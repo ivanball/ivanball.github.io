@@ -1,178 +1,250 @@
 # 26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser & Fallback Adapters)
 
-**What this group covers.** A single Blazor UI codebase in `MMCA.Common.UI` renders on three
-very different heads: Blazor Server (server-side render + interactive Server circuits), Blazor
+**What this group covers.** A single Blazor UI codebase in `MMCA.Common.UI` renders on three very
+different heads: Blazor Server (server-side render plus interactive Server circuits), Blazor
 WebAssembly (the whole component tree running in the browser), and MAUI Blazor Hybrid (the same
 components inside a native shell on Android, iOS, Windows and macOS). Those heads have wildly
 different access to the device: a phone can vibrate, scan a fingerprint, drop a local notification
-and open the system share sheet; a server-rendered page can do none of that, and a WASM page can do
-some of it through browser APIs. This group is how one component library talks to all of that
+and open the system share sheet; a server-rendered page can do none of that, and a browser page can
+do some of it through web APIs. This group is how one component library talks to all of that
 hardware without ever naming a platform type. It is a set of small, single-capability interface
-**contracts** (biometrics, geolocation/geocoding, speech, push registration, media pick, clipboard,
-screenshot, haptics, share, external links, external OAuth, local cache, local notifications,
-connectivity, battery, accessibility announcements, deep links) plus three families of
-**adapters** that implement each contract per host: MAUI-native, browser-JS-interop, and inert
+**contracts** (biometrics, geolocation and geocoding, speech, push registration, media pick,
+clipboard, screenshot, haptics, share, external links, external OAuth, local cache, local
+notifications, connectivity, battery, accessibility announcements, deep links) plus three families
+of **adapters** that implement each contract per host: MAUI-native, browser-JS-interop, and inert
 fallback. The head chooses which family it gets at DI composition time. This is the
 [Rubric §18, UI Architecture] and [Rubric §22, Responsive/Cross-Browser] story in miniature, and the
-whole design is [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) (`Website/docs-src/adr/042-device-capability-abstraction.md`).
+whole design is [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)
+(`Website/docs-src/adr/042-device-capability-abstraction.md`).
 
 **The contract-per-capability shape.** Every capability is its own narrow interface in the
-`MMCA.Common.UI.Services.Capabilities` namespace (form-factor detection, [`IFormFactor`](#iformfactor),
+`MMCA.Common.UI.Services.Capabilities` namespace (form-factor detection, [IFormFactor](#iformfactor),
 sits one level up in `MMCA.Common.UI.Services`). The contracts are deliberately tiny and
-transport-agnostic: they speak in booleans, strings, and framework-owned records, never in a MAUI or
-JS type. [`IBiometricAuthenticator`](#ibiometricauthenticator)
+transport-agnostic: they speak in booleans, strings, and framework-owned types, never in a MAUI or JS
+type. [IBiometricAuthenticator](#ibiometricauthenticator)
 (`MMCA.Common.UI/Services/Capabilities/IBiometricAuthenticator.cs:9`) is the clearest example of the
-house rule: availability and outcome are both plain `Task<bool>`, and every failure mode (cancel,
-lockout, error) collapses to `false` so a caller can only fall back to the normal credential login,
-never to a weaker path. Where a capability must return structured data it does so through a
-framework-owned value type, not a platform one: [`GeoPoint`](#geopoint)
+house rule: availability and outcome are both plain `Task<bool>`
+(`IBiometricAuthenticator.cs:12,19`), and every failure mode (cancellation, lockout, error) collapses
+to `false`, documented right on the member, so a caller can only fall back to the normal credential
+login, never to a weaker path. Where a capability must return structured data it does so through a
+framework-owned type, not a platform one: [GeoPoint](#geopoint)
 (`MMCA.Common.UI/Services/Capabilities/GeoPoint.cs:9`) is a `sealed record` latitude/longitude pair
-that even carries its own haversine `DistanceKmTo` helper (`GeoPoint.cs:17`) so shared components
-never touch a platform location type. [`PickedMedia`](#pickedmedia),
-[`PushDeviceToken`](#pushdevicetoken), and [`LocalNotificationRequest`](#localnotificationrequest)
-play the same role for their capabilities. Keeping the contracts in the shared UI layer and the
-platform types out of them is the [Rubric §1, SOLID] Dependency-Inversion move that makes the whole
-layer swappable per host.
+that even carries its own haversine `DistanceKmTo` helper (`GeoPoint.cs:17-29`) so shared components
+never touch a platform location type. [PickedMedia](#pickedmedia)
+(`MMCA.Common.UI/Services/Capabilities/IMediaPickerService.cs:29`, deliberately a class rather than a
+record because a record's generic `IEquatable<T>` trips CsWinRT AOT generation on the windows TFM,
+`IMediaPickerService.cs:21-24`), [PushDeviceToken](#pushdevicetoken), and
+[LocalNotificationRequest](#localnotificationrequest) play the same role for their capabilities.
+Keeping the contracts in the shared UI layer and the platform types out of them is the
+[Rubric §1, SOLID] dependency-inversion move that makes the whole layer swappable per host.
 
 **Composition: safe defaults first, head overrides last.** The wiring is a two-phase, last-wins
 registration and it is the load-bearing mechanism of the group. `AddUIShared` (in the wider UI group)
 calls `AddDeviceCapabilityDefaults`
-(`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:24`), which `TryAdd`-registers a neutral
-implementation for **every** contract, so any shared component can resolve any capability on any head
-and get a well-defined no-op rather than a missing-service exception (`DependencyInjection.cs:27-60`).
-A head then calls its own registration **after** `AddUIShared` with plain `Add` calls, and because the
-last single-service registration wins, those override the defaults. Browser heads call
-`AddBrowserDeviceCapabilities` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:73`);
-native heads call `AddMauiDeviceCapabilities`
-(`MMCA.Common.UI.Maui/DependencyInjection.cs:25`), which ships in the separate MAUI-TFM package
-`MMCA.Common.UI.Maui` (the one package built outside `MMCA.Common.slnx`, [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Both of those DI
+(`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:24`), which `TryAdd`-registers a
+neutral implementation for **every** contract, so any shared component can resolve any capability on
+any head and get a well-defined no-op rather than a missing-service exception
+(`DependencyInjection.cs:27-60`). A head then calls its own registration **after** `AddUIShared` with
+plain `Add` calls, and because the last single-service registration wins, those override the
+defaults. Browser heads call `AddBrowserDeviceCapabilities`
+(`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:73`); native heads call
+`AddMauiDeviceCapabilities` (`MMCA.Common.UI.Maui/DependencyInjection.cs:26`), which ships in the
+separate MAUI-TFM package `MMCA.Common.UI.Maui`, the one package built outside `MMCA.Common.slnx`
+([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Both DI
 classes use the C# `extension(IServiceCollection)` member idiom the codebase favours for registration
 (see the [primer](00-primer.md#c-extensiont-types--read-this-once)). The lifetime choices are
-deliberate: the browser services are `Scoped` (one per Blazor circuit) so per-user state never leaks
-across circuits, while the MAUI services are `Singleton` because a native head is single-user and its
-stateful services wrap app-global platform events.
+deliberate and commented in place: the browser services are `Scoped`, one per Blazor circuit, so
+per-user state never leaks across circuits (`DependencyInjection.cs:76-85`), while the MAUI services
+are `Singleton` because a native head is single-user and its stateful services wrap app-global
+platform events (`MMCA.Common.UI.Maui/DependencyInjection.cs:28-46`).
 
 **Three adapter families.** Each contract has up to three implementations, split across three
 namespaces. The **fallback** family lives in `MMCA.Common.UI.Services.Capabilities.Fallbacks` and is
 the Null Object pattern applied wholesale ([Rubric §2, Design Patterns]):
-[`NullBiometricAuthenticator`](#nullbiometricauthenticator)
+[NullBiometricAuthenticator](#nullbiometricauthenticator)
 (`MMCA.Common.UI/Services/Capabilities/Fallbacks/NullBiometricAuthenticator.cs:4`) simply returns
-`false` from both members, [`NullShareService`](#nullshareservice),
-[`NullClipboardService`](#nullclipboardservice), and their siblings do nothing, and
-[`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice) reports permanent
-connectivity because a server-rendered page has no offline concept. These are what make it safe for a
-shared component to call a capability unconditionally: the null implementation answers "not available
-here" honestly and the component hides the corresponding affordance. The **MAUI** family lives in
-`MMCA.Common.UI.Maui.Capabilities` and wraps the real platform APIs:
-[`MauiFormFactor`](#mauiformfactor) (`MMCA.Common.UI.Maui/Capabilities/MauiFormFactor.cs:12`) reads
-`DeviceInfo.Idiom`/`DeviceInfo.Platform`, and its siblings drive Essentials, the Community Toolkit,
-and Plugin.LocalNotification.
+`false` from both members (`NullBiometricAuthenticator.cs:7-12`), [NullShareService](#nullshareservice),
+[NullClipboardService](#nullclipboardservice) and their siblings do nothing, and
+[AlwaysOnlineConnectivityStatusService](#alwaysonlineconnectivitystatusservice) reports permanent
+connectivity with an event that is never raised
+(`MMCA.Common.UI/Services/Capabilities/Fallbacks/AlwaysOnlineConnectivityStatusService.cs:10-24`),
+which is the correct answer on Blazor Server, where a lost connection tears down the circuit itself.
+These are what make it safe for a shared component to call a capability unconditionally: the null
+implementation answers "not available here" honestly and the component hides the corresponding
+affordance. The **MAUI** family lives in `MMCA.Common.UI.Maui.Capabilities` and wraps the real
+platform APIs: [MauiFormFactor](#mauiformfactor)
+(`MMCA.Common.UI.Maui/Capabilities/MauiFormFactor.cs:12`) reads `DeviceInfo.Idiom` and
+`DeviceInfo.Platform` (`MauiFormFactor.cs:15-18`), and its siblings drive Essentials, the MAUI
+Community Toolkit, and Plugin.LocalNotification.
 
 **The browser family and its prerender-safe contract.** The **browser** family lives in
 `MMCA.Common.UI.Services.Capabilities.Browser` and reaches the device through JavaScript interop, but
 it never calls `IJSRuntime` directly. Every browser service depends on
-[`CapabilitiesJsModule`](#capabilitiesjsmodule)
+[CapabilitiesJsModule](#capabilitiesjsmodule)
 (`MMCA.Common.UI/Services/Capabilities/Browser/CapabilitiesJsModule.cs:12`), a lazy accessor for the
-single `capabilities-interop.js` module (`CapabilitiesJsModule.cs:14`) registered once per circuit
-(`DependencyInjection.cs:76`). Its `InvokeOrDefaultAsync<T>` (`CapabilitiesJsModule.cs:27`) is the
-degradation contract that makes browser capabilities usable during server-side prerender: it wraps the
-import-and-invoke in a `try` that swallows the entire JS-unavailable exception family
-(`InvalidOperationException` for an un-hydrated prerender, `JSDisconnectedException` for a torn-down
-circuit, and `JSException` for a throwing browser API) and returns `default`
-(`CapabilitiesJsModule.cs:39-51`). So [`BrowserShareService`](#browsershareservice)
-(`MMCA.Common.UI/Services/Capabilities/Browser/BrowserShareService.cs:8`) calling `navigator.share`
-degrades to "did not share" during prerender instead of throwing, exactly as a null implementation
-would. This is the [Rubric §22, Responsive/Cross-Browser] and [Rubric §23, Front-End Performance]
-discipline that lets the same component prerender on the server and hydrate in the browser without a
-capability check at every call site.
+single `./_content/MMCA.Common.UI/capabilities-interop.js` module (`CapabilitiesJsModule.cs:14`)
+registered once per circuit (`DependencyInjection.cs:76`). Its `InvokeOrDefaultAsync<T>`
+(`CapabilitiesJsModule.cs:27`) is the degradation contract that makes browser capabilities usable
+during server-side prerender: it wraps the import-and-invoke in a `try` that swallows the entire
+JS-unavailable exception family (`InvalidOperationException` for an un-hydrated prerender,
+`JSDisconnectedException` for a torn-down circuit, and `JSException` for a throwing browser API) and
+returns `default` (`CapabilitiesJsModule.cs:39-51`); disposal is guarded the same way
+(`CapabilitiesJsModule.cs:62-69`). So [BrowserShareService](#browsershareservice)
+(`MMCA.Common.UI/Services/Capabilities/Browser/BrowserShareService.cs:8`) invoking `shareLink`
+against `navigator.share` reads the nullable result as `shared == true`
+(`BrowserShareService.cs:20-23`) and degrades to "did not share" during prerender instead of
+throwing, exactly as the null implementation would. This is the
+[Rubric §22, Responsive/Cross-Browser] and [Rubric §23, Front-End Performance] discipline that lets
+the same component prerender on the server and hydrate in the browser without a capability check at
+every call site.
 
-**Form-factor detection across the trio.** [`IFormFactor`](#iformfactor)
+**Form-factor detection across the trio.** [IFormFactor](#iformfactor)
 (`MMCA.Common.UI/Services/IFormFactor.cs:7`) is the smallest capability, two strings describing the
-device and platform, and it is the one contract with three genuinely different, hoisted
-implementations: [`WebFormFactor`](#webformfactor)
+device and platform (`IFormFactor.cs:10,13`), and it is the one contract with three genuinely
+different, hoisted implementations: [WebFormFactor](#webformfactor)
 (`MMCA.Common.UI.Web/Services/WebFormFactor.cs:12`) reports `"Web"` for the server head,
-[`WasmFormFactor`](#wasmformfactor) (`MMCA.Common.UI/Services/WasmFormFactor.cs:9`) reports
-`"WebAssembly"` for the browser runtime, and [`MauiFormFactor`](#mauiformfactor) reports the real
-device idiom. Each head registers its own (`AddMauiFormFactor`,
-`MMCA.Common.UI.Maui/DependencyInjection.cs:69`, keeps this separate from the capability bundle so a
-head can override just the form factor). The trio is the concrete illustration of why the whole group
-exists: identical shared components read `GetFormFactor()`/`GetPlatform()` and adapt, and the
-correct answer for "what am I running on" is injected, not detected inline.
+[WasmFormFactor](#wasmformfactor) (`MMCA.Common.UI/Services/WasmFormFactor.cs:9`) reports
+`"WebAssembly"` for the browser runtime, and [MauiFormFactor](#mauiformfactor) reports the real
+device idiom plus platform and version. Each head registers its own, and `AddMauiFormFactor`
+(`MMCA.Common.UI.Maui/DependencyInjection.cs:82`) is kept deliberately separate from the capability
+bundle so a head that still registers its own implementation keeps last-registration-wins control.
+The trio is the concrete illustration of why the whole group exists: identical shared components read
+`GetFormFactor()` and `GetPlatform()` and adapt, and the correct answer for "what am I running on" is
+injected, not detected inline.
 
 **Deep links: one funnel from native navigation into Blazor routing.** The most involved runtime flow
-in this group is the deep-link path ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html),
+in this group is the deep-link path
+([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html),
 `Website/docs-src/adr/043-mobile-deep-links-and-native-oauth-callback.md`).
-[`IDeepLinkDispatcher`](#ideeplinkdispatcher)
+[IDeepLinkDispatcher](#ideeplinkdispatcher)
 (`MMCA.Common.UI/Services/Capabilities/IDeepLinkDispatcher.cs:10`) is the single boundary between
 native navigation sources (notification taps, home-screen app actions, app links, QR scans) and the
 Blazor router. Native code calls `Publish(route)` with an app-relative route; the shared
 `DeepLinkListener` component (in the UI-components group) either receives it live via the
-`RouteRequested` event or drains it from a buffer after first render. The default
-[`DeepLinkDispatcher`](#deeplinkdispatcher)
-(`MMCA.Common.UI/Services/Capabilities/DeepLinkDispatcher.cs:9`) is a singleton that solves the
-cold-start race: when a tap launches the app before the router exists, `Publish` finds no attached
-handler and stores the route in a single-entry buffer under a `Lock` (`DeepLinkDispatcher.cs:18-34`),
-and the listener drains it via `TryConsumePending` once it renders (`DeepLinkDispatcher.cs:37-46`).
-The event payload is [`DeepLinkRouteEventArgs`](#deeplinkrouteeventargs). On MAUI the bridge is wired
-by [`DeviceCapabilitiesInitializer`](#devicecapabilitiesinitializer)
-(`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:15`), an `IMauiInitializeService` that hooks
-`LocalNotificationCenter.Current.NotificationActionTapped` and republishes the tapped notification's
-`ReturningData` route into the dispatcher (`DeviceCapabilitiesInitializer.cs:28-42`). That wiring is
-installed by `UseMauiDeviceCapabilities` on the `MauiAppBuilder`
-(`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:25`), which also calls `UseLocalNotification()`
-and registers the native capability bundle.
+`RouteRequested` event (`IDeepLinkDispatcher.cs:13`) or drains it from a buffer after first render.
+The default [DeepLinkDispatcher](#deeplinkdispatcher)
+(`MMCA.Common.UI/Services/Capabilities/DeepLinkDispatcher.cs:9`) is registered as a singleton
+(`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:60`) because native callers publish
+into it from outside any scope, and it solves the cold-start race: when a tap launches the app before
+the router exists, `Publish` finds no attached handler and stores the route in a single-entry,
+last-write-wins buffer under a `Lock` (`DeepLinkDispatcher.cs:18-34`), and the listener drains it via
+`TryConsumePending` once it renders (`DeepLinkDispatcher.cs:37-46`). The event payload is
+[DeepLinkRouteEventArgs](#deeplinkrouteeventargs), a one-property `EventArgs` carrying the
+app-relative route (`MMCA.Common.UI/Services/Capabilities/DeepLinkRouteEventArgs.cs:4-10`). On MAUI
+the bridge is wired by [DeviceCapabilitiesInitializer](#devicecapabilitiesinitializer)
+(`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:14`), an `IMauiInitializeService` that hooks
+`LocalNotificationCenter.Current.NotificationActionTapped`
+(`DeviceCapabilitiesInitializer.cs:27`) and republishes the tapped notification's `ReturningData`
+route into the dispatcher, skipping dismissals (`DeviceCapabilitiesInitializer.cs:30-42`). That
+wiring is installed by `UseMauiDeviceCapabilities` on the `MauiAppBuilder`
+(`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:26`), which also calls `UseLocalNotification()`
+and registers the native capability bundle (`HostingDependencyInjection.cs:28-30`).
 
-**Culture is applied through the same last-wins boundary.** Switching language is host-specific too, so
-it hides behind [`ICultureApplier`](group-15-common-ui-framework.md#icultureapplier): `AddUIShared`
-`TryAdd`s the web default that force-loads the server `/culture/set` endpoint, and
-`UseMauiCulture()` (folded into `UseMauiDeviceCapabilities`,
-`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:37,52-56`) replaces it with
-[`MauiCultureApplier`](#mauicultureapplier) plus the [`MauiCultureInitializer`](#mauicultureinitializer)
-startup restore, because a hybrid head has no ASP.NET pipeline and would render the not-found page for
-that URL ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
+**Culture is applied through the same last-wins boundary.** Switching language is host-specific too,
+so it hides behind [ICultureApplier](group-15-common-ui-framework.md#icultureapplier): `AddUIShared`
+`TryAdd`s the web default that force-loads the server `/culture/set` endpoint, and `UseMauiCulture()`
+(folded into `UseMauiDeviceCapabilities` at `MMCA.Common.UI.Maui/HostingDependencyInjection.cs:37`,
+defined at `HostingDependencyInjection.cs:52-57`) replaces it with
+[MauiCultureApplier](#mauicultureapplier) plus the [MauiCultureInitializer](#mauicultureinitializer)
+startup restore, because a hybrid head has no ASP.NET pipeline and would resolve that URL through the
+Blazor router, matching no page and rendering not-found
+(`MMCA.Common.UI.Maui/Globalization/MauiCultureApplier.cs:8-12`). The applier persists and activates
+the culture through [MauiCultureStore](#mauiculturestore) before it force-loads the WebView, and the
+order is load-bearing (`MauiCultureApplier.cs:37-45`); the initializer restores the persisted culture
+inside `MauiAppBuilder.Build()`, before any window exists, so the first render is already in the
+right language (`MMCA.Common.UI.Maui/Globalization/MauiCultureInitializer.cs:14-22`). That is
+[ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) and [Rubric §27, i18n]
+meeting this group's composition rule.
 
 **Wired-but-inert capabilities.** A recurring, honest theme in this layer is capabilities that are
-fully registered but deliberately do nothing yet, because their real backing requires credentials or a
-later feature wave. Native push ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html),
+fully registered but deliberately do nothing yet, because their real backing requires credentials or
+a later feature wave. Native push
+([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html),
 `Website/docs-src/adr/044-native-push-delivery.md`) registers a real
-[`IPushRegistrationService`](#ipushregistrationservice)
-(`MMCA.Common.UI/Services/Capabilities/IPushRegistrationService.cs:10`) on MAUI heads, but the
-[`IPushDeviceTokenProvider`](#ipushdevicetokenprovider) defaults to a null provider that yields no
-token, so even a native head stays registered-but-tokenless until the app supplies real FCM/APNs
-credentials (`DependencyInjection.cs:45-49`). The [`IExternalAuthBroker`](#iexternalauthbroker)
+[IPushRegistrationService](#ipushregistrationservice)
+(`MMCA.Common.UI/Services/Capabilities/IPushRegistrationService.cs:10`) on MAUI heads
+(`MMCA.Common.UI.Maui/DependencyInjection.cs:51`), but the
+[IPushDeviceTokenProvider](#ipushdevicetokenprovider) default is
+[NullPushDeviceTokenProvider](#nullpushdevicetokenprovider), which always yields `null`
+(`MMCA.Common.UI/Services/Capabilities/Fallbacks/NullPushDeviceTokenProvider.cs:12-13`), so even a
+native head stays registered-but-tokenless until the app supplies real FCM or APNs credentials
+(`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:45-49`). The
+[IExternalAuthBroker](#iexternalauthbroker)
 (`MMCA.Common.UI/Services/Capabilities/IExternalAuthBroker.cs:10`) defaults to
-[`UnavailableExternalAuthBroker`](#unavailableexternalauthbroker) so web heads keep their existing
-anchor-href OAuth flow, and the MAUI broker reports `IsAvailable == false` until the head configures
-`OAuth:MobileRedirectScheme` (`MMCA.Common.UI.Maui/DependencyInjection.cs:56-59`). Biometrics stay on
-their null default until [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 4 lands (see the
-[`DevicePreferenceKeys.AppLockEnabled`](#devicepreferencekeys) key,
+[UnavailableExternalAuthBroker](#unavailableexternalauthbroker) so web heads keep their existing
+anchor-href OAuth flow (`DependencyInjection.cs:42`), and
+[MauiExternalAuthBroker](#mauiexternalauthbroker) reports `IsAvailable == false` until the head
+configures `OAuth:MobileRedirectScheme`
+(`MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:35,39`), which is also why it is the one
+`Scoped` registration in the native bundle: it navigates through the circuit's `NavigationManager`
+after the system-browser round trip (`MMCA.Common.UI.Maui/DependencyInjection.cs:57-60`). Media
+picking is the same shape read the other way: [IMediaPickerService](#imediapickerservice) exposes
+`IsSupported` (`MMCA.Common.UI/Services/Capabilities/IMediaPickerService.cs:12`) so web heads render
+a plain `InputFile` instead, "the affordance switch, not a degraded path"
+(`IMediaPickerService.cs:6-7`,
+[ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)). Biometrics
+stay on their null default until the app-lock wave lands (see the
+[DevicePreferenceKeys](#devicepreferencekeys) `AppLockEnabled` key,
 `MMCA.Common.UI/Services/Capabilities/DevicePreferenceKeys.cs:10`). This "contract present, behavior
 inert" pattern is what lets shared components be written against the full capability surface today
 while the platform work ships incrementally; each null default is a truthful `IsAvailable == false`
 that hides its affordance rather than a stub that lies.
 
-**Device preferences and the per-head lifetime split.** [`IDevicePreferences`](#idevicepreferences)
-(`MMCA.Common.UI/Services/Capabilities/IDevicePreferences.cs:11`) stores per-device settings (reminder
-lead time, haptics toggle, app-lock) that describe *this device* and never roam to the server, which
-is why it is distinct from the server-side per-user preferences. It exposes an `IsPersistent` flag so a
+**Device preferences and the per-head lifetime split.** [IDevicePreferences](#idevicepreferences)
+(`MMCA.Common.UI/Services/Capabilities/IDevicePreferences.cs:11`) stores per-device settings
+(reminder lead time, haptics toggle, app-lock) that describe *this device* and never roam to the
+server, which is why it is distinct from the server-side per-user preferences
+(`IDevicePreferences.cs:4-9`). It exposes an `IsPersistent` flag (`IDevicePreferences.cs:17`) so a
 head can hide device-settings UI where storage is ephemeral. The three implementations show the
-lifetime story clearly: [`MauiDevicePreferences`](#mauidevicepreferences) persists to native
-`Preferences`, [`BrowserDevicePreferences`](#browserdevicepreferences) persists to `localStorage`
-through the shared JS module, and [`InMemoryDevicePreferences`](#inmemorydevicepreferences) is
-registered `Scoped` (`DependencyInjection.cs:56`) so the Blazor Server fallback holds per-circuit
-state and reports `IsPersistent == false`. Never storing secrets here is a documented rule (tokens
-belong in platform secure storage), which ties this into [Rubric §26, Front-End Security] and
+lifetime story clearly: [MauiDevicePreferences](#mauidevicepreferences) persists JSON-encoded values
+to native `Preferences.Default` under an `mmca.devicePrefs.` prefix
+(`MMCA.Common.UI.Maui/Capabilities/MauiDevicePreferences.cs:14,24`),
+[BrowserDevicePreferences](#browserdevicepreferences) persists the same shape to `localStorage`
+through the shared JS module
+(`MMCA.Common.UI/Services/Capabilities/Browser/BrowserDevicePreferences.cs:12,27-28`), and
+[InMemoryDevicePreferences](#inmemorydevicepreferences) is registered `Scoped`
+(`DependencyInjection.cs:56`) so the Blazor Server fallback holds per-circuit state in a
+`ConcurrentDictionary` and reports `IsPersistent == false`
+(`MMCA.Common.UI/Services/Capabilities/Fallbacks/InMemoryDevicePreferences.cs:12,15`). Never storing
+secrets here is a documented rule, tokens belong in platform secure storage
+(`IDevicePreferences.cs:7`), which ties this into [Rubric §26, Front-End Security] and
 [Rubric §11, Security].
 
+**The native shell pieces that come with the package.** Two members of this group are not capability
+contracts at all but the MAUI-side plumbing that ships beside them.
+[MauiTokenStorageService](#mauitokenstorageservice)
+(`MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:20`) is the native
+[ITokenStorageService](group-15-common-ui-framework.md#itokenstorageservice), holding both tokens in
+`SecureStorage` (Android Keystore, iOS Keychain, Windows DPAPI) with every call guarded so an
+OS-invalidated keystore entry degrades to one clean re-login rather than an unhandled throw that
+would brick the app on launch (`MauiTokenStorageService.cs:5-19`); it writes the refresh token first
+and drops both on a partial failure so storage is never a mismatched pair
+(`MauiTokenStorageService.cs:34-37`), and it is registered `Scoped` by
+`AddCommonMauiTokenStorage()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:73-74`) to match its
+browser siblings. [MainPageBase](#mainpagebase) (`MMCA.Common.UI.Maui/MainPageBase.cs:20`) is the
+`ContentPage` base a hybrid head's XAML points at: it consumes the platform back gesture
+(`MainPageBase.cs:30-35`), captures the renderer-scoped `IJSRuntime` out of the `BlazorWebView`
+through a `TaskCompletionSource` (`MainPageBase.cs:46-62`), and forwards the press to
+[MauiBackNavigationBridge](group-15-common-ui-framework.md#mauibacknavigationbridge)
+(`MainPageBase.cs:69`), quitting the app only when the WebView history is at its root. Both are
+[Rubric §11, Security] and [Rubric §25, Navigation & IA] concerns that would otherwise be
+hand-written in every native head.
+
 **Where this group sits.** The capability contracts are consumed by the shared Blazor components and
-pages (the UI-components group), by the connectivity/battery/accessibility banners, and by the deep-link
-and notification surfaces. Nothing in this group references EF Core, the API, or a message broker: it
-is pure presentation-edge adaptation, sitting alongside the rest of `MMCA.Common.UI` at the top of the
-dependency flow. Read it as the codebase's answer to a specific hard problem: how to write device-aware
-UI once and run it on a server, in a browser, and on a phone, with the platform differences pushed
-entirely into injected adapters and the shared components none the wiser. The governing decisions are
-[ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) (the abstraction itself), [ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html) (deep links and native OAuth callback), [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) (native push
-delivery), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) (managed file storage and avatars, the backing for the media-picker capability).
+pages (the UI-components group), by the connectivity, battery and accessibility surfaces, and by the
+deep-link and notification paths. Nothing in this group references EF Core, the API, or a message
+broker: it is pure presentation-edge adaptation, sitting alongside the rest of `MMCA.Common.UI` at
+the top of the dependency flow. Read it as the codebase's answer to a specific hard problem: how to
+write device-aware UI once and run it on a server, in a browser, and on a phone, with the platform
+differences pushed entirely into injected adapters and the shared components none the wiser. The
+governing decisions are
+[ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) (the
+abstraction itself and the separate MAUI-TFM package),
+[ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)
+(deep links and the native OAuth callback),
+[ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) (native push delivery),
+and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) (managed
+file storage and avatars, the backing for the media-picker capability).
 
 ### IFormFactor
 
@@ -1170,41 +1242,6 @@ delivery), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-st
 - **Where it's used**: registered for native heads; the fallback is [`UnavailableExternalAuthBroker`](#unavailableexternalauthbroker). Consumed by the login page's external-provider buttons.
 - **Caveats / not-in-source**: the code-to-token exchange, token storage, and auth-state refresh are not in this class; they live in the shared `/auth/oauth-complete` page it navigates to.
 
-### MauiCultureStore
-
-> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Globalization` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureStore.cs:19` · Level 1 · class (internal static)
-
-- **What it is**: the single storage plus activation path for the UI culture on a MAUI Blazor Hybrid head ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). It persists the user's choice to device preferences, resolves which culture to start under, and activates a culture for the process. Both the runtime switch and the startup restore go through this one class.
-- **Depends on**: [`SupportedCultures`](group-12-api-hosting-mapping.md#supportedcultures) (`MMCA.Common.Shared.Globalization`, `MauiCultureStore.cs:2`); BCL `System.Globalization.CultureInfo` (`:1`); MAUI Essentials `Preferences.Default` (NuGet, `Microsoft.Maui.Essentials`).
-- **Concept introduced**: this is the group's clearest example of **process state standing in for request state**. A web head resolves culture per HTTP request through ASP.NET request localization and a cookie; a hybrid head has no request pipeline, no cookie to write, and nothing reading `CookieRequestCultureProvider` (`MauiCultureStore.cs:7-11`), so the active culture is simply process state and the persisted choice is a device preference. `[Rubric §27, Internationalization & Localization]` assesses whether one culture decision holds across every head and survives a restart; this type is the hybrid half of that answer, and it deliberately mirrors the web precedence order rather than inventing a new one. `[Rubric §19, State Management & Data Flow]` applies through the "one value, exactly one storage path" rule the type remarks state (`:15-16`).
-- **Walkthrough**: `PreferenceKey = "mmca.culture"` (`MauiCultureStore.cs:25`) is stored **outside** the `"mmca.devicePrefs."` prefix that [`MauiDevicePreferences`](#mauidevicepreferences) uses (`MauiDevicePreferences.cs:14`), and as a raw string rather than the JSON that contract encodes; the remarks warn that changing the key silently resets every installed app to the device locale (`:22-23`). `Save(string culture)` (`:29`) is a one-line `Preferences.Default.Set`. `Resolve()` (`:37`) reads the stored value (`:39`) and returns it when [`SupportedCultures.IsSupported`](group-12-api-hosting-mapping.md#supportedcultures) accepts it, otherwise falls back to `SupportedCultures.ResolveClosest(CultureInfo.CurrentUICulture.Name)` (`:41-43`), which language-matches the device locale so an `es-MX` phone gets `es` and anything unrecognized gets the framework default. The doc comment maps that ladder onto the web one explicitly: stored choice is the cookie's analogue, device locale is `Accept-Language`'s (`:32-35`). `ApplyToProcess(string culture)` (`:68`) builds a `CultureInfo` and assigns **only** `CultureInfo.DefaultThreadCurrentCulture` and `DefaultThreadCurrentUICulture` (`:70-73`).
-- **Why it's built this way**: the thread-defaults-only assignment in `ApplyToProcess` is the load-bearing detail of the whole culture story on this head, and the remarks (`:49-65`) spell out the mechanism. `CultureInfo.CurrentCulture` / `CurrentUICulture` are **`AsyncLocal`-backed**: a value written to them flows with the `ExecutionContext` and is *restored* every time that context is re-entered, taking precedence over the thread defaults. The startup restore ([`MauiCultureInitializer`](#mauicultureinitializer)) runs before any window exists, so the context it writes to is the one every later dispatch descends from, including the Blazor renderer's. Had it assigned `Current*`, a later switch could set the defaults to `es` and still re-render in the launch language forever: the reload re-enters that context, the `AsyncLocal` wins, and the app is pinned to whatever language it started in. A web head never hits this because request localization sets the culture inside each request's own context. As long as no code path ever assigns `Current*`, no thread materializes a culture of its own, the defaults govern every thread and context, and a switch takes effect everywhere at once (`:61-65`). The class also reads and writes `Preferences.Default` directly instead of going through [`IDevicePreferences`](#idevicepreferences), because that contract is async-only while the startup restore runs from the synchronous `IMauiInitializeService.Initialize` hook, and splitting one value across two storage paths would be worse than the inconsistency (`:12-17`).
-- **Where it's used**: called by [`MauiCultureApplier`](#mauicultureapplier) on a runtime switch (`Save` then `ApplyToProcess`) and by [`MauiCultureInitializer`](#mauicultureinitializer) at startup (`ApplyToProcess(Resolve())`). It is `internal`, so nothing outside `MMCA.Common.UI.Maui` can reach it.
-- **Caveats / not-in-source**: `Save` is documented as best-effort (`:27`) but the code does not catch anything, so a `Preferences` failure would surface as an exception from the underlying platform call. There is no test project for this package in the repository, so the AsyncLocal behavior described above is asserted by the source remarks and [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) decision 10, not by an executable test here.
-
-### MauiCultureApplier
-
-> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Globalization` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureApplier.cs:22` · Level 2 · class (sealed)
-
-- **What it is**: the [`ICultureApplier`](group-15-common-ui-framework.md#icultureapplier) implementation for MAUI Blazor Hybrid heads ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). It switches the culture in process and reloads the `BlazorWebView`, instead of round-tripping the server `/culture/set` endpoint the way [`EndpointCultureApplier`](group-15-common-ui-framework.md#endpointcultureapplier) does.
-- **Depends on**: [`ICultureApplier`](group-15-common-ui-framework.md#icultureapplier) (`MMCA.Common.UI.Services`, `MauiCultureApplier.cs:3`), [`MauiCultureStore`](#mauiculturestore), and [`SupportedCultures`](group-12-api-hosting-mapping.md#supportedcultures) (`:2`); ASP.NET Core `NavigationManager` via primary constructor (`:1`, `:22`).
-- **Concept introduced**: the **per-head applier swap** is the culture counterpart of this group's capability-adapter pattern, and it is why the abstraction exists at all. The shared culture switcher and the login preference reconciliation both call `ApplyAsync` and know nothing about heads; the web default navigates to a server endpoint, and a hybrid head has no ASP.NET pipeline, so that URL would be resolved by the Blazor `Router`, match no page, and render the not-found page (`MauiCultureApplier.cs:8-12`). `[Rubric §27, Internationalization & Localization]` assesses exactly this: whether the locale decision survives every host without special-casing at the call site. `[Rubric §2, Design Patterns]` applies through the same Strategy-by-DI shape the capability adapters use.
-- **Walkthrough**: `ApplyAsync(culture, returnPath, cancellationToken)` (`MauiCultureApplier.cs:25`) guards the culture with `ArgumentException.ThrowIfNullOrWhiteSpace` (`:27`), then silently returns `Task.CompletedTask` for anything [`SupportedCultures.IsSupported`](group-12-api-hosting-mapping.md#supportedcultures) rejects (`:32-35`), matching the web endpoint's behavior of honoring only allowlisted cultures and otherwise leaving the user on the same page unchanged. The comment records that the pseudo locale is unreachable here: the switcher only offers it when `IHostEnvironment` reports Development, and a MAUI head registers no such service (`:30-31`). It then calls [`MauiCultureStore.Save`](#mauiculturestore) and [`MauiCultureStore.ApplyToProcess`](#mauiculturestore) (`:41-42`) **before** navigating, an order the comment marks as load-bearing (`:37-40`) so the new culture is already the process default when the tree re-renders. Finally it defaults a blank `returnPath` to `"/"` (`:44`) and calls `navigation.NavigateTo(target, forceLoad: true)` (`:45`), returning `Task.CompletedTask` (`:47`): the method is synchronous despite the async contract.
-- **Why it's built this way**: the reload is what makes the change visible (`:13-19`). Resource strings are resolved from `CultureInfo.CurrentUICulture` at render time and Blazor has no API to re-render an entire component tree in place, so a force load inside a `BlazorWebView` re-boots the Blazor app while the .NET process, and therefore the culture just set, stays alive. Note the asymmetry with the web applier: there the reload exists to make the *server* re-render under a new cookie; here there is no server and no cookie, and the reload exists purely to rebuild the component tree. The persist-then-activate-then-reload order is what keeps the two halves from racing.
-- **Where it's used**: registered as `AddScoped<ICultureApplier, MauiCultureApplier>()` by `UseMauiCulture()` (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:54`), which `UseMauiDeviceCapabilities()` calls for every head (`:37`). That plain `Add` must run **after** `AddUIShared`, whose `TryAddScoped` default is the web applier (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:89`), because last registration wins; both consumer MAUI heads honor that order (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:71,76` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:62,67`). Callers are the shared `CultureSwitcher` component and the login preference reconciliation, neither of which is MAUI-aware.
-- **Caveats / not-in-source**: `cancellationToken` is accepted to satisfy the interface and is not observed; there is nothing awaited to cancel.
-
-### MauiCultureInitializer
-
-> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Globalization` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureInitializer.cs:14` · Level 2 · class (sealed)
-
-- **What it is**: the startup restore for a hybrid head ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)): an `IMauiInitializeService` that reapplies the persisted culture while the MAUI app is being built, so the very first Blazor render already happens in the language the user last chose.
-- **Depends on**: [`MauiCultureStore`](#mauiculturestore) (both `Resolve()` and `ApplyToProcess`); MAUI's `IMauiInitializeService` (NuGet, `Microsoft.Maui`).
-- **Concept introduced**: this is the hybrid counterpart of the WASM head's [`MmcaCultureBootstrap`](group-15-common-ui-framework.md#mmcaculturebootstrap), and the pairing is the point. Both run *before* the UI exists and both set only the thread default cultures; they differ only in where the persisted choice comes from (a cookie read over JS interop on WASM, device preferences here). `[Rubric §27, Internationalization & Localization]` assesses whether a returning user's locale is restored rather than re-guessed: without this service a hybrid head has no culture state of its own and always starts at the device locale, so persisting the choice in [`MauiCultureApplier`](#mauicultureapplier) alone would not be enough (`MauiCultureInitializer.cs:9-12`). It shares the `IMauiInitializeService` extension point with [`DeviceCapabilitiesInitializer`](#devicecapabilitiesinitializer), the deep-link bridge in this group.
-- **Walkthrough**: the whole type is one expression-bodied method. `Initialize(IServiceProvider services)` (`MauiCultureInitializer.cs:21-22`) calls `MauiCultureStore.ApplyToProcess(MauiCultureStore.Resolve())`: resolve the stored choice (falling back to the language-matched device locale, then the framework default), then activate it through the thread-defaults-only path. The `services` parameter is documented as deliberately unused (`:17-19`): the culture lives in device preferences and process state, both reachable without DI, and the parameter belongs to the interface rather than to this restore.
-- **Why it's built this way**: `IMauiInitializeService.Initialize` runs inside `MauiAppBuilder.Build()`, before any window or page exists (`:5-8`), which buys two things: no flash of the wrong language on launch, and no need to re-switch on every start just to get back to the chosen language. It also puts the assignment in the earliest `ExecutionContext`, which is precisely why [`MauiCultureStore.ApplyToProcess`](#mauiculturestore) must not touch `CultureInfo.Current*`: an `AsyncLocal` written this early would be restored into every later dispatch and would outrank any subsequent switch.
-- **Where it's used**: registered as `AddSingleton<IMauiInitializeService, MauiCultureInitializer>()` by `UseMauiCulture()` (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:55`), which `UseMauiDeviceCapabilities()` folds in for every head (`:32-37`) so no head can be left half-configured; `UseMauiCulture()` stays separately callable, and calling it twice is documented as harmless (`:47`).
-
 ### MauiGeocodingService
 
 > MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Capabilities` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiGeocodingService.cs:10` · Level 2 · class
@@ -1262,151 +1299,52 @@ delivery), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-st
 - **Where it's used**: resolved via [`IPushRegistrationService`](#ipushregistrationservice) on the MAUI head; invoked around sign-in (register) and sign-out (unregister). The server side is the [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) native-push pipeline (`INativePushSender`/`IPushDeviceRegistrar`).
 - **Caveats / not-in-source**: the concrete `"APIClient"` handler chain (base address, bearer-token attachment) is configured by the head's HTTP wiring, not in this file. Not determinable from source here: which [`IPushDeviceTokenProvider`](#ipushdevicetokenprovider) implementation a given app registers (the default is the inert Null provider per [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)).
 
-### AlwaysOnlineConnectivityStatusService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/AlwaysOnlineConnectivityStatusService.cs:7` · Level 1 · class
+### MauiCultureStore
 
-- **What it is**: the default, host-agnostic implementation of [`IConnectivityStatusService`](#iconnectivitystatusservice): it reports the app as permanently online and never signals a connectivity change.
-- **Depends on**: [`IConnectivityStatusService`](#iconnectivitystatusservice) (the contract it satisfies) and BCL `EventHandler` / `ValueTask` only. No native platform APIs, no `MMCA.Common.UI.Maui` dependency.
-- **Concept introduced (the inert-fallback / Null Object tier of the device-capability layer).** This is the first fallback type in the unit, so the pattern is worth teaching from first principles. Every device capability the UI can use (biometrics, geolocation, speech, haptics, sharing, push registration, connectivity, battery, and so on) is expressed as a small per-capability interface in `MMCA.Common.UI.Services.Capabilities`. Because a single shared Blazor component tree runs on three very different hosts (a MAUI Blazor Hybrid native shell, a browser Blazor WebAssembly/Server head, and backend-less test/gallery hosts), a component cannot assume any given capability exists. The framework resolves this with three registration tiers, selected per host at DI composition time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)): the MAUI package registers real native adapters, the browser head registers JS-interop adapters, and `AddUIShared` registers this fallback tier with `TryAdd` so that *some* implementation is always resolvable even when nothing richer was added. The fallbacks are pure Null Objects: they satisfy the interface, do the safe inert thing, and never throw, so calling code never has to null-check a capability. This is [Rubric §2, Design Patterns] (the Null Object pattern applied uniformly across a capability surface) and [Rubric §1, SOLID] (Liskov substitutability: a component holding the interface behaves correctly whichever tier answered, and the dependency-inversion boundary keeps components off concrete platform APIs). It is also [Rubric §18, UI Architecture] and [Rubric §22, Responsive / Cross-Browser], because the same component set degrades gracefully from a native shell down to a plain web page without host-specific branches in the markup.
-- **Walkthrough**: the class is `sealed` (`AlwaysOnlineConnectivityStatusService.cs:7`). The `ConnectivityChanged` event (`:10`) declares explicit `add`/`remove` accessors whose bodies are intentionally empty (`:12`, `:17`): subscribers are accepted but the event is never raised, because on this host connectivity is treated as constant. `IsOnline` (`:24`) is an expression-bodied property returning `true`. `InitializeAsync` (`:27`) returns `ValueTask.CompletedTask`, so warm-up is a no-op.
-- **Why it's built this way**: the class comment (`:4`) records the rationale: on Blazor Server a dropped connection tears down the SignalR circuit itself, so a per-app "am I online?" signal is meaningless there, and "always online, never raises" is the *correct* default rather than a mere stub. Native heads that genuinely track radio state override it with `Add`.
-- **Where it's used**: resolved by any component or service that injects [`IConnectivityStatusService`](#iconnectivitystatusservice) on a host that did not register a native/browser connectivity adapter.
+> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Globalization` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureStore.cs:19` · Level 1 · class (internal static)
 
-### InMemoryDevicePreferences
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/InMemoryDevicePreferences.cs:10` · Level 1 · class
+- **What it is**: the single storage plus activation path for the UI culture on a MAUI Blazor Hybrid head ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). It persists the user's choice to device preferences, resolves which culture to start under, and activates a culture for the process. Both the runtime switch and the startup restore go through this one class.
+- **Depends on**: [`SupportedCultures`](group-12-api-hosting-mapping.md#supportedcultures) (`MMCA.Common.Shared.Globalization`, `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureStore.cs:2`); BCL `System.Globalization.CultureInfo` (`:1`); MAUI Essentials `Preferences.Default` (NuGet, `Microsoft.Maui.Essentials`).
+- **Concept introduced**: this is the group's clearest example of **process state standing in for request state**. A web head resolves culture per HTTP request through ASP.NET request localization and a cookie; a hybrid head has no request pipeline, no cookie to write, and nothing reading `CookieRequestCultureProvider` (`MauiCultureStore.cs:7-11`), so the active culture is simply process state and the persisted choice is a device preference. `[Rubric §27, Internationalization & Localization]` assesses whether one culture decision holds across every head and survives a restart; this type is the hybrid half of that answer, and it deliberately mirrors the web precedence order rather than inventing a new one. `[Rubric §19, State Management & Data Flow]` applies through the "one value must have exactly one storage path" rule the type remarks state (`:15-16`).
+- **Walkthrough**: `PreferenceKey = "mmca.culture"` (`MauiCultureStore.cs:25`) is stored **outside** the `"mmca.devicePrefs."` prefix that [`MauiDevicePreferences`](#mauidevicepreferences) uses (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiDevicePreferences.cs:14`), and as a raw string rather than the JSON that contract encodes; the remarks warn that changing the key silently resets every installed app to the device locale (`:22-23`). `Save(string culture)` (`:29`) is a one-line `Preferences.Default.Set`. `Resolve()` (`:37`) reads the stored value (`:39`) and returns it when [`SupportedCultures.IsSupported`](group-12-api-hosting-mapping.md#supportedcultures) accepts it, otherwise falls back to `SupportedCultures.ResolveClosest(CultureInfo.CurrentUICulture.Name)` (`:41-43`), which language-matches the device locale so an `es-MX` phone gets `es` and anything unrecognized gets the framework default. The doc comment maps that ladder onto the web one explicitly: the stored choice is the cookie's analogue, the device locale is `Accept-Language`'s (`:32-35`). `ApplyToProcess(string culture)` (`:68`) builds a `CultureInfo` and assigns **only** `CultureInfo.DefaultThreadCurrentCulture` and `DefaultThreadCurrentUICulture` (`:70-73`).
+- **Why it's built this way**: the thread-defaults-only assignment in `ApplyToProcess` is the load-bearing detail of the whole culture story on this head, and the remarks (`:49-65`) spell out the mechanism. `CultureInfo.CurrentCulture` / `CurrentUICulture` are **`AsyncLocal`-backed**: a value written to them flows with the `ExecutionContext` and is *restored* every time that context is re-entered, taking precedence over the thread defaults. The startup restore ([`MauiCultureInitializer`](#mauicultureinitializer)) runs before any window exists, so the context it writes to is the one every later dispatch descends from, including the Blazor renderer's. Had it assigned `Current*`, a later switch could set the defaults to `es` and still re-render in the launch language forever: the reload re-enters that context, the `AsyncLocal` wins, and the app is pinned to whatever language it started in. A web head never hits this because request localization sets the culture inside each request's own context. As long as no code path ever assigns `Current*`, no thread materializes a culture of its own, the defaults govern every thread and context, and a switch takes effect everywhere at once (`:61-65`). The class also reads and writes `Preferences.Default` directly instead of going through [`IDevicePreferences`](#idevicepreferences), because that contract is async-only while the startup restore runs from the synchronous `IMauiInitializeService.Initialize` hook, and splitting one value across two storage paths would be worse than the inconsistency (`:12-17`).
+- **Where it's used**: called by [`MauiCultureApplier`](#mauicultureapplier) on a runtime switch (`Save` then `ApplyToProcess`) and by [`MauiCultureInitializer`](#mauicultureinitializer) at startup (`ApplyToProcess(Resolve())`). It is `internal`, so nothing outside `MMCA.Common.UI.Maui` can reach it.
+- **Caveats / not-in-source**: `Save` is documented as best-effort (`:27`) but the code catches nothing, so a `Preferences` failure would surface as an exception from the underlying platform call. There is no test project for this package in the repository, so the `AsyncLocal` behavior described above is asserted by the source remarks and [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html), not by an executable test here.
 
-- **What it is**: the default [`IDevicePreferences`](#idevicepreferences): a non-persistent key/value store that keeps preference values in memory for the lifetime of its DI scope only.
-- **Depends on**: [`IDevicePreferences`](#idevicepreferences) and BCL `ConcurrentDictionary<string, object?>`.
-- **Concept introduced**: unlike the pure Null Objects around it, this fallback carries *real* behavior: it is the only member of this unit that actually stores and returns data. It signals its limitation through the interface contract rather than by failing, which is a recurring shape in this layer (a `bool` "is this real?" property that hosts read to decide whether to show capability-dependent UI). See the fallback-tier concept under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice). [Rubric §19, State Management] applies: preferences are the small slice of client state whose durability differs per host, and the durability answer is data (`IsPersistent`), not a thrown exception.
-- **Walkthrough**: a `readonly ConcurrentDictionary<string, object?>` built with `StringComparer.Ordinal` backs the store (`:12`); the concurrent type is chosen because Blazor scopes can be touched from more than one async continuation. `IsPersistent` (`:15`) returns `false`, the honest admission that these values do not survive a restart. `GetAsync<T>` (`:18`) guards the key with `ArgumentException.ThrowIfNullOrWhiteSpace`, then returns the stored value only when it is present and of the requested type `T`, otherwise the caller-supplied `fallback` (`:22`). `SetAsync<T>` (`:28`) and `RemoveAsync` (`:37`) apply the same key guard, then write or `TryRemove`. All three return completed `Task`s (the work is synchronous under an async contract).
-- **Why it's built this way**: the class comment (`:5`) explains the intended consumer behavior: because `IsPersistent` is `false`, a host can hide device-settings UI that would otherwise promise durability it cannot deliver. A native head swaps in a platform-backed preferences store with `IsPersistent => true`.
-- **Where it's used**: injected wherever the UI reads or writes device-scoped preferences and no persistent adapter was registered.
+### MauiTokenStorageService
 
-### NullAccessibilityAnnouncer
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullAccessibilityAnnouncer.cs:4` · Level 1 · class
+> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:20` · Level 1 · class (sealed)
 
-- **What it is**: the default [`IAccessibilityAnnouncer`](#iaccessibilityannouncer): screen-reader announcements are silently dropped.
-- **Depends on**: [`IAccessibilityAnnouncer`](#iaccessibilityannouncer) and BCL `Task` only.
-- **Walkthrough**: a single `sealed` class (`:4`) with `AnnounceAsync(string message, ...)` returning `Task.CompletedTask` (`:7`). No state, no side effects. See the fallback-tier concept under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: a Null Object keeps [Rubric §21, Accessibility] wiring resolvable on every host; heads that own a live-region or native accessibility API replace it so announcements actually reach assistive technology.
-- **Where it's used**: injected by components that push polite/assertive live-region messages.
+- **What it is**: the MAUI implementation of [`ITokenStorageService`](group-15-common-ui-framework.md#itokenstorageservice). It keeps the JWT access token and the refresh token in the platform secure store (`SecureStorage.Default`) and guards every read, write, and delete so an entry the OS has invalidated degrades to one clean re-login instead of an unhandled throw.
+- **Depends on**: [`ITokenStorageService`](group-15-common-ui-framework.md#itokenstorageservice) (the contract it implements, `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:1`); MAUI Essentials `SecureStorage.Default` (NuGet, `Microsoft.Maui.Essentials`); BCL `Task`. No logger: nothing in this head takes an `ILogger` (`:76-78`).
+- **Concept introduced**: **at-rest credential protection delegated to the OS**, and with it the group's most defensive error handling. Browser heads are limited to what the browser offers (the access token in memory, the refresh token mirrored to an HttpOnly cookie, per the contract's own remarks at `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/ITokenStorageService.cs:4-6`); a device head can hand both tokens to the platform secure enclave (Android Keystore, iOS Keychain, Windows DPAPI, `MauiTokenStorageService.cs:6-7`), so they are encrypted at rest by the platform rather than by app code. `[Rubric §11, Security]` and `[Rubric §26, Front-End Security]` both assess where credentials live at rest and who can read them; this adapter answers by never holding a decrypted token itself and by keeping the storage decision behind one interface every head shares. `[Rubric §15, Best Practices & Code Quality]` applies to the way the blanket catches are handled: every `catch` carries a scoped `#pragma warning disable CA1031` with the reason inline (`:42-44`, `:72-74`, `:94-96`, `:110-112`), because the thrown platform exception type differs per OS and none of them are recoverable here.
+- **Walkthrough**: two fixed key constants, `auth_access_token` and `auth_refresh_token` (`MauiTokenStorageService.cs:22-23`). `GetAccessTokenAsync` (`:26`) and `GetRefreshTokenAsync` (`:29`) each forward to the private `GetAsync(key)` (`:66`), which awaits `SecureStorage.Default.GetAsync(key)` (`:70`) and, on any failure, calls `TryRemove(key)` and returns `null` (`:79-80`): an undecryptable entry is dropped so the next write starts from a clean key, and the caller sees the "no token stored" outcome the interface already documents. `SetTokensAsync(accessToken, refreshToken)` (`:32`) writes the **refresh** token first, so a failure there leaves the old pair coherent, then writes the access token inside a try whose catch removes both keys before rethrowing (`:37-49`): the storage ends up in a clean signed-out state rather than holding a new access token against a stale refresh token whose refresh path is already dead. The private `SetAsync` (`:88`) is the one place a failure is retried: it removes the key and attempts the write once more (`:98-99`), and a second failure propagates, because a caller must never believe a token was persisted when it was not. `ClearTokensAsync` (`:53`) is deliberately unguarded in outcome: it calls `TryRemove` for both keys and returns `Task.CompletedTask` (`:57-59`), since an entry that cannot be deleted is one the OS already invalidated, which is exactly what the caller asked for. `TryRemove` (`:104`) swallows its own failure with the note that the next `SetAsync` overwrites the entry anyway (`:114-115`).
+- **Why it's built this way**: the class remarks (`:8-13`) record the failure mode being defended against. The OS invalidates keystore entries on its own schedule (an Android backup and restore onto a new device, a security patch that rotates the master key, a biometric enrolment change), and the raw APIs then throw a platform exception instead of returning nothing. An unhandled throw on that path bricks the app on launch until it is reinstalled, so a read failure degrades to "no token stored" and the unreadable entry is dropped, costing the user one re-login. Note the asymmetry the code encodes: **reads and deletes degrade silently, writes do not**. Only the write path is allowed to surface an error, because a silent write failure would leave the auth pipeline believing it is signed in.
+- **Where it's used**: registered as `services.AddScoped<ITokenStorageService, MauiTokenStorageService>()` by the `AddCommonMauiTokenStorage()` extension (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:73-74`), scoped rather than singleton to match the browser siblings so component code depends on one lifetime across every head (`:70-71`). Both consumer MAUI heads call it: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:103` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:88`, in each case alongside [`DirectApiTokenRefresher`](group-15-common-ui-framework.md#directapitokenrefresher) and [`JwtAuthenticationStateProvider`](group-15-common-ui-framework.md#jwtauthenticationstateprovider). The browser-host siblings behind the same contract are [`WasmTokenStorageService`](group-15-common-ui-framework.md#wasmtokenstorageservice) and [`ServerTokenStorageService`](group-15-common-ui-framework.md#servertokenstorageservice) (`MauiTokenStorageService.cs:15-17`).
+- **Caveats / not-in-source**: the swallowed failures are not reported anywhere, by design (`:76-78`), so a device stuck in a keystore-failure loop looks to telemetry exactly like a user signing in again. There is no test project for this package in the repository, so the retry-once and rollback-both behaviors are asserted by the source only.
 
-### NullBatteryStatusService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullBatteryStatusService.cs:4` · Level 1 · class
+### MauiCultureApplier
 
-- **What it is**: the default [`IBatteryStatusService`](#ibatterystatusservice): energy-saver mode is never reported active and the change event never fires.
-- **Depends on**: [`IBatteryStatusService`](#ibatterystatusservice) and BCL `EventHandler`.
-- **Walkthrough**: the `sealed` class (`:4`) mirrors the connectivity fallback's shape: `EnergySaverChanged` (`:7`) has empty `add`/`remove` accessors (`:9`, `:14`) so subscriptions are accepted but never invoked, and `IsEnergySaverOn` (`:21`) returns `false`. See [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice) for the event-never-raised idiom and the fallback tier.
-- **Why it's built this way**: web hosts have no OS battery signal, so "never energy-saving" is the safe default that lets performance-sensitive components (for example, animation throttling) run unthrottled; native heads override with real battery telemetry.
-- **Where it's used**: injected by components that adapt behavior to low-power mode.
+> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Globalization` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureApplier.cs:22` · Level 2 · class (sealed)
 
-### NullBiometricAuthenticator
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullBiometricAuthenticator.cs:4` · Level 1 · class
+- **What it is**: the [`ICultureApplier`](group-15-common-ui-framework.md#icultureapplier) implementation for MAUI Blazor Hybrid heads ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). It switches the culture in process and reloads the `BlazorWebView`, instead of round-tripping the server `/culture/set` endpoint the way [`EndpointCultureApplier`](group-15-common-ui-framework.md#endpointcultureapplier) does.
+- **Depends on**: [`ICultureApplier`](group-15-common-ui-framework.md#icultureapplier) (`MMCA.Common.UI.Services`, `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureApplier.cs:3`), [`MauiCultureStore`](#mauiculturestore), and [`SupportedCultures`](group-12-api-hosting-mapping.md#supportedcultures) (`:2`); ASP.NET Core `NavigationManager` via primary constructor (`:1`, `:22`).
+- **Concept introduced**: the **per-head applier swap** is the culture counterpart of this group's capability-adapter pattern, and it is why the abstraction exists at all. The shared culture switcher and the login preference reconciliation both call `ApplyAsync` and know nothing about heads; the web default navigates to a server endpoint, and a hybrid head has no ASP.NET pipeline, so that URL would be resolved by the Blazor `Router`, match no page, and render the not-found page (`MauiCultureApplier.cs:8-12`). `[Rubric §27, Internationalization & Localization]` assesses exactly this: whether the locale decision survives every host without special-casing at the call site. `[Rubric §2, Design Patterns]` applies through the same Strategy-by-DI shape the capability adapters use.
+- **Walkthrough**: `ApplyAsync(culture, returnPath, cancellationToken)` (`MauiCultureApplier.cs:25`) guards the culture with `ArgumentException.ThrowIfNullOrWhiteSpace` (`:27`), then silently returns `Task.CompletedTask` for anything [`SupportedCultures.IsSupported`](group-12-api-hosting-mapping.md#supportedcultures) rejects (`:32-35`), matching the web endpoint's behavior of honoring only allowlisted cultures and otherwise leaving the user on the same page unchanged. The comment records that the pseudo locale is unreachable here: the switcher only offers it when `IHostEnvironment` reports Development, and a MAUI head registers no such service (`:30-31`). It then calls [`MauiCultureStore.Save`](#mauiculturestore) and [`MauiCultureStore.ApplyToProcess`](#mauiculturestore) (`:41-42`) **before** navigating, an order the comment marks as load-bearing (`:37-40`) so the new culture is already the process default when the tree re-renders. Finally it defaults a blank `returnPath` to `"/"` (`:44`) and calls `navigation.NavigateTo(target, forceLoad: true)` (`:45`), returning `Task.CompletedTask` (`:47`): the method is synchronous despite the async contract.
+- **Why it's built this way**: the reload is what makes the change visible (`:13-19`). Resource strings are resolved from `CultureInfo.CurrentUICulture` at render time and Blazor has no API to re-render an entire component tree in place, so a force load inside a `BlazorWebView` re-boots the Blazor app while the .NET process, and therefore the culture just set, stays alive. Note the asymmetry with the web applier: there the reload exists to make the *server* re-render under a new cookie; here there is no server and no cookie, and the reload exists purely to rebuild the component tree. The persist-then-activate-then-reload order is what keeps the two halves from racing.
+- **Where it's used**: registered as `AddScoped<ICultureApplier, MauiCultureApplier>()` by `UseMauiCulture()` (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:54`), which `UseMauiDeviceCapabilities()` calls for every head (`:37`). That plain `Add` must run **after** `AddUIShared`, whose `TryAddScoped` default is the web applier (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:97`), because last registration wins; both consumer MAUI heads honor that order (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:71,76` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:61,66`). Callers are the shared culture switcher component and the login preference reconciliation, neither of which is MAUI-aware.
+- **Caveats / not-in-source**: `cancellationToken` is accepted to satisfy the interface and is not observed; there is nothing awaited to cancel.
 
-- **What it is**: the default [`IBiometricAuthenticator`](#ibiometricauthenticator): biometric app-lock is reported unavailable and any authentication attempt fails.
-- **Depends on**: [`IBiometricAuthenticator`](#ibiometricauthenticator) and BCL `Task<bool>`.
-- **Walkthrough**: the `sealed` class (`:4`) returns `Task.FromResult(false)` from both `IsAvailableAsync` (`:7`) and `AuthenticateAsync(string reason, ...)` (`:11`). The availability flag and the auth result are the same `false`, so a host that checks availability first will never call authenticate. See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: the class comment (`:3`) notes hosts hide the app-lock toggle when biometrics are unavailable, which keeps the security affordance ([Rubric §26, Front-End Security]) honest: no fake lock UI on a head that cannot enforce it. MAUI supplies a real fingerprint/face adapter.
-- **Where it's used**: injected by app-lock / sensitive-screen guard components.
+### MauiCultureInitializer
 
-### NullClipboardService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullClipboardService.cs:4` · Level 1 · class
+> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Globalization` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureInitializer.cs:14` · Level 2 · class (sealed)
 
-- **What it is**: the default [`IClipboardService`](#iclipboardservice): copying text to the clipboard is reported as failed.
-- **Depends on**: [`IClipboardService`](#iclipboardservice) and BCL `Task<bool>`.
-- **Walkthrough**: the `sealed` class (`:4`) has one member, `SetTextAsync(string text, ...)`, returning `Task.FromResult(false)` (`:7`). The `bool` return is the failure signal callers branch on. See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: returning `false` rather than throwing lets a copy-to-clipboard button degrade to an alternate UX (for example, showing selectable text) instead of erroring; browser heads register a JS-interop clipboard adapter that returns `true`.
-- **Where it's used**: injected by copy-link / copy-code UI elements.
-
-### NullExternalLinkService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullExternalLinkService.cs:7` · Level 1 · class
-
-- **What it is**: the default [`IExternalLinkService`](#iexternallinkservice): it does not intercept outbound links, so components render ordinary anchors.
-- **Depends on**: [`IExternalLinkService`](#iexternallinkservice) and BCL `Uri` / `Task`.
-- **Walkthrough**: the `sealed` class (`:7`) exposes `InterceptsLinks` returning `false` (`:10`) and `OpenAsync(Uri uri, ...)` returning `Task.CompletedTask` (`:13`). Because `InterceptsLinks` is `false`, well-behaved components never call `OpenAsync` at all; they emit a plain `<a target="_blank">`. See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: the class comment (`:3`) explains this is the *correct* behavior on web heads even without JS: a normal anchor already opens an external URL in a new tab. It exists as an override point for BlazorWebView (MAUI), where `target="_blank"` is dead and links must be handed to the OS browser instead ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). This is the `ExternalLink`-over-raw-anchor decision recorded in [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html).
-- **Where it's used**: injected by the shared `ExternalLink` component and anywhere the UI opens off-app URLs.
-
-### NullHapticFeedbackService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullHapticFeedbackService.cs:4` · Level 1 · class
-
-- **What it is**: the default [`IHapticFeedbackService`](#ihapticfeedbackservice): no vibration hardware, so every haptic call is a no-op.
-- **Depends on**: [`IHapticFeedbackService`](#ihapticfeedbackservice) and BCL `TimeSpan`.
-- **Walkthrough**: the `sealed` class (`:4`) reports `IsSupported => false` (`:7`) and provides empty `Click()` (`:10`), `LongPress()` (`:16`), and `Vibrate(TimeSpan duration)` (`:22`). These are the unit's only *synchronous* (non-`Task`) capability methods, matching the fire-and-forget nature of haptics. See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: no-op methods plus an `IsSupported` flag let interaction code request haptics unconditionally while a host with a vibrator motor opts in; the fallback keeps web and desktop heads quiet.
-- **Where it's used**: injected by tactile-feedback wrappers around buttons and gestures.
-
-### NullLocalCacheStore
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullLocalCacheStore.cs:4` · Level 1 · class
-
-- **What it is**: the default [`ILocalCacheStore`](#ilocalcachestore): nothing is cached, and reads always return `default`.
-- **Depends on**: [`ILocalCacheStore`](#ilocalcachestore) and BCL `Task` / `Task<T?>`.
-- **Walkthrough**: the `sealed` class (`:4`) reports `IsAvailable => false` (`:7`). `SetAsync<T>` (`:10`) and `RemoveAsync` (`:18`) return `Task.CompletedTask` (writes are discarded); `GetAsync<T>` (`:14`) returns `Task.FromResult<T?>(default)`, so a miss is guaranteed. This is a write-black-hole / read-empty store. See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: `IsAvailable` lets a component skip an offline read path entirely when no durable local cache exists; native/browser heads supply a real store (for example, over platform storage or IndexedDB). [Rubric §23, Front-End Performance] is the relevant lens: local caching is a performance capability the fallback declares absent rather than faking.
-- **Where it's used**: injected by offline-read and response-caching UI helpers.
-
-### NullMapNavigationService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullMapNavigationService.cs:4` · Level 1 · class
-
-- **What it is**: the default [`IMapNavigationService`](#imapnavigationservice): no maps integration; opening an address reports failure.
-- **Depends on**: [`IMapNavigationService`](#imapnavigationservice) and BCL `Task<bool>`.
-- **Walkthrough**: the `sealed` class (`:4`) has one member, `OpenAddressAsync(string address, string? label, ...)`, returning `Task.FromResult(false)` (`:7`). The nullable `label` is accepted and ignored. See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: a `false` result lets an "open in maps" affordance fall back to plain address text; native heads launch the OS maps app.
-- **Where it's used**: injected by venue / location UI that offers turn-by-turn hand-off.
-
-### NullPushRegistrationService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullPushRegistrationService.cs:7` · Level 1 · class
-
-- **What it is**: the default [`IPushRegistrationService`](#ipushregistrationservice): OS-level push registration is unsupported, so registering is a failed no-op.
-- **Depends on**: [`IPushRegistrationService`](#ipushregistrationservice) and BCL `Task` / `Task<bool>`.
-- **Walkthrough**: the `sealed` class (`:7`) reports `IsSupported => false` (`:10`), `RegisterAsync` returns `Task.FromResult(false)` (`:13`), and `UnregisterAsync` returns `Task.CompletedTask` (`:16`) so tearing down is always safe to call. See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: the class comment (`:3`) records the [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) rationale precisely: web heads already receive real-time notifications over the SignalR hub while the page is open and have no OS-level installation to manage, so no-op push registration is correct, not a gap. Native heads register with Azure Notification Hubs (FCM v1 / APNs) via the MAUI package. This is the client leg of [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)'s native push channel; the credential-less-but-inert posture keeps builds wired without a device token.
-- **Where it's used**: injected by notification-preferences / permission-prompt UI.
-
-### NullScreenshotService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullScreenshotService.cs:4` · Level 1 · class
-
-- **What it is**: the default [`IScreenshotService`](#iscreenshotservice): screen capture is unavailable.
-- **Depends on**: [`IScreenshotService`](#iscreenshotservice) and BCL `Task<string?>`.
-- **Walkthrough**: the `sealed` class (`:4`) reports `IsSupported => false` (`:7`) and `CaptureToFileAsync` returning `Task.FromResult<string?>(null)` (`:10`) (a null file path meaning "no capture"). See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: the null-path convention lets a "save screenshot" action gate itself on `IsSupported` and skip cleanly; native heads implement real capture-to-file.
-- **Where it's used**: injected by share-a-screenshot / diagnostics UI.
-
-### NullShareService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullShareService.cs:4` · Level 1 · class
-
-- **What it is**: the default [`IShareService`](#ishareservice): the native share sheet is unavailable, so callers fall back to copy-link.
-- **Depends on**: [`IShareService`](#ishareservice) and BCL `Uri` / `Task<bool>`.
-- **Walkthrough**: the `sealed` class (`:4`) returns `Task.FromResult(false)` from both `ShareLinkAsync(string title, Uri uri, ...)` (`:7`) and `ShareFileAsync(string title, string filePath, string contentType, ...)` (`:11`). See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: the class comment (`:3`) names the intended degradation: a `false` result routes callers to copy-link instead of a native share sheet. MAUI supplies a real share adapter.
-- **Where it's used**: injected by share buttons on shareable entities (sessions, links, files).
-
-### NullSpeechToTextService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullSpeechToTextService.cs:6` · Level 1 · class
-
-- **What it is**: the default [`ISpeechToTextService`](#ispeechtotextservice): no recognizer, so dictation is unavailable.
-- **Depends on**: [`ISpeechToTextService`](#ispeechtotextservice), BCL `CultureInfo`, `IProgress<string>`, `Task<string?>`.
-- **Walkthrough**: the `sealed` class (`:6`) reports `IsSupported => false` (`:9`). `ListenAsync(CultureInfo culture, IProgress<string>? partialResults, ...)` (`:12`) accepts a target culture and an optional partial-results reporter but returns `Task.FromResult<string?>(null)` (`:16`) immediately: no interim progress is ever reported and the final result is null. See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: the class comment (`:5`) notes components hide the microphone affordance when `IsSupported` is false; native heads provide a platform speech recognizer that streams partials through the `IProgress<string>`.
-- **Where it's used**: injected by voice-input / dictation controls.
-
-### NullTextToSpeechService
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/NullTextToSpeechService.cs:4` · Level 1 · class
-
-- **What it is**: the default [`ITextToSpeechService`](#itexttospeechservice): no synthesizer, so speaking text is a no-op.
-- **Depends on**: [`ITextToSpeechService`](#itexttospeechservice) and BCL `Task`.
-- **Walkthrough**: the `sealed` class (`:4`) reports `IsSupported => false` (`:7`); `SpeakAsync(string text, ...)` (`:10`) and `StopAsync()` (`:13`) both return completed `Task`s. The paired speak/stop shape means a caller can always cancel safely even when nothing is speaking. See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: the class comment (`:3`) notes components hide the read-aloud affordance when unsupported; native heads provide a platform synthesizer.
-- **Where it's used**: injected by read-aloud / accessibility narration controls.
-
-### UnavailableExternalAuthBroker
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Fallbacks` · `MMCA.Common.UI/Services/Capabilities/Fallbacks/UnavailableExternalAuthBroker.cs:7` · Level 1 · class
-
-- **What it is**: the default [`IExternalAuthBroker`](#iexternalauthbroker): there is no native OAuth broker, so external sign-in falls through to the web flow.
-- **Depends on**: [`IExternalAuthBroker`](#iexternalauthbroker) and BCL `Task<bool>`.
-- **Walkthrough**: the `sealed` class (`:7`) reports `IsAvailable => false` (`:10`) and `SignInAsync(string provider, ...)` returning `Task.FromResult(false)` (`:13`). Because `IsAvailable` is `false`, the shared Login page never invokes the broker. See the fallback tier under [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
-- **Why it's built this way**: the class comment (`:3`) explains this keeps the shared Login page on its anchor-href OAuth flow, the correct behavior for web heads. On MAUI the `MauiExternalAuthBroker` overrides it to drive `WebAuthenticator` and capture the single-use completion code over the allow-listed custom scheme ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)). This is [Rubric §11, Security]: the native-vs-web sign-in path is chosen behind one interface, and the fallback picks the browser-safe OAuth redirect by default.
-- **Where it's used**: injected by the shared Identity Login page's external-provider buttons.
+- **What it is**: the startup restore for a hybrid head ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)): an `IMauiInitializeService` that reapplies the persisted culture while the MAUI app is being built, so the very first Blazor render already happens in the language the user last chose.
+- **Depends on**: [`MauiCultureStore`](#mauiculturestore) (both `Resolve()` and `ApplyToProcess`); MAUI's `IMauiInitializeService` (NuGet, `Microsoft.Maui`).
+- **Concept introduced**: this is the hybrid counterpart of the WASM head's [`MmcaCultureBootstrap`](group-15-common-ui-framework.md#mmcaculturebootstrap), and the pairing is the point. Both run *before* the UI exists and both set only the thread default cultures; they differ only in where the persisted choice comes from (a cookie read over JS interop on WASM, device preferences here). `[Rubric §27, Internationalization & Localization]` assesses whether a returning user's locale is restored rather than re-guessed: without this service a hybrid head has no culture state of its own and always starts at the device locale, so persisting the choice in [`MauiCultureApplier`](#mauicultureapplier) alone would not be enough (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureInitializer.cs:9-12`). It shares the `IMauiInitializeService` extension point with [`DeviceCapabilitiesInitializer`](#devicecapabilitiesinitializer), the deep-link bridge in this group.
+- **Walkthrough**: the whole type is one expression-bodied method. `Initialize(IServiceProvider services)` (`MauiCultureInitializer.cs:21-22`) calls `MauiCultureStore.ApplyToProcess(MauiCultureStore.Resolve())`: resolve the stored choice (falling back to the language-matched device locale, then the framework default), then activate it through the thread-defaults-only path. The `services` parameter is documented as deliberately unused (`:17-19`): the culture lives in device preferences and process state, both reachable without DI, and the parameter belongs to the interface rather than to this restore.
+- **Why it's built this way**: `IMauiInitializeService.Initialize` runs inside `MauiAppBuilder.Build()`, before any window or page exists (`:5-8`), which buys two things: no flash of the wrong language on launch, and no need to re-switch on every start just to get back to the chosen language. It also puts the assignment in the earliest `ExecutionContext`, which is precisely why [`MauiCultureStore.ApplyToProcess`](#mauiculturestore) must not touch `CultureInfo.Current*`: an `AsyncLocal` written this early would be restored into every later dispatch and would outrank any subsequent switch.
+- **Where it's used**: registered as `AddSingleton<IMauiInitializeService, MauiCultureInitializer>()` by `UseMauiCulture()` (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:55`), which `UseMauiDeviceCapabilities()` folds in for every head (`:32-37`) so no head can be left half-configured; `UseMauiCulture()` stays separately callable, and calling it twice is documented as harmless (`:47`).
 
 ### NullGeocodingService
 
@@ -1470,49 +1408,61 @@ delivery), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-st
 
 > MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Services` · `MMCA.Common.UI.Web/Services/WebFormFactor.cs:12` · Level 1 · class
 
-- **What it is**: The Blazor Server side implementation of [`IFormFactor`](#iformfactor), the tiny contract that lets shared UI adapt to the host it is running on. It reports the form factor as the literal string `"Web"` because this code executes on the server during SSR prerender and interactive Server render mode.
-- **Depends on**: First-party: the [`IFormFactor`](#iformfactor) contract it implements (`MMCA.Common.UI.Web/Services/WebFormFactor.cs:12`). Externals: `System.Environment` (BCL) for the OS description. No app-specific state, which is why it was hoisted out of the individual Blazor Web hosts into the shared package.
-- **Concept introduced**: **Host-selected capability implementation.** `IFormFactor` is the smallest example of the pattern this whole group is built around: one interface, and a different concrete class registered per host at DI composition time. The three siblings are this class ([`WebFormFactor`](#webformfactor) for Blazor Server), [`WasmFormFactor`](#wasmformfactor) in MMCA.Common.UI for WebAssembly, and [`MauiFormFactor`](#mauiformfactor) in MMCA.Common.UI.Maui for the native head. Shared components depend only on the interface; the host picks the body. [Rubric §18, UI Architecture] assesses how cleanly presentation concerns are layered and how portable components are across render hosts; a one-method contract with three swappable bodies keeps every consuming component host-agnostic. [Rubric §22, Responsive/Cross-Browser] assesses how the app adapts to device and environment; `GetFormFactor()` is the coarse signal components branch on when server-rendered behavior must differ from WASM or native.
-- **Walkthrough**: The class is `sealed` (`WebFormFactor.cs:12`) and holds no fields. `GetFormFactor()` returns the constant `"Web"` (`WebFormFactor.cs:15`); it is a constant rather than a probe because Blazor Server always runs this code server-side. `GetPlatform()` returns `Environment.OSVersion.ToString()` (`WebFormFactor.cs:18`), the server OS description, which for a server render is the deployment host rather than the end user's device.
-- **Why it's built this way**: Server prerender and interactive Server render both run on the server, so there is no reliable client device signal available at this layer; reporting `"Web"` and the server OS is the honest answer for this host. Keeping the type stateless and app-neutral is what allowed it to move up into the shared `MMCA.Common.UI.Web` package (its XML doc notes it is registered via `AddCommonWebFormFactor()`, `WebFormFactor.cs:9-10`).
-- **Where it's used**: Registered by the Blazor Web hosts through `AddCommonWebFormFactor()`; resolved by any shared component that injects [`IFormFactor`](#iformfactor) to branch on the current host.
-- **Caveats / not-in-source**: `GetPlatform()` reports the *server* OS, not the browser or client device; do not treat it as a client fingerprint. Not determinable from source: the exact registration body of `AddCommonWebFormFactor()` (it lives in the Web host's own DI file, outside this unit).
+- **What it is**: The Blazor Server implementation of [`IFormFactor`](#iformfactor), the tiny contract that lets shared UI adapt to the host it is running on. It reports the form factor as the literal string `"Web"` because this code executes on the server during SSR prerender and interactive Server render mode.
+- **Depends on**: First-party: the [`IFormFactor`](#iformfactor) contract it implements, imported from `MMCA.Common.UI.Services` (`MMCA.Common.UI.Web/Services/WebFormFactor.cs:1,12`). Externals: `System.Environment` (BCL) for the OS description. It holds no app-specific state, which is why it was hoisted out of the individual Blazor Web hosts into the shared package (`MMCA.Common.UI.Web/Services/WebFormFactor.cs:7-9`).
+- **Concept introduced**: **Host-selected capability implementation.** `IFormFactor` is the smallest example of the pattern this whole group is built around: one interface, and a different concrete class registered per host at DI composition time. The three siblings are this class ([`WebFormFactor`](#webformfactor) for Blazor Server), [`WasmFormFactor`](#wasmformfactor) in MMCA.Common.UI for WebAssembly, and [`MauiFormFactor`](#mauiformfactor) in MMCA.Common.UI.Maui for the native head; the XML doc names all three (`MMCA.Common.UI.Web/Services/WebFormFactor.cs:8-9`). Shared components depend only on the interface, and the host picks the body. [Rubric §18, UI Architecture] assesses how cleanly presentation concerns are layered and how portable components are across render hosts; a one-method contract with three swappable bodies keeps every consuming component host-agnostic. [Rubric §22, Responsive/Cross-Browser] assesses how the app adapts to device and environment; `GetFormFactor()` is the coarse signal components branch on when server-rendered behavior must differ from WASM or native.
+- **Walkthrough**: The class is `sealed` and stateless (`MMCA.Common.UI.Web/Services/WebFormFactor.cs:12`). `GetFormFactor()` returns the constant `"Web"` (`MMCA.Common.UI.Web/Services/WebFormFactor.cs:15`); it is a constant rather than a probe because Blazor Server always runs this code server-side. `GetPlatform()` returns `Environment.OSVersion.ToString()` (`MMCA.Common.UI.Web/Services/WebFormFactor.cs:18`), the server OS description, which for a server render describes the deployment host rather than the end user's device.
+- **Why it's built this way**: Server prerender and interactive Server render both execute on the server, so no reliable client-device signal is available at this layer; reporting `"Web"` plus the server OS is the honest answer for this host. Keeping the type stateless and app-neutral is what allowed it to move up into the shared `MMCA.Common.UI.Web` package.
+- **Where it's used**: Registered by the Blazor Server host through `AddCommonWebFormFactor()`, which binds `IFormFactor` to this class as a singleton (`MMCA.Common.UI.Web/DependencyInjection.cs:47-48`); the WASM client registers `AddWasmFormFactor()` from MMCA.Common.UI instead (`MMCA.Common.UI.Web/DependencyInjection.cs:44-45`). Resolved by any shared component that injects [`IFormFactor`](#iformfactor) to branch on the current host.
+- **Caveats / not-in-source**: `GetPlatform()` reports the *server* OS, not the browser or client device; do not treat it as a client fingerprint.
+
+### MainPageBase
+
+> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui` · `MMCA.Common.UI.Maui/MainPageBase.cs:20` · Level 2 · class (abstract)
+
+- **What it is**: The base `ContentPage` for a MAUI Blazor Hybrid head whose XAML hosts a single `BlazorWebView`. It intercepts the platform back gesture (Android hardware back, iOS swipe) and forwards it into the WebView's own history stack, quitting the app only when the WebView has nowhere left to go (`MMCA.Common.UI.Maui/MainPageBase.cs:7-11,20`).
+- **Depends on**: First-party: [`MauiBackNavigationBridge`](group-15-common-ui-framework.md#mauibacknavigationbridge) and its [`BackNavigationResult`](group-15-common-ui-framework.md#backnavigationresult) return type, imported from `MMCA.Common.UI.Services.Navigation` (`MMCA.Common.UI.Maui/MainPageBase.cs:3,69`). Externals: `Microsoft.Maui.Controls.ContentPage`, `MainThread` and `Application.Current` (MAUI), `Microsoft.AspNetCore.Components.WebView.Maui.BlazorWebView` (NuGet, `MMCA.Common.UI.Maui/MainPageBase.cs:1`), and `Microsoft.JSInterop.IJSRuntime` (`MMCA.Common.UI.Maui/MainPageBase.cs:2`).
+- **Concept introduced**: **Native gesture routed into web history.** A hybrid head has two navigation stacks that do not know about each other: the native page stack and the WebView's `history`. Without this base, Android's back button pops the native stack (there is only one page, so the app exits) no matter how deep the Blazor router has navigated. This type makes the native gesture a question asked of the web stack first, and treats "app exit" as the answer of last resort. [Rubric §25, Navigation & IA] assesses whether navigation intent is modeled coherently across the app's entry points; funnelling the hardware gesture through the same history the Blazor router drives keeps one navigation model instead of two. [Rubric §18, UI Architecture] assesses how much host-specific plumbing leaks into app code; because the base owns the whole interception, a head adopts it in two edits (point the XAML root element at this type, and override `HostWebView` to return the `x:Name`d control, `MMCA.Common.UI.Maui/MainPageBase.cs:12-18`). [Rubric §29, Resilience and Business Continuity] assesses graceful degradation at edge states; every failure path here (WebView not hydrated, dispatch refused, interop threw) ends in a clean quit rather than a swallowed gesture or an unhandled exception.
+- **Walkthrough**: `HostWebView` is an abstract protected property (`MMCA.Common.UI.Maui/MainPageBase.cs:27`): the XAML-generated `x:Name` field is private to the derived partial class, so the base can only reach the control through an override. `OnBackButtonPressed()` (`MMCA.Common.UI.Maui/MainPageBase.cs:30-35`) starts `HandleBackAsync()` without awaiting it and returns `true`, which consumes the gesture immediately and moves the decision off the UI thread. `HandleBackAsync()` (`MMCA.Common.UI.Maui/MainPageBase.cs:46`) has to bridge a synchronous API to async work: `BlazorWebView` only exposes an `Action<IServiceProvider>` dispatch overload, so the method creates a `TaskCompletionSource<IJSRuntime?>` (`MMCA.Common.UI.Maui/MainPageBase.cs:53`), calls `HostWebView.TryDispatchAsync(...)` with the tiny `CaptureJsRuntime` callback that resolves the renderer-scoped `IJSRuntime` into that source (`MMCA.Common.UI.Maui/MainPageBase.cs:37-38,54`), and then awaits the task outside the dispatch context (`MMCA.Common.UI.Maui/MainPageBase.cs:62`). Two guards quit the app early: dispatch refused (`MMCA.Common.UI.Maui/MainPageBase.cs:56-60`) and a null `IJSRuntime` (`MMCA.Common.UI.Maui/MainPageBase.cs:63-67`). Otherwise it delegates to `MauiBackNavigationBridge.HandleBackPressedAsync(jsRuntime)` and quits only when the returned result reports `AtRoot` (`MMCA.Common.UI.Maui/MainPageBase.cs:69-73`). Quitting itself is a two-hop helper: `QuitApp()` marshals back with `MainThread.BeginInvokeOnMainThread` (`MMCA.Common.UI.Maui/MainPageBase.cs:40-41`) and `QuitOnMainThread()` calls `Application.Current?.Quit()` (`MMCA.Common.UI.Maui/MainPageBase.cs:43-44`). A deliberate catch-all wraps the whole body with the CA1031 analyzer suppressed and a comment explaining why (the interop failure modes differ per platform and none are recoverable here), degrading to a clean exit (`MMCA.Common.UI.Maui/MainPageBase.cs:75-81`).
+- **Why it's built this way**: The bridge itself lives in `MMCA.Common.UI` so the JS interop module ships with the shared UI package, and this page is the thin native adapter over it; the bridge returns `Handled`/`AtRoot` rather than navigating on its own precisely so the native side decides what "no history left" means (`MMCA.Common.UI/Services/Navigation/MauiBackNavigationBridge.cs:9-19,38`). The bridge already converts its own interop failures into `AtRoot: true` (`MMCA.Common.UI/Services/Navigation/MauiBackNavigationBridge.cs:48-60`), so the two layers agree on the fail-safe direction: when in doubt, treat the WebView as being at its root. Owning no XAML keeps the base adoptable by any head regardless of what that head's page declares.
+- **Where it's used**: Both MAUI heads derive from it: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MainPage.xaml.cs:12-17` (with the XAML root element switched to `maui:MainPageBase`, `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MainPage.xaml:2-7`) and Store's, where the code-behind declares no base at all because the XAML root element supplies it, leaving only the `HostWebView` override (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MainPage.xaml.cs:10-16`).
+- **Caveats / not-in-source**: Whether a given gesture reaches `OnBackButtonPressed` at all is platform behavior, not visible here (MAUI raises it for Android hardware back and the iOS swipe per the class doc, `MMCA.Common.UI.Maui/MainPageBase.cs:9-11`). Not determinable from source in this unit: the `tryGoBack()` helper in `_content/MMCA.Common.UI/nav-interop.js` that actually inspects the history stack (`MMCA.Common.UI/Services/Navigation/MauiBackNavigationBridge.cs:30,45`); it is a JS asset, not C#.
 
 ### DependencyInjection
 
-> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui` · `MMCA.Common.UI.Maui/DependencyInjection.cs:14` · Level 3 · class (static)
+> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui` · `MMCA.Common.UI.Maui/DependencyInjection.cs:16` · Level 3 · class (static)
 
-- **What it is**: The service-level registration surface for the MAUI native device-capability layer ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). It adds one `AddMauiDeviceCapabilities()` method that binds every capability contract the framework backs natively to its MAUI implementation, plus a separate `AddMauiFormFactor()` for the native [`IFormFactor`](#iformfactor).
-- **Depends on**: First-party: the whole capability contract set in `MMCA.Common.UI.Services.Capabilities` and their `Maui*` implementations in `MMCA.Common.UI.Maui.Capabilities` (`DependencyInjection.cs:2-4`), [`MauiFormFactor`](#mauiformfactor) (`DependencyInjection.cs:69-70`). Externals: `Microsoft.Extensions.DependencyInjection.IServiceCollection` (BCL/NuGet) as the extended type.
-- **Concept introduced**: **`extension(IServiceCollection)` registration blocks.** The class is a `static class` whose members live inside an `extension(IServiceCollection services)` block (`DependencyInjection.cs:17`), the C# preview extension-member syntax this codebase uses everywhere for DI. The methods appear as instance methods on `IServiceCollection` at call sites (`builder.Services.AddMauiDeviceCapabilities()`). Two registration lifetimes appear here and the code explains both in comments: **singletons** for the capability services because a MAUI head is single-user and the stateful ones (connectivity, battery) wrap app-global platform events (`DependencyInjection.cs:27-28`), and one **scoped** registration for [`IExternalAuthBroker`](#iexternalauthbroker) because it navigates through the circuit's `NavigationManager` (`DependencyInjection.cs:56-59`). [Rubric §10, Cross-Cutting] assesses how infrastructure concerns are composed rather than scattered; centralizing every native binding in one extension method keeps the host program short. [Rubric §7, Microservices Readiness] assesses how cleanly a host swaps implementations; last-registration-wins over the shared TryAdd defaults is exactly that boundary.
-- **Walkthrough**: `AddMauiDeviceCapabilities()` (`DependencyInjection.cs:25`) registers sixteen capability contracts as singletons in a block (`DependencyInjection.cs:29-45`): connectivity, battery, share, clipboard, haptics, map navigation, geolocation, geocoding, external links, text-to-speech, accessibility announcer, local notifications, screenshot, device preferences, local cache, biometrics, and speech-to-text. Three further registrations are commented because they carry conditions: [`IPushRegistrationService`](#ipushregistrationservice) is wired but stays inert until a credentialed `IPushDeviceTokenProvider` exists ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html), `DependencyInjection.cs:47-50`); `IMediaPickerService` needs the head to declare camera permissions for capture ([ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html), `DependencyInjection.cs:52-54`); and [`IExternalAuthBroker`](#iexternalauthbroker) is registered `AddScoped` and stays inert (`IsAvailable == false`) until the head configures `OAuth:MobileRedirectScheme` and the platform callback (`DependencyInjection.cs:56-59`). `AddMauiFormFactor()` (`DependencyInjection.cs:69-70`) is deliberately separate so a head that registers its own [`IFormFactor`](#iformfactor) keeps last-registration-wins control.
-- **Why it's built this way**: The class doc is explicit that plain `Add` (not `TryAdd`) is used and must run *after* `AddUIShared` so these native bodies override the shared TryAdd null-object defaults (last registration wins, `DependencyInjection.cs:11-13`). Splitting form-factor registration from capability registration (`DependencyInjection.cs:63-68`) preserves that override control per concern. Contracts with no native body yet (biometrics broker gaps, speech, external-auth) simply keep their shared null defaults until their feature wave lands (`DependencyInjection.cs:20-24`), so the DI graph always resolves.
-- **Where it's used**: Called by [`HostingDependencyInjection`](#hostingdependencyinjection)'s `UseMauiDeviceCapabilities()` (`HostingDependencyInjection.cs:28`), the builder-level entry point heads actually call; the class doc names `builder.UseMauiDeviceCapabilities()` as the preferred path (`DependencyInjection.cs:9-11`).
-- **Caveats / not-in-source**: "Wired but inert" is a real runtime state for push, media capture, and external auth: registration does not imply the capability works without the additional host config each comment names. Not determinable from source: the bodies of the individual `Maui*Service` implementations (they live in other units of this group).
+- **What it is**: The service-level registration surface for the MAUI native device-capability layer ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). It binds every capability contract the framework backs natively to its MAUI implementation (`AddMauiDeviceCapabilities()`), and adds two deliberately separate opt-ins: OS-SecureStorage token storage (`AddCommonMauiTokenStorage()`) and the native [`IFormFactor`](#iformfactor) (`AddMauiFormFactor()`).
+- **Depends on**: First-party: the capability contract set in `MMCA.Common.UI.Services.Capabilities` with their `Maui*` bodies in `MMCA.Common.UI.Maui.Capabilities`, plus `MMCA.Common.UI.Services` and `MMCA.Common.UI.Services.Auth` for [`IFormFactor`](#iformfactor) and `ITokenStorageService` (`MMCA.Common.UI.Maui/DependencyInjection.cs:1-5`). Externals: `Microsoft.Extensions.DependencyInjection.IServiceCollection` as the extended type.
+- **Concept introduced**: **`extension(IServiceCollection)` registration blocks.** The class is a `static class` (`MMCA.Common.UI.Maui/DependencyInjection.cs:16`) whose members live inside an `extension(IServiceCollection services)` block (`MMCA.Common.UI.Maui/DependencyInjection.cs:18`), the C# preview extension-member syntax this codebase uses for DI registration everywhere. The methods appear as instance methods on `IServiceCollection` at call sites (`builder.Services.AddMauiDeviceCapabilities()`). Two lifetimes appear here and the code explains both: **singletons** for the capability services because a MAUI head is single-user and the stateful ones (connectivity, battery) wrap app-global platform events (`MMCA.Common.UI.Maui/DependencyInjection.cs:28-29`), and **scoped** for [`IExternalAuthBroker`](#iexternalauthbroker) because it navigates through the circuit's `NavigationManager` (`MMCA.Common.UI.Maui/DependencyInjection.cs:57-59`) and for `ITokenStorageService` so component code sees one lifetime across every head (`MMCA.Common.UI.Maui/DependencyInjection.cs:70-71`). [Rubric §1, SOLID] assesses dependency inversion in practice; every consumer here depends on a capability interface and never on a MAUI type, which is exactly what makes the browser and fallback adapters in this group drop-in substitutes. [Rubric §10, Cross-Cutting] assesses whether infrastructure concerns are composed in one place rather than scattered; a single extension method carries the entire native binding set, so a head's `MauiProgram` stays short.
+- **Walkthrough**: `AddMauiDeviceCapabilities()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:26`) registers seventeen capability contracts as singletons in one block (`MMCA.Common.UI.Maui/DependencyInjection.cs:30-46`): connectivity, battery, share, clipboard, haptics, map navigation, geolocation, geocoding, external links, text-to-speech, accessibility announcer, local notifications, screenshot, device preferences, local cache, biometrics, and speech-to-text. Three further registrations carry conditions and are commented for it: [`IPushRegistrationService`](#ipushregistrationservice) is wired but yields nothing until the app registers a credentialed `IPushDeviceTokenProvider` ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html), `MMCA.Common.UI.Maui/DependencyInjection.cs:48-51`); [`IMediaPickerService`](#imediapickerservice) needs the head to declare camera permissions for capture ([ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html), `MMCA.Common.UI.Maui/DependencyInjection.cs:53-55`); and [`IExternalAuthBroker`](#iexternalauthbroker) is `AddScoped` to [`MauiExternalAuthBroker`](#mauiexternalauthbroker) and stays inert (`IsAvailable == false`) until the head configures `OAuth:MobileRedirectScheme` and the platform callback (`MMCA.Common.UI.Maui/DependencyInjection.cs:57-60`). The method returns `services` for chaining (`MMCA.Common.UI.Maui/DependencyInjection.cs:61`). `AddCommonMauiTokenStorage()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:73-74`) binds `ITokenStorageService` to [`MauiTokenStorageService`](#mauitokenstorageservice), which keeps both tokens in the platform secure enclave and guards every read and write so an OS-invalidated keystore entry degrades to one clean re-login instead of a launch-time throw (`MMCA.Common.UI.Maui/DependencyInjection.cs:65-71`). `AddMauiFormFactor()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:82-83`) binds [`IFormFactor`](#iformfactor) to [`MauiFormFactor`](#mauiformfactor) as a singleton.
+- **Why it's built this way**: The class doc is explicit that these are plain `Add` calls (not `TryAdd`) and must run **after** `AddUIShared`, so the native bodies override the shared TryAdd fallback defaults under last-registration-wins (`MMCA.Common.UI.Maui/DependencyInjection.cs:10-14`). That is the whole selection mechanism of ADR-042: the shared package always registers an inert default, so the DI graph resolves on every host, and a native head simply overwrites the entries it can do better. Splitting token storage and form factor into their own methods (`MMCA.Common.UI.Maui/DependencyInjection.cs:64-83`) preserves that same override control per concern for a head that wants its own implementation. Token storage is scoped rather than singleton purely to match the browser siblings (`AddCommonServerTokenStorage()` in MMCA.Common.UI.Web and the WASM `WasmTokenStorageService`), so component code depends on one lifetime everywhere (`MMCA.Common.UI.Maui/DependencyInjection.cs:68-71`).
+- **Where it's used**: Called by [`HostingDependencyInjection`](#hostingdependencyinjection)'s `UseMauiDeviceCapabilities()` (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:29`), the builder-level entry point the class doc steers heads toward (`MMCA.Common.UI.Maui/DependencyInjection.cs:10-12`). `AddCommonMauiTokenStorage()` and `AddMauiFormFactor()` are called directly by each MAUI head's `MauiProgram`.
+- **Caveats / not-in-source**: "Wired but inert" is a real runtime state for push registration, media capture, and external auth: registration does not imply the capability works without the extra host configuration each comment names. Not determinable from source in this unit: the bodies of the individual `Maui*Service` implementations, which are covered by the other units of this group.
 
 ### DeviceCapabilitiesInitializer
 
 > MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui` · `MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:14` · Level 3 · class
 
-- **What it is**: A MAUI startup hook that bridges local-notification taps into Blazor routing. It implements `IMauiInitializeService`, so its `Initialize` runs when the app is built, and it forwards the route carried by a tapped reminder to the shared [`IDeepLinkDispatcher`](#ideeplinkdispatcher).
-- **Depends on**: First-party: [`IDeepLinkDispatcher`](#ideeplinkdispatcher) (`DeviceCapabilitiesInitializer.cs:2`). Externals: `Microsoft.Maui.Hosting.IMauiInitializeService` (MAUI), and `Plugin.LocalNotification` with its `NotificationActionEventArgs` (NuGet, `DeviceCapabilitiesInitializer.cs:3-4`).
-- **Concept introduced**: **Cold-start deep-link buffering.** This type is the native publisher end of the deep-link funnel; the receiver end is the `DeepLinkListener` component in the shared layout. When a notification is tapped while the app is running, the route is delivered live via [`IDeepLinkDispatcher`](#ideeplinkdispatcher)'s `RouteRequested` event; when the tap cold-starts the app, the dispatcher buffers the single pending route until first render, and the listener drains it (`DeviceCapabilitiesInitializer.cs:10-13`). [Rubric §25, Navigation & IA] assesses how navigation intent flows through the app; routing every native entry point (taps, app links) through one dispatcher keeps Blazor routing the single source of truth. [Rubric §29, Resilience & Business Continuity] assesses graceful handling of edge states; the cold-start buffer means a tap that launches the process is not silently lost before the router exists.
-- **Walkthrough**: The class is `sealed` (`DeviceCapabilitiesInitializer.cs:15`). `Initialize(IServiceProvider services)` null-guards its argument (`DeviceCapabilitiesInitializer.cs:20`), then resolves [`IDeepLinkDispatcher`](#ideeplinkdispatcher) with `GetService` and returns early if none is registered (`DeviceCapabilitiesInitializer.cs:22-26`), so a head without the dispatcher is a no-op rather than a crash. When present, it subscribes to `LocalNotificationCenter.Current.NotificationActionTapped` (`DeviceCapabilitiesInitializer.cs:28`). The private handler `OnNotificationTapped` (`DeviceCapabilitiesInitializer.cs:31`) ignores dismissals (`IsDismissed`, `DeviceCapabilitiesInitializer.cs:33-36`), reads the app-relative route from `args.Request?.ReturningData` (`DeviceCapabilitiesInitializer.cs:38`), and only publishes when the route is non-blank (`DeviceCapabilitiesInitializer.cs:39-42`).
-- **Why it's built this way**: Notification metadata is not routing; this initializer translates the plugin's tap event into the codebase's own [`IDeepLinkDispatcher`](#ideeplinkdispatcher) vocabulary so the shared listener never touches `Plugin.LocalNotification`. Wiring it as an `IMauiInitializeService` means the subscription is established once at app build time. The defensive early-return keeps the hook safe to register unconditionally.
-- **Where it's used**: Registered by [`HostingDependencyInjection`](#hostingdependencyinjection) as an `IMauiInitializeService` singleton (`HostingDependencyInjection.cs:29`); its published routes are consumed by the shared `DeepLinkListener` component through [`IDeepLinkDispatcher`](#ideeplinkdispatcher).
-- **Caveats / not-in-source**: The route contract is entirely `ReturningData` on the scheduled notification: a reminder created without an app-relative route in that field produces no navigation. Not determinable from source: the `DeepLinkListener` component body and the code that schedules notifications with `ReturningData` set (both outside this unit).
+- **What it is**: A MAUI startup hook that bridges local-notification taps into Blazor routing. It implements `IMauiInitializeService`, so its `Initialize` runs when the MAUI app is built, and it forwards the route carried by a tapped reminder to the shared [`IDeepLinkDispatcher`](#ideeplinkdispatcher).
+- **Depends on**: First-party: [`IDeepLinkDispatcher`](#ideeplinkdispatcher) from `MMCA.Common.UI.Services.Capabilities` (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:1,21`). Externals: `Microsoft.Maui.Hosting.IMauiInitializeService` (MAUI), and `Plugin.LocalNotification` with its `NotificationActionEventArgs` (NuGet, `MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:2-3`).
+- **Concept introduced**: **Cold-start deep-link buffering.** This type is the native publisher end of the deep-link funnel; the receiver end is the shared `DeepLinkListener` component rendered in the layout (`MMCA.Common.UI/Components/Capabilities/DeepLinkListener.razor`). When a notification is tapped while the app is running, the route travels live through [`IDeepLinkDispatcher`](#ideeplinkdispatcher); when the tap cold-starts the process, the dispatcher buffers the pending route until first render and the listener drains it (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:8-12`). [Rubric §25, Navigation and IA] assesses how navigation intent flows through the app; routing every native entry point through one dispatcher keeps the Blazor router the single source of truth for where the user lands. [Rubric §29, Resilience and Business Continuity] assesses graceful handling of edge states; the cold-start buffer is what stops a tap that launched the process from being lost before the router exists.
+- **Walkthrough**: The class is `sealed` (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:14`). `Initialize(IServiceProvider services)` null-guards its argument (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:17-19`), then resolves [`IDeepLinkDispatcher`](#ideeplinkdispatcher) with `GetService` (not `GetRequiredService`) and returns early when none is registered (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:21-25`), so a head without the dispatcher gets a no-op rather than a startup crash. When present, it subscribes to `LocalNotificationCenter.Current.NotificationActionTapped` with a lambda that closes over the resolved dispatcher (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:27`). The static handler `OnNotificationTapped` (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:30`) ignores dismissals (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:32-35`), reads the app-relative route from `args.Request?.ReturningData` (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:37`), and publishes only when that route is non-blank (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:38-41`).
+- **Why it's built this way**: Notification metadata is not routing. Translating the plugin's tap event into the codebase's own [`IDeepLinkDispatcher`](#ideeplinkdispatcher) vocabulary here means the shared listener component never references `Plugin.LocalNotification`, so the same component works on hosts that have no notification plugin at all. Wiring it as an `IMauiInitializeService` establishes the subscription exactly once, at app build time, before any UI renders. The defensive early return keeps the hook safe to register unconditionally, which is what lets [`HostingDependencyInjection`](#hostingdependencyinjection) add it with no condition.
+- **Where it's used**: Registered by [`HostingDependencyInjection`](#hostingdependencyinjection) as an `IMauiInitializeService` singleton inside `UseMauiDeviceCapabilities()` (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:30`); the routes it publishes are consumed through [`IDeepLinkDispatcher`](#ideeplinkdispatcher) (implemented by [`DeepLinkDispatcher`](#deeplinkdispatcher)) by the shared `DeepLinkListener` component.
+- **Caveats / not-in-source**: The route contract is entirely `ReturningData` on the scheduled notification: a reminder created without an app-relative route in that field produces no navigation. Not determinable from source in this unit: the `DeepLinkListener` component body and the scheduling code that sets `ReturningData` (both outside this unit).
 
 ### HostingDependencyInjection
 
 > MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui` · `MMCA.Common.UI.Maui/HostingDependencyInjection.cs:11` · Level 4 · class (static)
 
-- **What it is**: The `MauiAppBuilder`-level entry point for the entire device-capability layer ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Its one method `UseMauiDeviceCapabilities()` composes the service registrations plus the platform hooks that need the builder itself, so a head configures native capabilities with a single fluent call.
-- **Depends on**: First-party: [`DependencyInjection`](#dependencyinjection)'s `AddMauiDeviceCapabilities()` (`HostingDependencyInjection.cs:28`) and [`DeviceCapabilitiesInitializer`](#devicecapabilitiesinitializer) (`HostingDependencyInjection.cs:29`). Externals: `Microsoft.Maui.Hosting.MauiAppBuilder` (MAUI) as the extended type, and `Plugin.LocalNotification`'s `UseLocalNotification()` (NuGet, `HostingDependencyInjection.cs:2,27`).
-- **Concept introduced**: **Builder-level vs service-level composition.** This is the layered pairing that runs through MAUI hosting: [`DependencyInjection`](#dependencyinjection) registers services on `IServiceCollection`, while this class operates on `MauiAppBuilder` because two of the steps (the Plugin.LocalNotification lifecycle wiring and the initializer registration) need more than the service collection. It uses the same `extension(MauiAppBuilder builder)` block syntax (`HostingDependencyInjection.cs:12`). [Rubric §16, Maintainability] assesses how easy the framework is to adopt correctly; folding three easy-to-forget steps into one fluent call reduces the ways a head can be misconfigured. [Rubric §17, DevOps] assesses reproducible, low-ceremony host setup; a single builder extension is that ceremony reduction for the native head.
-- **Walkthrough**: `UseMauiDeviceCapabilities()` (`HostingDependencyInjection.cs:25`) does three things in order: `builder.UseLocalNotification()` to initialize the notification plugin (`HostingDependencyInjection.cs:27`), `builder.Services.AddMauiDeviceCapabilities()` to bind every native capability (`HostingDependencyInjection.cs:28`), and `AddSingleton<IMauiInitializeService, DeviceCapabilitiesInitializer>()` to register the notification-tap deep-link bridge (`HostingDependencyInjection.cs:29`). It returns `builder` for chaining (`HostingDependencyInjection.cs:30`).
-- **Why it's built this way**: The class doc pins the ordering constraint: call this AFTER `AddUIShared` in `MauiProgram.CreateMauiApp` (`HostingDependencyInjection.cs:8-9`), because [`DependencyInjection`](#dependencyinjection) uses plain `Add` to override the shared TryAdd defaults. One step it deliberately cannot do for the head is the MauiCommunityToolkit registration: speech-to-text depends on `.UseMauiCommunityToolkit()`, and the toolkit's MCT001 analyzer requires that call to appear directly in the app's own `UseMauiApp<T>()` chain, so the wrapper documents the requirement rather than hiding it (`HostingDependencyInjection.cs:18-23`).
-- **Where it's used**: Called once per MAUI head in `MauiProgram.CreateMauiApp`; it is the public front door the class docs steer heads toward instead of calling [`DependencyInjection`](#dependencyinjection) directly (`DependencyInjection.cs:9-11`).
-- **Caveats / not-in-source**: The head still has two obligations this wrapper cannot fulfill: chaining `.UseMauiCommunityToolkit()` for speech-to-text, and providing the per-capability config each inert service needs (push credentials, camera permissions, OAuth redirect scheme). Not determinable from source: the concrete `MauiProgram` of any downstream head that calls this method (outside this unit).
+- **What it is**: The `MauiAppBuilder`-level entry point for the device-capability layer ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)) and the hybrid culture wiring ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). `UseMauiDeviceCapabilities()` composes the service registrations plus the platform hooks that need the builder itself; `UseMauiCulture()` is the separately callable culture half.
+- **Depends on**: First-party: [`DependencyInjection`](#dependencyinjection)'s `AddMauiDeviceCapabilities()` (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:29`), [`DeviceCapabilitiesInitializer`](#devicecapabilitiesinitializer) (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:30`), and the globalization pair [`MauiCultureApplier`](#mauicultureapplier) / [`MauiCultureInitializer`](#mauicultureinitializer) behind [`ICultureApplier`](group-15-common-ui-framework.md#icultureapplier) (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:1,54-55`). Externals: `Microsoft.Maui.Hosting.MauiAppBuilder` as the extended type, and `Plugin.LocalNotification`'s `UseLocalNotification()` (NuGet, `MMCA.Common.UI.Maui/HostingDependencyInjection.cs:3,28`).
+- **Concept introduced**: **Builder-level versus service-level composition.** This is the layered pairing that runs through MAUI hosting: [`DependencyInjection`](#dependencyinjection) registers services on `IServiceCollection`, while this class operates on `MauiAppBuilder` because some steps (the Plugin.LocalNotification lifecycle wiring, the `IMauiInitializeService` registrations) need more than a service collection. It uses the same `extension(MauiAppBuilder builder)` block syntax (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:13`). [Rubric §16, Maintainability] assesses how hard the framework is to adopt correctly; folding four easy-to-forget steps into one fluent call removes most of the ways a head can be half-configured. [Rubric §33, Developer Experience] assesses the ceremony a developer pays to get a working host; one builder extension plus one documented obligation is that ceremony, and the one obligation the wrapper cannot absorb is spelled out in the XML doc instead of failing silently.
+- **Walkthrough**: `UseMauiDeviceCapabilities()` (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:26`) does four things in order: `builder.UseLocalNotification()` initializes the notification plugin (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:28`); `builder.Services.AddMauiDeviceCapabilities()` binds every native capability (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:29`); `AddSingleton<IMauiInitializeService, DeviceCapabilitiesInitializer>()` registers the notification-tap deep-link bridge (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:30`); and `builder.UseMauiCulture()` folds in the hybrid culture wiring (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:37`). It returns `builder` for chaining (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:38`). `UseMauiCulture()` (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:52`) does two: `AddScoped<ICultureApplier, MauiCultureApplier>()` replaces the web applier that round-trips a server `/culture/set` endpoint no hybrid head hosts (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:54`), and `AddSingleton<IMauiInitializeService, MauiCultureInitializer>()` restores the persisted culture at startup (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:55`). It is idempotent in effect: calling it twice is harmless (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:46-47`).
+- **Why it's built this way**: The class doc pins the ordering constraint, call this **after** `AddUIShared` in `MauiProgram.CreateMauiApp` (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:8-9`), because [`DependencyInjection`](#dependencyinjection) uses plain `Add` to override the shared TryAdd defaults. The culture fold-in is explained in an inline comment as a deliberate cross-ADR decision (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:32-36`): culture belongs to ADR-027, not ADR-042, but a hybrid head that skips it ends up with a culture switcher that navigates to a server endpoint it does not host and renders the not-found page, so wiring it here means no head can be left half-configured; `UseMauiCulture()` stays public for a head that composes by hand. One step the wrapper deliberately cannot take is the MauiCommunityToolkit registration: speech-to-text ([`MauiSpeechToTextService`](#mauispeechtotextservice)) depends on `.UseMauiCommunityToolkit()`, and the toolkit's MCT001 analyzer requires that call to appear in the app's own `UseMauiApp<T>()` chain, so the doc states the requirement rather than hiding it (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:19-24`).
+- **Where it's used**: Called once per MAUI head in `MauiProgram.CreateMauiApp`; it is the front door the class docs steer heads toward instead of calling [`DependencyInjection`](#dependencyinjection) directly (`MMCA.Common.UI.Maui/DependencyInjection.cs:10-12`).
+- **Caveats / not-in-source**: The head keeps two obligations this wrapper cannot fulfill: chaining `.UseMauiCommunityToolkit()` for speech-to-text, and supplying the per-capability configuration each inert service needs (push credentials, camera permissions, `OAuth:MobileRedirectScheme`). Not determinable from source in this unit: the concrete `MauiProgram` of any downstream head that calls these methods.
 
 
 ---
