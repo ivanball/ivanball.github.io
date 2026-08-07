@@ -5,7 +5,7 @@ lockstep-versioned NuGet packages (the authoritative list and count live in
 [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)). Its core promise: **build a
 modular monolith now, and extract a module into its own microservice later, without a rewrite.**
 
-Standing that up by hand means 12 projects and roughly 5,300 lines before a line of your own
+Standing that up by hand means 12 projects and roughly 6,600 lines before a line of your own
 business logic, several of them load-bearing in ways nothing tells you about until much later. So
 you do not type it. One command writes the whole thing, green:
 
