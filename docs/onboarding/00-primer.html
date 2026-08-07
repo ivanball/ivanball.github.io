@@ -635,6 +635,36 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>Deploy preconditions as proof of recency: <code>dr-freshness</code>, <code>load-freshness</code> and <code>cross-service-freshness</code> sit in <code>deploy.needs</code> and fail when the newest successful DR drill (8 days), k6 load run (35) or broker round-trip (5) is older than its window; no successful run at all fails too</td>
           <td><a href="devops-cicd.html">devops-cicd</a></td>
           </tr>
+          <tr>
+          <td>065</td>
+          <td>Scaffolding templates derived from the reference app: the <code>dotnet new</code> pack <code>MMCA.Templates</code> (<code>mmca-app</code>/<code>mmca-module</code>/<code>mmca-command</code>/<code>mmca-query</code>) is staged at pack time from the MMCA.Helpdesk tree itself (no second copy to drift); generated apps ship <code>build/add-module.ps1</code>, which performs the seven wire-ups the template can only print, plus the first migration; a <code>template-smoke</code> CI job builds a generated app package-mode and sweeps for residual <code>Helpdesk</code>/<code>Ticket</code> tokens</td>
+          <td><a href="group-14-module-system-composition.html">g14</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>066</td>
+          <td>Broker transport selection + dev/prod parity: one <code>IMessageBus</code> with three <code>MessageBusProvider</code> values (<code>InProcess</code> for tests and the monolith, RabbitMQ wired by the AppHost&#39;s <code>WithBroker</code> locally, Azure Service Bus injected by both apps&#39; Bicep in production), identical exponential retry per transport, and a non-gating Service Bus emulator test tier proving the production binding</td>
+          <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-16-aspire-orchestration.html">g16</a></td>
+          </tr>
+          <tr>
+          <td>067</td>
+          <td>Shared Blazor shell + <code>IUIModule</code> composition: the framework package ships the router, layout, nav menu and routable shell pages; each module contributes <code>NavItems</code>, an <code>Assembly</code> for <code>AdditionalAssemblies</code> route discovery, and app-bar/layout extension points, enumerated by <code>Routes.razor</code> at runtime (the UI-layer counterpart of ADR-059&#39;s <code>IModule</code>; Helpdesk keeps its own shell)</td>
+          <td><a href="group-15-common-ui-framework.html">g15</a>/<a href="group-25-adc-host-composition.html">g25</a></td>
+          </tr>
+          <tr>
+          <td>068</td>
+          <td>Value objects as validated domain primitives: seven sealed <code>record</code> types over an abstract <code>ValueObject</code> base, each a private constructor plus a <code>Result</code>-returning <code>Create</code> factory (fitness-enforced), mapped via <code>OwnsMoney</code> or value converters (no schema change); the deliberate opposite of ADR-048&#39;s identifier aliases (identifiers cross boundaries, domain values carry invariants)</td>
+          <td><a href="group-02-domain-building-blocks.html">g02</a></td>
+          </tr>
+          <tr>
+          <td>069</td>
+          <td>Shared DataProtection key ring for scaled-out hosts: <code>AddCommonDataProtection</code> persists the key ring to one Azure blob under <code>DefaultAzureCredential</code> so cookies and antiforgery tokens minted by one replica decrypt on another; Key Vault at-rest encryption is a deliberately independent second gate, and absent config is a full no-op (adopted by ADC; Store still runs per-replica key rings)</td>
+          <td><a href="group-16-aspire-orchestration.html">g16</a>/<a href="group-08-auth.html">g08</a></td>
+          </tr>
+          <tr>
+          <td>070</td>
+          <td>Fail-fast configuration contract: every settings section binds through <code>AddOptions().Bind().ValidateDataAnnotations().ValidateOnStart()</code> so a misconfigured host refuses to boot instead of failing at first use; settings consumed above Infrastructure flow through read-only singleton facades (<code>IApplicationSettings</code>, <code>ISmtpSettings</code>, <code>IJwtSettings</code>) rather than <code>IOptions&lt;T&gt;</code></td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a>/<a href="group-14-module-system-composition.html">g14</a></td>
+          </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>
           <hr>
