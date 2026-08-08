@@ -33,7 +33,7 @@ window.PLATFORM_FACTS = {
     { name: "Testing", note: "Integration bases, architecture rule library, Playwright and bUnit harnesses", items: ["MMCA.Common.Testing", "MMCA.Common.Testing.Architecture", "MMCA.Common.Testing.E2E", "MMCA.Common.Testing.UI"] },
   ],
   /* FACTS.md "Architecture fitness functions": test methods, not base classes */
-  fitnessTests: 93,
+  fitnessTests: 100,
   /* Store, ADC, Helpdesk */
   referenceApps: 3,
   /* docs-src/governance/ArchitectureEvaluationCriteria.md */
