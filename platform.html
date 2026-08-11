@@ -426,16 +426,16 @@
           <a class="adr" href="docs/adr/058-runtime-conformance-suites-as-a-package.html"><span class="adr-num">058</span><span><span class="adr-title">Runtime conformance suites shipped as a package</span><span class="adr-sum">Abstract contract bases that a host subclasses to prove it wired the framework&#39;s runtime contracts, asserted against a really booted host rather than by reflection over registrations. The runtime half of the fitness-function story.</span></span></a>
           <a class="adr" href="docs/adr/059-module-contract-and-composition.html"><span class="adr-num">059</span><span><span class="adr-title">The IModule contract and module composition</span><span class="adr-sum">Modules are discovered by reflection and registered in topological dependency order, and a disabled module is represented by stub registrations rather than by absence: the mechanism that lets one module run as its own service.</span></span></a>
           <a class="adr" href="docs/adr/060-performance-regression-gate.html"><span class="adr-num">060</span><span><span class="adr-title">Performance-regression gate</span><span class="adr-sum">A committed benchmark baseline checked in CI, gating allocations absolutely but latency only as a ratio between benchmarks, which is what keeps the gate meaningful on shared, noisy runners. A missing measurement fails rather than passes.</span></span></a>
-          <a class="adr" href="docs/adr/061-runtime-secret-management.html"><span class="adr-num">061</span><span><span class="adr-title">Runtime Secret Management via Key Vault References and Managed Identity</span><span class="adr-sum">Accepted (2026-08-01).</span></span></a>
-          <a class="adr" href="docs/adr/062-slo-alerting-as-code.html"><span class="adr-num">062</span><span><span class="adr-title">SLO Alerting as Code with an Alert-to-Runbook Build Gate</span><span class="adr-sum">Accepted (2026-08-01).</span></span></a>
-          <a class="adr" href="docs/adr/063-accessibility-conformance-gate.html"><span class="adr-num">063</span><span><span class="adr-title">WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</span><span class="adr-sum">Accepted (2026-08-01).</span></span></a>
-          <a class="adr" href="docs/adr/064-deploy-recency-gates.html"><span class="adr-num">064</span><span><span class="adr-title">Deploy Preconditions as Proof-of-Recency Gates</span><span class="adr-sum">Accepted (2026-08-01). Revised 2026-08-07: the MMCA.Helpdesk workflow inventory below was corrected (it also carries release-templates.yml, and its…</span></span></a>
-          <a class="adr" href="docs/adr/065-scaffolding-templates.html"><span class="adr-num">065</span><span><span class="adr-title">Scaffolding templates derived from the reference app</span><span class="adr-sum">Status: Accepted (2026-08-02). Revised 2026-08-07: the staged analyzer delta relaxes three rules rather than one; mmca-module prints seven wire-ups…</span></span></a>
-          <a class="adr" href="docs/adr/066-broker-transport-selection.html"><span class="adr-num">066</span><span><span class="adr-title">Broker Transport Selection and Dev/Prod Parity</span><span class="adr-sum">Accepted (2026-08-07).</span></span></a>
-          <a class="adr" href="docs/adr/067-ui-module-shell-composition.html"><span class="adr-num">067</span><span><span class="adr-title">Shared Blazor Application Shell and IUIModule Composition</span><span class="adr-sum">Accepted (2026-08-07).</span></span></a>
-          <a class="adr" href="docs/adr/068-value-objects-as-validated-primitives.html"><span class="adr-num">068</span><span><span class="adr-title">Value Objects as Validated Domain Primitives</span><span class="adr-sum">Accepted (2026-08-07).</span></span></a>
-          <a class="adr" href="docs/adr/069-shared-data-protection-key-ring.html"><span class="adr-num">069</span><span><span class="adr-title">Shared DataProtection Key Ring for Scaled-Out Hosts</span><span class="adr-sum">Accepted (2026-08-07).</span></span></a>
-          <a class="adr" href="docs/adr/070-fail-fast-configuration-contract.html"><span class="adr-num">070</span><span><span class="adr-title">Fail-Fast Configuration Contract</span><span class="adr-sum">Accepted (2026-08-07).</span></span></a>
+          <a class="adr" href="docs/adr/061-runtime-secret-management.html"><span class="adr-num">061</span><span><span class="adr-title">Runtime secret management via Key Vault references</span><span class="adr-sum">Every production secret lives in Azure Key Vault and reaches the app as a reference resolved by one shared user-assigned managed identity: no container app carries an inline value, the same identity pulls from the registry, and SQL authentication is staged behind a flag toward the same model.</span></span></a>
+          <a class="adr" href="docs/adr/062-slo-alerting-as-code.html"><span class="adr-num">062</span><span><span class="adr-title">SLO alerting as code with an alert-to-runbook gate</span><span class="adr-sum">Each consumer declares its SLO alerts as data in its Bicep template, materialized as Log Analytics scheduled query rules whose predicates exclude the routine 401s and hub-connection lifetimes that used to page, with a framework build gate failing when an alert and its runbook section fall out of step.</span></span></a>
+          <a class="adr" href="docs/adr/063-accessibility-conformance-gate.html"><span class="adr-num">063</span><span><span class="adr-title">WCAG 2.1 AA as a shipped test contract</span><span class="adr-sum">Accessibility conformance as a named, versioned contract in the E2E package: one pinned axe tag list with advisory rules deliberately outside it, a violation thrown as a test failure pointing at the element, inherited by consumers through the workflow bases and wired as a merge check and deploy gate.</span></span></a>
+          <a class="adr" href="docs/adr/064-deploy-recency-gates.html"><span class="adr-num">064</span><span><span class="adr-title">Deploy preconditions as proof-of-recency gates</span><span class="adr-sum">A production deploy is blocked not only on green tests but on proof that the out-of-band verification still means something: three gates assert a real DR drill, load run, and broker round-trip happened recently, because a scheduled workflow can fail silently for weeks behind a green-looking history.</span></span></a>
+          <a class="adr" href="docs/adr/065-scaffolding-templates.html"><span class="adr-num">065</span><span><span class="adr-title">Scaffolding templates derived from the reference app</span><span class="adr-sum">A dotnet new template pack (mmca-app, mmca-module, mmca-command, mmca-query) generated from the minimal seed, replacing the 12 projects, 105 files, and 6,596 hand-created lines that stood between the getting-started guide and the first line of business logic.</span></span></a>
+          <a class="adr" href="docs/adr/066-broker-transport-selection.html"><span class="adr-num">066</span><span><span class="adr-title">Broker transport selection and dev/prod parity</span><span class="adr-sum">One IMessageBus abstraction with a three-value transport selector chosen at the deployment edge, never in application code: the AppHost wires RabbitMQ locally, Bicep injects Azure Service Bus in production, both configured identically, and a dedicated test tier exercises the transport only production uses.</span></span></a>
+          <a class="adr" href="docs/adr/067-ui-module-shell-composition.html"><span class="adr-num">067</span><span><span class="adr-title">Shared Blazor shell + IUIModule composition</span><span class="adr-sum">The application shell (router, layout, nav, and the auth and notification pages every app needs) ships in the framework package, and each module contributes pages and navigation by implementing IUIModule, resolved from DI so nothing in the shell names a module: ADR-059&#39;s composition model applied to the UI layer.</span></span></a>
+          <a class="adr" href="docs/adr/068-value-objects-as-validated-primitives.html"><span class="adr-num">068</span><span><span class="adr-title">Value objects as validated domain primitives</span><span class="adr-sum">A domain value that carries an invariant is an immutable record value object with a private constructor and a Result-returning factory, while identifiers stay primitives (ADR-048): the asymmetry is the decision, and the factory shape is fitness-enforced rather than conventional.</span></span></a>
+          <a class="adr" href="docs/adr/069-shared-data-protection-key-ring.html"><span class="adr-num">069</span><span><span class="adr-title">Shared DataProtection key ring for scaled-out hosts</span><span class="adr-sum">One opt-in registration persists the DataProtection key ring to a single Azure blob so every replica of a scaled-out host can decrypt the cookies and antiforgery tokens its peers mint; an absent configuration key means the single-process in-memory default stays, with no Azure dependency at startup.</span></span></a>
+          <a class="adr" href="docs/adr/070-fail-fast-configuration-contract.html"><span class="adr-num">070</span><span><span class="adr-title">Fail-fast configuration contract</span><span class="adr-sum">Every settings section binds through data-annotation validation with ValidateOnStart, so a missing or unparseable value refuses to boot the host instead of surfacing as a 500 at first use, and a setting read above Infrastructure goes through a read-only interface rather than the options pipeline.</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -455,39 +455,18 @@
           <h2>The reference library</h2>
           <p>The full architecture documentation, maintained in this site's repository as its canonical home and rendered as browsable pages: every Architecture Decision Record, the governance scorecards, the guides and specifications, and the complete onboarding guide that walks the codebase type by type.</p>
         </div>
-        <!-- Cards are GENERATED from the docs-src/ collections by tools/build-docs.mjs, so their
-             counts cannot drift from what is actually published. -->
+        <!-- The card is GENERATED from the docs-src/ collections by tools/build-docs.mjs, so its
+             counts cannot drift from what is actually published. The per-collection cards live on
+             the Reference page (docs/index.html); this section deliberately does not repeat them. -->
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
-          <a class="card card--link" href="docs/adr/index.html">
-            <span class="kicker kicker--accent">70 records</span>
-            <h3>Architecture Decision Records</h3>
-            <p>The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.</p>
-            <div class="card-foot"><span class="go">Browse the ADRs →</span></div>
-          </a>
-          <a class="card card--link" href="docs/onboarding/index.html">
-            <span class="kicker kicker--accent">38 documents</span>
-            <h3>Onboarding guide</h3>
-            <p>A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, 27 group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.</p>
-            <div class="card-foot"><span class="go">Open the guide →</span></div>
-          </a>
-          <a class="card card--link" href="docs/governance/index.html">
-            <span class="kicker kicker--accent">7 artifacts</span>
-            <h3>Architecture governance</h3>
-            <p>The 34-category evaluation rubric, plus an evidence-based scorecard and remediation backlog for each repo. Every score cites the code that earns it.</p>
-            <div class="card-foot"><span class="go">Read the scorecards →</span></div>
-          </a>
-          <a class="card card--link" href="docs/guides/index.html">
-            <span class="kicker kicker--accent">17 guides</span>
-            <h3>Guides &amp; specifications</h3>
-            <p>The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern reference notes.</p>
-            <div class="card-foot"><span class="go">Browse the guides →</span></div>
+          <a class="card card--link" href="docs/index.html">
+            <span class="kicker kicker--accent">132 documents</span>
+            <h3>Open the reference library</h3>
+            <p>Every collection indexed in one place: 70 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
+            <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->
-        </div>
-
-        <div class="btn-row" style="margin-top:1.75rem">
-          <a class="btn btn--ghost" href="docs/index.html">Open the reference library →</a>
         </div>
       </div>
     </section>

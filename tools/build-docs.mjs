@@ -1308,29 +1308,20 @@ ${bar("Implementation", grab("Implementation"), true)}
           </li>`).join("\n");
   html = replaceRegion(html, "package-layers", packageLayers, file);
 
+  /* The four per-collection cards used to be repeated here in full; they are the
+     Reference page's (docs/index.html) whole content, so the platform page now
+     carries one summary card pointing there instead of a second copy. */
   const onbCol = collections.find((c) => c.id === "onboarding");
-  const groupChapters = onbFiles.filter((f) => /^group-\d/.test(f)).length;
-  const libraryCards = [
-    ["docs/adr/index.html", `${adrFiles.length} records`, "Architecture Decision Records",
-      "The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.",
-      "Browse the ADRs →"],
-    ["docs/onboarding/index.html", `${onbCol.docs.length - 1} documents`, "Onboarding guide",
-      `A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, ${groupChapters} group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.`,
-      "Open the guide →"],
-    ["docs/governance/index.html", `${govFiles.length} artifacts`, "Architecture governance",
-      "The 34-category evaluation rubric, plus an evidence-based scorecard and remediation backlog for each repo. Every score cites the code that earns it.",
-      "Read the scorecards →"],
-    ["docs/guides/index.html", `${guideFiles.length} guides`, "Guides &amp; specifications",
-      "The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern reference notes.",
-      "Browse the guides →"],
-  ].map(([href, count, title, body, cta]) =>
-`          <a class="card card--link" href="${href}">
-            <span class="kicker kicker--accent">${count}</span>
-            <h3>${title}</h3>
-            <p>${body}</p>
-            <div class="card-foot"><span class="go">${cta}</span></div>
-          </a>`).join("\n");
-  html = replaceRegion(html, "library-cards", libraryCards, file);
+  const onbCount = onbCol.docs.length - 1;
+  const libraryTotal = adrFiles.length + onbCount + govFiles.length + guideFiles.length;
+  const libraryCard =
+`          <a class="card card--link" href="docs/index.html">
+            <span class="kicker kicker--accent">${libraryTotal} documents</span>
+            <h3>Open the reference library</h3>
+            <p>Every collection indexed in one place: ${adrFiles.length} Architecture Decision Records, the ${onbCount}-document onboarding guide, ${govFiles.length} governance artifacts, and ${guideFiles.length} guides and specifications.</p>
+            <div class="card-foot"><span class="go">Browse the collections →</span></div>
+          </a>`;
+  html = replaceRegion(html, "library-cards", libraryCard, file);
 
   const cards = adrFiles.map((f) => {
     const num = f.slice(0, 3);
