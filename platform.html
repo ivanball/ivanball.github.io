@@ -455,39 +455,18 @@
           <h2>The reference library</h2>
           <p>The full architecture documentation, maintained in this site's repository as its canonical home and rendered as browsable pages: every Architecture Decision Record, the governance scorecards, the guides and specifications, and the complete onboarding guide that walks the codebase type by type.</p>
         </div>
-        <!-- Cards are GENERATED from the docs-src/ collections by tools/build-docs.mjs, so their
-             counts cannot drift from what is actually published. -->
+        <!-- The card is GENERATED from the docs-src/ collections by tools/build-docs.mjs, so its
+             counts cannot drift from what is actually published. The per-collection cards live on
+             the Reference page (docs/index.html); this section deliberately does not repeat them. -->
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
-          <a class="card card--link" href="docs/adr/index.html">
-            <span class="kicker kicker--accent">70 records</span>
-            <h3>Architecture Decision Records</h3>
-            <p>The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.</p>
-            <div class="card-foot"><span class="go">Browse the ADRs →</span></div>
-          </a>
-          <a class="card card--link" href="docs/onboarding/index.html">
-            <span class="kicker kicker--accent">38 documents</span>
-            <h3>Onboarding guide</h3>
-            <p>A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, 27 group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.</p>
-            <div class="card-foot"><span class="go">Open the guide →</span></div>
-          </a>
-          <a class="card card--link" href="docs/governance/index.html">
-            <span class="kicker kicker--accent">7 artifacts</span>
-            <h3>Architecture governance</h3>
-            <p>The 34-category evaluation rubric, plus an evidence-based scorecard and remediation backlog for each repo. Every score cites the code that earns it.</p>
-            <div class="card-foot"><span class="go">Read the scorecards →</span></div>
-          </a>
-          <a class="card card--link" href="docs/guides/index.html">
-            <span class="kicker kicker--accent">17 guides</span>
-            <h3>Guides &amp; specifications</h3>
-            <p>The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern reference notes.</p>
-            <div class="card-foot"><span class="go">Browse the guides →</span></div>
+          <a class="card card--link" href="docs/index.html">
+            <span class="kicker kicker--accent">132 documents</span>
+            <h3>Open the reference library</h3>
+            <p>Every collection indexed in one place: 70 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
+            <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->
-        </div>
-
-        <div class="btn-row" style="margin-top:1.75rem">
-          <a class="btn btn--ghost" href="docs/index.html">Open the reference library →</a>
         </div>
       </div>
     </section>
