@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-071: Device Capability Pattern for Barcode Scanning and QR Display · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-12).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/071-barcode-scanning-and-qr-display.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-071: Device Capability Pattern for Barcode Scanning and QR Display">
+  <meta property="og:description" content="Accepted (2026-08-12).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/071-barcode-scanning-and-qr-display.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-071: Device Capability Pattern for Barcode Scanning and QR Display">
+  <meta name="twitter:description" content="Accepted (2026-08-12).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"071 · Device Capability Pattern for Barcode Scanning and QR Display","item":"https://ivanball.github.io/docs/adr/071-barcode-scanning-and-qr-display.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">071 · Device Capability Pattern for Barcode Scanning and QR Display</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 72 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html" aria-current="page">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-071-device-capability-pattern-for-barcode-scanning-and-qr-display">ADR-071: Device Capability Pattern for Barcode Scanning and QR Display</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-12).</p>
+          <h2 id="context">Context</h2>
+          <p>ADC&#39;s badge check-in feature (<a href="072-qr-badge-check-in-and-points.html">ADR-072</a>) needs two things that
+          look like one thing: an attendee&#39;s device has to <strong>show</strong> a QR code, and an organizer&#39;s device has to
+          <strong>read</strong> one. They are not the same kind of capability. Rendering a QR is pure managed computation
+          that every head can do, including WebAssembly. Reading one needs a camera, a permission grant, a
+          preview surface and a decode loop, none of which exist on a browser head that this workspace targets.</p>
+          <p><a href="042-device-capability-abstraction.html">ADR-042</a> already decided the shape for the second half: one
+          small interface per capability in <code>MMCA.Common.UI</code>, a safe fallback TryAdd-registered by
+          <code>AddDeviceCapabilityDefaults</code>, and a native override registered by the MAUI head after <code>AddUIShared</code>.
+          It did not decide anything about the first half, and it left two questions open that this feature is
+          the first to hit. Scanning is the first capability whose null fallback is not decoration: a head
+          without a camera cannot simply hide the affordance, because the underlying task (check an attendee in)
+          still has to be completable. And a camera is the first capability whose mere availability costs
+          something outside the code, since Android <code>CAMERA</code> and iOS <code>NSCameraUsageDescription</code> are declarations
+          an app store reviewer reads.</p>
+          <p>Two constraints bound the implementation. <code>MMCA.Common.UI</code> is a single-target net10.0 Razor class
+          library that must stay WebAssembly-compatible, so a QR generator that reaches for <code>System.Drawing</code> or a
+          native imaging asset is not available to it. And the pair is not conference-specific: a loyalty or
+          ticket-redemption flow in MMCA.Store would want the identical two halves, so building them inside ADC
+          would be the app-local duplication ADR-042 exists to prevent.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>Split the feature by what it actually depends on: QR display ships as a shared component, barcode
+          scanning ships as an ADR-042 capability whose native half is opt-in per head.</strong></p>
+          <ul>
+          <li><strong>Display is a component, not a capability.</strong> <code>QrCodeImage</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/QrCodeImage.razor</code>) renders a payload as
+          an inline base64 PNG data URI through QRCoder&#39;s managed <code>PngByteQRCode</code> path (<code>:71-74</code>), so it works
+          identically on SSR, Server, WASM and MAUI with no per-head registration at all. <code>Payload</code> (<code>:15-17</code>)
+          and <code>AltText</code> (<code>:23-25</code>) are both <code>[EditorRequired]</code>, which is what keeps a generated image from
+          shipping without an accessible name; <code>PixelsPerModule</code> (default 10, clamped to at least 1 at <code>:74</code>),
+          <code>ErrorCorrection</code> and <code>Class</code> cover sizing and styling. A blank payload renders nothing rather than a
+          broken image (<code>:66-69</code>), and the bitmap is memoized against the three inputs that affect it
+          (<code>:42-56</code>), so a parent re-render does not re-encode.</li>
+          <li><strong>The error-correction level is a framework enum, not the generator&#39;s.</strong>
+          <code>QrErrorCorrectionLevel</code> (<code>Components/QrErrorCorrectionLevel.cs:9-21</code>: <code>Low</code>, <code>Medium</code> (default),
+          <code>Quartile</code>, <code>High</code>) is mapped onto QRCoder&#39;s <code>ECCLevel</code> inside the component (<code>QrCodeImage.razor:77-83</code>),
+          so the package&#39;s public surface does not pin consumers to the generator that happens to back it today.</li>
+          <li><strong>Scanning is one contract on the ADR-042 pattern.</strong> <code>IBarcodeScannerService</code>
+          (<code>Services/Capabilities/IBarcodeScannerService.cs:11-20</code>) is two members: <code>bool IsSupported</code> and
+          <code>Task&lt;string?&gt; ScanAsync(CancellationToken cancellationToken = default)</code>. The contract is that an
+          implementation <strong>never throws</strong>: an unsupported head, a denied permission, a user-cancelled scan and a
+          cancelled token all return <code>null</code> (<code>:3-10</code>), and the decoded payload is documented as untrusted input.
+          <code>NullBarcodeScannerService</code> (<code>Fallbacks/NullBarcodeScannerService.cs:9-16</code>) reports <code>IsSupported == false</code>
+          and returns <code>null</code>, TryAdd-registered by <code>AddDeviceCapabilityDefaults</code>
+          (<code>Services/Capabilities/DependencyInjection.cs:57</code>).</li>
+          <li><strong>The native implementation is opt-in and deliberately NOT folded into <code>UseMauiDeviceCapabilities</code>.</strong>
+          A head asks for the camera by name:
+          <code>UseCommonBarcodeScanner(string cancelText = &quot;Cancel&quot;, string cameraDescription = &quot;Scan a code&quot;)</code>
+          on <code>MauiAppBuilder</code> (<code>MMCA.Common.UI.Maui/HostingDependencyInjection.cs:58-66</code>), which calls ZXing&#39;s
+          <code>UseBarcodeReader()</code> and then plain-<code>AddSingleton</code>s <code>MauiBarcodeScannerService</code> over the TryAdd default.
+          <code>UseMauiDeviceCapabilities</code> (<code>:29-42</code>) does not call it, and says why (<code>:47-49</code>): a head that never
+          scans should ship neither the camera handler nor a camera permission declaration.</li>
+          <li><strong>The scan is a modal page with exactly one resolution.</strong> <code>MauiBarcodeScannerService</code>
+          (<code>Capabilities/MauiBarcodeScannerService.cs:19</code>) marshals to the main thread, pushes a
+          <code>BarcodeScanPage</code> modally and pops it in a <code>finally</code> (<code>:53-78</code>). The page holds a
+          <code>TaskCompletionSource&lt;string?&gt;</code> (<code>Capabilities/BarcodeScanPage.cs:23-24</code>) that four paths can complete
+          and only the first wins: a decode, the cancel button, the hardware back gesture, and
+          <code>OnDisappearing</code>; the caller&#39;s <code>CancellationToken</code> is bridged to the same <code>Cancel()</code>
+          (<code>MauiBarcodeScannerService.cs:71</code>). Only 2D formats are read (<code>BarcodeScanPage.cs:36</code>), because 1D
+          symbologies multiply false positives on a badge screen.</li>
+          <li><strong>Permission stays with the head, not the framework.</strong> No framework code calls
+          <code>Permissions.RequestAsync&lt;Permissions.Camera&gt;</code>. An undeclared or denied camera produces a preview that
+          never decodes and is cancelled out of, which the contract already renders as <code>null</code>
+          (<code>MauiBarcodeScannerService.cs:7-11</code>), so the degradation path and the cancel path are the same path.</li>
+          <li><strong>Supported means Android or iOS.</strong> <code>IsSupported</code> gates on <code>DeviceInfo.Current.Platform</code> (<code>:27-29</code>);
+          Windows and Mac Catalyst heads keep the null behavior even after opting in.</li>
+          </ul>
+          <p>Packaging follows ADR-042 exactly: <code>QRCoder</code> 1.8.0 (MIT) is a <code>MMCA.Common.UI</code> dependency and
+          <code>ZXing.Net.Maui.Controls</code> 0.10.3 (MIT) a <code>MMCA.Common.UI.Maui</code> one, both pinned in
+          <code>MMCA.Common/Directory.Packages.props</code> (<code>:101</code>, <code>:124</code>), and the MAUI package keeps its
+          windows-job build and pack.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Rendering a QR is not a device concern, so making it one would have been ceremony.</strong> As a capability
+          it would have needed an interface, a null fallback and a native override for something four heads all
+          do the same way, and the null fallback would have meant a head that renders no badge at all. As a
+          component it is one tag with no registration, which is why the web fallback in ADC&#39;s check-in flow
+          costs nothing.</li>
+          <li><strong>Managed-only is a hard requirement, not a preference.</strong> QRCoder&#39;s <code>PngByteQRCode</code> path needs no
+          native imaging asset, which is what lets the component ride into the WebAssembly head that
+          <code>MMCA.Common.UI</code> must keep supporting.</li>
+          <li><strong><code>null</code> beats an exception when cancellation is the normal case.</strong> A scan is a user-cancellable
+          operation: the attendee walks away, the organizer taps back, the code never decodes. Modelling those as
+          exceptions would make the ordinary path expensive and force every caller into a <code>try</code>. The contract of
+          ADR-042&#39;s fallbacks (never throw, report capability through <code>IsSupported</code>) already said this, and
+          scanning is where it pays.</li>
+          <li><strong>Opting in by name keeps a permission declaration honest.</strong> Folding the camera into
+          <code>UseMauiDeviceCapabilities</code> would have handed every MAUI head an app-store-visible camera permission
+          for a feature it may not have. The one extra line in a head&#39;s <code>MauiProgram</code> is the whole price of that.</li>
+          <li><strong>Common, not ADC, because nothing here is about conferences.</strong> ADR-042 established that reusable
+          infrastructure belongs to the framework and app-specific behavior stays in the app. A QR display
+          component and a barcode reader are the former by construction: ADC&#39;s check-in feature supplies only the
+          payload format and the verification, both of which stay in ADC (ADR-072).</li>
+          <li><strong>ZXing.Net.MAUI is MIT and is the maintained option.</strong> Licensing is a decided axis in this workspace
+          (ADR-016 pins MassTransit to v8 precisely because v9 is commercial), and a permissive license on a
+          package that ships inside a published framework package is not negotiable. The alternative,
+          hand-writing a camera preview and decoder per platform, is a large amount of code to own for a feature
+          measured in one screen.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The scan page&#39;s strings are resolved at composition, not per call.</strong> <code>cancelText</code> and
+          <code>cameraDescription</code> are captured into the singleton at registration
+          (<code>HostingDependencyInjection.cs:63-64</code>) and stored as primary-constructor parameters
+          (<code>MauiBarcodeScannerService.cs:19</code>), and <code>ScanAsync</code> takes no culture or text argument. A head that
+          switches culture at runtime under <a href="027-multi-locale-i18n.html">ADR-027</a> therefore keeps the cancel
+          button, page title and semantic description in the language that was current at startup. Accepted for
+          a two-string surface; fixing it properly means either a per-call options argument or resolving
+          <code>IStringLocalizer</code> inside the service, and both were judged more contract than the payoff justifies
+          today.</li>
+          <li><strong><code>QrCodeImage</code> has no error surface.</strong> There is no <code>try</code>/<code>catch</code> around the encode, so a payload too
+          large for the chosen version and error-correction combination propagates out of <code>OnParametersSet</code>
+          rather than degrading to a message. The intended payloads are short opaque tokens, so the failure mode
+          is a programming error rather than a data condition, but the component does not say so at runtime.</li>
+          <li><strong>A null fallback still masks a missing registration.</strong> This is ADR-042&#39;s recorded trade-off, and here
+          it is functional rather than decorative: a MAUI head that forgets <code>UseCommonBarcodeScanner</code> gets the
+          same behavior as a browser head. The mitigation is on the consumer, which is why ADC&#39;s check-in page
+          branches on <code>IsSupported</code> and renders a manual entry path instead (ADR-072) rather than hiding a
+          button.</li>
+          <li><strong>Opt-in means the platform matrix is not uniform.</strong> A Windows or Mac Catalyst MAUI head that calls
+          <code>UseCommonBarcodeScanner</code> still reports <code>IsSupported == false</code>, so &quot;registered&quot; and &quot;usable&quot; are two
+          different questions a caller has to ask separately.</li>
+          <li><strong>A generator dependency now ships to the browser.</strong> <code>QRCoder</code> is a <code>MMCA.Common.UI</code> dependency, so it
+          rides down to every WebAssembly client whether or not that client ever renders a code. It is a small
+          managed assembly and trimming applies, but the cost is not zero and it is paid by heads that do not use
+          the feature.</li>
+          <li><strong>The decoded payload is input, and the contract can only say so.</strong> Nothing in the framework validates
+          what a camera decodes. The security of a scan therefore lives entirely in the consumer&#39;s verification
+          step, which is exactly why ADR-072&#39;s credential is server-verified rather than self-describing.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="042-device-capability-abstraction.html">ADR-042</a> (the capability pattern this extends: contract in
+          <code>MMCA.Common.UI</code>, native implementation in <code>MMCA.Common.UI.Maui</code>, override after <code>AddUIShared</code>),
+          <a href="072-qr-badge-check-in-and-points.html">ADR-072</a> (the ADC feature that motivated both halves and owns the
+          payload format and its verification), <a href="027-multi-locale-i18n.html">ADR-027</a> (the culture model the
+          builder-time strings do not participate in), <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>
+          (lockstep release and the licensing posture behind the ZXing choice),
+          <a href="045-managed-file-storage-and-avatars.html">ADR-045</a> (the previous capability addition, and the same
+          treatment of untrusted device input).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/071-barcode-scanning-and-qr-display.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

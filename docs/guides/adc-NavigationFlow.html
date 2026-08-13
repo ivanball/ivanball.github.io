@@ -174,6 +174,7 @@
         PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
         PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
         PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
+        PubSponsors[&quot;/conference/sponsors&lt;br/&gt;Sponsors, grouped by tier&quot;]
     end
 
     Home[&quot;/  Home Page&quot;]
@@ -181,6 +182,7 @@
     Home --&gt;|nav menu| PubEvents
     Home --&gt;|nav menu| PubSessions
     Home --&gt;|nav menu| PubSpeakers
+    Home --&gt;|nav menu, sponsor strip| PubSponsors
     Home --&gt;|auth links| Login
     Home --&gt;|auth links| Register
 
@@ -218,6 +220,7 @@
         PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
         PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
         PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
+        PubSponsors[&quot;/conference/sponsors&lt;br/&gt;Sponsors, grouped by tier&quot;]
     end
 
     subgraph Engagement[&quot;Engagement / Feedback&quot;]
@@ -230,13 +233,21 @@
         SessionLive[&quot;/conference/sessions/{Id}/live&lt;br/&gt;Live Session (Q and A, polls)&quot;]
     end
 
+    subgraph Badge[&quot;Badge and Rewards&quot;]
+        MyBadge[&quot;/my-badge&lt;br/&gt;My Badge, QR credential&quot;]
+        MyPoints[&quot;/points&lt;br/&gt;My Points, leaderboard opt-in&quot;]
+    end
+
     Home[&quot;/  Home Page&quot;]
 
     Home --&gt;|nav menu| PubEvents
     Home --&gt;|nav menu| PubSessions
     Home --&gt;|nav menu| PubSpeakers
+    Home --&gt;|nav menu| PubSponsors
     Home --&gt;|nav menu| MyProfile
     Home --&gt;|nav menu| HappeningNow
+    Home --&gt;|nav menu| MyBadge
+    Home --&gt;|nav menu| MyPoints
 
     HappeningNow --&gt;|join a running session| SessionLive
     PubSessionDetail --&gt;|join live| SessionLive
@@ -286,6 +297,7 @@
         PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
         PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
         PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
+        PubSponsors[&quot;/conference/sponsors&lt;br/&gt;Sponsors, grouped by tier&quot;]
     end
 
     subgraph Engagement[&quot;Engagement / Feedback&quot;]
@@ -298,6 +310,7 @@
     Home --&gt;|nav menu| PubEvents
     Home --&gt;|nav menu| PubSessions
     Home --&gt;|nav menu| PubSpeakers
+    Home --&gt;|nav menu| PubSponsors
     Home --&gt;|nav menu| MyProfile
     Home --&gt;|nav menu| Dashboard
 
@@ -323,7 +336,7 @@
     SessionFeedback --&gt;|cancel| PubSessionDetail</pre>
           <hr>
           <h2 id="4-organizer">4. Organizer</h2>
-          <p>Authenticated users with the <code>Organizer</code> role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms), user management, feedback analytics, and the AI-assisted <strong>Session Selection Dashboard</strong>. These items appear under the nav menu&#39;s <em>Admin</em> section (most grouped under &quot;Conference&quot;).</p>
+          <p>Authenticated users with the <code>Organizer</code> role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors), user management, feedback analytics, the badge <strong>check-in</strong> and attendance pages, the points overview, and the AI-assisted <strong>Session Selection Dashboard</strong>. These items appear under the nav menu&#39;s <em>Admin</em> section (most grouped under &quot;Conference&quot;).</p>
           <pre class="mermaid">flowchart TD
     subgraph Auth[&quot;Authentication&quot;]
         Login[&quot;/login&lt;br/&gt;Login&quot;]
@@ -341,6 +354,7 @@
         PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Public Session Detail&quot;]
         PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Public Speaker List&quot;]
         PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Public Speaker Detail&quot;]
+        PubSponsors[&quot;/conference/sponsors&lt;br/&gt;Public Sponsors, grouped by tier&quot;]
     end
 
     subgraph Engagement[&quot;Engagement / Feedback&quot;]
@@ -380,6 +394,18 @@
         RoomDetail[&quot;/rooms/{Id}&lt;br/&gt;Edit Room&quot;]
     end
 
+    subgraph SponsorMgmt[&quot;Organizer: Sponsor Management&quot;]
+        SponsorList[&quot;/sponsors&lt;br/&gt;Sponsor List&quot;]
+        SponsorCreate[&quot;/sponsors/create&lt;br/&gt;Create Sponsor&quot;]
+        SponsorDetail[&quot;/sponsors/{Id}&lt;br/&gt;Edit Sponsor&quot;]
+    end
+
+    subgraph CheckIn[&quot;Organizer: Check-In and Rewards&quot;]
+        Scan[&quot;/check-in&lt;br/&gt;Scan Badges&lt;br/&gt;camera on MAUI, search on web&quot;]
+        Attendance[&quot;/organizer/attendance&lt;br/&gt;Attendance Overview&quot;]
+        PointsOverview[&quot;/organizer/points&lt;br/&gt;Points Overview&quot;]
+    end
+
     subgraph Decision[&quot;Organizer: Session Selection&quot;]
         SessionSelection[&quot;/sessions/selection-dashboard&lt;br/&gt;Session Selection Dashboard&lt;br/&gt;status mix, AI scoring&quot;]
     end
@@ -398,6 +424,10 @@
     Home --&gt;|nav menu| CatList
     Home --&gt;|nav menu| QuestionList
     Home --&gt;|nav menu| RoomList
+    Home --&gt;|nav menu| SponsorList
+    Home --&gt;|nav menu| Scan
+    Home --&gt;|nav menu| Attendance
+    Home --&gt;|nav menu| PointsOverview
     Home --&gt;|nav menu| SessionSelection
 
     Login --&gt;|on success| Home
@@ -466,7 +496,14 @@
     RoomList --&gt;|row click| RoomDetail
     RoomCreate --&gt;|on success| RoomDetail
     RoomCreate --&gt;|back| RoomList
-    RoomDetail --&gt;|back| RoomList</pre>
+    RoomDetail --&gt;|back| RoomList
+
+    %% Sponsor CRUD
+    SponsorList --&gt;|create| SponsorCreate
+    SponsorList --&gt;|row click| SponsorDetail
+    SponsorCreate --&gt;|on success| SponsorDetail
+    SponsorCreate --&gt;|back| SponsorList
+    SponsorDetail --&gt;|back| SponsorList</pre>
           <hr>
           <h2 id="5-functionality-flows-attendee--speaker">5. Functionality Flows (Attendee &amp; Speaker)</h2>
           <p>The diagrams in sections 1-4 map <em>which pages</em> each actor can reach. The diagrams below map <em>how attendees and speakers accomplish each functionality</em>, including inline actions (bookmarking, schedule filtering, dashboard editing) that are not separate pages. Pages appear as <code>route</code> nodes; edge labels are user actions. Flows in 5.3-5.5 require authentication.</p>
@@ -568,12 +605,14 @@
           <li><strong>In-page rights, not route rights:</strong> the live layer gates <em>panels</em>, not routes. <code>/conference/sessions/{Id}/live</code> is one page for everyone authenticated; the moderation panel renders only when the caller is the session&#39;s presenter or an Organizer, and the server re-checks that on every moderation call (BR-236), so the client-side gate is convenience, not security.</li>
           <li><strong>Menu-driven visibility:</strong> the left nav is built from each module&#39;s <code>IUIModule.NavItems</code>. Items declare a required role (<code>Organizer</code>) or claim (<code>speaker_id</code>); the menu hides what the current user can&#39;t use. Organizer items sit in the <em>Admin</em> nav section (most grouped under &quot;Conference&quot;); &quot;My Profile&quot; and the Speaker &quot;Dashboard&quot; sit in the <em>User</em> section.</li>
           <li><strong>Page guards (<code>@attribute [Authorize…]</code>):</strong><ul>
-          <li><em>Organizer role required:</em> <code>/sessions/selection-dashboard</code>, <code>/events/{EventId}/feedback</code>, <code>/sessions/{SessionId}/feedback</code>, and every conference/user management page (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>, <code>/conferencecategories</code>, <code>/questions</code>, <code>/rooms</code>, <code>/users</code>), each carrying a page-level <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> (e.g. <code>EventList.razor</code>, <code>UserList.razor</code>). The shared <code>Routes.razor</code> renders the Forbidden page for an authenticated non-Organizer; the inherited <code>RegisteredUser_AdminPages_ShouldBeForbidden</code> E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth).</li>
-          <li><em>Authentication only:</em> <code>/profile</code>, <code>/profile/claims</code>, <code>/speaker/dashboard</code>, both attendee feedback forms, the conference-day live pages (<code>/happening-now</code>, <code>/conference/sessions/{Id}/live</code>, <code>/conference/sessions/{Id}/present</code>), and <code>/speakers/{Id}</code> (SpeakerDetail is the one management page still gated by plain <code>[Authorize]</code> because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).</li>
+          <li><em>Organizer role required:</em> <code>/sessions/selection-dashboard</code>, <code>/events/{EventId}/feedback</code>, <code>/sessions/{SessionId}/feedback</code>, and every conference/user management page (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>, <code>/conferencecategories</code>, <code>/questions</code>, <code>/rooms</code>, <code>/users</code>), each carrying a page-level <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> (e.g. <code>EventList.razor</code>, <code>UserList.razor</code>). The shared <code>Routes.razor</code> renders the Forbidden page for an authenticated non-Organizer; the inherited <code>RegisteredUser_AdminPages_ShouldBeForbidden</code> E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth). The sponsor management pages (<code>/sponsors</code>, <code>/sponsors/create</code>, <code>/sponsors/{Id}</code>) and the check-in and rewards pages (<code>/check-in</code>, <code>/organizer/attendance</code>, <code>/organizer/points</code>) carry the same page-level attribute, and their <strong>writes</strong> are additionally permission-checked API-side (<code>conference:sponsors:manage</code>, <code>engagement:checkin:manage</code>, <code>engagement:points:view-overview</code>), so the role opens the page and the permission authorizes the call.</li>
+          <li><em>Authentication only:</em> <code>/profile</code>, <code>/profile/claims</code>, <code>/speaker/dashboard</code>, <code>/my-badge</code>, <code>/points</code>, both attendee feedback forms, the conference-day live pages (<code>/happening-now</code>, <code>/conference/sessions/{Id}/live</code>, <code>/conference/sessions/{Id}/present</code>), and <code>/speakers/{Id}</code> (SpeakerDetail is the one management page still gated by plain <code>[Authorize]</code> because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).</li>
           <li><em>Public (no attribute):</em> all <code>/conference/*</code> read pages, except the two live-layer routes above.</li>
           <li><em>MAUI head only:</em> <code>/settings/device</code> is registered by <code>DeviceUIModule</code> and exists in no web head.</li>
           </ul>
           </li>
+          <li><strong>Feature-gated surfaces:</strong> the badge and check-in pages (<code>/my-badge</code>, <code>/check-in</code>, <code>/organizer/attendance</code>) and the points pages (<code>/points</code>, <code>/organizer/points</code>) call APIs behind the <code>Engagement.CheckIn</code> and <code>Engagement.Points</code> flags. With a flag off the controller returns <strong>404</strong> rather than 403 (ADR-031) and the page renders empty; the route itself is not removed.</li>
+          <li><strong>One route, two input surfaces:</strong> <code>/check-in</code> renders the camera scan card only where the barcode-scanner capability reports itself supported (the MAUI head, <a href="../adr/071-barcode-scanning-and-qr-display.html">ADR-071</a>). The manual attendee-search panel is always rendered, so on the web and Windows heads that search <em>is</em> the check-in surface rather than a degraded fallback. The page adapts; it does not branch on platform.</li>
           </ul>
           <h3 id="crud-pattern-organizer">CRUD Pattern (Organizer)</h3>
           <p>All admin entity management follows the same navigation pattern:</p>
