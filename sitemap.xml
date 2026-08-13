@@ -132,17 +132,17 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/019-rate-limiting.html</loc>
-    <lastmod>2026-08-01</lastmod>
+    <lastmod>2026-08-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/020-permission-based-authorization.html</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-08-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -327,7 +327,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html</loc>
-    <lastmod>2026-07-28</lastmod>
+    <lastmod>2026-08-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -347,7 +347,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html</loc>
-    <lastmod>2026-08-01</lastmod>
+    <lastmod>2026-08-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -382,7 +382,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/069-shared-data-protection-key-ring.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -532,7 +532,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-22-engagement-module.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -602,7 +602,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/adc-ArchitectureScorecard.html</loc>
-    <lastmod>2026-08-01</lastmod>
+    <lastmod>2026-08-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -627,7 +627,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/store-ArchitectureScorecard.html</loc>
-    <lastmod>2026-07-28</lastmod>
+    <lastmod>2026-08-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

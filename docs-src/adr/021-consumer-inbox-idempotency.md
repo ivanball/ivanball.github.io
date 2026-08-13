@@ -49,7 +49,7 @@ not make handlers free to be non-idempotent.
 
 In production `EnableInbox: true` is set on all four ADC service hosts
 (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:28`,
-`MMCA.ADC.Conference.Service/appsettings.json:31`, `MMCA.ADC.Engagement.Service/appsettings.json:36`,
+`MMCA.ADC.Conference.Service/appsettings.json:31`, `MMCA.ADC.Engagement.Service/appsettings.json:52`,
 `MMCA.ADC.Notification.Service/appsettings.json:50`) and on Store's Sales service
 (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:33`). Where the `InboxMessages`
 table comes from differs by repo: each of the four ADC per-service migration projects carries a
@@ -57,12 +57,25 @@ dedicated `AddInboxMessages` migration, whereas Store Sales creates the table an
 `IX_InboxMessages_MessageId` index inside its single `InitialCreate` migration
 (`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260621192808_InitialCreate.cs:21,179`),
 because that per-service project postdates the frozen combined-archive lineage that added the ADC
-migration. Of the services carrying the flag, only ADC Identity and ADC Conference register a broker
-consumer today (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:275-276`,
-`MMCA.ADC.Conference.Service/Program.cs:320-321`), and Store Sales consumes `ProductVariantChanged`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:200-201`); ADC Engagement and Notification
-carry `EnableInbox: true` and the table but register no consumer today, so their inbox is provisioned
-and unused (functionally harmless).
+migration. Adoption inventory as of 2026-08-13: **three ADC services consume from the broker** and
+so use their inbox for real, plus Store Sales. ADC Identity consumes `SpeakerLinkedToUser` and
+`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:275-276`),
+ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:322`), and ADC
+Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
+`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:275-278`), the
+first of which is ADC's first **self-consumption** over the broker: Engagement publishes
+`AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
+so the inbox is load-bearing there rather than decorative. Store Sales consumes `ProductVariantChanged`
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:200-201`). Only **ADC Notification**
+now carries `EnableInbox: true` and the table while registering no consumer, so its inbox alone is
+provisioned and unused (functionally harmless). The mirror image is equally harmless and worth stating
+because it looks like the opposite mistake: Store Catalog and Store Identity carry the `InboxMessages`
+table from their own `InitialCreate` migrations
+(`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs:48,213`,
+`MMCA.Store.Migrations.SqlServer.Identity/Migrations/20260621192816_InitialCreate.cs:49,119`) with
+**no** `EnableInbox` flag and **no** consumer, so the table exists and is simply never written; the
+audit condition the Trade-offs below state (no broker-consuming service lacks the flag) holds in both
+repos.
 
 ## Rationale
 - **Dedup once, not in every handler.** A single consume-edge check turns "every handler author must

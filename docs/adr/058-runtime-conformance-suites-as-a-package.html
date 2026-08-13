@@ -276,11 +276,15 @@
           covers all three Store services
           (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ProblemDetailsContractTests.cs:19</code>,
           <code>MMCA.Store.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15</code>,
-          <code>MMCA.Store.Sales.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15</code>) and three of the four
+          <code>MMCA.Store.Sales.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15</code>) and, since
+          2026-08-13, all four
           ADC services (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:19</code>,
           <code>MMCA.ADC.Engagement.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>,
-          <code>MMCA.ADC.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>): <strong>ADC Notification
-          has no problem-details subclass</strong>. The versioning contract is subclassed once per repo, on ADC
+          <code>MMCA.ADC.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>,
+          <code>MMCA.ADC.Notification.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15</code>): <strong>ADC
+          Notification gained the missing subclass</strong> (landing in a pull request in flight as this record is
+          updated), so every REST host in both consumers is now guarded for this one contract. The versioning
+          contract is subclassed once per repo, on ADC
           Conference (<code>ApiVersioningTests.cs:14</code>) and Store Catalog
           (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:15</code>),
           which is enough to keep the machinery exercised but leaves the other five REST hosts unguarded. The
@@ -328,8 +332,9 @@
           once someone writes the subclass. That is the same audit-the-inventory caveat, and the adoption
           inventory above is the current answer to it, not a claim of completeness.</li>
           <li><strong>Coverage is uneven by suite.</strong> Security headers and graceful shutdown are Gateway-only, versioning
-          is one host per repo, ADC Notification has no problem-details guard, and Helpdesk has none of it.
-          Every one of those is an unguarded host for that contract, not a decision that the contract does not
+          is one host per repo, and Helpdesk has none of it. Problem details is the one suite now subclassed
+          on every REST host in both consumers (ADC Notification closed the last gap on 2026-08-13). Every
+          remaining hole is an unguarded host for that contract, not a decision that the contract does not
           apply.</li>
           <li><strong>Most of the suites need a real SQL Server.</strong> The five fixture-driven suites live in the per-service
           integration tier and cannot run in a database-free test pass; only the Gateway pair (no DbContext, no
