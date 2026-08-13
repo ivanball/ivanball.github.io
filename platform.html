@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">15</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">70</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">72</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">100</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -361,7 +361,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>70 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>72 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -436,6 +436,8 @@
           <a class="adr" href="docs/adr/068-value-objects-as-validated-primitives.html"><span class="adr-num">068</span><span><span class="adr-title">Value objects as validated domain primitives</span><span class="adr-sum">A domain value that carries an invariant is an immutable record value object with a private constructor and a Result-returning factory, while identifiers stay primitives (ADR-048): the asymmetry is the decision, and the factory shape is fitness-enforced rather than conventional.</span></span></a>
           <a class="adr" href="docs/adr/069-shared-data-protection-key-ring.html"><span class="adr-num">069</span><span><span class="adr-title">Shared DataProtection key ring for scaled-out hosts</span><span class="adr-sum">One opt-in registration persists the DataProtection key ring to a single Azure blob so every replica of a scaled-out host can decrypt the cookies and antiforgery tokens its peers mint; an absent configuration key means the single-process in-memory default stays, with no Azure dependency at startup.</span></span></a>
           <a class="adr" href="docs/adr/070-fail-fast-configuration-contract.html"><span class="adr-num">070</span><span><span class="adr-title">Fail-fast configuration contract</span><span class="adr-sum">Every settings section binds through data-annotation validation with ValidateOnStart, so a missing or unparseable value refuses to boot the host instead of surfacing as a 500 at first use, and a setting read above Infrastructure goes through a read-only interface rather than the options pipeline.</span></span></a>
+          <a class="adr" href="docs/adr/071-barcode-scanning-and-qr-display.html"><span class="adr-num">071</span><span><span class="adr-title">Barcode scanning and QR display capability</span><span class="adr-sum">One feature split by what each half actually depends on: rendering a QR needs no device, so it ships as a plain shared component, while reading one needs a camera and ships as a capability contract with a null fallback and an opt-in native implementation, because a camera costs an app-store permission declaration a head may not want.</span></span></a>
+          <a class="adr" href="docs/adr/072-qr-badge-check-in-and-points.html"><span class="adr-num">072</span><span><span class="adr-title">QR badge check-in and points gamification</span><span class="adr-sum">The badge QR carries an opaque server-verified handle rather than a signed token, organizers scan attendees rather than the reverse, and one unique index serves as both the redelivery-idempotency guard and the anti-farming rule for an append-only points ledger.</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -461,9 +463,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">132 documents</span>
+            <span class="kicker kicker--accent">134 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 70 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
+            <p>Every collection indexed in one place: 72 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->

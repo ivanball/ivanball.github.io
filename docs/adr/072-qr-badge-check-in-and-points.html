@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-072: QR Badge Check-In and Points Gamification in ADC · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-13).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/072-qr-badge-check-in-and-points.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-072: QR Badge Check-In and Points Gamification in ADC">
+  <meta property="og:description" content="Accepted (2026-08-13).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/072-qr-badge-check-in-and-points.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-072: QR Badge Check-In and Points Gamification in ADC">
+  <meta name="twitter:description" content="Accepted (2026-08-13).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"072 · QR Badge Check-In and Points Gamification in ADC","item":"https://ivanball.github.io/docs/adr/072-qr-badge-check-in-and-points.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">072 · QR Badge Check-In and Points Gamification in ADC</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 72 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html" aria-current="page">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-072-qr-badge-check-in-and-points-gamification-in-adc">ADR-072: QR Badge Check-In and Points Gamification in ADC</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-13).</p>
+          <h2 id="context">Context</h2>
+          <p>ADC wanted two conference-day capabilities that turn out to be one mechanism. Organizers want to know
+          who actually attended which session, which the schedule cannot tell them: a bookmark is an intention and
+          feedback arrives from a self-selected minority. Attendees want a reason to show up to a session they did
+          not plan on and to leave feedback afterwards, which is a rewards problem rather than a data problem.</p>
+          <p>Registration and door admission are <strong>not</strong> part of this. ADC sells tickets through TicketLeap, and
+          TicketLeap already scans people through the door on the morning of the event. Rebuilding arrival
+          check-in would produce two systems with two different opinions about who is in the building, and the one
+          holding the money would be right. What TicketLeap cannot do is tell an organizer that 60 people sat in
+          the third-track talk at 2pm.</p>
+          <p>That framing left a set of open questions with no recorded answer:</p>
+          <ul>
+          <li><strong>What does the QR actually carry?</strong> A signed token (JWT or an HMAC over the user id) verifies offline
+          and needs no lookup. An opaque handle carries nothing and requires the server.</li>
+          <li><strong>Who scans whom?</strong> An attendee scanning a code posted on a room door needs no staff, but a photograph
+          of that door code lets anyone check in from the hallway. An organizer scanning an attendee&#39;s badge
+          needs a person with a device.</li>
+          <li><strong>Is a session check-in the same kind of thing as an event check-in?</strong> They differ only by whether a
+          session is named.</li>
+          <li><strong>Where do points live?</strong> A points ledger is generic infrastructure by shape, and
+          <a href="042-device-capability-abstraction.html">ADR-042</a> and this workspace&#39;s practice both say reusable
+          infrastructure belongs to MMCA.Common. But no second consumer exists: MMCA.Store has no loyalty
+          feature today.</li>
+          <li><strong>Is a leaderboard compatible with an attendee&#39;s privacy expectations?</strong> Ranking people by name is a
+          publication of attendance behavior.</li>
+          </ul>
+          <p>The framework half of the mechanism (the QR component and the camera capability) is
+          <a href="071-barcode-scanning-and-qr-display.html">ADR-071</a>. This record decides what ADC does with it.</p>
+          <h2 id="decision">Decision</h2>
+          <h3 id="the-badge-credential-is-an-opaque-server-verified-handle">The badge credential is an opaque, server-verified handle</h3>
+          <p><code>AttendeeBadge</code> (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/Badges/AttendeeBadge.cs:17-24</code>)
+          is one row per user holding a single <code>Guid Credential</code>, minted on first read of <code>/my-badge</code> by a
+          get-or-create command rather than a query
+          (<code>.../Engagement.Application/CheckIns/UseCases/GetOrCreateMyBadge/GetOrCreateMyBadgeHandler.cs</code>). Two
+          filtered unique indexes cover it, on <code>UserId</code> and on <code>Credential</code>
+          (<code>.../Engagement.Infrastructure/Persistence/EntityConfiguration/AttendeeBadgeConfiguration.cs:31-36</code>).</p>
+          <ul>
+          <li>The credential is <code>Guid.NewGuid()</code> and explicitly <strong>not</strong> <code>Guid.CreateVersion7()</code>
+          (<code>AttendeeBadge.cs:65-68</code>): a v7 value embeds a timestamp and orders monotonically, which is exactly
+          wrong for a bearer value that must be unguessable.</li>
+          <li><code>Regenerate()</code> (<code>:59-63</code>) issues a new credential, which revokes every previously printed or
+          screenshotted copy in one write.</li>
+          <li>The wire format is <code>mmca-adc:badge:{credential}</code>
+          (<code>.../Engagement.Shared/CheckIns/BadgePayload.cs:15-20</code>). <code>TryExtractCredential</code> (<code>:30-45</code>) accepts the
+          prefixed form <strong>or</strong> a bare GUID, case-insensitively, and rejects <code>Guid.Empty</code>, so the manual path can
+          take a typed value and the scanner can reject a foreign QR by prefix.</li>
+          </ul>
+          <h3 id="organizers-scan-attendees-never-the-reverse">Organizers scan attendees, never the reverse</h3>
+          <p><code>/check-in</code> (<code>.../Engagement.UI/Pages/CheckIn/CheckInScan.razor:1-2</code>) is <code>[Authorize(Roles = &quot;Organizer&quot;)]</code>
+          and its writes carry <code>[HasPermission(EngagementPermissions.CheckInManage)]</code>
+          (<code>&quot;engagement:checkin:manage&quot;</code>, <code>.../Engagement.Shared/Authorization/EngagementPermissions.cs:23</code>,
+          applied at <code>.../Engagement.API/Controllers/CheckInsController.cs:66</code>, <code>:86</code>, <code>:105</code>). The attendee&#39;s page
+          <code>/my-badge</code> is authenticated-only and displays, never writes. Every <code>CheckIn</code> row therefore records both
+          parties: <code>UserId</code> and <code>CheckedInByUserId</code>
+          (<code>.../Engagement.Domain/CheckIns/CheckIn.cs:24-39</code>).</p>
+          <p>The scan surface adapts to the head rather than branching on platform, per ADR-071:
+          <code>ScannerAvailable =&gt; Scanner.IsSupported</code> (<code>CheckInScan.razor.cs:36</code>) gates the camera card
+          (<code>CheckInScan.razor:68</code>), while the manual attendee-search panel is <strong>always</strong> rendered, because on a web
+          or Windows head that search <em>is</em> the check-in surface (<code>CheckInScan.razor:108-113</code>). The scan loop
+          discards a non-badge QR and keeps scanning rather than failing (<code>CheckInScan.razor.cs:125-129</code>).</p>
+          <h3 id="one-checkin-aggregate-carrying-a-scope">One <code>CheckIn</code> aggregate carrying a scope</h3>
+          <p><code>CheckInScope</code> is <code>Event = 0</code> / <code>Session = 1</code> (<code>.../Engagement.Shared/CheckIns/CheckInScope.cs</code>), and one
+          aggregate covers both: <code>EventId</code> is always set, <code>SessionId</code> is set only for session scope
+          (<code>CheckIn.cs:24-39</code>). Session check-in is the case ADC actually runs; event scope exists because the
+          model costs nothing extra to support and the door remains TicketLeap&#39;s job.</p>
+          <h3 id="idempotency-and-anti-farming-are-the-same-index">Idempotency and anti-farming are the same index</h3>
+          <p>A repeat scan is answered, not written: <code>CheckInProcessor.FindExistingAsync</code> returns the prior row and the
+          processor reports <code>AlreadyCheckedIn = true</code> without a write
+          (<code>.../Engagement.Application/CheckIns/Services/CheckInProcessor.cs:59-68</code>), so no second integration event
+          is published. Two <strong>filtered unique indexes</strong> are the backstop under a concurrent double scan
+          (<code>.../EntityConfiguration/CheckInConfiguration.cs:48-55</code>): <code>(UserId, EventId)</code> filtered to <code>[Scope] = 0</code>
+          and <code>(UserId, SessionId)</code> filtered to <code>[Scope] = 1</code>, both also excluding soft-deleted rows.</p>
+          <p>The points ledger uses the same construction for a different purpose. <code>PointsEntry</code>
+          (<code>.../Engagement.Domain/Points/PointsEntry.cs:23-39</code>) is append-only with no mutators at all, and carries a
+          unique index on <code>(UserId, ActivityType, SubjectKey)</code>
+          (<code>.../EntityConfiguration/PointsEntryConfiguration.cs:46-48</code>). That one index is simultaneously the
+          idempotency guard for redelivered integration events and the anti-farming rule: because the subject key is
+          <code>session:{id}</code> or <code>event:{id}</code> (<code>.../Engagement.Shared/Points/PointsSubjectKeys.cs:19-25</code>, max 64 chars),
+          asking five questions in one session earns the question award exactly once.</p>
+          <h3 id="points-are-adc-local-with-the-extraction-path-pre-paid">Points are ADC-local, with the extraction path pre-paid</h3>
+          <p><code>IPointsAwarder</code> is deliberately conference-agnostic:
+          <code>AwardAsync(userId, activity, subjectKey, occurredOnUtc, ct)</code>
+          (<code>.../Engagement.Application/Points/Services/IPointsAwarder.cs:35-40</code>) names no event, session, or
+          conference concept, and the record for that choice is in the interface itself (<code>:12-17</code>): the ledger is
+          built so it can MOVE to MMCA.Common the day a second consumer (Store loyalty) exists, not before.</p>
+          <ul>
+          <li><code>PointsSettings</code> (section <code>&quot;Points&quot;</code>, <code>.../Engagement.Shared/Points/PointsSettings.cs:15-33</code>) carries the
+          rule values: <code>EventCheckIn</code> 25, <code>SessionCheckIn</code> 10, <code>SessionFeedback</code> 15, <code>EventFeedback</code> 15,
+          <code>QuestionAsked</code> 5, <code>LeaderboardSize</code> 10.</li>
+          <li><strong>Zero disables a rule.</strong> <code>PointsAwarder</code> short-circuits on <code>value &lt;= 0</code> and writes nothing
+          (<code>.../Points/Services/PointsAwarder.cs:44-49</code>); an absent config entry binds to 0 and takes the same
+          path.</li>
+          <li>The awarded <code>Points</code> value is snapshotted onto the entry at award time (<code>PointsEntry.cs:33</code>), so the
+          ledger records what a rule was worth then.</li>
+          <li>A duplicate is success, not failure: the pre-check returns <code>Result.Success()</code> (<code>PointsAwarder.cs:55-62</code>)
+          and a lost race is caught and also returns success (<code>:73-80</code>).</li>
+          </ul>
+          <p>Award triggers come from three different mechanisms, chosen per event source:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Activity</th>
+          <th>Trigger</th>
+          <th>Subject key</th>
+          <th>Delivery</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>EventCheckIn</code> (25)</td>
+          <td><code>AttendeeCheckedIn</code>, event scope</td>
+          <td><code>event:{id}</code></td>
+          <td>Outbox integration event</td>
+          </tr>
+          <tr>
+          <td><code>SessionCheckIn</code> (10)</td>
+          <td><code>AttendeeCheckedIn</code>, session scope</td>
+          <td><code>session:{id}</code></td>
+          <td>Outbox integration event</td>
+          </tr>
+          <tr>
+          <td><code>SessionFeedback</code> (15)</td>
+          <td><code>SessionFeedbackSubmitted</code></td>
+          <td><code>session:{id}</code></td>
+          <td>Outbox integration event</td>
+          </tr>
+          <tr>
+          <td><code>EventFeedback</code> (15)</td>
+          <td><code>EventFeedbackSubmitted</code></td>
+          <td><code>event:{id}</code></td>
+          <td>Outbox integration event</td>
+          </tr>
+          <tr>
+          <td><code>QuestionAsked</code> (5)</td>
+          <td><code>SessionQuestionChanged</code>, <code>Added</code> only</td>
+          <td><code>session:{id}</code></td>
+          <td>In-module domain event</td>
+          </tr>
+          </tbody></table></div>
+          <p><code>AttendeeCheckedIn</code> (<code>.../Engagement.Shared/CheckIns/IntegrationEvents/AttendeeCheckedIn.cs:21-28</code>) is
+          raised inside <code>CheckIn.Create</code> (<code>CheckIn.cs:95</code>), so the outbox captures it in the same transaction as the
+          row (ADR-003), and it carries <code>Scope</code> as a <strong>string</strong> so a new scope stays additive. It is ADC&#39;s first
+          broker self-consumption: the Engagement service both publishes and consumes it
+          (<code>.../Services/MMCA.ADC.Engagement.Service/Program.cs:259-264</code>).</p>
+          <p>The two feedback events are new to the Conference module
+          (<code>.../Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:19-24</code>,
+          <code>.../Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:18-22</code>) and are raised on the
+          <strong>answer-create path only</strong>, never on the BR-107 upsert-update path
+          (<code>AddSessionQuestionAnswerHandler.cs:131-134</code>, <code>AddEventQuestionAnswerHandler.cs:109-112</code>). One feedback
+          form produces one event per answer row, and the shared subject key collapses them to one award.</p>
+          <p><code>QuestionAsked</code> rides the existing in-module <code>SessionQuestionChanged</code> domain event, filtered to
+          <code>DomainEntityState.Added</code> (<code>.../Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:48-49</code>),
+          keyed by session rather than by question (<code>:74</code>).</p>
+          <h3 id="the-leaderboard-is-opt-in-and-opting-in-is-a-row">The leaderboard is opt-in, and opting in is a row</h3>
+          <p><code>LeaderboardOptIn</code> (<code>.../Engagement.Domain/Points/LeaderboardOptIn.cs:19-28</code>) holds <code>UserId</code> and a
+          <code>DisplayName</code> snapshot, resolved server-side from the caller&#39;s token claims rather than accepted from the
+          request body (<code>SetLeaderboardParticipationHandler.cs:142-161</code>; the request carries only <code>Participate</code>).
+          Opting out soft-deletes the row and rejoining reactivates it (<code>:73-103</code>, the BR-135 pattern), so nobody&#39;s
+          name is on the board without a live opt-in. <code>GetLeaderboard</code>
+          (<code>.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs</code>) reads only opted-in users&#39; entries, folds
+          totals in memory, orders by total then display name, and assigns distinct sequential ranks.</p>
+          <p><code>Engagement.CheckIn</code> and <code>Engagement.Points</code> are feature flags enforced with <code>[FeatureGate]</code> at the
+          controllers (<code>CheckInsController.cs:32</code>, <code>PointsController.cs:34</code>, ADR-031). GDPR export is extended in the
+          same pass: <code>user_engagement_export.proto</code> gains <code>points_entries</code>, <code>leaderboard_opt_in</code> and
+          <code>leaderboard_display_name</code> (<code>:34-41</code>) plus an <code>EngagementPointsEntryExportItem</code> message (<code>:59-76</code>).</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>An opaque credential makes the server the only interpreter.</strong> A JWT or HMAC badge would verify
+          offline, but the scanning device is online by necessity (it has to write a check-in row), so offline
+          verification buys nothing. What it costs is real: a signed token is self-describing, so a screenshot
+          leaks whatever claims it carries; it cannot be revoked without a revocation list, which is a second
+          store; and it is long, which makes a denser QR that is harder to read off a dim phone screen. A GUID is
+          short, meaningless to anyone holding it, and revoked by one <code>Regenerate()</code>.</li>
+          <li><strong>Scanning direction decides who can cheat.</strong> A code posted at a room door is a photograph away from
+          remote check-in by anyone in the building or on social media. Making the organizer&#39;s device the scanner
+          moves the trust to a person holding a permission, and the record of who scanned lands on every row.</li>
+          <li><strong>Session-first respects the product that already owns the door.</strong> TicketLeap is the system of record
+          for admission, and a second arrival check-in would create a disagreement rather than a capability. The
+          scope enum leaves event check-in modelled and available without ADC asserting ownership of it.</li>
+          <li><strong>One aggregate with a scope beats two aggregates that differ by a nullable column.</strong> Splitting
+          <code>EventCheckIn</code> and <code>SessionCheckIn</code> would duplicate the factory, the integration event, the idempotency
+          rule, the query surface and the migration for a distinction that a single enum expresses. The filtered
+          unique indexes give each scope its own exact constraint anyway.</li>
+          <li><strong>The anti-farming rule and the idempotency rule are genuinely the same rule.</strong> &quot;Award this user once
+          for this subject&quot; is what makes a redelivered broker message safe and what makes a fifth question worth
+          nothing. Expressing it once, as a unique index, means the two cannot drift apart, and the database is
+          the arbiter rather than handler code.</li>
+          <li><strong>ADC-local is the honest place for the ledger today.</strong> Moving it to MMCA.Common now would add a public
+          API surface and a lockstep release obligation (ADR-016) for a single consumer, and the shape of a second
+          consumer is guesswork until Store actually needs loyalty. The cost of waiting was paid up front instead:
+          the awarding vocabulary carries no conference nouns and the subject key is an opaque string, so the move
+          is a project relocation rather than a redesign.</li>
+          <li><strong>Opt-in is the only defensible default for a leaderboard.</strong> A ranked list of names is a publication of
+          who attended what. Snapshotting the display name at opt-in additionally keeps the board query out of
+          Identity, so the reward surface does not become a second read path onto user records.</li>
+          <li><strong>Points are earned by facts the system already publishes.</strong> Check-in, feedback and question-asked are
+          events that exist for their own reasons; the ledger is a consumer of them, so gamification adds no new
+          write path to the features it rewards.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The badge credential is a bearer value.</strong> Anyone who photographs an attendee&#39;s screen can be checked
+          in as that attendee. The mitigations are that a scan is organizer-side, that every row records who
+          scanned, and that <code>Regenerate()</code> invalidates a leaked code, but the value itself carries no proof of
+          possession.</li>
+          <li><strong><code>QuestionAsked</code> is at-most-once and says so.</strong> It rides an in-process domain event dispatched after
+          commit, so a crash in that window silently loses one five-point award
+          (<code>SessionQuestionSubmittedPointsHandler.cs:23-32</code>, whose body is additionally wrapped in a best-effort
+          catch). Promotion to an integration event is a one-file change per side, deliberately deferred: five
+          points do not justify an outbox row per question.</li>
+          <li><strong>The feature flags gate the surface, not the ledger.</strong> <code>[FeatureGate]</code> sits on the controllers, and no
+          handler implements <code>IFeatureGated</code>, so turning <code>Engagement.Points</code> off hides the pages and the API while
+          the event consumers keep accruing entries. That is recoverable (the ledger is append-only and correct)
+          but it is not what &quot;off&quot; usually means.</li>
+          <li><strong>Rule values are snapshotted, so history is mixed-rate.</strong> Changing <code>SessionCheckIn</code> from 10 to 15 does
+          not restate earlier entries, which is right for an audit ledger and confusing on a leaderboard where two
+          attendees with identical activity can hold different totals.</li>
+          <li><strong>Duplicate-key detection is message-text matching.</strong> <code>PointsAwarder.IsDuplicateKey</code> walks the inner
+          exception chain looking for &quot;duplicate key&quot;, &quot;UNIQUE KEY constraint&quot; or &quot;unique index&quot;
+          (<code>PointsAwarder.cs:112-125</code>) because the Application layer references neither EF Core nor SqlClient, and
+          it deliberately does not match SQL Server error numbers 2601/2627. Layer purity is bought with a
+          provider-dependent string comparison; the pre-check makes it a rare path, not a hot one.</li>
+          <li><strong>The leaderboard folds totals in memory.</strong> <code>GetLeaderboardHandler</code> reads the opted-in users&#39; entries and
+          sums them client-side, because the Application layer has no EF Core to push a <code>GROUP BY</code> down with. It is
+          bounded by the opt-in population and fine at conference scale; it is not a design that survives a much
+          larger ledger.</li>
+          <li><strong>Broker self-consumption for an in-service concern.</strong> <code>AttendeeCheckedIn</code> is published and consumed by
+          the same Engagement service, so an in-service award takes a broker round-trip. That is the price of
+          keeping the award path identical to the cross-module ones (feedback arrives from Conference) and of
+          leaving Engagement extractable, but it is a real hop for a local fact.</li>
+          <li><strong>A once-per-subject rule caps engagement as well as farming.</strong> The second question an attendee asks in
+          a session earns nothing, which is the anti-farming rule working as designed and also a small
+          disincentive at exactly the moment a room is warming up.</li>
+          <li><strong>The export carries the activity as a number.</strong> <code>activity_type</code> is an <code>int32</code> rather than a proto enum
+          (<code>user_engagement_export.proto:61-66</code>), because proto3 forces a zero member and 0 is reserved as &quot;unset&quot;
+          on the C# side, so a reader of the raw export sees <code>3</code> rather than <code>SessionFeedback</code>.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="071-barcode-scanning-and-qr-display.html">ADR-071</a> (the framework halves this consumes: the QR component on
+          <code>/my-badge</code> and the scanner capability behind <code>/check-in</code>),
+          <a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox path <code>AttendeeCheckedIn</code> and the two feedback events
+          take, and the at-least-once delivery the unique index makes safe),
+          <a href="021-consumer-inbox-idempotency.html">ADR-021</a> (the broker-dedup sibling; the points ledger&#39;s unique index is
+          a stronger, persisted form of the same guarantee),
+          <a href="020-permission-based-authorization.html">ADR-020</a> (<code>engagement:checkin:manage</code> and
+          <code>engagement:points:view-overview</code> as capability grants rather than roles),
+          <a href="031-feature-flag-management.html">ADR-031</a> (the <code>Engagement.CheckIn</code> / <code>Engagement.Points</code> gates and the
+          404-not-403 posture), <a href="005-soft-delete-vs-erasure.html">ADR-005</a> (the GDPR export the points ledger and
+          leaderboard opt-in now extend).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/072-qr-badge-check-in-and-points.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

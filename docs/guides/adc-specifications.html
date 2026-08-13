@@ -134,6 +134,7 @@
           <li><strong>Event Management</strong> - Creating and managing conference events, rooms, sessions, and speakers</li>
           <li><strong>Speaker &amp; Category Management</strong> - Organizing speakers by categories (e.g., track, level, tags)</li>
           <li><strong>Feedback Collection</strong> - Gathering attendee ratings and comments on events, individual sessions, and speakers</li>
+          <li><strong>Sponsor Management</strong> - Organizer-managed sponsors and exhibitors grouped by tier, published with their event (BR-240 to BR-243)</li>
           <li><strong>External Data Sync</strong> - Importing conference data from Sessionize</li>
           </ul>
           <p><strong>Engagement</strong> (attendee-generated activity: user-facing):</p>
@@ -141,6 +142,8 @@
           <li><strong>Personal Schedule</strong> - Attendee session bookmarking</li>
           <li><strong>Live Polls</strong> - Conference-day polls scoped to an event or a single session, with live tallies (<a href="../adr/039-live-channel-push.html">ADR-039</a>)</li>
           <li><strong>Live Session Q and A</strong> - Attendee-submitted questions with moderation and upvoting, displayed anonymously</li>
+          <li><strong>Badge Check-In</strong> - Organizers scan an attendee&#39;s QR badge to record session attendance; door admission stays with TicketLeap (BR-244 to BR-249)</li>
+          <li><strong>Points and Leaderboard</strong> - An append-only rewards ledger fed by check-in, feedback and questions, with an opt-in leaderboard (BR-250 to BR-254)</li>
           </ul>
           <p><strong>Identity</strong> (identity and authentication):</p>
           <ul>
@@ -1256,6 +1259,90 @@
           <tr>
           <td>BR-239</td>
           <td><strong>Speaker visibility:</strong> a speaker is publicly visible only if the speaker has <strong>at least one visible session</strong> (a session eligible under BR-49) <strong>in the scoped event set</strong>: the selected event on event-scoped reads (paged list with an event filter; an unpublished scoped event yields an empty set), and all Published events on reads without event context (unscoped list, lookup, by-id, junction filters). An <code>EventSpeaker</code> row grants <strong>no</strong> visibility: the Sessionize sync creates one for every imported speaker, so the row carries no acceptance signal. Speakers with no qualifying session are excluded from public list, paged, lookup, and junction responses, and a GET by id returns <strong>HTTP 404</strong> for non-privileged callers rather than leaking existence, with one carve-out: a caller whose <code>speaker_id</code> claim matches the requested id can always read their own profile (mirror of the BR-214 self-or-organizer rule; the self-edit form cannot load without it), and that self-read response is never stored into the shared output cache. Privileged readers (<code>Organizer</code> or <code>ContentEditor</code>) see every speaker. The rule is evaluated as an id-list specification, so a hidden speaker cannot be reached through any other read path.</td>
+          </tr>
+          <tr>
+          <td></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><strong>Sponsors (Conference context)</strong></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>BR-240</td>
+          <td><strong>Sponsor authoring shape:</strong> a sponsor carries a required <code>Name</code> (max 200 characters) and a required <code>Tier</code>, plus optional <code>LogoUrl</code>, <code>Description</code> and <code>WebsiteUrl</code> (max 2000 each), <code>LinkedInUrl</code> (max 2000), <code>TwitterHandle</code> (max 100), <code>BoothNumber</code> (max 50), a <code>Sort</code> order (must be &gt;= 0) and the exhibitor flag <code>IsExhibitor</code>. A <code>BoothNumber</code> is accepted even when <code>IsExhibitor</code> is false: the two fields are recorded independently rather than cross-validated. Every sponsor belongs to exactly one <strong>Event</strong> (<code>EventId</code> required), and the owning event is <strong>immutable after creation</strong>: <code>Update</code> does not accept an <code>EventId</code>, so moving a sponsor between events means deleting and re-creating it (the BR-140 pattern for sessions).</td>
+          </tr>
+          <tr>
+          <td>BR-241</td>
+          <td><strong>Sponsor tiers are Platinum, Gold, Silver and Community</strong>, and the tier&#39;s stored order <em>is</em> its display order (Platinum first). The public page groups sponsors by tier ascending, then orders within a tier by <code>Sort</code> ascending and <code>Name</code>, so an organizer controls placement inside a tier without renaming anything.</td>
+          </tr>
+          <tr>
+          <td>BR-242</td>
+          <td><strong>Sponsor visibility inherits event visibility.</strong> For non-privileged callers, sponsor reads are restricted to sponsors whose parent Event has <code>IsPublished = true</code>, evaluated as an id-list specification over the published event set (the BR-239 shape). Scoping a public read to an unpublished event therefore yields an empty page, and a GET by id for a sponsor of an unpublished event returns <strong>HTTP 404</strong> rather than a redacted record. Privileged readers (<code>Organizer</code> or <code>ContentEditor</code>) see every sponsor. Sponsor reads are otherwise anonymous and output-cached.</td>
+          </tr>
+          <tr>
+          <td>BR-243</td>
+          <td><strong>Sponsor writes require the <code>conference:sponsors:manage</code> permission</strong> (ADR-020), which is part of both the full Conference permission set and the ContentManagement set: <code>Organizer</code> and <code>Admin</code> hold it through the former and <code>ContentEditor</code> through the latter. Reads are <code>[AllowAnonymous]</code>. There is <strong>no feature flag</strong> for sponsors: publication of the parent event and this permission are the only gates.</td>
+          </tr>
+          <tr>
+          <td></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><strong>Badge check-in (Engagement context)</strong></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>BR-244</td>
+          <td><strong>An attendee badge is one opaque credential per user.</strong> The badge holds a single random <code>Guid</code> (unique per user, unique across badges), minted on the attendee&#39;s first visit to <code>/my-badge</code> and never derived from the user id. It encodes as <code>mmca-adc:badge:{credential}</code> in the QR, and the reader accepts either the prefixed form or a bare GUID (case-insensitive prefix, <code>Guid.Empty</code> rejected) so a code can also be typed in by hand. Regenerating a badge issues a new credential and thereby revokes every previously printed or screenshotted copy.</td>
+          </tr>
+          <tr>
+          <td>BR-245</td>
+          <td><strong>Check-in is organizer-scans-attendee, never the reverse.</strong> The attendee&#39;s <code>/my-badge</code> page only displays; the scanning page is Organizer-gated and every check-in records both parties (<code>UserId</code> and <code>CheckedInByUserId</code>) plus the instant. A check-in carries a <strong>scope</strong>, <code>Event</code> or <code>Session</code>: <code>EventId</code> is always recorded and <code>SessionId</code> only for session scope.</td>
+          </tr>
+          <tr>
+          <td>BR-246</td>
+          <td><strong>A repeat scan is idempotent, not an error.</strong> A second scan of the same attendee for the same subject returns the existing check-in with an &quot;already checked in&quot; outcome and writes nothing, so no second integration event is published. Two filtered unique indexes are the concurrency backstop: one on (UserId, EventId) for event scope and one on (UserId, SessionId) for session scope, each excluding soft-deleted rows.</td>
+          </tr>
+          <tr>
+          <td>BR-247</td>
+          <td><strong>Check-in writes require the <code>engagement:checkin:manage</code> permission</strong> (held by <code>Organizer</code> and <code>Admin</code>), and the whole check-in surface sits behind the <code>Engagement.CheckIn</code> feature flag: with the flag off the controller returns 404 (ADR-031). Reading one&#39;s own badge needs authentication only, not the permission.</td>
+          </tr>
+          <tr>
+          <td>BR-248</td>
+          <td><strong>Door and arrival check-in are out of scope: TicketLeap owns them.</strong> ADC runs registration and admission through TicketLeap, which already scans attendees in at the door, so ADC&#39;s check-in exists for <strong>session attendance</strong>, the thing the ticketing product cannot report. Event scope is modelled and available (it costs nothing beyond the enum), but ADC does not claim to be the system of record for who entered the building.</td>
+          </tr>
+          <tr>
+          <td>BR-249</td>
+          <td><strong>A check-in publishes <code>AttendeeCheckedIn</code> through the outbox.</strong> The event is raised inside the aggregate factory, so it is captured in the same transaction as the row (ADR-003) and delivered at least once. It carries the user, the scope <strong>as a string</strong> (so a new scope stays additive), the event, the optional session, the scanning organizer and the instant. Consumers must be idempotent; the points consumer is, by BR-250.</td>
+          </tr>
+          <tr>
+          <td></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><strong>Points and leaderboard (Engagement context)</strong></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>BR-250</td>
+          <td><strong>The points ledger is append-only and awards once per subject.</strong> A points entry records the user, the activity type, the points awarded, a <code>SubjectKey</code> (max 64 characters, <code>event:{id}</code> or <code>session:{id}</code>) and the instant, and has no mutators: a correction is a new entry, never an edit. A unique index on (UserId, ActivityType, SubjectKey) is both the redelivery-idempotency guard for at-least-once events and the anti-farming rule: <strong>the same activity on the same subject can only ever be awarded once</strong>. Asking five questions in one session therefore earns the question award once, and a duplicate award attempt succeeds as a no-op rather than failing.</td>
+          </tr>
+          <tr>
+          <td>BR-251</td>
+          <td><strong>Award values are configuration, and 0 disables a rule.</strong> The <code>Points</code> configuration section carries one value per activity (see Section 10.30 for the shipped rules and values) plus the leaderboard size. An activity configured at 0, or missing from configuration entirely, awards nothing and writes no entry, so a rule can be switched off without a deploy. The awarded value is <strong>snapshotted onto the entry</strong>, so changing a rule never restates earlier awards.</td>
+          </tr>
+          <tr>
+          <td>BR-252</td>
+          <td><strong>Points are awarded from events that already exist, not from a second write path.</strong> Check-in awards come from <code>AttendeeCheckedIn</code> (BR-249). Feedback awards come from the new <code>SessionFeedbackSubmitted</code> and <code>EventFeedbackSubmitted</code> integration events, which are raised on the <strong>answer-create path only</strong> and never on the BR-107 upsert-update path: one feedback form produces one event per answer row, and the shared subject key collapses them to a single award. The question award rides the in-module session-question domain event, filtered to creation and keyed by <strong>session</strong> rather than by question. That last path is deliberately <strong>at-most-once</strong>: it is dispatched in-process after commit, so a crash in that window loses one award, accepted as cheaper than an outbox row per question.</td>
+          </tr>
+          <tr>
+          <td>BR-253</td>
+          <td><strong>The leaderboard is opt-in, and opting in publishes a display name.</strong> A user appears on the leaderboard only while an active opt-in row exists; opting out soft-deletes it and rejoining reactivates the same row (the BR-135 pattern). The display name is a <strong>snapshot taken at opt-in</strong> and resolved server-side from the caller&#39;s token claims, never accepted from the request body (which carries only the participate flag), so the board never reads back into Identity. The board totals only opted-in users&#39; entries, orders by total then display name, is capped at the configured leaderboard size, and assigns distinct sequential ranks. The whole points surface sits behind the <code>Engagement.Points</code> feature flag.</td>
+          </tr>
+          <tr>
+          <td>BR-254</td>
+          <td><strong>Points data is part of the GDPR export.</strong> A user&#39;s engagement export includes every points entry (activity type, points, subject key, timestamp) plus the leaderboard opt-in state and the published display name, alongside the existing bookmark and question data (ADR-005).</td>
           </tr>
           </tbody></table></div>
           <h3 id="inferred-rules">Inferred Rules</h3>
@@ -3709,6 +3796,56 @@
           <p>However, <strong>no <code>SpeakerQuestionAnswersController</code> exists</strong>: SpeakerQuestionAnswer CRUD is not exposed via REST API. Speaker question answers are currently populated only through Sessionize import (UC-6, which imports speaker survey responses from Sessionize). Manual speaker feedback submission by attendees is not yet available.</p>
           <p><strong>Impact:</strong> Actor-Action Matrix items 73a-73c (speaker question answer management) describe domain-layer capabilities that are not yet exposed as API endpoints. Attendees cannot submit speaker-level feedback through the API. This is a known gap: the domain is ready, but the API controller has not been implemented.</p>
           <p><strong>To implement:</strong> Create a <code>SpeakerQuestionAnswersController</code> following the same pattern as <code>EventQuestionAnswersController</code> and <code>SessionQuestionAnswersController</code>. The controller should use <code>RequireAuthenticated</code> authorization (matching the feedback pattern), apply user-scoping for reads (attendees see own answers only), and enforce BR-128 (<code>QuestionEntity = &quot;Speaker&quot;</code>) and BR-124 (answer validation) on submission.</p>
+          <hr>
+          <h3 id="1030-points-award-rules-clarifies-br-251-br-252">10.30 Points Award Rules (clarifies BR-251, BR-252)</h3>
+          <p>BR-251 states that award values are configuration and that 0 disables a rule, without listing the rules
+          themselves. These are the activities the ledger recognizes, their shipped default values, and the subject
+          each is keyed by. The subject column is the anti-farming granularity from BR-250: one award per user per
+          row of this table per subject, forever.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Activity</th>
+          <th>Default</th>
+          <th>Awarded once per</th>
+          <th>Raised by</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Event check-in</td>
+          <td>25</td>
+          <td>Event</td>
+          <td><code>AttendeeCheckedIn</code>, event scope (outbox)</td>
+          </tr>
+          <tr>
+          <td>Session check-in</td>
+          <td>10</td>
+          <td>Session</td>
+          <td><code>AttendeeCheckedIn</code>, session scope (outbox)</td>
+          </tr>
+          <tr>
+          <td>Session feedback</td>
+          <td>15</td>
+          <td>Session</td>
+          <td><code>SessionFeedbackSubmitted</code>, answer-create only (outbox)</td>
+          </tr>
+          <tr>
+          <td>Event feedback</td>
+          <td>15</td>
+          <td>Event</td>
+          <td><code>EventFeedbackSubmitted</code>, answer-create only (outbox)</td>
+          </tr>
+          <tr>
+          <td>Question asked</td>
+          <td>5</td>
+          <td>Session</td>
+          <td>Session-question domain event, creation only (in-module, at-most-once)</td>
+          </tr>
+          </tbody></table></div>
+          <p>The leaderboard size (default <strong>10</strong>) lives in the same configuration section. Note the asymmetry in the
+          &quot;awarded once per&quot; column: feedback and question-asked are keyed by the <strong>session or event</strong>, not by the
+          answer or the question, so submitting a five-question feedback form earns the feedback award once and
+          asking a second question in the same room earns nothing further.</p>
           <hr>
           <h2 id="11-api-contract-specifications">11. API Contract Specifications</h2>
           <p>This section documents API design decisions that apply across all endpoints.</p>

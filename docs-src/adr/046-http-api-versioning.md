@@ -5,6 +5,8 @@ Accepted (2026-07-15). Revised 2026-08-01 (anonymity is granted by each per-serv
 `ServiceInfoControllerBase`; corrected the ADR-034 cross-reference, which puts the class-level
 attributes on its own generic base rather than noting a non-inheritance caveat; refreshed the
 `AddCommonApiVersioning` call-site lines in the ADC Conference/Identity and Store Catalog hosts).
+Amended 2026-08-12 (v1.146.0): the registration also guards OpenAPI generation against an unbound route
+token, which a URL-segment-versioned host would otherwise trip on.
 
 ## Context
 The framework's REST surface is served by controllers hosted in extracted service processes behind a
@@ -78,6 +80,17 @@ proves two live versions coexist.
   `MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs`).
   This is the rubric SS9 fitness check: without a second working version, everything above would be
   asserted rather than proven.
+- **The registration also backfills missing API-parameter descriptors** (added in v1.146.0). MVC leaves
+  `ApiParameterDescription.ParameterDescriptor` null for a route token with no matching action
+  parameter, and `Asp.Versioning.OpenApi` dereferences it without a null check, so a host that routes
+  `api/v{version:apiVersion}/...` returned a 500 from `GET /openapi/{documentName}.json`. Both
+  `AddCommonApiVersioning` and `AddCommonOpenApi` now register `ApiParameterDescriptorBackfillProvider`
+  (`Source/Presentation/MMCA.Common.API/OpenApi/ApiParameterDescriptorBackfillProvider.cs`), an
+  `IApiDescriptionProvider` that runs last and fills a placeholder wherever one is missing, never
+  replacing an existing descriptor. The guard is deliberately general, because it is the token being
+  unbound rather than the versioning that produces the null: an unbound `{tenant}` or `{region}` fails
+  identically. It goes inert once the upstream null check lands. The header-based reader above means no
+  current host was affected either way, which is precisely why the failure could ship unnoticed.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:171`) and Identity

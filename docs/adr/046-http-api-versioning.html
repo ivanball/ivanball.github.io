@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 70 ADRs</summary>
+        <summary>All 72 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -170,6 +170,8 @@
         <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
         <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
         <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
           </ol>
         </nav>
       </details>
@@ -181,7 +183,9 @@
           <p>Accepted (2026-07-15). Revised 2026-08-01 (anonymity is granted by each per-service subclass, not by
           <code>ServiceInfoControllerBase</code>; corrected the ADR-034 cross-reference, which puts the class-level
           attributes on its own generic base rather than noting a non-inheritance caveat; refreshed the
-          <code>AddCommonApiVersioning</code> call-site lines in the ADC Conference/Identity and Store Catalog hosts).</p>
+          <code>AddCommonApiVersioning</code> call-site lines in the ADC Conference/Identity and Store Catalog hosts).
+          Amended 2026-08-12 (v1.146.0): the registration also guards OpenAPI generation against an unbound route
+          token, which a URL-segment-versioned host would otherwise trip on.</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s REST surface is served by controllers hosted in extracted service processes behind a
           YARP gateway. As those services evolve, a response shape has to be able to change without breaking a
@@ -252,6 +256,17 @@
           <code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs</code>).
           This is the rubric SS9 fitness check: without a second working version, everything above would be
           asserted rather than proven.</li>
+          <li><strong>The registration also backfills missing API-parameter descriptors</strong> (added in v1.146.0). MVC leaves
+          <code>ApiParameterDescription.ParameterDescriptor</code> null for a route token with no matching action
+          parameter, and <code>Asp.Versioning.OpenApi</code> dereferences it without a null check, so a host that routes
+          <code>api/v{version:apiVersion}/...</code> returned a 500 from <code>GET /openapi/{documentName}.json</code>. Both
+          <code>AddCommonApiVersioning</code> and <code>AddCommonOpenApi</code> now register <code>ApiParameterDescriptorBackfillProvider</code>
+          (<code>Source/Presentation/MMCA.Common.API/OpenApi/ApiParameterDescriptorBackfillProvider.cs</code>), an
+          <code>IApiDescriptionProvider</code> that runs last and fills a placeholder wherever one is missing, never
+          replacing an existing descriptor. The guard is deliberately general, because it is the token being
+          unbound rather than the versioning that produces the null: an unbound <code>{tenant}</code> or <code>{region}</code> fails
+          identically. It goes inert once the upstream null check lands. The header-based reader above means no
+          current host was affected either way, which is precisely why the failure could ship unnoticed.</li>
           <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
           in their startup: ADC&#39;s Conference
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:171</code>) and Identity
