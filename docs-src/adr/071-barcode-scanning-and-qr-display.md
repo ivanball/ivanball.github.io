@@ -1,7 +1,8 @@
 # ADR-071: Device Capability Pattern for Barcode Scanning and QR Display
 
 ## Status
-Accepted (2026-08-12).
+Accepted (2026-08-12). Amended 2026-08-13: the composition-time string trade-off below was resolved
+in v1.147.0 by a deferred-resolution overload; see the updated trade-off entry.
 
 ## Context
 ADC's badge check-in feature ([ADR-072](072-qr-badge-check-in-and-points.md)) needs two things that
@@ -106,15 +107,15 @@ windows-job build and pack.
   measured in one screen.
 
 ## Trade-offs
-- **The scan page's strings are resolved at composition, not per call.** `cancelText` and
-  `cameraDescription` are captured into the singleton at registration
-  (`HostingDependencyInjection.cs:63-64`) and stored as primary-constructor parameters
-  (`MauiBarcodeScannerService.cs:19`), and `ScanAsync` takes no culture or text argument. A head that
-  switches culture at runtime under [ADR-027](027-multi-locale-i18n.md) therefore keeps the cancel
-  button, page title and semantic description in the language that was current at startup. Accepted for
-  a two-string surface; fixing it properly means either a per-call options argument or resolving
-  `IStringLocalizer` inside the service, and both were judged more contract than the payoff justifies
-  today.
+- **The scan page's strings were resolved at composition, not per call (resolved in v1.147.0).**
+  As shipped in v1.145.0, `cancelText` and `cameraDescription` were captured into the singleton at
+  registration, so a head that switches culture at runtime under
+  [ADR-027](027-multi-locale-i18n.md) kept the cancel button, page title and semantic description in
+  the language that was current at startup. v1.147.0 added a
+  `UseCommonBarcodeScanner(Func<string> cancelText, Func<string> cameraDescription)` overload whose
+  delegates are invoked once per scan, when the modal page is built, so the scan surface follows the
+  in-app language. The original string overload remains and keeps its startup-fixed semantics (its
+  XML doc says so); heads with a language switcher should pass the delegate overload.
 - **`QrCodeImage` has no error surface.** There is no `try`/`catch` around the encode, so a payload too
   large for the chosen version and error-correction combination propagates out of `OnParametersSet`
   rather than degrading to a message. The intended payloads are short opaque tokens, so the failure mode

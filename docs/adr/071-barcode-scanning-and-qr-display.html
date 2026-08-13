@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-071: Device Capability Pattern for Barcode Scanning and QR Display · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-12).">
+  <meta name="description" content="Accepted (2026-08-12). Amended 2026-08-13: the composition-time string trade-off below was resolved in v1.147.0 by a deferred-resolution overload; see…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/071-barcode-scanning-and-qr-display.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-071: Device Capability Pattern for Barcode Scanning and QR Display">
-  <meta property="og:description" content="Accepted (2026-08-12).">
+  <meta property="og:description" content="Accepted (2026-08-12). Amended 2026-08-13: the composition-time string trade-off below was resolved in v1.147.0 by a deferred-resolution overload; see…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/071-barcode-scanning-and-qr-display.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-071: Device Capability Pattern for Barcode Scanning and QR Display">
-  <meta name="twitter:description" content="Accepted (2026-08-12).">
+  <meta name="twitter:description" content="Accepted (2026-08-12). Amended 2026-08-13: the composition-time string trade-off below was resolved in v1.147.0 by a deferred-resolution overload; see…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"071 · Device Capability Pattern for Barcode Scanning and QR Display","item":"https://ivanball.github.io/docs/adr/071-barcode-scanning-and-qr-display.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -180,7 +180,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-071-device-capability-pattern-for-barcode-scanning-and-qr-display">ADR-071: Device Capability Pattern for Barcode Scanning and QR Display</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-12).</p>
+          <p>Accepted (2026-08-12). Amended 2026-08-13: the composition-time string trade-off below was resolved
+          in v1.147.0 by a deferred-resolution overload; see the updated trade-off entry.</p>
           <h2 id="context">Context</h2>
           <p>ADC&#39;s badge check-in feature (<a href="072-qr-badge-check-in-and-points.html">ADR-072</a>) needs two things that
           look like one thing: an attendee&#39;s device has to <strong>show</strong> a QR code, and an organizer&#39;s device has to
@@ -282,15 +283,15 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>The scan page&#39;s strings are resolved at composition, not per call.</strong> <code>cancelText</code> and
-          <code>cameraDescription</code> are captured into the singleton at registration
-          (<code>HostingDependencyInjection.cs:63-64</code>) and stored as primary-constructor parameters
-          (<code>MauiBarcodeScannerService.cs:19</code>), and <code>ScanAsync</code> takes no culture or text argument. A head that
-          switches culture at runtime under <a href="027-multi-locale-i18n.html">ADR-027</a> therefore keeps the cancel
-          button, page title and semantic description in the language that was current at startup. Accepted for
-          a two-string surface; fixing it properly means either a per-call options argument or resolving
-          <code>IStringLocalizer</code> inside the service, and both were judged more contract than the payoff justifies
-          today.</li>
+          <li><strong>The scan page&#39;s strings were resolved at composition, not per call (resolved in v1.147.0).</strong>
+          As shipped in v1.145.0, <code>cancelText</code> and <code>cameraDescription</code> were captured into the singleton at
+          registration, so a head that switches culture at runtime under
+          <a href="027-multi-locale-i18n.html">ADR-027</a> kept the cancel button, page title and semantic description in
+          the language that was current at startup. v1.147.0 added a
+          <code>UseCommonBarcodeScanner(Func&lt;string&gt; cancelText, Func&lt;string&gt; cameraDescription)</code> overload whose
+          delegates are invoked once per scan, when the modal page is built, so the scan surface follows the
+          in-app language. The original string overload remains and keeps its startup-fixed semantics (its
+          XML doc says so); heads with a language switcher should pass the delegate overload.</li>
           <li><strong><code>QrCodeImage</code> has no error surface.</strong> There is no <code>try</code>/<code>catch</code> around the encode, so a payload too
           large for the chosen version and error-correction combination propagates out of <code>OnParametersSet</code>
           rather than degrading to a message. The intended payloads are short opaque tokens, so the failure mode
