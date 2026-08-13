@@ -49,10 +49,14 @@ Add a **permission (capability) layer over RBAC**, opt-in and backward-compatibl
   free, but it grants nothing beyond explicit claims until a host calls `AddPermissions(...)`. The
   existing role policies keep working unchanged.
 
-Adoption is asymmetric and that is intentional: ADC's Conference module defines seven capabilities
-(including a curation subset granted to a new `RoleNames.ContentEditor`), its Engagement module
-defines `engagement:live:manage` (granted to `Organizer` and `Admin`, gating the conference-day
-live-poll management endpoints) and its Identity module defines `identity:users:read`; MMCA.Store
+Adoption is asymmetric and that is intentional: ADC's Conference module defines eight capabilities
+(`ConferencePermissions.cs:12-33`, enumerated in `All` at `:36-46`), including a curation subset
+granted to a new `RoleNames.ContentEditor`; its Engagement module defines three
+(`engagement:live:manage` gating the conference-day live-poll management endpoints,
+`engagement:checkin:manage` gating QR badge check-in and the attendance rollup, and
+`engagement:points:view-overview` gating the organizer points rollup, at
+`EngagementPermissions.cs:16`, `:23`, `:30`), each granted to `Organizer` and `Admin`; and its
+Identity module defines `identity:users:read`; MMCA.Store
 has not adopted it and still authorizes by role policy only. The registry, handler, policy provider,
 and the ADC grant tables (Conference and Engagement) are all covered by tests.
 

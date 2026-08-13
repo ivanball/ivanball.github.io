@@ -135,12 +135,16 @@ deployment.
 
 **Coverage boundary inside ADC's template.** The gate covers exactly the alerts declared between the two
 parse anchors. ADC additionally provisions two operational scheduled query rules,
-`outbox-dead-letter` and `sql-dependency-failures` (`MMCA.ADC/infra/main.bicep:392`, materialized at
-`:407`), and a severity 1 gateway-availability metric alert over a three-location URL ping web test
-(`MMCA.ADC/infra/main.bicep:448`, `:481`). All three sit outside the `sloAlertSpecs` window, so the
+`outbox-dead-letter` and `sql-dependency-failures` (`MMCA.ADC/infra/main.bicep:407`, materialized at
+`:422`), and a severity 1 gateway-availability metric alert over a three-location URL ping web test
+(`MMCA.ADC/infra/main.bicep:463`, `:496`). All three sit outside the `sloAlertSpecs` window, so the
 pairing gate neither requires nor forbids runbook sections for them, and `OPERATIONS.md` carries none
-today (its only `-alert-` headings are the three SLO sections). Store provisions neither family: its
-alerting surface is the three SLO rules plus the budget notifications.
+today (its only `-alert-` headings are the three SLO sections). Store provisions both of the families
+that apply to it (2026-08-13, landing in a pull request in flight as this record is updated): the
+`outbox-dead-letter` scheduled query rule and the outside-in Gateway availability web test with its
+severity 1 metric alert, alongside the three SLO rules and the budget notifications. It deliberately
+does not port `sql-dependency-failures`: Store's own `dependency-failures` SLO rule already spans
+SQL, gRPC and HTTP, so a narrower SQL-scoped twin would page twice for one fault.
 
 ## Rationale
 - **Alerts as data, not as portal state.** One array is reviewable in a PR, diffable across

@@ -47,8 +47,18 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
    Unlike the other named policies it is not left to each app to attach. `AuthControllerBase`
    (`MMCA.Common.API`) decorates `LoginAsync` and `RegisterAsync` with
    `[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]`, so any consumer that
-   inherits the base gets it without opting in (ADC's `AuthController` repeats the attribute on its
-   overrides). It exists because the other two layers leave one hole between them: the global limiter
+   inherits the base gets it without opting in. **What an override inherits, settled empirically
+   (2026-08-13):** `EnableRateLimitingAttribute` leaves `AttributeUsage.Inherited` at its default of
+   `true`, and a derived override therefore still sees the base attribute through
+   `GetCustomAttributes(inherit: true)`, so a bare override very likely retains the policy rather
+   than silently dropping it. The convention is unchanged regardless: apply the attribute explicitly
+   on **every** override (ADC always did; Store now does), because endpoint metadata resolution is
+   not something an app should have to reason about per action, and a dropped policy fails silently.
+   Two guards pin it instead of leaving it to argument: a MMCA.Common reflection test that asserts
+   both the base decoration and the inherited-on-an-override case, and a Store integration test that
+   reads the booted host's `EndpointDataSource` and asserts `POST /Auth/register` carries the
+   `auth-ip` policy in its metadata (the only check independent of the reflection question). It
+   exists because the other two layers leave one hole between them: the global limiter
    no-ops for anonymous traffic and the lockout is keyed per email, so a password spray (one password,
    many emails) from a single source was otherwise unthrottled. Three details are deliberate:
    `RefreshAsync` is **not** throttled (renewal is automatic and periodic, and Blazor Server circuits

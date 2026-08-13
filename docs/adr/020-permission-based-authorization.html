@@ -226,10 +226,14 @@
           free, but it grants nothing beyond explicit claims until a host calls <code>AddPermissions(...)</code>. The
           existing role policies keep working unchanged.</li>
           </ul>
-          <p>Adoption is asymmetric and that is intentional: ADC&#39;s Conference module defines seven capabilities
-          (including a curation subset granted to a new <code>RoleNames.ContentEditor</code>), its Engagement module
-          defines <code>engagement:live:manage</code> (granted to <code>Organizer</code> and <code>Admin</code>, gating the conference-day
-          live-poll management endpoints) and its Identity module defines <code>identity:users:read</code>; MMCA.Store
+          <p>Adoption is asymmetric and that is intentional: ADC&#39;s Conference module defines eight capabilities
+          (<code>ConferencePermissions.cs:12-33</code>, enumerated in <code>All</code> at <code>:36-46</code>), including a curation subset
+          granted to a new <code>RoleNames.ContentEditor</code>; its Engagement module defines three
+          (<code>engagement:live:manage</code> gating the conference-day live-poll management endpoints,
+          <code>engagement:checkin:manage</code> gating QR badge check-in and the attendance rollup, and
+          <code>engagement:points:view-overview</code> gating the organizer points rollup, at
+          <code>EngagementPermissions.cs:16</code>, <code>:23</code>, <code>:30</code>), each granted to <code>Organizer</code> and <code>Admin</code>; and its
+          Identity module defines <code>identity:users:read</code>; MMCA.Store
           has not adopted it and still authorizes by role policy only. The registry, handler, policy provider,
           and the ADC grant tables (Conference and Engagement) are all covered by tests.</p>
           <h2 id="rationale">Rationale</h2>

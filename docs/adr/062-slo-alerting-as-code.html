@@ -314,12 +314,16 @@
           deployment.</p>
           <p><strong>Coverage boundary inside ADC&#39;s template.</strong> The gate covers exactly the alerts declared between the two
           parse anchors. ADC additionally provisions two operational scheduled query rules,
-          <code>outbox-dead-letter</code> and <code>sql-dependency-failures</code> (<code>MMCA.ADC/infra/main.bicep:392</code>, materialized at
-          <code>:407</code>), and a severity 1 gateway-availability metric alert over a three-location URL ping web test
-          (<code>MMCA.ADC/infra/main.bicep:448</code>, <code>:481</code>). All three sit outside the <code>sloAlertSpecs</code> window, so the
+          <code>outbox-dead-letter</code> and <code>sql-dependency-failures</code> (<code>MMCA.ADC/infra/main.bicep:407</code>, materialized at
+          <code>:422</code>), and a severity 1 gateway-availability metric alert over a three-location URL ping web test
+          (<code>MMCA.ADC/infra/main.bicep:463</code>, <code>:496</code>). All three sit outside the <code>sloAlertSpecs</code> window, so the
           pairing gate neither requires nor forbids runbook sections for them, and <code>OPERATIONS.md</code> carries none
-          today (its only <code>-alert-</code> headings are the three SLO sections). Store provisions neither family: its
-          alerting surface is the three SLO rules plus the budget notifications.</p>
+          today (its only <code>-alert-</code> headings are the three SLO sections). Store provisions both of the families
+          that apply to it (2026-08-13, landing in a pull request in flight as this record is updated): the
+          <code>outbox-dead-letter</code> scheduled query rule and the outside-in Gateway availability web test with its
+          severity 1 metric alert, alongside the three SLO rules and the budget notifications. It deliberately
+          does not port <code>sql-dependency-failures</code>: Store&#39;s own <code>dependency-failures</code> SLO rule already spans
+          SQL, gRPC and HTTP, so a narrower SQL-scoped twin would page twice for one fault.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Alerts as data, not as portal state.</strong> One array is reviewable in a PR, diffable across

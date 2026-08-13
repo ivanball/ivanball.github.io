@@ -15,7 +15,10 @@ HttpOnly cookies read during Blazor SSR prerender, and the Blazor Server forms t
 antiforgery tokens; both are DataProtection payloads. ADR-008 then split the monolith into
 independently scaled hosts, and in ADC the two hosts that mint those payloads (the UI host and the
 Identity service, which also does OAuth correlation and state cookie cryptography) both run at
-`maxReplicas: 2` with no session affinity (`MMCA.ADC/infra/main.bicep:1178`, `:1759-1761`).
+`maxReplicas: 2` (`MMCA.ADC/infra/main.bicep:1195` Identity service, `:1788` UI host). Only the
+Identity service runs with **no session affinity**; the UI ingress is sticky
+(`MMCA.ADC/infra/main.bicep:1714-1715`), which narrows the UI window rather than closing it, since
+affinity is lost on a replica restart, a revision swap, or a dropped affinity cookie.
 
 Nothing in the record decided **where the key ring lives**. ADR-061 decides how a running app reaches
 a secret (Key Vault reference resolved by a managed identity) and ADR-045 decides that blob storage is
@@ -77,12 +80,17 @@ Azure blob so every replica of a host shares one ring
   `System.Security.Cryptography.Xml` pin that lifts that chain's transitive off a vulnerable version
   for consumers without the ASP.NET Core framework reference (`Directory.Packages.props:76`).
 
-**Adoption is partial, and that is the current state, not an oversight in the record.** MMCA.Store has
-**no** call site and no `DataProtection` configuration anywhere in the repo, even though its UI and
-Identity container apps also run at `maxReplicas: 2` (`MMCA.Store/infra/main.bicep:1169`, `:829`). The
-capability ships in the framework package Store already consumes; adopting it there is a call site plus
-a container and two environment variables. Recording a framework capability that one consumer has taken
-up and another has not is the same posture as ADR-018 and ADR-020.
+**Both consumers have now adopted it (2026-08-13).** MMCA.Store originally had no call site and no
+`DataProtection` configuration anywhere in the repo, even though its UI and Identity container apps
+also run at `maxReplicas: 2` (`MMCA.Store/infra/main.bicep:1193-1194` UI host, `:846` Identity
+service). Its UI host now calls `AddCommonDataProtection()` after `AddServiceDefaults()`
+(`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs`), backed by a private
+`dataprotection-keys` container plus `DataProtection__BlobStorageUri` and
+`DataProtection__ApplicationName='MMCA.Store'` on that app in `MMCA.Store/infra/main.bicep` (landing
+in a pull request in flight as this record is updated). That was exactly the work this record already
+scoped: a call site plus a container and two environment variables, against a capability that already
+shipped in the framework package Store consumes. Store's Identity service is deliberately left out:
+it registers no cookie or OAuth scheme, so it mints no key-ring payload at all.
 
 ## Rationale
 - **The key ring is the smallest thing that has to be shared.** Sticky sessions would paper over the
@@ -107,8 +115,9 @@ up and another has not is the same posture as ADR-018 and ADR-020.
   Vault key. Closing that needs a Key Vault Crypto User grant plus one environment variable per app.
 - **Opt-in per host, so adoption must be audited.** A scaled-out host that never calls
   `AddCommonDataProtection` keeps the broken per-replica default and fails intermittently rather than
-  loudly, the same audit-the-inventory caveat as ADR-005 / ADR-017 / ADR-021. Store is exactly that
-  case today.
+  loudly, the same audit-the-inventory caveat as ADR-005 / ADR-017 / ADR-021. Store was exactly that
+  case until its UI host adopted the call site (2026-08-13); the caveat still binds every future
+  scaled-out host that mints a DataProtection payload.
 - **Startup now depends on a credential resolving in the adopting hosts.** In Azure that is the
   user-assigned identity named by `AZURE_CLIENT_ID`; a missing or wrong identity turns a key-ring read
   into a startup-time failure on the two hosts that opt in.
