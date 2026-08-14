@@ -777,24 +777,27 @@ identityService.WithEnvironment(<span class="hljs-string">&quot;OAuth__UIBaseUrl
           <h2 id="the-yarp-gateways-role">The YARP Gateway&#39;s role</h2>
           <p>The gateway (<code>Source/Hosts/MMCA.ADC.Gateway</code>) is a pure YARP reverse proxy. It has no <code>DbContext</code>, no
           <code>ModuleLoader</code>, no REST controllers, and no broker connection. Its <code>Program.cs</code> is the source of truth
-          for endpoint ownership: 24 <code>MapForwarder</code> calls map URL prefixes to backend services via Aspire service
-          discovery (Gateway/Program.cs:88-125), every destination an in-cluster service-discovery name over
+          for endpoint ownership: 26 <code>MapForwarder</code> calls map URL prefixes to backend services via Aspire service
+          discovery (Gateway/Program.cs:121-161), every destination an in-cluster service-discovery name over
           cleartext, never a public URL:</p>
           <ul>
-          <li><code>/Auth</code>, <code>/Users</code>, <code>/UserClaims</code>, <code>/.well-known/*</code> → <code>http://identity</code> (Program.cs:88-94)</li>
+          <li><code>/Auth</code>, <code>/Users</code>, <code>/UserClaims</code>, <code>/.well-known/*</code> → <code>http://identity</code> (Program.cs:121-127)</li>
           <li><code>/Events</code>, <code>/Sessions</code>, <code>/Speakers</code>, <code>/Rooms</code>, <code>/ConferenceCategories</code>, <code>/CategoryItems</code>,
           <code>/SessionSpeakers</code>, <code>/EventSpeakers</code>, <code>/SessionCategoryItems</code>, <code>/SessionQuestionAnswers</code>,
-          <code>/EventQuestionAnswers</code>, <code>/SpeakerCategoryItems</code>, <code>/SpeakerQuestionAnswers</code>, <code>/SessionSelection</code>,
-          <code>/Questions</code> → <code>http://conference</code> (Program.cs:97-111)</li>
-          <li><code>/Bookmarks</code>, <code>/LivePolls</code>, <code>/SessionQuestions</code> → <code>http://engagement</code> (Program.cs:114-116)</li>
-          <li><code>/Notifications</code>, <code>/hubs/*</code> → <code>http://notification</code> (Program.cs:124-125)</li>
+          <code>/EventQuestionAnswers</code>, <code>/SpeakerCategoryItems</code>, <code>/SessionSelection</code>,
+          <code>/Questions</code>, <code>/Sponsors</code> → <code>http://conference</code> (Program.cs:130-144)</li>
+          <li><code>/Bookmarks</code>, <code>/CheckIns</code>, <code>/LivePolls</code>, <code>/Points</code>, <code>/SessionQuestions</code> → <code>http://engagement</code> (Program.cs:147-151)</li>
+          <li><code>/Notifications</code>, <code>/hubs/*</code> → <code>http://notification</code> (Program.cs:160-161)</li>
           </ul>
+          <p>A <code>/SpeakerQuestionAnswers</code> forwarder used to sit in the Conference list, but no controller ever
+          existed behind it (the spec documents SpeakerQuestionAnswer&#39;s REST surface as deferred), so the dead
+          route was removed in the 2026-08-13 hardening pass.</p>
           <p>The Identity, Conference and Engagement routes take a shared <code>http2Config</code> that sets
-          <code>Version = HttpVersion.Version20</code> with <code>VersionPolicy = RequestVersionExact</code> (Program.cs:66-77). Exact is
+          <code>Version = HttpVersion.Version20</code> with <code>VersionPolicy = RequestVersionExact</code> (Program.cs:92-102). Exact is
           load-bearing: on cleartext there is no ALPN to negotiate, so <code>RequestVersionOrLower</code> silently downgrades
           to HTTP/1.1 and the <code>Http2</code>-only backend rejects it. The two Notification routes deliberately use YARP&#39;s
           default HTTP/1.1 config, because SignalR&#39;s WebSocket transport begins with an HTTP/1.1 Upgrade handshake
-          (Program.cs:119-123). <code>ForwardHttp2</code> stays configurable (default <code>true</code>, Program.cs:66) so a deployment
+          (Program.cs:108-110). <code>ForwardHttp2</code> stays configurable (default <code>true</code>, Program.cs:73) so a deployment
           without HTTP/2 ingress can roll back without a code change.</p>
           <p>The gateway serves three architectural purposes:</p>
           <ol>

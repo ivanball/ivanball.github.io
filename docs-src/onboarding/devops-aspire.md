@@ -745,24 +745,28 @@ the first is never exercised in production paths, the second has the emulator ti
 
 The gateway (`Source/Hosts/MMCA.ADC.Gateway`) is a pure YARP reverse proxy. It has no `DbContext`, no
 `ModuleLoader`, no REST controllers, and no broker connection. Its `Program.cs` is the source of truth
-for endpoint ownership: 24 `MapForwarder` calls map URL prefixes to backend services via Aspire service
-discovery (Gateway/Program.cs:88-125), every destination an in-cluster service-discovery name over
+for endpoint ownership: 26 `MapForwarder` calls map URL prefixes to backend services via Aspire service
+discovery (Gateway/Program.cs:121-161), every destination an in-cluster service-discovery name over
 cleartext, never a public URL:
 
-- `/Auth`, `/Users`, `/UserClaims`, `/.well-known/*` → `http://identity` (Program.cs:88-94)
+- `/Auth`, `/Users`, `/UserClaims`, `/.well-known/*` → `http://identity` (Program.cs:121-127)
 - `/Events`, `/Sessions`, `/Speakers`, `/Rooms`, `/ConferenceCategories`, `/CategoryItems`,
   `/SessionSpeakers`, `/EventSpeakers`, `/SessionCategoryItems`, `/SessionQuestionAnswers`,
-  `/EventQuestionAnswers`, `/SpeakerCategoryItems`, `/SpeakerQuestionAnswers`, `/SessionSelection`,
-  `/Questions` → `http://conference` (Program.cs:97-111)
-- `/Bookmarks`, `/LivePolls`, `/SessionQuestions` → `http://engagement` (Program.cs:114-116)
-- `/Notifications`, `/hubs/*` → `http://notification` (Program.cs:124-125)
+  `/EventQuestionAnswers`, `/SpeakerCategoryItems`, `/SessionSelection`,
+  `/Questions`, `/Sponsors` → `http://conference` (Program.cs:130-144)
+- `/Bookmarks`, `/CheckIns`, `/LivePolls`, `/Points`, `/SessionQuestions` → `http://engagement` (Program.cs:147-151)
+- `/Notifications`, `/hubs/*` → `http://notification` (Program.cs:160-161)
+
+A `/SpeakerQuestionAnswers` forwarder used to sit in the Conference list, but no controller ever
+existed behind it (the spec documents SpeakerQuestionAnswer's REST surface as deferred), so the dead
+route was removed in the 2026-08-13 hardening pass.
 
 The Identity, Conference and Engagement routes take a shared `http2Config` that sets
-`Version = HttpVersion.Version20` with `VersionPolicy = RequestVersionExact` (Program.cs:66-77). Exact is
+`Version = HttpVersion.Version20` with `VersionPolicy = RequestVersionExact` (Program.cs:92-102). Exact is
 load-bearing: on cleartext there is no ALPN to negotiate, so `RequestVersionOrLower` silently downgrades
 to HTTP/1.1 and the `Http2`-only backend rejects it. The two Notification routes deliberately use YARP's
 default HTTP/1.1 config, because SignalR's WebSocket transport begins with an HTTP/1.1 Upgrade handshake
-(Program.cs:119-123). `ForwardHttp2` stays configurable (default `true`, Program.cs:66) so a deployment
+(Program.cs:108-110). `ForwardHttp2` stays configurable (default `true`, Program.cs:73) so a deployment
 without HTTP/2 ingress can roll back without a code change.
 
 The gateway serves three architectural purposes:
