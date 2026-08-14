@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-058: Runtime Conformance Suites Shipped as a Package · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-28).">
+  <meta name="description" content="Accepted (2026-07-28; revised 2026-08-14).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-058: Runtime Conformance Suites Shipped as a Package">
-  <meta property="og:description" content="Accepted (2026-07-28).">
+  <meta property="og:description" content="Accepted (2026-07-28; revised 2026-08-14).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-058: Runtime Conformance Suites Shipped as a Package">
-  <meta name="twitter:description" content="Accepted (2026-07-28).">
+  <meta name="twitter:description" content="Accepted (2026-07-28; revised 2026-08-14).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"058 · Runtime Conformance Suites Shipped as a Package","item":"https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -186,7 +192,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-058-runtime-conformance-suites-shipped-as-a-package">ADR-058: Runtime Conformance Suites Shipped as a Package</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-28).</p>
+          <p>Accepted (2026-07-28; revised 2026-08-14).</p>
           <h2 id="context">Context</h2>
           <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
           explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
@@ -198,7 +204,7 @@
           one of them is only true if the consuming host wired it correctly: the framework ships the middleware,
           the controller base, and the decorator registrations, but the host composes them.</p>
           <p>The gap is visible in the ADR set. ADR-046 names exactly one of these checks in passing (a &quot;shared
-          fitness contract&quot; for versioning, <code>046-http-api-versioning.md:62</code>), and ADR-013 defines the RFC 9457
+          fitness contract&quot; for versioning, <code>046-http-api-versioning.md:78</code>), and ADR-013 defines the RFC 9457
           edge contract that another one guards, but neither decides the layer itself. The runtime-conformance
           tier has been referenced repeatedly and never recorded on its own.</p>
           <h2 id="decision">Decision</h2>
@@ -288,10 +294,9 @@
           <code>MMCA.ADC.Engagement.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>,
           <code>MMCA.ADC.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>,
           <code>MMCA.ADC.Notification.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15</code>): <strong>ADC
-          Notification gained the missing subclass</strong> (landing in a pull request in flight as this record is
-          updated), so every REST host in both consumers is now guarded for this one contract. The versioning
-          contract is subclassed once per repo, on ADC
-          Conference (<code>ApiVersioningTests.cs:14</code>) and Store Catalog
+          Notification gained the missing subclass</strong>, merged to <code>main</code> on 2026-08-13, so every REST host in
+          both consumers is now guarded for this one contract. The versioning contract is subclassed once per
+          repo, on ADC Conference (<code>ApiVersioningTests.cs:14</code>) and Store Catalog
           (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:15</code>),
           which is enough to keep the machinery exercised but leaves the other five REST hosts unguarded. The
           security-headers and graceful-shutdown suites are subclassed <strong>only on the two Gateway hosts</strong>
@@ -365,9 +370,7 @@
           (the RFC 9457 ProblemDetails edge contract <code>ProblemDetailsContractTestsBase</code> guards), ADR-046 (HTTP
           API versioning, whose &quot;shared fitness contract&quot; is one of these bases), ADR-016 (lockstep versioning:
           a new conformance base reaches consumers only through a release and a full sweep). Package inventory
-          for the framework lives in <code>MMCA.Common/FACTS.md</code>.
-          &lt;/content&gt;
-          &lt;/invoke&gt;</p>
+          for the framework lives in <code>MMCA.Common/FACTS.md</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

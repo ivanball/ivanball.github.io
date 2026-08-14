@@ -1,10 +1,14 @@
 # ADR-076: Data-Subject Export (DSAR) as a Framework Contract
 
 ## Status
-Accepted (2026-08-13). The implementation lands in the MMCA.Common "enterprise capability wave" release.
+Accepted (2026-08-13). Revised 2026-08-14 (the API-surface section corrected to the shipped mechanism,
+an abstract `DataExportControllerBase` a subclass mounts, not an application-part registration; the
+consumer adoption picture corrected; the export/delete generic-constraint difference stated; ADC
+citations re-anchored).
+The implementation lands in the MMCA.Common "enterprise capability wave" release.
 It is opt-in: an app subclasses `ExportUserDataHandlerBase` and registers its own
-`IUserDataExportSection` implementations, and the shipped controller is added to the MVC application
-parts explicitly. Nothing changes for a host that does not.
+`IUserDataExportSection` implementations, and the shipped controller base is subclassed and routed by
+the app. Nothing changes for a host that does not.
 
 ## Context
 A data-subject access request is a legal obligation with a clock on it: the person asks for a copy of the
@@ -56,9 +60,13 @@ the same contract with one module's name baked into it. Sections are collected f
 store of personal data to an app is a registration, not an edit to the export handler.
 
 ### `ExportUserDataHandlerBase<TUser, TQuery>` mirrors `DeleteUserHandlerBase`
-The base class (`.../Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs`) takes the same generic
-constraints as `DeleteUserHandlerBase`, runs the same `UserOwnershipRule.CheckOwnership` gate with the
-export error code, and exposes a `HasDeletePrivilege`-style hook so the app supplies its own role
+The base class (`.../Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs`) takes generic
+constraints similar to `DeleteUserHandlerBase` but not identical: both constrain `TUser` to
+`AuditableAggregateRootEntity<UserIdentifierType>` and `TQuery`/`TCommand` to `IUserOwnedRequest`
+(`ExportUserDataHandlerBase.cs:54-55`), and deletion additionally requires `TUser : IErasableUser`
+(`DeleteUserHandlerBase.cs:41`) because it calls `Anonymize()`. Export never does, so it does not ask
+for that interface: a user aggregate can be exportable without being erasable. The base runs the same
+`UserOwnershipRule.CheckOwnership` gate with the export error code, and exposes a `HasDeletePrivilege`-style hook so the app supplies its own role
 vocabulary (ADC evaluates `UserRole.IsOrganizer`, Store evaluates `UserRole.IsAdmin`). It then loads the
 owned aggregate, fans out to every registered `IUserDataExportSection`, and assembles a
 `UserDataExportDTO`. The subclass keeps the role test, the subject snapshot projection, and the sections.
@@ -88,18 +96,41 @@ per-activity ledger entries). A PDF is a rendering, not a copy: the subject's li
 processing or handing the file to another controller, which a PDF turns into a scraping exercise. JSON is
 what the sections already are, and the format version makes it evolvable as a rendered document is not.
 
-### The API surface is a shipped controller the host opts into
-The endpoint ships from the framework assembly (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/`)
-as `DataExportControllerBase` plus an `AddDsarControllers()` `IMvcBuilder` extension that calls
-`AddApplicationPart`. That is the precedent `AddNotificationControllers` already set for controllers
-living in a NuGet assembly MVC does not scan by default
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:19-23`). The
-action is `[Authorize]` and `[FeatureGate]`-gated, so a host that has not turned the feature on answers
-404 rather than 403 ([ADR-031](031-feature-flag-management.md)), and the endpoint does not exist for an
-app that never calls the registration. Today the endpoint is app-owned and returns the document inline:
-ADC's `GET /Users/{userId}/export`
-(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:148`) ends in
-`Ok(result.Value)` (`:166`). An app that prefers its own route keeps its controller and calls the base.
+### The API surface is a shipped controller base the app subclasses
+The endpoint ships from the framework assembly as the abstract
+`DataExportControllerBase<TQuery>`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:60`),
+**not** as a concrete controller registered into the MVC application parts. That is a deliberate
+departure from the `AddNotificationControllers` precedent for package-assembly controllers
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:19-23`), and the
+base's own remarks record why: the query type is app-owned, so "this ships as an abstract base with a
+`CreateQuery` factory rather than as a concrete controller added through an application part: a
+concrete controller could not construct a type it cannot see" (`DataExportControllerBase.cs:44-49`).
+There is no `AddDsarControllers()` registration; the unit of opt-in is the subclass itself. An app
+declares a controller carrying its own `[Route]`, passes its query type, and implements the abstract
+`CreateQuery(userId, currentUserId, currentUserRole)` factory (`:120-123`); the action template
+`{userId}/export` is fixed on the base (`:78`), so a subclass routed at `Users` serves the same
+`/Users/{userId}/export` path the hand-written controllers do.
+
+The base carries `[Authorize(Policy = AuthorizationPolicies.RequireAuthenticated)]` (`:58`) and
+`[FeatureGate(PrivacyFeatures.DataExport)]` (`:59`), so a host that has not turned the feature on
+answers 404 rather than 403 ([ADR-031](031-feature-flag-management.md)), and the endpoint does not
+exist for an app that never subclasses. Authorization is defence in depth rather than the real gate:
+the handler independently enforces owner-or-privileged-role. The action serializes the package itself
+and returns `File(payload, ExportContentType, BuildFileName(...))` (`:110`) rather than an
+`ObjectResult`, because content negotiation would render the document inline and the point of the
+endpoint is a saved file.
+
+**No consumer has adopted the base yet.** Neither ADC's nor Store's `UsersController` references
+`DataExportControllerBase`: each still owns a standalone action that reimplements the dispatch. ADC's
+`GET /Users/{userId}/export`
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:149`) builds
+the query inline and ends in `Ok(result.Value)` (`:167`), returning the document as a negotiated body
+with no `Content-Disposition`, and it is covered only by the class-level `[Authorize]` (`:30`) with no
+`[FeatureGate]`. Store's is the same shape
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs:35`). So
+the handler hoist landed in both apps while the controller hoist did not: the framework base is shipped
+and tested, the download delivery and the feature gate reach a consumer only when one subclasses it.
 
 ### The completeness fitness rule is deferred, deliberately
 A `PiiEntitiesAreExportable` rule as a sibling to `EntitiesWithPiiImplementAnonymizable` (ADR-005) is the
@@ -135,9 +166,12 @@ MMCA.Helpdesk has no Identity module and does not adopt.
 - **A format version costs one field and buys the ability to change the envelope.** The envelope now
   belongs to the framework and will move on a framework release, so a reader that can name the contract
   it received is the difference between an evolvable document and a frozen one.
-- **A shipped controller is the only way a NuGet-delivered endpoint is discoverable.** MVC does not scan
-  package assemblies, so an application-part registration is required either way, and making it an
-  explicit `AddDsarControllers()` call keeps the endpoint absent for a host that did not ask for it.
+- **An abstract base is what a NuGet-delivered endpoint can be when the query type is app-owned.** MVC
+  does not scan package assemblies, and the usual answer is an application-part registration, but a
+  concrete controller in the framework assembly cannot name (or construct) each app's
+  `ExportUserDataQuery`. Shipping the action, the attributes and the file delivery on a base whose one
+  abstract member is the query factory keeps the endpoint absent for a host that did not subclass, and
+  costs the adopter a class declaration and one expression.
 - **A fitness rule that fails everything on arrival does not get adopted, it gets suppressed.** ADR-015's
   value comes from rules that hold on the day they land. Recording the deferral keeps the gap in the
   record instead of hiding it behind a suppression.
@@ -146,6 +180,11 @@ MMCA.Helpdesk has no Identity module and does not adopt.
 - **Best-effort degradation can return a quietly incomplete package.** `Available = false` is the only
   signal, and nothing forces a caller, a UI, or the subject to read it. A section that fails on every
   attempt produces an export that looks successful every time.
+- **The controller half of this record is shipped but unadopted.** Both apps subclass the handler base
+  and neither subclasses `DataExportControllerBase`, so the download delivery, the `Content-Disposition`
+  file name and the `[FeatureGate]` 404 posture are framework behavior no deployed endpoint exhibits
+  today: ADC and Store still return the package inline from their own actions. Until a consumer
+  subclasses, the two halves of the endpoint contract can drift without a test noticing.
 - **Nothing proves a section exists for every store of personal data.** The completeness of an export is
   exactly the set of sections a consumer chose to register; a module holding personal data that registers
   none is invisible to the export, and the fitness rule that would catch it is deferred.

@@ -1,7 +1,7 @@
 # ADR-058: Runtime Conformance Suites Shipped as a Package
 
 ## Status
-Accepted (2026-07-28).
+Accepted (2026-07-28; revised 2026-08-14).
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
@@ -15,7 +15,7 @@ one of them is only true if the consuming host wired it correctly: the framework
 the controller base, and the decorator registrations, but the host composes them.
 
 The gap is visible in the ADR set. ADR-046 names exactly one of these checks in passing (a "shared
-fitness contract" for versioning, `046-http-api-versioning.md:62`), and ADR-013 defines the RFC 9457
+fitness contract" for versioning, `046-http-api-versioning.md:78`), and ADR-013 defines the RFC 9457
 edge contract that another one guards, but neither decides the layer itself. The runtime-conformance
 tier has been referenced repeatedly and never recorded on its own.
 
@@ -106,10 +106,9 @@ ADC services (`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/C
 `MMCA.ADC.Engagement.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16`,
 `MMCA.ADC.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16`,
 `MMCA.ADC.Notification.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15`): **ADC
-Notification gained the missing subclass** (landing in a pull request in flight as this record is
-updated), so every REST host in both consumers is now guarded for this one contract. The versioning
-contract is subclassed once per repo, on ADC
-Conference (`ApiVersioningTests.cs:14`) and Store Catalog
+Notification gained the missing subclass**, merged to `main` on 2026-08-13, so every REST host in
+both consumers is now guarded for this one contract. The versioning contract is subclassed once per
+repo, on ADC Conference (`ApiVersioningTests.cs:14`) and Store Catalog
 (`MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:15`),
 which is enough to keep the machinery exercised but leaves the other five REST hosts unguarded. The
 security-headers and graceful-shutdown suites are subclassed **only on the two Gateway hosts**
@@ -184,5 +183,3 @@ ADR-014 (the decorator execution order `DecoratorPipelineOrderTestsBase` proves 
 API versioning, whose "shared fitness contract" is one of these bases), ADR-016 (lockstep versioning:
 a new conformance base reaches consumers only through a release and a full sweep). Package inventory
 for the framework lives in `MMCA.Common/FACTS.md`.
-</content>
-</invoke>

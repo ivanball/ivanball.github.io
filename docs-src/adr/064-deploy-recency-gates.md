@@ -109,11 +109,11 @@ happened recently enough to still mean something.
 - **Deploy-time only, and deliberately not a required merge check.** Both repos document the freshness
   gates as push-only jobs that run after merge and must not be added to branch protection, since a job
   that never runs on a pull request would block every merge
-  (`MMCA.ADC/CONTRIBUTING.md:42-44,111-113`, `MMCA.Store/CONTRIBUTING.md:43-44,111-113`). In both
+  (`MMCA.ADC/CONTRIBUTING.md:42-44,111-113`, `MMCA.Store/CONTRIBUTING.md:43-44,118-120`). In both
   files the push-only half is the earlier passage and the "do not require these jobs" sentence is the
   later one. Store's enumeration
   at `CONTRIBUTING.md:43-44` names only `dr-freshness` and `load-freshness`; the generic sentence at
-  `:111-113` is what covers `cross-service-freshness` there.
+  `:118-120` is what covers `cross-service-freshness` there.
 
 **Adoption is the two deployed apps, in near-identical form.** The differences between MMCA.ADC and
 MMCA.Store are comments: Store orders the two "run conclusion is not a proxy" reasons the other way

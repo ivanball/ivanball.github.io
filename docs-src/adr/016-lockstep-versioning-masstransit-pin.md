@@ -8,7 +8,10 @@ the single pin; the consumer framing is corrected (Store and ADC each declare a
 the claim that framework-to-app (`[C->A]`) changes are non-breaking. Amended (2026-08-01): Store now
 has its own `.github/dependabot.yml` (added 2026-07-29) mirroring ADC's, so the trade-off that rested
 on Store having no such file is restated, and the ADC `MassTransit.Azure.ServiceBus.Core` citation is
-rebased onto its current lines.
+rebased onto its current lines. Amended (2026-08-14): every `Directory.Packages.props` citation is
+rebased onto its current lines, and the versions are restated per repo (Common is on MassTransit
+8.5.10 and `SixLabors.ImageSharp` 3.1.12; Store and ADC still declare
+`MassTransit.Azure.ServiceBus.Core` 8.5.5).
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -50,7 +53,7 @@ Two related governance questions had no recorded answer:
    MSBuild targets fail outright), each mirrored as a dependabot major-update ignore so the bump is
    never even proposed
    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-60`,
-   `MMCA.Common/Directory.Packages.props:54-56,66`, `MMCA.Common/.github/dependabot.yml:56-65`).
+   `MMCA.Common/Directory.Packages.props:73-81,84-91`, `MMCA.Common/.github/dependabot.yml:56-65`).
    MassTransit is the original instance; ImageSharp is what showed the rule generalizes.
 
    The assertions run in MMCA.Common only, the one repo that subclasses the base
@@ -60,7 +63,11 @@ Two related governance questions had no recorded answer:
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:34-36`),
    but each **does** declare one MassTransit entry of its own: `MassTransit.Azure.ServiceBus.Core`
    8.5.5 for the Service Bus emulator test tier, carrying a comment that points back to Common's v8
-   pin (`MMCA.ADC/Directory.Packages.props:92-97`, `MMCA.Store/Directory.Packages.props:116-121`).
+   pin (`MMCA.ADC/Directory.Packages.props:56-61`, `MMCA.Store/Directory.Packages.props:81-86`).
+   Common's own three MassTransit entries are on 8.5.10
+   (`MMCA.Common/Directory.Packages.props:79-81`), so the app-side entry trails within v8 rather than
+   tracking Common patch for patch; what the pin governs, and what the fitness function reads, is the
+   major.
    They still do not subclass the test: its default list also names the two package ids they do not
    declare, and the rule fails on a pin it cannot find
    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:42-45`).

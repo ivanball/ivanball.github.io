@@ -1,7 +1,8 @@
 # ADR-075: Audit Trail (Same-Transaction Field-Level Change History)
 
 ## Status
-Accepted (2026-08-13). The implementation lands in the MMCA.Common "enterprise capability wave" release
+Accepted (2026-08-13; corrected 2026-08-14: the adoption sweep and the `ApplicationDbContext` line
+citations). The implementation lands in the MMCA.Common "enterprise capability wave" release
 and is opt-in twice over: `AddAuditTrail(configuration)` registers the interceptor and the settings, and
 an entity is audited only when it carries the `IAuditedEntity` marker. Absent registration the interceptor
 is not resolved and the whole feature is a no-op.
@@ -36,10 +37,11 @@ Several questions had no recorded answer:
 ### A fourth `SaveChangesInterceptor`, resolved optionally, running last
 `AuditTrailSaveChangesInterceptor` (Infrastructure `Persistence/AuditTrail/`) joins the interceptors
 `ApplicationDbContext.OnConfiguring` already passes to `optionsBuilder.AddInterceptors`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:183-185`,
-where `AuditSaveChangesInterceptor` and `DomainEventSaveChangesInterceptor` are resolved from the service
-provider today). The new one is resolved with `GetService`, not `GetRequiredService`: a host that never
-calls `AddAuditTrail` resolves null, nothing is added to the pipeline, and the feature costs nothing.
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:236-260`,
+where `AuditSaveChangesInterceptor` and `DomainEventSaveChangesInterceptor` are resolved with
+`GetRequiredService` and the tenant and audit-trail interceptors with `GetService`). The new one is
+resolved with `GetService`, not `GetRequiredService` (`:258`): a host that never calls `AddAuditTrail`
+resolves null, nothing is added to the pipeline, and the feature costs nothing.
 
 **Registration order is execution order and it is load-bearing.** After the wave the sequence is
 `AuditSaveChangesInterceptor` (stamps `CreatedBy/On` and `LastModifiedBy/On`), then
@@ -84,9 +86,10 @@ ADR-070 fail-fast chain, and `AddAuditTrail(configuration)` in Infrastructure's 
 registers the interceptor and the settings together.
 
 ### The table lives in every relational source that adopts it
-`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:220`) calls
-`ConfigureAuditTrail(modelBuilder)`, gated on the settings flag resolved from the root provider the way
-the interceptors are, creating an `AuditTrailEntries` table with an index on
+`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:304`) calls
+`ConfigureAuditTrail(modelBuilder)` (`:326`, the method itself at `:572`), gated on the settings flag
+resolved from the root provider the way the interceptors are, creating an `AuditTrailEntries` table with
+an index on
 `(EntityType, EntityKey, ChangedOn)`. A same-transaction write requires the table in the same database as
 the data, which is the outbox precedent (ADR-006) and the reason the trail is not one central store.
 Cosmos skips it, the way `CosmosDbContext` reports `SupportsOutbox => false`
@@ -103,8 +106,10 @@ scheduler.
 `(EntityType, EntityKey)`, which is exactly the index. No controller and no UI ship in v1: a change
 history is a surface with real authorization and presentation opinions, and consumers hold those opinions.
 
-Adoption in the consumer sweep is ADC (Identity, Conference, Engagement and Notification databases),
-Store (its shared database) and Helpdesk (Tickets), each with one migration per adopted source.
+Adoption in the consumer sweep is seven relational sources, each with its own migration: ADC's Identity,
+Conference and Engagement services (its Notification service does not call `AddAuditTrail` and has no
+trail migration), Store's Catalog, Sales and Identity services (Store is database-per-service, so each
+adopts separately rather than sharing one database), and Helpdesk's Tickets.
 
 ## Rationale
 - **`IAuditableEntity` is a statement about a business row, and an audit row is not one.** The interface
@@ -141,7 +146,8 @@ Store (its shared database) and Helpdesk (Tickets), each with one migration per 
   properties writes twenty rows inside the caller's transaction, so an audited save is slower than an
   unaudited one, and the trail is not a beside-the-request concern the way a background publish is.
 - **A per-source table makes cross-database history a fan-out.** "What happened to this user across the
-  whole system" is a query against four ADC databases, and the framework does not ship that query.
+  whole system" is a query against ADC's three audited databases, and the framework does not ship that
+  query.
 - **Values are strings, so a reader gets a rendering rather than a value.** A decimal, an enum and a date
   all arrive as text formatted at capture time, and a large column is stored at whatever length it had.
 - **Redact-at-capture is irreversible, which is the point and also a limit.** A `[Pii]` field's old value

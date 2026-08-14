@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-081: The Cost Baseline as a Hard Deploy Gate · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-14).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/081-cost-baseline-deploy-gate.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-081: The Cost Baseline as a Hard Deploy Gate">
+  <meta property="og:description" content="Accepted (2026-08-14).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/081-cost-baseline-deploy-gate.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-081: The Cost Baseline as a Hard Deploy Gate">
+  <meta name="twitter:description" content="Accepted (2026-08-14).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"081 · The Cost Baseline as a Hard Deploy Gate","item":"https://ivanball.github.io/docs/adr/081-cost-baseline-deploy-gate.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">081 · The Cost Baseline as a Hard Deploy Gate</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 84 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html" aria-current="page">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-081-the-cost-baseline-as-a-hard-deploy-gate">ADR-081: The Cost Baseline as a Hard Deploy Gate</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-14).</p>
+          <h2 id="context">Context</h2>
+          <p>Both deployed apps run a deliberately small production footprint: every Container App is declared with
+          <code>maxReplicas: 2</code> and every SQL database with the <code>Basic</code> tier
+          (<code>MMCA.Store/infra/main.bicep:1083,1182,1309,1384,1481</code> and <code>:594-598,624-628</code>;
+          <code>MMCA.ADC/infra/main.bicep:1211,1335,1459,1708,1826</code> and <code>:634-638,667-671</code>, with ADC&#39;s Notification
+          app deliberately right-sized at <code>maxReplicas: 1</code>, <code>MMCA.ADC/infra/main.bicep:1614-1616</code>). That
+          footprint is the cost baseline, and it is what the monthly bill is planned against.</p>
+          <p>The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
+          real traffic: an operator scales the replica ceiling or the SQL tier up by hand and is supposed to
+          scale it back down afterwards. The failure mode is not the surge, it is the <strong>un-reverted</strong> surge, and
+          it is silent: nothing breaks, no alert fires on a healthy oversized system, and the app keeps serving
+          traffic perfectly while costing several times its baseline.</p>
+          <p>The existing control against that was the monthly Azure budget declared in both Bicep templates
+          (<code>MMCA.Store/infra/main.bicep:508-534</code>, <code>MMCA.ADC/infra/main.bicep:551</code>), which notifies at 80% of
+          actual spend and 100% of forecast spend. The Store template names the exact case it is meant to catch
+          in its own comment, &quot;a scale-up (manual SQL-tier / replica) silently running for weeks&quot;
+          (<code>MMCA.Store/infra/main.bicep:505-507</code>). A spend threshold is a lagging indicator: by the time it
+          trips, weeks of the overspend have already happened, and the notification says a number, not which
+          resource is wrong. What was missing was a check on the <strong>configuration</strong> itself, and a moment at which
+          someone would have to look at it.</p>
+          <p>This is the FinOps sibling of the deploy gates the framework already records: ADR-038 (supply-chain
+          provenance), ADR-060 (the performance-regression gate against a committed baseline) and ADR-062 (SLO
+          alerting as code). ADR-064 decides the three proof-of-recency gates and enumerates <code>cost-guard</code>
+          in passing as one of the jobs &quot;whose subject is the change itself&quot;
+          (<code>Website/docs-src/adr/064-deploy-recency-gates.md:11-12,39</code>), but it does not decide it. This record
+          does.</p>
+          <h2 id="decision">Decision</h2>
+          <p>The cost baseline is asserted by a <strong>read-only reusable workflow</strong> that both runs weekly and sits in
+          <code>deploy.needs</code>, so an un-reverted scale-up blocks the next production deploy.</p>
+          <ul>
+          <li><p><strong>One workflow, two triggers plus a call.</strong> <code>cost-guard.yml</code> carries a Monday 07:00 UTC cron,
+          <code>workflow_dispatch</code>, and <code>workflow_call</code>
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:14-21</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:10-17</code>).
+          The single <code>surge-drift</code> job runs on <code>ubuntu-latest</code> with a 10-minute timeout under
+          <code>environment: production</code>, which is what makes the OIDC token subject match the federated credential
+          the deploy itself uses (<code>MMCA.Store/.github/workflows/cost-guard.yml:31-43</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:27-39</code>). Permissions are <code>id-token: write</code> and
+          <code>contents: read</code> only (<code>MMCA.Store/.github/workflows/cost-guard.yml:23-25</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:19-21</code>).</p>
+          </li>
+          <li><p><strong>Two dimensions are checked, both by name prefix inside one resource group.</strong> For every Container
+          App whose name starts with <code>mmca-</code> (Store) or <code>adc-</code> (ADC), the job reads
+          <code>properties.template.scale.maxReplicas</code> and flags a value greater than <code>BASELINE_MAX_REPLICAS</code>,
+          which is <code>&quot;2&quot;</code> in both repos (<code>MMCA.Store/.github/workflows/cost-guard.yml:29,62-67</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:25,58-63</code>). For every SQL server under the same prefix it
+          enumerates the databases except <code>master</code> and reads <code>sku.tier</code>
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:76-85</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:72-79</code>). The resource group comes from the
+          <code>AZURE_RESOURCE_GROUP</code> repo variable (<code>MMCA.Store/.github/workflows/cost-guard.yml:28</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:24</code>).</p>
+          </li>
+          <li><p><strong>The accepted SQL tier differs per repo, deliberately.</strong> ADC accepts <code>Basic</code> and nothing else
+          (<code>MMCA.ADC/.github/workflows/cost-guard.yml:76</code>). Store accepts <code>Basic</code> <strong>or</strong> <code>Standard</code>
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:82</code>), because its retained legacy <code>MMCAStore</code> archive
+          was downgraded from S0 to Basic and the bump back to S0 is the documented rollback path, so a
+          rollback must not read as drift (<code>MMCA.Store/.github/workflows/cost-guard.yml:9-12</code>, and the same
+          reasoning beside the resource at <code>MMCA.Store/infra/main.bicep:586-588</code>).</p>
+          </li>
+          <li><p><strong>It never mutates anything.</strong> Every call is an <code>az ... list</code> or <code>az ... show</code>; the job&#39;s stated
+          contract is that on drift it fails the run and prints what to reset
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:7</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:7-8</code>).
+          There is no auto-revert.</p>
+          </li>
+          <li><p><strong>The output is a step-summary table, and drift is a non-zero exit.</strong> The job writes a Container Apps
+          table and a SQL table with a per-row <code>ok</code> or <code>DRIFT</code> status into <code>$GITHUB_STEP_SUMMARY</code>, then either
+          prints the reset instruction and exits 1, or prints the all-clear
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:52-92</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:48-86</code>). The whole step runs under <code>set -euo pipefail</code>
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:47</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:43</code>).</p>
+          </li>
+          <li><p><strong><code>deploy</code> waits on it by name.</strong> <code>cost-guard</code> is listed in <code>deploy.needs</code>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:862</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:866</code>), and
+          because the deploy condition runs under <code>always()</code> with explicit per-need results, the condition
+          requires <code>needs.cost-guard.result == &#39;success&#39;</code> literally
+          (<code>MMCA.Store/.github/workflows/deploy.yml:881-893</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:884-896</code>). Only <code>e2e-gate</code> is allowed to be <code>skipped</code> there,
+          so a cost-guard that fails, errors or is skipped leaves <code>deploy</code> unrun.</p>
+          </li>
+          <li><p><strong>Gate on deploys only, never on pull requests.</strong> The calling job carries
+          <code>if: github.event_name != &#39;pull_request&#39;</code> and <code>secrets: inherit</code>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:525-528</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:519-522</code>), because there is no production OIDC on a PR and the
+          deploy is PR-skipped anyway. Both repos&#39; CONTRIBUTING files list <code>cost-guard</code> among the push-only
+          jobs that must <strong>not</strong> be added to branch protection (<code>MMCA.Store/CONTRIBUTING.md:42,118</code>,
+          <code>MMCA.ADC/CONTRIBUTING.md:42,111</code>).</p>
+          </li>
+          <li><p><strong>Raising the baseline is a reviewed repo change, not a click.</strong> The ceiling lives in the workflow&#39;s
+          <code>env</code> (<code>MMCA.Store/.github/workflows/cost-guard.yml:29</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:25</code>) and the tier allow-list lives in the comparison
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:82</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:76</code>).
+          A legitimately larger footprint means editing those <strong>and</strong> the Bicep that declares the footprint,
+          in a pull request, together: otherwise the next <code>main.bicep</code> run pushes the resource back down to
+          the declared value, which is exactly why the drift message points at re-running the deploy as the
+          reset (<code>MMCA.Store/.github/workflows/cost-guard.yml:89</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:83</code>).</p>
+          </li>
+          </ul>
+          <p><strong>Adoption is the two deployed apps, in near-identical form.</strong> The files differ only in the resource
+          name prefix, the accepted SQL tier set, the summary heading and the wording of the drift message
+          (ADC&#39;s names the conference-day surge, Store&#39;s does not). MMCA.Helpdesk and MMCA.Common carry no
+          <code>cost-guard.yml</code> and no deploy workflow at all: Helpdesk&#39;s <code>.github/workflows/</code> holds <code>ci.yml</code>,
+          <code>release-templates.yml</code> and the two Claude workflows, and Common&#39;s holds <code>ci.yml</code>, <code>release.yml</code> and
+          the same two, so neither has a rollout for this gate to block.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Configuration drift is the leading indicator; spend is the lagging one.</strong> The budget notification
+          fires at 80% of actual spend, after the money is gone, and names a number rather than a resource.
+          Reading <code>maxReplicas</code> and <code>sku.tier</code> directly answers &quot;what is wrong and where&quot; on day one of the
+          drift instead of week three.</li>
+          <li><strong>The deploy is the moment someone is already looking.</strong> A weekly cron catches an un-reverted surge
+          up to seven days late, and a red scheduled run is easy to leave unread. Putting the same check in
+          <code>deploy.needs</code> attaches it to an event that has a human waiting on it, which is what converts a
+          notification into a control.</li>
+          <li><strong>Read-only is what makes it safe on the critical path.</strong> The gate performs a handful of <code>az</code>
+          queries and mutates nothing, so its worst failure mode is a blocked deploy, never an unintended
+          production change. Auto-reverting a surge would be the opposite trade: a gate that can itself take
+          production down mid-incident, possibly while the surge is the thing keeping the app up.</li>
+          <li><strong>One definition serves both cadences.</strong> Making the check a reusable workflow (<code>workflow_call</code>)
+          rather than duplicating a job into <code>deploy.yml</code> means the weekly run and the deploy gate cannot
+          drift apart, and dispatching it manually to answer &quot;are we at baseline right now&quot; costs nothing.</li>
+          <li><strong>The baseline belongs in version control next to the Bicep that declares it.</strong> A threshold stored
+          in the repo is reviewed, diffed and dated when it changes; a threshold stored in someone&#39;s memory of
+          what the footprint should be is not a baseline at all.</li>
+          <li><strong>Per-repo tier sets, because the two footprints genuinely differ.</strong> Store&#39;s widened Basic-or-
+          Standard window is not laxity, it is the price of keeping a documented S0 rollback path from reading
+          as drift on every deploy.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>A legitimate scale-up blocks deploys until the baseline is edited.</strong> Standing up extra capacity
+          for a real event and then shipping a fix during it requires a pull request against
+          <code>BASELINE_MAX_REPLICAS</code> first. That is the intended friction, but it is friction at exactly the
+          moment (a live event) when nobody wants to be opening a PR against a CI threshold.</li>
+          <li><strong>The printed remediation is circular on the deploy path.</strong> The drift message suggests resetting
+          &quot;by re-running the deploy workflow&quot; (<code>MMCA.Store/.github/workflows/cost-guard.yml:89</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:83</code>), which was accurate while the check was cron-only.
+          Now that <code>cost-guard</code> sits in <code>deploy.needs</code>, any run of <code>deploy.yml</code> re-runs the failing gate and
+          leaves <code>deploy</code> unrun, so the Bicep never re-applies. The reset has to happen out of band (portal or
+          <code>az</code>) before a deploy can proceed.</li>
+          <li><strong>There is no break-glass for this gate.</strong> The <code>workflow_dispatch</code> inputs cover only the three
+          freshness gates (<code>skip_freshness_gates</code> plus <code>skip_justification</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:8-20</code>), and <code>cost-guard.yml</code> declares no inputs at all, so
+          the ADR-064 escape hatch does not reach it. Getting past a red cost guard means fixing the footprint
+          or changing the baseline.</li>
+          <li><strong>It reads live Azure state, so it can block a deploy for a non-cost reason.</strong> An Azure control-plane
+          outage, an OIDC login failure, a throttled <code>az</code> call or an expired federated credential fails the job
+          and therefore the deploy, and none of those mean the footprint is wrong. The job holds
+          <code>id-token: write</code> and logs in before it can check anything
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:38-43</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:34-39</code>).</li>
+          <li><strong>Store&#39;s tier check is coarser than its own comment claims.</strong> The inline note says a &quot;scaled-up
+          Standard like S3&quot; is drift (<code>MMCA.Store/.github/workflows/cost-guard.yml:80-81</code>, and the header at
+          <code>:12</code> says it flags &quot;S1+&quot;), but the comparison is against <code>sku.tier</code>, and every S-series database
+          reports tier <code>Standard</code>. A surge from S0 to S3 on Store therefore passes the gate; only Premium,
+          BusinessCritical, Hyperscale and similar are caught. ADC, accepting <code>Basic</code> alone, does not have
+          this gap.</li>
+          <li><strong>An empty reading passes.</strong> A replica count that comes back empty is defaulted to <code>0</code> by
+          <code>${max:-0}</code> and scores <code>ok</code> with a <code>?</code> in the table
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:65-66</code>,
+          <code>MMCA.ADC/.github/workflows/cost-guard.yml:61-62</code>). The gate fails open on an unreadable value rather
+          than closed, the opposite of the fail-on-absence posture ADR-064 took for the recency gates.</li>
+          <li><strong>Only two cost dimensions and one name prefix are covered.</strong> Service Bus, Redis, Log Analytics
+          retention and everything else in the resource group are invisible to the gate, as is any resource
+          whose name does not start with the app prefix or that lives in another resource group. Store&#39;s
+          Service Bus is Standard tier (<code>MMCA.Store/infra/main.bicep:665-667</code>) and would go unchecked if it
+          were scaled up.</li>
+          <li><strong>The ceiling is an upper bound, not an equality.</strong> Scaling a resource <strong>below</strong> the baseline is not
+          drift, so an accidental <code>maxReplicas: 1</code> on a service that needs two, or a downgrade that costs
+          availability rather than money, passes silently. This gate is about spend, not about capacity being
+          correct.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="064-deploy-recency-gates.html">ADR-064</a> (the sibling deploy-precondition record, which decides the
+          three proof-of-recency gates and enumerates this one only in passing; its break-glass input does not
+          apply here), <a href="060-performance-regression-gate.html">ADR-060</a> (the other committed-baseline gate, where
+          the baseline is a benchmark rather than a footprint),
+          <a href="062-slo-alerting-as-code.html">ADR-062</a> (the alerting-side control this complements: alerts fire on
+          symptoms in production, this fails a build on configuration),
+          <a href="038-supply-chain-provenance.html">ADR-038</a> (the other result-based job in the same <code>deploy.needs</code>
+          list).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/081-cost-baseline-deploy-gate.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

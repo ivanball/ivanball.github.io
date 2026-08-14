@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">15</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">78</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">84</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">100</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -361,7 +361,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>78 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>84 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -444,6 +444,12 @@
           <a class="adr" href="docs/adr/076-data-subject-export.html"><span class="adr-num">076</span><span><span class="adr-title">Data-subject export (DSAR) contract</span><span class="adr-sum">The orchestration every export shares (ownership gate, aggregate load, section fan-out, envelope) moves into the framework while the app-specific projections stay app-specific as registered sections; a failing section degrades to an unavailable flag rather than failing the package, because a subject request is a legal deadline.</span></span></a>
           <a class="adr" href="docs/adr/077-hybridcache-substrate.html"><span class="adr-num">077</span><span><span class="adr-title">HybridCache as an opt-in cache substrate</span><span class="adr-sum">An L1-plus-L2 implementation joins the two auto-selected cache stores, opted into explicitly, and writes under a disjoint keyspace so two serialization formats can never share one key: the structural fix for the class of bug that once produced a production WRONGTYPE, including mid-rolling-deploy.</span></span></a>
           <a class="adr" href="docs/adr/078-csv-export-endpoint.html"><span class="adr-num">078</span><span><span class="adr-title">CSV export as a dedicated endpoint</span><span class="adr-sum">Export ships as its own route rather than as content negotiation, because the output-cache policy does not vary by Accept and a negotiation failure silently returns JSON; the endpoint page-loops past the pipeline&#39;s unpaged row ceiling and streams RFC 4180 rows written in-house, with truncation signalled by a header.</span></span></a>
+          <a class="adr" href="docs/adr/079-shared-http-middleware-pipeline.html"><span class="adr-num">079</span><span><span class="adr-title">Shared HTTP middleware pipeline</span><span class="adr-sum">One framework method fixes the middleware order for every REST/gRPC host, with the load-bearing adjacencies (authentication before the rate limiter and before tenant resolution) commented where they sit; hosts extend by appending after the call, and conditional middleware registers unconditionally but stays inert by config.</span></span></a>
+          <a class="adr" href="docs/adr/080-deploy-rollout-revision-rollback.html"><span class="adr-num">080</span><span><span class="adr-title">Rollout with automatic revision rollback</span><span class="adr-sum">Every production deploy ends in a smoke gate asserting expected status codes; on failure each container app walks back to its previous revision, and a rollback that itself fails escalates loudly as a fleet split. Schema is never rolled back, which is the premise the expand/contract gate rests on.</span></span></a>
+          <a class="adr" href="docs/adr/081-cost-baseline-deploy-gate.html"><span class="adr-num">081</span><span><span class="adr-title">Cost baseline as a deploy gate</span><span class="adr-sum">A read-only workflow asserts the production footprint still matches its declared cost baseline (replica ceilings, SQL tiers) and sits in deploy.needs, so an un-reverted manual surge blocks the next deploy instead of quietly billing forever.</span></span></a>
+          <a class="adr" href="docs/adr/082-two-tier-cors-posture.html"><span class="adr-num">082</span><span><span class="adr-title">Two-tier cross-origin posture</span><span class="adr-sum">Service hosts run named allow-listed CORS policies selected per environment inside the shared pipeline; the gateways run a default policy that restricts only origins, because a reverse proxy has to pass arbitrary client headers through.</span></span></a>
+          <a class="adr" href="docs/adr/083-crud-lifecycle-event-taxonomy.html"><span class="adr-num">083</span><span><span class="adr-title">CRUD lifecycle event taxonomy</span><span class="adr-sum">One entity-changed event with a state discriminator replaces per-entity Created/Updated/Deleted triples, and handlers filter on the state; business state-machine transitions keep their own event types, and the discriminator rides integration events as a frozen wire field.</span></span></a>
+          <a class="adr" href="docs/adr/084-stripe-webhook-ingress.html"><span class="adr-num">084</span><span><span class="adr-title">Stripe webhook ingress contract</span><span class="adr-sum">An anonymous signature-verified endpoint whose status code means accepted-not-processed, because rejections make the provider disable the endpoint; a startup service self-registers the webhook and logs its freshly minted signing secret loudly for an operator to persist.</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -469,9 +475,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">140 documents</span>
+            <span class="kicker kicker--accent">146 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 78 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
+            <p>Every collection indexed in one place: 84 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->

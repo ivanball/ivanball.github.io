@@ -1,7 +1,9 @@
 # ADR-051: Client-Side Authentication Token Lifecycle Across Render Modes
 
 ## Status
-Accepted (2026-07-23).
+Accepted (2026-07-23). Revised 2026-08-14 (`SetTokensAsync` now writes the refresh token and the
+access token under one shared guard, so a failed refresh-token write also drops both tokens; see
+Revision below).
 
 ## Context
 ADR-022 and ADR-050 describe the two server halves of authentication: the Blazor host's
@@ -67,9 +69,9 @@ UI code above them never branches on render mode.
   is framework-shared too and backs onto `SecureStorage.Default` (platform secure enclaves), guarding
   every read and write so an OS-invalidated keystore entry degrades to one clean re-login instead of an
   unhandled throw on launch
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:20`,
-  `MauiTokenStorageService.cs:66-82`, `MauiTokenStorageService.cs:88-101`,
-  `MauiTokenStorageService.cs:104-117`); both MAUI heads register that one class through
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:22`,
+  `MauiTokenStorageService.cs:69-85`, `MauiTokenStorageService.cs:91-104`,
+  `MauiTokenStorageService.cs:107-120`); both MAUI heads register that one class through
   `AddCommonMauiTokenStorage`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:73`).
 - **Login seeds the browser HttpOnly cookie through a JS fetch.** `SetTokensAsync` on both browser
@@ -110,11 +112,11 @@ UI code above them never branches on render mode.
   registers `ServerTokenStorageService` via `AddCommonServerTokenStorage`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:26-29`) plus the same
   proxy refresher and auth-state provider
-  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:97-98`,
-  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:65-66`); the MAUI host registers the shared
+  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:114-116`,
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:73-75`); the MAUI host registers the shared
   SecureStorage-backed storage via `AddCommonMauiTokenStorage` plus `DirectApiTokenRefresher` +
   `JwtAuthenticationStateProvider`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:103-105`,
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:125-127`,
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:88-90`).
 
 ## Rationale
@@ -170,30 +172,43 @@ implementations are now framework-owned.
 1. **One class, in MMCA.Common.UI.Maui.** `MauiTokenStorageService` is a single sealed
    `ITokenStorageService` holding both tokens under the `auth_access_token` / `auth_refresh_token`
    keys in `SecureStorage.Default`
-   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:20`,
-   `MauiTokenStorageService.cs:22-23`). The per-app copies are gone: no
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:22`,
+   `MauiTokenStorageService.cs:24-25`). The per-app copies are gone: no
    `MauiTokenStorageService.cs` exists under `MMCA.ADC/Source/` or `MMCA.Store/Source/` (the only
    match in the workspace is the framework file above), so the "behavior can drift between the two
    apps" risk the Trade-offs section recorded no longer applies.
 2. **Both heads register it through one extension method.** `AddCommonMauiTokenStorage()` registers
    it as the scoped `ITokenStorageService`
    (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:73-74`), and both
-   MAUI hosts call exactly that (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:103`,
+   MAUI hosts call exactly that (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:125`,
    `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:88`). Scoped, not singleton, to match the
    two browser siblings so component code depends on one lifetime on every head
    (`DependencyInjection.cs:70-71`). The rest of each MAUI trio is unchanged:
    `DirectApiTokenRefresher` + `JwtAuthenticationStateProvider` still follow it
-   (`MauiProgram.cs:104-105` in ADC, `MauiProgram.cs:89-90` in Store).
+   (`MauiProgram.cs:126-127` in ADC, `MauiProgram.cs:89-90` in Store).
 3. **The hoist added failure handling the app copies did not have.** Every read and write is guarded,
    because the OS invalidates keystore entries on its own schedule and the raw API then throws rather
    than returning nothing: a failed read drops the unreadable entry and degrades to "no token stored"
-   (`MauiTokenStorageService.cs:66-82`), a failed write retries once against a freshly removed key and
-   otherwise propagates (`MauiTokenStorageService.cs:88-101`), `ClearTokensAsync` is best-effort so
-   logout always succeeds (`MauiTokenStorageService.cs:53-60`, `:104-117`), and `SetTokensAsync`
-   writes the refresh token first and drops both on a failed access-token write rather than leaving a
-   mismatched pair (`MauiTokenStorageService.cs:32-50`).
+   (`MauiTokenStorageService.cs:69-85`), a failed write retries once against a freshly removed key and
+   otherwise propagates (`MauiTokenStorageService.cs:91-104`), `ClearTokensAsync` is best-effort so
+   logout always succeeds (`MauiTokenStorageService.cs:56-63`, `:107-120`), and `SetTokensAsync`
+   writes both tokens under one shared guard so either write failing drops both, rather than leaving a
+   mismatched pair (`MauiTokenStorageService.cs:34-53`).
 4. **What it cost.** The class cannot live in `MMCA.Common.UI` (that package must stay
    Blazor-WASM-compatible and MAUI-free), so it sits in `MMCA.Common.UI.Maui`, outside
    `MMCA.Common.slnx` and built across its four TFMs by a windows-only CI job (ADR-042). The
    Trade-offs bullet above is rewritten accordingly: the risk is no longer divergent copies, it is a
    slower and separate verification path for the one shared copy.
+
+## Revision (2026-08-14)
+`SetTokensAsync` closed a gap the original hoist left open. Point 3 above previously described the
+method as writing the refresh token first and dropping both tokens only when the following
+access-token write failed, which left a window where a failing refresh-token write escaped before
+the guard was entered and left the OLD pair in place: the app then held a stale access token it
+believed was current until a manual sign-out cleared it.
+
+`SetTokensAsync` now performs both writes inside one `try`/`catch`, so either write failing drops
+both tokens and forces a clean re-login instead of leaving a stale, partially-updated pair
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:34-53`).
+Point 3's description above is updated accordingly: read guarding, write-retry, and best-effort
+clearing are all unchanged, only the `SetTokensAsync` behavior narrowed.

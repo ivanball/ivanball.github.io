@@ -15,8 +15,8 @@ the OAuth custom-scheme returnUrl allowlist in `CompleteAsync`, the app-associat
 (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:19`). The ADC
 consumer's deep-link wave has shipped: `MMCA.ADC.UI.Web` serves the two well-known association
 documents through the shared helper
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:160`), the Identity service allow-lists the
-`atldevcon` scheme (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:37`), and
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:169`), the Identity service allow-lists the
+`atldevcon` scheme (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:42-43`), and
 the native heads register the callback: iOS carries both the custom-scheme URL type
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Info.plist:16`) and the associated-domains
 entitlement (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Entitlements.plist:11`), while
@@ -192,9 +192,9 @@ Anchor and precision pass from an ADR audit. No decision and no behavior changed
 1. **The two `Program.cs` anchors moved one line.** MMCA.ADC commit `886fa189` (PR #100, merged
    2026-08-03, DataProtection plus client idempotency keys) inserted a line above the association
    block. `app.MapAppAssociationEndpoints(new AppAssociationOptions` is now at
-   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:160` (`:159` is the preceding
-   `GetSection("AppAssociation")` line), and `AndroidCertFingerprints` is at `:167`, with
-   `AndroidPackageName` at `:166` and the four-line comment from the 2026-08-01 entry at `:162-165`.
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:169` (`:168` is the preceding
+   `GetSection("AppAssociation")` line), and `AndroidCertFingerprints` is at `:176`, with
+   `AndroidPackageName` at `:175` and the four-line comment from the 2026-08-01 entry at `:171-174`.
    Every citation of those two anchors is updated above, the ones inside the earlier revisions
    included.
 2. **The hostname trade-off names its three occurrences.** The bullet said every occurrence "stays

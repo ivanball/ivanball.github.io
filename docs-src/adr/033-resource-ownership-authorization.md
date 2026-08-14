@@ -48,7 +48,7 @@ bypass role (`Admin` by default).
   (`/customers/{id}`) or, when the route lacks it, from a **model-bound query/body argument**
   (`?userId=42`), so the guard also covers list/query routes that carry the owner as a bound
   argument, not only route ids. It is registered scoped by `AddAPI`
-  (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:68`) and applied per controller as
+  (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:78`) and applied per controller as
   `[ServiceFilter(typeof(OwnerOrAdminFilter))]`.
 - **Collection ownership specification.** `OwnershipHelper`
   (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10`) is a static helper.
@@ -87,30 +87,30 @@ inherited from `EntityControllerBase` / `AggregateRootEntityControllerBase`. Add
 audit of the whole controller, not just of the routes that motivated it.
 
 **Adoption.** MMCA.Store wires both in production. The filter guards
-`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:38` and
+`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:49` and
 `MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:32` as a `[ServiceFilter]`. The
 ownership specification scopes list/get queries:
 `ShoppingCartsController` builds a `ShoppingCartByCustomerSpecification`
-(`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:53`,
+(`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:66`,
 `MMCA.Store/.../Sales.Application/ShoppingCarts/Specifications/ShoppingCartByCustomerSpecification.cs:19`,
 which filters by `Id` because a cart is keyed by customer, `ShoppingCartByCustomerSpecification.cs:24`)
 and `OrdersController` builds an `OrdersByCustomerSpecification` through a private
 `GetOwnershipSpecification()` method
-(`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:62-64`,
+(`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:63-65`,
 `MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13`, filtering
 by `CustomerId`, `OrdersByCustomerSpecification.cs:18`), passed as `specification:
-GetOwnershipSpecification()` into each query (`OrdersController.cs:103`, `OrdersController.cs:141`,
-`OrdersController.cs:175`). `OrdersController` does not use the class-level filter for its mutating
+GetOwnershipSpecification()` into each query (`OrdersController.cs:104`, `OrdersController.cs:142`,
+`OrdersController.cs:176`). `OrdersController` does not use the class-level filter for its mutating
 routes; it runs an explicit per-mutation ownership check, `ValidateOwnershipAsync`
-(`OrdersController.cs:345`), that reuses `OwnershipHelper.IsAdmin` through its `IsAdmin` property
-(`OrdersController.cs:60`) to let the bypass role through. Its two denial branches return different
+(`OrdersController.cs:396`), that reuses `OwnershipHelper.IsAdmin` through its `IsAdmin` property
+(`OrdersController.cs:61`) to let the bypass role through. Its two denial branches return different
 statuses on purpose:
 
 - **Missing owner claim** (the caller carries no `customer_id`): `Error.Forbidden`, a 403
-  (`OrdersController.cs:353`, `OrdersController.cs:355-359`). Nothing was looked up, so there is no
+  (`OrdersController.cs:404`, `OrdersController.cs:406-410`). Nothing was looked up, so there is no
   resource whose existence a 403 could leak; this matches the filter's own missing-claim `ForbidResult`.
 - **Owner mismatch** (the claim is present but the order is someone else's): `Error.NotFound`, a 404
-  rather than a 403 (`OrdersController.cs:366`, `OrdersController.cs:368-370`), so the response does not
+  rather than a 403 (`OrdersController.cs:417`, `OrdersController.cs:419-421`), so the response does not
   reveal that another customer's order exists.
 
 MMCA.ADC's Engagement module is the first host to configure the filter's vocabulary rather than take
@@ -199,9 +199,9 @@ An audit against the code. No behavior changed; the ADR text did.
 Anchor-only correction. No behavior changed; `OrdersController` was refactored (a constructor
 parameter added, `GetOwnershipSpecification()` and the `IsAdmin` property extracted,
 `ValidateOwnershipAsync` moved) since the 2026-07-25 pass, which shifted every line anchor pointing
-into it. Refreshed: `GetOwnershipSpecification()` (now `OrdersController.cs:62-64`), its three call
-sites (`OrdersController.cs:103`, `:141`, `:175`), `ValidateOwnershipAsync` (now
-`OrdersController.cs:345`) and the `IsAdmin` property it reads (`OrdersController.cs:60`), the
-missing-owner-claim `Error.Forbidden` branch (`OrdersController.cs:353`, `:355-359`), and the
-owner-mismatch `Error.NotFound` branch (`OrdersController.cs:366`, `:368-370`).
+into it. Refreshed: `GetOwnershipSpecification()` (now `OrdersController.cs:63-65`), its three call
+sites (`OrdersController.cs:104`, `:142`, `:176`), `ValidateOwnershipAsync` (now
+`OrdersController.cs:396`) and the `IsAdmin` property it reads (`OrdersController.cs:61`), the
+missing-owner-claim `Error.Forbidden` branch (`OrdersController.cs:404`, `:406-410`), and the
+owner-mismatch `Error.NotFound` branch (`OrdersController.cs:417`, `:419-421`).
 `OrdersByCustomerSpecification.cs:13` and `:18` were re-checked and are unchanged.

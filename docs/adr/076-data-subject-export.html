@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-076: Data-Subject Export (DSAR) as a Framework Contract · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release. It is opt-in: an app subclasses…">
+  <meta name="description" content="Accepted (2026-08-13). Revised 2026-08-14 (the API-surface section corrected to the shipped mechanism, an abstract DataExportControllerBase a subclass…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/076-data-subject-export.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-076: Data-Subject Export (DSAR) as a Framework Contract">
-  <meta property="og:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release. It is opt-in: an app subclasses…">
+  <meta property="og:description" content="Accepted (2026-08-13). Revised 2026-08-14 (the API-surface section corrected to the shipped mechanism, an abstract DataExportControllerBase a subclass…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/076-data-subject-export.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-076: Data-Subject Export (DSAR) as a Framework Contract">
-  <meta name="twitter:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release. It is opt-in: an app subclasses…">
+  <meta name="twitter:description" content="Accepted (2026-08-13). Revised 2026-08-14 (the API-surface section corrected to the shipped mechanism, an abstract DataExportControllerBase a subclass…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"076 · Data-Subject Export (DSAR) as a Framework Contract","item":"https://ivanball.github.io/docs/adr/076-data-subject-export.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html" aria-current="page">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -186,10 +192,14 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-076-data-subject-export-dsar-as-a-framework-contract">ADR-076: Data-Subject Export (DSAR) as a Framework Contract</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release.
+          <p>Accepted (2026-08-13). Revised 2026-08-14 (the API-surface section corrected to the shipped mechanism,
+          an abstract <code>DataExportControllerBase</code> a subclass mounts, not an application-part registration; the
+          consumer adoption picture corrected; the export/delete generic-constraint difference stated; ADC
+          citations re-anchored).
+          The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release.
           It is opt-in: an app subclasses <code>ExportUserDataHandlerBase</code> and registers its own
-          <code>IUserDataExportSection</code> implementations, and the shipped controller is added to the MVC application
-          parts explicitly. Nothing changes for a host that does not.</p>
+          <code>IUserDataExportSection</code> implementations, and the shipped controller base is subclassed and routed by
+          the app. Nothing changes for a host that does not.</p>
           <h2 id="context">Context</h2>
           <p>A data-subject access request is a legal obligation with a clock on it: the person asks for a copy of the
           personal data held about them, and the operator has a deadline to hand one over.
@@ -233,9 +243,13 @@
           the same contract with one module&#39;s name baked into it. Sections are collected from DI, so adding a
           store of personal data to an app is a registration, not an edit to the export handler.</p>
           <h3 id="exportuserdatahandlerbasetuser-tquery-mirrors-deleteuserhandlerbase"><code>ExportUserDataHandlerBase&lt;TUser, TQuery&gt;</code> mirrors <code>DeleteUserHandlerBase</code></h3>
-          <p>The base class (<code>.../Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs</code>) takes the same generic
-          constraints as <code>DeleteUserHandlerBase</code>, runs the same <code>UserOwnershipRule.CheckOwnership</code> gate with the
-          export error code, and exposes a <code>HasDeletePrivilege</code>-style hook so the app supplies its own role
+          <p>The base class (<code>.../Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs</code>) takes generic
+          constraints similar to <code>DeleteUserHandlerBase</code> but not identical: both constrain <code>TUser</code> to
+          <code>AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code> and <code>TQuery</code>/<code>TCommand</code> to <code>IUserOwnedRequest</code>
+          (<code>ExportUserDataHandlerBase.cs:54-55</code>), and deletion additionally requires <code>TUser : IErasableUser</code>
+          (<code>DeleteUserHandlerBase.cs:41</code>) because it calls <code>Anonymize()</code>. Export never does, so it does not ask
+          for that interface: a user aggregate can be exportable without being erasable. The base runs the same
+          <code>UserOwnershipRule.CheckOwnership</code> gate with the export error code, and exposes a <code>HasDeletePrivilege</code>-style hook so the app supplies its own role
           vocabulary (ADC evaluates <code>UserRole.IsOrganizer</code>, Store evaluates <code>UserRole.IsAdmin</code>). It then loads the
           owned aggregate, fans out to every registered <code>IUserDataExportSection</code>, and assembles a
           <code>UserDataExportDTO</code>. The subclass keeps the role test, the subject snapshot projection, and the sections.</p>
@@ -261,18 +275,39 @@
           per-activity ledger entries). A PDF is a rendering, not a copy: the subject&#39;s likely next step is machine
           processing or handing the file to another controller, which a PDF turns into a scraping exercise. JSON is
           what the sections already are, and the format version makes it evolvable as a rendered document is not.</p>
-          <h3 id="the-api-surface-is-a-shipped-controller-the-host-opts-into">The API surface is a shipped controller the host opts into</h3>
-          <p>The endpoint ships from the framework assembly (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/</code>)
-          as <code>DataExportControllerBase</code> plus an <code>AddDsarControllers()</code> <code>IMvcBuilder</code> extension that calls
-          <code>AddApplicationPart</code>. That is the precedent <code>AddNotificationControllers</code> already set for controllers
-          living in a NuGet assembly MVC does not scan by default
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:19-23</code>). The
-          action is <code>[Authorize]</code> and <code>[FeatureGate]</code>-gated, so a host that has not turned the feature on answers
-          404 rather than 403 (<a href="031-feature-flag-management.html">ADR-031</a>), and the endpoint does not exist for an
-          app that never calls the registration. Today the endpoint is app-owned and returns the document inline:
-          ADC&#39;s <code>GET /Users/{userId}/export</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:148</code>) ends in
-          <code>Ok(result.Value)</code> (<code>:166</code>). An app that prefers its own route keeps its controller and calls the base.</p>
+          <h3 id="the-api-surface-is-a-shipped-controller-base-the-app-subclasses">The API surface is a shipped controller base the app subclasses</h3>
+          <p>The endpoint ships from the framework assembly as the abstract
+          <code>DataExportControllerBase&lt;TQuery&gt;</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:60</code>),
+          <strong>not</strong> as a concrete controller registered into the MVC application parts. That is a deliberate
+          departure from the <code>AddNotificationControllers</code> precedent for package-assembly controllers
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:19-23</code>), and the
+          base&#39;s own remarks record why: the query type is app-owned, so &quot;this ships as an abstract base with a
+          <code>CreateQuery</code> factory rather than as a concrete controller added through an application part: a
+          concrete controller could not construct a type it cannot see&quot; (<code>DataExportControllerBase.cs:44-49</code>).
+          There is no <code>AddDsarControllers()</code> registration; the unit of opt-in is the subclass itself. An app
+          declares a controller carrying its own <code>[Route]</code>, passes its query type, and implements the abstract
+          <code>CreateQuery(userId, currentUserId, currentUserRole)</code> factory (<code>:120-123</code>); the action template
+          <code>{userId}/export</code> is fixed on the base (<code>:78</code>), so a subclass routed at <code>Users</code> serves the same
+          <code>/Users/{userId}/export</code> path the hand-written controllers do.</p>
+          <p>The base carries <code>[Authorize(Policy = AuthorizationPolicies.RequireAuthenticated)]</code> (<code>:58</code>) and
+          <code>[FeatureGate(PrivacyFeatures.DataExport)]</code> (<code>:59</code>), so a host that has not turned the feature on
+          answers 404 rather than 403 (<a href="031-feature-flag-management.html">ADR-031</a>), and the endpoint does not
+          exist for an app that never subclasses. Authorization is defence in depth rather than the real gate:
+          the handler independently enforces owner-or-privileged-role. The action serializes the package itself
+          and returns <code>File(payload, ExportContentType, BuildFileName(...))</code> (<code>:110</code>) rather than an
+          <code>ObjectResult</code>, because content negotiation would render the document inline and the point of the
+          endpoint is a saved file.</p>
+          <p><strong>No consumer has adopted the base yet.</strong> Neither ADC&#39;s nor Store&#39;s <code>UsersController</code> references
+          <code>DataExportControllerBase</code>: each still owns a standalone action that reimplements the dispatch. ADC&#39;s
+          <code>GET /Users/{userId}/export</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:149</code>) builds
+          the query inline and ends in <code>Ok(result.Value)</code> (<code>:167</code>), returning the document as a negotiated body
+          with no <code>Content-Disposition</code>, and it is covered only by the class-level <code>[Authorize]</code> (<code>:30</code>) with no
+          <code>[FeatureGate]</code>. Store&#39;s is the same shape
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs:35</code>). So
+          the handler hoist landed in both apps while the controller hoist did not: the framework base is shipped
+          and tested, the download delivery and the feature gate reach a consumer only when one subclasses it.</p>
           <h3 id="the-completeness-fitness-rule-is-deferred-deliberately">The completeness fitness rule is deferred, deliberately</h3>
           <p>A <code>PiiEntitiesAreExportable</code> rule as a sibling to <code>EntitiesWithPiiImplementAnonymizable</code> (ADR-005) is the
           obvious guard: every entity carrying <code>[Pii]</code> should be reachable by some registered section. It is
@@ -306,9 +341,12 @@
           <li><strong>A format version costs one field and buys the ability to change the envelope.</strong> The envelope now
           belongs to the framework and will move on a framework release, so a reader that can name the contract
           it received is the difference between an evolvable document and a frozen one.</li>
-          <li><strong>A shipped controller is the only way a NuGet-delivered endpoint is discoverable.</strong> MVC does not scan
-          package assemblies, so an application-part registration is required either way, and making it an
-          explicit <code>AddDsarControllers()</code> call keeps the endpoint absent for a host that did not ask for it.</li>
+          <li><strong>An abstract base is what a NuGet-delivered endpoint can be when the query type is app-owned.</strong> MVC
+          does not scan package assemblies, and the usual answer is an application-part registration, but a
+          concrete controller in the framework assembly cannot name (or construct) each app&#39;s
+          <code>ExportUserDataQuery</code>. Shipping the action, the attributes and the file delivery on a base whose one
+          abstract member is the query factory keeps the endpoint absent for a host that did not subclass, and
+          costs the adopter a class declaration and one expression.</li>
           <li><strong>A fitness rule that fails everything on arrival does not get adopted, it gets suppressed.</strong> ADR-015&#39;s
           value comes from rules that hold on the day they land. Recording the deferral keeps the gap in the
           record instead of hiding it behind a suppression.</li>
@@ -318,6 +356,11 @@
           <li><strong>Best-effort degradation can return a quietly incomplete package.</strong> <code>Available = false</code> is the only
           signal, and nothing forces a caller, a UI, or the subject to read it. A section that fails on every
           attempt produces an export that looks successful every time.</li>
+          <li><strong>The controller half of this record is shipped but unadopted.</strong> Both apps subclass the handler base
+          and neither subclasses <code>DataExportControllerBase</code>, so the download delivery, the <code>Content-Disposition</code>
+          file name and the <code>[FeatureGate]</code> 404 posture are framework behavior no deployed endpoint exhibits
+          today: ADC and Store still return the package inline from their own actions. Until a consumer
+          subclasses, the two halves of the endpoint contract can drift without a test noticing.</li>
           <li><strong>Nothing proves a section exists for every store of personal data.</strong> The completeness of an export is
           exactly the set of sections a consumer chose to register; a module holding personal data that registers
           none is invisible to the export, and the fitness rule that would catch it is deferred.</li>

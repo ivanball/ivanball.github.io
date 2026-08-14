@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-070: Fail-Fast Configuration Contract · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-07).">
+  <meta name="description" content="Accepted (2026-08-07). Revised 2026-08-14 (source citations re-anchored; the consumer-repo facade claim narrowed to production code, with the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-070: Fail-Fast Configuration Contract">
-  <meta property="og:description" content="Accepted (2026-08-07).">
+  <meta property="og:description" content="Accepted (2026-08-07). Revised 2026-08-14 (source citations re-anchored; the consumer-repo facade claim narrowed to production code, with the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-070: Fail-Fast Configuration Contract">
-  <meta name="twitter:description" content="Accepted (2026-08-07).">
+  <meta name="twitter:description" content="Accepted (2026-08-07). Revised 2026-08-14 (source citations re-anchored; the consumer-repo facade claim narrowed to production code, with the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"070 · Fail-Fast Configuration Contract","item":"https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -186,7 +192,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-070-fail-fast-configuration-contract">ADR-070: Fail-Fast Configuration Contract</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-07).</p>
+          <p>Accepted (2026-08-07). Revised 2026-08-14 (source citations re-anchored; the consumer-repo facade
+          claim narrowed to production code, with the controller-test exception recorded).</p>
           <h2 id="context">Context</h2>
           <p>Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
           JWT key material, outbox tuning, message-bus provider, module enablement, page-size limits. A settings
@@ -208,26 +215,26 @@
           <ul>
           <li><strong>One binding shape, used everywhere.</strong>
           <code>AddOptions&lt;T&gt;().Bind(configuration.GetSection(T.SectionName)).ValidateDataAnnotations().ValidateOnStart()</code>
-          is the required form (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:60-63</code>).
+          is the required form (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:67-70</code>).
           <code>.BindConfiguration(T.SectionName)</code> is the accepted shorthand for the <code>Bind(GetSection(...))</code> step and
           is what Store&#39;s Sales module uses
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:35-38</code>, <code>:40-43</code>).
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:47-50</code>, <code>:52-55</code>).
           <code>ValidateOnStart()</code> is the load-bearing link: without it the annotations are evaluated lazily on first
           resolution, which is exactly the first-use failure the contract exists to prevent.</li>
           <li><strong>The framework owns the base set.</strong> Eight sections are bound this way in the Infrastructure package&#39;s
-          <code>DependencyInjection.cs</code> alone: seven inside <code>AddInfrastructure</code> (<code>ConnectionStringSettings</code> <code>:60-63</code>,
-          <code>SmtpSettings</code> <code>:74-77</code>, <code>PersistenceSettings</code> <code>:116-119</code>, <code>OutboxSettings</code> <code>:121-124</code>,
-          <code>LoginProtectionSettings</code> <code>:126-129</code>, <code>MessageBusSettings</code> <code>:132-135</code>, <code>JwksSettings</code> <code>:137-140</code>) and an
-          eighth in the opt-in <code>AddPushNotifications</code> (<code>PushNotificationSettings</code> <code>:292-295</code>). Three more are bound
+          <code>DependencyInjection.cs</code> alone: seven inside <code>AddInfrastructure</code> (<code>ConnectionStringSettings</code> <code>:67-70</code>,
+          <code>SmtpSettings</code> <code>:81-84</code>, <code>PersistenceSettings</code> <code>:123-126</code>, <code>OutboxSettings</code> <code>:128-131</code>,
+          <code>LoginProtectionSettings</code> <code>:133-136</code>, <code>MessageBusSettings</code> <code>:139-142</code>, <code>JwksSettings</code> <code>:144-147</code>) and an
+          eighth in the opt-in <code>AddPushNotifications</code> (<code>PushNotificationSettings</code> <code>:530-533</code>). Three more are bound
           by the Presentation packages: <code>IdempotencySettings</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:60-63</code>), <code>JwtSettings</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:318-321</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:70-73</code>), <code>JwtSettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:346-349</code>),
           and <code>ApiSettings</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:32-35</code>).</li>
           <li><strong>Each service host adds exactly two of its own</strong>, <code>ApplicationSettings</code> and <code>ModulesSettings</code>, and all
           eight hosts across the three application repos do it identically: ADC&#39;s four services (for example
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:153-156</code> and <code>:273-276</code>), Store&#39;s three
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:104-107</code> and <code>:195-198</code>), and the
-          Helpdesk monolith seed (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:17-20</code> and <code>:62-65</code>).
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:170-173</code> and <code>:299-302</code>), Store&#39;s three
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:123-126</code> and <code>:226-229</code>), and the
+          Helpdesk monolith seed (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:17-20</code> and <code>:75-78</code>).
           Modules may add their own sections on the same chain, as Store&#39;s Sales module does for Stripe.</li>
           <li><strong>Validation is data annotations, extended by <code>IValidatableObject</code> where a rule spans fields.</strong>
           <code>JwtSettings</code> marks <code>Issuer</code> and <code>Audience</code> <code>[Required]</code>
@@ -238,9 +245,9 @@
           fails to boot rather than failing to sign its first token.</li>
           <li><strong>Read-only interface facades over <code>IOptions</code>.</strong> Five settings types are additionally registered as
           singletons that resolve <code>IOptions&lt;T&gt;.Value</code> and hand back an interface: <code>IApplicationSettings</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:30</code>), <code>IJwtSettings</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:58</code>),
-          <code>IConnectionStringSettings</code> (<code>:64</code>), <code>ISmtpSettings</code> (<code>:78</code>), and <code>IPushNotificationSettings</code> (<code>:296-297</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:31</code>), <code>IJwtSettings</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:65</code>),
+          <code>IConnectionStringSettings</code> (<code>:71</code>), <code>ISmtpSettings</code> (<code>:85</code>), and <code>IPushNotificationSettings</code> (<code>:534-535</code>).
           The interfaces declare <code>get</code>/<code>init</code> members only
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ISmtpSettings.cs:6-28</code>), so a consumer can
           read a setting and cannot rebind it. The interface for <code>IJwtSettings</code> lives in a file named
@@ -248,32 +255,43 @@
           type name, not the filename, is the contract.</li>
           <li><strong>Three recorded exceptions to the chain, all in the framework.</strong> <code>CacheKeyPrefixOptions</code> is bound with
           a bare <code>services.Configure</code> and no validation, because an absent section must leave cache keys exactly
-          as callers write them (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:163-166</code>).
+          as callers write them (a single call inside <code>AddCaching</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:172</code>, the method starting
+          at <code>:164</code>).
           <code>LayoutSettings</code> is bound without validation for the same reason: it is optional footer copy
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:38-39</code>). <code>DataSourcesSettings</code> is
           constructed directly from the section rather than through <code>AddOptions</code>, because a root-level dictionary
           section does not bind through the options pipeline
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:68-70</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:75-77</code>).</li>
           </ul>
           <p><strong>Adoption of the facade half is partial, and this ADR settles the direction rather than claiming the
           state.</strong> Only five of the framework&#39;s settings types have a facade; the rest are consumed as <code>IOptions&lt;T&gt;</code>
           inside Infrastructure and API, which is where they belong: <code>OutboxProcessor</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:48</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:53</code>),
           <code>BrokerEventBus</code> (<code>.../Services/BrokerEventBus.cs:34</code>), <code>LoginProtectionService</code>
           (<code>.../Auth/LoginProtectionService.cs:21</code>), <code>RsaJwksProvider</code> (<code>.../Auth/RsaJwksProvider.cs:15</code>),
           <code>SQLServerDbContext</code> (<code>.../Persistence/DbContexts/SQLServerDbContext.cs:37</code>), and <code>IdempotencyFilter</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:432</code>). The facades are
-          consumed only inside the framework: <code>EntityControllerBase</code> resolves <code>IApplicationSettings</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:54</code>),
+          consumed only inside the framework: <code>EntityControllerBase</code> resolves <code>IApplicationSettings</code> per request at
+          two sites, its <code>MaxPageSize</code> and <code>MaxExportRows</code> accessors
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:60</code> and <code>:80</code>),
           <code>RepositoryFactory</code> takes it in its constructor
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:14</code>),
           <code>TokenService</code> takes <code>IJwtSettings</code> (<code>.../Services/TokenService.cs:47</code>), and <code>SmtpEmailSender</code> takes
-          <code>ISmtpSettings</code> (<code>.../Services/SmtpEmailSender.cs:12</code>). No consumer repo resolves a facade at all: ADC,
-          Store, and Helpdesk contain zero references to <code>IApplicationSettings</code>, <code>IJwtSettings</code>, or <code>ISmtpSettings</code>,
-          and where their own code reads a setting it injects <code>IOptions&lt;T&gt;</code> directly (Store&#39;s Sales Infrastructure
+          <code>ISmtpSettings</code> (<code>.../Services/SmtpEmailSender.cs:12</code>). No consumer repo&#39;s production code resolves a
+          facade: nothing under <code>Source/</code> in ADC, Store, or Helpdesk references <code>IApplicationSettings</code>,
+          <code>IJwtSettings</code>, or <code>ISmtpSettings</code>. The only consumer references are in controller tests, and they exist
+          because of <code>EntityControllerBase</code>: Store registers a stand-in <code>IApplicationSettings</code> in six API test
+          fixtures so <code>MaxPageSize</code> resolves (for example
+          <code>MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.API.Tests/Controllers/ShoppingCartsControllerTests.cs:44</code>),
+          and six ADC Conference controller tests name it only in a comment recording that an empty provider yields
+          the default (for example
+          <code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Controllers/SponsorsControllerTests.cs:41</code>);
+          Helpdesk has no reference of either kind.
+          Where consumer code reads a setting it injects <code>IOptions&lt;T&gt;</code> directly (Store&#39;s Sales Infrastructure
           in <code>StripeClientFactory.cs:21</code>, <code>StripePaymentService.cs:62</code>, <code>StripeWebhookRegistrationService.cs:29</code>,
-          <code>PaymentReconciliationService.cs:35-36</code>; ADC&#39;s web host in
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:136</code> and its calendar component in
+          <code>PaymentReconciliationService.cs:35-36</code>; ADC&#39;s web host in its <code>/client-config</code> minimal-API handler,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:145</code>, and its calendar component in
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Components/AddToCalendarButton.razor:7</code>).</p>
           <p>The Application-layer invariant nevertheless holds today: no Application-layer file in any of the four
           repos takes an <code>IOptions</code> dependency, because settings are read at the Infrastructure, API, and host
@@ -313,7 +331,7 @@
           That is the intended trade (no half-configured replica serves traffic), but it means a configuration
           mistake takes the whole rollout rather than one code path.</li>
           <li><strong>Two ways to read a setting coexist.</strong> Five types have a facade and the rest do not, and no consumer
-          repo uses a facade at all, so a reader encounters both forms. The boundary above sets which is correct
+          repo&#39;s production code uses a facade at all, so a reader encounters both forms. The boundary above sets which is correct
           where, but it does not make the codebase look uniform today.</li>
           <li><strong>Data annotations are the vocabulary.</strong> Anything richer needs <code>IValidatableObject</code> or a custom
           <code>IValidateOptions&lt;T&gt;</code>, and only <code>JwtSettings</code> reaches for the former today.</li>

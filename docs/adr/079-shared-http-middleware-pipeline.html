@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-079: One Shared, Ordered HTTP Middleware Pipeline for Every Service Host · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-14).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-079: One Shared, Ordered HTTP Middleware Pipeline for Every Service Host">
+  <meta property="og:description" content="Accepted (2026-08-14).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-079: One Shared, Ordered HTTP Middleware Pipeline for Every Service Host">
+  <meta name="twitter:description" content="Accepted (2026-08-14).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host","item":"https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 84 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html" aria-current="page">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-079-one-shared-ordered-http-middleware-pipeline-for-every-service-host">ADR-079: One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-14).</p>
+          <h2 id="context">Context</h2>
+          <p>In ASP.NET Core, middleware order is behavior, not style: a rate limiter placed before authentication
+          partitions every request as anonymous, an HTTPS redirect placed in front of a gRPC call breaks the
+          call, and a tenant resolver that reads <code>HttpContext.User</code> before <code>UseAuthentication</code> resolves nothing.
+          Each of those is a silent, correct-looking build.</p>
+          <p>The framework already ships that pipeline as a single call. Three accepted records cite it as <em>where</em>
+          their middleware sits: ADR-019 relies on forwarded headers running before the rate limiter
+          (<code>019-rate-limiting.md:77</code>), ADR-047 pins <code>SoftDeletedUserMiddleware</code> between authentication and
+          authorization (<code>047-soft-deleted-user-session-revocation.md:33-38</code>), and ADR-073 places
+          <code>TenantResolutionMiddleware</code> immediately after <code>UseAuthentication</code> because claim-first resolution needs
+          a populated principal (<code>073-multi-tenancy-model.md:74-81</code>). All three take the pipeline as given
+          context. None of them decides it, and nothing else does either, so the one ordering that every host in
+          both production apps depends on has been an implementation detail of a method rather than a recorded
+          decision. This record makes the pipeline itself the decision.</p>
+          <p>It is the HTTP counterpart of ADR-014, which does the same job for the CQRS decorator chain: one fixed,
+          documented order that handler and host authors do not re-litigate per project.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Ship the edge as <strong>one ordered pipeline in the framework</strong>, <code>UseCommonMiddlewarePipeline</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:45</code>), and have
+          every REST/gRPC host call it instead of composing its own.</p>
+          <ul>
+          <li><strong>One call, whole edge, controllers included.</strong> The method is an <code>extension(WebApplication app)</code>
+          member (<code>WebApplicationExtensions.cs:37</code>) that registers every edge middleware and finishes by
+          mapping controllers (<code>:121</code>), returning the app for chaining (<code>:123</code>). A host&#39;s composition root is
+          one line, not a hand-ordered list.</li>
+          <li><strong>The order is fixed and complete.</strong> Exception handler (<code>:47</code>), correlation id (<code>:48</code>), request
+          localization (<code>:53</code>), pre-forwarded scheme/host capture (<code>:72-77</code>), forwarded headers (<code>:79</code>),
+          gRPC-exempt HTTPS redirect (<code>:87-89</code>), response compression (<code>:91</code>), routing (<code>:92</code>), CORS (<code>:93-95</code>),
+          authentication (<code>:96</code>), tenant resolution (<code>:102</code>), rate limiter (<code>:108</code>), soft-deleted-user check
+          (<code>:109</code>), authorization (<code>:110</code>), output cache (<code>:111</code>), JWKS (<code>:118</code>) and OIDC discovery (<code>:119</code>)
+          endpoints, controllers (<code>:121</code>).</li>
+          <li><strong>Authentication before tenant resolution, and the code says why.</strong> <code>TenantResolutionMiddleware</code>
+          is registered at <code>:102</code>, immediately after <code>app.UseAuthentication()</code> (<code>:96</code>), because the claim
+          strategy reads <code>HttpContext.User</code>, which carries token claims only once authentication has run
+          (comment at <code>:98-101</code>, ADR-073).</li>
+          <li><strong>Authentication before rate limiting, and the code says why.</strong> <code>app.UseRateLimiter()</code> (<code>:108</code>) runs
+          after authentication on purpose: the global partition keys on the authenticated principal and routes
+          anonymous traffic down a <code>NoLimiter</code> branch, so an unpopulated <code>HttpContext.User</code> would make every
+          request look anonymous and the per-user cap would never engage (comment at <code>:104-107</code>, ADR-019).</li>
+          <li><strong>Forwarded headers before anything that reads the client IP, trusting any proxy.</strong>
+          <code>UseForwardedHeaders</code> (<code>:79</code>) is configured for <code>XForwardedFor | XForwardedProto | XForwardedHost</code>
+          (<code>:55-58</code>) with both <code>KnownProxies</code> and <code>KnownIPNetworks</code> cleared (<code>:63-64</code>), because cloud reverse
+          proxies front the services from internal addresses that are not in the default allow-lists (comment
+          at <code>:60-62</code>). It sits ahead of the rate limiter (<code>:108</code>), which is the ordering ADR-019 depends on.</li>
+          <li><strong>HTTPS redirect is exempted for gRPC.</strong> The redirect is wrapped in <code>app.UseWhen</code> and skipped for any
+          request whose <code>Content-Type</code> starts with <code>application/grpc</code> (<code>:87-89</code>), because extracted services
+          are reached over HTTP/2 cleartext and a 307 on those requests breaks the call (comment at <code>:81-86</code>,
+          ADR-012).</li>
+          <li><strong>The soft-deleted-user check sits between the limiter and authorization.</strong>
+          <code>SoftDeletedUserMiddleware</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:31</code>)
+          is registered at <code>:109</code>, after <code>UseRateLimiter</code> (<code>:108</code>) and before <code>UseAuthorization</code> (<code>:110</code>), so a
+          revoked account is rejected before any endpoint authorizes it (ADR-047).</li>
+          <li><strong>JWKS and OIDC discovery are always mapped.</strong> <code>MapJwksEndpoint()</code> (<code>:118</code>) and
+          <code>MapOidcDiscoveryEndpoint()</code> (<code>:119</code>) are unconditional; a non-Identity host answers with an empty key
+          set or a 404 rather than a different pipeline shape (comment at <code>:113-117</code>;
+          <code>OidcDiscoveryEndpointExtensions.cs:63-66</code> is the 404 path).</li>
+          <li><strong>Conditional middleware is registered unconditionally and made inert by configuration.</strong> Both
+          <code>TenantResolutionMiddleware</code> (<code>:102</code>) and <code>SoftDeletedUserMiddleware</code> (<code>:109</code>) are always in the chain
+          and gated by their own settings, so the pipeline is literally one shape on every host rather than a
+          per-host permutation.</li>
+          <li><strong>Every REST/gRPC host calls it.</strong> All seven extracted services in the two production apps: ADC
+          Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:322</code>), ADC Conference
+          (<code>MMCA.ADC.Conference.Service/Program.cs:373</code>), ADC Engagement
+          (<code>MMCA.ADC.Engagement.Service/Program.cs:328</code>), ADC Notification
+          (<code>MMCA.ADC.Notification.Service/Program.cs:258</code>), Store Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:266</code>), Store Identity
+          (<code>MMCA.Store.Identity.Service/Program.cs:257</code>) and Store Sales
+          (<code>MMCA.Store.Sales.Service/Program.cs:275</code>). The reference app calls it too
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111</code>), and because that tree <strong>is</strong> the
+          <code>mmca-app</code> template (<code>MMCA.Helpdesk/.template.config/template.json:5,7</code>, ADR-065), a scaffolded app
+          gets the same line: the generated <code>MMCA.ECommerce</code> sample has it at
+          <code>MMCA.ECommerce/Source/Hosts/MMCA.ECommerce.Web/Program.cs:100</code>.</li>
+          <li><strong>Hosts extend it by appending, after the call.</strong> Service hosts map their extra endpoints below the
+          one line: OpenAPI outside Production (<code>MMCA.ADC.Notification.Service/Program.cs:265-268</code>), the SignalR
+          hub (<code>:275</code>, which <code>SignalRExtensions.cs:18-19</code> documents as &quot;call after
+          <code>UseCommonMiddlewarePipeline</code>&quot;), and gRPC services (<code>:277-279</code>).</li>
+          </ul>
+          <p>Scope is REST and gRPC service hosts. The Blazor UI hosts and the YARP gateways deliberately do not
+          call it: the gateways compose a much thinner chain (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:50</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:72</code>), and the UI hosts hand-compose their own,
+          reusing only the localization half via <code>UseCommonRequestLocalization()</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:124</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:164</code>), which is the public method the pipeline
+          itself calls at <code>:53</code> (<code>WebApplicationExtensions.cs:133</code>).</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Order is behavior, so it belongs to the framework, not to each host.</strong> Four of the adjacencies above
+          fail silently when reversed: the limiter stops limiting, the tenant resolver resolves nothing, the
+          client IP becomes the proxy&#39;s, and gRPC calls get redirected. Centralizing removes the chance to get
+          any of them wrong once per host, which is the same invariant-over-discipline posture as ADR-015.</li>
+          <li><strong>One place to change means one place to review.</strong> ADR-019, ADR-047 and ADR-073 each added middleware
+          by editing this method, and each got a comment explaining its position. The comments accumulate where
+          the ordering lives instead of being copied into seven <code>Program.cs</code> files.</li>
+          <li><strong>Unconditional-and-inert keeps the shape stable.</strong> Gating on configuration rather than on
+          registration means a host that turns multi-tenancy on later changes a setting, not its pipeline, and
+          a diff between two hosts&#39; edges is empty by construction.</li>
+          <li><strong>It preserves the extraction path.</strong> ADR-008 promises a module can be lifted into its own service
+          without a rewrite. A host-owned pipeline would make the new service&#39;s edge a hand-transcribed copy;
+          one shared call makes the extracted service inherit the identical edge behavior for free.</li>
+          <li><strong>It is the HTTP sibling of a pattern already proven in-process.</strong> ADR-014 fixes the decorator order
+          for commands and queries for the same reason and with the same result: authors reason about one
+          documented sequence.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Nothing freezes the order.</strong> A workspace-wide search finds no test referencing
+          <code>UseCommonMiddlewarePipeline</code>: the only non-host references are the method itself, a cross-reference
+          in <code>WebApplicationBuilderExtensions.cs:399</code> and one in <code>SignalRExtensions.cs:19</code>. Reordering two lines
+          compiles, passes every analyzer, and passes the unit tiers. The load-bearing adjacencies are protected
+          by comments and review, not by a fitness test. That is the weakest point of this decision.</li>
+          <li><strong>There is no extension point for a host that needs a deviation.</strong> The method takes no parameters and
+          exposes no hooks (<code>WebApplicationExtensions.cs:45</code>). A host can only prepend or append around the
+          call; it cannot insert into the middle, replace one step, or drop one. A host that genuinely needs a
+          different edge has to stop calling the method and re-implement the whole chain, which is what the
+          Blazor UI hosts do (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:145,164</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:105,124</code>). That is the honest cost of the fixed
+          order: the escape hatch is all-or-nothing.</li>
+          <li><strong>Controllers are mapped inside the call.</strong> Because <code>MapControllers()</code> runs at <code>:121</code>, every endpoint
+          a host maps afterwards is registered after controller routing. Hosts that need a hub or a gRPC service
+          simply map it later, but a host cannot use this method and still map something ahead of controllers.</li>
+          <li><strong>Trusting any proxy is a deliberate security trade.</strong> With <code>KnownProxies</code> and <code>KnownIPNetworks</code>
+          cleared (<code>:63-64</code>), <code>X-Forwarded-For</code> is accepted from any caller, so the IP-keyed rate-limit
+          partitions are spoofable by anything that can reach a service directly. This is safe only because the
+          services are not publicly routable and sit behind the gateway; ADR-019 records the same caveat.</li>
+          <li><strong>Security-response headers are not in this pipeline.</strong> ADR-023&#39;s <code>UseCommonSecurityHeaders</code> is applied
+          by the gateways and UI hosts only (<code>MMCA.ADC.Gateway/Program.cs:50</code>, <code>MMCA.Store.Gateway/Program.cs:72</code>,
+          <code>MMCA.ADC.UI.Web/Program.cs:105</code>, <code>MMCA.Store.UI.Web/Program.cs:145</code>). A service host exposed directly,
+          without a gateway in front, would serve responses without them.</li>
+          <li><strong>One step in the fixed order is currently dead weight.</strong> The pre-forwarded scheme/host capture
+          (<code>:72-77</code>) writes <code>HttpContext.Items[&quot;PreForwardedScheme&quot;]</code> and <code>[&quot;PreForwardedHost&quot;]</code>, and its XML doc
+          (<code>:18-35</code>) says the OIDC discovery endpoint consumes them. It no longer does:
+          <code>MapOidcDiscoveryEndpoint</code> derives <code>jwks_uri</code> from <code>Jwt:Issuer</code>
+          (<code>OidcDiscoveryEndpointExtensions.cs:76</code>, with the rationale at <code>:68-75</code>), and a workspace-wide search
+          for <code>PreForwarded</code> finds no reader anywhere outside this file and the onboarding chapters that
+          describe it. The middleware costs one delegate per request and stays because removing it is a separate
+          change, but it is not load-bearing today.</li>
+          <li><strong>The method&#39;s own summary comment is not the contract.</strong> The order listed at <code>:39-44</code> omits request
+          localization, the pre-forwarded capture, and the JWKS/OIDC mapping that the body actually registers.
+          Read the body, not the summary.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the in-process sibling: one fixed decorator order for commands
+          and queries), <a href="019-rate-limiting.html">ADR-019</a> (depends on forwarded headers before the limiter and on the
+          limiter after authentication), <a href="047-soft-deleted-user-session-revocation.html">ADR-047</a> (depends on the slot
+          between authentication and authorization), <a href="073-multi-tenancy-model.html">ADR-073</a> (depends on the slot
+          immediately after authentication), <a href="027-multi-locale-i18n.html">ADR-027</a> (the request localization this
+          pipeline wires at <code>:53</code>), <a href="012-grpc-host-transport.html">ADR-012</a> (the h2c transport the HTTPS-redirect
+          exemption exists for), <a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a> (the output cache
+          at <code>:111</code>), <a href="023-security-response-headers.html">ADR-023</a> (the edge middleware deliberately NOT in this
+          pipeline), <a href="008-service-extraction-topology.html">ADR-008</a> (the extraction path this shared edge preserves).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/079-shared-http-middleware-pipeline.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

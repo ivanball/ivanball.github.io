@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -193,7 +199,10 @@
           the claim that framework-to-app (<code>[C-&gt;A]</code>) changes are non-breaking. Amended (2026-08-01): Store now
           has its own <code>.github/dependabot.yml</code> (added 2026-07-29) mirroring ADC&#39;s, so the trade-off that rested
           on Store having no such file is restated, and the ADC <code>MassTransit.Azure.ServiceBus.Core</code> citation is
-          rebased onto its current lines.</p>
+          rebased onto its current lines. Amended (2026-08-14): every <code>Directory.Packages.props</code> citation is
+          rebased onto its current lines, and the versions are restated per repo (Common is on MassTransit
+          8.5.10 and <code>SixLabors.ImageSharp</code> 3.1.12; Store and ADC still declare
+          <code>MassTransit.Azure.ServiceBus.Core</code> 8.5.5).</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>FACTS.md</code> for the authoritative
           list and count) consumed by three downstream repos: the two
@@ -237,7 +246,7 @@
           MSBuild targets fail outright), each mirrored as a dependabot major-update ignore so the bump is
           never even proposed
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-60</code>,
-          <code>MMCA.Common/Directory.Packages.props:54-56,66</code>, <code>MMCA.Common/.github/dependabot.yml:56-65</code>).
+          <code>MMCA.Common/Directory.Packages.props:73-81,84-91</code>, <code>MMCA.Common/.github/dependabot.yml:56-65</code>).
           MassTransit is the original instance; ImageSharp is what showed the rule generalizes.</p>
           <p>The assertions run in MMCA.Common only, the one repo that subclasses the base
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/DependencyVersionTests.cs:9</code>).
@@ -246,7 +255,11 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:34-36</code>),
           but each <strong>does</strong> declare one MassTransit entry of its own: <code>MassTransit.Azure.ServiceBus.Core</code>
           8.5.5 for the Service Bus emulator test tier, carrying a comment that points back to Common&#39;s v8
-          pin (<code>MMCA.ADC/Directory.Packages.props:92-97</code>, <code>MMCA.Store/Directory.Packages.props:116-121</code>).
+          pin (<code>MMCA.ADC/Directory.Packages.props:56-61</code>, <code>MMCA.Store/Directory.Packages.props:81-86</code>).
+          Common&#39;s own three MassTransit entries are on 8.5.10
+          (<code>MMCA.Common/Directory.Packages.props:79-81</code>), so the app-side entry trails within v8 rather than
+          tracking Common patch for patch; what the pin governs, and what the fitness function reads, is the
+          major.
           They still do not subclass the test: its default list also names the two package ids they do not
           declare, and the rule fails on a pin it cannot find
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:42-45</code>).</p>

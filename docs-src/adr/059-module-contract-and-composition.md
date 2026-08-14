@@ -1,7 +1,7 @@
 # ADR-059: The IModule Contract and Reflection-Based Module Composition
 
 ## Status
-Accepted (2026-07-28).
+Accepted (2026-07-28; revised 2026-08-14).
 
 ## Context
 The framework's headline claim is that an application is built as a modular monolith and later
@@ -41,12 +41,12 @@ rather than by absence.
   throws from `GetTypes()` is logged and skipped, not fatal (`ModuleLoader.cs:89-98,353-354`). An
   overload taking the assemblies explicitly exists and its own documentation calls it the preferred
   host call (`ModuleLoader.cs:61-79`), but **every host today uses the AppDomain overload**: Store
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:212`,
-  `MMCA.Store.Identity.Service/Program.cs:187`, `MMCA.Store.Sales.Service/Program.cs:179`), ADC
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:231`,
-  `MMCA.ADC.Conference.Service/Program.cs:280`, `MMCA.ADC.Engagement.Service/Program.cs:181`,
-  `MMCA.ADC.Notification.Service/Program.cs:190`) and Helpdesk
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:81`). Only the unit tests pass assemblies
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:245`,
+  `MMCA.Store.Identity.Service/Program.cs:223`, `MMCA.Store.Sales.Service/Program.cs:229`), ADC
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:264`,
+  `MMCA.ADC.Conference.Service/Program.cs:318`, `MMCA.ADC.Engagement.Service/Program.cs:232`,
+  `MMCA.ADC.Notification.Service/Program.cs:207`) and Helpdesk
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:94`). Only the unit tests pass assemblies
   explicitly (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:41-48`).
 - **Registration order is a Kahn topological sort over the declared names.** The loader sorts before
   it registers anything (`ModuleLoader.cs:112`); the sort builds an in-degree map plus a reverse
@@ -78,8 +78,12 @@ rather than by absence.
   `DisabledSessionBookmarkValidationService` returns `Result.Success()` plus an empty session-id
   collection, which deliberately skips the BR-49 / BR-91 eligibility checks
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DisabledSessionBookmarkValidationService.cs:30-39`);
-  `DisabledEventLiveValidationService` fails open with an always-open live window
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/DisabledEventLiveValidationService.cs:22-43`).
+  `DisabledEventLiveValidationService`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/DisabledEventLiveValidationService.cs:22-63`)
+  fails open across all four of the members it has grown to: an always-open live window for an event
+  (`:25-26`) and for a session (`:34-42`), every sponsor reported as belonging to a published event
+  under a default id and an empty name (`:49-50`), and a room's own id echoed back as the current
+  session with an empty title (`:58-62`).
   The dependent's code path does not branch on "is the module here": it resolves the interface and
   gets a documented degraded answer.
 - **`Dependencies` declares the graph; `RequiresDependencies` decides whether a gap is fatal.** The
@@ -100,16 +104,16 @@ rather than by absence.
   (`ModuleLoader.cs:186-193`), so a module can carry its own configuration file without a host edit.
 - **Composition also shapes the HTTP surface, seeding and health.** `AddAPI(modulesSettings)`
   installs `ModuleControllerFeatureProvider`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:42,52-56`), which removes
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:44,62-66`), which removes
   from MVC discovery any controller whose assembly name or namespace contains a `.{ModuleName}.`
   token for a disabled module, so those endpoints are never mapped instead of mapping and then
   failing with a 500
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:33-53,60-82`).
   Seeders run only for enabled modules and in registration order (`ModuleLoader.cs:133-136,270-276`),
   invoked from startup database initialization
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:28-31,87`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:32-35,98`).
   `AddModuleHealthChecks` publishes one `module-{Name}` check per module, Healthy when enabled and
-  Degraded when disabled (`DependencyInjection.cs:169-188`).
+  Degraded when disabled (`DependencyInjection.cs:179-198`).
 - **A remote-dependency validator exists but is not wired.** `ValidateRemoteDependencies` re-resolves
   every service type a disabled dependency's stub registered, throwing when it no longer resolves and
   warning when it still resolves to the stub type (`ModuleLoader.cs:216-261`). It is exercised only by
@@ -120,10 +124,16 @@ The module inventory is small and explicit. **MMCA.Store has three:** `CatalogMo
 `IProductVariantService`,
 `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/CatalogModule.cs:13-30`), `IdentityModule`
 (leaf, stubs `ICustomerService`,
-`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:14-31`) and
-`SalesModule`, which declares `["Catalog", "Identity"]` with `RequiresDependencies = true` and
-publishes no cross-module contract of its own
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:17-46`). **MMCA.ADC has four:**
+`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:16-42`, the stub at
+`:27-28`) and `SalesModule`, which declares `["Catalog", "Identity"]` with
+`RequiresDependencies = true` and publishes one cross-module contract of its own,
+`IUserSalesExportService` stubbed by `DisabledUserSalesExportService`
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:19-63`, the stub registration at
+`:41-42`,
+`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Exports/DisabledUserSalesExportService.cs:7-12`):
+the data-subject export edge Identity consumes, which is why Store's `IdentityModule.Register` also
+adds `AddUserDataExportSection<SalesUserDataExportSection>()`
+(`MMCA.Store.Identity.API/IdentityModule.cs:40`). **MMCA.ADC has four:**
 `IdentityModule` (leaf, stubs `IAttendeeQueryService`,
 `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModule.cs:13-25`), `ConferenceModule`
 (no declared dependencies, two stubs,
@@ -142,16 +152,16 @@ The per-service configuration is where "the monolith with one module enabled" be
 Catalog enables `Catalog` and disables both peers with no remote declarations
 (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/appsettings.json:20-24`); Store Sales enables
 `Sales` and declares `["Catalog", "Identity"]` as `RemoteDependencies`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:20-27`), then replaces the two
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34`), then replaces the two
 stubs with typed gRPC clients after the loader returns
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:188-189`). ADC Engagement declares
-`["Conference"]` remote (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:22-30`)
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:238-239`). ADC Engagement declares
+`["Conference"]` remote (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46`)
 and ADC Notification declares `["Identity"]` remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:27-35`), while ADC
 Conference enables one module and declares nothing remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25`) even though it wires
 Engagement's `IBookmarkCountService` as a gRPC client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:303`), because
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:329`), because
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale
@@ -166,9 +176,9 @@ Engagement's `IBookmarkCountService` as a gRPC client
   puts its contract type in the container, the dependent module's Application and Domain code has no
   branch for "peer not present", which is precisely why a module's non-hosting layers are identical
   in-process and extracted (`ModuleLoader.cs:123`, `CatalogModule.cs:24-25`). The host then
-  overwrites the stub with a real cross-process adapter (`Sales.Service/Program.cs:188-189`).
+  overwrites the stub with a real cross-process adapter (`Sales.Service/Program.cs:238-239`).
 - **Two strictness levels, chosen per module.** A module that genuinely cannot function without a
-  peer opts into `RequiresDependencies = true` and fails fast (`SalesModule.cs:30`,
+  peer opts into `RequiresDependencies = true` and fails fast (`SalesModule.cs:32`,
   `EngagementModule.cs:23`, `NotificationModule.cs:24`); everything else tolerates a missing peer and
   degrades, which is the safer default for a module whose cross-module call is advisory.
 - **`RemoteDependencies` keeps strictness usable after extraction.** Without it, every strict module
@@ -193,15 +203,28 @@ Engagement's `IBookmarkCountService` as a gRPC client
   empty exports
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/DisabledUserEngagementExportService.cs:7-12`,
   `MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/UserNotifications/DisabledUserNotificationExportService.cs:7-12`,
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/DisabledAttendeeQueryService.cs:7-12`).
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/DisabledAttendeeQueryService.cs:7-12`,
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Exports/DisabledUserSalesExportService.cs:10-11`).
+  The export stubs are the sharpest case: because the stub answers successfully, the consuming
+  section reports itself `Complete` with nothing in it rather than unavailable
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/SalesUserDataExportSection.cs:52-56`),
+  so a data-subject export assembled while a module is disabled reads as a complete document.
   A wrongly disabled module therefore produces plausible wrong answers rather than an error, and the
   only startup signal is a Degraded `module-{Name}` health check plus a log line
-  (`DependencyInjection.cs:181-188`, `ModuleLoader.cs:338-339,347-348`).
+  (`DependencyInjection.cs:191-198`, `ModuleLoader.cs:338-339,347-348`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** ADC Conference consumes
   Engagement's `IBookmarkCountService` over gRPC without listing Engagement in `Dependencies`
-  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:303`), so neither the
-  topological sort nor the `RequiresDependencies` check knows about that edge. Nothing enforces that
-  `Dependencies` matches the interfaces a module actually resolves.
+  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:329`), so neither the
+  topological sort nor the `RequiresDependencies` check knows about that edge. Nothing derives
+  `Dependencies` from the interfaces a module actually resolves. What is pinned is the declaration
+  against a written expectation: `ModuleConformanceTestsBase<TModule>` asserts `Name`, `Dependencies`,
+  `RequiresDependencies` (read through the `IModule` interface, so a leaf module is checked against
+  the framework defaults too) and what `RegisterDisabledStubs` puts in the container
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ModuleConformanceTestsBase.cs:21-64`).
+  That turns a silent edit of a declaration into a red test, but it is opt-in per module and five of
+  the eight subclass it today (Store Catalog, Identity and Sales; ADC Identity and Notification);
+  ADC Conference, ADC Engagement and Helpdesk Tickets have no subclass, so for those three the
+  declaration is still unchecked.
 - **The one guard against a forgotten cross-process rewire is unadopted.** `ValidateRemoteDependencies`
   was written for exactly the "typo'd or forgotten `AddTypedGrpcClient`" failure
   (`ModuleLoader.cs:202-215`), and no host calls it, so that failure still shows up as a stub no-op at
@@ -211,6 +234,19 @@ Engagement's `IBookmarkCountService` as a gRPC client
   (`ModuleLoader.cs:20,109,288-294`), so renaming a module without updating every dependent's
   `Dependencies` list and every host's `Modules` section yields a module treated as disabled with, at
   worst, a warning.
+- **Controller filtering does not read "disabled" the way the loader does.** The provider builds its
+  disabled set from the entries **present** in the `Modules` section whose `Enabled` is false
+  (`ModuleControllerFeatureProvider.cs:36-39`), while the loader treats a module missing from that
+  section as disabled (`ModulesSettings.cs:18-19`). A module simply left out of configuration
+  therefore gets no `Register` call and none of its services, yet keeps its controllers mapped: the
+  map-then-500-on-request case this provider exists to prevent
+  (`ModuleControllerFeatureProvider.cs:19-25`). Every host today enumerates its whole module set and
+  pins each disabled peer to `"Enabled": false`
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/appsettings.json:20-24`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25`; the Helpdesk seed has
+  only the one module to list, `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:13-15`),
+  so the divergence is latent rather than live. The accepted position is that a host enumerates its
+  modules rather than leaning on the absence rule.
 - **Controller filtering is coupled to assembly and namespace naming.** A disabled module's
   controllers are found by a `.{ModuleName}.` substring test on the assembly name or namespace
   (`ModuleControllerFeatureProvider.cs:60-82`), so a project that does not follow the

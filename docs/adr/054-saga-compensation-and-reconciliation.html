@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -235,7 +241,7 @@
           notification. Compensation that does write therefore commits on its own, after the originating
           save, rather than joining the transaction it is compensating for.</li>
           <li><strong>Idempotency is a persisted marker committed by the SAME <code>SaveChanges</code> as the compensating
-          writes.</strong> <code>Order.InventoryRestored</code> (<code>.../Domain/Orders/Order.cs:42-48</code>) is the marker;
+          writes.</strong> <code>Order.InventoryRestored</code> (<code>.../Domain/Orders/Order.cs:48-54</code>) is the marker;
           <code>MarkInventoryRestored</code> refuses a second call and refuses a non-cancelled order
           (<code>Order.cs:281-298</code>). The handler checks the marker first
           (<code>OrderCancelledSagaHandler.cs:56-62</code>), applies the increases through a pure domain service
@@ -262,7 +268,7 @@
           <li><strong>Concurrent redeliveries are serialized by the <code>RowVersion</code> concurrency token.</strong> Every auditable
           entity carries one (<code>MMCA.Common/.../Entities/AuditableBaseEntity.cs:39</code>), configured as a
           concurrency token on every non-owned auditable type
-          (<code>MMCA.Common/.../DbContexts/ApplicationDbContext.cs:270-290</code>, ADR-035). Two deliveries that both
+          (<code>MMCA.Common/.../DbContexts/ApplicationDbContext.cs:445-473</code>, ADR-035). Two deliveries that both
           pass the marker check carry the same original token into their update: one commits, the other gets
           <code>DbUpdateConcurrencyException</code> and its outbox retry then finds the committed marker and skips.</li>
           <li><strong>A periodic sweep drives the transitions a lost webhook would have.</strong>
@@ -276,7 +282,7 @@
           <code>MarkAsPaymentFailed</code>, still open to nothing (<code>PaymentReconciliationService.cs:180-202</code>). It is
           configuration-gated (<code>.../Infrastructure/Settings/PaymentReconciliationSettings.cs:13-36</code>, defaults
           of a 10-minute interval, a 30-minute stuck age and a 50-order batch, carried in
-          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:49-54</code>).</li>
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:62-67</code>).</li>
           <li><strong>The sweep gets no private path into the aggregate, and loses races on purpose.</strong> It calls the same
           guarded transitions as the webhook handler
           (<code>.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:97,128</code>) and the
@@ -356,7 +362,7 @@
           swallow its failures itself.</li>
           <li><strong>The sweep is not replica-leased.</strong> The outbox processor claims rows with a lease before working
           them (ADR-003); the sweep takes no such claim, so at the configured <code>maxReplicas: 2</code>
-          (<code>MMCA.Store/infra/main.bicep:1025</code>) two replicas can pick the same stuck order and each spend a
+          (<code>MMCA.Store/infra/main.bicep:1309</code>) two replicas can pick the same stuck order and each spend a
           Stripe status call. Correctness holds through the concurrency token; the duplicated external call
           does not deduplicate.</li>
           <li><strong>Every compensating action needs its own marker.</strong> There is no generic mechanism: the ADR-021

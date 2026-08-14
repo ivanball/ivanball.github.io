@@ -51,7 +51,7 @@ In production `EnableInbox: true` is set on all four ADC service hosts
 (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:28`,
 `MMCA.ADC.Conference.Service/appsettings.json:31`, `MMCA.ADC.Engagement.Service/appsettings.json:52`,
 `MMCA.ADC.Notification.Service/appsettings.json:50`) and on Store's Sales service
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:33`). Where the `InboxMessages`
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:40`). Where the `InboxMessages`
 table comes from differs by repo: each of the four ADC per-service migration projects carries a
 dedicated `AddInboxMessages` migration, whereas Store Sales creates the table and its unique
 `IX_InboxMessages_MessageId` index inside its single `InitialCreate` migration
@@ -59,14 +59,14 @@ dedicated `AddInboxMessages` migration, whereas Store Sales creates the table an
 because that per-service project postdates the frozen combined-archive lineage that added the ADC
 migration. Adoption inventory as of 2026-08-13: **three ADC services consume from the broker** and
 so use their inbox for real, plus Store Sales. ADC Identity consumes `SpeakerLinkedToUser` and
-`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:275-276`),
-ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:322`), and ADC
+`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:299-300`),
+ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:347`), and ADC
 Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
-`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:275-278`), the
+`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:299-302`), the
 first of which is ADC's first **self-consumption** over the broker: Engagement publishes
 `AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
 so the inbox is load-bearing there rather than decorative. Store Sales consumes `ProductVariantChanged`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:200-201`). Only **ADC Notification**
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:251`). Only **ADC Notification**
 now carries `EnableInbox: true` and the table while registering no consumer, so its inbox alone is
 provisioned and unused (functionally harmless). The mirror image is equally harmless and worth stating
 because it looks like the opposite mistake: Store Catalog and Store Identity carry the `InboxMessages`

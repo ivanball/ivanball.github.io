@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-14).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/084-stripe-webhook-ingress.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)">
+  <meta property="og:description" content="Accepted (2026-08-14).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/084-stripe-webhook-ingress.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)">
+  <meta name="twitter:description" content="Accepted (2026-08-14).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)","item":"https://ivanball.github.io/docs/adr/084-stripe-webhook-ingress.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 84 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html" aria-current="page">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-084-stripe-webhook-ingress-acceptance-coded-responses-and-startup-self-registration">ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-14).</p>
+          <h2 id="context">Context</h2>
+          <p>Four ADRs already cover how a message crosses a boundary in this workspace. ADR-003 decides how an
+          event leaves a service (outbox, at-least-once). ADR-021 decides how a redelivered broker message is
+          recognized on the way in (consumer inbox). ADR-017 decides how a retried HTTP client request is
+          deduped at the inbound edge (<code>Idempotency-Key</code>). ADR-054 decides what happens when a message that was
+          supposed to arrive never does (a reconciliation sweep). None of them decides the case Store Sales
+          actually runs in production: <strong>an inbound call from a third party we do not control</strong>.</p>
+          <p>Stripe is that caller, and it fits none of the existing shapes. It cannot authenticate as an
+          application user (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/PaymentsController.cs:15-16</code>),
+          so the endpoint has to be anonymous. It does not send an <code>Idempotency-Key</code>, so ADR-017 does not apply.
+          It does not go through the broker, so ADR-021&#39;s inbox never sees it. And it treats the HTTP status
+          code as a <strong>delivery protocol</strong>, not as an application result: a non-2xx response makes Stripe retry
+          the event and, if failures persist, disable the endpoint entirely, which silently stops every payment
+          status update for the whole store.</p>
+          <p>Two production incidents shaped this, and both are recorded in the source. Rejections were logged at
+          <code>Warning</code> for weeks while the configured signing secret did not match the live endpoint, so 100% of
+          deliveries returned 400 and nothing surfaced it (<code>PaymentsController.cs:76-81</code>). Separately, between
+          2026-06-12 and 2026-07-30 a disabled-but-still-present endpoint caused a second endpoint to be created
+          at the same URL with a brand-new signing secret, invalidating the configured one; 507 deliveries failed
+          in the final week alone (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/StripeWebhookRegistrationService.cs:124-131</code>).
+          Both were failures of the <em>ingress contract</em>, not of payment logic.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Treat third-party webhook ingress as its own contract with two halves: <strong>an acceptance-coded endpoint</strong>
+          and <strong>a self-registering, self-provisioning endpoint registration at startup</strong>.</p>
+          <ul>
+          <li><strong>One anonymous, raw-body endpoint.</strong> <code>POST /Payments/webhook</code> is <code>[AllowAnonymous]</code>
+          (<code>PaymentsController.cs:46-47</code>). The body is read straight off <code>HttpContext.Request.Body</code> with S6932
+          suppressed, because signature verification needs the unmodified payload and model binding would
+          destroy it (<code>PaymentsController.cs:52-58</code>); the <code>Stripe-Signature</code> header is read alongside it
+          (<code>:57</code>). The Gateway forwards <code>/Payments/{**catch-all}</code> to Sales over plain HTTP/1.1
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:129</code>), which is why Sales keeps the ADR-012
+          mixed-endpoint profile (<code>MMCA.Store/infra/main.bicep:1207</code>).</li>
+          <li><strong>The status code encodes ACCEPTED, not PROCESSED.</strong> Exactly three error codes return 400, held in a
+          <code>FrozenSet</code> named <code>RejectionCodes</code>: <code>SignatureVerificationFailed</code>, <code>ParseFailed</code> and <code>SecretMissing</code>
+          (<code>PaymentsController.cs:30-35</code>, defined at
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Interfaces/IPaymentService.cs:37,40,43</code>).
+          Everything past acceptance returns 200, <strong>including an order that cannot be found</strong>, because
+          retrying those would fail identically forever (<code>PaymentsController.cs:38-42,70,86,89</code>).</li>
+          <li><strong>Verification and parsing are separate steps, so the three reasons stay distinguishable.</strong>
+          <code>EventUtility.ValidateSignature</code> runs first
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/StripePaymentService.cs:329</code>),
+          then <code>EventUtility.ParseEvent</code> with <code>throwOnApiVersionMismatch: false</code>, so an account whose API
+          version rolled ahead of the pinned library does not reject a correctly signed event (<code>:345-348</code>).
+          A missing secret is named as its own deployment gap rather than reported as a bad signature
+          (<code>:314-325</code>). One combined call previously reported all three as a signature failure (<code>:298-307</code>).</li>
+          <li><strong>A rejection logs at <code>Critical</code>, everything else at <code>Warning</code>.</strong> <code>LogWebhookRejected</code> is a
+          source-generated <code>Critical</code> message that names the code, the message, and the operational
+          consequence (<code>PaymentsController.cs:82,93-97</code>). <code>Critical</code> is deliberate: it clears the production
+          Azure Monitor log floor (<code>Logging__OpenTelemetry__LogLevel__Default=Warning</code>) with room to spare
+          (<code>:80-81</code>). A post-acceptance failure logs <code>Warning</code> and still returns 200 (<code>:86,89</code>).</li>
+          <li><strong>Processing idempotency lives in the handler, not in the transport.</strong> Exactly two event types move
+          an order: <code>checkout.session.completed</code> pays it and <code>checkout.session.expired</code> fails it, while
+          <code>payment_intent.payment_failed</code> is recorded and nothing else
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:16-18,26-28,41-47,65-72</code>).
+          An already-<code>Paid</code> order short-circuits to success (<code>:84-87</code>), as does an already-failed or cancelled
+          one (<code>:115-118</code>), and contradictory transitions log an anomaly instead of erroring (<code>:90-94,121-125,156-159</code>).
+          Unhandled event types return success (<code>:46</code>). The command is deliberately <strong>not</strong> <code>ITransactional</code>
+          (<code>ProcessPaymentWebhookCommand.cs:8-17</code>).</li>
+          <li><strong>The provider-side endpoint registers itself at startup.</strong> <code>StripeWebhookRegistrationService</code> is a
+          <code>BackgroundService</code> (<code>StripeWebhookRegistrationService.cs:27-31</code>) registered by
+          <code>AddModuleSalesInfrastructure</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/DependencyInjection.cs:33</code>). It
+          skips entirely when <code>WebhookBaseUrl</code> is empty, which is the local-development path where the Stripe
+          CLI forwards instead (<code>:54-58</code>), and skips with a <code>Warning</code> when <code>SecretKey</code> is empty (<code>:60-64</code>).
+          The expected URL is <code>WebhookBaseUrl</code> plus the constant <code>/Payments/webhook</code> (<code>:33,84</code>); production
+          injects <code>Stripe__WebhookBaseUrl</code> as the Gateway FQDN (<code>main.bicep:1296</code>), so the registered endpoint
+          is the Gateway route above. It subscribes exactly three event types (<code>:42-47</code>), and warns when an
+          existing endpoint is missing any of them (<code>:224-234</code>).</li>
+          <li><strong>It deletes only endpoints it created itself.</strong> Every auto-created endpoint carries the description
+          prefix <code>Auto-registered by MMCA</code> (<code>:40,143-148</code>). <code>IsStaleAutoRegistered</code> returns <code>false</code> for any
+          endpoint without that prefix, so an operator-created endpoint is never touched (<code>:179-185</code>), and
+          <code>true</code> for an auto-registered one whose URL no longer matches or whose status is not <code>enabled</code>
+          (<code>:187-188</code>), which is what collapses the disabled same-URL duplicate that caused the 2026 incident
+          (<code>:164-178</code>). Cleanup is best-effort and per-endpoint isolated: a failed delete is logged and never
+          aborts the others or the reconcile (<code>:91-96,207-221</code>).</li>
+          <li><strong>The signing secret is minted once, held in memory, and announced for an operator to persist.</strong>
+          Stripe returns a signing secret only at creation time (<code>:153</code>), so the created value is written to
+          the singleton <code>StripeWebhookSecretProvider</code> (<code>:156</code>), a volatile-backed holder
+          (<code>StripeWebhookSecretProvider.cs:17-27</code>) that <code>StripePaymentService</code> prefers over the configured
+          value on every incoming event (<code>StripePaymentService.cs:310-312</code>). The event is announced at
+          <code>Critical</code> (<code>StripeWebhookRegistrationService.cs:158,256-257</code>) and the raw secret is written to
+          stderr for the operator to copy into <code>Stripe:WebhookSecret</code> (<code>:159-161</code>). When a secret is <em>already</em>
+          configured and a new endpoint still has to be created, a second <code>Critical</code> states that the
+          configured value is now provably stale (<code>:132-135,268</code>).</li>
+          <li><strong>An existing enabled endpoint plus a configured secret is trusted without validation.</strong> That path
+          only verifies event types and returns (<code>:102-110</code>), and its log deliberately does not say &quot;verified&quot;,
+          because Stripe never re-reveals a secret and a stale one is undetectable here: it surfaces only as
+          the <code>Critical</code> rejection on the first delivery (<code>:246-251</code>). When the endpoint exists but no secret
+          is known anywhere, the endpoint is deleted and recreated to obtain a fresh one (<code>:112-119</code>).</li>
+          </ul>
+          <p>Adoption is <strong>Store Sales only</strong>. It is the workspace&#39;s single inbound third-party webhook, and nothing
+          in this decision has been generalized into MMCA.Common; recording a single-application pattern as an ADR
+          follows the ADR-072 precedent (a decision that is ADC-only). The two halves are covered by unit tests
+          that pin the contract rather than the implementation: the controller&#39;s accept-versus-reject mapping in
+          three cases (<code>MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.API.Tests/Controllers/PaymentsControllerTests.cs:32,41,50</code>),
+          and the deletion predicate in five, including the operator-created endpoint that must never be stale
+          (<code>MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.Infrastructure.Tests/Services/StripeWebhookRegistrationServiceTests.cs:137,145,159,169,182</code>).</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The caller&#39;s protocol decides the response vocabulary.</strong> Stripe reads a status code as &quot;keep
+          retrying&quot; or &quot;stop&quot;, not as &quot;this succeeded&quot; or &quot;this failed&quot;. Mapping every application failure to
+          400 would be locally honest and globally catastrophic: it costs the endpoint, and with it every
+          payment status update. Encoding acceptance is the only mapping that keeps the caller&#39;s retry machine
+          pointed at the cases a retry can actually fix.</li>
+          <li><strong>Three named rejection reasons beat one.</strong> A tampered payload, an unparseable body and a missing
+          signing secret need three different responses from a human, and the collapsed version sent on-call
+          after the wrong thing (<code>StripePaymentService.cs:298-307</code>).</li>
+          <li><strong><code>Critical</code> is the level this environment can see.</strong> The production log floor is <code>Warning</code>
+          (<code>PaymentsController.cs:80-81</code>), and a total payment-status outage that logs at <code>Warning</code> is
+          indistinguishable from noise: that is exactly how it went unnoticed for weeks.</li>
+          <li><strong>Self-registration removes a manual step the platform keeps invalidating.</strong> The public URL is a
+          Container Apps default domain, so it changes on a region move; a hand-registered endpoint drifts and
+          a dead one keeps firing failing-webhook alerts (<code>StripeWebhookRegistrationService.cs:91-94</code>).</li>
+          <li><strong>Marker-scoped deletion is what makes automated deletion acceptable.</strong> The service is allowed to
+          delete only endpoints it can prove it created, so the worst case of a buggy predicate is a
+          re-registration, never the removal of an operator&#39;s endpoint (<code>:176-177,181-185</code>).</li>
+          <li><strong>The runtime secret provider keeps the very first boot working.</strong> Without it, an auto-created
+          endpoint would reject every delivery until a human copied the secret into configuration and
+          redeployed (<code>:153-156</code>, <code>StripePaymentService.cs:310-312</code>).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>A startup service that writes to a live third-party account.</strong> Booting a Sales replica creates and
+          deletes webhook endpoints in the real Stripe account (<code>StripeWebhookRegistrationService.cs:117-118,150-151,212-213</code>).
+          The blast radius is bounded by the description marker and by the <code>WebhookBaseUrl</code>/<code>SecretKey</code> guards
+          (<code>:54-64</code>), but this is still automated mutation of an external system at boot, and a
+          misconfigured <code>WebhookBaseUrl</code> registers a wrong endpoint rather than failing.</li>
+          <li><strong>A signing secret at <code>Critical</code> and on stderr is an operational hazard.</strong> It puts live credential
+          material into the log pipeline (<code>:158-161</code>). That is the deliberate price of zero-touch provisioning:
+          the alternative is a first boot where the endpoint exists and every delivery is rejected. It also
+          means the secret must be rotated in configuration promptly, and log retention is part of the
+          exposure.</li>
+          <li><strong>200 hides processing failures from Stripe by design.</strong> A post-acceptance failure is invisible in
+          the Stripe dashboard&#39;s delivery view, so it has to surface through our own telemetry: the <code>Warning</code>
+          log (<code>PaymentsController.cs:86</code>) and, for an order left stuck because no webhook ever completed the
+          work, the ADR-054 reconciliation sweep (<code>PaymentReconciliationService</code>,
+          <code>DependencyInjection.cs:34-36</code>).</li>
+          <li><strong>A configured secret is trusted, never validated.</strong> A stale <code>Stripe:WebhookSecret</code> cannot be
+          detected at startup and is discovered only on the first rejected delivery (<code>:246-251</code>). This is a
+          provider constraint (the secret is never re-revealed), not a choice, but it means startup can log a
+          reassuring &quot;endpoint found&quot; line while the deployment is already broken.</li>
+          <li><strong>A restart before the operator persists the secret loops.</strong> The no-secret path deletes and recreates
+          the endpoint to mint a fresh one (<code>:112-119,156</code>), so every such restart produces a new secret and
+          supersedes the previous one; the loop only ends when a human saves a value into configuration.</li>
+          <li><strong>The endpoint is anonymous and internet-reachable.</strong> Signature verification is the only
+          authentication (<code>StripePaymentService.cs:314-341</code>); an unsigned or wrongly signed request reaches
+          the handler pipeline before it is rejected, and each rejection emits a <code>Critical</code> log, so a hostile
+          caller can generate <code>Critical</code> volume.</li>
+          <li><strong>Single-module adoption.</strong> None of this lives in MMCA.Common, so a second inbound webhook (in this
+          or another repo) starts from a copy of <code>PaymentsController</code> and <code>StripeWebhookRegistrationService</code>
+          rather than from a framework contract.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-003 (outbound at-least-once delivery, the other end of the same family), ADR-021 (broker-side
+          inbound dedup, which never sees a webhook), ADR-017 (client-supplied idempotency keys, which a third
+          party does not send), ADR-054 (the reconciliation backstop for the order a webhook never completed),
+          ADR-012 (the Sales mixed-endpoint profile that keeps an HTTP/1.1 surface for this webhook), ADR-070
+          (the fail-fast configuration contract this startup path deliberately does not join: missing Stripe
+          configuration logs and skips instead of refusing to start), ADR-072 (precedent for recording a
+          single-application decision).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/084-stripe-webhook-ingress.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

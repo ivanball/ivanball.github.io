@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -194,7 +200,12 @@
           qualification: the ADC file it pointed at no longer exists, so neither interface has any reference
           outside its own declaration file; replaced the ADC concrete-specification example, which named a
           class that does not exist, with the specifications ADC actually ships; refreshed the
-          <code>EFReadRepository</code>, <code>SessionsController</code>, and <code>IEntityQueryService</code> anchors).</p>
+          <code>EFReadRepository</code>, <code>SessionsController</code>, and <code>IEntityQueryService</code> anchors). Revised 2026-08-14
+          (re-anchored every <code>IRepository.cs</code>, <code>EFReadRepository.cs</code>, <code>DependencyInjection.cs</code>, and
+          <code>stage.ps1</code> citation after a named-query-filter remarks block shifted <code>IRepository.cs</code> down; narrowed
+          &quot;every read&quot; on <code>IEntityQueryService</code> to the four reads that actually take a specification, and
+          narrowed the &quot;no reference&quot; claim about <code>IEntityReader</code> / <code>IEntityQuerier</code> to C# code, since the
+          Helpdesk staging-script comments named in the same paragraph are references of a kind).</p>
           <h2 id="context">Context</h2>
           <p>Every read an application handler performs has to come from somewhere, and the shape of that contract
           decides whether the module can still be lifted into its own service later (ADR-007, ADR-008). The
@@ -222,17 +233,17 @@
           keeps the raw <code>IQueryable</code> surfaces out of Application code.</p>
           <ul>
           <li><strong>The read contract is split by responsibility.</strong> <code>IEntityReader&lt;TEntity, TIdentifierType&gt;</code>
-          (<code>IRepository.cs:14</code>) carries single-entity lookups: <code>GetByIdAsync</code> (<code>IRepository.cs:19</code>, <code>:24</code>),
-          <code>GetByIdsAsync</code> (<code>:37</code>), and the two <code>ExistsAsync</code> overloads (<code>:45</code>, <code>:51</code>).
-          <code>IEntityQuerier&lt;TEntity, TIdentifierType&gt;</code> (<code>:64</code>) carries collection work: <code>GetAllAsync</code> (<code>:69</code>),
-          <code>GetProjectedAsync</code> (<code>:80</code>), <code>GetAllForLookupAsync</code> (<code>:87</code>), and <code>CountAsync</code> (<code>:94</code>, <code>:97</code>).
-          <code>IReadRepository</code> composes exactly those two (<code>:110-111</code>), and <code>IRepository</code> composes read plus
-          write (<code>:238</code>). The interface documentation directs new handlers at the focused sub-interfaces and
-          leaves existing code on the composite (<code>:105-106</code>).</li>
+          (<code>IRepository.cs:19</code>) carries single-entity lookups: <code>GetByIdAsync</code> (<code>IRepository.cs:24</code>, <code>:29</code>),
+          <code>GetByIdsAsync</code> (<code>:46</code>), and the two <code>ExistsAsync</code> overloads (<code>:54</code>, <code>:60</code>).
+          <code>IEntityQuerier&lt;TEntity, TIdentifierType&gt;</code> (<code>:78</code>) carries collection work: <code>GetAllAsync</code> (<code>:83</code>),
+          <code>GetProjectedAsync</code> (<code>:103</code>), <code>GetAllForLookupAsync</code> (<code>:111</code>), and <code>CountAsync</code> (<code>:118</code>, <code>:121</code>).
+          <code>IReadRepository</code> composes exactly those two (<code>:134-135</code>), and <code>IRepository</code> composes read plus
+          write (<code>:262</code>). The interface documentation directs new handlers at the focused sub-interfaces and
+          leaves existing code on the composite (<code>:129-130</code>).</li>
           <li><strong>The raw queryables live on the composite only.</strong> <code>Table</code>, <code>TableNoTracking</code>,
           <code>TableNoTrackingSingleQuery</code>, and <code>TableNoTrackingSplitQuery</code> are declared on <code>IReadRepository</code>
-          (<code>IRepository.cs:116</code>, <code>:119</code>, <code>:122</code>, <code>:125</code>) and implemented as EF <code>DbSet</code> expressions
-          (<code>EFReadRepository.cs:250</code>, <code>:253</code>, <code>:256</code>, <code>:259</code>). They are deliberately absent from
+          (<code>IRepository.cs:140</code>, <code>:143</code>, <code>:146</code>, <code>:149</code>) and implemented as EF <code>DbSet</code> expressions
+          (<code>EFReadRepository.cs:262</code>, <code>:265</code>, <code>:268</code>, <code>:271</code>). They are deliberately absent from
           <code>IEntityReader</code> and <code>IEntityQuerier</code>, so a handler that declares the narrow dependency cannot reach
           a queryable at all.</li>
           <li><strong>Application code must not touch those queryables, and a fitness rule fails the build.</strong>
@@ -270,9 +281,12 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:96</code>,
           <code>:118</code>, rationale at <code>:91-93</code>).</li>
           <li><strong>The specification enters the same query pipeline, not a parallel one.</strong> <code>IEntityQueryService</code>
-          takes an optional <code>Specification&lt;TEntity, TIdentifierType&gt;</code> on every read
+          takes an optional <code>Specification&lt;TEntity, TIdentifierType&gt;</code> on every DTO or entity read: the two
+          <code>GetAllAsync</code> overloads, <code>GetEntityByIdAsync</code>, and <code>GetByIdAsync</code>
           (<code>Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:40</code>, <code>:63</code>, <code>:110</code>,
-          <code>:131</code>), and <code>EntityQueryService</code> passes its <code>Criteria</code> into the query parameters
+          <code>:131</code>). The other two reads on the interface take a raw predicate rather than a specification,
+          <code>GetAllForLookupAsync</code> (<code>:87-91</code>) and <code>ExistsAsync</code> (<code>:143-146</code>).
+          <code>EntityQueryService</code> passes the specification&#39;s <code>Criteria</code> into the query parameters
           (<code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:427</code>) alongside the dynamic
           filters, sorting, and paging. Cross-source predicates are produced the same way:
           <code>CrossSourceSpecification.BuildAsync</code>
@@ -302,15 +316,17 @@
           out only the composites (<code>IRepository</code> at
           <code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IUnitOfWork.cs:19</code>, <code>IReadRepository</code>
           at <code>:29</code>), and the container registers only the open generic <code>IRepository&lt;,&gt;</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:100</code>). <code>IEntityReader</code> and
-          <code>IEntityQuerier</code> have no reference of any kind outside their own declaration file across all four
-          repositories: not a type, not a parameter, and not a doc comment (<code>IRepository.cs:14</code>, <code>:64</code>). The
-          only other occurrences of either name in the workspace describe the contract rather than depend on
-          it: two comments in MMCA.Helpdesk&#39;s template staging script
-          (<code>MMCA.Helpdesk/build/templates/stage.ps1:250</code>, <code>:958</code>) noting that <code>IEntityReader.GetByIdAsync</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:107</code>). <code>IEntityReader</code> and
+          <code>IEntityQuerier</code> have no reference in C# code outside their own declaration file across all four
+          repositories: not a type, not a parameter, and not a doc comment. The only C# occurrences of either
+          name in the workspace are inside that file, the two declarations (<code>IRepository.cs:19</code>, <code>:78</code>) and
+          <code>IReadRepository</code> naming them in its own doc comment and base list (<code>:127-128</code>, <code>:135</code>). The only
+          other occurrences in the workspace describe the contract rather than depend on it: two comments in
+          MMCA.Helpdesk&#39;s template staging script
+          (<code>MMCA.Helpdesk/build/templates/stage.ps1:250</code>, <code>:959</code>) noting that <code>IEntityReader.GetByIdAsync</code>
           declares <code>includes</code> as a required parameter, which is why the generated conditional passes an empty
           list instead of omitting the argument. So the ISP split is today the declared target that new
-          handlers are pointed at (<code>IRepository.cs:105-106</code>), not the dependency shape any handler currently
+          handlers are pointed at (<code>IRepository.cs:129-130</code>), not the dependency shape any handler currently
           has.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>

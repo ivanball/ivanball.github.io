@@ -1,7 +1,7 @@
 # ADR-049: Library-Scoped ConfigureAwait(false) Policy (CA2007)
 
 ## Status
-Accepted (2026-07-20).
+Accepted (2026-07-20; measurements re-anchored 2026-08-07 and 2026-08-14).
 
 ## Context
 MMCA.Common ships as NuGet packages consumed by host applications, not as an application itself.
@@ -46,9 +46,9 @@ application code do not.
 - **Standard .NET library guidance, applied at the boundary where it holds.** The rule is scoped to
   exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
   360+ sites of pure noise (measured across Store/ADC before this decision, and the scale has only
-  grown: a raw `await` scan on 2026-08-07 counts 593 occurrences in `MMCA.Store/Source` and 1,175 in
-  `MMCA.ADC/Source`, 1,768 combined, which is the upper bound on the CA2007 sites the rule would open
-  there).
+  grown: a raw `\bawait\b` scan on 2026-08-14 counts 616 occurrences in `MMCA.Store/Source` and 1,380
+  in `MMCA.ADC/Source`, 1,996 combined, which is the upper bound on the CA2007 sites the rule would
+  open there).
 - **Mechanical, with the enforcement and the remediation at different levels.** The build gate is the
   enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
   review effort. The remediation is a convention rather than an artifact: `dotnet format analyzers
@@ -57,8 +57,8 @@ application code do not.
 
 ## Trade-offs
 - **Visual noise in framework source.** Every await in `Source/` (except UI packages) carries
-  `.ConfigureAwait(false)` (324 sites at adoption; 629 gated sites as of the 2026-08-07 snapshot, out
-  of 719 across `Source/` once the exempt UI packages are counted back in). The gate makes it uniform,
+  `.ConfigureAwait(false)` (324 sites at adoption; 693 gated sites as of the 2026-08-14 snapshot, out
+  of 786 across `Source/` once the exempt UI packages are counted back in). The gate makes it uniform,
   so the noise is consistent rather than sporadic.
 - **A per-repo delta in an otherwise shared analyzer baseline.** The workspace keeps one
   byte-identical `.editorconfig` baseline across the four repos; this policy lives in the marked
@@ -107,3 +107,32 @@ An audit against the code. The policy did not change; three statements about it 
    by any repo artifact: nothing in the repo invokes `dotnet format analyzers --diagnostics CA2007`,
    so the Rationale now presents it as guidance for a developer who trips the gate, not as tooling
    the build or CI runs.
+
+## Revision (2026-08-14)
+A re-measurement only. The policy, the gate and the exemption are unchanged; the counts the document
+quotes were a week old and had moved by roughly 9%.
+
+1. **Framework site counts, measured 2026-08-14.** `MMCA.Common/Source/**/*.cs` now holds 786
+   `ConfigureAwait(false)` occurrences across 158 files, of which 93 sit inside the exempt UI
+   packages (`MMCA.Common.UI` 49 across 15 files, `MMCA.Common.UI.Maui` 42 across 16 files,
+   `MMCA.Common.UI.Web` 2 in 1 file), leaving 693 under the gate. The 2026-08-07 figures the previous
+   revision recorded (719 / 147 files, 90 exempt, 629 gated) stay in that revision as the history of
+   that measurement; the Trade-offs entry now carries today's numbers. "324 sites at adoption"
+   remains the 2026-07-20 snapshot and is unchanged.
+2. **Consumer-scale upper bound, measured 2026-08-14.** A raw `\bawait\b` scan gives 616 occurrences
+   across 118 files in `MMCA.Store/Source/**/*.cs` and 1,380 across 259 files in
+   `MMCA.ADC/Source/**/*.cs`, 1,996 combined, up from 593 / 1,175 on 2026-08-07 (ADC accounts for
+   most of the growth, which is the conference feature work shipped that week). Raw `await` still
+   overcounts CA2007 sites, so this is an upper bound and it points the same way the original "360+"
+   phrasing did: only harder. The Rationale now names the pattern (`\bawait\b`) so the figure is
+   reproducible rather than method-dependent.
+3. **Everything else re-verified and unchanged.** The `[Source/**.cs]` gate at `warning`
+   (`MMCA.Common/.editorconfig:828-829`) with the `[Source/Presentation/MMCA.Common.UI*/**.cs]`
+   exemption at `none` (`:831-832`), the three packaged `MMCA.Common.UI*` projects (including
+   `<PackageId>MMCA.Common.UI.Web</PackageId>` at
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/MMCA.Common.UI.Web.csproj:3` and
+   `ServerTokenStorageService` at
+   `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:17`),
+   `TreatWarningsAsErrors` (`MMCA.Common/Directory.Build.props:7`) with
+   `CodeAnalysisTreatWarningsAsErrors` at `:13` and CA2007 in no `NoWarn` list, and the absence of any
+   repo artifact invoking `dotnet format analyzers --diagnostics CA2007` all still hold as written.

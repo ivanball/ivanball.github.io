@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html" aria-current="page">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -200,8 +206,8 @@
           <p>Adopting it is not a drop-in replacement, because ADR-026 also records a production failure that
           constrains the design. <code>ICacheService.IncrementAsync</code> is a read-modify-write rather than Redis <code>INCR</code>
           because of a storage-format mismatch documented at the implementation
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:156-174</code>, override
-          at <code>:175-181</code>): <code>INCR</code> writes a Redis string while <code>StackExchangeRedisCache</code> stores every entry as a Redis
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:107-126</code>, override
+          at <code>:127</code>): <code>INCR</code> writes a Redis string while <code>StackExchangeRedisCache</code> stores every entry as a Redis
           hash, so an <code>INCR</code>-written counter answers <code>WRONGTYPE</code> on the next read and surfaces as a 500 on the
           endpoint that owns the counter. A second cache implementation writing a different payload shape into the
           same keys is the same failure with a different author, and a rolling deploy guarantees both writers are

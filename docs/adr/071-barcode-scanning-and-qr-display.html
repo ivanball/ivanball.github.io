@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -187,7 +193,9 @@
           <h1 id="adr-071-device-capability-pattern-for-barcode-scanning-and-qr-display">ADR-071: Device Capability Pattern for Barcode Scanning and QR Display</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-12). Amended 2026-08-13: the composition-time string trade-off below was resolved
-          in v1.147.0 by a deferred-resolution overload; see the updated trade-off entry.</p>
+          in v1.147.0 by a deferred-resolution overload; see the updated trade-off entry. Amended 2026-08-14:
+          source citations re-anchored, and the registration path corrected (the string overload delegates to
+          the delegate overload, which is where the ZXing and singleton registrations happen).</p>
           <h2 id="context">Context</h2>
           <p>ADC&#39;s badge check-in feature (<a href="072-qr-badge-check-in-and-points.html">ADR-072</a>) needs two things that
           look like one thing: an attendee&#39;s device has to <strong>show</strong> a QR code, and an organizer&#39;s device has to
@@ -236,28 +244,30 @@
           <li><strong>The native implementation is opt-in and deliberately NOT folded into <code>UseMauiDeviceCapabilities</code>.</strong>
           A head asks for the camera by name:
           <code>UseCommonBarcodeScanner(string cancelText = &quot;Cancel&quot;, string cameraDescription = &quot;Scan a code&quot;)</code>
-          on <code>MauiAppBuilder</code> (<code>MMCA.Common.UI.Maui/HostingDependencyInjection.cs:58-66</code>), which calls ZXing&#39;s
-          <code>UseBarcodeReader()</code> and then plain-<code>AddSingleton</code>s <code>MauiBarcodeScannerService</code> over the TryAdd default.
+          on <code>MauiAppBuilder</code> (<code>MMCA.Common.UI.Maui/HostingDependencyInjection.cs:67-70</code>), which delegates to the
+          <code>Func&lt;string&gt;</code> overload (<code>:92-103</code>); that overload is where ZXing&#39;s <code>UseBarcodeReader()</code> (<code>:99</code>) runs and
+          where <code>MauiBarcodeScannerService</code> is plain-<code>AddSingleton</code>ed over the TryAdd default (<code>:100-101</code>).
           <code>UseMauiDeviceCapabilities</code> (<code>:29-42</code>) does not call it, and says why (<code>:47-49</code>): a head that never
           scans should ship neither the camera handler nor a camera permission declaration.</li>
           <li><strong>The scan is a modal page with exactly one resolution.</strong> <code>MauiBarcodeScannerService</code>
-          (<code>Capabilities/MauiBarcodeScannerService.cs:19</code>) marshals to the main thread, pushes a
-          <code>BarcodeScanPage</code> modally and pops it in a <code>finally</code> (<code>:53-78</code>). The page holds a
+          (<code>Capabilities/MauiBarcodeScannerService.cs:24</code>) marshals to the main thread, then inside
+          <code>ScanOnMainThreadAsync</code> (<code>:94-119</code>) pushes a <code>BarcodeScanPage</code> modally (<code>:109</code>) and pops it in a
+          <code>finally</code> (<code>:115-118</code>). The page holds a
           <code>TaskCompletionSource&lt;string?&gt;</code> (<code>Capabilities/BarcodeScanPage.cs:23-24</code>) that four paths can complete
           and only the first wins: a decode, the cancel button, the hardware back gesture, and
           <code>OnDisappearing</code>; the caller&#39;s <code>CancellationToken</code> is bridged to the same <code>Cancel()</code>
-          (<code>MauiBarcodeScannerService.cs:71</code>). Only 2D formats are read (<code>BarcodeScanPage.cs:36</code>), because 1D
+          (<code>MauiBarcodeScannerService.cs:112</code>). Only 2D formats are read (<code>BarcodeScanPage.cs:36</code>), because 1D
           symbologies multiply false positives on a badge screen.</li>
           <li><strong>Permission stays with the head, not the framework.</strong> No framework code calls
           <code>Permissions.RequestAsync&lt;Permissions.Camera&gt;</code>. An undeclared or denied camera produces a preview that
           never decodes and is cancelled out of, which the contract already renders as <code>null</code>
           (<code>MauiBarcodeScannerService.cs:7-11</code>), so the degradation path and the cancel path are the same path.</li>
-          <li><strong>Supported means Android or iOS.</strong> <code>IsSupported</code> gates on <code>DeviceInfo.Current.Platform</code> (<code>:27-29</code>);
+          <li><strong>Supported means Android or iOS.</strong> <code>IsSupported</code> gates on <code>DeviceInfo.Current.Platform</code> (<code>:66-68</code>);
           Windows and Mac Catalyst heads keep the null behavior even after opting in.</li>
           </ul>
           <p>Packaging follows ADR-042 exactly: <code>QRCoder</code> 1.8.0 (MIT) is a <code>MMCA.Common.UI</code> dependency and
           <code>ZXing.Net.Maui.Controls</code> 0.10.3 (MIT) a <code>MMCA.Common.UI.Maui</code> one, both pinned in
-          <code>MMCA.Common/Directory.Packages.props</code> (<code>:101</code>, <code>:124</code>), and the MAUI package keeps its
+          <code>MMCA.Common/Directory.Packages.props</code> (<code>:128</code>, <code>:151</code>), and the MAUI package keeps its
           windows-job build and pack.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>

@@ -1,7 +1,9 @@
 # ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate
 
 ## Status
-Accepted (2026-08-01).
+Accepted (2026-08-01). Revised 2026-08-14: refreshed the `E2ETestBase` helper line anchors (explanatory
+comments were added above `ScanGridAsync`), the two consumer suite scan counts (ADC now 31, Store now 23),
+and the MMCA.Helpdesk pin location; no decision changed.
 
 ## Context
 Accessibility was documented before it was enforced. The narrative guide
@@ -46,9 +48,9 @@ the package's own workflow bases, and wire it as a required merge check and a de
   `UserRegistrationTestsBase.cs:91`, and `ProfileManagementTestsBase.cs:180` each call the assert with
   `AxeOptions.Wcag21Aa`.
 - **Consumer page scans go through two helpers that make strictness explicit.** On
-  `.../Testing.E2E/Infrastructure/E2ETestBase.cs`, `ScanAsync()` (`:281`) waits for any loading bar to
-  clear and asserts the strict options (`:284`); `ScanGridAsync()` (`:271`) additionally waits for a
-  seeded data row before scanning and asserts with the one recorded exception (`:276`). Which helper a
+  `.../Testing.E2E/Infrastructure/E2ETestBase.cs`, `ScanAsync()` (`:293`) waits for any loading bar to
+  clear and asserts the strict options (`:296`); `ScanGridAsync()` (`:283`) additionally waits for a
+  seeded data row before scanning and asserts with the one recorded exception (`:288`). Which helper a
   page uses is the declaration of which rule set applies to it.
 - **Exactly one recorded exception exists, and it is a value, not a switch.**
   `AxeOptions.Wcag21AaExceptMudPagerCombobox` (`AxeOptions.cs:35`) carries the same four WCAG tags
@@ -88,11 +90,11 @@ all three Identity bases (`Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/Use
 `UserRegistrationTests.cs:5`); its `ProfileManagementTests` derives `E2ETestBase` directly
 (`ProfileManagementTests.cs:8`) because the ADC profile page supports only password change and account
 deletion, so it does not inherit the base's profile scan. Beyond the Identity bases each app carries a
-dedicated suite: ADC's `Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17` holds 20 page
-scans (9 through `ScanGridAsync`, 11 strict) and Store's
-`Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17` holds 22 (6 grid, 16 strict).
+dedicated suite: ADC's `Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17` holds 31 page
+scans (11 through `ScanGridAsync`, 20 strict) and Store's
+`Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17` holds 23 (6 grid, 17 strict).
 **MMCA.Helpdesk adopts none of it**: it pins the package version
-(`MMCA.Helpdesk/Directory.Packages.props:121`) but no project references it, and the repo has no E2E
+(`MMCA.Helpdesk/Directory.Packages.props:66`) but no project references it, and the repo has no E2E
 test project at all (`Tests/` holds only `Architecture` and `Modules`), so the seed has no browser
 accessibility gate today.
 
@@ -126,7 +128,7 @@ accessibility gate today.
   (`AxeOptions.cs:12-15`).
 - **One accepted exception, with real blast radius.** `Wcag21AaExceptMudPagerCombobox` disables
   `aria-input-field-name` for the whole page scan, not just for the pager node. A grid page that later
-  gains a genuinely unnamed combobox of its own would pass `ScanGridAsync` (`E2ETestBase.cs:276`). The
+  gains a genuinely unnamed combobox of its own would pass `ScanGridAsync` (`E2ETestBase.cs:288`). The
   exception is documented as "use only where the sole combobox is a pager" (`AxeOptions.cs:33`), which is
   a convention the compiler cannot enforce. It is upstream-owned: it stands until MudBlazor labels the
   pager select.
@@ -139,7 +141,7 @@ accessibility gate today.
   is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
   gate as backstop, but it does mean "deployed" does not always mean "axe ran on this commit".
 - **Consumer breadth is hand-maintained.** Nothing forces a new page into `AccessibilityTests`, so
-  coverage grows by discipline: 20 scans in ADC and 22 in Store today, against far larger page inventories.
+  coverage grows by discipline: 31 scans in ADC and 23 in Store today, against far larger page inventories.
 - **MMCA.Helpdesk has no accessibility gate.** The reference app demonstrates the framework's layers but
   not this contract, so a reader following the seed sees no worked example of adopting the scan.
 
