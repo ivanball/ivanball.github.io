@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-026: Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25).">
+  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25). Amended by ADR-077 (2026-08-13): Tier 1&#39;s substrate gains a third, opt-in…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/026-caching-strategy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-026: Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge">
-  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25).">
+  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25). Amended by ADR-077 (2026-08-13): Tier 1&#39;s substrate gains a third, opt-in…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/026-caching-strategy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-026: Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge">
-  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25).">
+  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25). Amended by ADR-077 (2026-08-13): Tier 1&#39;s substrate gains a third, opt-in…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge","item":"https://ivanball.github.io/docs/adr/026-caching-strategy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 72 ADRs</summary>
+        <summary>All 78 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -172,6 +172,12 @@
         <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
         <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
         <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
           </ol>
         </nav>
       </details>
@@ -180,7 +186,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-026-two-tier-caching-a-swappable-icacheservice-substrate-plus-an-http-output-cache-edge">ADR-026: Two-Tier Caching: a Swappable <code>ICacheService</code> Substrate plus an HTTP Output-Cache Edge</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25).</p>
+          <p>Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25). <strong>Amended by
+          <a href="077-hybridcache-substrate.html">ADR-077</a> (2026-08-13)</strong>: Tier 1&#39;s substrate gains a third, opt-in
+          implementation (<code>HybridCacheService</code>, L1 plus L2) writing under a disjoint <code>hc:</code> keyspace. The default
+          path is unchanged; see the Revision (2026-08-13) below.</p>
           <h2 id="context">Context</h2>
           <p>The framework needs caching in two distinct places. Inside the application pipeline, query results
           are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -203,13 +212,17 @@
           <code>GetAsync</code> / <code>SetAsync</code> / <code>RemoveAsync</code> / <code>RemoveByPrefixAsync</code>. Application code (the ADR-014
           Caching decorators, <code>LoginProtectionService</code>) depends only on this interface, never on a concrete
           cache or on Redis.</li>
-          <li><strong>The backing store is chosen at startup, not in code.</strong> <code>AddCaching()</code>
+          <li><strong>The backing store is chosen at startup, not in code (amended by ADR-077).</strong> <code>AddCaching()</code>
           (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:157</code>, called from <code>AddInfrastructure</code>) registers
           <code>DistributedCacheService</code> when a real <code>IDistributedCache</code> is present (one that is not the in-memory
           <code>MemoryDistributedCache</code>, i.e. Aspire registered Redis), and otherwise <code>MemoryCacheService</code>. The
           monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
           distributed store with no application-code change. This is the same &quot;monolith now, scale or extract
-          later&quot; extension point as <code>InProcessMessageBus</code> vs <code>BrokerMessageBus</code> (ADR-003/006/008).</li>
+          later&quot; extension point as <code>InProcessMessageBus</code> vs <code>BrokerMessageBus</code> (ADR-003/006/008). Since
+          ADR-077 a third implementation exists, <code>HybridCacheService</code> (L1 in-process plus L2 distributed), and
+          it is the one substrate that is <strong>not</strong> auto-selected: a host opts into it explicitly with
+          <code>AddCommonHybridCache(...)</code>, which replaces the registration this call made. With no such call the
+          two-way swap above is exactly what it was.</li>
           <li><strong>Prefix invalidation, implemented per store.</strong> <code>IMemoryCache</code> has no key-enumeration API, so
           <code>MemoryCacheService</code> tracks live keys in a <code>ConcurrentDictionary</code> (kept in sync by a post-eviction
           callback) to support <code>RemoveByPrefixAsync</code>. <code>DistributedCacheService</code> serializes values as UTF-8 JSON
@@ -322,7 +335,10 @@
           substrate), ADR-019 (output caching as the anonymous-traffic lever, and <code>LoginProtectionService</code> is
           another <code>ICacheService</code> consumer), ADR-006 / ADR-008 (the same monolith-to-services swap boundary this
           substrate follows), ADR-040 (amends this ADR&#39;s Tier 2: the adopters&#39; public-read policies cache
-          authenticated, bearer-carrying requests too, not only anonymous traffic).</p>
+          authenticated, bearer-carrying requests too, not only anonymous traffic),
+          <a href="077-hybridcache-substrate.html">ADR-077</a> (amends this ADR&#39;s Tier 1: the opt-in <code>HybridCacheService</code>
+          substrate, the disjoint <code>hc:</code> keyspace that generalizes the <code>WRONGTYPE</code> lesson recorded in the counter
+          trade-off above, and the L1 bypass that keeps <code>IncrementAsync</code> semantics unchanged).</p>
           <h2 id="revision-2026-07-24">Revision (2026-07-24)</h2>
           <p>Three substrate corrections from a code review.</p>
           <ol>
@@ -431,6 +447,26 @@
           preceding revisions treated their predecessors: the anchors it recorded were correct on
           2026-08-01 and have since drifted again.</li>
           </ol>
+          <h2 id="revision-2026-08-13">Revision (2026-08-13)</h2>
+          <p>Tier 1 is amended by <a href="077-hybridcache-substrate.html">ADR-077</a>, which is where the decision and its
+          trade-offs are recorded. The three points that change the reading of this record:</p>
+          <ol>
+          <li><strong>A third substrate, opted into rather than auto-selected.</strong> <code>HybridCacheService</code> (L1 in-process
+          plus L2 distributed, <code>Microsoft.Extensions.Caching.Hybrid</code>) joins <code>MemoryCacheService</code> and
+          <code>DistributedCacheService</code>. <code>AddCaching()</code>&#39;s presence-of-a-real-<code>IDistributedCache</code> swap still
+          decides between the original two; <code>AddCommonHybridCache(...)</code> replaces the result. A host that does
+          not call it gets byte-identical behavior to this record as written.</li>
+          <li><strong>The counter trade-off above is generalized into a keyspace rule.</strong> The <code>WRONGTYPE</code> incident
+          documented in Trade-offs (a Redis <code>INCR</code> string read back by the hash-shaped
+          <code>StackExchangeRedisCache</code> path) is a class of bug, not one occurrence: two serialization formats
+          must never share one keyspace. The hybrid substrate therefore writes under a disjoint
+          <code>{prefix}hc:{key}</code> keyspace, so a rolling deploy cannot produce a cross-format read, and prefix
+          eviction runs both patterns through the migration window. The non-atomic read-modify-write
+          <code>IncrementAsync</code> position is unchanged, and the hybrid implementation bypasses L1 on both legs
+          precisely to keep it unchanged.</li>
+          <li><strong>Nothing in Tier 2 moves.</strong> The output-cache edge, its policies and its Redis-backed store are
+          untouched by ADR-077.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -452,6 +488,7 @@
             <li><a href="#revision-2026-07-28">Revision (2026-07-28)</a></li>
             <li><a href="#revision-2026-08-01">Revision (2026-08-01)</a></li>
             <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
+            <li><a href="#revision-2026-08-13">Revision (2026-08-13)</a></li>
             </ul>
           </nav>
         </aside>

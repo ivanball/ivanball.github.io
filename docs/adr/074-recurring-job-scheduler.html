@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)">
+  <meta property="og:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)">
+  <meta name="twitter:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)","item":"https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 78 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html" aria-current="page">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-074-recurring-job-scheduler-persistent-cron-jobs-on-the-outbox-claim-lease-pattern">ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          and is opt-in: a host calls <code>AddScheduledJobs(configuration)</code> and sets <code>Scheduler:Enabled</code>. Until it does,
+          the framework creates no table and starts no runner.</p>
+          <h2 id="context">Context</h2>
+          <p>The framework had two kinds of background work and neither of them is a schedule.</p>
+          <p><code>OutboxProcessor</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs</code>)
+          is durable, multi-replica safe and event-driven: it runs when there is a row to drain, and its cadence is a
+          consequence of writes, not a calendar. <a href="052-background-job-execution.html">ADR-052</a> is the opposite end: an
+          in-process bounded queue plus a hosted drain, started by a request, lost on restart, scoped to one replica
+          by design. Between them sits work that is neither, and every repo in the workspace had started inventing it
+          locally: purge rows older than N days, reconcile with an external system overnight, recompute a projection
+          before the business day. The available answer was a <code>PeriodicBackgroundService</code> subclass with an interval,
+          which fails on two counts. An interval is not a time of day, so &quot;every 24 hours&quot; drifts with each deploy and
+          lands at whatever hour the last restart happened to be. And an interval-driven hosted service runs on
+          <strong>every</strong> replica, so scaling a service to three instances silently triples a purge.</p>
+          <p><a href="075-audit-trail.html">ADR-075</a> forced the question: its change-history table needs a retention purge, and
+          shipping that as one more bespoke hosted service would have made the framework&#39;s own recurring work a
+          private implementation of a capability it declines to own. The unrecorded decision was whether to adopt a
+          scheduling product (Hangfire or Quartz.NET) or to extend the durable polling loop already in production.</p>
+          <h2 id="decision">Decision</h2>
+          <h3 id="the-scheduler-is-the-outbox-claim-lease-pattern-applied-to-cron-not-hangfire-and-not-quartznet">The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET</h3>
+          <p>A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
+          outbox claims a batch with an <code>ExecuteUpdateAsync</code> that sets <code>LockedUntil</code> and <code>LockToken</code> in one statement
+          (<code>.../Persistence/Outbox/OutboxProcessor.cs:405-406</code>) over a <code>Where</code> that admits only rows whose
+          <code>LockedUntil</code> is null or already in the past (<code>:404</code>), then re-reads the claimed set by <code>LockToken</code> so a
+          partial claim processes only its own rows (<code>:418</code>). A due job is claimed the same way, so two replicas can
+          never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.</p>
+          <p>Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
+          and host, and a licensing posture that varies by storage provider. Quartz.NET would have brought a large
+          configuration surface and a second scheduling model beside the one the outbox already implements. Both add
+          a dependency that every extracted service host (ADR-008) must be reasoned about separately, in a framework
+          whose extraction story is that a module lifts out without acquiring new infrastructure. The missing piece
+          was a cron expression, not a product.</p>
+          <h3 id="cron-parsing-is-the-one-thing-bought-rather-than-built">Cron parsing is the one thing bought rather than built</h3>
+          <p><strong>Cronos</strong> (MIT, zero-dependency) is pinned in <code>Directory.Packages.props</code> and parses every expression.
+          Writing a cron parser in-house is out of scope for this wave, and interval-only schedules are below the bar
+          this record exists to clear.</p>
+          <h3 id="ischeduledjob-is-the-contract-resolved-scoped-per-execution"><code>IScheduledJob</code> is the contract, resolved scoped per execution</h3>
+          <p><code>IScheduledJob</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IScheduledJob.cs</code>) declares
+          <code>Name</code>, <code>CronExpression</code> (a string) and <code>ExecuteAsync(CancellationToken)</code>. Nothing else: a job is a name, a
+          schedule and a body. Jobs are resolved through <code>IServiceScopeFactory</code> in a <strong>fresh scope per execution</strong>,
+          the OutboxProcessor pattern, so a job body gets scoped services (a <code>DbContext</code>, a repository, the
+          correlation context) exactly as a request handler does, and a long-lived runner never captures a scoped
+          dependency.</p>
+          <h3 id="the-job-store-is-one-row-per-job-in-the-default-source-only">The job store is one row per job, in the Default source only</h3>
+          <p><code>ScheduledJobEntry</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobEntry.cs</code>)
+          carries <code>JobName</code> (the primary key), <code>CronExpression</code>, <code>NextRunOn</code>, <code>LastRunOn</code>, <code>LastOutcome</code>,
+          <code>LastDurationMs</code>, <code>LockedUntil</code> and <code>LockToken</code>. It is deliberately <strong>not</strong> an <code>IAuditableEntity</code>: it
+          self-stamps nothing, it is never soft-deleted, and it is excluded from the global query filters applied in
+          <code>ApplicationDbContext.OnModelCreating</code> (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:220</code>). That is
+          the <code>OutboxMessage</code> precedent: infrastructure rows are not domain rows.</p>
+          <p>The table lives in the <strong>Default</strong> source and only there. The outbox exists once per relational database
+          because an outbox row must be written in the same transaction as the aggregate that produced it
+          (<a href="006-database-per-service.html">ADR-006</a>). A schedule has no such tie: a job belongs to the host that
+          registered it, not to a database, and a per-source job table would give a four-database host four copies of
+          one schedule and four claims for one occurrence.</p>
+          <h3 id="scheduledjobrunner-is-a-backgroundservice-with-a-smart-wait-not-a-periodicbackgroundservice"><code>ScheduledJobRunner</code> is a <code>BackgroundService</code> with a smart wait, not a <code>PeriodicBackgroundService</code></h3>
+          <p><code>ScheduledJobRunner</code> (<code>.../Infrastructure/Scheduling/ScheduledJobRunner.cs</code>) subclasses <code>BackgroundService</code>
+          directly, because a fixed period is the wrong shape: after each cycle it waits until the <strong>earliest</strong>
+          <code>NextRunOn</code> across the store, through <code>TimeProvider</code>, capped by the polling interval. That mirrors the
+          outbox smart wait, and it is what keeps a scheduler with one nightly job from waking 2,880 times a day to
+          find nothing due. The cycle is: claim the due jobs with the <code>ExecuteUpdateAsync</code> lease, execute each in a
+          fresh scope, record the outcome and duration on the row, compute the next occurrence with Cronos in UTC,
+          release the lease.</p>
+          <h3 id="a-missed-schedule-runs-once-and-then-advances">A missed schedule runs once and then advances</h3>
+          <p>A host that was down for six hours does not fire six catch-up runs. When the runner finds a job whose
+          <code>NextRunOn</code> is in the past it executes that job exactly once, then advances <code>NextRunOn</code> to the next
+          occurrence <strong>after now</strong>, discarding the occurrences that elapsed while the host was gone. A retention purge
+          that missed four nights wants one purge, not four identical passes over a table it already cleaned, and a
+          reconciliation sweep wants current state rather than four replays of it. The cost is in the Trade-offs: a
+          job that must run for every window is not served by this scheduler.</p>
+          <h3 id="settings-metrics-and-registration">Settings, metrics and registration</h3>
+          <p><code>SchedulerSettings</code> binds the <code>Scheduler</code> section with <code>Enabled</code>, <code>PollingIntervalSeconds</code> (default 30) and
+          <code>LeaseSeconds</code> (default 300), through the mandatory
+          <code>AddOptions&lt;T&gt;().Bind(...).ValidateDataAnnotations().ValidateOnStart()</code> chain of
+          <a href="070-fail-fast-configuration-contract.html">ADR-070</a>, so a malformed scheduler section stops the host at boot
+          rather than at 03:00.</p>
+          <p><code>SchedulerMetrics</code> (<code>.../Infrastructure/Scheduling/SchedulerMetrics.cs</code>) mirrors <code>OutboxMetrics</code>
+          (<code>.../Persistence/Outbox/OutboxMetrics.cs:15</code>) one for one: counters for runs and failures, histograms for
+          duration and for lag (actual start minus <code>NextRunOn</code>), under the conventions of
+          <a href="041-observability-and-telemetry.html">ADR-041</a>.</p>
+          <p>Registration is two calls. <code>AddScheduledJobs(configuration)</code> binds the settings and registers the runner;
+          <code>AddScheduledJob&lt;TJob&gt;(cron?)</code> adds one job from any module, using the accumulate-across-modules idiom that
+          <code>AddPermissions</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:54</code>)
+          and its <code>EnsurePermissionRegistry</code> helper (<code>:68</code>) already establish. The table is created only when the
+          settings flag is on, the same gating <a href="075-audit-trail.html">ADR-075</a> uses. At startup the registered jobs are
+          <strong>upserted by <code>JobName</code></strong>, and a cron supplied through configuration overrides the code default, so an
+          operator can retime a shipped job without a release.</p>
+          <h3 id="design-time-gets-the-same-flag">Design-time gets the same flag</h3>
+          <p><code>DesignTimeDbContextHelper</code> and <code>DesignTimeDbContextOptions</code> carry the matching enable flag, or the
+          design-time model diverges from the runtime model and <code>dotnet ef</code> breaks for every consumer.</p>
+          <h3 id="the-framework-dogfoods-it">The framework dogfoods it</h3>
+          <p><code>AuditTrailCleanupJob</code>, the retention purge of <a href="075-audit-trail.html">ADR-075</a>, ships as the framework&#39;s first
+          <code>IScheduledJob</code>, so the contract is exercised by the package that defines it before any application depends
+          on it. In the consumer sweep, ADC, Store and Helpdesk all call <code>AddScheduledJobs</code>, each adding one migration
+          on its Default source.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The lease is already proven under production load.</strong> Multi-replica correctness for recurring work is the
+          hard part, and it was solved once for the outbox: an atomic claim update, a token identifying the
+          claimant&#39;s rows, and an expiry that returns a dead replica&#39;s work with no operator involvement. Reusing it
+          means the scheduler&#39;s riskiest property was verified before it existed.</li>
+          <li><strong>A product dependency is paid for by every host, forever.</strong> Hangfire and Quartz.NET are competent, and
+          they are also a schema, a configuration model and an upgrade obligation that each extracted service host
+          inherits. Adding a scheduling server to that list would have cost more than the code it replaced.</li>
+          <li><strong>A cron string is the interface operators already know.</strong> It is portable, it is diffable in configuration,
+          and it expresses &quot;03:15 every day&quot; and &quot;every 15 minutes on weekdays&quot; in one grammar. An interval
+          expresses neither.</li>
+          <li><strong>Persistence is what makes it a schedule instead of a timer.</strong> <code>NextRunOn</code> and <code>LastRunOn</code> survive a
+          restart, so a deploy at 02:59 does not skip the 03:00 job and does not re-run it.</li>
+          <li><strong>Cronos is a parser, not a framework.</strong> MIT, zero dependencies, no storage or hosting opinion: it turns a
+          string into the next <code>DateTime</code> and nothing else, which is exactly the piece not worth writing.</li>
+          <li><strong>Scoped-per-execution keeps job bodies ordinary.</strong> A job that takes an <code>IUnitOfWork</code> looks like any other
+          application code, and nothing about it knows it is on a schedule. The Default source keeps the schedule
+          itself in one place, since jobs are host-scoped facts and per-database copies would only contend.</li>
+          <li><strong>Opt-in keeps the release non-breaking.</strong> No table, no runner, no polling and no cost for a host that
+          never calls <code>AddScheduledJobs</code>, which is what lets the capability ship in a lockstep release
+          (ADR-016) that every consumer takes at once.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>A polling loop is not a real-time scheduler.</strong> Worst-case start lag is one polling interval, 30 seconds
+          at the default, so sub-minute precision is not on offer. A job that must start within a second of its
+          scheduled instant is not what this is.</li>
+          <li><strong>The lease is a time lease, not a fence.</strong> A runner that stalls past <code>LeaseSeconds</code> (300 by default) can
+          have its job claimed by another replica while it is still executing. Jobs must therefore be idempotent,
+          the same at-least-once posture <a href="003-outbox-dual-dispatch.html">ADR-003</a> demands of event handlers, and a job
+          whose body can exceed the lease should raise <code>LeaseSeconds</code> rather than assume exclusivity.</li>
+          <li><strong>Scheduling depends on the Default database.</strong> A service whose module database is perfectly healthy
+          loses all scheduling if its Default source is unavailable, because that is where the claim is taken. That
+          is the price of one schedule per host rather than one per source.</li>
+          <li><strong>No per-job retry policy in v1.</strong> A failed run records its outcome and its duration and then waits for
+          the next cron occurrence. There is no backoff curve and no dead-letter equivalent of the outbox&#39;s, so a
+          job that fails at 03:00 is simply not done until 03:00 tomorrow unless the job body retries internally.</li>
+          <li><strong>No dashboard, no ad-hoc trigger endpoint, no run-history table.</strong> The entry carries the <strong>last</strong> outcome
+          and duration and nothing before it, so &quot;did this run last Tuesday&quot; is a question for the job&#39;s logs or
+          metrics, not the table.</li>
+          <li><strong>Run-once-then-advance silently drops occurrences.</strong> A long outage loses every elapsed window but one,
+          with no record that it did. That is right for a purge and wrong for a job that must produce an artifact
+          per window (a nightly export, a per-period invoice run), which has to make the window explicit in its own
+          state rather than infer it from the schedule.</li>
+          <li><strong>Cron is evaluated in UTC only.</strong> A daily job holds its UTC instant across a local daylight-saving shift,
+          so a &quot;3am&quot; job becomes a 4am job for half the year in any zone that observes one. Making it zone-aware
+          would put a time zone on every entry and a policy decision on every ambiguous or skipped local hour.</li>
+          <li><strong>Nothing enforces that a cron expression is sensible.</strong> A typo that still parses binds a job to a
+          schedule nobody intended, and Cronos parsing at startup is the only check: it catches <code>* * * * ? ?</code> and it
+          cannot catch <code>0 3 * * 1</code> written when <code>0 3 * * *</code> was meant.</li>
+          <li><strong>One runner per host, and it is shared.</strong> A slow job delays the jobs due behind it, exactly as
+          <a href="052-background-job-execution.html">ADR-052</a>&#39;s single-reader drain does for its queue.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox whose claim-lease idiom and smart wait this reuses
+          verbatim, and whose at-least-once posture it inherits along with the idempotency obligation on job bodies),
+          <a href="052-background-job-execution.html">ADR-052</a> (in-process background execution: the request-triggered,
+          non-durable sibling this does not replace, the boundary being durability and ownership, since work started
+          by a request and safe to lose stays on the bounded queue while work owned by a clock and required to survive
+          a restart belongs here),
+          <a href="006-database-per-service.html">ADR-006</a> (database-per-service, why the outbox is per-source and this job
+          store is Default-source-only),
+          <a href="075-audit-trail.html">ADR-075</a> (the audit-trail retention purge that ships as this scheduler&#39;s first job),
+          <a href="070-fail-fast-configuration-contract.html">ADR-070</a> (the validating chain <code>SchedulerSettings</code> binds through),
+          <a href="041-observability-and-telemetry.html">ADR-041</a> (the metrics conventions <code>SchedulerMetrics</code> follows, mirroring
+          <code>OutboxMetrics</code>), <a href="030-startup-sole-migrator.html">ADR-030</a> (the startup owner that applies the migration
+          creating the job table).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/074-recurring-job-scheduler.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 72 ADRs</summary>
+        <summary>All 78 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -171,6 +171,12 @@
         <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
         <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
         <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
           </ol>
         </nav>
       </details>
@@ -316,7 +322,7 @@
           <tr>
           <td><a href="026-caching-strategy.html">026</a></td>
           <td>Two-tier caching (swappable substrate + output-cache edge)</td>
-          <td>One <code>ICacheService</code> abstraction whose backing store is chosen at startup (<code>AddCaching</code> picks <code>DistributedCacheService</code> when Aspire registered Redis, else <code>MemoryCacheService</code>) with prefix invalidation and a 30s default TTL; a second HTTP output-cache tier (<code>UseOutputCache</code>, per-host policies) serves public reads at the edge (since ADR-040, authenticated requests too on registered public endpoints). Distinct from ADR-014&#39;s caching decorators (which consume this substrate). Every service now registers <code>AddRedisClient</code> alongside the distributed cache, so SCAN-based prefix invalidation is live whenever Redis is configured; the TTL backstops only the no-Redis case (amended 2026-07-23). Amended 2026-07-25: the output-cache store itself is Redis-backed wherever Redis is configured (ADR-040), and <code>IncrementAsync</code> is deliberately a read-modify-write on every backing store, not a Redis <code>INCR</code>, because <code>INCR</code> writes a string while the cache stores hashes.</td>
+          <td>One <code>ICacheService</code> abstraction whose backing store is chosen at startup (<code>AddCaching</code> picks <code>DistributedCacheService</code> when Aspire registered Redis, else <code>MemoryCacheService</code>) with prefix invalidation and a 30s default TTL; a second HTTP output-cache tier (<code>UseOutputCache</code>, per-host policies) serves public reads at the edge (since ADR-040, authenticated requests too on registered public endpoints). Distinct from ADR-014&#39;s caching decorators (which consume this substrate). Every service now registers <code>AddRedisClient</code> alongside the distributed cache, so SCAN-based prefix invalidation is live whenever Redis is configured; the TTL backstops only the no-Redis case (amended 2026-07-23). Amended 2026-07-25: the output-cache store itself is Redis-backed wherever Redis is configured (ADR-040), and <code>IncrementAsync</code> is deliberately a read-modify-write on every backing store, not a Redis <code>INCR</code>, because <code>INCR</code> writes a string while the cache stores hashes. <strong>Amended by <a href="077-hybridcache-substrate.html">ADR-077</a></strong> (2026-08-13): an opt-in <code>HybridCacheService</code> (L1 + L2) joins the two auto-selected Tier 1 stores, on a disjoint <code>hc:</code> keyspace.</td>
           </tr>
           <tr>
           <td><a href="027-multi-locale-i18n.html">027</a></td>
@@ -547,6 +553,36 @@
           <td><a href="072-qr-badge-check-in-and-points.html">072</a></td>
           <td>QR badge check-in + points gamification (ADC)</td>
           <td>The badge QR carries an <strong>opaque</strong> server-verified <code>Guid</code> (<code>mmca-adc:badge:{credential}</code>), not a JWT or HMAC: the scanning device is online anyway, while a signed token leaks its claims to a screenshot and cannot be revoked without a second store, where a GUID is revoked by one <code>Regenerate()</code>. Organizers scan attendees (never a code posted on a door, which a photograph defeats), and TicketLeap keeps owning arrival check-in, so ADC&#39;s scope is session-first: one <code>CheckIn</code> aggregate with an <code>Event</code>/<code>Session</code> scope, guarded by two filtered unique indexes. Points are an append-only ledger whose unique <code>(UserId, ActivityType, SubjectKey)</code> index is simultaneously the redelivery-idempotency guard and the anti-farming rule (one award per subject, so five questions in a session earn once). Awards ride events that already exist (check-in and feedback via the outbox, question-asked via an in-module domain event, at-most-once and accepted as such); rule values live in config and a 0 disables a rule. The ledger stays ADC-local with the extraction path pre-paid (<code>IPointsAwarder</code> names no conference concept), and the leaderboard is opt-in with a display-name snapshot.</td>
+          </tr>
+          <tr>
+          <td><a href="073-multi-tenancy-model.html">073</a></td>
+          <td>Multi-tenancy (shared-schema + DB-per-tenant)</td>
+          <td>A second <strong>named</strong> EF query filter, <code>&quot;Tenant&quot;</code>, composes by AND with the existing <code>&quot;SoftDelete&quot;</code> filter and embeds the executing context as a constant, so one cached model per source serves every tenant with the tenant id as a SQL parameter (null tenant = system context sees all). <code>ITenantContext</code> resolves claim-then-header behind <code>TenantResolutionMiddleware</code> (wired after <code>UseAuthentication</code>, <code>RequireTenant</code> fail-closed), a dedicated <code>TenantSaveChangesInterceptor</code> stamps writes and refuses cross-tenant ones, and DB-per-tenant is a per-tenant <code>PhysicalDataSource</code> connection-string override under the same <code>DataSourceKey</code>. The outbox is drained per <code>(source, tenant)</code> pair with no <code>OutboxMessage</code> schema change, and the caching decorators prefix keys with the tenant. Helpdesk is the reference adopter; ADC and Store stay single-tenant.</td>
+          </tr>
+          <tr>
+          <td><a href="074-recurring-job-scheduler.html">074</a></td>
+          <td>Recurring job scheduler (persistent cron)</td>
+          <td>Durable, multi-replica-safe scheduled work built on the <code>OutboxProcessor</code> claim-lease idiom (<code>ExecuteUpdate</code> over <code>LockedUntil</code>/<code>LockToken</code>) rather than Hangfire or Quartz: an <code>IScheduledJob</code> contract resolved scoped per execution, a <code>ScheduledJobEntry</code> store on the <strong>Default source only</strong>, Cronos for cron parsing, and a <code>BackgroundService</code> runner that smart-waits to the earliest <code>NextRunOn</code> through <code>TimeProvider</code>. Missed schedules run once and then advance (no catch-up storm). Opt-in via <code>AddScheduledJobs</code>; the framework&#39;s own first job is ADR-075&#39;s retention purge.</td>
+          </tr>
+          <tr>
+          <td><a href="075-audit-trail.html">075</a></td>
+          <td>Audit trail (field-level change history)</td>
+          <td>A third <code>SaveChangesInterceptor</code>, registered last so it diffs freshly stamped values, writes per-property <code>AuditTrailEntries</code> in the <strong>same transaction</strong> as the data (the outbox precedent), per relational source. Opt-in twice: <code>AddAuditTrail</code> plus an <code>IAuditedEntity</code> marker per entity. <code>[Pii]</code> properties record <code>PiiRedactor.RedactedToken</code> at capture, never clear text. The entry is deliberately <strong>not</strong> <code>IAuditableEntity</code> (no self-stamping, no soft-delete filter, like <code>OutboxMessage</code>); retention is a scheduled purge (ADR-074), and v1 ships <code>IAuditTrailReader</code> with no controller.</td>
+          </tr>
+          <tr>
+          <td><a href="076-data-subject-export.html">076</a></td>
+          <td>Data-subject export (DSAR) contract</td>
+          <td>Hoists the export idiom ADC and Store each wrote by hand: <code>ExportUserDataHandlerBase</code> mirrors <code>DeleteUserHandlerBase</code> (same ownership gate through <code>UserOwnershipRule</code>, same privileged-role hook), fans out to registered <code>IUserDataExportSection</code> implementations, and assembles a versioned JSON <code>UserDataExportDTO</code> delivered as a download from a <code>[FeatureGate]</code>-d shipped controller. Per-section failure degrades to <code>Available = false</code> rather than failing the package, because a data-subject request is a deadline with a legal obligation attached. Consumers become thin subclasses re-registering their existing projections as sections (ADC&#39;s check-in and points coverage already landed with <a href="072-qr-badge-check-in-and-points.html">ADR-072</a>). The <code>PiiEntitiesAreExportable</code> fitness rule is deferred.</td>
+          </tr>
+          <tr>
+          <td><a href="077-hybridcache-substrate.html">077</a></td>
+          <td>HybridCache substrate (amends 026)</td>
+          <td>An opt-in third Tier 1 substrate: <code>AddCommonHybridCache</code> swaps <code>ICacheService</code> to <code>HybridCacheService</code> (L1 in-process + L2 distributed). The structural decision is the <strong>disjoint <code>{prefix}hc:{key}</code> keyspace</strong>, which makes the two-serialization-formats-in-one-keyspace failure (ADR-026&#39;s <code>WRONGTYPE</code> incident) impossible rather than unlikely, including mid-rolling-deploy; prefix eviction runs both patterns through the migration window. <code>IncrementAsync</code> bypasses L1 on both legs to keep today&#39;s counter semantics, the caching decorators keep their own stampede logic (they cache only successful <code>Result</code>s), and <code>RemoveByTagAsync</code> is deliberately deferred. Default path with no call is byte-identical to before.</td>
+          </tr>
+          <tr>
+          <td><a href="078-csv-export-endpoint.html">078</a></td>
+          <td>CSV export as a dedicated endpoint</td>
+          <td>&quot;Export what you filtered&quot; ships as <code>[HttpGet(&quot;export&quot;)]</code> on <code>EntityControllerBase</code>, <strong>not</strong> as content negotiation on the existing URLs: <code>PublicEndpointOutputCachePolicy</code> does not vary by <code>Accept</code> (so a CSV request could be served cached JSON) and <code>ReturnHttpNotAcceptable=false</code> makes a negotiation failure silently return JSON. Because the query pipeline caps unpaged reads at 1000 rows and has no <code>IAsyncEnumerable</code> path, the endpoint page-loops at <code>MaxPageSize</code> and streams up to <code>MaxExportRows</code> (default 100,000), truncating with an <code>X-Export-Truncated</code> header. RFC 4180 writer in-house (no CsvHelper), camelCase headers matching the JSON field names, and no member added to <code>IEntityControllerBase</code> (breaking for explicit implementors).</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>
