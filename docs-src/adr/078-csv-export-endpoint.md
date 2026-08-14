@@ -141,6 +141,13 @@ the OpenAPI contract snapshots asserted by `OpenApiContractTestsBase`
   controller's existing authorization posture. A resource that was safe to page 20 rows at a time is now
   exportable 100,000 rows at a time by the same caller, and no controller opted in to that. Overriding
   `ExportAsync` to return 404 or 403 is the only opt-out, which is opt-out, not opt-in.
+- **Ownership scoping does not carry over, and that is a live leak on scoped controllers.** The inherited
+  endpoint queries with no specification, so a controller whose list endpoints row-scope by owner (the
+  ADR-033 ownership axis) still answers `/export` unscoped: during the v1.150.0 sweep this would have let a
+  Store customer token export every customer's orders. The v1 mitigation is gating: consumers with
+  owner-scoped reads override `ExportAsync` behind a privileged-role posture (Store and ADC did, with a
+  test pinning each gate). The recorded follow-up is a scoping extension point (the export honoring a
+  controller-supplied specification) so owners can export exactly the rows their list endpoints show.
 - **N queries, not one stream.** An export at the default settings is up to 200 round trips
   (`MaxExportRows` 100,000 over `MaxPageSize` 500), each with its own `Skip`/`Take`, and it holds a
   response open for their combined duration. There is no export-specific timeout budget in v1; the limits
