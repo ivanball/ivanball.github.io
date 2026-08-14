@@ -1105,6 +1105,10 @@
           <td><code>Room.AccessibilityInfo</code> is an optional free-text field describing accessibility features (e.g., &quot;Wheelchair accessible, hearing loop available&quot;). Displayed to attendees alongside room information. Informational only: no behavioral significance.</td>
           </tr>
           <tr>
+          <td>BR-255</td>
+          <td><strong>Room.Name must be unique within its parent Event</strong> (case-insensitive), among active (non-deleted) rooms. Enforced at the domain layer on add, rename, and Sessionize restore (duplicate attempts return the <code>Event.Room.Duplicate</code> validation error), and backstopped by a unique filtered database index on <code>(EventId, Name)</code> scoped to non-deleted rows. A soft-deleted room&#39;s name may be reused. Added 2026-08-13 (BugHunt H23): the domain check previously existed for add only and never fired because the aggregate was loaded without its rooms; the rule now names the invariant the code always intended, mirroring the BR-138 CategoryItem precedent.</td>
+          </tr>
+          <tr>
           <td>BR-112</td>
           <td><code>Session.AccessibilityInfo</code> is an optional free-text field describing accessibility accommodations (e.g., &quot;Live captioning provided, sign language interpreter available&quot;). Displayed to attendees alongside session details. Informational only.</td>
           </tr>
@@ -2891,6 +2895,10 @@
           <tr>
           <td>CategoryItem name uniqueness</td>
           <td>CategoryItem.Name must be unique within its parent Category (case-insensitive) (BR-138).</td>
+          </tr>
+          <tr>
+          <td>Room name uniqueness</td>
+          <td>Room.Name must be unique within its parent Event (case-insensitive), among active rooms; a soft-deleted room&#39;s name may be reused (BR-255).</td>
           </tr>
           <tr>
           <td>Question field immutability</td>
@@ -4888,7 +4896,7 @@
           </tr>
           <tr>
           <td>BR-207</td>
-          <td><strong>Speaker-user linking</strong> is automatic at registration and login when <code>User.Email</code> matches <code>Speaker.Email</code> (case-insensitive). The link is stored bidirectionally (<code>User.LinkedSpeakerId</code>, <code>Speaker.LinkedUserId</code>). <strong>Discovery limitation:</strong> Speaker emails are not exposed via public API (BR-66), so attendees cannot verify which email their Speaker profile uses in Sessionize. Organizers should inform speakers of their Sessionize-registered email address before the conference so they register with the matching email. When automatic matching fails (e.g., speaker uses a different personal email), organizers can use manual linking (BR-209).</td>
+          <td><strong>Speaker-user linking</strong> is automatic at registration and login when <code>User.Email</code> matches <code>Speaker.Email</code> (case-insensitive). The link is stored bidirectionally (<code>User.LinkedSpeakerId</code>, <code>Speaker.LinkedUserId</code>). <strong>Discovery limitation:</strong> Speaker emails are not exposed via public API (BR-66), so attendees cannot verify which email their Speaker profile uses in Sessionize. Organizers should inform speakers of their Sessionize-registered email address before the conference so they register with the matching email. When automatic matching fails (e.g., speaker uses a different personal email), organizers can use manual linking (BR-209). <strong>Clarification (2026-08-04, BugHunt C5):</strong> matching is by email equality ONLY; a name-based fallback that briefly existed in code was removed as a security fix (registration names are unverified free text, so a name match would let anyone claim a speaker profile). Sessionize-imported speakers carry no email, so the organizer manual link (BR-209) is their intended path; when a registration&#39;s email match misses but unlinked speakers share the registrant&#39;s name, the handler logs an Information-level cue for the organizer rather than linking.</td>
           </tr>
           <tr>
           <td>BR-208</td>
