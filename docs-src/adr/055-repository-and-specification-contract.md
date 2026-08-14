@@ -9,7 +9,12 @@ non-privileged callers rather than declined sessions). Revised 2026-08-07 (withd
 qualification: the ADC file it pointed at no longer exists, so neither interface has any reference
 outside its own declaration file; replaced the ADC concrete-specification example, which named a
 class that does not exist, with the specifications ADC actually ships; refreshed the
-`EFReadRepository`, `SessionsController`, and `IEntityQueryService` anchors).
+`EFReadRepository`, `SessionsController`, and `IEntityQueryService` anchors). Revised 2026-08-14
+(re-anchored every `IRepository.cs`, `EFReadRepository.cs`, `DependencyInjection.cs`, and
+`stage.ps1` citation after a named-query-filter remarks block shifted `IRepository.cs` down; narrowed
+"every read" on `IEntityQueryService` to the four reads that actually take a specification, and
+narrowed the "no reference" claim about `IEntityReader` / `IEntityQuerier` to C# code, since the
+Helpdesk staging-script comments named in the same paragraph are references of a kind).
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -41,17 +46,17 @@ operations, expression-tree specifications for the predicates, and a build-faili
 keeps the raw `IQueryable` surfaces out of Application code.
 
 - **The read contract is split by responsibility.** `IEntityReader<TEntity, TIdentifierType>`
-  (`IRepository.cs:14`) carries single-entity lookups: `GetByIdAsync` (`IRepository.cs:19`, `:24`),
-  `GetByIdsAsync` (`:37`), and the two `ExistsAsync` overloads (`:45`, `:51`).
-  `IEntityQuerier<TEntity, TIdentifierType>` (`:64`) carries collection work: `GetAllAsync` (`:69`),
-  `GetProjectedAsync` (`:80`), `GetAllForLookupAsync` (`:87`), and `CountAsync` (`:94`, `:97`).
-  `IReadRepository` composes exactly those two (`:110-111`), and `IRepository` composes read plus
-  write (`:238`). The interface documentation directs new handlers at the focused sub-interfaces and
-  leaves existing code on the composite (`:105-106`).
+  (`IRepository.cs:19`) carries single-entity lookups: `GetByIdAsync` (`IRepository.cs:24`, `:29`),
+  `GetByIdsAsync` (`:46`), and the two `ExistsAsync` overloads (`:54`, `:60`).
+  `IEntityQuerier<TEntity, TIdentifierType>` (`:78`) carries collection work: `GetAllAsync` (`:83`),
+  `GetProjectedAsync` (`:103`), `GetAllForLookupAsync` (`:111`), and `CountAsync` (`:118`, `:121`).
+  `IReadRepository` composes exactly those two (`:134-135`), and `IRepository` composes read plus
+  write (`:262`). The interface documentation directs new handlers at the focused sub-interfaces and
+  leaves existing code on the composite (`:129-130`).
 - **The raw queryables live on the composite only.** `Table`, `TableNoTracking`,
   `TableNoTrackingSingleQuery`, and `TableNoTrackingSplitQuery` are declared on `IReadRepository`
-  (`IRepository.cs:116`, `:119`, `:122`, `:125`) and implemented as EF `DbSet` expressions
-  (`EFReadRepository.cs:250`, `:253`, `:256`, `:259`). They are deliberately absent from
+  (`IRepository.cs:140`, `:143`, `:146`, `:149`) and implemented as EF `DbSet` expressions
+  (`EFReadRepository.cs:262`, `:265`, `:268`, `:271`). They are deliberately absent from
   `IEntityReader` and `IEntityQuerier`, so a handler that declares the narrow dependency cannot reach
   a queryable at all.
 - **Application code must not touch those queryables, and a fitness rule fails the build.**
@@ -89,9 +94,12 @@ keeps the raw `IQueryable` surfaces out of Application code.
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:96`,
   `:118`, rationale at `:91-93`).
 - **The specification enters the same query pipeline, not a parallel one.** `IEntityQueryService`
-  takes an optional `Specification<TEntity, TIdentifierType>` on every read
+  takes an optional `Specification<TEntity, TIdentifierType>` on every DTO or entity read: the two
+  `GetAllAsync` overloads, `GetEntityByIdAsync`, and `GetByIdAsync`
   (`Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:40`, `:63`, `:110`,
-  `:131`), and `EntityQueryService` passes its `Criteria` into the query parameters
+  `:131`). The other two reads on the interface take a raw predicate rather than a specification,
+  `GetAllForLookupAsync` (`:87-91`) and `ExistsAsync` (`:143-146`).
+  `EntityQueryService` passes the specification's `Criteria` into the query parameters
   (`Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:427`) alongside the dynamic
   filters, sorting, and paging. Cross-source predicates are produced the same way:
   `CrossSourceSpecification.BuildAsync`
@@ -122,15 +130,17 @@ The interface split is shipped, but nothing depends on the narrow interfaces yet
 out only the composites (`IRepository` at
 `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IUnitOfWork.cs:19`, `IReadRepository`
 at `:29`), and the container registers only the open generic `IRepository<,>`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:100`). `IEntityReader` and
-`IEntityQuerier` have no reference of any kind outside their own declaration file across all four
-repositories: not a type, not a parameter, and not a doc comment (`IRepository.cs:14`, `:64`). The
-only other occurrences of either name in the workspace describe the contract rather than depend on
-it: two comments in MMCA.Helpdesk's template staging script
-(`MMCA.Helpdesk/build/templates/stage.ps1:250`, `:958`) noting that `IEntityReader.GetByIdAsync`
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:107`). `IEntityReader` and
+`IEntityQuerier` have no reference in C# code outside their own declaration file across all four
+repositories: not a type, not a parameter, and not a doc comment. The only C# occurrences of either
+name in the workspace are inside that file, the two declarations (`IRepository.cs:19`, `:78`) and
+`IReadRepository` naming them in its own doc comment and base list (`:127-128`, `:135`). The only
+other occurrences in the workspace describe the contract rather than depend on it: two comments in
+MMCA.Helpdesk's template staging script
+(`MMCA.Helpdesk/build/templates/stage.ps1:250`, `:959`) noting that `IEntityReader.GetByIdAsync`
 declares `includes` as a required parameter, which is why the generated conditional passes an empty
 list instead of omitting the argument. So the ISP split is today the declared target that new
-handlers are pointed at (`IRepository.cs:105-106`), not the dependency shape any handler currently
+handlers are pointed at (`IRepository.cs:129-130`), not the dependency shape any handler currently
 has.
 
 ## Rationale

@@ -7,6 +7,8 @@ Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folde
 `UserIdentifierType` alias types). Revised 2026-07-29 (dropped the `StronglyTypedIds` placeholder-folder
 evidence and deleted the folders themselves: being empty, they were untracked by git and absent from
 every fresh clone, so the deferral now rests on the verifiable absence of any wrapper-struct type).
+Revised 2026-08-14 (Conference's alias file now declares sixteen aliases, `SponsorIdentifierType` having
+been added, and the ADC `User` source citations were re-anchored after an expanded doc comment).
 
 ## Context
 Every entity needs an identity type. The framework's base entity is generic over that type:
@@ -42,8 +44,8 @@ not as a wrapper struct.
   app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
-  ADC Conference with fifteen aliases
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-19`),
+  ADC Conference with sixteen aliases
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-20`),
   and Store Catalog
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-6`).
 - **The alias is the type; there is no wrapping struct.** The right-hand side is a bare primitive.
@@ -59,8 +61,8 @@ not as a wrapper struct.
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
   entity is `User : AuditableAggregateRootEntity<UserIdentifierType>`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:26`); the cross-context
-  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 63); the EF
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:33`); the cross-context
+  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 70); the EF
   configuration is `EntityTypeConfigurationSQLServer<User, UserIdentifierType>`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13`);
   the repository handle is `GetRepository<User, UserIdentifierType>()`

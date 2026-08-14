@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-051: Client-Side Authentication Token Lifecycle Across Render Modes · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-23).">
+  <meta name="description" content="Accepted (2026-07-23). Revised 2026-08-14 (SetTokensAsync now writes the refresh token and the access token under one shared guard, so a failed…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-051: Client-Side Authentication Token Lifecycle Across Render Modes">
-  <meta property="og:description" content="Accepted (2026-07-23).">
+  <meta property="og:description" content="Accepted (2026-07-23). Revised 2026-08-14 (SetTokensAsync now writes the refresh token and the access token under one shared guard, so a failed…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-051: Client-Side Authentication Token Lifecycle Across Render Modes">
-  <meta name="twitter:description" content="Accepted (2026-07-23).">
+  <meta name="twitter:description" content="Accepted (2026-07-23). Revised 2026-08-14 (SetTokensAsync now writes the refresh token and the access token under one shared guard, so a failed…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"051 · Client-Side Authentication Token Lifecycle Across Render Modes","item":"https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -186,7 +192,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-051-client-side-authentication-token-lifecycle-across-render-modes">ADR-051: Client-Side Authentication Token Lifecycle Across Render Modes</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-23).</p>
+          <p>Accepted (2026-07-23). Revised 2026-08-14 (<code>SetTokensAsync</code> now writes the refresh token and the
+          access token under one shared guard, so a failed refresh-token write also drops both tokens; see
+          Revision below).</p>
           <h2 id="context">Context</h2>
           <p>ADR-022 and ADR-050 describe the two server halves of authentication: the Blazor host&#39;s
           HttpOnly session cookie that survives SSR prerender (ADR-022), and the Identity service&#39;s single
@@ -249,9 +257,9 @@
           is framework-shared too and backs onto <code>SecureStorage.Default</code> (platform secure enclaves), guarding
           every read and write so an OS-invalidated keystore entry degrades to one clean re-login instead of an
           unhandled throw on launch
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:20</code>,
-          <code>MauiTokenStorageService.cs:66-82</code>, <code>MauiTokenStorageService.cs:88-101</code>,
-          <code>MauiTokenStorageService.cs:104-117</code>); both MAUI heads register that one class through
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:22</code>,
+          <code>MauiTokenStorageService.cs:69-85</code>, <code>MauiTokenStorageService.cs:91-104</code>,
+          <code>MauiTokenStorageService.cs:107-120</code>); both MAUI heads register that one class through
           <code>AddCommonMauiTokenStorage</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:73</code>).</li>
           <li><strong>Login seeds the browser HttpOnly cookie through a JS fetch.</strong> <code>SetTokensAsync</code> on both browser
@@ -292,11 +300,11 @@
           registers <code>ServerTokenStorageService</code> via <code>AddCommonServerTokenStorage</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:26-29</code>) plus the same
           proxy refresher and auth-state provider
-          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:97-98</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:65-66</code>); the MAUI host registers the shared
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:114-116</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:73-75</code>); the MAUI host registers the shared
           SecureStorage-backed storage via <code>AddCommonMauiTokenStorage</code> plus <code>DirectApiTokenRefresher</code> +
           <code>JwtAuthenticationStateProvider</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:103-105</code>,
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:125-127</code>,
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:88-90</code>).</li>
           </ul>
           </li>
@@ -355,34 +363,45 @@
           <li><strong>One class, in MMCA.Common.UI.Maui.</strong> <code>MauiTokenStorageService</code> is a single sealed
           <code>ITokenStorageService</code> holding both tokens under the <code>auth_access_token</code> / <code>auth_refresh_token</code>
           keys in <code>SecureStorage.Default</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:20</code>,
-          <code>MauiTokenStorageService.cs:22-23</code>). The per-app copies are gone: no
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:22</code>,
+          <code>MauiTokenStorageService.cs:24-25</code>). The per-app copies are gone: no
           <code>MauiTokenStorageService.cs</code> exists under <code>MMCA.ADC/Source/</code> or <code>MMCA.Store/Source/</code> (the only
           match in the workspace is the framework file above), so the &quot;behavior can drift between the two
           apps&quot; risk the Trade-offs section recorded no longer applies.</li>
           <li><strong>Both heads register it through one extension method.</strong> <code>AddCommonMauiTokenStorage()</code> registers
           it as the scoped <code>ITokenStorageService</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:73-74</code>), and both
-          MAUI hosts call exactly that (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:103</code>,
+          MAUI hosts call exactly that (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:125</code>,
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:88</code>). Scoped, not singleton, to match the
           two browser siblings so component code depends on one lifetime on every head
           (<code>DependencyInjection.cs:70-71</code>). The rest of each MAUI trio is unchanged:
           <code>DirectApiTokenRefresher</code> + <code>JwtAuthenticationStateProvider</code> still follow it
-          (<code>MauiProgram.cs:104-105</code> in ADC, <code>MauiProgram.cs:89-90</code> in Store).</li>
+          (<code>MauiProgram.cs:126-127</code> in ADC, <code>MauiProgram.cs:89-90</code> in Store).</li>
           <li><strong>The hoist added failure handling the app copies did not have.</strong> Every read and write is guarded,
           because the OS invalidates keystore entries on its own schedule and the raw API then throws rather
           than returning nothing: a failed read drops the unreadable entry and degrades to &quot;no token stored&quot;
-          (<code>MauiTokenStorageService.cs:66-82</code>), a failed write retries once against a freshly removed key and
-          otherwise propagates (<code>MauiTokenStorageService.cs:88-101</code>), <code>ClearTokensAsync</code> is best-effort so
-          logout always succeeds (<code>MauiTokenStorageService.cs:53-60</code>, <code>:104-117</code>), and <code>SetTokensAsync</code>
-          writes the refresh token first and drops both on a failed access-token write rather than leaving a
-          mismatched pair (<code>MauiTokenStorageService.cs:32-50</code>).</li>
+          (<code>MauiTokenStorageService.cs:69-85</code>), a failed write retries once against a freshly removed key and
+          otherwise propagates (<code>MauiTokenStorageService.cs:91-104</code>), <code>ClearTokensAsync</code> is best-effort so
+          logout always succeeds (<code>MauiTokenStorageService.cs:56-63</code>, <code>:107-120</code>), and <code>SetTokensAsync</code>
+          writes both tokens under one shared guard so either write failing drops both, rather than leaving a
+          mismatched pair (<code>MauiTokenStorageService.cs:34-53</code>).</li>
           <li><strong>What it cost.</strong> The class cannot live in <code>MMCA.Common.UI</code> (that package must stay
           Blazor-WASM-compatible and MAUI-free), so it sits in <code>MMCA.Common.UI.Maui</code>, outside
           <code>MMCA.Common.slnx</code> and built across its four TFMs by a windows-only CI job (ADR-042). The
           Trade-offs bullet above is rewritten accordingly: the risk is no longer divergent copies, it is a
           slower and separate verification path for the one shared copy.</li>
           </ol>
+          <h2 id="revision-2026-08-14">Revision (2026-08-14)</h2>
+          <p><code>SetTokensAsync</code> closed a gap the original hoist left open. Point 3 above previously described the
+          method as writing the refresh token first and dropping both tokens only when the following
+          access-token write failed, which left a window where a failing refresh-token write escaped before
+          the guard was entered and left the OLD pair in place: the app then held a stale access token it
+          believed was current until a manual sign-out cleared it.</p>
+          <p><code>SetTokensAsync</code> now performs both writes inside one <code>try</code>/<code>catch</code>, so either write failing drops
+          both tokens and forces a clean re-login instead of leaving a stale, partially-updated pair
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Services/MauiTokenStorageService.cs:34-53</code>).
+          Point 3&#39;s description above is updated accordingly: read guarding, write-retry, and best-effort
+          clearing are all unchanged, only the <code>SetTokensAsync</code> behavior narrowed.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -400,6 +419,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
+            <li><a href="#revision-2026-08-14">Revision (2026-08-14)</a></li>
             </ul>
           </nav>
         </aside>

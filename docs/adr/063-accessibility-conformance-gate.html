@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-01).">
+  <meta name="description" content="Accepted (2026-08-01). Revised 2026-08-14: refreshed the E2ETestBase helper line anchors (explanatory comments were added above ScanGridAsync), the two…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate">
-  <meta property="og:description" content="Accepted (2026-08-01).">
+  <meta property="og:description" content="Accepted (2026-08-01). Revised 2026-08-14: refreshed the E2ETestBase helper line anchors (explanatory comments were added above ScanGridAsync), the two…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate">
-  <meta name="twitter:description" content="Accepted (2026-08-01).">
+  <meta name="twitter:description" content="Accepted (2026-08-01). Revised 2026-08-14: refreshed the E2ETestBase helper line anchors (explanatory comments were added above ScanGridAsync), the two…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate","item":"https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -186,7 +192,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-063-wcag-21-aa-accessibility-as-a-shipped-test-contract-and-ci-gate">ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-01).</p>
+          <p>Accepted (2026-08-01). Revised 2026-08-14: refreshed the <code>E2ETestBase</code> helper line anchors (explanatory
+          comments were added above <code>ScanGridAsync</code>), the two consumer suite scan counts (ADC now 31, Store now 23),
+          and the MMCA.Helpdesk pin location; no decision changed.</p>
           <h2 id="context">Context</h2>
           <p>Accessibility was documented before it was enforced. The narrative guide
           (<a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, rubric section 21) named WCAG 2.1 AA
@@ -226,9 +234,9 @@
           <code>UserRegistrationTestsBase.cs:91</code>, and <code>ProfileManagementTestsBase.cs:180</code> each call the assert with
           <code>AxeOptions.Wcag21Aa</code>.</li>
           <li><strong>Consumer page scans go through two helpers that make strictness explicit.</strong> On
-          <code>.../Testing.E2E/Infrastructure/E2ETestBase.cs</code>, <code>ScanAsync()</code> (<code>:281</code>) waits for any loading bar to
-          clear and asserts the strict options (<code>:284</code>); <code>ScanGridAsync()</code> (<code>:271</code>) additionally waits for a
-          seeded data row before scanning and asserts with the one recorded exception (<code>:276</code>). Which helper a
+          <code>.../Testing.E2E/Infrastructure/E2ETestBase.cs</code>, <code>ScanAsync()</code> (<code>:293</code>) waits for any loading bar to
+          clear and asserts the strict options (<code>:296</code>); <code>ScanGridAsync()</code> (<code>:283</code>) additionally waits for a
+          seeded data row before scanning and asserts with the one recorded exception (<code>:288</code>). Which helper a
           page uses is the declaration of which rule set applies to it.</li>
           <li><strong>Exactly one recorded exception exists, and it is a value, not a switch.</strong>
           <code>AxeOptions.Wcag21AaExceptMudPagerCombobox</code> (<code>AxeOptions.cs:35</code>) carries the same four WCAG tags
@@ -268,11 +276,11 @@
           <code>UserRegistrationTests.cs:5</code>); its <code>ProfileManagementTests</code> derives <code>E2ETestBase</code> directly
           (<code>ProfileManagementTests.cs:8</code>) because the ADC profile page supports only password change and account
           deletion, so it does not inherit the base&#39;s profile scan. Beyond the Identity bases each app carries a
-          dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 20 page
-          scans (9 through <code>ScanGridAsync</code>, 11 strict) and Store&#39;s
-          <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 22 (6 grid, 16 strict).
+          dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 31 page
+          scans (11 through <code>ScanGridAsync</code>, 20 strict) and Store&#39;s
+          <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 23 (6 grid, 17 strict).
           <strong>MMCA.Helpdesk adopts none of it</strong>: it pins the package version
-          (<code>MMCA.Helpdesk/Directory.Packages.props:121</code>) but no project references it, and the repo has no E2E
+          (<code>MMCA.Helpdesk/Directory.Packages.props:66</code>) but no project references it, and the repo has no E2E
           test project at all (<code>Tests/</code> holds only <code>Architecture</code> and <code>Modules</code>), so the seed has no browser
           accessibility gate today.</p>
           <h2 id="rationale">Rationale</h2>
@@ -307,7 +315,7 @@
           (<code>AxeOptions.cs:12-15</code>).</li>
           <li><strong>One accepted exception, with real blast radius.</strong> <code>Wcag21AaExceptMudPagerCombobox</code> disables
           <code>aria-input-field-name</code> for the whole page scan, not just for the pager node. A grid page that later
-          gains a genuinely unnamed combobox of its own would pass <code>ScanGridAsync</code> (<code>E2ETestBase.cs:276</code>). The
+          gains a genuinely unnamed combobox of its own would pass <code>ScanGridAsync</code> (<code>E2ETestBase.cs:288</code>). The
           exception is documented as &quot;use only where the sole combobox is a pager&quot; (<code>AxeOptions.cs:33</code>), which is
           a convention the compiler cannot enforce. It is upstream-owned: it stands until MudBlazor labels the
           pager select.</li>
@@ -320,7 +328,7 @@
           is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
           gate as backstop, but it does mean &quot;deployed&quot; does not always mean &quot;axe ran on this commit&quot;.</li>
           <li><strong>Consumer breadth is hand-maintained.</strong> Nothing forces a new page into <code>AccessibilityTests</code>, so
-          coverage grows by discipline: 20 scans in ADC and 22 in Store today, against far larger page inventories.</li>
+          coverage grows by discipline: 31 scans in ADC and 23 in Store today, against far larger page inventories.</li>
           <li><strong>MMCA.Helpdesk has no accessibility gate.</strong> The reference app demonstrates the framework&#39;s layers but
           not this contract, so a reader following the seed sees no worked example of adopting the scan.</li>
           </ul>

@@ -42,7 +42,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -52,7 +52,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -87,7 +87,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html</loc>
-    <lastmod>2026-07-27</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -97,12 +97,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/012-grpc-host-transport.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/013-result-pattern.html</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -117,7 +117,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html</loc>
-    <lastmod>2026-08-01</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -142,7 +142,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html</loc>
-    <lastmod>2026-08-13</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -157,12 +157,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/024-push-notifications.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html</loc>
-    <lastmod>2026-08-01</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -187,27 +187,27 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/031-feature-flag-management.html</loc>
-    <lastmod>2026-07-27</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/032-password-hashing.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html</loc>
-    <lastmod>2026-08-01</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html</loc>
-    <lastmod>2026-08-01</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -237,22 +237,22 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -267,32 +267,32 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/046-http-api-versioning.html</loc>
-    <lastmod>2026-08-13</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -307,17 +307,17 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/056-blazor-render-mode-strategy.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -327,12 +327,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html</loc>
-    <lastmod>2026-08-13</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -342,62 +342,62 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/061-runtime-secret-management.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html</loc>
-    <lastmod>2026-08-13</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/065-scaffolding-templates.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/066-broker-transport-selection.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/068-value-objects-as-validated-primitives.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/069-shared-data-protection-key-ring.html</loc>
-    <lastmod>2026-08-13</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/071-barcode-scanning-and-qr-display.html</loc>
-    <lastmod>2026-08-13</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/072-qr-badge-check-in-and-points.html</loc>
-    <lastmod>2026-08-13</lastmod>
+    <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -427,6 +427,36 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html</loc>
+    <lastmod>2026-08-14</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html</loc>
+    <lastmod>2026-08-14</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/adr/080-deploy-rollout-revision-rollback.html</loc>
+    <lastmod>2026-08-14</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/adr/081-cost-baseline-deploy-gate.html</loc>
+    <lastmod>2026-08-14</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/adr/082-two-tier-cors-posture.html</loc>
+    <lastmod>2026-08-14</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/adr/083-crud-lifecycle-event-taxonomy.html</loc>
+    <lastmod>2026-08-14</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/adr/084-stripe-webhook-ingress.html</loc>
     <lastmod>2026-08-14</lastmod>
     <priority>0.6</priority>
   </url>

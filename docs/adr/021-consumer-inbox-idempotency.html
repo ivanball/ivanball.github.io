@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -232,7 +238,7 @@
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:28</code>,
           <code>MMCA.ADC.Conference.Service/appsettings.json:31</code>, <code>MMCA.ADC.Engagement.Service/appsettings.json:52</code>,
           <code>MMCA.ADC.Notification.Service/appsettings.json:50</code>) and on Store&#39;s Sales service
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:33</code>). Where the <code>InboxMessages</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:40</code>). Where the <code>InboxMessages</code>
           table comes from differs by repo: each of the four ADC per-service migration projects carries a
           dedicated <code>AddInboxMessages</code> migration, whereas Store Sales creates the table and its unique
           <code>IX_InboxMessages_MessageId</code> index inside its single <code>InitialCreate</code> migration
@@ -240,14 +246,14 @@
           because that per-service project postdates the frozen combined-archive lineage that added the ADC
           migration. Adoption inventory as of 2026-08-13: <strong>three ADC services consume from the broker</strong> and
           so use their inbox for real, plus Store Sales. ADC Identity consumes <code>SpeakerLinkedToUser</code> and
-          <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:275-276</code>),
-          ADC Conference consumes <code>UserRegistered</code> (<code>MMCA.ADC.Conference.Service/Program.cs:322</code>), and ADC
+          <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:299-300</code>),
+          ADC Conference consumes <code>UserRegistered</code> (<code>MMCA.ADC.Conference.Service/Program.cs:347</code>), and ADC
           Engagement consumes four events, <code>AttendeeCheckedIn</code>, <code>SessionFeedbackSubmitted</code>,
-          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:275-278</code>), the
+          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:299-302</code>), the
           first of which is ADC&#39;s first <strong>self-consumption</strong> over the broker: Engagement publishes
           <code>AttendeeCheckedIn</code> and consumes it back, which is precisely the shape a redelivery would double-count,
           so the inbox is load-bearing there rather than decorative. Store Sales consumes <code>ProductVariantChanged</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:200-201</code>). Only <strong>ADC Notification</strong>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:251</code>). Only <strong>ADC Notification</strong>
           now carries <code>EnableInbox: true</code> and the table while registering no consumer, so its inbox alone is
           provisioned and unused (functionally harmless). The mirror image is equally harmless and worth stating
           because it looks like the opposite mistake: Store Catalog and Store Identity carry the <code>InboxMessages</code>

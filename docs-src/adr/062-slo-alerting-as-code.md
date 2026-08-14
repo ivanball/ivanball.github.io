@@ -34,52 +34,52 @@ scheduled query rules, and make the alert-to-runbook pairing a **build gate ship
 
 - **`sloAlertSpecs` is the declaration.** A single array of records carrying `key`, `description`,
   `query`, `timeAggregation`, `metricMeasureColumn`, `threshold` and `severity`
-  (`MMCA.ADC/infra/main.bicep:261`, `MMCA.Store/infra/main.bicep:227`). Both consumers declare the same
+  (`MMCA.ADC/infra/main.bicep:276`, `MMCA.Store/infra/main.bicep:248`). Both consumers declare the same
   three SLOs with the same numbers: `failed-requests` (severity 2, more than 10 per 15 min),
   `server-response-time` (severity 3, average above 3000ms), `dependency-failures` (severity 2, more
-  than 10 per 15 min) (`MMCA.ADC/infra/main.bicep:263-288`, `MMCA.Store/infra/main.bicep:229-254`).
+  than 10 per 15 min) (`MMCA.ADC/infra/main.bicep:278-303`, `MMCA.Store/infra/main.bicep:250-275`).
 
 - **Materialized as Log Analytics scheduled query rules.** One `Microsoft.Insights/scheduledQueryRules`
-  per spec (`MMCA.ADC/infra/main.bicep:291`, `MMCA.Store/infra/main.bicep:257`), named
-  `${prefix}-alert-${spec.key}-v2` (`MMCA.ADC/infra/main.bicep:296`,
-  `MMCA.Store/infra/main.bicep:262`), enabled, scoped to the Log Analytics workspace, evaluated every
+  per spec (`MMCA.ADC/infra/main.bicep:306`, `MMCA.Store/infra/main.bicep:278`), named
+  `${prefix}-alert-${spec.key}-v2` (`MMCA.ADC/infra/main.bicep:311`,
+  `MMCA.Store/infra/main.bicep:283`), enabled, scoped to the Log Analytics workspace, evaluated every
   5 minutes over a 15-minute window with `autoMitigate`
-  (`MMCA.ADC/infra/main.bicep:303-307`, `MMCA.Store/infra/main.bicep:269-273`). A `union(...)` supplies
+  (`MMCA.ADC/infra/main.bicep:318-322`, `MMCA.Store/infra/main.bicep:290-294`). A `union(...)` supplies
   `metricMeasureColumn` only for the aggregate rule; the empty-string case makes a rule count returned
   **rows**, which is what the two failure-count SLOs want
-  (`MMCA.ADC/infra/main.bicep:313-325`, `MMCA.Store/infra/main.bicep:279-291`).
+  (`MMCA.ADC/infra/main.bicep:328-341`, `MMCA.Store/infra/main.bicep:300-313`).
 
 - **The KQL predicate is the point of the migration.** The failure queries exclude only 401 and 499
-  (`MMCA.ADC/infra/main.bicep:265`, `:283`; `MMCA.Store/infra/main.bicep:231`, `:249`) and the latency
+  (`MMCA.ADC/infra/main.bicep:280`, `:298`; `MMCA.Store/infra/main.bicep:252`, `:270`) and the latency
   query excludes `/hubs/` requests before averaging `DurationMs`
-  (`MMCA.ADC/infra/main.bicep:274`, `MMCA.Store/infra/main.bicep:240`). A genuine 400 or 500 burst
+  (`MMCA.ADC/infra/main.bicep:289`, `MMCA.Store/infra/main.bicep:261`). A genuine 400 or 500 burst
   still pages at the same threshold as before.
 
 - **Superseded metric alerts stay declared and disabled, never deleted.** `legacySloMetricAlertSpecs`
-  (`MMCA.ADC/infra/main.bicep:342`, `MMCA.Store/infra/main.bicep:307`) still materializes the three
-  `metricAlerts` (`MMCA.ADC/infra/main.bicep:348`, `MMCA.Store/infra/main.bicep:313`) under their
-  **original, unsuffixed** names (`MMCA.ADC/infra/main.bicep:350`, `MMCA.Store/infra/main.bicep:315`)
-  with `enabled: false` and an empty `actions` array (`MMCA.ADC/infra/main.bicep:355`, `:374`;
-  `MMCA.Store/infra/main.bicep:320`, `:339`). An incremental ARM deployment never deletes a resource
+  (`MMCA.ADC/infra/main.bicep:357`, `MMCA.Store/infra/main.bicep:328`) still materializes the three
+  `metricAlerts` (`MMCA.ADC/infra/main.bicep:363`, `MMCA.Store/infra/main.bicep:334`) under their
+  **original, unsuffixed** names (`MMCA.ADC/infra/main.bicep:365`, `MMCA.Store/infra/main.bicep:336`)
+  with `enabled: false` and an empty `actions` array (`MMCA.ADC/infra/main.bicep:370`, `:389`;
+  `MMCA.Store/infra/main.bicep:341`, `:360`). An incremental ARM deployment never deletes a resource
   just because it left the template, so dropping them would have left them live and firing alongside
   the new rules; disabling them in place is declarative, needs no portal step, and rolls back in one
   line. That is also why the replacements carry the `-v2` suffix: reusing the name would have renamed
-  the live originals instead of disabling them (`MMCA.ADC/infra/main.bicep:293-295`,
-  `MMCA.Store/infra/main.bicep:259-261`).
+  the live originals instead of disabling them (`MMCA.ADC/infra/main.bicep:308-310`,
+  `MMCA.Store/infra/main.bicep:280-282`).
 
 - **One unconditional action group.** `alertEmailAddress` is a required parameter with no default
   (`MMCA.ADC/infra/main.bicep:104`, `MMCA.Store/infra/main.bicep:87`), so the action group's email
-  receiver is not conditional (`MMCA.ADC/infra/main.bicep:231-244`,
-  `MMCA.Store/infra/main.bicep:199-212`) and every scheduled query rule routes to it
-  (`MMCA.ADC/infra/main.bicep:329`, `MMCA.Store/infra/main.bicep:295`). The monthly cost budget
-  notifies the same group (`MMCA.ADC/infra/main.bicep:552`, `:560`;
-  `MMCA.Store/infra/main.bicep:389`, `:397`).
+  receiver is not conditional (`MMCA.ADC/infra/main.bicep:246-260`,
+  `MMCA.Store/infra/main.bicep:220-234`) and every scheduled query rule routes to it
+  (`MMCA.ADC/infra/main.bicep:344`, `MMCA.Store/infra/main.bicep:316`). The monthly cost budget
+  notifies the same group (`MMCA.ADC/infra/main.bicep:551`, `:560`;
+  `MMCA.Store/infra/main.bicep:508`, `:517`).
 
 - **A saved workbook renders the same three signals.** `sloWorkbook`
-  (`MMCA.ADC/infra/main.bicep:515`, `MMCA.Store/infra/main.bicep:352`) is bound to the Log Analytics
+  (`MMCA.ADC/infra/main.bicep:530`, `MMCA.Store/infra/main.bicep:487`) is bound to the Log Analytics
   workspace and embeds `workbooks/adc-slo-workbook.json` / `workbooks/store-slo-workbook.json` at
-  compile time via `loadTextContent` (`MMCA.ADC/infra/main.bicep:524`,
-  `MMCA.Store/infra/main.bicep:361`), grouped per service by `AppRoleName`, so the visualization cannot
+  compile time via `loadTextContent` (`MMCA.ADC/infra/main.bicep:539`,
+  `MMCA.Store/infra/main.bicep:496`), grouped per service by `AppRoleName`, so the visualization cannot
   diverge from the alerts by being maintained somewhere else.
 
 - **`infra/OPERATIONS.md` is the paired artifact.** Each repo's runbook carries one `###` section per
@@ -118,7 +118,7 @@ scheduled query rules, and make the alert-to-runbook pairing a **build gate ship
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/ObservabilityConventionTests.cs:7`,
   `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/ObservabilityConventionTests.cs:7`), so
   the default floor of 3 applies to both. Both test projects are in the CI solution filter
-  (`MMCA.ADC/MMCA.ADC.CI.slnf:58`, `MMCA.Store/MMCA.Store.CI.slnf:52`), so the gate runs in the same
+  (`MMCA.ADC/MMCA.ADC.CI.slnf:58`, `MMCA.Store/MMCA.Store.CI.slnf:53`), so the gate runs in the same
   deploy-gating test job as the rest of the fitness tier.
 
 - **The framework guards its own indirection.** `ObservabilityConventionTestsBaseTests`
@@ -183,7 +183,7 @@ SQL, gRPC and HTTP, so a narrower SQL-scoped twin would page twice for one fault
   re-tiered with no runbook consequence.
 - **Disabled-but-declared alerts are carried debt.** Three superseded `metricAlerts` remain in each
   template and in each resource group until a follow-up deletes them, and the templates say so
-  (`MMCA.ADC/infra/main.bicep:335-341`, `MMCA.Store/infra/main.bicep:301-306`).
+  (`MMCA.ADC/infra/main.bicep:350-356`, `MMCA.Store/infra/main.bicep:322-327`).
 - **The runbook heading is not the deployed resource name.** The gate matches only the `-alert-<key>`
   infix, so the prefix in a heading is unchecked. Live rules resolve from `prefix`
   (`MMCA.ADC/infra/main.bicep:125`, `MMCA.Store/infra/main.bicep:99`) and carry the `-v2` suffix, while

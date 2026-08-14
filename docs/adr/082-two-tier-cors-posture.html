@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-082: Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-14).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/082-two-tier-cors-posture.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-082: Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy">
+  <meta property="og:description" content="Accepted (2026-08-14).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/082-two-tier-cors-posture.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-082: Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy">
+  <meta name="twitter:description" content="Accepted (2026-08-14).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy","item":"https://ivanball.github.io/docs/adr/082-two-tier-cors-posture.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 84 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html" aria-current="page">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-082-two-tier-cross-origin-posture-allow-listed-service-policies-an-any-header-gateway-policy">ADR-082: Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-14).</p>
+          <h2 id="context">Context</h2>
+          <p>Both deployed applications put a YARP gateway in front of per-module service hosts (ADR-008), and
+          the browser and MAUI clients talk to the gateway origin while the services answer on their own
+          internal origins. That makes CORS an edge decision taken in <strong>two different kinds of host</strong>: a
+          service host that owns controllers and therefore knows exactly which headers and methods its API
+          accepts, and a reverse proxy that owns no API surface at all and has to relay whatever a client
+          sends to the service behind it.</p>
+          <p>Those two hosts cannot run the same policy. A proxy that allow-lists headers would have to
+          enumerate every header any fronted service will ever accept, and would break the next endpoint that
+          introduces one. A service host that allowed any header would be giving away precision it actually
+          has.</p>
+          <p>CORS already appears in the record twice, but only in passing: ADR-008 lists it as gateway
+          middleware and as a reason the gateway exists
+          (<code>Website/docs-src/adr/008-service-extraction-topology.md:34</code>, <code>:49</code>), and ADR-058 pins its test
+          hosts to Production so the restrictive branch is the one under test
+          (<code>Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:58-60</code>). Its edge siblings
+          each have their own record: ADR-023 for the security-response headers and ADR-019 for rate limiting
+          and the forwarded-header trust that feeds it. This ADR records the posture itself.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Ship <strong>two</strong> cross-origin policies from the framework: an allow-listed one for service hosts and a
+          deliberately broader one for gateways.</p>
+          <ul>
+          <li><strong>Service hosts register two named policies from one call.</strong> <code>AddCommonCors(IConfiguration)</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:387</code>)
+          adds <code>_allowSpecificOrigins</code> (<code>:29</code>, <code>:391</code>) and <code>_allowAll</code> (<code>:32</code>, <code>:400</code>). Neither is the
+          default policy, so nothing applies until the pipeline names one.</li>
+          <li><strong>The service policy allow-lists origins, headers and methods, and allows credentials.</strong> Origins
+          come from <code>Cors:AllowedOrigins</code> (<code>:393-394</code>), headers are the four the APIs actually use
+          (<code>Content-Type</code>, <code>Authorization</code>, <code>x-signalr-user-agent</code>, <code>x-requested-with</code>, <code>:395</code>), methods are
+          five explicit verbs (<code>GET</code>, <code>POST</code>, <code>PUT</code>, <code>DELETE</code>, <code>PATCH</code>, <code>:396</code>), and <code>AllowCredentials()</code>
+          (<code>:397</code>) is what lets cookie and bearer traffic cross. The <code>x-signalr-user-agent</code> entry is
+          load-bearing rather than decorative: it plus credentials is what allows the SignalR hub to
+          negotiate cross-origin with a bearer token
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:150-154</code>).</li>
+          <li><strong>The environment picks between the two policies in the shared middleware pipeline, not at
+          registration.</strong> <code>UseCommonMiddlewarePipeline</code> calls <code>app.UseCors(...)</code> with <code>CorsPolicyAllowAll</code>
+          when <code>app.Environment.IsDevelopment()</code> and <code>CorsPolicyAllowSpecificOrigins</code> otherwise
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:93-95</code>),
+          positioned after <code>UseRouting()</code> (<code>:92</code>) and before <code>UseAuthentication()</code> (<code>:96</code>). Registration
+          stays environment-agnostic; one line decides the posture.</li>
+          <li><strong>The gateway gets a different policy, and it is the default policy.</strong>
+          <code>AddCommonGatewayCors(IConfiguration, IHostEnvironment)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/GatewayCorsExtensions.cs:24</code>) lives in the Aspire
+          hosting package, not in the API package, and calls <code>AddDefaultPolicy</code> (<code>:37</code>, <code>:48</code>) so a gateway
+          pairs it with a bare <code>app.UseCors()</code>.</li>
+          <li><strong>The gateway policy restricts origins only.</strong> Outside Development it is
+          <code>WithOrigins(Cors:AllowedOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()</code>
+          (<code>GatewayCorsExtensions.cs:45-52</code>). A reverse proxy must pass arbitrary client headers through to
+          the services it fronts, so origin is the one axis it can still constrain while keeping credentials
+          flowing.</li>
+          <li><strong>Both tiers carry a Development-only allow-any-origin branch behind an S5122 suppression.</strong> The
+          service <code>_allowAll</code> policy is <code>AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()</code> under
+          <code>#pragma warning disable S5122</code> whose comment names the pipeline line that gates it
+          (<code>WebApplicationBuilderExtensions.cs:399-404</code>); the gateway&#39;s Development branch is the same shape
+          under the same suppression (<code>GatewayCorsExtensions.cs:34-41</code>), selected by <code>environment .IsDevelopment()</code> at registration time because the gateway has only one policy slot.</li>
+          <li><strong>Allowed origins are configuration, empty by default, filled at deploy time.</strong> Every host ships
+          <code>&quot;Cors&quot;: { &quot;AllowedOrigins&quot;: [] }</code>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:10-11</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:11</code>,
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:11</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:22</code>), and Bicep injects the
+          real value into the gateway container of both applications as
+          <code>Cors__AllowedOrigins__0</code>, pointing at the UI container app&#39;s FQDN
+          (<code>MMCA.ADC/infra/main.bicep:1665</code>, <code>MMCA.Store/infra/main.bicep:1363</code>). On Store the same key can
+          also arrive from Key Vault as <code>Cors--AllowedOrigins--0</code>, which is why the vault provider is
+          registered before anything reads configuration: the allow-list binds eagerly
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:38-43</code>, <code>:55-59</code>).</li>
+          <li><strong>Adoption is complete on both tiers.</strong> All seven ADC and Store service hosts call <code>AddCommonCors</code>
+          (<code>MMCA.ADC.Identity.Service/Program.cs:167</code>, <code>MMCA.ADC.Conference.Service/Program.cs:187</code>,
+          <code>MMCA.ADC.Engagement.Service/Program.cs:165</code>, <code>MMCA.ADC.Notification.Service/Program.cs:154</code>,
+          <code>MMCA.Store.Catalog.Service/Program.cs:140</code>, <code>MMCA.Store.Identity.Service/Program.cs:136</code>,
+          <code>MMCA.Store.Sales.Service/Program.cs:147</code>), as does the Helpdesk reference host
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:32</code>), and every one of the eight then
+          runs <code>UseCommonMiddlewarePipeline()</code> so the selection above applies
+          (<code>MMCA.ADC.Identity.Service/Program.cs:322</code>, <code>MMCA.ADC.Conference.Service/Program.cs:373</code>,
+          <code>MMCA.ADC.Engagement.Service/Program.cs:328</code>, <code>MMCA.ADC.Notification.Service/Program.cs:258</code>,
+          <code>MMCA.Store.Catalog.Service/Program.cs:266</code>, <code>MMCA.Store.Identity.Service/Program.cs:257</code>,
+          <code>MMCA.Store.Sales.Service/Program.cs:275</code>, <code>MMCA.Helpdesk.Web/Program.cs:111</code>). Both gateways call
+          <code>AddCommonGatewayCors</code> and the bare <code>app.UseCors()</code>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:42</code>, <code>:53</code>;
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:59</code>, <code>:75</code>).</li>
+          </ul>
+          <p>The Blazor UI hosts register neither call: they serve their own origin and have no cross-origin API
+          surface, so there is no third tier.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>A proxy cannot allow-list what it does not own.</strong> The gateway has no controllers and no
+          knowledge of which headers the fronted services accept, so a header allow-list there would be a
+          guess that silently breaks the next endpoint. Origin is the axis the proxy genuinely knows, and
+          restricting it is what keeps <code>AllowCredentials()</code> meaningful.</li>
+          <li><strong>A service host can be precise, so it is.</strong> Four headers and five methods is a real reduction of
+          the preflight-accepted surface, and it costs nothing where the API surface is known.</li>
+          <li><strong>Named versus default policy follows from the count.</strong> The service tier needs two policies, so
+          they must be named and selected explicitly; the gateway needs one, so the default policy plus a
+          bare <code>UseCors()</code> is the smaller thing to get wrong.</li>
+          <li><strong>Deciding in the pipeline keeps registration environment-free.</strong> <code>AddCommonCors</code> takes no
+          <code>IHostEnvironment</code> and no host passes one: the single decision point lives beside the other
+          ordering decisions in <code>UseCommonMiddlewarePipeline</code>, where ADR-019&#39;s rate limiter and the auth
+          middleware are also placed.</li>
+          <li><strong>Credentials forbid a wildcard origin.</strong> Any policy that allows credentials has to enumerate
+          origins, which is exactly why both production branches read <code>Cors:AllowedOrigins</code> and only the
+          Development branches use <code>AllowAnyOrigin()</code> (which drops credentials with it).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The gateway policy is broad on two of three axes.</strong> Any header and any method are accepted for
+          an allow-listed origin. The origin list is the only lever there, so a mistake in
+          <code>Cors:AllowedOrigins</code> on a gateway is a bigger mistake than the same error on a service host.</li>
+          <li><strong>The allow-any-origin branch ships in production binaries.</strong> Both tiers keep a policy that
+          allows every origin and gate it solely on <code>IHostEnvironment.IsDevelopment()</code>. Anything that boots
+          one of these hosts with <code>ASPNETCORE_ENVIRONMENT=Development</code> on a reachable network gets the open
+          policy, and the S5122 suppressions
+          (<code>WebApplicationBuilderExtensions.cs:399</code>, <code>GatewayCorsExtensions.cs:36</code>) mean the analyzer will
+          not say so again. The compensating control is ADR-058&#39;s <code>ProductionHostApplicationFactory</code>, which
+          pins <code>UseEnvironment(&quot;Production&quot;)</code> so conformance runs exercise the restrictive branch.</li>
+          <li><strong>The service allow-list is a framework edit, not a host setting.</strong> Headers and methods are
+          hardcoded in <code>AddCommonCors</code> (<code>:395-396</code>), so a service that needs a sixth verb or a fifth header
+          needs an MMCA.Common change and a lockstep version bump (ADR-016), not an appsettings entry. That
+          is the deliberate direction of the trade (precision over per-host configurability), but it does
+          make the cheap change the expensive one.</li>
+          <li><strong>Origins are a deploy-time responsibility with no startup validation.</strong> <code>Cors:AllowedOrigins</code> is
+          read with a raw <code>configuration.GetSection(...).Get&lt;string[]&gt;() ?? []</code> in both registrations
+          (<code>WebApplicationBuilderExtensions.cs:393</code>, <code>GatewayCorsExtensions.cs:45-47</code>); there is no options
+          class, no <code>ValidateOnStart</code>, and no entry in the fail-fast configuration contract (ADR-070). A
+          host deployed without the value starts happily and fails closed at the first cross-origin request,
+          which is the safe direction but shows up as a browser console error rather than a boot failure.</li>
+          <li><strong>Nothing asserts the emitted <code>Access-Control-*</code> headers.</strong> The tests assert the registered policy
+          objects (origins, credentials, and the allow-all shape:
+          <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Startup/WebApplicationBuilderExtensionsTests.cs:197-245</code>),
+          not a real preflight response, so a pipeline-ordering regression that moved <code>UseCors</code> out of place
+          would not be caught by a CORS test.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="079-shared-http-middleware-pipeline.html">ADR-079</a> (the shared middleware pipeline whose fixed order
+          places the environment-selected CORS policy between routing and authentication), ADR-008 (the
+          gateway plus per-module service topology this posture splits along, and the record that
+          first named CORS as a gateway responsibility), ADR-023 (the security-response headers registered
+          next to CORS in the same gateway and service pipelines), ADR-019 (rate limiting and the
+          forwarded-header trust that share the same edge and the same middleware ordering), ADR-058 (the
+          conformance fixtures that pin Production so the restrictive branch is what runs under test),
+          ADR-070 (the fail-fast configuration contract that <code>Cors:AllowedOrigins</code> is deliberately not part
+          of), ADR-016 (why widening the service allow-list is a lockstep framework release).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/082-two-tier-cors-posture.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

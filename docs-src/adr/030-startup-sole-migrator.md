@@ -24,8 +24,8 @@ in production and is the sole migrator of its own database**: it applies its pen
 at startup, before the new revision serves traffic. There is deliberately **no** separate deploy-step
 migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
-- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:786,899,998` (Identity/Catalog/Sales)
-  and `MMCA.ADC/infra/main.bicep:1081,1248,1358,1494` (Identity/Conference/Engagement/Notification) all set
+- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:1031,1160,1279` (Identity/Catalog/Sales)
+  and `MMCA.ADC/infra/main.bicep:1106,1285,1404,1547` (Identity/Conference/Engagement/Notification) all set
   `DatabaseInitStrategy = 'Migrate'`.
 - **One applier per revision.** Each service runs `minReplicas: 1`, so the startup `MigrateAsync` is not
   racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
@@ -81,21 +81,21 @@ trade-off it carries.
 
 1. **Seeding runs after the strategy switch, unconditionally.** `InitializeDatabaseAsync` ends with
    `moduleLoader.SeedAllAsync(...)` placed *outside* the `DatabaseInitStrategy` switch
-   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:87`,
-   switch at `:70-85`). Every enabled module's `IModuleSeeder` therefore runs on every boot, in every
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:98`,
+   switch at `:74-89`). Every enabled module's `IModuleSeeder` therefore runs on every boot, in every
    environment, under all three strategies including the production `"None"` guard: choosing `"None"`
    opts out of applying migrations, not out of seeding. `ModuleLoader.SeedAllAsync` just walks its
    seeder list in module registration order and awaits each one
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:270-276`; the list is
    built only for enabled modules at `:133-136`). Nothing on that path consults the hosting
    environment, and the service hosts call the extension method straight after `builder.Build()`
-   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:295`,
-   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:344`,
-   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:248`,
-   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:239`;
-   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:207`,
-   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:232`,
-   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:215`), so production re-seeds on
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:319`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:370`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:325`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:255`;
+   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:254`,
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:263`,
+   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:272`), so production re-seeds on
    every revision.
 2. **Idempotency is delegated entirely to each seeder.** There is no framework-side ledger for seed
    data: no `__EFMigrationsHistory` equivalent, no marker row, no "already seeded" flag. The loop

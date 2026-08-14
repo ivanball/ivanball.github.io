@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -230,7 +236,7 @@
           (<code>/customers/{id}</code>) or, when the route lacks it, from a <strong>model-bound query/body argument</strong>
           (<code>?userId=42</code>), so the guard also covers list/query routes that carry the owner as a bound
           argument, not only route ids. It is registered scoped by <code>AddAPI</code>
-          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:68</code>) and applied per controller as
+          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:78</code>) and applied per controller as
           <code>[ServiceFilter(typeof(OwnerOrAdminFilter))]</code>.</li>
           <li><strong>Collection ownership specification.</strong> <code>OwnershipHelper</code>
           (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10</code>) is a static helper.
@@ -268,29 +274,29 @@
           inherited from <code>EntityControllerBase</code> / <code>AggregateRootEntityControllerBase</code>. Adding it is therefore an
           audit of the whole controller, not just of the routes that motivated it.</p>
           <p><strong>Adoption.</strong> MMCA.Store wires both in production. The filter guards
-          <code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:38</code> and
+          <code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:49</code> and
           <code>MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:32</code> as a <code>[ServiceFilter]</code>. The
           ownership specification scopes list/get queries:
           <code>ShoppingCartsController</code> builds a <code>ShoppingCartByCustomerSpecification</code>
-          (<code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:53</code>,
+          (<code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:66</code>,
           <code>MMCA.Store/.../Sales.Application/ShoppingCarts/Specifications/ShoppingCartByCustomerSpecification.cs:19</code>,
           which filters by <code>Id</code> because a cart is keyed by customer, <code>ShoppingCartByCustomerSpecification.cs:24</code>)
           and <code>OrdersController</code> builds an <code>OrdersByCustomerSpecification</code> through a private
           <code>GetOwnershipSpecification()</code> method
-          (<code>MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:62-64</code>,
+          (<code>MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:63-65</code>,
           <code>MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13</code>, filtering
-          by <code>CustomerId</code>, <code>OrdersByCustomerSpecification.cs:18</code>), passed as <code>specification: GetOwnershipSpecification()</code> into each query (<code>OrdersController.cs:103</code>, <code>OrdersController.cs:141</code>,
-          <code>OrdersController.cs:175</code>). <code>OrdersController</code> does not use the class-level filter for its mutating
+          by <code>CustomerId</code>, <code>OrdersByCustomerSpecification.cs:18</code>), passed as <code>specification: GetOwnershipSpecification()</code> into each query (<code>OrdersController.cs:104</code>, <code>OrdersController.cs:142</code>,
+          <code>OrdersController.cs:176</code>). <code>OrdersController</code> does not use the class-level filter for its mutating
           routes; it runs an explicit per-mutation ownership check, <code>ValidateOwnershipAsync</code>
-          (<code>OrdersController.cs:345</code>), that reuses <code>OwnershipHelper.IsAdmin</code> through its <code>IsAdmin</code> property
-          (<code>OrdersController.cs:60</code>) to let the bypass role through. Its two denial branches return different
+          (<code>OrdersController.cs:396</code>), that reuses <code>OwnershipHelper.IsAdmin</code> through its <code>IsAdmin</code> property
+          (<code>OrdersController.cs:61</code>) to let the bypass role through. Its two denial branches return different
           statuses on purpose:</p>
           <ul>
           <li><strong>Missing owner claim</strong> (the caller carries no <code>customer_id</code>): <code>Error.Forbidden</code>, a 403
-          (<code>OrdersController.cs:353</code>, <code>OrdersController.cs:355-359</code>). Nothing was looked up, so there is no
+          (<code>OrdersController.cs:404</code>, <code>OrdersController.cs:406-410</code>). Nothing was looked up, so there is no
           resource whose existence a 403 could leak; this matches the filter&#39;s own missing-claim <code>ForbidResult</code>.</li>
           <li><strong>Owner mismatch</strong> (the claim is present but the order is someone else&#39;s): <code>Error.NotFound</code>, a 404
-          rather than a 403 (<code>OrdersController.cs:366</code>, <code>OrdersController.cs:368-370</code>), so the response does not
+          rather than a 403 (<code>OrdersController.cs:417</code>, <code>OrdersController.cs:419-421</code>), so the response does not
           reveal that another customer&#39;s order exists.</li>
           </ul>
           <p>MMCA.ADC&#39;s Engagement module is the first host to configure the filter&#39;s vocabulary rather than take
@@ -391,11 +397,11 @@
           <p>Anchor-only correction. No behavior changed; <code>OrdersController</code> was refactored (a constructor
           parameter added, <code>GetOwnershipSpecification()</code> and the <code>IsAdmin</code> property extracted,
           <code>ValidateOwnershipAsync</code> moved) since the 2026-07-25 pass, which shifted every line anchor pointing
-          into it. Refreshed: <code>GetOwnershipSpecification()</code> (now <code>OrdersController.cs:62-64</code>), its three call
-          sites (<code>OrdersController.cs:103</code>, <code>:141</code>, <code>:175</code>), <code>ValidateOwnershipAsync</code> (now
-          <code>OrdersController.cs:345</code>) and the <code>IsAdmin</code> property it reads (<code>OrdersController.cs:60</code>), the
-          missing-owner-claim <code>Error.Forbidden</code> branch (<code>OrdersController.cs:353</code>, <code>:355-359</code>), and the
-          owner-mismatch <code>Error.NotFound</code> branch (<code>OrdersController.cs:366</code>, <code>:368-370</code>).
+          into it. Refreshed: <code>GetOwnershipSpecification()</code> (now <code>OrdersController.cs:63-65</code>), its three call
+          sites (<code>OrdersController.cs:104</code>, <code>:142</code>, <code>:176</code>), <code>ValidateOwnershipAsync</code> (now
+          <code>OrdersController.cs:396</code>) and the <code>IsAdmin</code> property it reads (<code>OrdersController.cs:61</code>), the
+          missing-owner-claim <code>Error.Forbidden</code> branch (<code>OrdersController.cs:404</code>, <code>:406-410</code>), and the
+          owner-mismatch <code>Error.NotFound</code> branch (<code>OrdersController.cs:417</code>, <code>:419-421</code>).
           <code>OrdersByCustomerSpecification.cs:13</code> and <code>:18</code> were re-checked and are unchanged.</p>
           
         <div class="doc-foot btn-row">

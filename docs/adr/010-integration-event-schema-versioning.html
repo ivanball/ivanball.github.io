@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention).">
+  <meta name="description" content="Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy">
-  <meta property="og:description" content="Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention).">
+  <meta property="og:description" content="Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy">
-  <meta name="twitter:description" content="Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention).">
+  <meta name="twitter:description" content="Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"010 · Integration-Event Schema Versioning & Upcaster Policy","item":"https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -186,7 +192,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-010-integration-event-schema-versioning--upcaster-policy">ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention).</p>
+          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base).</p>
           <h2 id="context">Context</h2>
           <p>Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
           are resolved by consumers solely by their type string: the outbox serializes the event to JSON keyed
@@ -239,13 +245,17 @@
           enforced by convention + review, not by an upcaster pipeline.</li>
           <li>The convention test is <strong>vacuous in MMCA.Common today</strong> (the framework ships no concrete integration
           event): <code>EventVersioningConventionTests</code> runs the shared base against <code>CommonArchitectureMap</code> but has
-          nothing to check. Real enforcement lives in the consumer repos: all three now subclass
+          nothing to check. Real enforcement lives in the consumer trees: four now subclass
           <code>EventConventionTestsBase</code> and run the identical rules against their own event assemblies:
-          <code>EventConventionTests</code> in <code>MMCA.ADC.Architecture.Tests</code> (ADC&#39;s three events) and
-          <code>MMCA.Store.Architecture.Tests</code> (Store&#39;s one), and a matching <code>EventConventionTests</code> in
+          <code>EventConventionTests</code> in <code>MMCA.ADC.Architecture.Tests</code> (ADC&#39;s seven events, spread across the
+          Identity, Conference and Engagement Shared assemblies the map registers) and
+          <code>MMCA.Store.Architecture.Tests</code> (Store&#39;s one), a matching <code>EventConventionTests</code> in
           <code>MMCA.Helpdesk.Architecture.Tests</code> (<code>ArchitectureTests.cs</code>) that gates the seed&#39;s
-          <code>TicketOpenedIntegrationEvent</code>. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
-          Store) is <strong>closed</strong>: every concrete integration event across all three consumers is now enforced.</li>
+          <code>TicketOpenedIntegrationEvent</code>, and one in the two-module <code>MMCA.ECommerce</code> sample
+          (<code>Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ArchitectureTests.cs:38</code>, a local-only sample
+          repo that is not published) gating its <code>ProductCreatedIntegrationEvent</code> and
+          <code>OrderPlacedIntegrationEvent</code>. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
+          Store) is <strong>closed</strong>: every concrete integration event across all four trees is now enforced.</li>
           <li>A get-only <code>SchemaVersion</code> is informational on the wire (it round-trips out, not back in): intentional
           (version is a property of the type, not per-instance data), but it means you read it off the concrete
           type/JSON, not by mutating it.</li>

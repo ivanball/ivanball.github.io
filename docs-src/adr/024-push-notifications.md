@@ -2,7 +2,8 @@
 
 ## Status
 Accepted (2026-06-27, amended 2026-07-15). Revised 2026-08-07 (transactional email recorded as an
-app-level concern outside the channel model; see Revision below).
+app-level concern outside the channel model; see Revision below). Revised 2026-08-14 (the opt-in
+dedup short-circuit and the scope key recorded; the `Enabled` gate narrowed to the hub endpoint).
 
 ## Context
 The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
@@ -22,10 +23,20 @@ recipient policy both behind abstractions.
 - **A durable per-user inbox plus a transient real-time push, written in that order.**
   `SendPushNotificationHandler` (`MMCA.Common.Application`) resolves recipients, creates a
   `PushNotification` aggregate (`MMCA.Common.Domain.Notifications.PushNotifications`, the audit record of
-  what was sent), persists one `UserNotification` inbox row per recipient
-  (`MMCA.Common.Domain.Notifications.UserNotifications`, carrying `IsRead` / `ReadOn` with an idempotent
-  `MarkAsRead`), and only then dispatches the live push. The inbox is the durable source of truth;
-  the push is the best-effort live layer over it.
+  what was sent, carrying the caller's optional `ScopeKey` alongside the title, body, sender and
+  recipient count, `SendPushNotificationHandler.cs:56-62`), persists one `UserNotification` inbox row
+  per recipient (`MMCA.Common.Domain.Notifications.UserNotifications`, carrying `IsRead` / `ReadOn` with
+  an idempotent `MarkAsRead`), and only then dispatches the live push. The inbox is the durable source
+  of truth; the push is the best-effort live layer over it.
+- **A send is idempotent only when the caller opts in.** The command may carry a `DedupKey`; when it is
+  present and not whitespace the handler looks it up before doing anything else and, on a hit, returns
+  the already-sent notification without resolving recipients, writing inbox rows, or pushing
+  (`SendPushNotificationHandler.cs:30-41`). That lookup is a check-then-act, so two concurrent retries
+  of the same send both pass it and the loser fails on the insert against the filtered unique index on
+  `DedupKey` (`PushNotificationConfiguration.cs:67-69`). The handler catches that save failure,
+  requeries the key on `CancellationToken.None`, and returns the winner's notification if the key now
+  exists, rethrowing untouched otherwise (`SendPushNotificationHandler.cs:76-103`). With no key the path
+  is unchanged: nothing is deduplicated by default.
 - **Transient delivery is an abstraction with a no-op default.** `IPushNotificationSender`
   (`MMCA.Common.Application`) is registered by default as `NullPushNotificationSender` (no-op), so a host
   that never calls the opt-in does nothing on send. `AddPushNotifications(configuration)`
@@ -49,14 +60,20 @@ recipient policy both behind abstractions.
   (`SendPushNotificationHandler.cs:134-152`), an OS-level native-push channel that reaches devices the
   SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
   push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:240`), so it
+  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:478`), so it
   stays inert until a native hub is configured. The design of that channel is ADR-044's scope; this ADR
   keeps its own on the inbox and SignalR channels, so the "Two-Channel" title names the durable and
   transient channels this record governs, not a hard cap on the number of delivery legs.
 - **Horizontal scale-out is configuration, not code.** When a Redis connection string is present,
   `AddPushNotifications` adds a Redis backplane to SignalR (`AddStackExchangeRedis`) so a push reaches a
-  user whose WebSocket is pinned to a different replica. The feature is gated by
-  `PushNotificationSettings.Enabled` (config section `"PushNotifications"`).
+  user whose WebSocket is pinned to a different replica. `PushNotificationSettings.Enabled` (config
+  section `"PushNotifications"`, `PushNotificationSettings.cs:9,12`) gates the hub endpoint only:
+  `MapNotificationHub()` maps `NotificationHub` at the configured `HubPath` just when it is true
+  (`SignalRExtensions.cs:25`). `AddPushNotifications` binds the section but registers SignalR,
+  `SignalRPushNotificationSender` and `SignalRLiveChannelPublisher` unconditionally
+  (`DependencyInjection.cs:528-551`), so the opt-in registration, not the flag, is what decides whether
+  a send goes through SignalR; with `Enabled: false` the sender is still wired and simply has no hub
+  endpoint for clients to connect to.
 
 ## Rationale
 - **Each channel covers the other's failure mode.** The inbox guarantees eventual delivery to offline
@@ -107,9 +124,10 @@ unchanged: this closes a documentation gap so the asymmetry reads as deliberate 
    single implementation, `SmtpEmailSender`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:12`), and it is
    TryAdd-registered in the same block as the push-sender defaults
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:234`, beside
-   `IPushNotificationSender` at `:235` and `INativePushSender` at `:240`). That block is `AddServices()`
-   (`:211`), which `AddInfrastructure` always calls (`:147`), so every host gets it. Unlike the two push
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:472`, beside
+   `IPushNotificationSender` at `:473`, `ILiveChannelPublisher` at `:474`, `INativePushSender` at `:478`
+   and `IPushDeviceRegistrar` at `:479`). That block is `AddServices()` (`:442`), which
+   `AddInfrastructure` (`:50`) always calls (`:154`), so every host gets it. Unlike the two push
    abstractions it has no null default and no opt-in `Add*` counterpart: the real SMTP sender is always
    the registration, inert only because nothing resolves it.
 2. **It sits outside the inbox / SignalR / native model.** An email creates no `PushNotification` audit

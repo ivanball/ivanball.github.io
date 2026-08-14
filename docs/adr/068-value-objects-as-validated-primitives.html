@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -259,7 +265,7 @@
           <code>[JsonConstructor]</code> round-trip constructor (<code>Money.cs:51</code>, <code>Email.cs:22</code>, <code>PhoneNumber.cs:22</code>,
           <code>Address.cs:42</code>) so a materializer rebuilds the value without reopening the factory; <code>AddAPI</code>
           registers both the JSON converter and the XML <code>DataContractSerializer</code> formatters
-          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:49-50</code>). <code>Currency</code> instead serializes
+          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:53,60</code>). <code>Currency</code> instead serializes
           as its bare code through a converter attached to the type itself (<code>Currency.cs:13,73</code>) with a
           matching API-layer converter (<code>Source/Presentation/MMCA.Common.API/JsonConverters/CurrencyJsonConverter.cs:12</code>),
           so non-MVC paths (cache, outbox, integration events, typed clients) fail the same way model binding
@@ -274,13 +280,13 @@
           <li><strong>Adoption is real but partial.</strong> Store maps <code>ProductVariant.Price</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:21</code>) with
           <code>OwnsMoney</code> (<code>.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:31</code>),
-          and <code>Order.Total</code> (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:31</code>) is
-          seeded with <code>Money.Zero()</code> (<code>:71</code>) and accumulated through <code>Money.Add</code> (<code>:103,322</code>), mapped
+          and <code>Order.Total</code> (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:37</code>) is
+          seeded with <code>Money.Zero()</code> (<code>:77</code>) and accumulated through <code>Money.Add</code> (<code>:109</code>), mapped
           <code>required: false</code> (<code>OrderConfiguration.cs:26</code>) alongside <code>OrderLine.UnitPrice</code>
           (<code>OrderLineConfiguration.cs:28</code>). Store Identity maps <code>Customer.Email</code> through <code>EmailValueConverter</code>
           and <code>Customer.Address</code> through a hand-rolled <code>OwnsOne</code> block (<code>CustomerConfiguration.cs:36,43</code>), and
           <code>User.Email</code> the same way (<code>UserConfiguration.cs:24</code>). ADC types <code>User.Email</code> as <code>Email</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:31</code>, built at <code>:164</code>) with
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38</code>, built at <code>:164</code>) with
           the same converter (<code>.../Identity.Infrastructure/.../UserConfiguration.cs:21</code>) and a speaker&#39;s
           optional email through <code>NullableEmailValueConverter</code>
           (<code>.../Conference.Infrastructure/.../SpeakerConfiguration.cs:43</code>). <code>Money</code> and <code>Email</code> are the two

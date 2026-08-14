@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -212,10 +218,10 @@
           by a short cache so the account-status lookup is not paid on every request.</p>
           <ul>
           <li><strong>It runs after authentication, before authorization.</strong> <code>UseCommonMiddlewarePipeline</code> registers it
-          at <code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:102</code>, immediately after
+          at <code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:109</code>, immediately after
           <code>UseAuthentication</code> / <code>UseRateLimiter</code>
-          (<code>WebApplicationExtensions.cs:96,101</code>) and before <code>UseAuthorization</code>
-          (<code>WebApplicationExtensions.cs:103</code>), so <code>HttpContext.User</code> is already populated and the check gates
+          (<code>WebApplicationExtensions.cs:96,108</code>) and before <code>UseAuthorization</code>
+          (<code>WebApplicationExtensions.cs:110</code>), so <code>HttpContext.User</code> is already populated and the check gates
           every downstream endpoint.</li>
           <li><strong>Anonymous requests pass straight through.</strong> When <code>ICurrentUserService.UserId</code> is null the
           middleware calls the next delegate and returns without any lookup
@@ -233,7 +239,7 @@
           (<code>TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>, <code>SoftDeletedUserValidator.cs:20</code>). Each
           app closes it over its own <code>User</code> at registration and writes no subclass of its own
           (<code>services.TryAddScoped&lt;ISoftDeletedUserValidator, SoftDeletedUserValidator&lt;User&gt;&gt;()</code> at
-          <code>MMCA.ADC.Identity.Application/DependencyInjection.cs:34</code> and
+          <code>MMCA.ADC.Identity.Application/DependencyInjection.cs:35</code> and
           <code>MMCA.Store.Identity.Application/DependencyInjection.cs:41</code>). The query bypasses the soft-delete
           global query filter deliberately, because a plain read would hide the very row it needs to find.</li>
           <li><strong>A 30-second cache amortizes the lookup.</strong> The key shape and the marker lifetime live in a shared
@@ -264,7 +270,7 @@
           (<code>SoftDeletedUserMiddleware.cs:76-83</code>): Identity is the source of truth and already validated the
           token upstream. Resolving it as a constructor/parameter dependency would instead 500 every request
           in those services. MMCA.Helpdesk wires the same pipeline
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:98</code>) but hosts only a Tickets module and
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111</code>) but hosts only a Tickets module and
           registers no validator, so it takes the same no-op path.</li>
           </ul>
           <p><code>SoftDeletedUserMiddlewareTests</code>
@@ -281,11 +287,11 @@
           erases the linked <code>Customer</code> and writes no marker, so revocation there is bounded only by that passive
           window. MMCA.ADC&#39;s handler writes one: after the erasure commits it queues
           <code>SoftDeletedUserCache.MarkDeletedAsync(cacheService, command.UserId, ct)</code> as an after-commit callback
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:56-68</code>,
-          the call at <code>:60-62</code>; <code>SoftDeletedUserCache.MarkDeletedAsync</code> at <code>SoftDeletedUserCache.cs:53-61</code>), so
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:68-80</code>,
+          the call at <code>:72-74</code>; <code>SoftDeletedUserCache.MarkDeletedAsync</code> at <code>SoftDeletedUserCache.cs:53-61</code>), so
           the next request bearing an already-issued token is rejected without waiting for the window to elapse.
-          The write is best effort: a cache fault is logged and swallowed (<code>DeleteUserHandler.cs:64-67</code>,
-          <code>:78-81</code>) rather than failing an erasure that already committed, which drops ADC back to the same
+          The write is best effort: a cache fault is logged and swallowed (<code>DeleteUserHandler.cs:76-79</code>)
+          rather than failing an erasure that already committed, which drops ADC back to the same
           passive bound Store lives with.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -318,7 +324,7 @@
           <li><strong>Writing the marker on delete is per-app, not framework-wide.</strong> The framework supplies the shared
           key and TTL (<code>SoftDeletedUserCache.MarkDeletedAsync</code>, <code>SoftDeletedUserCache.cs:53-61</code>), but nothing
           calls it on an application&#39;s behalf. ADC&#39;s <code>DeleteUserHandler</code> calls it
-          (<code>MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:56-68</code>); Store&#39;s does
+          (<code>MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:68-80</code>); Store&#39;s does
           not (<code>MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:35-60</code>), so the
           two apps genuinely revoke at different speeds from the same middleware.</li>
           <li><strong>Failing open is a deliberate availability-over-strictness trade.</strong> A cache or database failure on
@@ -355,7 +361,7 @@
           <code>SoftDeletedUserValidator&lt;TUser&gt;</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:19-34</code>, its own
           remarks at <code>:11-17</code> stating no per-app subclass is needed), closed over each app&#39;s <code>User</code> at
-          registration (<code>MMCA.ADC.Identity.Application/DependencyInjection.cs:34</code>, from <code>:32</code>;
+          registration (<code>MMCA.ADC.Identity.Application/DependencyInjection.cs:35</code>, from <code>:32</code>;
           <code>MMCA.Store.Identity.Application/DependencyInjection.cs:41</code>, from <code>:39</code>). The behavior of the query
           is what it was; only its location changed.</li>
           <li><strong>The 30-second value moved out of the middleware.</strong> There is no <code>CacheDuration</code> member in
@@ -372,7 +378,7 @@
           in the Decision and Trade-offs sections.</li>
           <li><strong>The uniform revocation window was wrong for ADC.</strong> ADC&#39;s <code>DeleteUserHandler</code> writes the deleted
           marker in an after-commit callback
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:56-68</code>),
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:68-80</code>),
           so its revocation lands on the next request rather than after the passive window. Store&#39;s handler
           does not
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:35-60</code>),
@@ -385,9 +391,9 @@
           cache read at <code>:91</code> (from <code>:63-66</code>), the cached-<code>true</code> 401 at <code>:102-106</code> (from <code>:66-71</code>), the
           cache-miss validator call at <code>:114-116</code> with the cache write at <code>:131-133</code> and the deleted-401 at
           <code>:143-147</code> (from <code>:73-84</code>), and the fall-through at <code>:150</code> (from <code>:86</code>). Unchanged and re-checked:
-          the pipeline registration (<code>WebApplicationExtensions.cs:102</code>, with <code>:96,101</code> and <code>:103</code> around it),
+          the pipeline registration (<code>WebApplicationExtensions.cs:109</code>, with <code>:96,108</code> and <code>:110</code> around it),
           <code>ISoftDeletedUserValidator.cs:7,15</code>, the Helpdesk no-op path
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:98</code>), and
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111</code>), and
           <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Middleware/SoftDeletedUserMiddlewareTests.cs</code>.</li>
           </ol>
           

@@ -52,7 +52,7 @@ saga-timeout backstop for steps that depend on an external system.
   notification. Compensation that does write therefore commits on its own, after the originating
   save, rather than joining the transaction it is compensating for.
 - **Idempotency is a persisted marker committed by the SAME `SaveChanges` as the compensating
-  writes.** `Order.InventoryRestored` (`.../Domain/Orders/Order.cs:42-48`) is the marker;
+  writes.** `Order.InventoryRestored` (`.../Domain/Orders/Order.cs:48-54`) is the marker;
   `MarkInventoryRestored` refuses a second call and refuses a non-cancelled order
   (`Order.cs:281-298`). The handler checks the marker first
   (`OrderCancelledSagaHandler.cs:56-62`), applies the increases through a pure domain service
@@ -79,7 +79,7 @@ saga-timeout backstop for steps that depend on an external system.
 - **Concurrent redeliveries are serialized by the `RowVersion` concurrency token.** Every auditable
   entity carries one (`MMCA.Common/.../Entities/AuditableBaseEntity.cs:39`), configured as a
   concurrency token on every non-owned auditable type
-  (`MMCA.Common/.../DbContexts/ApplicationDbContext.cs:270-290`, ADR-035). Two deliveries that both
+  (`MMCA.Common/.../DbContexts/ApplicationDbContext.cs:445-473`, ADR-035). Two deliveries that both
   pass the marker check carry the same original token into their update: one commits, the other gets
   `DbUpdateConcurrencyException` and its outbox retry then finds the committed marker and skips.
 - **A periodic sweep drives the transitions a lost webhook would have.**
@@ -93,7 +93,7 @@ saga-timeout backstop for steps that depend on an external system.
   `MarkAsPaymentFailed`, still open to nothing (`PaymentReconciliationService.cs:180-202`). It is
   configuration-gated (`.../Infrastructure/Settings/PaymentReconciliationSettings.cs:13-36`, defaults
   of a 10-minute interval, a 30-minute stuck age and a 50-order batch, carried in
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:49-54`).
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:62-67`).
 - **The sweep gets no private path into the aggregate, and loses races on purpose.** It calls the same
   guarded transitions as the webhook handler
   (`.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:97,128`) and the
@@ -173,7 +173,7 @@ adopted.
   swallow its failures itself.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
-  (`MMCA.Store/infra/main.bicep:1025`) two replicas can pick the same stuck order and each spend a
+  (`MMCA.Store/infra/main.bicep:1309`) two replicas can pick the same stuck order and each spend a
   Stripe status call. Correctness holds through the concurrency token; the duplicated external call
   does not deduplicate.
 - **Every compensating action needs its own marker.** There is no generic mechanism: the ADR-021

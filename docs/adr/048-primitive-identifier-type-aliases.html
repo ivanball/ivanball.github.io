@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -191,7 +197,9 @@
           <code>Directory.Build.props</code> alias-block line range and corrected the framing of what Common&#39;s
           <code>UserIdentifierType</code> alias types). Revised 2026-07-29 (dropped the <code>StronglyTypedIds</code> placeholder-folder
           evidence and deleted the folders themselves: being empty, they were untracked by git and absent from
-          every fresh clone, so the deferral now rests on the verifiable absence of any wrapper-struct type).</p>
+          every fresh clone, so the deferral now rests on the verifiable absence of any wrapper-struct type).
+          Revised 2026-08-14 (Conference&#39;s alias file now declares sixteen aliases, <code>SponsorIdentifierType</code> having
+          been added, and the ADC <code>User</code> source citations were re-anchored after an expanded doc comment).</p>
           <h2 id="context">Context</h2>
           <p>Every entity needs an identity type. The framework&#39;s base entity is generic over that type:
           <code>BaseEntity&lt;TIdentifierType&gt;</code> constrains it to <code>notnull</code> and exposes a single <code>required init Id</code>
@@ -225,8 +233,8 @@
           app supplying the concrete <code>User</code> entity that satisfies it.
           Consumers follow the same pattern: ADC Identity
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2</code>),
-          ADC Conference with fifteen aliases
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-19</code>),
+          ADC Conference with sixteen aliases
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-20</code>),
           and Store Catalog
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-6</code>).</li>
           <li><strong>The alias is the type; there is no wrapping struct.</strong> The right-hand side is a bare primitive.
@@ -242,8 +250,8 @@
           solution-wide alias is a new <code>GlobalUsings.*.cs</code> plus a matching <code>&lt;Compile Include&gt;</code> line, nothing more.</li>
           <li><strong>The alias flows unchanged through every layer.</strong> Tracing the ADC <code>User</code> aggregate: the domain
           entity is <code>User : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:26</code>); the cross-context
-          reference to a speaker is typed <code>SpeakerIdentifierType? LinkedSpeakerId</code> (same file, line 63); the EF
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:33</code>); the cross-context
+          reference to a speaker is typed <code>SpeakerIdentifierType? LinkedSpeakerId</code> (same file, line 70); the EF
           configuration is <code>EntityTypeConfigurationSQLServer&lt;User, UserIdentifierType&gt;</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13</code>);
           the repository handle is <code>GetRepository&lt;User, UserIdentifierType&gt;()</code>

@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-10, amended 2026-07-17 and 2026-07-23).">
+  <meta name="description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23 and 2026-08-14).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)">
-  <meta property="og:description" content="Accepted (2026-07-10, amended 2026-07-17 and 2026-07-23).">
+  <meta property="og:description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23 and 2026-08-14).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)">
-  <meta name="twitter:description" content="Accepted (2026-07-10, amended 2026-07-17 and 2026-07-23).">
+  <meta name="twitter:description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23 and 2026-08-14).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"042 · Device Capability Abstraction (MAUI Blazor Hybrid)","item":"https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -186,7 +192,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-042-device-capability-abstraction-maui-blazor-hybrid">ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-10, amended 2026-07-17 and 2026-07-23).</p>
+          <p>Accepted (2026-07-10, amended 2026-07-17, 2026-07-23 and 2026-08-14).</p>
           <h2 id="context">Context</h2>
           <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
           (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
@@ -197,8 +203,9 @@
           library that must stay WASM-compatible (its layer rule allows Shared only), and any MAUI-typed code
           in it would break the web heads at compile time.</p>
           <p>Two constraints shape the packaging. First, per-head service selection already has a working
-          precedent: <code>ITokenStorageService</code> is implemented by each host and registered after <code>AddUIShared</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:103</code>). Second, MMCA.Common&#39;s CI and release
+          precedent: <code>ITokenStorageService</code> resolves to a per-head implementation registered after
+          <code>AddUIShared</code> (<code>builder.Services.AddCommonMauiTokenStorage()</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:125</code>). Second, MMCA.Common&#39;s CI and release
           pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
           framework&#39;s packages release in lockstep (ADR-016).</p>
           <h2 id="decision">Decision</h2>
@@ -211,14 +218,19 @@
           <code>IGeolocationService</code>, <code>IExternalLinkService</code>, <code>ITextToSpeechService</code>, <code>IAccessibilityAnnouncer</code>,
           <code>ILocalNotificationService</code>, <code>IScreenshotService</code>, <code>IDevicePreferences</code>, <code>IBatteryStatusService</code>,
           <code>IBiometricAuthenticator</code>, <code>ISpeechToTextService</code>, <code>IExternalAuthBroker</code>, <code>IDeepLinkDispatcher</code>,
-          <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Four more have joined since, for 22 today, all
+          <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Five more have joined since, for 23 today, all
           TryAdd-registered by <code>AddDeviceCapabilityDefaults</code>
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:27-60</code>) and
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:27-65</code>) and
           overridden natively by <code>AddMauiDeviceCapabilities</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:28-58</code>): <code>IGeocodingService</code>
-          (Wave 3), <code>IMediaPickerService</code> (ADR-045), and the push pair <code>IPushRegistrationService</code> and
-          <code>IPushDeviceTokenProvider</code> (ADR-044). Each capability has an independent fallback story, and
-          per-capability contracts let heads adopt incrementally.</p>
+          (Wave 3), <code>IMediaPickerService</code> (ADR-045), the push pair <code>IPushRegistrationService</code> and
+          <code>IPushDeviceTokenProvider</code> (ADR-044), and <code>IBarcodeScannerService</code> for camera barcode/QR scanning
+          (<code>DependencyInjection.cs:57</code>). Barcode is the one native override that is deliberately NOT in
+          <code>AddMauiDeviceCapabilities</code>: it ships behind the opt-in <code>UseCommonBarcodeScanner</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:92</code>, called by ADC at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:115</code>), so a head that never scans ships
+          neither the ZXing handler nor a camera permission declaration. Each capability has an independent
+          fallback story, and per-capability contracts let heads adopt incrementally.</p>
           </li>
           <li><p><strong>Safe defaults for every contract, TryAdd-registered by <code>AddUIShared</code>.</strong>
           <code>AddDeviceCapabilityDefaults</code> (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs</code>)

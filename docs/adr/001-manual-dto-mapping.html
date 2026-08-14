@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -186,7 +192,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-001-manual-dto-mapping-over-automapper">ADR-001: Manual DTO Mapping over AutoMapper</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted. <em>Mechanism clarified 2026-06-26: the per-entity mappers are Riok.Mapperly source-generated (compile-time), not hand-written line by line. The decision to avoid runtime convention/reflection mapping (AutoMapper, Mapster) is unchanged.</em></p>
+          <p>Accepted. <em>Mechanism clarified 2026-06-26: the per-entity mappers are Riok.Mapperly source-generated (compile-time), not hand-written line by line. The decision to avoid runtime convention/reflection mapping (AutoMapper, Mapster) is unchanged.</em> <em>Mapper count refreshed 2026-08-14: 30 DTO mappers across Store + ADC.</em></p>
           <h2 id="context">Context</h2>
           <p>Domain entities must be mapped to DTOs for API responses. The two common approaches are:</p>
           <ol>
@@ -205,7 +211,7 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li>More files (28 DTO mappers across Store + ADC, plus the parallel <code>IEntityRequestMapper</code> classes). The interface&#39;s default <code>MapToDTOs</code> implementation is available to remove the batch-mapping boilerplate, though in practice each concrete mapper re-declares the identical one-line projection rather than relying on the default.</li>
+          <li>More files (30 DTO mappers across Store + ADC: 19 in ADC, 11 in Store, plus the parallel <code>IEntityRequestMapper</code> classes). The interface&#39;s default <code>MapToDTOs</code> implementation is available to remove the batch-mapping boilerplate, though in practice each concrete mapper re-declares the identical one-line projection rather than relying on the default.</li>
           <li>Adding a new entity requires creating a mapper class. This is consistent with the project&#39;s explicit-over-implicit philosophy.</li>
           </ul>
           

@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-08-12). Amended 2026-08-13: the composition-time string trade-off below was resolved
-in v1.147.0 by a deferred-resolution overload; see the updated trade-off entry.
+in v1.147.0 by a deferred-resolution overload; see the updated trade-off entry. Amended 2026-08-14:
+source citations re-anchored, and the registration path corrected (the string overload delegates to
+the delegate overload, which is where the ZXing and singleton registrations happen).
 
 ## Context
 ADC's badge check-in feature ([ADR-072](072-qr-badge-check-in-and-points.md)) needs two things that
@@ -55,28 +57,30 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
 - **The native implementation is opt-in and deliberately NOT folded into `UseMauiDeviceCapabilities`.**
   A head asks for the camera by name:
   `UseCommonBarcodeScanner(string cancelText = "Cancel", string cameraDescription = "Scan a code")`
-  on `MauiAppBuilder` (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:58-66`), which calls ZXing's
-  `UseBarcodeReader()` and then plain-`AddSingleton`s `MauiBarcodeScannerService` over the TryAdd default.
+  on `MauiAppBuilder` (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:67-70`), which delegates to the
+  `Func<string>` overload (`:92-103`); that overload is where ZXing's `UseBarcodeReader()` (`:99`) runs and
+  where `MauiBarcodeScannerService` is plain-`AddSingleton`ed over the TryAdd default (`:100-101`).
   `UseMauiDeviceCapabilities` (`:29-42`) does not call it, and says why (`:47-49`): a head that never
   scans should ship neither the camera handler nor a camera permission declaration.
 - **The scan is a modal page with exactly one resolution.** `MauiBarcodeScannerService`
-  (`Capabilities/MauiBarcodeScannerService.cs:19`) marshals to the main thread, pushes a
-  `BarcodeScanPage` modally and pops it in a `finally` (`:53-78`). The page holds a
+  (`Capabilities/MauiBarcodeScannerService.cs:24`) marshals to the main thread, then inside
+  `ScanOnMainThreadAsync` (`:94-119`) pushes a `BarcodeScanPage` modally (`:109`) and pops it in a
+  `finally` (`:115-118`). The page holds a
   `TaskCompletionSource<string?>` (`Capabilities/BarcodeScanPage.cs:23-24`) that four paths can complete
   and only the first wins: a decode, the cancel button, the hardware back gesture, and
   `OnDisappearing`; the caller's `CancellationToken` is bridged to the same `Cancel()`
-  (`MauiBarcodeScannerService.cs:71`). Only 2D formats are read (`BarcodeScanPage.cs:36`), because 1D
+  (`MauiBarcodeScannerService.cs:112`). Only 2D formats are read (`BarcodeScanPage.cs:36`), because 1D
   symbologies multiply false positives on a badge screen.
 - **Permission stays with the head, not the framework.** No framework code calls
   `Permissions.RequestAsync<Permissions.Camera>`. An undeclared or denied camera produces a preview that
   never decodes and is cancelled out of, which the contract already renders as `null`
   (`MauiBarcodeScannerService.cs:7-11`), so the degradation path and the cancel path are the same path.
-- **Supported means Android or iOS.** `IsSupported` gates on `DeviceInfo.Current.Platform` (`:27-29`);
+- **Supported means Android or iOS.** `IsSupported` gates on `DeviceInfo.Current.Platform` (`:66-68`);
   Windows and Mac Catalyst heads keep the null behavior even after opting in.
 
 Packaging follows ADR-042 exactly: `QRCoder` 1.8.0 (MIT) is a `MMCA.Common.UI` dependency and
 `ZXing.Net.Maui.Controls` 0.10.3 (MIT) a `MMCA.Common.UI.Maui` one, both pinned in
-`MMCA.Common/Directory.Packages.props` (`:101`, `:124`), and the MAUI package keeps its
+`MMCA.Common/Directory.Packages.props` (`:128`, `:151`), and the MAUI package keeps its
 windows-job build and pack.
 
 ## Rationale

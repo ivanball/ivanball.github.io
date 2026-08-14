@@ -78,7 +78,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   `[JsonConstructor]` round-trip constructor (`Money.cs:51`, `Email.cs:22`, `PhoneNumber.cs:22`,
   `Address.cs:42`) so a materializer rebuilds the value without reopening the factory; `AddAPI`
   registers both the JSON converter and the XML `DataContractSerializer` formatters
-  (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:49-50`). `Currency` instead serializes
+  (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:53,60`). `Currency` instead serializes
   as its bare code through a converter attached to the type itself (`Currency.cs:13,73`) with a
   matching API-layer converter (`Source/Presentation/MMCA.Common.API/JsonConverters/CurrencyJsonConverter.cs:12`),
   so non-MVC paths (cache, outbox, integration events, typed clients) fail the same way model binding
@@ -93,13 +93,13 @@ Model a domain value that carries an invariant as an **immutable record value ob
 - **Adoption is real but partial.** Store maps `ProductVariant.Price`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:21`) with
   `OwnsMoney` (`.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:31`),
-  and `Order.Total` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:31`) is
-  seeded with `Money.Zero()` (`:71`) and accumulated through `Money.Add` (`:103,322`), mapped
+  and `Order.Total` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:37`) is
+  seeded with `Money.Zero()` (`:77`) and accumulated through `Money.Add` (`:109`), mapped
   `required: false` (`OrderConfiguration.cs:26`) alongside `OrderLine.UnitPrice`
   (`OrderLineConfiguration.cs:28`). Store Identity maps `Customer.Email` through `EmailValueConverter`
   and `Customer.Address` through a hand-rolled `OwnsOne` block (`CustomerConfiguration.cs:36,43`), and
   `User.Email` the same way (`UserConfiguration.cs:24`). ADC types `User.Email` as `Email`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:31`, built at `:164`) with
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38`, built at `:164`) with
   the same converter (`.../Identity.Infrastructure/.../UserConfiguration.cs:21`) and a speaker's
   optional email through `NullableEmailValueConverter`
   (`.../Conference.Infrastructure/.../SpeakerConfiguration.cs:43`). `Money` and `Email` are the two

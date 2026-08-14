@@ -9,11 +9,11 @@ posture, so consumers re-baseline their OpenAPI contract snapshots in the sweep.
 ## Context
 The request is "export what you filtered". The generic entity surface of
 [ADR-034](034-generic-entity-query-layer.md) already accepts a full query vocabulary on the paged route
-(`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:112`): sparse fieldsets through
-`fields`, dynamic per-type filtering bound by `QueryFilterModelBinder` (`EntityControllerBase.cs:124`),
+(`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:139`): sparse fieldsets through
+`fields`, dynamic per-type filtering bound by `QueryFilterModelBinder` (`EntityControllerBase.cs:151`),
 `sortColumn` / `sortDirection`, and pagination reported in `X-Pagination`. A user who has narrowed a grid
 to the rows they care about wants those exact rows as a file. The framework produced no file at all: the
-four generic reads (`EntityControllerBase.cs:73`, `:112`, `:154`, `:184`) return JSON and nothing else.
+four generic reads (`EntityControllerBase.cs:100`, `:139`, `:347`, `:377`) return JSON and nothing else.
 
 The obvious implementation is content negotiation: keep the same URL, have the client send
 `Accept: text/csv`, and register an `OutputFormatter`. Exploration of the real source found two behaviors
@@ -60,7 +60,7 @@ different URL.
 `IEntityQueryService.GetAllAsync`
 (`Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:60`) at a page size of
 `ApplicationSettings.MaxPageSize`
-(`Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:15`, default 500), writing each
+(`Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17`, default 500), writing each
 page's rows into the response as they materialize, until a page comes back short or the export cap is
 reached. Every page is a bounded, already-supported read, so `MaxUnboundedResultLimit` is never the thing
 that decides how large an export is.

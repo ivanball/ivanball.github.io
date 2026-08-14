@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -208,13 +214,14 @@
           contract, supplied by two controller bases over a shared query pipeline.</p>
           <ol>
           <li><p><strong>Generic read controller.</strong> <code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code>
-          (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:28</code>,
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:34</code>,
           <code>[ApiController]</code> / <code>[Route(&quot;[controller]&quot;)]</code> / <code>[ApiVersion(&quot;1.0&quot;)]</code> at
-          <code>EntityControllerBase.cs:25-27</code>) exposes four GET routes for any entity:
-          <code>[HttpGet]</code> list (<code>EntityControllerBase.cs:73</code>), <code>[HttpGet(&quot;paged&quot;)]</code>
-          (<code>EntityControllerBase.cs:112</code>), <code>[HttpGet(&quot;lookup&quot;)]</code> for id/name dropdown
-          entries (<code>EntityControllerBase.cs:154</code>), and <code>[HttpGet(&quot;{id}&quot;)]</code>
-          (<code>EntityControllerBase.cs:184</code>).</p>
+          <code>EntityControllerBase.cs:31-33</code>) exposes four core GET routes for any entity
+          (plus a <code>[HttpGet(&quot;export&quot;)]</code> CSV action inserted between the paged and lookup
+          routes): <code>[HttpGet]</code> list (<code>EntityControllerBase.cs:100</code>), <code>[HttpGet(&quot;paged&quot;)]</code>
+          (<code>EntityControllerBase.cs:139</code>), <code>[HttpGet(&quot;lookup&quot;)]</code> for id/name dropdown
+          entries (<code>EntityControllerBase.cs:347</code>), and <code>[HttpGet(&quot;{id}&quot;)]</code>
+          (<code>EntityControllerBase.cs:377</code>).</p>
           </li>
           <li><p><strong>Generic write controller.</strong> <code>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;</code>
           (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:27</code>)
@@ -226,7 +233,7 @@
           not create a duplicate (ADR-017).</p>
           </li>
           <li><p><strong>Sparse fieldsets via <code>fields</code>.</strong> A comma-separated <code>fields</code> query parameter
-          (<code>EntityControllerBase.cs:77</code>, <code>:121</code>, <code>:193</code>) drives a server-side projection:
+          (<code>EntityControllerBase.cs:104</code>, <code>:148</code>, <code>:386</code>) drives a server-side projection:
           <code>QueryFieldService.ApplyFieldSelection</code>
           (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:169</code>) builds a
           <code>MemberInit</code> expression that selects only the requested writable properties so
@@ -234,7 +241,7 @@
           </li>
           <li><p><strong>Dynamic per-type filtering.</strong> The paged route binds
           <code>Dictionary&lt;string, (string Operator, string Value)&gt; filters</code> through
-          <code>[ModelBinder(typeof(QueryFilterModelBinder))]</code> (<code>EntityControllerBase.cs:124</code>),
+          <code>[ModelBinder(typeof(QueryFilterModelBinder))]</code> (<code>EntityControllerBase.cs:151</code>),
           which parses <code>filters[Property].operator</code> / <code>filters[Property].value</code> query keys
           (<code>Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:24</code>).
           <code>QueryFilterService.ApplyFilters</code>
@@ -246,19 +253,19 @@
           declaring its <code>SupportedOperators</code> (<code>IFilterStrategy.cs:24</code>). Extra types register
           via <code>QueryFilterService.RegisterStrategy</code> (<code>QueryFilterService.cs:60</code>).</p>
           </li>
-          <li><p><strong>Sort.</strong> <code>sortColumn</code> / <code>sortDirection</code> (<code>EntityControllerBase.cs:119-120</code>)
+          <li><p><strong>Sort.</strong> <code>sortColumn</code> / <code>sortDirection</code> (<code>EntityControllerBase.cs:146-147</code>)
           feed <code>QueryFieldService.ApplySorting</code> (<code>QueryFieldService.cs:135</code>), an
           <code>OrderBy(&quot;&lt;col&gt; ascending|descending&quot;)</code> over the entity property the DTO name
           maps to.</p>
           </li>
           <li><p><strong>Pagination and the <code>X-Pagination</code> header.</strong> The paged route clamps the
           requested page size with <code>Math.Min(pageSize, MaxPageSize)</code>
-          (<code>EntityControllerBase.cs:127</code>), where <code>MaxPageSize</code> reads
+          (<code>EntityControllerBase.cs:154</code>), where <code>MaxPageSize</code> reads
           <code>IApplicationSettings.MaxPageSize</code> and falls back to 500
-          (<code>EntityControllerBase.cs:50</code>, default at
-          <code>Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:15</code>). The
+          (<code>EntityControllerBase.cs:56</code>, default at
+          <code>Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17</code>). The
           pagination metadata is serialized into the <code>X-Pagination</code> response header
-          (<code>EntityControllerBase.cs:144</code>).</p>
+          (<code>EntityControllerBase.cs:171</code>).</p>
           </li>
           <li><p><strong>A last-resort safety ceiling.</strong> Independent of the API page-size clamp,
           <code>EntityQueryPipeline.MaxUnboundedResultLimit = 1000</code>
@@ -268,7 +275,8 @@
           pagination cannot trigger an unbounded full-table load.</p>
           </li>
           <li><p><strong>Two include paths.</strong> <code>includeFKs</code> / <code>includeChildren</code>
-          (<code>EntityControllerBase.cs:69</code>) select navigation loading. <code>EntityQueryPipeline</code>
+          (<code>EntityControllerBase.cs:105-106</code> for the list overload, <code>:144-145</code> for the
+          paged overload) select navigation loading. <code>EntityQueryPipeline</code>
           (<code>EntityQueryPipeline.cs:13</code>) runs PATH 1 for source-supported includes via EF
           Core <code>.Include()</code> translated to SQL (<code>EntityQueryPipeline.cs:39</code>) and PATH 2 for
           unsupported includes via manual <code>INavigationPopulator</code> batch loading after
@@ -287,7 +295,7 @@
           touched (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:111</code>,
           invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:227</code>),
           and <code>MaxUnboundedResultLimit</code> (<code>EntityQueryPipeline.cs:23</code>) plus the <code>MaxPageSize</code>
-          clamp (<code>EntityControllerBase.cs:127</code>) bound the result size.</li>
+          clamp (<code>EntityControllerBase.cs:154</code>) bound the result size.</li>
           <li><strong>Composes with manual DTO mapping (ADR-001).</strong> Entities are projected to DTOs by
           an injected <code>IEntityDTOMapper</code> (<code>EntityQueryService.cs:35</code>, <code>:51</code>) via
           <code>DTOMapper.MapToDTOs</code> (<code>EntityQueryService.cs:262</code>); a <code>DTOToEntityPropertyMap</code>
@@ -317,7 +325,7 @@
           purpose-built endpoint; the query contract (filter key syntax, operators) must be
           learned once rather than read off each endpoint.</li>
           <li><strong>Opting out means overriding the base.</strong> All four reads and the two writes are
-          <code>virtual</code> (<code>EntityControllerBase.cs:76</code>, <code>AggregateRootEntityControllerBase.cs:63</code>),
+          <code>virtual</code> (<code>EntityControllerBase.cs:103</code>, <code>AggregateRootEntityControllerBase.cs:63</code>),
           so a controller that needs bespoke behavior overrides the specific action rather
           than abandoning the base, but the default surface is opt-out, not opt-in.</li>
           </ul>
@@ -325,7 +333,7 @@
           <p>ADR-001 (manual DTO mapping: the generic controllers project through
           <code>IEntityDTOMapper</code>), ADR-002 (navigation populators: the unsupported-include path),
           ADR-013 (Result pattern at the edge: every action returns through
-          <code>HandleFailure(result.Errors)</code>, <code>EntityControllerBase.cs:93</code>), ADR-017 (idempotency:
+          <code>HandleFailure(result.Errors)</code>, <code>EntityControllerBase.cs:120</code>), ADR-017 (idempotency:
           the generic create is <code>[Idempotent]</code>, <code>AggregateRootEntityControllerBase.cs:59</code>),
           ADR-019 (rate limiting: these GET routes are the authenticated read surface the
           always-on global limiter caps per principal).</p>

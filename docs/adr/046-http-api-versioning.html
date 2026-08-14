@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -191,7 +197,10 @@
           attributes on its own generic base rather than noting a non-inheritance caveat; refreshed the
           <code>AddCommonApiVersioning</code> call-site lines in the ADC Conference/Identity and Store Catalog hosts).
           Amended 2026-08-12 (v1.146.0): the registration also guards OpenAPI generation against an unbound route
-          token, which a URL-segment-versioned host would otherwise trip on.</p>
+          token, which a URL-segment-versioned host would otherwise trip on.
+          Revised 2026-08-14 (the registration never sets <code>DefaultApiVersion</code>: <code>1.0</code> comes from the
+          <code>Asp.Versioning</code> library default and the omission is deliberate; re-anchored the registration,
+          explorer, OpenAPI, host call-site and <code>EntityControllerBase</code> citations to their current lines).</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s REST surface is served by controllers hosted in extracted service processes behind a
           YARP gateway. As those services evolve, a response shape has to be able to change without breaking a
@@ -210,22 +219,27 @@
           proves two live versions coexist.</p>
           <ul>
           <li><strong>One registration wires the whole policy.</strong> <code>AddCommonApiVersioning</code>
-          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:110</code>) sets the
-          default version to <code>1.0</code>
-          (<code>WebApplicationBuilderExtensions.cs:114</code>), assumes it when a caller sends no version
-          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:115</code>), reports
+          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:115</code>) deliberately
+          does <strong>not</strong> set <code>DefaultApiVersion</code>: <code>1.0</code> is already the <code>Asp.Versioning</code> library default, and the
+          API explorer inherits both it and <code>AssumeDefaultVersionWhenUnspecified</code> from the versioning options,
+          so restating either one trips AV0011/AV0024. The code comment recording that omission is at
+          <code>WebApplicationBuilderExtensions.cs:117</code>. What the registration does set: it assumes the default
+          version when a caller sends no header
+          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:122</code>), reports
           the supported/deprecated versions on every response (<code>ReportApiVersions = true</code>,
-          <code>WebApplicationBuilderExtensions.cs:116</code>), and selects the version from an <code>api-version</code> request
-          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:117</code>). The
+          <code>WebApplicationBuilderExtensions.cs:123</code>), and selects the version from an <code>api-version</code> request
+          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:124</code>). The
           reader is header-based deliberately: routes and query strings stay version-free, so a caller opts
           into a newer shape by adding one header rather than changing the URL.</li>
           <li><strong>The API explorer is wired for versioned OpenAPI.</strong> The same call chains <code>.AddMvc()</code> then
-          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:118</code>,
-          <code>WebApplicationBuilderExtensions.cs:119</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
-          (<code>WebApplicationBuilderExtensions.cs:121</code>) and mirroring the default-version behavior for the
-          explorer (<code>WebApplicationBuilderExtensions.cs:123</code>, <code>WebApplicationBuilderExtensions.cs:124</code>). That
+          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:125</code>,
+          <code>WebApplicationBuilderExtensions.cs:126</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
+          (<code>WebApplicationBuilderExtensions.cs:128</code>) and substituting the version into the URL where a host
+          routes one (<code>SubstituteApiVersionInUrl = true</code>, <code>WebApplicationBuilderExtensions.cs:129</code>). The
+          explorer&#39;s default-version behavior is inherited rather than configured, exactly as the comment
+          above it records (<code>WebApplicationBuilderExtensions.cs:117</code>). That
           group format feeds the <code>v1</code> OpenAPI document <code>AddCommonOpenApi</code> registers
-          (<code>WebApplicationBuilderExtensions.cs:225</code>), which
+          (<code>WebApplicationBuilderExtensions.cs:236</code>), which
           <code>MapCommonOpenApi</code> serves at <code>/openapi/v1.json</code> outside Production only
           (<code>Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:28</code>,
           <code>OpenApiEndpointExtensions.cs:30</code>).</li>
@@ -275,9 +289,9 @@
           current host was affected either way, which is precisely why the failure could ship unnoticed.</li>
           <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
           in their startup: ADC&#39;s Conference
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:171</code>) and Identity
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:152</code>) hosts, Store&#39;s Catalog host
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:122</code>), and the same call is made
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:188</code>) and Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:168</code>) hosts, Store&#39;s Catalog host
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:141</code>), and the same call is made
           by the other extracted hosts and by the monolith reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:33</code>).</li>
           </ul>
@@ -327,8 +341,7 @@
           <code>[ApiVersion]</code> non-inheritance, handled there by ADC&#39;s sealed <code>OAuthController</code> subclass), ADR-034
           (the generic entity controller bases, which take the opposite shape: <code>[ApiController]</code> /
           <code>[Route(&quot;[controller]&quot;)]</code> / <code>[ApiVersion(&quot;1.0&quot;)]</code> sit on the generic base itself,
-          <code>EntityControllerBase.cs:25-27</code>).
-          &lt;/content&gt;</p>
+          <code>EntityControllerBase.cs:31-33</code>).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

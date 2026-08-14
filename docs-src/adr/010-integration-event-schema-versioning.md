@@ -1,7 +1,7 @@
 # ADR-010: Integration-Event Schema Versioning & Upcaster Policy
 
 ## Status
-Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention).
+Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base).
 
 ## Context
 Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
@@ -53,13 +53,17 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
   enforced by convention + review, not by an upcaster pipeline.
 - The convention test is **vacuous in MMCA.Common today** (the framework ships no concrete integration
   event): `EventVersioningConventionTests` runs the shared base against `CommonArchitectureMap` but has
-  nothing to check. Real enforcement lives in the consumer repos: all three now subclass
+  nothing to check. Real enforcement lives in the consumer trees: four now subclass
   `EventConventionTestsBase` and run the identical rules against their own event assemblies:
-  `EventConventionTests` in `MMCA.ADC.Architecture.Tests` (ADC's three events) and
-  `MMCA.Store.Architecture.Tests` (Store's one), and a matching `EventConventionTests` in
+  `EventConventionTests` in `MMCA.ADC.Architecture.Tests` (ADC's seven events, spread across the
+  Identity, Conference and Engagement Shared assemblies the map registers) and
+  `MMCA.Store.Architecture.Tests` (Store's one), a matching `EventConventionTests` in
   `MMCA.Helpdesk.Architecture.Tests` (`ArchitectureTests.cs`) that gates the seed's
-  `TicketOpenedIntegrationEvent`. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
-  Store) is **closed**: every concrete integration event across all three consumers is now enforced.
+  `TicketOpenedIntegrationEvent`, and one in the two-module `MMCA.ECommerce` sample
+  (`Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ArchitectureTests.cs:38`, a local-only sample
+  repo that is not published) gating its `ProductCreatedIntegrationEvent` and
+  `OrderPlacedIntegrationEvent`. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
+  Store) is **closed**: every concrete integration event across all four trees is now enforced.
 - A get-only `SchemaVersion` is informational on the wire (it round-trips out, not back in): intentional
   (version is a property of the type, not per-instance data), but it means you read it off the concrete
   type/JSON, not by mutating it.

@@ -1,7 +1,8 @@
 # ADR-070: Fail-Fast Configuration Contract
 
 ## Status
-Accepted (2026-08-07).
+Accepted (2026-08-07). Revised 2026-08-14 (source citations re-anchored; the consumer-repo facade
+claim narrowed to production code, with the controller-test exception recorded).
 
 ## Context
 Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
@@ -27,26 +28,26 @@ type through a read-only interface when it must be read above Infrastructure.**
 
 - **One binding shape, used everywhere.**
   `AddOptions<T>().Bind(configuration.GetSection(T.SectionName)).ValidateDataAnnotations().ValidateOnStart()`
-  is the required form (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:60-63`).
+  is the required form (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:67-70`).
   `.BindConfiguration(T.SectionName)` is the accepted shorthand for the `Bind(GetSection(...))` step and
   is what Store's Sales module uses
-  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:35-38`, `:40-43`).
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:47-50`, `:52-55`).
   `ValidateOnStart()` is the load-bearing link: without it the annotations are evaluated lazily on first
   resolution, which is exactly the first-use failure the contract exists to prevent.
 - **The framework owns the base set.** Eight sections are bound this way in the Infrastructure package's
-  `DependencyInjection.cs` alone: seven inside `AddInfrastructure` (`ConnectionStringSettings` `:60-63`,
-  `SmtpSettings` `:74-77`, `PersistenceSettings` `:116-119`, `OutboxSettings` `:121-124`,
-  `LoginProtectionSettings` `:126-129`, `MessageBusSettings` `:132-135`, `JwksSettings` `:137-140`) and an
-  eighth in the opt-in `AddPushNotifications` (`PushNotificationSettings` `:292-295`). Three more are bound
+  `DependencyInjection.cs` alone: seven inside `AddInfrastructure` (`ConnectionStringSettings` `:67-70`,
+  `SmtpSettings` `:81-84`, `PersistenceSettings` `:123-126`, `OutboxSettings` `:128-131`,
+  `LoginProtectionSettings` `:133-136`, `MessageBusSettings` `:139-142`, `JwksSettings` `:144-147`) and an
+  eighth in the opt-in `AddPushNotifications` (`PushNotificationSettings` `:530-533`). Three more are bound
   by the Presentation packages: `IdempotencySettings`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:60-63`), `JwtSettings`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:318-321`),
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:70-73`), `JwtSettings`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:346-349`),
   and `ApiSettings` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:32-35`).
 - **Each service host adds exactly two of its own**, `ApplicationSettings` and `ModulesSettings`, and all
   eight hosts across the three application repos do it identically: ADC's four services (for example
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:153-156` and `:273-276`), Store's three
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:104-107` and `:195-198`), and the
-  Helpdesk monolith seed (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:17-20` and `:62-65`).
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:170-173` and `:299-302`), Store's three
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:123-126` and `:226-229`), and the
+  Helpdesk monolith seed (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:17-20` and `:75-78`).
   Modules may add their own sections on the same chain, as Store's Sales module does for Stripe.
 - **Validation is data annotations, extended by `IValidatableObject` where a rule spans fields.**
   `JwtSettings` marks `Issuer` and `Audience` `[Required]`
@@ -57,9 +58,9 @@ type through a read-only interface when it must be read above Infrastructure.**
   fails to boot rather than failing to sign its first token.
 - **Read-only interface facades over `IOptions`.** Five settings types are additionally registered as
   singletons that resolve `IOptions<T>.Value` and hand back an interface: `IApplicationSettings`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:30`), `IJwtSettings`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:58`),
-  `IConnectionStringSettings` (`:64`), `ISmtpSettings` (`:78`), and `IPushNotificationSettings` (`:296-297`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:31`), `IJwtSettings`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:65`),
+  `IConnectionStringSettings` (`:71`), `ISmtpSettings` (`:85`), and `IPushNotificationSettings` (`:534-535`).
   The interfaces declare `get`/`init` members only
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ISmtpSettings.cs:6-28`), so a consumer can
   read a setting and cannot rebind it. The interface for `IJwtSettings` lives in a file named
@@ -67,32 +68,43 @@ type through a read-only interface when it must be read above Infrastructure.**
   type name, not the filename, is the contract.
 - **Three recorded exceptions to the chain, all in the framework.** `CacheKeyPrefixOptions` is bound with
   a bare `services.Configure` and no validation, because an absent section must leave cache keys exactly
-  as callers write them (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:163-166`).
+  as callers write them (a single call inside `AddCaching`,
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:172`, the method starting
+  at `:164`).
   `LayoutSettings` is bound without validation for the same reason: it is optional footer copy
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:38-39`). `DataSourcesSettings` is
   constructed directly from the section rather than through `AddOptions`, because a root-level dictionary
   section does not bind through the options pipeline
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:68-70`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:75-77`).
 
 **Adoption of the facade half is partial, and this ADR settles the direction rather than claiming the
 state.** Only five of the framework's settings types have a facade; the rest are consumed as `IOptions<T>`
 inside Infrastructure and API, which is where they belong: `OutboxProcessor`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:48`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:53`),
 `BrokerEventBus` (`.../Services/BrokerEventBus.cs:34`), `LoginProtectionService`
 (`.../Auth/LoginProtectionService.cs:21`), `RsaJwksProvider` (`.../Auth/RsaJwksProvider.cs:15`),
 `SQLServerDbContext` (`.../Persistence/DbContexts/SQLServerDbContext.cs:37`), and `IdempotencyFilter`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:432`). The facades are
-consumed only inside the framework: `EntityControllerBase` resolves `IApplicationSettings`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:54`),
+consumed only inside the framework: `EntityControllerBase` resolves `IApplicationSettings` per request at
+two sites, its `MaxPageSize` and `MaxExportRows` accessors
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:60` and `:80`),
 `RepositoryFactory` takes it in its constructor
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:14`),
 `TokenService` takes `IJwtSettings` (`.../Services/TokenService.cs:47`), and `SmtpEmailSender` takes
-`ISmtpSettings` (`.../Services/SmtpEmailSender.cs:12`). No consumer repo resolves a facade at all: ADC,
-Store, and Helpdesk contain zero references to `IApplicationSettings`, `IJwtSettings`, or `ISmtpSettings`,
-and where their own code reads a setting it injects `IOptions<T>` directly (Store's Sales Infrastructure
+`ISmtpSettings` (`.../Services/SmtpEmailSender.cs:12`). No consumer repo's production code resolves a
+facade: nothing under `Source/` in ADC, Store, or Helpdesk references `IApplicationSettings`,
+`IJwtSettings`, or `ISmtpSettings`. The only consumer references are in controller tests, and they exist
+because of `EntityControllerBase`: Store registers a stand-in `IApplicationSettings` in six API test
+fixtures so `MaxPageSize` resolves (for example
+`MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.API.Tests/Controllers/ShoppingCartsControllerTests.cs:44`),
+and six ADC Conference controller tests name it only in a comment recording that an empty provider yields
+the default (for example
+`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Controllers/SponsorsControllerTests.cs:41`);
+Helpdesk has no reference of either kind.
+Where consumer code reads a setting it injects `IOptions<T>` directly (Store's Sales Infrastructure
 in `StripeClientFactory.cs:21`, `StripePaymentService.cs:62`, `StripeWebhookRegistrationService.cs:29`,
-`PaymentReconciliationService.cs:35-36`; ADC's web host in
-`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:136` and its calendar component in
+`PaymentReconciliationService.cs:35-36`; ADC's web host in its `/client-config` minimal-API handler,
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:145`, and its calendar component in
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Components/AddToCalendarButton.razor:7`).
 
 The Application-layer invariant nevertheless holds today: no Application-layer file in any of the four
@@ -132,7 +144,7 @@ with the exception that new framework settings crossing into Application or cont
   That is the intended trade (no half-configured replica serves traffic), but it means a configuration
   mistake takes the whole rollout rather than one code path.
 - **Two ways to read a setting coexist.** Five types have a facade and the rest do not, and no consumer
-  repo uses a facade at all, so a reader encounters both forms. The boundary above sets which is correct
+  repo's production code uses a facade at all, so a reader encounters both forms. The boundary above sets which is correct
   where, but it does not make the codebase look uniform today.
 - **Data annotations are the vocabulary.** Anything richer needs `IValidatableObject` or a custom
   `IValidateOptions<T>`, and only `JwtSettings` reaches for the former today.

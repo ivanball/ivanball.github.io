@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
+  <meta name="description" content="Accepted (2026-08-13; revised 2026-08-14). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)">
-  <meta property="og:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
+  <meta property="og:description" content="Accepted (2026-08-13; revised 2026-08-14). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)">
-  <meta name="twitter:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
+  <meta name="twitter:description" content="Accepted (2026-08-13; revised 2026-08-14). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)","item":"https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -186,7 +192,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-074-recurring-job-scheduler-persistent-cron-jobs-on-the-outbox-claim-lease-pattern">ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          <p>Accepted (2026-08-13; revised 2026-08-14). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
           and is opt-in: a host calls <code>AddScheduledJobs(configuration)</code> and sets <code>Scheduler:Enabled</code>. Until it does,
           the framework creates no table and starts no runner.</p>
           <h2 id="context">Context</h2>
@@ -209,9 +215,9 @@
           <h3 id="the-scheduler-is-the-outbox-claim-lease-pattern-applied-to-cron-not-hangfire-and-not-quartznet">The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET</h3>
           <p>A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
           outbox claims a batch with an <code>ExecuteUpdateAsync</code> that sets <code>LockedUntil</code> and <code>LockToken</code> in one statement
-          (<code>.../Persistence/Outbox/OutboxProcessor.cs:405-406</code>) over a <code>Where</code> that admits only rows whose
-          <code>LockedUntil</code> is null or already in the past (<code>:404</code>), then re-reads the claimed set by <code>LockToken</code> so a
-          partial claim processes only its own rows (<code>:418</code>). A due job is claimed the same way, so two replicas can
+          (<code>.../Persistence/Outbox/OutboxProcessor.cs:429-430</code>, inside <code>ClaimEligibleAsync</code>) over a <code>Where</code> that
+          admits only rows whose <code>LockedUntil</code> is null or already in the past (<code>:426-428</code>), then re-reads the claimed
+          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:441-442</code>). A due job is claimed the same way, so two replicas can
           never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.</p>
           <p>Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
           and host, and a licensing posture that varies by storage provider. Quartz.NET would have brought a large
@@ -234,9 +240,11 @@
           <p><code>ScheduledJobEntry</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobEntry.cs</code>)
           carries <code>JobName</code> (the primary key), <code>CronExpression</code>, <code>NextRunOn</code>, <code>LastRunOn</code>, <code>LastOutcome</code>,
           <code>LastDurationMs</code>, <code>LockedUntil</code> and <code>LockToken</code>. It is deliberately <strong>not</strong> an <code>IAuditableEntity</code>: it
-          self-stamps nothing, it is never soft-deleted, and it is excluded from the global query filters applied in
-          <code>ApplicationDbContext.OnModelCreating</code> (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:220</code>). That is
-          the <code>OutboxMessage</code> precedent: infrastructure rows are not domain rows.</p>
+          self-stamps nothing, it is never soft-deleted, and no global query filter reaches it. That falls out of the
+          mapping rather than being asserted: the soft-delete filter is applied only to entity types assignable to
+          <code>IAuditableEntity</code> (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:339</code>, <code>:348</code>), and
+          <code>ConfigureScheduler</code> maps the table with no <code>HasQueryFilter</code> call of its own (<code>:538-563</code>). That is the
+          <code>OutboxMessage</code> precedent: infrastructure rows are not domain rows.</p>
           <p>The table lives in the <strong>Default</strong> source and only there. The outbox exists once per relational database
           because an outbox row must be written in the same transaction as the aggregate that produced it
           (<a href="006-database-per-service.html">ADR-006</a>). A schedule has no such tie: a job belongs to the host that
@@ -263,10 +271,18 @@
           <code>AddOptions&lt;T&gt;().Bind(...).ValidateDataAnnotations().ValidateOnStart()</code> chain of
           <a href="070-fail-fast-configuration-contract.html">ADR-070</a>, so a malformed scheduler section stops the host at boot
           rather than at 03:00.</p>
-          <p><code>SchedulerMetrics</code> (<code>.../Infrastructure/Scheduling/SchedulerMetrics.cs</code>) mirrors <code>OutboxMetrics</code>
-          (<code>.../Persistence/Outbox/OutboxMetrics.cs:15</code>) one for one: counters for runs and failures, histograms for
-          duration and for lag (actual start minus <code>NextRunOn</code>), under the conventions of
-          <a href="041-observability-and-telemetry.html">ADR-041</a>.</p>
+          <p><code>SchedulerMetrics</code> (<code>.../Infrastructure/Scheduling/SchedulerMetrics.cs:16</code>) follows the same conventions as
+          <code>OutboxMetrics</code> (<code>.../Persistence/Outbox/OutboxMetrics.cs:15</code>) under
+          <a href="041-observability-and-telemetry.html">ADR-041</a>: one meter per subsystem, never a second <code>Meter</code> with the
+          same name, and outcomes carried as tags rather than as separate instruments. It is not an
+          instrument-for-instrument copy. The scheduler emits <strong>one</strong> counter, <code>RunCounter</code>, tagged by <code>job</code> and by
+          <code>outcome</code> (<code>Succeeded</code>, <code>Failed</code>, <code>Skipped</code>), so a failure rate is that counter split by tag rather than a
+          second instrument (<code>:28</code>), plus two histograms: <code>DurationHistogram</code> for execution time in seconds (<code>:39</code>)
+          and <code>LagHistogram</code> for lag, actual start minus <code>NextRunOn</code> (<code>:50</code>). The outbox carries a different set for
+          its own shape: two counters, <code>DeadLetterCounter</code> and <code>ProcessedCounter</code> (<code>OutboxMetrics.cs:32</code>, <code>:38</code>), one
+          histogram, <code>DispatchLagHistogram</code> (<code>:48</code>), and a <code>PendingDepthGauge</code> observable gauge (<code>:66</code>) that the
+          scheduler has no counterpart for, because backlog depth is a question about a queue and a schedule has no
+          queue.</p>
           <p>Registration is two calls. <code>AddScheduledJobs(configuration)</code> binds the settings and registers the runner;
           <code>AddScheduledJob&lt;TJob&gt;(cron?)</code> adds one job from any module, using the accumulate-across-modules idiom that
           <code>AddPermissions</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:54</code>)
@@ -275,8 +291,11 @@
           <strong>upserted by <code>JobName</code></strong>, and a cron supplied through configuration overrides the code default, so an
           operator can retime a shipped job without a release.</p>
           <h3 id="design-time-gets-the-same-flag">Design-time gets the same flag</h3>
-          <p><code>DesignTimeDbContextHelper</code> and <code>DesignTimeDbContextOptions</code> carry the matching enable flag, or the
-          design-time model diverges from the runtime model and <code>dotnet ef</code> breaks for every consumer.</p>
+          <p><code>DesignTimeDbContextOptions.EnableScheduler</code>
+          (<code>.../Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:41</code>) is the design-time mirror of
+          <code>Scheduler:Enabled</code>, and <code>DesignTimeDbContextHelper</code> feeds it to the context as a fixed
+          <code>SchedulerSettings</code> (<code>.../Design/DesignTimeDbContextHelper.cs:82-83</code>). Without that flag the design-time
+          model diverges from the runtime model and <code>dotnet ef</code> breaks for every consumer.</p>
           <h3 id="the-framework-dogfoods-it">The framework dogfoods it</h3>
           <p><code>AuditTrailCleanupJob</code>, the retention purge of <a href="075-audit-trail.html">ADR-075</a>, ships as the framework&#39;s first
           <code>IScheduledJob</code>, so the contract is exercised by the package that defines it before any application depends
@@ -347,8 +366,9 @@
           store is Default-source-only),
           <a href="075-audit-trail.html">ADR-075</a> (the audit-trail retention purge that ships as this scheduler&#39;s first job),
           <a href="070-fail-fast-configuration-contract.html">ADR-070</a> (the validating chain <code>SchedulerSettings</code> binds through),
-          <a href="041-observability-and-telemetry.html">ADR-041</a> (the metrics conventions <code>SchedulerMetrics</code> follows, mirroring
-          <code>OutboxMetrics</code>), <a href="030-startup-sole-migrator.html">ADR-030</a> (the startup owner that applies the migration
+          <a href="041-observability-and-telemetry.html">ADR-041</a> (the metrics conventions <code>SchedulerMetrics</code> follows, the same
+          ones <code>OutboxMetrics</code> follows, with its own instrument set),
+          <a href="030-startup-sole-migrator.html">ADR-030</a> (the startup owner that applies the migration
           creating the job table).</p>
           
         <div class="doc-foot btn-row">

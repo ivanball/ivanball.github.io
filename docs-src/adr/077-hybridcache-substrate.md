@@ -17,8 +17,8 @@ front of the distributed L2) that removes exactly that cost.
 Adopting it is not a drop-in replacement, because ADR-026 also records a production failure that
 constrains the design. `ICacheService.IncrementAsync` is a read-modify-write rather than Redis `INCR`
 because of a storage-format mismatch documented at the implementation
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:156-174`, override
-at `:175-181`): `INCR` writes a Redis string while `StackExchangeRedisCache` stores every entry as a Redis
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:107-126`, override
+at `:127`): `INCR` writes a Redis string while `StackExchangeRedisCache` stores every entry as a Redis
 hash, so an `INCR`-written counter answers `WRONGTYPE` on the next read and surfaces as a 500 on the
 endpoint that owns the counter. A second cache implementation writing a different payload shape into the
 same keys is the same failure with a different author, and a rolling deploy guarantees both writers are

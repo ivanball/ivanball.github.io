@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-075: Audit Trail (Same-Transaction Field-Level Change History) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in twice over:…">
+  <meta name="description" content="Accepted (2026-08-13; corrected 2026-08-14: the adoption sweep and the ApplicationDbContext line citations). The implementation lands in the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/075-audit-trail.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-075: Audit Trail (Same-Transaction Field-Level Change History)">
-  <meta property="og:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in twice over:…">
+  <meta property="og:description" content="Accepted (2026-08-13; corrected 2026-08-14: the adoption sweep and the ApplicationDbContext line citations). The implementation lands in the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/075-audit-trail.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-075: Audit Trail (Same-Transaction Field-Level Change History)">
-  <meta name="twitter:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in twice over:…">
+  <meta name="twitter:description" content="Accepted (2026-08-13; corrected 2026-08-14: the adoption sweep and the ApplicationDbContext line citations). The implementation lands in the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"075 · Audit Trail (Same-Transaction Field-Level Change History)","item":"https://ivanball.github.io/docs/adr/075-audit-trail.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -186,7 +192,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-075-audit-trail-same-transaction-field-level-change-history">ADR-075: Audit Trail (Same-Transaction Field-Level Change History)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          <p>Accepted (2026-08-13; corrected 2026-08-14: the adoption sweep and the <code>ApplicationDbContext</code> line
+          citations). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
           and is opt-in twice over: <code>AddAuditTrail(configuration)</code> registers the interceptor and the settings, and
           an entity is audited only when it carries the <code>IAuditedEntity</code> marker. Absent registration the interceptor
           is not resolved and the whole feature is a no-op.</p>
@@ -217,10 +224,11 @@
           <h3 id="a-fourth-savechangesinterceptor-resolved-optionally-running-last">A fourth <code>SaveChangesInterceptor</code>, resolved optionally, running last</h3>
           <p><code>AuditTrailSaveChangesInterceptor</code> (Infrastructure <code>Persistence/AuditTrail/</code>) joins the interceptors
           <code>ApplicationDbContext.OnConfiguring</code> already passes to <code>optionsBuilder.AddInterceptors</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:183-185</code>,
-          where <code>AuditSaveChangesInterceptor</code> and <code>DomainEventSaveChangesInterceptor</code> are resolved from the service
-          provider today). The new one is resolved with <code>GetService</code>, not <code>GetRequiredService</code>: a host that never
-          calls <code>AddAuditTrail</code> resolves null, nothing is added to the pipeline, and the feature costs nothing.</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:236-260</code>,
+          where <code>AuditSaveChangesInterceptor</code> and <code>DomainEventSaveChangesInterceptor</code> are resolved with
+          <code>GetRequiredService</code> and the tenant and audit-trail interceptors with <code>GetService</code>). The new one is
+          resolved with <code>GetService</code>, not <code>GetRequiredService</code> (<code>:258</code>): a host that never calls <code>AddAuditTrail</code>
+          resolves null, nothing is added to the pipeline, and the feature costs nothing.</p>
           <p><strong>Registration order is execution order and it is load-bearing.</strong> After the wave the sequence is
           <code>AuditSaveChangesInterceptor</code> (stamps <code>CreatedBy/On</code> and <code>LastModifiedBy/On</code>), then
           <code>TenantSaveChangesInterceptor</code> (ADR-073, stamps <code>TenantId</code>), then <code>DomainEventSaveChangesInterceptor</code>
@@ -259,9 +267,10 @@
           ADR-070 fail-fast chain, and <code>AddAuditTrail(configuration)</code> in Infrastructure&#39;s <code>DependencyInjection.cs</code>
           registers the interceptor and the settings together.</p>
           <h3 id="the-table-lives-in-every-relational-source-that-adopts-it">The table lives in every relational source that adopts it</h3>
-          <p><code>ApplicationDbContext.OnModelCreating</code> (<code>.../ApplicationDbContext.cs:220</code>) calls
-          <code>ConfigureAuditTrail(modelBuilder)</code>, gated on the settings flag resolved from the root provider the way
-          the interceptors are, creating an <code>AuditTrailEntries</code> table with an index on
+          <p><code>ApplicationDbContext.OnModelCreating</code> (<code>.../ApplicationDbContext.cs:304</code>) calls
+          <code>ConfigureAuditTrail(modelBuilder)</code> (<code>:326</code>, the method itself at <code>:572</code>), gated on the settings flag
+          resolved from the root provider the way the interceptors are, creating an <code>AuditTrailEntries</code> table with
+          an index on
           <code>(EntityType, EntityKey, ChangedOn)</code>. A same-transaction write requires the table in the same database as
           the data, which is the outbox precedent (ADR-006) and the reason the trail is not one central store.
           Cosmos skips it, the way <code>CosmosDbContext</code> reports <code>SupportsOutbox =&gt; false</code>
@@ -275,8 +284,10 @@
           <p><code>IAuditTrailReader</code> (Application) with an Infrastructure implementation querying by
           <code>(EntityType, EntityKey)</code>, which is exactly the index. No controller and no UI ship in v1: a change
           history is a surface with real authorization and presentation opinions, and consumers hold those opinions.</p>
-          <p>Adoption in the consumer sweep is ADC (Identity, Conference, Engagement and Notification databases),
-          Store (its shared database) and Helpdesk (Tickets), each with one migration per adopted source.</p>
+          <p>Adoption in the consumer sweep is seven relational sources, each with its own migration: ADC&#39;s Identity,
+          Conference and Engagement services (its Notification service does not call <code>AddAuditTrail</code> and has no
+          trail migration), Store&#39;s Catalog, Sales and Identity services (Store is database-per-service, so each
+          adopts separately rather than sharing one database), and Helpdesk&#39;s Tickets.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong><code>IAuditableEntity</code> is a statement about a business row, and an audit row is not one.</strong> The interface
@@ -314,7 +325,8 @@
           properties writes twenty rows inside the caller&#39;s transaction, so an audited save is slower than an
           unaudited one, and the trail is not a beside-the-request concern the way a background publish is.</li>
           <li><strong>A per-source table makes cross-database history a fan-out.</strong> &quot;What happened to this user across the
-          whole system&quot; is a query against four ADC databases, and the framework does not ship that query.</li>
+          whole system&quot; is a query against ADC&#39;s three audited databases, and the framework does not ship that
+          query.</li>
           <li><strong>Values are strings, so a reader gets a rendering rather than a value.</strong> A decimal, an enum and a date
           all arrive as text formatted at capture time, and a large column is stored at whatever length it had.</li>
           <li><strong>Redact-at-capture is irreversible, which is the point and also a limit.</strong> A <code>[Pii]</code> field&#39;s old value

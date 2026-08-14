@@ -21,8 +21,8 @@ factor, and comparison are decided once and not re-implemented per app. Two forc
 Provide a single `IPasswordHasher` (`MMCA.Common.Application.Interfaces.Infrastructure`,
 `IPasswordHasher.cs:6`) with one implementation `PasswordHasher`
 (`Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12`), registered as a singleton via
-`TryAddSingleton` (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:224`, in the
-`AddServices` helper that `AddInfrastructure` calls at `DependencyInjection.cs:147`). The call site
+`TryAddSingleton` (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:462`, in the
+`AddServices` helper that `AddInfrastructure` calls at `DependencyInjection.cs:154`). The call site
 always runs, but `TryAdd` semantics mean a host that has already registered its own `IPasswordHasher`
 keeps it: the framework supplies the default hasher rather than forcing it. The type is stateless (only
 `const` parameters), so

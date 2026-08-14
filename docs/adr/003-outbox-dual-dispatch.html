@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -219,8 +225,8 @@
           dead-lettered immediately on first pickup (it can never succeed) and requires manual investigation.
           A message that <strong>throws during dispatch</strong> is retried up to <code>Outbox:MaxRetries</code> (default 5) times,
           then dropped from the eligible set (it stops being polled once <code>RetryCount &gt;= MaxRetries</code>).</li>
-          <li>Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> seconds multiplied by a random jitter factor in <code>[0.8, 1.2]</code>, capped at <code>Outbox:LeaseSeconds</code> (<code>MMCA.Common/.../Outbox/OutboxProcessor.cs:500-507,539-553</code>). At the shipped defaults (base 10s, <code>MaxRetries</code> 5, lease 300s, batch 50: <code>MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,98</code>) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends <strong>about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range</strong>, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).</li>
-          <li>That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: <code>OutboxProcessor.cs:128-129,245</code>), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (<code>HasMoreEligibleWork</code> requires progress: <code>OutboxProcessor.cs:287-291</code>), so a batch of 50 that fails in full cannot hot-spin the processor.</li>
+          <li>Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> seconds multiplied by a random jitter factor in <code>[0.8, 1.2]</code>, capped at <code>Outbox:LeaseSeconds</code> (<code>MMCA.Common/.../Outbox/OutboxProcessor.cs:500-507,539-553</code>). At the shipped defaults (base 10s, <code>MaxRetries</code> 5, lease 300s, batch 50: <code>MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,99</code>) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends <strong>about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range</strong>, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).</li>
+          <li>That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: <code>OutboxProcessor.cs:128-129,269</code>), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (<code>HasMoreEligibleWork</code> requires progress: <code>OutboxProcessor.cs:287-291</code>), so a batch of 50 that fails in full cannot hot-spin the processor.</li>
           <li>Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup.</li>
           </ul>
           <h2 id="revision-2026-07-19">Revision (2026-07-19)</h2>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 78 ADRs</summary>
+        <summary>All 84 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -178,6 +178,12 @@
         <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
         <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
         <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
           </ol>
         </nav>
       </details>
@@ -189,7 +195,10 @@
           <p>Accepted (2026-08-13). The implementation lands in the MMCA.Common enterprise capability wave release,
           alongside the scheduler, audit trail, DSAR export, and CSV export work. It is opt-in:
           <code>AddMultiTenancy(configuration)</code> binds the settings section, and with no host calling it the mechanism is
-          inert (<code>Tenancy:Enabled</code> false, no tenant resolved), so the framework release is non-breaking.</p>
+          inert (<code>Tenancy:Enabled</code> false, no tenant resolved), so the framework release is non-breaking.
+          Revised 2026-08-14: re-anchored the <code>ApplicationDbContext</code>, middleware, repository, and outbox citations to
+          current source, and corrected the repository&#39;s named-filter exclusion (five call sites through one shared
+          field, not four inline arrays).</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
           <strong>source name</strong> (every entity resolves to a <code>DataSourceKey(Engine, Name)</code>, each module or service owning
@@ -197,12 +206,13 @@
           to&quot;, had no recorded answer, which meant every consumer that ever needed one would invent it: a <code>TenantId</code>
           column here, a <code>Where</code> clause in each handler there, and one forgotten handler is a customer data leak.</p>
           <p>The framework does have the machinery this needs, built for a different reason. <code>ApplySoftDeleteFilters</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:243</code>,
-          called from <code>OnModelCreating</code> at <code>:220</code>) proves that a global predicate applied by expression tree to every
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:336</code>,
+          called from <code>OnModelCreating</code> at <code>:306</code>) proves that a global predicate applied by expression tree to every
           matching entity type makes an invariant unforgettable, and EF10&#39;s <strong>named</strong> query filters
-          (<code>modelBuilder.Entity(clrType).HasQueryFilter(&quot;SoftDelete&quot;, filter)</code>, <code>:255</code>) mean a second filter can be
-          added beside the first rather than replacing it. The interceptor pipeline resolved in <code>OnConfiguring</code>
-          (<code>:183-185</code>) proves that a write-side rule can be enforced once for every context.</p>
+          (<code>modelBuilder.Entity(clrType).HasQueryFilter(SoftDeleteFilterName, filter)</code>, <code>:348</code>, the name itself a
+          constant at <code>:357</code>) mean a second filter can be added beside the first rather than replacing it. The
+          interceptor pipeline resolved in <code>OnConfiguring</code> (<code>:236-251</code>) proves that a write-side rule can be enforced
+          once for every context.</p>
           <p>That left a specific set of open questions: whether a tenant is a row discriminator or a database, what
           happens when no tenant is resolved, where the tenant comes from on an inbound request, whether the outbox
           and the migration runner (which have no request and therefore no claims) can reach tenant data at all, and
@@ -247,14 +257,15 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48</code>) and is wired
           into <code>UseCommonMiddlewarePipeline</code> (<code>:45</code>) immediately <strong>after</strong> <code>app.UseAuthentication()</code> (<code>:96</code>),
           because a claim-first resolution order requires that <code>HttpContext.User</code> already be populated. Like
-          <code>SoftDeletedUserMiddleware</code> (<code>:102</code>) it is registered unconditionally and inert by default, keeping the
+          <code>SoftDeletedUserMiddleware</code> (<code>:109</code>) it is registered unconditionally and inert by default, keeping the
           pipeline one shape across every host. When <code>RequireTenant</code> is true and nothing resolves on a non-excluded
           path, it returns 400 with a ProblemDetails body.</p>
           <h3 id="writes-are-guarded-by-their-own-interceptor">Writes are guarded by their own interceptor</h3>
           <p><code>TenantSaveChangesInterceptor</code> is a <strong>separate</strong> interceptor from the audit one (one concern per
-          interceptor, matching how audit stamping and domain-event capture are already split at <code>:183-185</code>). It
-          stamps <code>TenantId</code> on Added entries and throws <code>CrossTenantWriteException</code> on any Added, Modified, or
-          Deleted entry whose tenant differs from the resolved one. It is always registered and is a no-op when no
+          interceptor, matching how audit stamping and domain-event capture are already split at <code>:236-251</code>, where
+          it is registered between the two). It stamps <code>TenantId</code> on Added entries and throws
+          <code>CrossTenantWriteException</code> on any Added, Modified, or Deleted entry whose tenant differs from the
+          resolved one. It is always registered and is a no-op when no
           tenant is resolved. <code>DesignTimeDbContextHelper</code> must register it too, or <code>dotnet ef</code> breaks for every
           consumer the moment it is resolved as a required service.</p>
           <h3 id="the-tenant-is-read-live-not-copied-at-context-creation">The tenant is read live, not copied at context creation</h3>
@@ -270,24 +281,28 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:17</code>)
           with the override connection string and the <strong>same <code>DataSourceKey</code></strong>, so EF&#39;s model cache key is unchanged
           and one model still serves every tenant. Creation goes through a new
-          <code>IPhysicalDbContextFactory.Create(key, physical)</code> overload beside today&#39;s single member
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/IPhysicalDbContextFactory.cs:21</code>).
+          <code>IPhysicalDbContextFactory.Create(key, physical)</code> overload (<code>:37</code>) beside the original single member
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/IPhysicalDbContextFactory.cs:22</code>).
           That overload is deliberately <strong>not</strong> a default interface member: it is additive-breaking for any consumer
           with a custom implementation, and hiding that behind a default body would turn a compile error into a
           runtime routing surprise, so it goes in the CHANGELOG as breaking-for-implementors. The tenant is not part
           of the per-scope context cache key; instead a guard throws if the scope&#39;s tenant changes after an
           overridden context exists, restating the one-scope-one-tenant invariant where it would otherwise break.</p>
           <h3 id="ignorequeryfilters-stops-meaning-ignore-everything"><code>ignoreQueryFilters</code> stops meaning &quot;ignore everything&quot;</h3>
-          <p>The four parameterless <code>IgnoreQueryFilters()</code> call sites in <code>EFReadRepository</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:40</code>,
-          <code>:145</code>, <code>:209</code>, <code>:223</code>) become <code>IgnoreQueryFilters([&quot;SoftDelete&quot;])</code>. The repository&#39;s
-          <code>ignoreQueryFilters: true</code> parameter has always meant &quot;include soft-deleted rows&quot;, and naming the filter
-          keeps that meaning exactly while making it impossible for a soft-delete-inclusive read to cross tenants.</p>
+          <p><code>EFReadRepository</code> names the one filter it means to drop instead of dropping every filter. A single shared
+          field carries the name,
+          <code>private static readonly string[] SoftDeleteFilterOnly = [ApplicationDbContext.SoftDeleteFilterName]</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:29</code>), and
+          it is passed to <code>IgnoreQueryFilters</code> at all <strong>five</strong> call sites (<code>:48</code>, <code>:77</code>, <code>:157</code>, <code>:221</code>, <code>:235</code>): one
+          field rather than five inline arrays, so the set of filters a soft-delete-inclusive read drops cannot
+          diverge between two of them. The repository&#39;s <code>ignoreQueryFilters: true</code> parameter has always meant
+          &quot;include soft-deleted rows&quot;, and naming the filter keeps that meaning exactly while making it impossible
+          for a soft-delete-inclusive read to cross tenants.</p>
           <h3 id="background-work-drains-and-migrates-per-tenant">Background work drains and migrates per tenant</h3>
           <p><code>OutboxProcessor</code> and <code>OutboxCleanupService</code> enumerate <code>(source, tenant?)</code> pairs from <code>TenancySettings</code>
           and call <code>ITenantContext.SetTenant</code> inside the per-source scope before obtaining the context, so the
           factory routes to the tenant&#39;s database and the claim-lease update
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:404-406</code>) runs
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:425-432</code>) runs
           against the right rows. There is deliberately <strong>no <code>OutboxMessage</code> schema change</strong>: a <code>TenantId</code> column
           would force a migration on every consumer on upgrade, for a discriminator the per-tenant database already
           provides and shared-schema tenancy does not need (the row sits in its aggregate&#39;s database either way).</p>
