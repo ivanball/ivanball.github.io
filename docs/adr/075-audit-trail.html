@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-075: Audit Trail (Same-Transaction Field-Level Change History) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in twice over:…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/075-audit-trail.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-075: Audit Trail (Same-Transaction Field-Level Change History)">
+  <meta property="og:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in twice over:…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/075-audit-trail.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-075: Audit Trail (Same-Transaction Field-Level Change History)">
+  <meta name="twitter:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in twice over:…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"075 · Audit Trail (Same-Transaction Field-Level Change History)","item":"https://ivanball.github.io/docs/adr/075-audit-trail.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">075 · Audit Trail (Same-Transaction Field-Level Change History)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 78 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html" aria-current="page">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-075-audit-trail-same-transaction-field-level-change-history">ADR-075: Audit Trail (Same-Transaction Field-Level Change History)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          and is opt-in twice over: <code>AddAuditTrail(configuration)</code> registers the interceptor and the settings, and
+          an entity is audited only when it carries the <code>IAuditedEntity</code> marker. Absent registration the interceptor
+          is not resolved and the whole feature is a no-op.</p>
+          <h2 id="context">Context</h2>
+          <p>The framework already answers &quot;who touched this row last&quot;. Every <code>AuditableBaseEntity</code> carries
+          <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code>, stamped by <code>AuditSaveChangesInterceptor</code> on the way into
+          <code>SaveChangesAsync</code>. What it cannot answer is &quot;what changed&quot;. The stamps are a single overwrite: the
+          current value of <code>LastModifiedBy</code> erases the previous one, so a row that has been edited nine times
+          carries the ninth editor and nothing else. Soft-delete (ADR-005) preserves the row, not its history.</p>
+          <p>That gap becomes concrete the moment a regulated or contested question arrives: which administrator moved
+          this ticket&#39;s priority, what the price was before yesterday&#39;s edit, whether a role assignment predates or
+          postdates an incident. Every consumer in the workspace has the same gap and none of them has built the
+          same answer, which is exactly the shape of a framework concern rather than an application one.</p>
+          <p>Several questions had no recorded answer:</p>
+          <ul>
+          <li><strong>Where does the capture run?</strong> A repository decorator sees intent but not the change tracker&#39;s diff.
+          An application-layer handler sees the command, not the properties EF actually marked modified. A
+          database trigger sees the diff and nothing else: no user, no correlation id, no PII knowledge.</li>
+          <li><strong>Does the trail commit with the data or beside it?</strong> A trail written after the commit can be lost by a
+          crash in the window; a trail written to a different database cannot share the transaction at all.</li>
+          <li><strong>What happens to personal data?</strong> A change trail is precisely the store that outlives the erasure of
+          the row it describes, so a naive old-value capture would recreate the personal data that ADR-005 exists
+          to remove.</li>
+          <li><strong>What stops it from swamping the database?</strong> Auditing every entity in a shipped framework would put
+          every consumer&#39;s write path on a multiplier they never asked for.</li>
+          </ul>
+          <h2 id="decision">Decision</h2>
+          <h3 id="a-fourth-savechangesinterceptor-resolved-optionally-running-last">A fourth <code>SaveChangesInterceptor</code>, resolved optionally, running last</h3>
+          <p><code>AuditTrailSaveChangesInterceptor</code> (Infrastructure <code>Persistence/AuditTrail/</code>) joins the interceptors
+          <code>ApplicationDbContext.OnConfiguring</code> already passes to <code>optionsBuilder.AddInterceptors</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:183-185</code>,
+          where <code>AuditSaveChangesInterceptor</code> and <code>DomainEventSaveChangesInterceptor</code> are resolved from the service
+          provider today). The new one is resolved with <code>GetService</code>, not <code>GetRequiredService</code>: a host that never
+          calls <code>AddAuditTrail</code> resolves null, nothing is added to the pipeline, and the feature costs nothing.</p>
+          <p><strong>Registration order is execution order and it is load-bearing.</strong> After the wave the sequence is
+          <code>AuditSaveChangesInterceptor</code> (stamps <code>CreatedBy/On</code> and <code>LastModifiedBy/On</code>), then
+          <code>TenantSaveChangesInterceptor</code> (ADR-073, stamps <code>TenantId</code>), then <code>DomainEventSaveChangesInterceptor</code>
+          (writes the outbox rows), then <code>AuditTrailSaveChangesInterceptor</code> last, so the diff it captures sees the
+          final stamped values rather than a half-populated entity. The audit-trail rows it adds are themselves
+          never audited. <code>DesignTimeDbContextHelper</code> registers all four, or <code>dotnet ef</code> breaks for every consumer.</p>
+          <h3 id="audittrailentry-is-deliberately-not-an-auditable-entity"><code>AuditTrailEntry</code> is deliberately not an auditable entity</h3>
+          <p>The entity (Infrastructure <code>Persistence/AuditTrail/AuditTrailEntry.cs</code>) does <strong>not</strong> implement
+          <code>IAuditableEntity</code>, mirroring <code>OutboxMessage</code>. It therefore has no audit stamps of its own and no
+          soft-delete query filter. Its columns are <code>Id</code> (Guid), <code>EntityType</code>, <code>EntityKey</code>, <code>PropertyName</code>,
+          <code>OldValue</code> and <code>NewValue</code> (string, nullable), <code>Operation</code> (<code>Added</code> / <code>Modified</code> / <code>Deleted</code>), <code>ChangedBy</code>,
+          <code>ChangedOn</code>, <code>CorrelationId</code>, and a nullable <code>TenantId</code> populated when tenancy is active.</p>
+          <h3 id="capture-is-a-change-tracker-diff-committed-in-the-callers-transaction">Capture is a change-tracker diff committed in the caller&#39;s transaction</h3>
+          <p><code>SavingChangesAsync</code> walks <code>ChangeTracker.Entries()</code>, keeps the entities carrying the marker, compares
+          <code>OriginalValue</code> against <code>CurrentValue</code> for each modified property, and adds one row per changed property
+          through <code>context.Set&lt;AuditTrailEntry&gt;().Add(...)</code>. The rows go into the same <code>SaveChanges</code> call as the
+          data, so they commit or roll back with it: the outbox mechanic of ADR-003, applied to a different payload.</p>
+          <p>Two mechanics are copied verbatim from <code>DomainEventSaveChangesInterceptor</code>:</p>
+          <ul>
+          <li><strong>A <code>DiscardAbandonedCapture</code> equivalent.</strong> <code>EnableRetryOnFailure</code> re-runs <code>SavingChanges</code> against a
+          change tracker that still holds the previous attempt&#39;s Added rows, so without an explicit discard one
+          transient SQL fault writes the trail twice.</li>
+          <li><strong>Mutation through <code>Add</code> only.</strong> The save runs under <code>DetectChangesOnce</code> with automatic change detection
+          off, so anything that relies on a later detection pass to be noticed is not noticed.</li>
+          </ul>
+          <h3 id="pii-is-redacted-at-capture-never-at-read">PII is redacted at capture, never at read</h3>
+          <p>Any property carrying <code>[Pii]</code> records <code>PiiRedactor.RedactedToken</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:27</code>, the class at <code>:24</code>) for both the
+          old and the new value. The trail stores the fact that a personal field changed, and never its contents.
+          Redacting on the way out instead would leave clear-text personal data at rest in a store that by
+          construction survives the erasure of the row it describes.</p>
+          <h3 id="opt-in-is-a-marker-interface-plus-a-settings-section">Opt-in is a marker interface, plus a settings section</h3>
+          <p><code>IAuditedEntity</code> (Domain) is an empty marker. An entity is audited because someone wrote the interface on
+          it, which is what keeps volume a deliberate decision rather than a framework-imposed tax.
+          <code>AuditTrailSettings</code> binds section <code>AuditTrail</code> (<code>Enabled</code>, <code>RetentionDays</code> default 90) through the
+          ADR-070 fail-fast chain, and <code>AddAuditTrail(configuration)</code> in Infrastructure&#39;s <code>DependencyInjection.cs</code>
+          registers the interceptor and the settings together.</p>
+          <h3 id="the-table-lives-in-every-relational-source-that-adopts-it">The table lives in every relational source that adopts it</h3>
+          <p><code>ApplicationDbContext.OnModelCreating</code> (<code>.../ApplicationDbContext.cs:220</code>) calls
+          <code>ConfigureAuditTrail(modelBuilder)</code>, gated on the settings flag resolved from the root provider the way
+          the interceptors are, creating an <code>AuditTrailEntries</code> table with an index on
+          <code>(EntityType, EntityKey, ChangedOn)</code>. A same-transaction write requires the table in the same database as
+          the data, which is the outbox precedent (ADR-006) and the reason the trail is not one central store.
+          Cosmos skips it, the way <code>CosmosDbContext</code> reports <code>SupportsOutbox =&gt; false</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:69</code>).</p>
+          <h3 id="retention-is-the-frameworks-first-scheduled-job">Retention is the framework&#39;s first scheduled job</h3>
+          <p><code>AuditTrailCleanupJob</code> ships as the first <code>IScheduledJob</code> (ADR-074), purging rows older than
+          <code>RetentionDays</code>. The framework dogfoods its own scheduler rather than shipping a second periodic
+          mechanism; a <code>PeriodicBackgroundService</code> subclass is the fallback for a host that does not enable the
+          scheduler.</p>
+          <h3 id="the-read-surface-is-one-interface">The read surface is one interface</h3>
+          <p><code>IAuditTrailReader</code> (Application) with an Infrastructure implementation querying by
+          <code>(EntityType, EntityKey)</code>, which is exactly the index. No controller and no UI ship in v1: a change
+          history is a surface with real authorization and presentation opinions, and consumers hold those opinions.</p>
+          <p>Adoption in the consumer sweep is ADC (Identity, Conference, Engagement and Notification databases),
+          Store (its shared database) and Helpdesk (Tickets), each with one migration per adopted source.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong><code>IAuditableEntity</code> is a statement about a business row, and an audit row is not one.</strong> The interface
+          means &quot;this row stamps who created and last modified it and participates in soft-delete&quot;. An audit row
+          has no author beyond the write that produced it, so the stamps would be noise; it must never be
+          soft-deleted, because a soft-deleted audit row is a rewritten history that a query filter quietly hides;
+          and it would recurse if the stamping interceptor touched it, since stamping is itself a change.
+          <code>OutboxMessage</code> made the same call for the same three reasons, and matching it keeps one rule for
+          infrastructure rows rather than two.</li>
+          <li><strong>The change tracker is the only place the diff actually exists.</strong> EF has already resolved which
+          properties changed and holds both values; a decorator above it would have to re-read the row to
+          reconstruct what EF discarded, and a database trigger would have the values but none of the identity,
+          correlation or <code>[Pii]</code> context that makes the row useful.</li>
+          <li><strong>Same-transaction is the difference between a trail and a hint.</strong> A trail written after the commit is
+          lost by a crash in the window, and a trail that can be lost is one nobody can rely on in the argument it
+          exists to settle. The outbox has run this exact mechanic in production for the whole life of the
+          framework, so this is a proven path rather than a new one.</li>
+          <li><strong>Running last is what makes the captured values final.</strong> Capturing before the tenant and stamp
+          interceptors would record a <code>TenantId</code> of null and a stale <code>LastModifiedBy</code> on rows the same save is
+          about to correct, which is worse than not capturing at all: a wrong history reads exactly like a right
+          one.</li>
+          <li><strong>Redacting at capture is the only version that survives erasure.</strong> ADR-005 anonymizes a row in place on
+          a data-subject request. If the trail held the old clear-text value, erasure would delete the data from
+          the row and leave it in the history, so the compliance path would be defeated by the audit path.</li>
+          <li><strong>Opt-in per entity keeps the cost proportional to the value.</strong> A framework that audited everything
+          would multiply every consumer&#39;s write volume for rows nobody will ever ask about. The marker makes the
+          cost a per-entity decision made by the team that knows which rows get argued over.</li>
+          <li><strong>Reusing the scheduler proves the scheduler.</strong> Retention is a real recurring job with a real failure
+          mode, so making it the first <code>IScheduledJob</code> exercises ADR-074 in the framework&#39;s own code rather than
+          waiting for a consumer to be the first to find out.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Write amplification is real and it is on the caller&#39;s latency path.</strong> An entity with twenty changed
+          properties writes twenty rows inside the caller&#39;s transaction, so an audited save is slower than an
+          unaudited one, and the trail is not a beside-the-request concern the way a background publish is.</li>
+          <li><strong>A per-source table makes cross-database history a fan-out.</strong> &quot;What happened to this user across the
+          whole system&quot; is a query against four ADC databases, and the framework does not ship that query.</li>
+          <li><strong>Values are strings, so a reader gets a rendering rather than a value.</strong> A decimal, an enum and a date
+          all arrive as text formatted at capture time, and a large column is stored at whatever length it had.</li>
+          <li><strong>Redact-at-capture is irreversible, which is the point and also a limit.</strong> A <code>[Pii]</code> field&#39;s old value
+          is gone from the trail forever, so the trail can never answer &quot;what was this email address before it
+          changed&quot;.</li>
+          <li><strong>The marker is per entity, not per property.</strong> Opting an entity in captures every non-PII property it
+          has, including the ones nobody wanted a history of.</li>
+          <li><strong>Nothing enforces the interceptor ordering.</strong> It is registration order held by review, with no fitness
+          test asserting it, and a fifth interceptor inserted in the wrong position silently changes what the
+          trail sees rather than failing anything.</li>
+          <li><strong>Retention is a purge, not an archive.</strong> Rows past <code>RetentionDays</code> are deleted with no cold-storage
+          path in v1, so the answer to a question older than the window is that there is no answer.</li>
+          <li><strong>Cosmos-backed sources get no trail at all.</strong> The engine that cannot join the transaction is simply
+          skipped, so a consumer&#39;s audit coverage is decided by ADR-018 placement rather than by intent.</li>
+          <li><strong>No shipped read surface means the capability is invisible until someone builds one.</strong> Rows accumulate
+          from the day <code>AddAuditTrail</code> is called; nobody sees them until a consumer writes a page or an endpoint
+          over <code>IAuditTrailReader</code>.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the same-transaction write this copies wholesale, including the
+          retry-discard and the <code>Add</code>-only mutation rule),
+          <a href="005-soft-delete-vs-erasure.html">ADR-005</a> (soft-delete, <code>[Pii]</code> and erasure: why the trail redacts at
+          capture and why its rows are purged rather than soft-deleted),
+          <a href="073-multi-tenancy-model.html">ADR-073</a> (the interceptor that runs immediately before this one, and the
+          source of the nullable <code>TenantId</code> column), <a href="074-recurring-job-scheduler.html">ADR-074</a> (the scheduler that
+          runs the retention purge, and its first consumer),
+          <a href="070-fail-fast-configuration-contract.html">ADR-070</a> (the validating chain <code>AuditTrailSettings</code> binds
+          through), <a href="006-database-per-service.html">ADR-006</a> (why the table is created per relational source rather
+          than once), <a href="018-polyglot-persistence.html">ADR-018</a> (the engine axis, and why a Cosmos-backed source opts
+          out), <a href="035-optimistic-concurrency.html">ADR-035</a> (the <code>RowVersion</code> token that makes a diffed update
+          deterministic: without it two concurrent writers can produce a history that never happened).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/075-audit-trail.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-077: HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-13). Amends ADR-026: Tier 1&#39;s substrate gains a third implementation beside MemoryCacheService and DistributedCacheService. It is…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-077: HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)">
+  <meta property="og:description" content="Accepted (2026-08-13). Amends ADR-026: Tier 1&#39;s substrate gains a third implementation beside MemoryCacheService and DistributedCacheService. It is…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-077: HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)">
+  <meta name="twitter:description" content="Accepted (2026-08-13). Amends ADR-026: Tier 1&#39;s substrate gains a third implementation beside MemoryCacheService and DistributedCacheService. It is…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)","item":"https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 78 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html" aria-current="page">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-077-hybridcache-as-an-opt-in-icacheservice-substrate-amends-adr-026">ADR-077: HybridCache as an Opt-In <code>ICacheService</code> Substrate (Amends ADR-026)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-13). <strong>Amends <a href="026-caching-strategy.html">ADR-026</a></strong>: Tier 1&#39;s substrate gains a third
+          implementation beside <code>MemoryCacheService</code> and <code>DistributedCacheService</code>. It is opt-in through
+          <code>AddCommonHybridCache(...)</code>; with no call the default path is byte-identical to today, so the release is
+          non-breaking.</p>
+          <h2 id="context">Context</h2>
+          <p><a href="026-caching-strategy.html">ADR-026</a> settled Tier 1 as one abstraction (<code>ICacheService</code>) over two
+          implementations chosen at startup: in-process memory when no real <code>IDistributedCache</code> is present, Redis
+          otherwise. That swap is still right, but in the deployed shape a scaled-out service pays a network hop and
+          a JSON deserialize for <strong>every</strong> cache read, including reads of small, hot, rarely changing values that
+          every replica wants. <code>Microsoft.Extensions.Caching.Hybrid</code> shipped a two-level cache (an in-process L1 in
+          front of the distributed L2) that removes exactly that cost.</p>
+          <p>Adopting it is not a drop-in replacement, because ADR-026 also records a production failure that
+          constrains the design. <code>ICacheService.IncrementAsync</code> is a read-modify-write rather than Redis <code>INCR</code>
+          because of a storage-format mismatch documented at the implementation
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:156-174</code>, override
+          at <code>:175-181</code>): <code>INCR</code> writes a Redis string while <code>StackExchangeRedisCache</code> stores every entry as a Redis
+          hash, so an <code>INCR</code>-written counter answers <code>WRONGTYPE</code> on the next read and surfaces as a 500 on the
+          endpoint that owns the counter. A second cache implementation writing a different payload shape into the
+          same keys is the same failure with a different author, and a rolling deploy guarantees both writers are
+          live at once.</p>
+          <p>Two further constraints came out of the code rather than the record: the caching decorators of
+          <a href="014-cqrs-decorator-pipeline.html">ADR-014</a> cache only <strong>successful</strong> <code>Result</code>s, and the
+          <a href="029-authentication-brute-force-protection.html">ADR-029</a> login counters read a value other replicas
+          increment. Neither survives a naive port onto <code>HybridCache</code>&#39;s get-or-create and local cache.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Ship <code>HybridCacheService</code> as a third <code>ICacheService</code> implementation, opt-in per host, under a disjoint
+          keyspace.</p>
+          <h3 id="two-serialization-formats-never-share-one-keyspace">Two serialization formats never share one keyspace</h3>
+          <p>This is the structural rule the design is built around, and everything else follows from it. The
+          <code>WRONGTYPE</code> failure ADR-026 records is a class of bug, not an incident: whenever two writers with different
+          payload shapes address one key, one of them eventually reads what the other wrote. <code>HybridCacheService</code>
+          therefore writes under <code>{prefix}hc:{key}</code>, disjoint from the keyspace <code>DistributedCacheService</code> uses, so an
+          old-format and a new-format entry can never cross-read, including during a rolling deploy where both
+          versions serve traffic against one Redis.</p>
+          <p>The alternative considered was a payload discriminator: one keyspace, with each reader detecting and
+          skipping a foreign shape. It lost because it makes the failure unlikely rather than impossible, and because
+          the detection code is exercised only during the migration window it was written for. A disjoint keyspace
+          needs no detection: a reader that cannot see the other format cannot mis-read it. The cost of the split is
+          that entries written before the switch become invisible and age out on their TTL (the 30-second ADR-026
+          default for decorator entries, longer only where a caller asked for longer): a cold cache for seconds, not
+          a correctness problem. Prefix eviction is the one operation that must span both formats, so it runs a
+          <strong>dual pattern</strong>, with and without the <code>hc:</code> segment, for as long as legacy entries can exist. That is not
+          cosmetic: the 24-hour idempotency records of <a href="017-request-idempotency.html">ADR-017</a> outlive any deploy
+          window, and a single-pattern eviction would leave them unreachable until the next day.</p>
+          <h3 id="icacheservice-gains-a-default-getorcreateasync"><code>ICacheService</code> gains a default <code>GetOrCreateAsync</code></h3>
+          <p><code>ICacheService</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs</code>, <code>GetAsync</code> at <code>:15</code>,
+          <code>SetAsync</code> at <code>:24</code>, <code>RemoveAsync</code> at <code>:34</code>, <code>RemoveByPrefixAsync</code> at <code>:40</code>) gains
+          <code>GetOrCreateAsync&lt;T&gt;(key, factory, expiration?, cancellationToken)</code> as a <strong>default interface member</strong>,
+          following the <code>IncrementAsync</code> precedent at <code>:57</code> precisely because that precedent proved the shape is
+          non-breaking: no existing implementer, in the framework or in a consumer, has to change. The default
+          implementation is get, then take the key&#39;s stripe from a <code>KeyedSemaphoreStripe</code> holder (the
+          <code>QueryCacheKeyLocks</code> pattern), double-check, call the factory, set. Every backing store therefore gets the
+          process-local stampede protection the query decorator already has, and <code>HybridCacheService</code> can override
+          the member with its native two-level primitive.</p>
+          <h3 id="hybridcacheservice"><code>HybridCacheService</code></h3>
+          <p>A new <code>internal sealed HybridCacheService : ICacheService</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs</code>) implements the
+          interface over <code>HybridCache</code>.</p>
+          <ul>
+          <li><strong><code>GetAsync</code> is a read that never writes.</strong> It calls <code>HybridCache.GetOrCreateAsync</code> with
+          <code>HybridCacheEntryFlags.DisableUnderlyingData</code> (a shipped 9.0 GA API), which suppresses the factory and
+          writes nothing on a miss. This is the call that earns the feature: an L2 hit is promoted into the calling
+          replica&#39;s L1, so the next read of that key costs no hop. The call is wrapped fail-soft: any fault logs a
+          warning, self-heal-deletes the key, and returns the default.</li>
+          <li><strong><code>SetAsync</code> maps expiration to both levels</strong>, with <code>LocalCacheExpiration</code> set to
+          <code>min(local default, expiration)</code>, the local default being the 30 seconds <code>CacheOptions.DefaultDuration</code>
+          declares. A shorter caller TTL applies at both levels; a longer one still leaves the L1 copy bounded at
+          30 seconds.</li>
+          <li><strong><code>IncrementAsync</code> bypasses L1 on both legs</strong> (<code>DisableLocalCacheRead | DisableLocalCacheWrite</code>), keeping
+          today&#39;s L2-only read-modify-write semantics exactly. A counter served from a replica&#39;s local cache
+          ignores the other replicas&#39; increments, which on the ADR-029 brute-force path means a lockout that never
+          triggers. ADR-026 accepted an occasional lost increment; it did not accept a counter that reads its own
+          stale copy for up to 30 seconds.</li>
+          <li><strong><code>RemoveByPrefixAsync</code> reuses the existing SCAN machinery</strong>, extracted out of <code>DistributedCacheService</code>
+          into a shared internal <code>RedisPrefixScanner</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/RedisPrefixScanner.cs</code>) that both services
+          call, so both evict through one implementation and the existing Redis-tier tests over
+          <code>DistributedCacheService</code> prove the extraction is behavior-identical. The delete is a caller-supplied
+          callback: hybrid keys go through <code>hybrid.RemoveAsync</code>, which also evicts the calling replica&#39;s L1 copy,
+          legacy keys through a raw delete.</li>
+          </ul>
+          <h3 id="the-caching-decorators-keep-their-own-stampede-logic">The caching decorators keep their own stampede logic</h3>
+          <p><code>CachingQueryDecorator</code> deliberately does <strong>not</strong> route through <code>GetOrCreateAsync</code>. It caches only
+          successful <code>Result</code>s, and <code>HybridCache.GetOrCreateAsync</code> cannot express &quot;store this outcome but not that
+          one&quot; without also caching failures, which would turn a transient handler failure into a cached one for the
+          entry&#39;s lifetime. Switching buys nothing anyway: HybridCache&#39;s stampede protection is process-local,
+          exactly like the stripe the decorator holds. The decorators keep their read/execute/write sequence and get
+          the L1 benefit for free, because their reads go through <code>GetAsync</code>.</p>
+          <h3 id="registration-is-one-opt-in-call">Registration is one opt-in call</h3>
+          <p><code>AddCommonHybridCache(Action&lt;HybridCacheOptions&gt;? configure = null)</code> (Infrastructure <code>DependencyInjection</code>)
+          calls <code>AddHybridCache</code> with defaults matching <code>CacheOptions</code> (<code>LocalCacheExpiration</code> 30 seconds), then
+          <code>RemoveAll&lt;ICacheService&gt;()</code> and <code>AddSingleton&lt;ICacheService, HybridCacheService&gt;</code>. Remove-then-add makes
+          the call order-independent against <code>AddInfrastructure</code>, whose <code>AddCaching</code> registers its substrate with
+          <code>TryAddSingleton</code>: the opt-in wins either way.</p>
+          <h3 id="tags-are-deferred">Tags are deferred</h3>
+          <p><code>HybridCache.RemoveByTagAsync</code> would eventually retire prefix invalidation and its SCAN cost, and it is not
+          in this release: adopting tags means every cache-writing call site declares its tags, a public-contract
+          sweep across three repos, while the prefix model has production history. The keyspace decision above is
+          what makes a later tag adoption possible without a second format collision.</p>
+          <h3 id="packaging-and-adoption">Packaging and adoption</h3>
+          <p><code>Microsoft.Extensions.Caching.Hybrid</code> is pinned in <code>Directory.Packages.props</code> and referenced by
+          <code>MMCA.Common.Infrastructure</code>, with lock files regenerated across the solution <strong>and</strong> the out-of-slnx Redis
+          tests project (<a href="038-supply-chain-provenance.html">ADR-038</a>). In the sweep, ADC and Store call
+          <code>AddCommonHybridCache</code> in the hosts that already register Redis; MMCA.Helpdesk does not (no Redis, so it
+          stays on the memory substrate).</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The disjoint keyspace is the decision; everything else is implementation.</strong> Rather than trusting a
+          second implementation to write a shape compatible with the first, this record removes the possibility of
+          the two shapes meeting. A cache key belongs to exactly one writer&#39;s format.</li>
+          <li><strong>A default interface member is the only non-breaking way to widen this interface.</strong> <code>IncrementAsync</code>
+          proved it: implementers inherit working behavior, and the one with something better overrides it.</li>
+          <li><strong><code>DisableUnderlyingData</code> makes <code>GetAsync</code> honest.</strong> Without it, mapping <code>GetAsync</code> onto a get-or-create
+          API would need a factory that fabricates a value, or would write on a read. The flag turns get-or-create
+          into a pure read while keeping the L1 promotion that is the point of adopting HybridCache.</li>
+          <li><strong>The counter path is excluded rather than tuned.</strong> A short <code>LocalCacheExpiration</code> would have made the
+          counters &quot;mostly right&quot;, the wrong property for the control that decides whether an account is locked.
+          Bypassing L1 on both legs keeps ADR-029&#39;s semantics identical to what shipped.</li>
+          <li><strong>Fail-soft matches the existing substrate&#39;s posture.</strong> ADR-026 already treats prefix invalidation as
+          best-effort with a TTL backstop; a faulting read returning a miss is the same trade.</li>
+          <li><strong>Opt-in keeps the release non-breaking and the monolith cheap.</strong> A host with no Redis gains nothing from
+          a two-level cache over an in-process one, so automatic adoption would add a dependency and a second cache
+          layer to hosts that cannot benefit.</li>
+          <li><strong>Extracting the scanner guarantees one eviction behavior.</strong> Two SCAN implementations would drift, and
+          the drift would be silent (entries surviving an invalidation), the hardest kind of cache bug to see.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Invalidation does not reach other replicas&#39; L1 immediately.</strong> A remove evicts the L2 entry and the
+          calling replica&#39;s L1; every other replica keeps its copy for up to <code>LocalCacheExpiration</code> (30 seconds).
+          The command decorator&#39;s delayed 5-second re-invalidation already tolerates a comparable race, but this is
+          a second and longer staleness window that did not exist before.</li>
+          <li><strong>OAuth state and nonce records inherit that window.</strong> A value consulted to reject a replay can be served
+          from a stale local copy, so the residual replay exposure is bounded by <code>LocalCacheExpiration</code>, not by the
+          record&#39;s removal.</li>
+          <li><strong><code>AddCommonHybridCache</code> overwrites a host&#39;s own <code>ICacheService</code>.</strong> <code>RemoveAll&lt;ICacheService&gt;()</code> is what
+          makes the call order-independent, and it is also indiscriminate: a host that registered a custom
+          implementation loses it silently. Deliberate, and a sharp edge for anyone who had one.</li>
+          <li><strong>The migration window pays for two formats.</strong> Legacy entries stay resident in Redis until their TTL
+          expires while the new keyspace fills, so peak memory is briefly the sum of both.</li>
+          <li><strong>Dual-pattern prefix eviction doubles the SCAN work.</strong> Every prefix invalidation scans twice for as long
+          as the legacy pattern is retained, and nothing in this record schedules its removal.</li>
+          <li><strong>Fail-soft turns a broken cache into database load, quietly.</strong> A warning log per fault is the only
+          signal; the endpoint keeps answering while the database absorbs the traffic the cache used to.</li>
+          <li><strong>The counter path gets none of the benefit.</strong> <code>IncrementAsync</code> opting out of L1 leaves ADR-029&#39;s hot
+          path exactly as expensive as before: correct, and an uneven benefit across the interface.</li>
+          <li><strong>A wider public contract, even when non-breaking.</strong> <code>GetOrCreateAsync</code> is a member three repos now
+          inherit, and it caches unconditionally (failures included, unlike the decorators), so a caller who
+          assumes decorator semantics can misuse it.</li>
+          <li><strong>Deferring tags leaves SCAN as the only bulk-eviction tool.</strong> Prefix invalidation remains an O(keyspace)
+          operation per invalidation, on every non-replica server.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="026-caching-strategy.html">ADR-026</a> (amended by this record: its Tier 1 substrate gains a third
+          implementation, its 30-second default TTL becomes the local-cache bound as well, its prefix-invalidation
+          model gains a dual pattern, and its <code>IncrementAsync</code> storage-format trade-off is the specific case this
+          keyspace decision generalizes), <a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the caching decorators, which
+          keep their own stampede protection and their cache-only-success rule and take the L1 win through
+          <code>GetAsync</code>), <a href="029-authentication-brute-force-protection.html">ADR-029</a> (the brute-force and rate-limit
+          counters that force <code>IncrementAsync</code> to bypass L1 on both legs), <a href="017-request-idempotency.html">ADR-017</a> (the
+          24-hour idempotency records the dual-pattern eviction keeps reachable through the migration window),
+          <a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a> (the Tier 2 output-cache edge, untouched by
+          this record: its own store, its own tag eviction), <a href="038-supply-chain-provenance.html">ADR-038</a> (the lock-file
+          and vulnerability-audit obligations a new package pin carries, out-of-slnx projects included),
+          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release and one-pass consumer sweep
+          that carries this to ADC, Store, and Helpdesk).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/077-hybridcache-substrate.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

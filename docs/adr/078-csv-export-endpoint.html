@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release. Unlike the wave&#39;s other features this one is…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation">
+  <meta property="og:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release. Unlike the wave&#39;s other features this one is…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation">
+  <meta name="twitter:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release. Unlike the wave&#39;s other features this one is…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation","item":"https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 78 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html" aria-current="page">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-078-csv-export-as-a-dedicated-endpoint-not-content-negotiation">ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-13). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release.
+          Unlike the wave&#39;s other features this one is NOT opt-in: every controller deriving from
+          <code>EntityControllerBase</code> gains the endpoint automatically, under that controller&#39;s own authorization
+          posture, so consumers re-baseline their OpenAPI contract snapshots in the sweep.</p>
+          <h2 id="context">Context</h2>
+          <p>The request is &quot;export what you filtered&quot;. The generic entity surface of
+          <a href="034-generic-entity-query-layer.html">ADR-034</a> already accepts a full query vocabulary on the paged route
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:112</code>): sparse fieldsets through
+          <code>fields</code>, dynamic per-type filtering bound by <code>QueryFilterModelBinder</code> (<code>EntityControllerBase.cs:124</code>),
+          <code>sortColumn</code> / <code>sortDirection</code>, and pagination reported in <code>X-Pagination</code>. A user who has narrowed a grid
+          to the rows they care about wants those exact rows as a file. The framework produced no file at all: the
+          four generic reads (<code>EntityControllerBase.cs:73</code>, <code>:112</code>, <code>:154</code>, <code>:184</code>) return JSON and nothing else.</p>
+          <p>The obvious implementation is content negotiation: keep the same URL, have the client send
+          <code>Accept: text/csv</code>, and register an <code>OutputFormatter</code>. Exploration of the real source found two behaviors
+          that make that the wrong shape here.</p>
+          <ul>
+          <li><strong>The output cache does not vary by <code>Accept</code>.</strong> <code>PublicEndpointOutputCachePolicy</code>
+          (<a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a>) sets
+          <code>context.CacheVaryByRules.QueryKeys = &quot;*&quot;</code>
+          (<code>Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:81</code>) and varies by
+          nothing else. On any endpoint carrying that policy, a CSV request and a JSON request to the same URL
+          with the same query string are the same cache entry, so a CSV request can be served a stored JSON body
+          with a <code>Content-Type</code> that no longer matches what the formatter would have produced.</li>
+          <li><strong>A negotiation failure is silent.</strong> <code>AddAPI</code> sets <code>options.ReturnHttpNotAcceptable = false</code>
+          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:48</code>), so a request for a media type no
+          formatter can produce does not get 406: it falls back to the default formatter. A caller asking for CSV
+          against a controller where the formatter did not apply receives JSON with a 200 and no signal that it
+          asked for something else.</li>
+          </ul>
+          <p>Neither global setting is free to change: flipping <code>ReturnHttpNotAcceptable</code> changes the failure mode of
+          every endpoint in every consumer in one release, and adding <code>Accept</code> to the cache variance multiplies
+          cache entries on the read-scaling path for a format almost nobody requests. A second question had no
+          answer either: how many rows an export returns. The query pipeline caps any
+          unpaginated read at <code>EntityQueryPipeline.MaxUnboundedResultLimit = 1000</code>
+          (<code>Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:23</code>, applied by <code>Take(...)</code> at
+          <code>:102</code> and <code>:148</code>), and there is no <code>IAsyncEnumerable</code> path through it. A naive &quot;read it all, write CSV&quot;
+          export therefore returns 1000 rows and says nothing about the rest.</p>
+          <h2 id="decision">Decision</h2>
+          <h3 id="a-dedicated-route-not-a-media-type">A dedicated route, not a media type</h3>
+          <p><code>EntityControllerBase</code> gains a virtual <code>[HttpGet(&quot;export&quot;)] ExportAsync(...)</code> action
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs</code>). It accepts the same query
+          surface as the paged route: <code>sortColumn</code>, <code>sortDirection</code>, <code>fields</code>, <code>includeFKs</code>, and <code>filters</code> bound by
+          <code>[ModelBinder(typeof(QueryFilterModelBinder))]</code>, so a grid that produced a <code>paged</code> URL produces an
+          <code>export</code> URL by changing one path segment. It returns a streamed <code>text/csv</code> response with a
+          <code>Content-Disposition</code> attachment filename of <code>{controller}-{yyyyMMdd-HHmmss}.csv</code>.</p>
+          <p>A distinct path avoids both findings without touching either global setting: the route is not the cached
+          route, and a client cannot ask for CSV and silently receive JSON, because asking for CSV means calling a
+          different URL.</p>
+          <h3 id="the-page-loop-is-how-the-row-cap-is-answered">The page loop is how the row cap is answered</h3>
+          <p><code>ExportAsync</code> does not issue one unpaged query. It loops server-side over the existing paged
+          <code>IEntityQueryService.GetAllAsync</code>
+          (<code>Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:60</code>) at a page size of
+          <code>ApplicationSettings.MaxPageSize</code>
+          (<code>Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:15</code>, default 500), writing each
+          page&#39;s rows into the response as they materialize, until a page comes back short or the export cap is
+          reached. Every page is a bounded, already-supported read, so <code>MaxUnboundedResultLimit</code> is never the thing
+          that decides how large an export is.</p>
+          <p>Adding an <code>IAsyncEnumerable</code> path through <code>EntityQueryPipeline</code> is the better long-term answer: one
+          query, one open reader, no repeated <code>Skip</code>. It is deliberately deferred out of this wave. It changes the
+          shared read path that every entity in every consumer uses, and this record buys the capability without
+          touching it.</p>
+          <h3 id="the-row-ceiling-is-a-setting-and-hitting-it-is-visible">The row ceiling is a setting, and hitting it is visible</h3>
+          <p><code>ApplicationSettings</code> gains <code>MaxExportRows</code>, default 100,000. At the ceiling the export stops, emits a
+          final CSV comment row recording that the file is partial, and sets an <code>X-Export-Truncated: true</code> response
+          header. Truncation is a normal outcome with a signal, not an error: the response has already begun
+          streaming by the time the cap is reached, so a status code is no longer available to carry it.</p>
+          <h3 id="the-csv-writer-is-in-house">The CSV writer is in-house</h3>
+          <p><code>CsvWriter</code> (internal static, <code>Source/Presentation/MMCA.Common.API/Export/</code>) implements RFC 4180: quote a
+          field when it contains the separator, a quote, or a line break; escape an embedded quote by doubling it;
+          terminate rows with CRLF; optionally lead with a UTF-8 BOM, controlled by a setting because the BOM is
+          what makes Excel open a UTF-8 file correctly and what makes some parsers see a junk first column.</p>
+          <p>No CsvHelper dependency is taken. The framework&#39;s export input is already a rectangle of stringified
+          shaped values, the escaping rules are a page of code, and a published framework that takes a dependency
+          imposes it on every consumer of every package pin
+          (<a href="038-supply-chain-provenance.html">ADR-038</a>, <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).</p>
+          <h3 id="column-names-come-from-the-same-place-the-json-property-names-do">Column names come from the same place the JSON property names do</h3>
+          <p>The header row is the key set produced by <code>QueryFieldService.ShapeCollectionData</code>
+          (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:96</code>), which writes each shaped value
+          under its camelCase name via <code>JsonNamingPolicy.CamelCase</code> (<code>QueryFieldService.cs:43</code>, <code>:110</code>). The CSV
+          columns for a given <code>fields=</code> request are therefore exactly the JSON property names for the same request,
+          with no second naming convention to keep in step.</p>
+          <h3 id="ientitycontrollerbase-is-deliberately-not-touched"><code>IEntityControllerBase</code> is deliberately not touched</h3>
+          <p>The endpoint is a base-class method only. Adding a member to the public
+          <code>IEntityControllerBase</code> interface
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/IEntityControllerBase.cs:14</code>) is breaking for any
+          consumer that implements it explicitly rather than inheriting the base, and a default interface member
+          would hide that break behind a runtime surprise instead of removing it. This is the same reasoning
+          <a href="073-multi-tenancy-model.html">ADR-073</a> applies to the new <code>IPhysicalDbContextFactory.Create</code> overload.</p>
+          <h3 id="the-streamed-response-passes-the-failure-filter-untouched">The streamed response passes the failure filter untouched</h3>
+          <p><code>UnhandledResultFailureFilter</code> acts only when the action result is an <code>ObjectResult</code> carrying a failed
+          <code>Result</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/UnhandledResultFailureFilter.cs:27</code>). A streamed
+          file result is neither, so it flows through the filter pipeline unmodified and the
+          <a href="013-result-pattern.html">ADR-013</a> contract stays intact for the JSON routes without a special case for
+          this one. A failure detected before streaming begins still returns through <code>HandleFailure</code>.</p>
+          <h3 id="adoption-is-automatic-and-the-sweep-work-is-contract-snapshots">Adoption is automatic, and the sweep work is contract snapshots</h3>
+          <p>ADC, Store, and Helpdesk inherit <code>/export</code> on every <code>EntityControllerBase</code> derivative the moment they take
+          the pin. No registration call exists to make. The visible work in each consumer sweep PR is re-baselining
+          the OpenAPI contract snapshots asserted by <code>OpenApiContractTestsBase</code>
+          (<a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a>), which will otherwise fail on the added path.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>A route is an unambiguous request; an <code>Accept</code> header is a preference.</strong> Given a cache policy that
+          ignores <code>Accept</code> and a pipeline configured to never return 406, a client that negotiates has no way to
+          know what it got. A separate path makes the request explicit and the response deterministic, and it does
+          it without editing two settings that every consumer&#39;s every endpoint depends on.</li>
+          <li><strong>The cheapest correct fix beats the most idiomatic one here.</strong> <code>OutputFormatter</code> is the textbook answer
+          and would have been right if the two findings had gone the other way. The cost of making them go the
+          other way (a 406 behavior change plus a cache-entry multiplier on the read-scaling path) is paid by
+          every consumer for a feature used by few.</li>
+          <li><strong>Page-looping reuses a read that is already correct.</strong> Filtering, validation, sorting, projection,
+          include handling, and DTO mapping stay exactly as the paged route runs them, so an export cannot
+          disagree with the grid it was launched from, and no new code touches the query pipeline in this wave.</li>
+          <li><strong>A hard ceiling with a signal beats an unbounded stream.</strong> 100,000 rows is a number an operator can
+          reason about; an unbounded export is a way to hold a connection and a database read open for as long as
+          the data allows. The truncation header names the boundary rather than hiding it.</li>
+          <li><strong>A framework declines dependencies its consumers cannot decline.</strong> Every pin MMCA.Common takes is one
+          its packages carry into three applications under lockstep versioning (ADR-016), and RFC 4180 quoting is
+          small, stable, and fully testable in-repo.</li>
+          <li><strong>One naming source keeps two formats honest.</strong> Deriving the header row from the same shaper the JSON
+          response uses makes the CSV columns a projection of an existing contract instead of a second one.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Every derivative gains a bulk read whether its owner wanted one or not.</strong> The only gate is the
+          controller&#39;s existing authorization posture. A resource that was safe to page 20 rows at a time is now
+          exportable 100,000 rows at a time by the same caller, and no controller opted in to that. Overriding
+          <code>ExportAsync</code> to return 404 or 403 is the only opt-out, which is opt-out, not opt-in.</li>
+          <li><strong>N queries, not one stream.</strong> An export at the default settings is up to 200 round trips
+          (<code>MaxExportRows</code> 100,000 over <code>MaxPageSize</code> 500), each with its own <code>Skip</code>/<code>Take</code>, and it holds a
+          response open for their combined duration. There is no export-specific timeout budget in v1; the limits
+          are the row cap and whatever the host and client already enforce.</li>
+          <li><strong>Truncation is signalled where spreadsheets do not look.</strong> A response header and a trailing comment row
+          are both invisible to a user who double-clicks the downloaded file. A partial export can therefore be
+          read as a complete one.</li>
+          <li><strong>No <code>Accept: text/csv</code> support at all.</strong> A client that negotiates instead of routing gets JSON. That is
+          the behavior this record chose, and it is still surprising to anyone who expects a modern API to answer
+          a media type request.</li>
+          <li><strong>The framework now owns a CSV implementation.</strong> Embedded quotes, embedded newlines, a leading
+          separator, and encoding all become framework correctness obligations covered by framework tests. The
+          spreadsheet formula-injection question (a cell whose value begins with <code>=</code>, <code>+</code>, <code>-</code>, or <code>@</code>) is one the
+          in-house writer must answer explicitly at implementation, and this record does not pre-decide the answer:
+          neutralizing changes the exported value, and not neutralizing ships a known spreadsheet risk.</li>
+          <li><strong>CSV flattens, and the query surface does not.</strong> A shaped field that is nested or collection-valued has
+          no natural cell. Whatever the writer renders for such a field is a framework convention, not a standard,
+          and it will not round-trip back into the JSON shape it came from.</li>
+          <li><strong>The endpoint is not output-cached, by construction.</strong> Every export is a live read against the database,
+          which is correct for an operator extract and means an export cannot be absorbed by the cache tier the
+          way the read routes are (<a href="019-rate-limiting.html">ADR-019</a> rate limiting is the only load control on it).</li>
+          <li><strong>Adding an endpoint to a shared base moves every consumer&#39;s OpenAPI document in one release.</strong> Under
+          lockstep versioning (ADR-016) there is no phased rollout: all three consumers re-baseline their contract
+          snapshots (ADR-058) in the same sweep.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="034-generic-entity-query-layer.html">ADR-034</a> (the generic entity surface and query contract this extends,
+          and the <code>MaxUnboundedResultLimit</code> ceiling that forced the page loop),
+          <a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a> (the output-cache policy whose
+          <code>Accept</code>-blind query-string variance is one of the two forcing findings),
+          <a href="013-result-pattern.html">ADR-013</a> (the <code>Result</code> contract at the edge and the unhandled-failure filter the
+          streamed result passes through untouched),
+          <a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a> (the shipped OpenAPI contract snapshots every
+          consumer re-baselines for the added path),
+          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> and <a href="038-supply-chain-provenance.html">ADR-038</a> (why a
+          published framework declines a CSV dependency, and why a public interface gains no member),
+          <a href="019-rate-limiting.html">ADR-019</a> (the per-principal limiter that is the only load control standing in front
+          of a bulk read), <a href="076-data-subject-export.html">ADR-076</a> (the other export in this wave, and the boundary
+          between a data-subject package assembled for one person and an operator&#39;s filtered extract of a table).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/078-csv-export-endpoint.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

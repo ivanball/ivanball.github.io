@@ -1,7 +1,10 @@
 # ADR-026: Two-Tier Caching: a Swappable `ICacheService` Substrate plus an HTTP Output-Cache Edge
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25).
+Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25). **Amended by
+[ADR-077](077-hybridcache-substrate.md) (2026-08-13)**: Tier 1's substrate gains a third, opt-in
+implementation (`HybridCacheService`, L1 plus L2) writing under a disjoint `hc:` keyspace. The default
+path is unchanged; see the Revision (2026-08-13) below.
 
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
@@ -28,13 +31,17 @@ Cache in two tiers, each with its own substrate.
   `GetAsync` / `SetAsync` / `RemoveAsync` / `RemoveByPrefixAsync`. Application code (the ADR-014
   Caching decorators, `LoginProtectionService`) depends only on this interface, never on a concrete
   cache or on Redis.
-- **The backing store is chosen at startup, not in code.** `AddCaching()`
+- **The backing store is chosen at startup, not in code (amended by ADR-077).** `AddCaching()`
   (`MMCA.Common.Infrastructure/DependencyInjection.cs:157`, called from `AddInfrastructure`) registers
   `DistributedCacheService` when a real `IDistributedCache` is present (one that is not the in-memory
   `MemoryDistributedCache`, i.e. Aspire registered Redis), and otherwise `MemoryCacheService`. The
   monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
   distributed store with no application-code change. This is the same "monolith now, scale or extract
-  later" extension point as `InProcessMessageBus` vs `BrokerMessageBus` (ADR-003/006/008).
+  later" extension point as `InProcessMessageBus` vs `BrokerMessageBus` (ADR-003/006/008). Since
+  ADR-077 a third implementation exists, `HybridCacheService` (L1 in-process plus L2 distributed), and
+  it is the one substrate that is **not** auto-selected: a host opts into it explicitly with
+  `AddCommonHybridCache(...)`, which replaces the registration this call made. With no such call the
+  two-way swap above is exactly what it was.
 - **Prefix invalidation, implemented per store.** `IMemoryCache` has no key-enumeration API, so
   `MemoryCacheService` tracks live keys in a `ConcurrentDictionary` (kept in sync by a post-eviction
   callback) to support `RemoveByPrefixAsync`. `DistributedCacheService` serializes values as UTF-8 JSON
@@ -144,7 +151,10 @@ ADR-014 (the Caching decorators and `IQueryCacheable` / `ICacheInvalidating` mar
 substrate), ADR-019 (output caching as the anonymous-traffic lever, and `LoginProtectionService` is
 another `ICacheService` consumer), ADR-006 / ADR-008 (the same monolith-to-services swap boundary this
 substrate follows), ADR-040 (amends this ADR's Tier 2: the adopters' public-read policies cache
-authenticated, bearer-carrying requests too, not only anonymous traffic).
+authenticated, bearer-carrying requests too, not only anonymous traffic),
+[ADR-077](077-hybridcache-substrate.md) (amends this ADR's Tier 1: the opt-in `HybridCacheService`
+substrate, the disjoint `hc:` keyspace that generalizes the `WRONGTYPE` lesson recorded in the counter
+trade-off above, and the L1 bypass that keeps `IncrementAsync` semantics unchanged).
 
 ## Revision (2026-07-24)
 Three substrate corrections from a code review.
@@ -254,3 +264,23 @@ substantive prose changed.
 5. **The 2026-08-01 anchor claim is annotated rather than removed**, consistent with how the two
    preceding revisions treated their predecessors: the anchors it recorded were correct on
    2026-08-01 and have since drifted again.
+
+## Revision (2026-08-13)
+Tier 1 is amended by [ADR-077](077-hybridcache-substrate.md), which is where the decision and its
+trade-offs are recorded. The three points that change the reading of this record:
+
+1. **A third substrate, opted into rather than auto-selected.** `HybridCacheService` (L1 in-process
+   plus L2 distributed, `Microsoft.Extensions.Caching.Hybrid`) joins `MemoryCacheService` and
+   `DistributedCacheService`. `AddCaching()`'s presence-of-a-real-`IDistributedCache` swap still
+   decides between the original two; `AddCommonHybridCache(...)` replaces the result. A host that does
+   not call it gets byte-identical behavior to this record as written.
+2. **The counter trade-off above is generalized into a keyspace rule.** The `WRONGTYPE` incident
+   documented in Trade-offs (a Redis `INCR` string read back by the hash-shaped
+   `StackExchangeRedisCache` path) is a class of bug, not one occurrence: two serialization formats
+   must never share one keyspace. The hybrid substrate therefore writes under a disjoint
+   `{prefix}hc:{key}` keyspace, so a rolling deploy cannot produce a cross-format read, and prefix
+   eviction runs both patterns through the migration window. The non-atomic read-modify-write
+   `IncrementAsync` position is unchanged, and the hybrid implementation bypasses L1 on both legs
+   precisely to keep it unchanged.
+3. **Nothing in Tier 2 moves.** The output-cache edge, its policies and its Redis-backed store are
+   untouched by ADR-077.

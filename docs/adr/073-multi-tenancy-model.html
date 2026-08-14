@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-073: Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common enterprise capability wave release, alongside the scheduler, audit trail, DSAR…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-073: Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)">
+  <meta property="og:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common enterprise capability wave release, alongside the scheduler, audit trail, DSAR…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-073: Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)">
+  <meta name="twitter:description" content="Accepted (2026-08-13). The implementation lands in the MMCA.Common enterprise capability wave release, alongside the scheduler, audit trail, DSAR…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)","item":"https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 78 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html" aria-current="page">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-073-multi-tenancy-shared-schema-query-filter-plus-db-per-tenant-routing">ADR-073: Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-13). The implementation lands in the MMCA.Common enterprise capability wave release,
+          alongside the scheduler, audit trail, DSAR export, and CSV export work. It is opt-in:
+          <code>AddMultiTenancy(configuration)</code> binds the settings section, and with no host calling it the mechanism is
+          inert (<code>Tenancy:Enabled</code> false, no tenant resolved), so the framework release is non-breaking.</p>
+          <h2 id="context">Context</h2>
+          <p>MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
+          <strong>source name</strong> (every entity resolves to a <code>DataSourceKey(Engine, Name)</code>, each module or service owning
+          its own database) and ADR-018 partitions by <strong>engine</strong>. A third axis, &quot;which customer does this row belong
+          to&quot;, had no recorded answer, which meant every consumer that ever needed one would invent it: a <code>TenantId</code>
+          column here, a <code>Where</code> clause in each handler there, and one forgotten handler is a customer data leak.</p>
+          <p>The framework does have the machinery this needs, built for a different reason. <code>ApplySoftDeleteFilters</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:243</code>,
+          called from <code>OnModelCreating</code> at <code>:220</code>) proves that a global predicate applied by expression tree to every
+          matching entity type makes an invariant unforgettable, and EF10&#39;s <strong>named</strong> query filters
+          (<code>modelBuilder.Entity(clrType).HasQueryFilter(&quot;SoftDelete&quot;, filter)</code>, <code>:255</code>) mean a second filter can be
+          added beside the first rather than replacing it. The interceptor pipeline resolved in <code>OnConfiguring</code>
+          (<code>:183-185</code>) proves that a write-side rule can be enforced once for every context.</p>
+          <p>That left a specific set of open questions: whether a tenant is a row discriminator or a database, what
+          happens when no tenant is resolved, where the tenant comes from on an inbound request, whether the outbox
+          and the migration runner (which have no request and therefore no claims) can reach tenant data at all, and
+          whether one cached EF model serves many tenants or each tenant compiles its own.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>Ship shared-schema tenancy as a second named query filter, with per-tenant database routing as a
+          configuration override on the same source key, both opt-in and both inert until a host asks for them.</strong></p>
+          <h3 id="the-tenant-filter-is-a-second-named-filter-composed-with-soft-delete">The tenant filter is a second named filter, composed with soft-delete</h3>
+          <p><code>ApplicationDbContext</code> gains <code>ApplyTenantFilters</code>, applied beside <code>ApplySoftDeleteFilters</code> in
+          <code>OnModelCreating</code>. Named filters compose with AND automatically, so an entity that is both
+          <code>IAuditableEntity</code> and <code>ITenantEntity</code> carries both predicates and neither knows about the other. The
+          tenant predicate is <code>e =&gt; CurrentTenantId == null || e.TenantId == CurrentTenantId</code>, built as an
+          expression tree that embeds <code>Expression.Constant(this)</code>: EF rewrites a context-typed constant inside a
+          filter to the executing context instance at query-compile time, so <strong>one cached model per source serves
+          every tenant</strong> and the tenant value arrives as a SQL parameter rather than as a literal baked into a
+          per-tenant model. A dedicated two-tenants-one-cached-model Sqlite test locks that in, because it is a
+          property of EF&#39;s filter rewriting rather than of code this repo owns.</p>
+          <p>A null tenant is the system context and sees everything: background services, the migration runner, and
+          admin flows run without a resolved tenant by construction. <code>CosmosDbContext.OnModelCreating</code> calls
+          <code>ApplyTenantFilters</code> too, because it builds its filters independently rather than inheriting them.</p>
+          <h3 id="itenantentity-carries-a-plain-string"><code>ITenantEntity</code> carries a plain <code>string</code></h3>
+          <p><code>ITenantEntity</code> (Domain, <code>Source/Core/MMCA.Common.Domain/Interfaces/ITenantEntity.cs</code>) declares
+          <code>string TenantId { get; }</code>: max 64 characters, no public setter. The interceptor stamps it through
+          <code>entry.Property(...).CurrentValue</code>, so an entity cannot set its own tenant and a handler cannot move a row
+          between tenants by assignment. The type is <code>string</code> deliberately, and this is where the record departs
+          from ADR-048: a tenant identifier arrives from a JWT claim, an HTTP header, or a configuration key, all
+          three of which are text, so a <code>TenantIdentifierType</code> alias would add a conversion at every one of those
+          boundaries and buy nothing. A tenant is never a key this system generates the way an entity identifier is.</p>
+          <h3 id="itenantcontext-mirrors-icorrelationcontext-one-scope-means-one-tenant"><code>ITenantContext</code> mirrors <code>ICorrelationContext</code>, one scope means one tenant</h3>
+          <p><code>ITenantContext</code> (Application) exposes <code>TenantId</code>, <code>IsResolved</code>, and <code>SetTenant</code>, mirroring
+          <code>ICorrelationContext</code> in shape and lifetime. The scoped <code>TenantContext</code> implementation makes <code>SetTenant</code>
+          idempotent for the same value and <strong>throws on a different value</strong>: a scope that has already answered
+          queries for tenant A must not start answering them for tenant B, so the invariant is enforced, not advised.</p>
+          <h3 id="resolution-is-claim-then-header-and-fails-closed">Resolution is claim, then header, and fails closed</h3>
+          <p><code>TenancySettings</code> binds section <code>Tenancy</code> through the ADR-070 chain: <code>Enabled</code> (false), <code>ResolutionOrder</code>
+          (<code>[Claim, Header]</code>), <code>ClaimType</code> (<code>tenant_id</code>), <code>HeaderName</code> (<code>X-Tenant-Id</code>), <code>RequireTenant</code> (<strong>true</strong>),
+          <code>ExcludedPathPrefixes</code> (health, alive, <code>.well-known</code>), and a <code>Tenants:{id}:DataSources:{sourceName}</code> map of
+          per-tenant connection strings. Host-based resolution (tenant from subdomain) is deferred: it needs a
+          hostname-to-tenant map and certificate handling that no consumer needs today.</p>
+          <p><code>TenantResolutionMiddleware</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs</code>)
+          mirrors <code>CorrelationIdMiddleware</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48</code>) and is wired
+          into <code>UseCommonMiddlewarePipeline</code> (<code>:45</code>) immediately <strong>after</strong> <code>app.UseAuthentication()</code> (<code>:96</code>),
+          because a claim-first resolution order requires that <code>HttpContext.User</code> already be populated. Like
+          <code>SoftDeletedUserMiddleware</code> (<code>:102</code>) it is registered unconditionally and inert by default, keeping the
+          pipeline one shape across every host. When <code>RequireTenant</code> is true and nothing resolves on a non-excluded
+          path, it returns 400 with a ProblemDetails body.</p>
+          <h3 id="writes-are-guarded-by-their-own-interceptor">Writes are guarded by their own interceptor</h3>
+          <p><code>TenantSaveChangesInterceptor</code> is a <strong>separate</strong> interceptor from the audit one (one concern per
+          interceptor, matching how audit stamping and domain-event capture are already split at <code>:183-185</code>). It
+          stamps <code>TenantId</code> on Added entries and throws <code>CrossTenantWriteException</code> on any Added, Modified, or
+          Deleted entry whose tenant differs from the resolved one. It is always registered and is a no-op when no
+          tenant is resolved. <code>DesignTimeDbContextHelper</code> must register it too, or <code>dotnet ef</code> breaks for every
+          consumer the moment it is resolved as a required service.</p>
+          <h3 id="the-tenant-is-read-live-not-copied-at-context-creation">The tenant is read live, not copied at context creation</h3>
+          <p><code>ApplicationDbContext</code> gains <code>internal Func&lt;string?&gt;? TenantIdAccessor</code> and
+          <code>CurrentTenantId =&gt; TenantIdAccessor?.Invoke()</code>. The scoped context factory assigns
+          <code>() =&gt; tenantContext?.TenantId</code> when it creates a context, and the value is read at query-compile time
+          rather than captured at construction. Copying at creation would make correctness depend on the middleware
+          having run before the first context in the scope existed, a hazard no test catches and a reordered
+          pipeline reintroduces silently.</p>
+          <h3 id="db-per-tenant-is-a-connection-string-override-behind-the-same-key">DB-per-tenant is a connection-string override behind the same key</h3>
+          <p>When <code>TenancySettings.Tenants[tenant].DataSources[key.Name]</code> has an entry, the scoped <code>DbContextFactory</code>
+          clones the resolver&#39;s <code>PhysicalDataSource</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:17</code>)
+          with the override connection string and the <strong>same <code>DataSourceKey</code></strong>, so EF&#39;s model cache key is unchanged
+          and one model still serves every tenant. Creation goes through a new
+          <code>IPhysicalDbContextFactory.Create(key, physical)</code> overload beside today&#39;s single member
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/IPhysicalDbContextFactory.cs:21</code>).
+          That overload is deliberately <strong>not</strong> a default interface member: it is additive-breaking for any consumer
+          with a custom implementation, and hiding that behind a default body would turn a compile error into a
+          runtime routing surprise, so it goes in the CHANGELOG as breaking-for-implementors. The tenant is not part
+          of the per-scope context cache key; instead a guard throws if the scope&#39;s tenant changes after an
+          overridden context exists, restating the one-scope-one-tenant invariant where it would otherwise break.</p>
+          <h3 id="ignorequeryfilters-stops-meaning-ignore-everything"><code>ignoreQueryFilters</code> stops meaning &quot;ignore everything&quot;</h3>
+          <p>The four parameterless <code>IgnoreQueryFilters()</code> call sites in <code>EFReadRepository</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:40</code>,
+          <code>:145</code>, <code>:209</code>, <code>:223</code>) become <code>IgnoreQueryFilters([&quot;SoftDelete&quot;])</code>. The repository&#39;s
+          <code>ignoreQueryFilters: true</code> parameter has always meant &quot;include soft-deleted rows&quot;, and naming the filter
+          keeps that meaning exactly while making it impossible for a soft-delete-inclusive read to cross tenants.</p>
+          <h3 id="background-work-drains-and-migrates-per-tenant">Background work drains and migrates per tenant</h3>
+          <p><code>OutboxProcessor</code> and <code>OutboxCleanupService</code> enumerate <code>(source, tenant?)</code> pairs from <code>TenancySettings</code>
+          and call <code>ITenantContext.SetTenant</code> inside the per-source scope before obtaining the context, so the
+          factory routes to the tenant&#39;s database and the claim-lease update
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:404-406</code>) runs
+          against the right rows. There is deliberately <strong>no <code>OutboxMessage</code> schema change</strong>: a <code>TenantId</code> column
+          would force a migration on every consumer on upgrade, for a discriminator the per-tenant database already
+          provides and shared-schema tenancy does not need (the row sits in its aggregate&#39;s database either way).</p>
+          <p><code>InitializeDatabaseAsync</code> gains a per-tenant pass: a fresh scope per tenant, <code>SetTenant</code>, then the same
+          <code>DatabaseInitStrategy</code> semantics and migrations assembly per overridden source. Module seeding stays
+          default-scope-only in v1, documented as such rather than half-implemented.</p>
+          <h3 id="cache-isolation-lives-in-the-decorators">Cache isolation lives in the decorators</h3>
+          <p><code>ICacheService</code> is a singleton and cannot observe scoped state, so tenant awareness goes one layer up:
+          <code>CachingQueryDecorator</code> and <code>CachingCommandDecorator</code> take <code>ITenantContext</code> and prefix the cache key, the
+          invalidation prefix, and the stripe lock with <code>t:{tenantId}:</code> when a tenant is resolved. Doing it in both
+          decorators is what makes read isolation and invalidation isolation symmetric; doing it in one would let
+          tenant A&#39;s write evict tenant B&#39;s entry or fail to evict its own. Direct <code>ICacheService</code> consumers (login
+          counters, OAuth state, idempotency records) are keyed by subject already and are unchanged.
+          <code>AddMultiTenancy(configuration)</code> additionally validates on start that every override names a source that
+          exists, so a typo fails the host rather than silently routing a tenant to the default database.</p>
+          <h3 id="adoption-helpdesk-demonstrates-it-adc-and-store-do-not-adopt-it">Adoption: Helpdesk demonstrates it, ADC and Store do not adopt it</h3>
+          <p>MMCA.ADC and MMCA.Store are single-tenant production applications, so adding a tenant filter and a
+          <code>TenantId</code> column to their aggregates is scope creep with real deploy risk (two production deployments,
+          migrations on every source) for a capability neither product sells. MMCA.Helpdesk is the reference demo:
+          its Tickets entities implement <code>ITenantEntity</code>, it is configured with two tenants, and one of them gets a
+          per-tenant database override, so the runnable seed exercises both halves of this record.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>A query filter is the only place the rule cannot be forgotten.</strong> Per-handler <code>Where</code> clauses are
+          correct until the tenth handler, and the tenth handler is a data leak rather than a bug report. The
+          soft-delete filter has proven the mechanism across three applications.</li>
+          <li><strong>Named filters are why this is additive at all.</strong> Before EF10, a second global filter would have
+          replaced the soft-delete one, forcing both predicates into one hand-composed expression. Naming them
+          keeps <code>IgnoreQueryFilters([&quot;SoftDelete&quot;])</code> expressible, so the repository&#39;s contract survives unchanged.</li>
+          <li><strong>Embedding the context constant is what keeps one model.</strong> Closing over the tenant string at model-build
+          time, the obvious implementation, produces a distinct compiled model per tenant and turns the model cache
+          into a memory leak proportional to tenant count, buying nothing a SQL parameter does not.</li>
+          <li><strong>Null-tenant-sees-all keeps background work simple.</strong> The alternative, a system context that enumerates
+          tenants to see everything, pushes tenancy into the outbox loop, the cleanup service, and the migration
+          runner as a control-flow concern rather than as a routing detail.</li>
+          <li><strong>Fail-closed is the only defensible default for isolation.</strong> <code>RequireTenant</code> defaults to true because
+          the failure mode of the other default is serving one customer&#39;s data to another, silently, with a 200.
+          A 400 is loud, immediate, and visible in the first smoke test.</li>
+          <li><strong>Same <code>DataSourceKey</code>, different connection string, is the smallest possible DB-per-tenant.</strong> An
+          override changes where a source points, not what a source is, so the entity registry, the model cache,
+          the migrations assembly, and the per-source outbox all keep working unchanged.</li>
+          <li><strong>A live accessor removes an ordering hazard rather than documenting it,</strong> and no outbox column keeps
+          the upgrade free: every consumer would otherwise pay a migration on every source for a discriminator a
+          per-tenant database already carries.</li>
+          <li><strong>The decorator is where the cache knows about scope.</strong> Pushing tenancy into <code>ICacheService</code> would mean
+          a singleton reaching for scoped state, which is exactly the shape that produces cross-request bleed.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Reads are on discipline where writes are on an invariant.</strong> A consumer calling EF&#39;s own parameterless
+          <code>IgnoreQueryFilters()</code> on a raw <code>Table</code> surface drops the tenant filter along with soft-delete. Writes
+          remain guarded by <code>TenantSaveChangesInterceptor</code> and the adoption sweep includes a grep for the
+          parameterless form, but nothing prevents a future call site. ADR-055&#39;s
+          <code>ApplicationLayer_DoesNotUseRawQueryableSurfaces</code> is partial cover only: it does not reach Infrastructure.</li>
+          <li><strong>The EF-style singleton adapter factories are tenant-unaware by design.</strong>
+          <code>DefaultSqlServerDbContextFactory</code> and its siblings exist for tooling and adapter scenarios that have no
+          scope and therefore no tenant. A context obtained through them sees every tenant&#39;s rows.</li>
+          <li><strong>Fail-closed means a misconfigured claim takes the whole surface down.</strong> A deployment whose identity
+          provider stops emitting <code>tenant_id</code> returns 400 on every non-excluded route rather than degrading to a
+          reduced view. That is the intended trade, and it is still an outage.</li>
+          <li><strong>Shared-schema turns one bad filter into a data leak rather than an error,</strong> and a missing
+          <code>ITenantEntity</code> marker on a new entity fails no build and no test: it silently includes that entity&#39;s
+          rows in every tenant&#39;s queries.</li>
+          <li><strong>The system context is a privileged mode with no second gate.</strong> Any code path that runs without a
+          resolved tenant reads across all tenants, and nothing distinguishes &quot;deliberately system&quot; from
+          &quot;middleware did not run here&quot;.</li>
+          <li><strong>DB-per-tenant multiplies operational surface.</strong> Each override adds a migration pass at startup and its
+          own connection pool, so both scale with tenant count, and the per-tenant connection strings live in
+          configuration, making the tenant roster a deployment artifact rather than data.</li>
+          <li><strong>Cache isolation stops at the decorator.</strong> Code resolving <code>ICacheService</code> directly gets no tenant
+          prefix. Today&#39;s direct consumers are subject-scoped (login counters, OAuth state, idempotency records)
+          so they are safe by accident of their key shape, not by a rule that would catch the next one.</li>
+          <li><strong>Module seeding is default-scope-only in v1.</strong> A per-tenant database gets migrations but not seed data.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="006-database-per-service.html">ADR-006</a> (the source-name axis this composes with: an override re-points a
+          <code>DataSourceKey</code> without changing it, and the per-source outbox this record drains once per tenant),
+          <a href="005-soft-delete-vs-erasure.html">ADR-005</a> (the filter this one sits beside and composes with by name, and
+          whose <code>IgnoreQueryFilters</code> contract narrows to <code>[&quot;SoftDelete&quot;]</code>),
+          <a href="018-polyglot-persistence.html">ADR-018</a> (the engine axis; <code>CosmosDbContext</code> applies the tenant filters
+          independently because it builds its own), <a href="026-caching-strategy.html">ADR-026</a> and
+          <a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the caching decorators that gain the <code>t:{tenantId}:</code> prefix on
+          key, invalidation prefix, and stripe lock), <a href="048-primitive-identifier-type-aliases.html">ADR-048</a> (why
+          <code>TenantId</code> is a plain <code>string</code> and not an identifier alias),
+          <a href="055-repository-and-specification-contract.html">ADR-055</a> (the raw-queryable rule that partially covers the
+          read-side bypass), <a href="030-startup-sole-migrator.html">ADR-030</a> (who applies migrations, now once per tenant per
+          overridden source), <a href="070-fail-fast-configuration-contract.html">ADR-070</a> (the validating settings chain
+          <code>TenancySettings</code> binds through, extended with a check that every override names a known source).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/073-multi-tenancy-model.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

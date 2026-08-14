@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">15</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">72</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">78</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">100</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -361,7 +361,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>72 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>78 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -438,6 +438,12 @@
           <a class="adr" href="docs/adr/070-fail-fast-configuration-contract.html"><span class="adr-num">070</span><span><span class="adr-title">Fail-fast configuration contract</span><span class="adr-sum">Every settings section binds through data-annotation validation with ValidateOnStart, so a missing or unparseable value refuses to boot the host instead of surfacing as a 500 at first use, and a setting read above Infrastructure goes through a read-only interface rather than the options pipeline.</span></span></a>
           <a class="adr" href="docs/adr/071-barcode-scanning-and-qr-display.html"><span class="adr-num">071</span><span><span class="adr-title">Barcode scanning and QR display capability</span><span class="adr-sum">One feature split by what each half actually depends on: rendering a QR needs no device, so it ships as a plain shared component, while reading one needs a camera and ships as a capability contract with a null fallback and an opt-in native implementation, because a camera costs an app-store permission declaration a head may not want.</span></span></a>
           <a class="adr" href="docs/adr/072-qr-badge-check-in-and-points.html"><span class="adr-num">072</span><span><span class="adr-title">QR badge check-in and points gamification</span><span class="adr-sum">The badge QR carries an opaque server-verified handle rather than a signed token, organizers scan attendees rather than the reverse, and one unique index serves as both the redelivery-idempotency guard and the anti-farming rule for an append-only points ledger.</span></span></a>
+          <a class="adr" href="docs/adr/073-multi-tenancy-model.html"><span class="adr-num">073</span><span><span class="adr-title">Multi-tenancy: shared schema plus DB-per-tenant</span><span class="adr-sum">A second named query filter composes by AND with the existing soft-delete filter and reads the tenant live from the executing context, so one cached model per source serves every tenant with the tenant id as a parameter; a write interceptor refuses cross-tenant writes, and a per-tenant connection-string override buys database isolation without a second model.</span></span></a>
+          <a class="adr" href="docs/adr/074-recurring-job-scheduler.html"><span class="adr-num">074</span><span><span class="adr-title">Recurring job scheduler</span><span class="adr-sum">Durable cron jobs built on the outbox&#39;s own claim-lease idiom rather than on Hangfire or Quartz, because the framework already owns a lease-based, multi-replica-safe polling loop in production; a missed schedule runs once and then advances, so an outage cannot produce a catch-up storm.</span></span></a>
+          <a class="adr" href="docs/adr/075-audit-trail.html"><span class="adr-num">075</span><span><span class="adr-title">Audit trail: field-level change history</span><span class="adr-sum">A fourth save-changes interceptor diffs the change tracker and writes per-property history rows in the same transaction as the data, opted in per entity by a marker; personal data is redacted at capture rather than at read, because a trail outlives the row it describes.</span></span></a>
+          <a class="adr" href="docs/adr/076-data-subject-export.html"><span class="adr-num">076</span><span><span class="adr-title">Data-subject export (DSAR) contract</span><span class="adr-sum">The orchestration every export shares (ownership gate, aggregate load, section fan-out, envelope) moves into the framework while the app-specific projections stay app-specific as registered sections; a failing section degrades to an unavailable flag rather than failing the package, because a subject request is a legal deadline.</span></span></a>
+          <a class="adr" href="docs/adr/077-hybridcache-substrate.html"><span class="adr-num">077</span><span><span class="adr-title">HybridCache as an opt-in cache substrate</span><span class="adr-sum">An L1-plus-L2 implementation joins the two auto-selected cache stores, opted into explicitly, and writes under a disjoint keyspace so two serialization formats can never share one key: the structural fix for the class of bug that once produced a production WRONGTYPE, including mid-rolling-deploy.</span></span></a>
+          <a class="adr" href="docs/adr/078-csv-export-endpoint.html"><span class="adr-num">078</span><span><span class="adr-title">CSV export as a dedicated endpoint</span><span class="adr-sum">Export ships as its own route rather than as content negotiation, because the output-cache policy does not vary by Accept and a negotiation failure silently returns JSON; the endpoint page-loops past the pipeline&#39;s unpaged row ceiling and streams RFC 4180 rows written in-house, with truncation signalled by a header.</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -463,9 +469,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">134 documents</span>
+            <span class="kicker kicker--accent">140 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 72 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
+            <p>Every collection indexed in one place: 78 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->
