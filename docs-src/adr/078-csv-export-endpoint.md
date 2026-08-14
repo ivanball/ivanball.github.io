@@ -146,8 +146,14 @@ the OpenAPI contract snapshots asserted by `OpenApiContractTestsBase`
   ADR-033 ownership axis) still answers `/export` unscoped: during the v1.150.0 sweep this would have let a
   Store customer token export every customer's orders. The v1 mitigation is gating: consumers with
   owner-scoped reads override `ExportAsync` behind a privileged-role posture (Store and ADC did, with a
-  test pinning each gate). The recorded follow-up is a scoping extension point (the export honoring a
-  controller-supplied specification) so owners can export exactly the rows their list endpoints show.
+  test pinning each gate). The follow-up shipped in v1.151.0 as `GetExportSpecification()`, a
+  protected virtual hook whose result the export applies to every page it streams (default null keeps
+  the v1.150.0 behavior byte for byte), so owners can export exactly the rows their list endpoints
+  show; Store adopted it in the same sweep (its admin gates relaxed back to ownership scoping), while
+  ADC keeps its Forbid gates because its read predicates are method bodies rather than
+  specifications. v1.151.0 also hardened the formatter: binary and collection properties produce no
+  column instead of rendering type names, and a `fields=` request naming one fails validation up
+  front.
 - **N queries, not one stream.** An export at the default settings is up to 200 round trips
   (`MaxExportRows` 100,000 over `MaxPageSize` 500), each with its own `Skip`/`Take`, and it holds a
   response open for their combined duration. There is no export-specific timeout budget in v1; the limits

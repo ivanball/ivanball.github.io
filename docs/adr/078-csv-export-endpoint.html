@@ -318,8 +318,14 @@
           ADR-033 ownership axis) still answers <code>/export</code> unscoped: during the v1.150.0 sweep this would have let a
           Store customer token export every customer&#39;s orders. The v1 mitigation is gating: consumers with
           owner-scoped reads override <code>ExportAsync</code> behind a privileged-role posture (Store and ADC did, with a
-          test pinning each gate). The recorded follow-up is a scoping extension point (the export honoring a
-          controller-supplied specification) so owners can export exactly the rows their list endpoints show.</li>
+          test pinning each gate). The follow-up shipped in v1.151.0 as <code>GetExportSpecification()</code>, a
+          protected virtual hook whose result the export applies to every page it streams (default null keeps
+          the v1.150.0 behavior byte for byte), so owners can export exactly the rows their list endpoints
+          show; Store adopted it in the same sweep (its admin gates relaxed back to ownership scoping), while
+          ADC keeps its Forbid gates because its read predicates are method bodies rather than
+          specifications. v1.151.0 also hardened the formatter: binary and collection properties produce no
+          column instead of rendering type names, and a <code>fields=</code> request naming one fails validation up
+          front.</li>
           <li><strong>N queries, not one stream.</strong> An export at the default settings is up to 200 round trips
           (<code>MaxExportRows</code> 100,000 over <code>MaxPageSize</code> 500), each with its own <code>Skip</code>/<code>Take</code>, and it holds a
           response open for their combined duration. There is no export-specific timeout budget in v1; the limits
