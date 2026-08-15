@@ -1045,6 +1045,42 @@
           by an otherwise-CONFIRMED check.</li>
           </ul>
           </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, devops-scope refresh, 2026-08-14).</strong> A scoped
+          refresh of the five hand-authored DevOps chapters (outside the type pipeline; last refreshed
+          2026-08-02) against MMCA.Common <code>3ba8d13</code> and MMCA.ADC <code>e129c82f</code>. Each chapter was drift-checked
+          read-only first, then re-authored targeted-sections-only; all five verdicts were TARGETED, no full
+          re-author and no node-count change (the type inventory was already current from the v1.152.0 sweep).</p>
+          <ul>
+          <li><strong>devops-cicd (3 fixes):</strong> the integration-tests gate now guards roughly 390 <code>[Fact]</code> methods
+          (was 330), the three freshness jobs grant two read privileges, <code>actions: read</code> plus
+          <code>contents: read</code> (<code>deploy.yml:553-555/610-612/667-669</code>), and the Testcontainers-tier description
+          cite moved to <code>cross-service-tests.yml:6-10</code>.</li>
+          <li><strong>devops-iac:</strong> new coverage for the post-08-02 pure-insertion bicep additions: the daily ACR
+          purge task (<code>foundation.bicep:83-108</code>, a third foundation resource), the two
+          <code>Telemetry__Disable*Metrics</code> env vars on all six apps (<code>main.bicep:231-238</code>), the private
+          DataProtection key-ring container (<code>main.bicep:821-827</code>) with Identity/UI wiring (<code>:1134-1135</code>,
+          <code>:1780-1781</code>) and the explicitly-not-implemented Key Vault Crypto User follow-up, the
+          <code>KeyVault__Uri</code> config source on five apps (Gateway excluded, <code>:937-939</code>), and the
+          <code>Scheduler__PollingIntervalSeconds</code> / <code>Outbox__DeadLetterRetentionDays</code> settings; every
+          <code>main.bicep</code>/<code>foundation.bicep</code> cite was re-derived (insertion offsets of +15 to +101).</li>
+          <li><strong>devops-aspire:</strong> the Gateway&#39;s three forwarder configs with explicit activity timeouts and the
+          two new <code>Gateway:*</code> knobs (<code>Gateway/Program.cs:75-110</code>), the eighth <code>MMCA.Common.Aspire.Hosting</code>
+          extension <code>WithE2eRegistrationThrottleLift</code> (<code>Extensions.cs:176-191</code>, replacing the inline AppHost
+          throttle lift), a new subsection for <code>AddCommonKeyVaultConfiguration</code> / <code>AddCommonDataProtection</code> /
+          <code>AddScheduledJobs</code> (each no-ops when its config key is absent), the four-meter OTel list, and a
+          full AppHost/Extensions cite sweep.</li>
+          <li><strong>devops-runbooks:</strong> the restore-drill narrative was inverted to match source: the DR doc now
+          documents three automated paths with the weekly cron as the enforcing one, and a six-row drill
+          ledger, latest 2026-08-10 (<code>DISASTER-RECOVERY.md:120-175</code>); the stale OPERATIONS.md 3-day-window
+          caution was dropped (fixed at source in ADC <code>1dd53f8d</code>); roughly 20 <code>main.bicep</code> cites re-anchored.</li>
+          <li><strong>devops-testing:</strong> all 45 per-project rows re-derived from the regenerated inventory (methodology
+          unchanged: distinct inventory nodes), roll-ups now 875 Common + 658 ADC = 1,533 types (was 1,246);
+          FACTS-owned fitness numbers moved to 100 methods / 32 bases / 78 executed by Common&#39;s own build
+          (<code>FACTS.md:44,47-48</code>), with <code>ModuleConformanceTestsBase</code> and its Common-repo test class newly
+          covered; the shipped-package roll-up is now 95 (was 89).</li>
+          </ul>
+          </blockquote>
           <hr>
           <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
           <h3 id="21-generated--scaffolded-code-not-sectioned-118-files">2.1 Generated / scaffolded code, not sectioned (118 files)</h3>

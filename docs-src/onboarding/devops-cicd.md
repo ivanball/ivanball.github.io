@@ -984,7 +984,7 @@ needs: changes
 if: github.event_name == 'pull_request'
 ```
 It runs the per-service `WebApplicationFactory` integration tests against a real SQL Server, covering
-roughly 330 `[Fact]` methods across the four projects `MMCA.ADC.Integration.slnf` lists: Identity,
+roughly 390 `[Fact]` methods across the four projects `MMCA.ADC.Integration.slnf` lists: Identity,
 Conference, Engagement and Notification (`MMCA.ADC.Integration.slnf:5-8`).
 
 How it protects production is worth being precise about, because the mechanism is not the one you
@@ -1135,8 +1135,9 @@ qualifying run at all.
 | `cross-service-freshness` (`deploy.yml:663`) | the Testcontainers outbox to broker to consumer round-trip | `cross-service-tests.yml` | 5 days (`deploy.yml:673`) |
 
 All three carry `if: github.event_name != 'pull_request'` (`deploy.yml:552`, `deploy.yml:609`,
-`deploy.yml:666`) and exactly one privilege, `permissions: actions: read` (`deploy.yml:553-555`,
-`deploy.yml:610-612`, `deploy.yml:667-669`): they read run history and run nothing. Each has a
+`deploy.yml:666`) and only two read privileges, `permissions: actions: read` plus `contents: read`
+(`deploy.yml:553-555`, `deploy.yml:610-612`, `deploy.yml:667-669`): nothing is writable, they read run
+history and run nothing. Each has a
 five-minute timeout and costs an Actions API read or two, no restore, no k6, no Docker daemon. And all
 three sit in `deploy`'s `needs` list (`deploy.yml:866`), which is the entire point: a stale proof blocks
 the production deploy.
@@ -2054,7 +2055,7 @@ contribute to a migration pattern that minimizes data loss risk and recovery tim
 
 (`dr-drill.yml` is the [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) §29 restore drill: it PITR-restores a *copy* of a chosen database, times the
 restore for the RTO record, verifies it comes back Online, then deletes the copy, the live databases are
-never touched. `cross-service-tests.yml` (`cross-service-tests.yml:26-30`) is the Testcontainers tier that
+never touched. `cross-service-tests.yml` (`cross-service-tests.yml:6-10`) is the Testcontainers tier that
 boots the three REST hosts in one process against a real SQL Server **and** a real RabbitMQ, exercising
 the genuine outbox to broker to consumer round-trip and the real Conference to Engagement gRPC read. It
 must never enter `deploy.needs`, and the reason is mechanical rather than stylistic: Testcontainers needs

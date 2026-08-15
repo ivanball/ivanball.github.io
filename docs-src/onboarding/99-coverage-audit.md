@@ -815,6 +815,39 @@ double-counted (each type maps to exactly one group).
 >   citation was corrected in place, alongside one cosmetic line-count fix in the G05 overview flagged
 >   by an otherwise-CONFIRMED check.
 
+> **Regeneration note (re-verified against current source, devops-scope refresh, 2026-08-14).** A scoped
+> refresh of the five hand-authored DevOps chapters (outside the type pipeline; last refreshed
+> 2026-08-02) against MMCA.Common `3ba8d13` and MMCA.ADC `e129c82f`. Each chapter was drift-checked
+> read-only first, then re-authored targeted-sections-only; all five verdicts were TARGETED, no full
+> re-author and no node-count change (the type inventory was already current from the v1.152.0 sweep).
+> - **devops-cicd (3 fixes):** the integration-tests gate now guards roughly 390 `[Fact]` methods
+>   (was 330), the three freshness jobs grant two read privileges, `actions: read` plus
+>   `contents: read` (`deploy.yml:553-555/610-612/667-669`), and the Testcontainers-tier description
+>   cite moved to `cross-service-tests.yml:6-10`.
+> - **devops-iac:** new coverage for the post-08-02 pure-insertion bicep additions: the daily ACR
+>   purge task (`foundation.bicep:83-108`, a third foundation resource), the two
+>   `Telemetry__Disable*Metrics` env vars on all six apps (`main.bicep:231-238`), the private
+>   DataProtection key-ring container (`main.bicep:821-827`) with Identity/UI wiring (`:1134-1135`,
+>   `:1780-1781`) and the explicitly-not-implemented Key Vault Crypto User follow-up, the
+>   `KeyVault__Uri` config source on five apps (Gateway excluded, `:937-939`), and the
+>   `Scheduler__PollingIntervalSeconds` / `Outbox__DeadLetterRetentionDays` settings; every
+>   `main.bicep`/`foundation.bicep` cite was re-derived (insertion offsets of +15 to +101).
+> - **devops-aspire:** the Gateway's three forwarder configs with explicit activity timeouts and the
+>   two new `Gateway:*` knobs (`Gateway/Program.cs:75-110`), the eighth `MMCA.Common.Aspire.Hosting`
+>   extension `WithE2eRegistrationThrottleLift` (`Extensions.cs:176-191`, replacing the inline AppHost
+>   throttle lift), a new subsection for `AddCommonKeyVaultConfiguration` / `AddCommonDataProtection` /
+>   `AddScheduledJobs` (each no-ops when its config key is absent), the four-meter OTel list, and a
+>   full AppHost/Extensions cite sweep.
+> - **devops-runbooks:** the restore-drill narrative was inverted to match source: the DR doc now
+>   documents three automated paths with the weekly cron as the enforcing one, and a six-row drill
+>   ledger, latest 2026-08-10 (`DISASTER-RECOVERY.md:120-175`); the stale OPERATIONS.md 3-day-window
+>   caution was dropped (fixed at source in ADC `1dd53f8d`); roughly 20 `main.bicep` cites re-anchored.
+> - **devops-testing:** all 45 per-project rows re-derived from the regenerated inventory (methodology
+>   unchanged: distinct inventory nodes), roll-ups now 875 Common + 658 ADC = 1,533 types (was 1,246);
+>   FACTS-owned fitness numbers moved to 100 methods / 32 bases / 78 executed by Common's own build
+>   (`FACTS.md:44,47-48`), with `ModuleConformanceTestsBase` and its Common-repo test class newly
+>   covered; the shipped-package roll-up is now 95 (was 89).
+
 ---
 
 ## 2. Exceptions log (every deliberate omission, with reason)

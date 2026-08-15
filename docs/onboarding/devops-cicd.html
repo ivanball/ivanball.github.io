@@ -892,7 +892,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">needs:</span> <span class="hljs-string">changes</span>
 <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;pull_request&#x27;</span></code></pre>
           <p>It runs the per-service <code>WebApplicationFactory</code> integration tests against a real SQL Server, covering
-          roughly 330 <code>[Fact]</code> methods across the four projects <code>MMCA.ADC.Integration.slnf</code> lists: Identity,
+          roughly 390 <code>[Fact]</code> methods across the four projects <code>MMCA.ADC.Integration.slnf</code> lists: Identity,
           Conference, Engagement and Notification (<code>MMCA.ADC.Integration.slnf:5-8</code>).</p>
           <p>How it protects production is worth being precise about, because the mechanism is not the one you
           would guess. This job never runs on the push to <code>main</code>, and it is absent from <code>deploy</code>&#39;s <code>needs</code>
@@ -1033,8 +1033,9 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           </tr>
           </tbody></table></div>
           <p>All three carry <code>if: github.event_name != &#39;pull_request&#39;</code> (<code>deploy.yml:552</code>, <code>deploy.yml:609</code>,
-          <code>deploy.yml:666</code>) and exactly one privilege, <code>permissions: actions: read</code> (<code>deploy.yml:553-555</code>,
-          <code>deploy.yml:610-612</code>, <code>deploy.yml:667-669</code>): they read run history and run nothing. Each has a
+          <code>deploy.yml:666</code>) and only two read privileges, <code>permissions: actions: read</code> plus <code>contents: read</code>
+          (<code>deploy.yml:553-555</code>, <code>deploy.yml:610-612</code>, <code>deploy.yml:667-669</code>): nothing is writable, they read run
+          history and run nothing. Each has a
           five-minute timeout and costs an Actions API read or two, no restore, no k6, no Docker daemon. And all
           three sit in <code>deploy</code>&#39;s <code>needs</code> list (<code>deploy.yml:866</code>), which is the entire point: a stale proof blocks
           the production deploy.</p>
@@ -1796,7 +1797,7 @@ run: az containerapp ingress <span class="hljs-built_in">disable</span> -n adc-p
           </tbody></table></div>
           <p>(<code>dr-drill.yml</code> is the <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a> §29 restore drill: it PITR-restores a <em>copy</em> of a chosen database, times the
           restore for the RTO record, verifies it comes back Online, then deletes the copy, the live databases are
-          never touched. <code>cross-service-tests.yml</code> (<code>cross-service-tests.yml:26-30</code>) is the Testcontainers tier that
+          never touched. <code>cross-service-tests.yml</code> (<code>cross-service-tests.yml:6-10</code>) is the Testcontainers tier that
           boots the three REST hosts in one process against a real SQL Server <strong>and</strong> a real RabbitMQ, exercising
           the genuine outbox to broker to consumer round-trip and the real Conference to Engagement gRPC read. It
           must never enter <code>deploy.needs</code>, and the reason is mechanical rather than stylistic: Testcontainers needs
