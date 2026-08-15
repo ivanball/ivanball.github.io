@@ -109,6 +109,24 @@ chapter; here is the orientation so the vocabulary is familiar.
   code talks to abstractions (`IMessageBus`, typed gRPC clients) and the transport choice lives at the
   edges. (ADRs 007 "gRPC extraction", 008 "service-extraction topology".)
 
+- **Cross-service auth without shared secrets ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)).** Only
+  the Identity service ever holds token-signing key material. The moment auth crosses a service
+  boundary, tokens are signed asymmetrically (RS256) and every other service validates them via
+  **JWKS / OIDC discovery**: `AddForwardedJwtBearer` points the bearer middleware at an authority,
+  fetches `/.well-known/openid-configuration`, and follows `jwks_uri` to the published public key.
+  So a compromised non-Identity service cannot mint tokens, and key rotation is publish-once at the
+  issuer. The issuer is deliberately taken from the discovery document rather than pinned, because
+  the internal service-discovery hostname differs from the public gateway origin, and both
+  validators pin `ValidAlgorithms` so an attacker cannot force an algorithm swap. Downstream gRPC
+  calls forward the already-validated JWT (ADR-007's `JwtForwardingClientInterceptor`). This is the
+  auth half of the extraction promise in the previous bullet: token validation survives the
+  issuer/validator split without a rewrite.
+  *Adoption note (verified by source):* the guarantee is scoped to *cross-service* auth. The
+  in-process monolith default stays HS256 with a shared symmetric secret behind the same
+  `JwtSettings.SigningAlgorithm` switch, and MMCA.Helpdesk (the monolith seed) runs issuer-less.
+  ADC's Conference, Engagement, and Notification services all validate through the gateway-routed
+  discovery path today. First concrete code: [`group-08`](group-08-auth.md).
+
 - **Write-once UI, render everywhere (Blazor + .NET MAUI Hybrid).** A UI page is authored **once** as
   a Razor component in a per-module **Razor Class Library** (`MMCA.ADC.{Module}.UI`, e.g.
   `Conference.UI`'s `EventList.razor`/`EventDetail.razor`). Both the **web** host
