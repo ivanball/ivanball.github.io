@@ -270,34 +270,73 @@
       <div class="container">
         <div class="section-head">
           <p class="eyebrow">How it holds together</p>
-          <h2>Architecture principles</h2>
-          <p>The same invariants are enforced across every repo, twice: a compile-time MSBuild layer guard and a shared NetArchTest rule library run as fitness functions.</p>
+          <h2>Architectural styles the codebase commits to</h2>
+          <p>The recurring ideas every repo is built on, summarized from the onboarding primer's orientation chapter. Each is taught in full at its first concrete appearance in the reference library.</p>
         </div>
-        <div class="grid grid--2">
+        <div class="grid grid--3">
           <div class="card">
-            <h3>Database-per-service, with an outbox</h3>
-            <p class="mb-0">Each module or service owns its own database and outbox. Domain events are persisted atomically with the data, then delivered at least once, in-process for the monolith or over a broker once extracted. The outbox is the cross-source consistency mechanism.</p>
+            <h3>Domain-Driven Design</h3>
+            <p class="mb-0">Aggregates enforce invariants inside their boundary, value objects model concepts with no identity, domain events announce meaningful state changes, and factory methods return a Result so an invalid entity cannot be constructed.</p>
+          </div>
+          <div class="card">
+            <h3>Clean Architecture</h3>
+            <p class="mb-0">Source dependencies point inward toward a framework-free domain; the application layer defines ports and infrastructure implements the adapters. Enforced twice: a compile-time MSBuild layer guard and shared NetArchTest fitness functions.</p>
+          </div>
+          <div class="card">
+            <h3>CQRS</h3>
+            <p class="mb-0">Commands mutate and return a Result; queries are side-effect-free. Both flow through a decorator pipeline (feature gate, logging, caching, validation, transaction), so cross-cutting concerns live in the pipeline, not in each handler.</p>
+          </div>
+          <div class="card">
+            <h3>One shared HTTP middleware pipeline</h3>
+            <p class="mb-0">Every REST and gRPC service host builds its request pipeline from a single call that fixes the middleware order once, with the load-bearing adjacencies commented in code. Hosts differ by configuration, never by pipeline shape.</p>
+          </div>
+          <div class="card">
+            <h3>Vertical slice architecture</h3>
+            <p class="mb-0">Within a module, a feature is one cohesive slice: command or query, handler, validator, DTO, and mapper together. Adding a feature means adding a slice, not scattering edits across horizontal folders.</p>
+          </div>
+          <div class="card">
+            <h3>Modular monolith, extractable services</h3>
+            <p class="mb-0">Modules implement one contract and are registered in dependency order; each can later run as its own service host behind a YARP gateway without a rewrite, because application code talks to abstractions and transport lives at the edges.</p>
           </div>
           <div class="card">
             <h3>Cross-service auth without shared secrets</h3>
-            <p class="mb-0">Extracted services validate the issuer's RS256 tokens via JWKS / OIDC discovery, routed through the gateway with a direct fallback. No symmetric secret crosses a service boundary.</p>
+            <p class="mb-0">Only the Identity service holds token-signing key material: every other service validates its RS256 tokens via JWKS / OIDC discovery, so no symmetric secret ever crosses a service boundary and key rotation is publish-once at the issuer.</p>
           </div>
           <div class="card">
-            <h3>Soft-delete plus a right to erasure</h3>
-            <p class="mb-0">Entities are soft-deleted for lifecycle and never hard-deleted; an anonymization pathway plus outbox purge satisfies GDPR/CCPA erasure. Audit fields are stamped automatically on every save.</p>
+            <h3>Write-once UI, render everywhere</h3>
+            <p class="mb-0">A page is authored once as a Razor component and hosted by both the Blazor web host and the .NET MAUI hybrid host: Web, Android, iOS, macOS, and Windows with no per-platform reimplementation.</p>
           </div>
           <div class="card">
-            <h3>Polyglot persistence behind one model</h3>
-            <p class="mb-0">SQL Server, Cosmos DB, and SQLite sit behind a single entity model; the engine is an attribute on the configuration, orthogonal to the database-name axis. Plumbing shipped and tested.</p>
+            <h3>Event-driven integration, with an outbox</h3>
+            <p class="mb-0">Domain events are persisted in the same transaction as the data, then delivered at least once by a background processor, in-process for the monolith or over a broker once extracted. No save-then-publish dual-write bug.</p>
+          </div>
+          <div class="card">
+            <h3>Database-per-service</h3>
+            <p class="mb-0">Each module or service owns its own database and its own outbox. Cross-source relationships auto-degrade to batch loaders, and the outbox is the cross-source consistency mechanism.</p>
+          </div>
+          <div class="card">
+            <h3>Engine-agnostic entities</h3>
+            <p class="mb-0">A domain entity carries no persistence-engine choice: a one-token attribute on its configuration routes it to SQL Server, Cosmos DB, or SQLite with zero change to the entity or the application layer. Plumbing shipped and tested.</p>
+          </div>
+          <div class="card">
+            <h3>The Result pattern</h3>
+            <p class="mb-0">Expected error paths return a Result carrying typed errors instead of throwing exceptions: the single most pervasive idiom in the codebase.</p>
+          </div>
+          <div class="card">
+            <h3>Soft-delete, audit, and erasure</h3>
+            <p class="mb-0">Entities are never hard-deleted: global query filters hide them, audit fields are stamped centrally on every save, an opt-in field-level audit trail writes in the same transaction, and a separate anonymize path satisfies GDPR/CCPA erasure.</p>
           </div>
           <div class="card">
             <h3>Multi-tenancy without a fork</h3>
-            <p class="mb-0">An opt-in tenant query filter composes with the soft-delete filter, a write interceptor refuses cross-tenant writes, and a per-tenant connection-string override buys full database isolation, all from the same entity model.</p>
+            <p class="mb-0">An opt-in named tenant filter composes with the soft-delete filter, a write interceptor refuses cross-tenant writes, and a per-tenant connection-string override buys full database isolation, all from the same entity model.</p>
           </div>
           <div class="card">
-            <h3>Enterprise capabilities, opt-in</h3>
-            <p class="mb-0">A field-level audit trail written in the same transaction as the data, a data-subject export contract with app-registered sections, durable cron jobs built on the outbox's own claim lease, and CSV export on every entity endpoint. Nothing turns on until a host asks for it.</p>
+            <h3>Identifier type aliases</h3>
+            <p class="mb-0">Every entity ID is a per-module type alias rather than a bare int or Guid, linked into every project, so an ID type changes in exactly one place.</p>
           </div>
+        </div>
+        <div class="btn-row" style="margin-top:1.5rem">
+          <a class="btn btn--ghost" href="docs/onboarding/00-primer.html#2-architectural-styles-this-codebase-commits-to">Read the full styles chapter →</a>
         </div>
       </div>
     </section>
