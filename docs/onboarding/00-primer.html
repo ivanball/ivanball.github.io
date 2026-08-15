@@ -241,6 +241,24 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           code talks to abstractions (<code>IMessageBus</code>, typed gRPC clients) and the transport choice lives at the
           edges. (ADRs 007 &quot;gRPC extraction&quot;, 008 &quot;service-extraction topology&quot;.)</p>
           </li>
+          <li><p><strong>Cross-service auth without shared secrets (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>).</strong> Only
+          the Identity service ever holds token-signing key material. The moment auth crosses a service
+          boundary, tokens are signed asymmetrically (RS256) and every other service validates them via
+          <strong>JWKS / OIDC discovery</strong>: <code>AddForwardedJwtBearer</code> points the bearer middleware at an authority,
+          fetches <code>/.well-known/openid-configuration</code>, and follows <code>jwks_uri</code> to the published public key.
+          So a compromised non-Identity service cannot mint tokens, and key rotation is publish-once at the
+          issuer. The issuer is deliberately taken from the discovery document rather than pinned, because
+          the internal service-discovery hostname differs from the public gateway origin, and both
+          validators pin <code>ValidAlgorithms</code> so an attacker cannot force an algorithm swap. Downstream gRPC
+          calls forward the already-validated JWT (ADR-007&#39;s <code>JwtForwardingClientInterceptor</code>). This is the
+          auth half of the extraction promise in the previous bullet: token validation survives the
+          issuer/validator split without a rewrite.
+          <em>Adoption note (verified by source):</em> the guarantee is scoped to <em>cross-service</em> auth. The
+          in-process monolith default stays HS256 with a shared symmetric secret behind the same
+          <code>JwtSettings.SigningAlgorithm</code> switch, and MMCA.Helpdesk (the monolith seed) runs issuer-less.
+          ADC&#39;s Conference, Engagement, and Notification services all validate through the gateway-routed
+          discovery path today. First concrete code: <a href="group-08-auth.html"><code>group-08</code></a>.</p>
+          </li>
           <li><p><strong>Write-once UI, render everywhere (Blazor + .NET MAUI Hybrid).</strong> A UI page is authored <strong>once</strong> as
           a Razor component in a per-module <strong>Razor Class Library</strong> (<code>MMCA.ADC.{Module}.UI</code>, e.g.
           <code>Conference.UI</code>&#39;s <code>EventList.razor</code>/<code>EventDetail.razor</code>). Both the <strong>web</strong> host
