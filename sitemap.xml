@@ -462,22 +462,22 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/index.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/00-dependency-manifest.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/00-inventory.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -492,22 +492,22 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-02-domain-building-blocks.html</loc>
-    <lastmod>2026-08-02</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-03-querying-specifications.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-04-events-outbox.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-05-cqrs-pipeline.html</loc>
-    <lastmod>2026-08-02</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -517,22 +517,22 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-07-persistence-ef-core.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-08-auth.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-09-caching.html</loc>
-    <lastmod>2026-08-02</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-10-notifications.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -542,7 +542,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-12-api-hosting-mapping.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -552,47 +552,47 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-14-module-system-composition.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-15-common-ui-framework.html</loc>
-    <lastmod>2026-08-02</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-16-aspire-orchestration.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-17-conference-domain.html</loc>
-    <lastmod>2026-08-02</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-18-conference-application.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-19-conference-infrastructure.html</loc>
-    <lastmod>2026-08-02</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-20-conference-api-grpc.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-21-conference-ui.html</loc>
-    <lastmod>2026-08-02</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-22-engagement-module.html</loc>
-    <lastmod>2026-08-13</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -602,22 +602,22 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-24-identity-module.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-25-adc-host-composition.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-26-device-capability-layer.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-27-testing-infrastructure.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -647,7 +647,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/99-coverage-audit.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-15</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

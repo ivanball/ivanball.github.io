@@ -11,20 +11,20 @@ explained, and lists what could not be determined from source. All counts are re
 
 | Quantity | Count | Source |
 |----------|------:|--------|
-| `.cs` files scanned | 2,388 | `00-inventory.md` |
-|, in-scope | 2,294 | |
-|, generated/excluded | 94 | logged exception §2.1 |
-| Type declaration rows (incl. partial-class fragments) | 2,966 | `00-inventory.md` |
-| **Distinct type nodes (partials collapsed)** | **2,864** | the master checklist |
-| → mapped to a functional group | 2,864 | `classify.ps1` (0 unmapped) |
-| → individually sectioned (named in a chapter) | 1,598 | `verify.ps1` |
-| → rolled up by project (G25 test classes) | 1,266 | logged exception §2.2 |
-| Distinct `###` sections written across 27 chapters | 1,388 | covering the 1,598 (sibling families share a section, §2.3) |
+| `.cs` files scanned | 2,699 | `00-inventory.md` |
+|, in-scope | 2,581 | |
+|, generated/excluded | 118 | logged exception §2.1 |
+| Type declaration rows (incl. partial-class fragments) | 3,377 | `00-inventory.md` |
+| **Distinct type nodes (partials collapsed)** | **3,264** | the master checklist |
+| → mapped to a functional group | 3,264 | `classify.ps1` (0 unmapped) |
+| → individually sectioned (named in a chapter) | 1,804 | `verify.ps1` |
+| → rolled up by project (G25 test classes) | 1,460 | logged exception §2.2 |
+| Distinct `###` sections written across 27 chapters | 1,740 | covering the 1,804 (sibling families share a section, §2.3) |
 | Chapter overviews written | 27 | one per group |
 
-**Cross-check result:** `verify.ps1` confirms **0** of the 1,598 individually-sectioned types are
+**Cross-check result:** `verify.ps1` confirms **0** of the 1,804 individually-sectioned types are
 missing from their group chapter, every one appears as a `###` heading or in a sibling-family
-`File:Line` table. 2,864 = 1,598 individually-sectioned + 1,266 rolled-up. Nothing dropped, nothing
+`File:Line` table. 3,264 = 1,804 individually-sectioned + 1,460 rolled-up. Nothing dropped, nothing
 double-counted (each type maps to exactly one group).
 
 > **Caveat on what `verify.ps1` proves.** Its check is name presence: a type counts as covered when
@@ -758,11 +758,68 @@ double-counted (each type maps to exactly one group).
 >   no-op default lives at `MMCA.Common.Application/Notifications/DependencyInjection.cs:67`); the
 >   sentence was corrected in place and re-verified against source.
 
+> **Regeneration note (re-verified against current source, v1.152.0 full drift sweep).** Regenerated at
+> **framework v1.152.0** (MMCA.Common `3ba8d13`; MMCA.ADC `e129c82f`; both clean; `FACTS.md` is the
+> source of truth for the version and package figures). Net change since the v1.142.0 pass: **+400**
+> distinct nodes (2,864 to **3,264**), individually-sectioned 1,598 to **1,804**, rolled-up 1,266 to
+> **1,460**, cycles 21 to **26**, `###` sections 1,388 to **1,740**. `classify.ps1`: **0 unmapped**, no
+> new functional group needed, the chapter count stays at 27. `verify.ps1`: **0 missing, rubric 34/34**.
+> One honest caveat up front: this delta spans releases **v1.143.0 through v1.152.0** (roughly ten
+> releases with no intervening onboarding sweep), so per-type attribution below is derived from the
+> mechanical inventory diff, not from per-release narration.
+> - **The dominant application cluster is the Engagement build-out (G22 +100, 78 to 178).** The shipped
+>   conference-day features: the QR badge check-in surface (organizer scanning, manual fallback,
+>   attendee self-service from printed room/sponsor codes, attendance rollup), the points economy (an
+>   append-only ledger plus the opt-in public leaderboard with GDPR erasure), and their use cases,
+>   persistence, API and UI. The chapter's fourteen sections units plus overview were re-authored to
+>   the new roster and the `00-index.md` concern line now names all four capability families.
+> - **The dominant framework cluster is the enterprise wave (v1.150.0, ADRs 073-078; +61 across
+>   G02/G05/G07/G08/G09/G12/G14/G16).** Audit trail (`AuditTrailEntry`,
+>   `AuditTrailSaveChangesInterceptor`, `MMCA.Common.Infrastructure/Persistence/AuditTrail/`), the
+>   scheduler (`IScheduledJob`, `ScheduledJobRunner`, `SchedulerMetrics`), multi-tenancy
+>   (`TenantContext`, `TenantSaveChangesInterceptor`, `TenantResolutionMiddleware`,
+>   `TenancySettings`), hybrid caching (`HybridCacheService`, `RedisPrefixScanner`), and the GDPR
+>   data-export generalization (`ExportUserDataHandlerBase<TUser, TQuery>`,
+>   `DataExportControllerBase<TQuery>`, `IUserDataExportSection`, `CsvWriter`).
+> - **The one removed type is a move-to-Common, not a deletion.** `UserDataExportDTO` left
+>   `MMCA.ADC.Identity.Shared.Users` and reappears in G08 under `MMCA.Common.Shared.Privacy`
+>   alongside `UserDataExportSectionDTO` and `PrivacyFeatures`; the ADC Identity chapter (G24)
+>   sections were updated accordingly.
+> - **Conference additions (+44 across G17-G21):** sponsors (the `AddSponsors` migration family and
+>   home-page sponsor rail), the per-event organizer contact email, the room-name unique index, and
+>   decision-support/session additions; plus **+194** rolled-up test types in the testing chapter
+>   (G25 classifier id, chapter 27) covering all of the above.
+> - **Graph and cycle movement.** Edge resolution: **11,706** namespace-visible (~96%), **481**
+>   globally-unique fallback (358 to 481), **28** dropped ambiguous (unchanged). Cycles 21 to 26;
+>   three of the 26 are now identical-name fallback artifacts rather than real dependencies (the
+>   `SelfHttpWarmupTask` service pair, plus the new test pairs `Priority` at
+>   `MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs:89` /
+>   `MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs:122` and `GateTestContext` at
+>   `MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailModelGateTests.cs:76` /
+>   `MMCA.Common.Infrastructure.Tests/Scheduling/SchedulerModelGateTests.cs:71`). The largest new
+>   genuine cycle is the eight-member G07 interceptor SCC around `ApplicationDbContext` (now including
+>   `AuditTrailSaveChangesInterceptor` and `TenantSaveChangesInterceptor`).
+> - **Method note: this pass re-authored 118 units, then deduplicated against unit rosters.** The
+>   approved scope was 102 units (83 sections units mapped from the added/moved type sets, 17
+>   overviews, the testing rollup); the G18 repack fallout then required its remaining 11 sections
+>   units (`plan.ps1` regrew the chapter to 19 sections units), and five newly-packed units with no
+>   prior part (G07 p02/p11, G14 p06, G21 p07, testing p07) were authored to close the packing.
+>   Deduplication removed **71** stale duplicate section copies across 11 not-re-authored parts,
+>   emptying five part files (removed). 35 sole-copy sections remain in parts whose new roster no
+>   longer lists them (placement drift, coverage intact per `verify.ps1`); they reconcile at the next
+>   repack re-author.
+> - **Spot-checks.** All 16 authored overview/rollup parts were adversarially spot-checked: 15
+>   CONFIRMED, one DRIFTED on a citation nit (the G02 overview cited the PII-erasure fitness rule at
+>   `ArchitectureRules.Governance.cs:50`, a shared helper; the rule method
+>   `EntitiesWithPiiImplementAnonymizable` lives at `ArchitectureRules.Governance.cs:11`); the
+>   citation was corrected in place, alongside one cosmetic line-count fix in the G05 overview flagged
+>   by an otherwise-CONFIRMED check.
+
 ---
 
 ## 2. Exceptions log (every deliberate omission, with reason)
 
-### 2.1 Generated / scaffolded code, not sectioned (88 files)
+### 2.1 Generated / scaffolded code, not sectioned (118 files)
 EF Core migrations (`/Migrations/`, `.Migrations.SqlServer`), `ModelSnapshot`, `*.Designer.cs`,
 `*.g.cs`, `GlobalUsings.g.cs`, and `AssemblyInfo.cs` are excluded by rule (`Tools/invtool` `IsGenerated`).
 The **mechanisms** that produce them are taught instead: the `DbContext`, the migration workflow, and
@@ -770,7 +827,7 @@ the `.proto`/gRPC contracts (see [group-07](group-07-persistence-ef-core.md),
 [group-13](group-13-grpc-contracts.md), and [devops-testing](devops-testing.md)). The full file list is
 in [`00-inventory.md`](00-inventory.md#generated--excluded-artifacts-no-type-sections-written).
 
-### 2.2 Per-`[Fact]` test classes, rolled up by project (1,266 types)
+### 2.2 Per-`[Fact]` test classes, rolled up by project (1,460 types)
 Per the guide's TESTS note, individual test classes are **not** given per-type sections. The
 [Testing chapter (group-27)](group-27-testing-infrastructure.md) instead:
 - sections the **reusable** test infrastructure in full (the **168** types in `MMCA.Common.Testing`,
@@ -785,10 +842,10 @@ Per the guide's TESTS note, individual test classes are **not** given per-type s
   `DependencyInjectionAssert`, `TestPolling`, `ModuleConformanceTestsBase<TModule>` and the
   `WebVitalsBudget` added at the v1.142.0 pass, and the per-repo architecture-fitness test classes
   plus the `Gallery` harness), and
-- rolls the remaining **1,266** per-suite test classes (including the `MMCA.Common.Benchmarks`
+- rolls the remaining **1,460** per-suite test classes (including the `MMCA.Common.Benchmarks`
   perf-smoke project) into a **per-project table** (purpose + style:
   unit / integration / fitness / E2E / component / performance-smoke).
-Every one of the 1,266 remains individually listed with `file:line` in
+Every one of the 1,460 remains individually listed with `file:line` in
 [`00-inventory.md`](00-inventory.md). This is the only category of first-party type not given its own
 prose section.
 
@@ -796,16 +853,16 @@ prose section.
 Near-identical families (per-entity `Add*/Remove*/Update*` commands, `*DTOMapper`, `*CreateRequest`,
 `*Validator`, per-type filter strategies, etc.) are taught in one `### A, B, C` section that explains
 the shared shape once. **Every** grouped type is still named and cited individually via the section's
-`File:Line` table, so citation coverage is complete (this is what `verify.ps1` checks). The 1,524
-individually-sectioned types are covered by 1,446 `###` sections; the 78-type difference is family grouping.
+`File:Line` table, so citation coverage is complete (this is what `verify.ps1` checks). The 1,804
+individually-sectioned types are covered by 1,740 `###` sections; the 64-type difference is family grouping.
 
 ---
 
 ## 3. Grouping & ordering verification
 
-- **Every type in exactly one group.** `classify.ps1` assigns all 2,645 nodes via name-level overrides
+- **Every type in exactly one group.** `classify.ps1` assigns all 3,264 nodes via name-level overrides
   (for the grab-bag `MMCA.Common.*Interfaces*/Services` namespaces) + ordered namespace-prefix rules;
-  it reports **0 unmapped** and the per-group counts sum to 2,645. See
+  it reports **0 unmapped** and the per-group counts sum to 3,264. See
   [`00-group-taxonomy.md`](00-group-taxonomy.md).
 - **Within-group ascending Level.** Each chapter's sections were authored from a pre-sorted, Level-
   ascending unit table, so no section precedes a same-group type it depends on (ties broken by name).
