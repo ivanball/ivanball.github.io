@@ -665,6 +665,76 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>Fail-fast configuration contract: every settings section binds through <code>AddOptions().Bind().ValidateDataAnnotations().ValidateOnStart()</code> so a misconfigured host refuses to boot instead of failing at first use; settings consumed above Infrastructure flow through read-only singleton facades (<code>IApplicationSettings</code>, <code>ISmtpSettings</code>, <code>IJwtSettings</code>) rather than <code>IOptions&lt;T&gt;</code></td>
           <td><a href="group-12-api-hosting-mapping.html">g12</a>/<a href="group-14-module-system-composition.html">g14</a></td>
           </tr>
+          <tr>
+          <td>071</td>
+          <td>Barcode scanning + QR display, split by what each depends on: <code>QrCodeImage</code> is a plain shared component (QRCoder PNG as a data URI, no device needed), while camera reads go through <code>IBarcodeScannerService</code>, an ADR-042 capability (never throws, <code>null</code> = cancelled/denied/unsupported) with a TryAdd null fallback and a ZXing.Net.MAUI implementation, opt-in per head</td>
+          <td><a href="group-26-device-capability-layer.html">g26</a>/<a href="group-15-common-ui-framework.html">g15</a></td>
+          </tr>
+          <tr>
+          <td>072</td>
+          <td>QR badge check-in + points gamification (ADC): the badge QR carries an opaque server-verified <code>Guid</code> (revocable by one <code>Regenerate()</code>), one <code>CheckIn</code> aggregate with Event/Session/Sponsor scopes behind filtered unique indexes, and an append-only points ledger whose unique <code>(UserId, ActivityType, SubjectKey)</code> index is both the redelivery-idempotency guard and the anti-farming rule</td>
+          <td><a href="group-22-engagement-module.html">g22</a>/<a href="group-17-conference-domain.html">g17</a></td>
+          </tr>
+          <tr>
+          <td>073</td>
+          <td>Multi-tenancy (shared-schema + DB-per-tenant): a second named EF query filter <code>&quot;Tenant&quot;</code> composes by AND with <code>&quot;SoftDelete&quot;</code>; <code>ITenantContext</code> resolves claim-then-header behind <code>TenantResolutionMiddleware</code>, a dedicated interceptor stamps writes and refuses cross-tenant ones, and DB-per-tenant is a per-tenant connection-string override (Helpdesk is the reference adopter)</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>074</td>
+          <td>Recurring job scheduler: durable multi-replica-safe cron built on the outbox claim-lease idiom (not Hangfire/Quartz); <code>IScheduledJob</code> resolved scoped per execution, a <code>ScheduledJobEntry</code> store on the Default source, Cronos parsing, smart-wait runner via <code>TimeProvider</code>; missed schedules run once then advance</td>
+          <td><a href="group-04-events-outbox.html">g04</a></td>
+          </tr>
+          <tr>
+          <td>075</td>
+          <td>Audit trail: a third <code>SaveChangesInterceptor</code> (registered last, so it diffs freshly stamped values) writes per-property <code>AuditTrailEntries</code> in the <strong>same transaction</strong> as the data; opt-in twice (<code>AddAuditTrail</code> + <code>IAuditedEntity</code> per entity), <code>[Pii]</code> values captured redacted, retention via an ADR-074 scheduled purge</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a></td>
+          </tr>
+          <tr>
+          <td>076</td>
+          <td>Data-subject export (DSAR) contract: <code>ExportUserDataHandlerBase</code> mirrors the delete handler&#39;s ownership gate, fans out to registered <code>IUserDataExportSection</code>s, and assembles a versioned JSON export; per-section failure degrades to <code>Available = false</code> rather than failing the request, because a DSAR is a legal deadline</td>
+          <td><a href="group-24-identity-module.html">g24</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>077</td>
+          <td>HybridCache substrate (amends 026): <code>AddCommonHybridCache</code> swaps <code>ICacheService</code> to L1 in-process + L2 distributed under a <strong>disjoint <code>{prefix}hc:{key}</code> keyspace</strong>, making the two-serialization-formats-in-one-keyspace failure impossible rather than unlikely; <code>IncrementAsync</code> bypasses L1 to keep counter semantics</td>
+          <td><a href="group-09-caching.html">g09</a></td>
+          </tr>
+          <tr>
+          <td>078</td>
+          <td>CSV export as a dedicated <code>[HttpGet(&quot;export&quot;)]</code> endpoint on <code>EntityControllerBase</code>, not content negotiation (the output cache does not vary by <code>Accept</code>); page-loops the capped query pipeline and streams up to <code>MaxExportRows</code>, truncating with an <code>X-Export-Truncated</code> header; RFC 4180 writer in-house</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a>/<a href="group-03-querying-specifications.html">g03</a></td>
+          </tr>
+          <tr>
+          <td>079</td>
+          <td>Shared HTTP middleware pipeline: <code>UseCommonMiddlewarePipeline</code> fixes one middleware order for every REST/gRPC host (exception handler through controllers), with the load-bearing adjacencies commented in code; conditional middleware registers unconditionally and stays inert by config (the ADR-014 decorator-order sibling, for the HTTP side)</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>080</td>
+          <td>Rollout + automatic revision rollback: both consumer deploys end in a post-deploy smoke gate asserting expected status codes; on failure every container app walks back to its previous revision (<code>az containerapp revision copy</code>); rollback is revision-only by construction, schema is never reverted (ADR-030/057)</td>
+          <td><a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>081</td>
+          <td>Cost baseline as a deploy gate: a read-only <code>cost-guard</code> workflow in <code>deploy.needs</code> asserts the production footprint still matches its baseline (replica caps + accepted SQL tiers), so an un-reverted manual surge blocks the next deploy; it never mutates anything</td>
+          <td><a href="devops-cicd.html">devops-cicd</a>/<a href="devops-iac.html">devops-iac</a></td>
+          </tr>
+          <tr>
+          <td>082</td>
+          <td>Two-tier cross-origin posture: service hosts get named allow-listed CORS policies from one <code>AddCommonCors</code> (origins from config, empty by default), selected inside the shared pipeline; the gateways get a default policy restricting only origins, because a reverse proxy must forward arbitrary client headers</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a>/<a href="group-16-aspire-orchestration.html">g16</a></td>
+          </tr>
+          <tr>
+          <td>083</td>
+          <td>CRUD lifecycle event taxonomy: one <code>EntityChangedEvent&lt;TId&gt;</code> base (a <code>DomainEntityState</code> discriminator + the entity id) replaces per-entity Created/Updated/Deleted triples; business state-machine transitions deliberately keep their own event types, and the discriminator rides integration events as a frozen wire field</td>
+          <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-02-domain-building-blocks.html">g02</a></td>
+          </tr>
+          <tr>
+          <td>084</td>
+          <td>Stripe webhook ingress contract (Store Sales): an anonymous raw-body POST verified by <code>Stripe-Signature</code> whose status code encodes ACCEPTED-vs-PROCESSED, not success/failure; 400 only when the event cannot be accepted at all, because rejections make Stripe retry and eventually disable the endpoint; post-acceptance failures log and return 200 with ADR-054&#39;s reconciliation as backstop</td>
+          <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>
           <hr>
