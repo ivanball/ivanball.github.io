@@ -165,7 +165,7 @@
             <span class="layer-name">Infrastructure</span>
             <span>
               <span class="pill-list"><span class="pill">MMCA.Common.Infrastructure</span></span>
-              <span class="layer-note">EF Core multi-engine, repositories, caching, outbox, message bus</span>
+              <span class="layer-note">EF Core multi-engine, repositories, caching, outbox, message bus, multi-tenancy, audit trail, job scheduler</span>
             </span>
           </li>
           <li class="layer layer--edge">
@@ -228,7 +228,7 @@
           <div class="card">
             <span class="kicker kicker--accent">Conference</span>
             <h3>MMCA.ADC</h3>
-            <p class="mb-0">A production-deployed conference platform: four microservices (Identity, Conference, Engagement, Notification) behind a YARP gateway, cross-service JWKS auth, bidirectional gRPC, polyglot persistence, and load testing at conference-day scale. It powered the Atlanta Cloud + AI Conference.</p>
+            <p class="mb-0">A production-deployed conference platform: four microservices (Identity, Conference, Engagement, Notification) behind a YARP gateway, cross-service JWKS auth, bidirectional gRPC, polyglot persistence, QR badge check-in with a live points leaderboard, and load testing at conference-day scale. It powered the Atlanta Cloud + AI Conference.</p>
           </div>
           <div class="card">
             <span class="kicker kicker--accent">E-commerce</span>
@@ -289,6 +289,14 @@
           <div class="card">
             <h3>Polyglot persistence behind one model</h3>
             <p class="mb-0">SQL Server, Cosmos DB, and SQLite sit behind a single entity model; the engine is an attribute on the configuration, orthogonal to the database-name axis. Plumbing shipped and tested.</p>
+          </div>
+          <div class="card">
+            <h3>Multi-tenancy without a fork</h3>
+            <p class="mb-0">An opt-in tenant query filter composes with the soft-delete filter, a write interceptor refuses cross-tenant writes, and a per-tenant connection-string override buys full database isolation, all from the same entity model.</p>
+          </div>
+          <div class="card">
+            <h3>Enterprise capabilities, opt-in</h3>
+            <p class="mb-0">A field-level audit trail written in the same transaction as the data, a data-subject export contract with app-registered sections, durable cron jobs built on the outbox's own claim lease, and CSV export on every entity endpoint. Nothing turns on until a host asks for it.</p>
           </div>
         </div>
       </div>

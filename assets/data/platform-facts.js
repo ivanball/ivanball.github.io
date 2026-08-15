@@ -26,7 +26,7 @@ window.PLATFORM_FACTS = {
     { name: "Shared", note: "Result pattern, value objects, error handling, DTOs", items: ["MMCA.Common.Shared"] },
     { name: "Domain", note: "Entities, aggregate roots, domain events, specifications", items: ["MMCA.Common.Domain"] },
     { name: "Application", note: "CQRS handlers, the decorator pipeline, the module system", items: ["MMCA.Common.Application"] },
-    { name: "Infrastructure", note: "EF Core multi-engine, repositories, caching, outbox, message bus", items: ["MMCA.Common.Infrastructure"] },
+    { name: "Infrastructure", note: "EF Core multi-engine, repositories, caching, outbox, message bus, multi-tenancy, audit trail, job scheduler", items: ["MMCA.Common.Infrastructure"] },
     { name: "API &amp; transport", note: "Controllers, middleware, idempotency, JWKS, gRPC contracts", items: ["MMCA.Common.API", "MMCA.Common.Grpc"], edge: true },
     { name: "UI", note: "Blazor shared components, MudBlazor theme, web and MAUI clients", items: ["MMCA.Common.UI", "MMCA.Common.UI.Web", "MMCA.Common.UI.Maui"] },
     { name: "Hosting", note: "Aspire service defaults, OpenTelemetry, health checks, broker wiring", items: ["MMCA.Common.Aspire", "MMCA.Common.Aspire.Hosting"], edge: true },
