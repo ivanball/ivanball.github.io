@@ -178,6 +178,8 @@
           <a href="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html" target="_blank" rel="noopener">ADR-029</a>
           (brute-force protection),
           <a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a> (password hashing),
+          <a href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html" target="_blank" rel="noopener">ADR-020</a>
+          (permission-based authorization),
           <a href="https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html" target="_blank" rel="noopener">ADR-033</a>
           (resource-ownership authorization),
           <a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a> (the browser
@@ -203,7 +205,8 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ITokenService.cs:8</code>)
           publishes both lifetimes as default interface members pinned to the same 15-minute / 7-day baseline
           (<code>ITokenService.cs:33</code>, <code>ITokenService.cs:40</code>), so a hand-written test double reports the same expiry
-          the production settings would.</p>
+          the production settings would, while the concrete service derives them from the bound settings
+          (<code>TokenService.cs:111</code>, <code>TokenService.cs:114</code>).</p>
           <p>The load-bearing design choice is a single configuration switch,
           <a href="group-14-module-system-composition.html#ijwtsettings"><code>IJwtSettings</code></a><code>.SigningAlgorithm</code>
           (<code>TokenService.cs:53</code>). In <strong>monolith mode</strong> it defaults to
@@ -224,28 +227,30 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:15</code>), which lazily builds
           a <code>JsonWebKeySet</code> from a PEM key (inline or read from a path) configured through
           <a href="group-14-module-system-composition.html#jwkssettings"><code>JwksSettings</code></a> (<code>RsaJwksProvider.cs:15</code>,
-          <code>RsaJwksProvider.cs:58-74</code>). Publishing is off by default, and when disabled or unconfigured the
-          provider returns an <em>empty</em> key set (<code>RsaJwksProvider.cs:30-33</code>, <code>RsaJwksProvider.cs:36-39</code>) so the
-          endpoint stays queryable but a non-issuer host advertises nothing. The cache is a
-          <code>Lazy&lt;JsonWebKeySet&gt;</code> in <code>PublicationOnly</code> mode rather than the default
-          <code>ExecutionAndPublication</code> (<code>RsaJwksProvider.cs:22-23</code>): the default caches a factory <em>exception</em>
-          forever, so a single transient IO failure reading the PEM would brick the endpoint (and with it
-          cross-service auth) until the process restarted. The endpoint itself,
+          <code>RsaJwksProvider.cs:58-74</code>), behind the <a href="#ijwksprovider"><code>IJwksProvider</code></a> port
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:11</code>). Publishing is off by
+          default, and when disabled or unconfigured the provider returns an <em>empty</em> key set
+          (<code>RsaJwksProvider.cs:30-33</code>, <code>RsaJwksProvider.cs:36-39</code>) so the endpoint stays queryable but a
+          non-issuer host advertises nothing. The cache is a <code>Lazy&lt;JsonWebKeySet&gt;</code> in <code>PublicationOnly</code> mode
+          rather than the default <code>ExecutionAndPublication</code> (<code>RsaJwksProvider.cs:22-23</code>): the default caches a
+          factory <em>exception</em> forever, so a single transient IO failure reading the PEM would brick the endpoint
+          (and with it cross-service auth) until the process restarted. The endpoint itself,
           <code>/.well-known/jwks.json</code>, is mapped in the API layer by
           <a href="group-12-api-hosting-mapping.html#jwksendpointextensions"><code>JwksEndpointExtensions</code></a>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/JwksEndpointExtensions.cs:20</code>), paired with
-          the OIDC discovery document from
+          (path constant at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/JwksEndpointExtensions.cs:20</code>, mapped
+          anonymously at <code>JwksEndpointExtensions.cs:31</code>), paired with the OIDC discovery document from
           <a href="group-12-api-hosting-mapping.html#oidcdiscoveryendpointextensions"><code>OidcDiscoveryEndpointExtensions</code></a>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/OidcDiscoveryEndpointExtensions.cs:27</code>);
           <a href="group-16-aspire-orchestration.html#openidconnectmetadatawarmuptask"><code>OpenIdConnectMetadataWarmupTask</code></a>
-          pre-fetches that document at startup
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:37</code>) so the
-          first authenticated request on a cold replica does not pay the discovery round trip. Validation pins
-          the expected algorithm so an attacker cannot force an algorithm swap: <code>GetPrincipalFromExpiredToken</code>
-          sets <code>ValidAlgorithms</code> to the single configured value (<code>TokenService.cs:136</code>) and then re-checks the
-          token header after <code>ValidateToken</code> returns (<code>TokenService.cs:145-149</code>). Only the lifetime check is
-          skipped there (<code>TokenService.cs:131</code>), because the method exists to read claims out of an
-          already-expired token during refresh.</p>
+          pre-fetches that document as a startup warm-up task
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:21</code>,
+          <code>OpenIdConnectMetadataWarmupTask.cs:35-46</code>) so the first authenticated request on a cold replica does
+          not pay the discovery round trip. Validation pins the expected algorithm so an attacker cannot force
+          an algorithm swap: <code>GetPrincipalFromExpiredToken</code> sets <code>ValidAlgorithms</code> to the single configured
+          value (<code>TokenService.cs:136</code>) and then re-checks the token header after <code>ValidateToken</code> returns
+          (<code>TokenService.cs:145-149</code>). Only the lifetime check is skipped there (<code>TokenService.cs:131</code>), because
+          the method exists to read claims out of an already-expired token during refresh.</p>
           <h2 id="the-shared-authentication-workflow">The shared authentication workflow</h2>
           <p>Login, registration, refresh, and revocation are not re-implemented per app. They live once in
           <a href="#authenticationservicebasetuser"><code>AuthenticationServiceBase&lt;TUser&gt;</code></a>
@@ -283,7 +288,9 @@
           rethrowing anything else (<code>AuthenticationServiceBase.cs:172-200</code>); the shared failure factory keeps
           the two paths indistinguishable to the caller (<code>AuthenticationServiceBase.cs:355</code>). The catch is broad
           because the Application layer has no EF Core dependency by layer rule and cannot name
-          <code>DbUpdateException</code>; the re-check is what narrows it. <code>RefreshTokenAsync</code>
+          <code>DbUpdateException</code>; the re-check is what narrows it, and it deliberately runs on
+          <code>CancellationToken.None</code> so a cancelled save can still be classified
+          (<code>AuthenticationServiceBase.cs:194</code>). <code>RefreshTokenAsync</code>
           (<code>AuthenticationServiceBase.cs:218</code>) extracts claims from the <em>expired</em> access token (signature still
           verified, only lifetime skipped, <code>AuthenticationServiceBase.cs:230</code>), then compares the presented
           refresh token against the stored one; a mismatch or an expired stored token is treated as reuse and
@@ -314,7 +321,8 @@
           presence-and-shape checks so a rejection never reveals which field was wrong
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/LoginRequestValidator.cs:11</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/RefreshTokenRequestValidator.cs:10</code>),
-          while the <code>IValidator&lt;RegisterRequest&gt;</code> the bundle requires is supplied by each app.</p>
+          while the <code>IValidator&lt;RegisterRequest&gt;</code> the bundle requires is supplied by each app
+          (<code>AuthenticationValidators.cs:16-19</code>).</p>
           <h2 id="what-the-apps-user-aggregate-must-expose">What the app&#39;s User aggregate must expose</h2>
           <p>The shared workflows never see an app&#39;s <code>User</code> class. They see four small Domain-layer contracts, each
           sized to one workflow, which is the [Rubric §1, SOLID] interface-segregation story in miniature.
@@ -337,14 +345,14 @@
           <p><a href="#ierasableuser"><code>IErasableUser</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30</code>) is the subtlest of the four. It
           extends <a href="group-02-domain-building-blocks.html#ianonymizable"><code>IAnonymizable</code></a> and <em>redeclares</em> <code>Delete()</code>
-          rather than inheriting it from <code>AuditableBaseEntity&lt;TId&gt;</code>, because an app <code>User</code> commonly <strong>hides</strong> the
-          base method (<code>public new Result Delete()</code>) to also revoke the refresh token. A hidden method is not an
-          override, so a shared workflow calling through the class constraint would silently run the base
-          implementation and skip that behavior; routing the call through this interface makes the interface map
-          resolve to the most derived <code>Delete()</code> (<code>IErasableUser.cs:11-29</code>). The base entity deliberately does
-          not implement the interface, so a consumer that forgets to add it fails the generic constraint at
-          compile time instead of losing behavior at run time. These four contracts are consumed by the shared
-          handler bases in group 14:
+          (<code>IErasableUser.cs:37</code>) rather than inheriting it from <code>AuditableBaseEntity&lt;TId&gt;</code>, because an app
+          <code>User</code> commonly <strong>hides</strong> the base method (<code>public new Result Delete()</code>) to also revoke the refresh
+          token. A hidden method is not an override, so a shared workflow calling through the class constraint
+          would silently run the base implementation and skip that behavior; routing the call through this
+          interface makes the interface map resolve to the most derived <code>Delete()</code> (<code>IErasableUser.cs:11-29</code>).
+          The base entity deliberately does not implement the interface, so a consumer that forgets to add it
+          fails the generic constraint at compile time instead of losing behavior at run time. These four
+          contracts are consumed by the shared handler bases in group 14:
           <a href="group-14-module-system-composition.html#changepasswordhandlerbasetuser-tcommand"><code>ChangePasswordHandlerBase&lt;TUser, TCommand&gt;</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:24</code>),
           <a href="group-14-module-system-composition.html#changepreferenceshandlerbasetuser-tcommand"><code>ChangePreferencesHandlerBase&lt;TUser, TCommand&gt;</code></a>
@@ -384,8 +392,8 @@
           cannot wrap the TTL back to something small (<code>LoginProtectionService.cs:88</code>), and it rate-limits
           registrations per source IP (default 10 per 60-minute window, <code>LoginProtectionSettings.cs:37-43</code>,
           <code>LoginProtectionService.cs:101-134</code>). Every setting carries a <code>[Range]</code> attribute, which is what makes
-          the clamp argument airtight: <code>MaxLockoutSeconds</code> cannot exceed 3600, and <code>1 &lt;&lt; 30</code> already dwarfs that.
-          The <a href="#iloginprotectionservice"><code>ILoginProtectionService</code></a> port
+          the clamp argument airtight: <code>MaxLockoutSeconds</code> cannot exceed 3600 (<code>LoginProtectionSettings.cs:23</code>),
+          and <code>1 &lt;&lt; 30</code> already dwarfs that. The <a href="#iloginprotectionservice"><code>ILoginProtectionService</code></a> port
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ILoginProtectionService.cs:10</code>) is what the
           workflow depends on, and it calls the gates at exactly the right points (increment on failed login,
           reset on success), so the protection is centralized rather than sprinkled through each app&#39;s
@@ -432,17 +440,18 @@
           dedicated named policy and is expected to be reached through permissions instead. Roles themselves get
           a value-object base, <a href="#rolevalue"><code>RoleValue</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:25</code>), so each app can fix its own role
-          set with case-insensitive, type-guarded equality (<code>RoleValue.cs:78-84</code>), a frozen interned lookup
-          (<code>RoleValue.cs:63-72</code>), and <code>Result</code>-returning validation (<code>RoleValue.cs:42</code>) while staying
+          set with case-insensitive, type-guarded equality (<code>RoleValue.cs:90-96</code>), a frozen interned lookup
+          (<code>RoleValue.cs:75-84</code>), and <code>Result</code>-returning validation (<code>RoleValue.cs:42</code>) while staying
           dependency-free enough to use from Blazor WASM.</p>
-          <p>The richer style is <strong>permission-based</strong> authorization, so endpoints depend on capabilities rather than
-          role names. <a href="#haspermissionattribute"><code>HasPermissionAttribute</code></a>
+          <p>The richer style is <strong>permission-based</strong> authorization
+          (<a href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html" target="_blank" rel="noopener">ADR-020</a>), so endpoints
+          depend on capabilities rather than role names. <a href="#haspermissionattribute"><code>HasPermissionAttribute</code></a>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:13</code>) marks a
           controller or action with a permission such as <code>&quot;sessions:manage&quot;</code>; under the hood it is an
           <code>AuthorizeAttribute</code> whose policy name is <code>perm:sessions:manage</code>
           (<a href="#permissionpolicy"><code>PermissionPolicy</code></a><code>.NameFor</code>,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicy.cs:12-17</code>). Rather than
-          pre-registering a named policy per permission,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicy.cs:12</code>,
+          <code>PermissionPolicy.cs:17</code>). Rather than pre-registering a named policy per permission,
           <a href="#permissionpolicyprovider"><code>PermissionPolicyProvider</code></a>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:13</code>)
           materializes those policies on demand for any <code>perm:</code> name and falls through to the default provider
@@ -524,34 +533,62 @@
           at <code>CookieSessionRefreshMiddleware.cs:35</code>) runs <em>before</em> <code>UseAuthentication</code> on qualifying navigations
           (GET plus an <code>Accept</code> header containing <code>text/html</code>, <code>CookieSessionRefreshMiddleware.cs:28-31</code>) and
           delegates to <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:49</code>) through
-          the <a href="#icookiesessionrefresher"><code>ICookieSessionRefresher</code></a> port (<code>CookieSessionRefresher.cs:27</code>). The
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:51</code>) through
+          the <a href="#icookiesessionrefresher"><code>ICookieSessionRefresher</code></a> port (<code>CookieSessionRefresher.cs:29</code>). The
           refresher first tries to read a still-valid expiry out of the access cookie with a 30-second skew
-          allowance (<code>CookieSessionRefresher.cs:56</code>, <code>CookieSessionRefresher.cs:137-166</code>); failing that it
+          allowance (<code>CookieSessionRefresher.cs:59</code>, <code>CookieSessionRefresher.cs:154-183</code>); failing that it
           exchanges the refresh cookie at the API&#39;s <code>auth/refresh</code> endpoint server-to-server
-          (<code>CookieSessionRefresher.cs:116-119</code>), so the refresh token never reaches browser JS. It then writes
+          (<code>CookieSessionRefresher.cs:127-130</code>), so the refresh token never reaches browser JS. It then writes
           the rotated pair back as cookies and stashes the fresh access token on <code>HttpContext.Items</code>
-          (<code>CookieSessionRefresher.cs:84-88</code>) so the <em>current</em> request&#39;s authentication reads the new token:
+          (<code>CookieSessionRefresher.cs:87-91</code>) so the <em>current</em> request&#39;s authentication reads the new token:
           <a href="#cookietokenreader"><code>CookieTokenReader</code></a> checks that item before falling back to the request cookie
           (<code>CookieTokenReader.cs:17</code>, <code>CookieTokenReader.cs:27-33</code>). Concurrent refreshes are collapsed into a
           single flight by a <a href="#keyedsemaphorestripe"><code>KeyedSemaphoreStripe</code></a> keyed on the refresh token plus a
           10-second rotation-grace <code>IMemoryCache</code> entry keyed by the <strong>old</strong> refresh token
-          (<code>CookieSessionRefresher.cs:57</code>, <code>CookieSessionRefresher.cs:59</code>, <code>CookieSessionRefresher.cs:92-108</code>,
-          <code>CookieSessionRefresher.cs:133</code>), so a queued herd of requests cannot double-rotate. Striping rather
+          (<code>CookieSessionRefresher.cs:60</code>, <code>CookieSessionRefresher.cs:62</code>, <code>CookieSessionRefresher.cs:95-111</code>,
+          <code>CookieSessionRefresher.cs:144</code>), so a queued herd of requests cannot double-rotate. Striping rather
           than one process-wide lock is deliberate and stated in source: the lock is held across an outbound HTTP
           call, so a single semaphore serialized every unrelated user&#39;s cold navigation behind whichever refresh
-          was in flight (<code>CookieSessionRefresher.cs:42-47</code>); two unrelated tokens sharing a stripe is harmless
+          was in flight (<code>CookieSessionRefresher.cs:44-49</code>); two unrelated tokens sharing a stripe is harmless
           because the grace cache is re-checked per token after acquiring
-          (<code>CookieSessionRefresher.cs:102-105</code>). The same refresher backs the same-origin
+          (<code>CookieSessionRefresher.cs:104-108</code>). A transport failure is not cached and renders the request
+          anonymously rather than throwing a 500 out of SSR (<code>CookieSessionRefresher.cs:117-122</code>,
+          <code>CookieSessionRefresher.cs:147-151</code>). The same refresher backs the same-origin
           <code>POST /auth/session/token</code> endpoint the browser polls to hydrate its in-memory token
           (<code>SessionCookieEndpoints.cs:45-60</code>), guarded by <code>SameSite=Lax</code> plus a <code>Sec-Fetch-Site</code> cross-site
           rejection (<code>SessionCookieEndpoints.cs:48</code>, <code>SessionCookieEndpoints.cs:68-70</code>) and returning
-          <a href="#sessiontokenresponse"><code>SessionTokenResponse</code></a> (<code>CookieSessionRefresher.cs:18</code>), the browser-safe
+          <a href="#sessiontokenresponse"><code>SessionTokenResponse</code></a> (<code>CookieSessionRefresher.cs:20</code>), the browser-safe
           projection of the internal <a href="#sessiontokenresult"><code>SessionTokenResult</code></a>
-          (<code>CookieSessionRefresher.cs:12</code>) that deliberately omits the refresh token. This whole cluster is
+          (<code>CookieSessionRefresher.cs:14</code>) that deliberately omits the refresh token. This whole cluster is
           <a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>&#39;s server half; the
           client half across Blazor Server, WASM, and MAUI is
           <a href="https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html" target="_blank" rel="noopener">ADR-051</a>.</p>
+          <h2 id="privacy-the-data-subject-export-package">Privacy: the data-subject export package</h2>
+          <p>Three members of this group belong to the privacy surface that sits beside erasure.
+          <a href="#userdataexportdto"><code>UserDataExportDTO</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:15</code>) is the portable
+          GDPR/CCPA export envelope: a document <code>FormatVersion</code> consumers read before parsing
+          (<code>UserDataExportDTO.cs:22</code>), the generation instant, the subject id, an app-owned <code>Subject</code> snapshot
+          typed as <code>object</code> so each app decides which of its own fields are portable
+          (<code>UserDataExportDTO.cs:39-40</code>), and an ordered list of
+          <a href="#userdataexportsectiondto"><code>UserDataExportSectionDTO</code></a> envelopes (<code>UserDataExportDTO.cs:48</code>,
+          <code>UserDataExportDTO.cs:61</code>). Each section reports <code>Available</code> explicitly (<code>UserDataExportDTO.cs:72</code>) so
+          a reader can tell &quot;this subject has no data here&quot; apart from &quot;this contributor could not be reached&quot;,
+          and an unavailable section carries only a caller-safe reason string, never an exception message or a
+          connection string (<code>UserDataExportDTO.cs:88</code>). One failing contributor therefore degrades one section
+          instead of denying the subject their whole export, which is the [Rubric §30, Compliance/Privacy/Data
+          Governance] point of the shape. <a href="#privacyfeatures"><code>PrivacyFeatures</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/PrivacyFeatures.cs:6</code>) holds the single flag name
+          <code>Privacy.DataExport</code> (<code>PrivacyFeatures.cs:9</code>) that keeps the whole surface off until a host turns it
+          on: it is applied as a <code>[FeatureGate]</code> on
+          <a href="group-12-api-hosting-mapping.html#dataexportcontrollerbasetquery"><code>DataExportControllerBase&lt;TQuery&gt;</code></a>
+          alongside an <code>[Authorize]</code> requiring an authenticated caller
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:58-60</code>),
+          with the owner-or-privileged-role check enforced independently in the handler. The composing workflow
+          (<a href="group-14-module-system-composition.html#exportuserdatahandlerbasetuser-tquery"><code>ExportUserDataHandlerBase&lt;TUser, TQuery&gt;</code></a>
+          and the <a href="group-14-module-system-composition.html#iuserdataexportsection"><code>IUserDataExportSection</code></a>
+          contributors) lives in group 14
+          (<a href="https://ivanball.github.io/docs/adr/076-data-subject-export.html" target="_blank" rel="noopener">ADR-076</a>).</p>
           <h2 id="shared-primitives-and-adjacent-members">Shared primitives and adjacent members</h2>
           <p>Four group members are general-purpose primitives that landed in this chapter because of how the
           dependency grouping fell, though one of them is now load-bearing for auth.
@@ -563,11 +600,21 @@
           removing the entry on release opens a window where one caller waits on a semaphore no longer in the
           table while another creates a fresh one, and never removing it lets caller-supplied keys grow the table
           without bound (<code>KeyedSemaphoreStripe.cs:7-16</code>). Its consumers today are
-          <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a> (above),
-          the <a href="group-12-api-hosting-mapping.html#idempotencyfilter"><code>IdempotencyFilter</code></a>,
-          <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a>,
-          <a href="group-09-caching.html#memorycacheservice"><code>MemoryCacheService</code></a>, and
-          <a href="group-14-module-system-composition.html#inprocessdistributedlock"><code>InProcessDistributedLock</code></a>.
+          <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a> (above, <code>CookieSessionRefresher.cs:62</code>),
+          the <a href="group-12-api-hosting-mapping.html#idempotencyfilter"><code>IdempotencyFilter</code></a>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:92</code>),
+          <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:197</code>),
+          <a href="group-09-caching.html#memorycacheservice"><code>MemoryCacheService</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/MemoryCacheService.cs:38</code>), and the
+          default <code>GetOrCreateAsync</code> lock table on
+          <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:142-145</code>).
+          <a href="group-14-module-system-composition.html#inprocessdistributedlock"><code>InProcessDistributedLock</code></a> is the
+          deliberate exception: it keys on the exact key in a <code>ConcurrentDictionary</code> instead, because its
+          contract has a <em>bounded</em> wait, and stripe false-sharing would turn that into a spurious
+          &quot;held elsewhere&quot; answer for a key nobody holds
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/InProcessDistributedLock.cs:19-24</code>).
           <a href="#icsevent"><code>IcsEvent</code></a> and <a href="#icscalendarbuilder"><code>IcsCalendarBuilder</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsEvent.cs:15</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:12</code>) build RFC 5545
@@ -592,7 +639,7 @@
           to outlive the window between the delete committing and the next validator query, and the 15-minute
           access-token lifetime bounds the rest of the exposure. The key is formatted invariantly on purpose,
           because a culture-sensitive identifier would be written under one request&#39;s culture and missed under
-          another (<code>SoftDeletedUserCache.cs:36-43</code>). The controller surface that drives everything above
+          another (<code>SoftDeletedUserCache.cs:42-43</code>). The controller surface that drives everything above
           (<a href="group-12-api-hosting-mapping.html#authcontrollerbase"><code>AuthControllerBase</code></a>,
           <a href="group-12-api-hosting-mapping.html#oauthcontrollerbase"><code>OAuthControllerBase</code></a>,
           <a href="group-12-api-hosting-mapping.html#externalauthextensions"><code>ExternalAuthExtensions</code></a>) and the gRPC token
@@ -1183,8 +1230,9 @@
           lazily from the request scope
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:75</code> uses
           <code>context.RequestServices.GetService&lt;ISoftDeletedUserValidator&gt;()</code>, so a host that registers no
-          implementation simply skips the check). Both apps register the shared generic against their own user
-          type: <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:34</code> and
+          implementation simply skips the check; the reason is stated at <code>:43</code>). Both apps register the shared
+          generic against their own user type:
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:35</code> and
           <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:41</code>, both
           as <code>TryAddScoped&lt;ISoftDeletedUserValidator, SoftDeletedUserValidator&lt;User&gt;&gt;()</code>.</li>
           </ul>
@@ -1212,7 +1260,7 @@
           <code>GenerateRefreshToken()</code> (<code>:26</code>) returns a cryptographically random base64 string. Two <strong>default
           interface members</strong> publish the lifetimes: <code>AccessTokenLifetime</code> (<code>:33</code>, defaulting to 15 minutes)
           and <code>RefreshTokenLifetime</code> (<code>:40</code>, defaulting to 7 days), both documented as the BR-205 baseline. The
-          comments at <code>:29-32</code> and <code>:36-39</code> explain the split: the real implementation derives both from the
+          comments at <code>:28-32</code> and <code>:35-39</code> explain the split: the real implementation derives both from the
           bound JWT settings, so the expiry reported to a client matches the token&#39;s actual <code>exp</code>, while the
           defaults keep hand-written test doubles on the baseline instead of forcing every double to implement
           two more members. <code>GetPrincipalFromExpiredToken(string token)</code> (<code>:48</code>) closes the set.</li>
@@ -1225,7 +1273,8 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:61-70</code>).</li>
           <li><strong>Where it&#39;s used</strong>: the shared <code>AuthenticationServiceBase</code> login/refresh/register paths
           (<code>AuthenticationServiceBase.cs:168</code> and <code>:214</code> stamp the refresh-token and access-token expiries from
-          those lifetimes) and, through it, each app&#39;s Identity authentication service, for example
+          those lifetimes, and <code>:298</code>/<code>:305</code> do the same on the refresh path) and, through it, each app&#39;s
+          Identity authentication service, for example
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:100</code>
           (access token with speaker claims) and <code>:225</code> (refresh token). The rotated pair produced here is what
           <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a> later exchanges on the browser&#39;s behalf.</li>
@@ -1256,7 +1305,7 @@
           <hr>
           <h3 id="sessiontokenresponse">SessionTokenResponse</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:18</code> · Level 0 · record</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:20</code> · Level 0 · record</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the JSON body returned by <code>POST /auth/session/token</code>: the access token and its UTC
@@ -1268,8 +1317,8 @@
           the access token, which the SPA holds in memory for its Bearer calls, and deliberately omits the
           refresh token, which stays exclusively in the HttpOnly cookie. The doc comment states the rule
           outright
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:14-17</code>).</li>
-          <li><strong>Walkthrough</strong>: <code>public sealed record SessionTokenResponse(string AccessToken, DateTime AccessTokenExpiry)</code> (<code>:18</code>). It is the serialized projection of the internal
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:16-19</code>).</li>
+          <li><strong>Walkthrough</strong>: <code>public sealed record SessionTokenResponse(string AccessToken, DateTime AccessTokenExpiry)</code> (<code>:20</code>). It is the serialized projection of the internal
           <a href="#sessiontokenresult"><code>SessionTokenResult</code></a>, which is why the two types carry the same two members
           and different visibility of intent.</li>
           <li><strong>Where it&#39;s used</strong>: constructed and returned by the <code>/auth/session/token</code> handler
@@ -1278,7 +1327,7 @@
           <hr>
           <h3 id="sessiontokenresult">SessionTokenResult</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:12</code> · Level 0 · record struct</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:14</code> · Level 0 · record struct</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the internal carrier for a validated access token plus its UTC expiry, returned by
@@ -1291,18 +1340,18 @@
           thrown exception. [Rubric §12, Performance &amp; Scalability] assesses avoidable allocation; a
           <code>readonly record struct</code> is the light choice for a result produced on every qualifying navigation.</li>
           <li><strong>Walkthrough</strong>: <code>public readonly record struct SessionTokenResult(string AccessToken, DateTime AccessTokenExpiry)</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:12</code>), with
-          the one-line summary at <code>:11</code> naming its provenance (&quot;acquired from the session cookies&quot;).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:14</code>), with
+          the one-line summary at <code>:13</code> naming its provenance (&quot;acquired from the session cookies&quot;).</li>
           <li><strong>Where it&#39;s used</strong>: the return type of
-          <a href="#icookiesessionrefresher"><code>ICookieSessionRefresher.GetOrRefreshAsync</code></a> (<code>:34</code>); constructed by
-          <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a> at <code>:68</code> (cookie still valid) and <code>:89</code> (after a
+          <a href="#icookiesessionrefresher"><code>ICookieSessionRefresher.GetOrRefreshAsync</code></a> (<code>:36</code>); constructed by
+          <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a> at <code>:71</code> (cookie still valid) and <code>:92</code> (after a
           rotation); unwrapped by <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a> at
           <code>SessionCookieEndpoints.cs:56</code>.</li>
           </ul>
           <hr>
           <h3 id="icookiesessionrefresher">ICookieSessionRefresher</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:27</code> · Level 1 · interface</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:29</code> · Level 1 · interface</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the &quot;validate-or-refresh over the HttpOnly session cookies&quot; port. One method returns
@@ -1312,15 +1361,15 @@
           only implementation is <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a>.</li>
           <li><strong>Concept introduced, server-side refresh that browser script never sees.</strong> [Rubric §11, Security]
           assesses where the long-lived credential lives. The type comment
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:20-26</code>) is
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:22-28</code>) is
           the contract in prose: if the access cookie&#39;s JWT is still valid it is returned as-is; otherwise the
           refresh cookie is exchanged at the API&#39;s <code>auth/refresh</code> endpoint server-to-server, so the refresh
           token never reaches browser JS; the rotated pair is written back as HttpOnly cookies; and the fresh
           access token is stashed on <code>HttpContext.Items</code> so the current request&#39;s SSR authentication can read
           it before the <code>Set-Cookie</code> takes effect on the next request.</li>
-          <li><strong>Walkthrough</strong>: <code>Task&lt;SessionTokenResult?&gt; GetOrRefreshAsync(HttpContext context, CancellationToken cancellationToken = default)</code> (<code>:34</code>). The nullable return is the whole vocabulary: a value means
+          <li><strong>Walkthrough</strong>: <code>Task&lt;SessionTokenResult?&gt; GetOrRefreshAsync(HttpContext context, CancellationToken cancellationToken = default)</code> (<code>:36</code>). The nullable return is the whole vocabulary: a value means
           &quot;here is a good access token&quot;, <code>null</code> means &quot;no session, treat this caller as anonymous&quot;. The doc
-          comment at <code>:29-33</code> flags that setting fresh cookies is a side effect of the call.</li>
+          comment at <code>:31-35</code> flags that setting fresh cookies is a side effect of the call.</li>
           <li><strong>Why it&#39;s built this way</strong>: one interface lets the SSR middleware and the <code>/auth/session/token</code>
           endpoint share a single refresh path, so exactly one type decides validity and exactly one type
           rotates (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>). It is
@@ -1330,7 +1379,7 @@
           authentication on navigations) and resolved by the <code>/auth/session/token</code> handler
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:46</code>).
           Registered as a singleton at
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:153</code>.</li>
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:163</code>.</li>
           </ul>
           <hr>
           <h3 id="cookiesessionrefreshmiddleware">CookieSessionRefreshMiddleware</h3>
@@ -1364,8 +1413,8 @@
           itself cannot double-rotate a token
           (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>).</li>
           <li><strong>Where it&#39;s used</strong>: registered on both Blazor Server hosts immediately before <code>UseAuthentication()</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:129</code> and
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:160</code>.</li>
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:138</code> (with <code>UseAuthentication()</code> on the very next
+          statement at <code>:140</code>) and <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:178</code> (<code>:180</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: the ordering rule (before <code>UseAuthentication</code>) is enforced by the host
           that calls the extension, not by this class. Getting it wrong silently disables the SSR refresh
           rather than failing loudly.</li>
@@ -1399,11 +1448,12 @@
           <code>204</code>; the <code>DELETE</code> (<code>:35-39</code>) calls <code>SessionCookieJar.Delete</code> and returns <code>204</code>; both
           <code>DisableAntiforgery()</code> because there is no antiforgery token cookie to validate on these calls. The
           <code>/auth/session/token</code> <code>POST</code> (<code>:45-60</code>) first rejects an obvious cross-site request with <code>403</code>
-          (<code>:48-51</code>), then awaits <code>refresher.GetOrRefreshAsync</code>; a <code>null</code> result becomes a <code>401</code> JSON body
-          <code>{ error = &quot;no_session&quot; }</code> (<code>:55</code>), otherwise a <a href="#sessiontokenresponse"><code>SessionTokenResponse</code></a> is
-          serialized (<code>:56</code>). That route is <code>AllowAnonymous()</code> (<code>:59</code>) because it authenticates via the cookies
-          themselves. The private <code>IsCrossSite</code> (<code>:68-70</code>) inspects the <code>Sec-Fetch-Site</code> request header and
-          treats a missing header as allowed, which the comment at <code>:67</code> attributes to older browsers.</li>
+          (<code>:48-51</code>), then awaits <code>refresher.GetOrRefreshAsync</code> (<code>:53</code>); a <code>null</code> result becomes a <code>401</code> JSON
+          body <code>{ error = &quot;no_session&quot; }</code> (<code>:55</code>), otherwise a
+          <a href="#sessiontokenresponse"><code>SessionTokenResponse</code></a> is serialized (<code>:56</code>). That route is
+          <code>AllowAnonymous()</code> (<code>:59</code>) because it authenticates via the cookies themselves. The private
+          <code>IsCrossSite</code> (<code>:68-70</code>) inspects the <code>Sec-Fetch-Site</code> request header and treats a missing header as
+          allowed, which the comment at <code>:67</code> attributes to older browsers.</li>
           <li><strong>Why it&#39;s built this way</strong>: CSRF is defended in depth rather than by antiforgery tokens. The comment
           at <code>:66-67</code> spells it out: <code>POST</code>-only, <code>SameSite=Lax</code> on the cookies (which already blocks
           cross-site cookie attachment), and the <code>Sec-Fetch-Site</code> check together stop a cross-site page from
@@ -1411,10 +1461,12 @@
           (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>). [Rubric §11,
           Security].</li>
           <li><strong>Where it&#39;s used</strong>: mapped by both Blazor Server hosts,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:148</code> and
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:176</code>. The routes are exercised end to end by
-          <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/SessionCookieEndpointsTests.cs:138</code>,
-          which builds a real pipeline around the mapper.</li>
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:157</code> and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:194</code>. The routes are exercised end to end by
+          <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/SessionCookieEndpointsTests.cs:125</code>,
+          whose <code>CreateHostAsync</code> builds a real pipeline around the mapper; the cases that matter most are the
+          cross-site <code>403</code> (<code>:60</code>), the no-session <code>401</code> (<code>:91</code>), and the assertion that a valid session returns
+          the access token but never the refresh token (<code>:104</code>).</li>
           </ul>
           <hr>
           <h3 id="sessioncookiejar">SessionCookieJar</h3>
@@ -1448,7 +1500,7 @@
           (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>).</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a> (seed at
           <code>SessionCookieEndpoints.cs:31</code>, clear at <code>:37</code>) and
-          <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a> (rewrite after rotation, <code>CookieSessionRefresher.cs:84</code>).</li>
+          <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a> (rewrite after rotation, <code>CookieSessionRefresher.cs:87</code>).</li>
           </ul>
           <hr>
           <h3 id="cookiesessionrefreshmiddlewareextensions">CookieSessionRefreshMiddlewareExtensions</h3>
@@ -1470,11 +1522,11 @@
           load-bearing rule in bold: register it immediately <strong>before</strong> <code>UseAuthentication()</code> on the Blazor
           Server (UI.Web) host.</li>
           <li><strong>Where it&#39;s used</strong>: the two Blazor Server hosts
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:129</code>,
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:160</code>). Both the null guard and the
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:138</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:178</code>). Both the null guard and the
           pipeline wiring are covered directly at
-          <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/CookieSessionRefreshMiddlewareTests.cs:117</code>
-          and <code>:130</code>.</li>
+          <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/CookieSessionRefreshMiddlewareTests.cs:115</code>
+          and <code>:123</code>.</li>
           </ul>
           <hr>
           <h3 id="cookietokenreader">CookieTokenReader</h3>
@@ -1512,12 +1564,12 @@
           (<code>SessionCookieAuthenticationHandler.cs:28</code>) and into the UI host&#39;s server-side token store
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:19</code>).
           Registered scoped by <code>AddServerAuthSessionCookie</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:147</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:157</code>).</li>
           </ul>
           <hr>
           <h3 id="cookiesessionrefresher">CookieSessionRefresher</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:49</code> · Level 4 · class</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:51</code> · Level 4 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the singleton implementation of
@@ -1525,9 +1577,10 @@
           and, when that fails, exchanges the refresh cookie at the API&#39;s <code>auth/refresh</code> endpoint
           server-to-server, writes the rotated pair back as cookies, and single-flights concurrent refreshes so
           a burst of requests rotates the token only once.</li>
-          <li><strong>Depends on</strong>: <code>IHttpClientFactory</code>, <code>IMemoryCache</code> and <code>IWebHostEnvironment</code> (primary constructor,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:49-52</code>);
-          <a href="#keyedsemaphorestripe"><code>KeyedSemaphoreStripe</code></a> (<code>:59</code>); <a href="#sessioncookiejar"><code>SessionCookieJar</code></a>;
+          <li><strong>Depends on</strong>: <code>IHttpClientFactory</code>, <code>IMemoryCache</code>, <code>IWebHostEnvironment</code> and
+          <code>ILogger&lt;CookieSessionRefresher&gt;</code> (primary constructor,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:51-55</code>);
+          <a href="#keyedsemaphorestripe"><code>KeyedSemaphoreStripe</code></a> (<code>:62</code>); <a href="#sessioncookiejar"><code>SessionCookieJar</code></a>;
           <a href="#cookietokenreader"><code>CookieTokenReader</code></a> for the Items key;
           <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a> for the cookie names; and the
           <a href="#authenticationresponse"><code>AuthenticationResponse</code></a> / <a href="#refreshtokenrequest"><code>RefreshTokenRequest</code></a>
@@ -1536,38 +1589,48 @@
           <li><strong>Concept introduced, single-flight refresh under a thundering herd.</strong> [Rubric §12, Performance &amp;
           Scalability] assesses behavior under concurrent load. When an access token expires, many queued
           navigations can arrive at once; rotating for each would burn the refresh token repeatedly and log the
-          user out. The type comment (<code>:37-47</code>) states the design and, notably, why it changed: the lock is a
+          user out. The type comment (<code>:39-50</code>) states the design and, notably, why it changed: the lock is a
           <strong>striped</strong> <a href="#keyedsemaphorestripe"><code>KeyedSemaphoreStripe</code></a> keyed by refresh token rather than one
           process-wide semaphore, because the lock is held across an outbound HTTP call and a single semaphore
           serialized every unrelated user&#39;s cold navigation behind whichever refresh happened to be in flight.
           Two unrelated tokens can still land on one stripe, which the comment calls out as harmless precisely
           because the rotation-grace cache is re-checked per token after acquiring. Alongside the lock, a
-          10-second <code>RotationGrace</code> (<code>:57</code>) caches the rotated pair keyed by the OLD refresh token (<code>:133</code>), so
+          10-second <code>RotationGrace</code> (<code>:60</code>) caches the rotated pair keyed by the OLD refresh token (<code>:144</code>), so
           a slightly-late sibling carrying the same expired pair gets the same result instead of rotating
           again.</li>
-          <li><strong>Walkthrough</strong>: <code>GetOrRefreshAsync</code> (<code>:61-90</code>) reads the access cookie (<code>:65</code>) and, if
-          <code>TryReadValidExpiry</code> passes, returns it untouched (<code>:66-69</code>). Otherwise it reads the refresh cookie
-          and returns <code>null</code> when there is none (<code>:71-75</code>). It calls <code>RefreshAsync</code> (<code>:77</code>), treats a missing or
-          blank access token as failure (<code>:78-81</code>), writes the rotated pair with <code>SessionCookieJar.Append</code>
-          (<code>:84</code>), stashes the fresh access token on <code>context.Items[CookieTokenReader.FreshAccessTokenItemKey]</code>
-          (<code>:88</code>, with the reason spelled out at <code>:86-87</code>), and returns the new
-          <a href="#sessiontokenresult"><code>SessionTokenResult</code></a> (<code>:89</code>). <code>RefreshAsync</code> (<code>:92-108</code>) is textbook
-          double-checked locking: a cache hit returns immediately (<code>:94-97</code>), otherwise it acquires the stripe
-          for this token (<code>:99</code>) and re-checks the cache before doing any work (<code>:101-105</code>). <code>CallRefreshAsync</code>
-          (<code>:110-135</code>) creates the named client (<code>:112</code>), POSTs a
+          <li><strong>Walkthrough</strong>: <code>GetOrRefreshAsync</code> (<code>:64-93</code>) reads the access cookie (<code>:68</code>) and, if
+          <code>TryReadValidExpiry</code> passes, returns it untouched (<code>:69-72</code>). Otherwise it reads the refresh cookie
+          and returns <code>null</code> when there is none (<code>:74-78</code>). It calls <code>RefreshAsync</code> (<code>:80</code>), treats a missing or
+          blank access token as failure (<code>:81-84</code>), writes the rotated pair with <code>SessionCookieJar.Append</code>
+          (<code>:87</code>), stashes the fresh access token on <code>context.Items[CookieTokenReader.FreshAccessTokenItemKey]</code>
+          (<code>:91</code>, with the reason spelled out at <code>:89-90</code>), and returns the new
+          <a href="#sessiontokenresult"><code>SessionTokenResult</code></a> (<code>:92</code>). <code>RefreshAsync</code> (<code>:95-111</code>) is textbook
+          double-checked locking: a cache hit returns immediately (<code>:97-100</code>), otherwise it acquires the stripe
+          for this token (<code>:102</code>) and re-checks the cache before doing any work (<code>:105-108</code>). <code>CallRefreshAsync</code>
+          (<code>:113-152</code>) creates the named client (<code>:115</code>), POSTs a
           <a href="#refreshtokenrequest"><code>RefreshTokenRequest</code></a> to the relative <code>auth/refresh</code> URI with
-          <code>CancellationToken.None</code> (<code>:116-119</code>) so that once the lock is held the rotation completes and writes
-          its cookies even if the triggering request was aborted (the reason is at <code>:114-115</code>), bails on a
-          non-success status (<code>:121-124</code>) or an empty access token (<code>:127-130</code>), and caches the
+          <code>CancellationToken.None</code> (<code>:127-130</code>) so that once the lock is held the rotation completes and writes
+          its cookies even if the triggering request was aborted (the reason is at <code>:125-126</code>), bails on a
+          non-success status (<code>:132-135</code>) or an empty access token (<code>:138-141</code>), and caches the
           <a href="#authenticationresponse"><code>AuthenticationResponse</code></a> under the old refresh token for <code>RotationGrace</code>
-          (<code>:133</code>). <code>TryReadValidExpiry</code> (<code>:137-166</code>) rejects a blank token, refuses anything
-          <code>JwtSecurityTokenHandler</code> cannot read (<code>:145-149</code>), treats the token as expired when
-          <code>jwt.ValidTo &lt;= DateTime.UtcNow + ClockSkew</code> (<code>:154</code>, with <code>ClockSkew</code> a 30-second margin at <code>:56</code>),
-          and swallows only <code>ArgumentException</code>/<code>FormatException</code> (<code>:162-165</code>). <code>CacheKey</code> (<code>:172</code>) builds the
+          (<code>:144</code>). <code>TryReadValidExpiry</code> (<code>:154-183</code>) rejects a blank token, refuses anything
+          <code>JwtSecurityTokenHandler</code> cannot read (<code>:162-166</code>), treats the token as expired when
+          <code>jwt.ValidTo &lt;= DateTime.UtcNow + ClockSkew</code> (<code>:171</code>, with <code>ClockSkew</code> a 30-second margin at <code>:59</code>),
+          and swallows only <code>ArgumentException</code>/<code>FormatException</code> (<code>:179-182</code>). <code>CacheKey</code> (<code>:189</code>) builds the
           <code>mmca:session-refresh:{refreshToken}</code> string that is both the cache key and the striping key; the
-          comment at <code>:168-171</code> explains it is <code>internal</code> rather than <code>private</code> so a concurrency test can pick
+          comment at <code>:185-188</code> explains it is <code>internal</code> rather than <code>private</code> so a concurrency test can pick
           two refresh tokens that do not collide on a stripe, which is a nice example of a testability
           affordance that costs nothing at runtime. [Rubric §14, Testability].</li>
+          <li><strong>Concept, an SSR-safe failure mode.</strong> [Rubric §29, Resilience] and [Rubric §13, Observability]
+          apply to the outbound call. <code>CallRefreshAsync</code> wraps the POST in a <code>try</code> whose filter narrows to
+          <code>HttpRequestException</code>, <code>OperationCanceledException</code>, <code>JsonException</code> and <code>NotSupportedException</code>
+          (<code>:147</code>), logs one warning through the source-generated <code>LogRefreshCallFailed</code> (<code>:149</code>, declared with
+          <code>[LoggerMessage]</code> at <code>:191-192</code>, which is why the class is <code>partial</code> at <code>:51</code>), and returns <code>null</code>.
+          The comment at <code>:117-122</code> gives the reasoning: this code runs during SSR, so an escaping exception
+          would turn a signed-in user&#39;s navigation into a <code>500</code> instead of an anonymous render. The failure is
+          deliberately not cached (only a successful rotation reaches <code>cache.Set</code> at <code>:144</code>), so the next
+          navigation retries, and a missing <code>BaseAddress</code> raises <code>InvalidOperationException</code> and is left to
+          propagate because that is a host misconfiguration rather than a runtime condition.</li>
           <li><strong>Why it&#39;s built this way</strong>: keying the grace cache by the OLD token is what lets a slightly-late
           sibling find the already-rotated pair, and striping the lock keeps one user&#39;s slow refresh from
           blocking everyone else&#39;s cold navigation. The server-to-server call is what keeps the refresh token
@@ -1575,9 +1638,9 @@
           [Rubric §11, Security].</li>
           <li><strong>Where it&#39;s used</strong>: resolved as <a href="#icookiesessionrefresher"><code>ICookieSessionRefresher</code></a> by
           <a href="#cookiesessionrefreshmiddleware"><code>CookieSessionRefreshMiddleware</code></a> and by the
-          <code>/auth/session/token</code> endpoint. Its named <code>HttpClient</code>, <code>RefreshClientName = &quot;SessionCookieRefreshClient&quot;</code> (<code>:54</code>), is configured with the API base address in
-          <code>AddServerAuthSessionCookie</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:149-150</code>),
-          which also registers the refresher as a singleton (<code>:152-153</code>) with an inline note that a shared
+          <code>/auth/session/token</code> endpoint. Its named <code>HttpClient</code>, <code>RefreshClientName = &quot;SessionCookieRefreshClient&quot;</code> (<code>:57</code>), is configured with the API base address in
+          <code>AddServerAuthSessionCookie</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:159-160</code>),
+          which also registers the refresher as a singleton (<code>:162-163</code>) with an inline note that a shared
           instance across requests is what makes single-flight work at all.</li>
           </ul>
           <hr>
@@ -1625,10 +1688,11 @@
           clock through the base handler&#39;s <code>TimeProvider</code> rather than <code>DateTime.UtcNow</code> keeps the expiry check
           on the same injectable clock as the rest of the auth stack and its tests. [Rubric §14, Testability].</li>
           <li><strong>Where it&#39;s used</strong>: registered as the <code>SessionCookie</code> scheme on both Blazor Server hosts,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:62</code> and
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:94</code>. Covered directly by
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:70-71</code> and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:111-112</code>. Covered directly by
           <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/SessionCookieAuthenticationHandlerTests.cs</code>,
-          including the fresh-token-from-Items path (<code>:102</code>).</li>
+          including the fresh-token-from-Items path (<code>:95</code>, which stashes the token under
+          <code>CookieTokenReader.FreshAccessTokenItemKey</code> at <code>:102</code> and asserts it wins over an expired cookie).</li>
           </ul>
           <hr>
           <h3 id="sessioncookieauthenticationextensions">SessionCookieAuthenticationExtensions</h3>
@@ -1652,9 +1716,9 @@
           explicit <code>null</code> arguments are named, so the call site says what it is skipping. The doc comment
           (<code>:94-97</code>) directs callers to use it after
           <code>AddAuthentication(SessionCookieAuthenticationHandler.SchemeName)</code>.</li>
-          <li><strong>Where it&#39;s used</strong>: <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:62</code> and
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:94</code>, chained onto the host&#39;s
-          <code>AddAuthentication(...)</code> call.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:71</code> and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:112</code>, chained onto the host&#39;s
+          <code>AddAuthentication(SessionCookieAuthenticationHandler.SchemeName)</code> call on the preceding line.</li>
           </ul>
           <hr>
           <h3 id="icurrentuserservice">ICurrentUserService</h3>
@@ -2556,7 +2620,7 @@
           <li><p><strong>What it is</strong>: two <code>const string</code> header names for the idempotency protocol, the request header a
           client sends to make a write repeatable and the response header a server sets when it replayed a
           stored answer instead of executing again
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/IdempotencyHeaders.cs:13-25</code>).</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/IdempotencyHeaders.cs:13-26</code>).</p>
           </li>
           <li><p><strong>Depends on</strong>: nothing. No usings, no first-party types, no externals.</p>
           </li>
@@ -2608,6 +2672,56 @@
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/SessionQuestionUIService.cs:75</code>).</p>
           </li>
           </ul>
+          <h3 id="privacyfeatures">PrivacyFeatures</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Privacy</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/PrivacyFeatures.cs:6</code> · Level 0 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the feature-flag name space for the privacy (data-subject rights) surface. One
+          member today: <code>DataExport = &quot;Privacy.DataExport&quot;</code>, the flag that turns the data-subject export
+          endpoint on
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/PrivacyFeatures.cs:6-10</code>).</li>
+          <li><strong>Depends on</strong>: nothing. No usings, no first-party types, no externals. Same reason as
+          <a href="#idempotencyheaders"><code>IdempotencyHeaders</code></a>: a flag name has to be nameable from the layer that
+          gates on it and from the configuration a host writes, so it lives at the bottom of the stack.</li>
+          <li><strong>Concept introduced, the flag name as a compile-time symbol rather than a magic string.</strong>
+          <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses whether a concern like feature gating is expressed
+          once instead of restated per call site;
+          <code>[Rubric §30, Compliance / Privacy / Data Governance]</code> assesses whether privacy-affecting surfaces
+          are deliberately controlled rather than always-on. <code>Microsoft.FeatureManagement</code> matches flags by
+          <strong>string</strong>, both in the <code>FeatureManagement</code> configuration section and in the <code>[FeatureGate(&quot;...&quot;)]</code>
+          attribute, so nothing in the compiler stops a host from enabling <code>&quot;Privacy.DataExport&quot;</code> while the
+          controller gates on <code>&quot;PrivacyDataExport&quot;</code>: the endpoint would simply stay 404 with no error
+          anywhere. Publishing the literal as a <code>const</code> makes the attribute side of that pair a symbol the
+          compiler checks, and it is <code>const</code> (not <code>static readonly</code>) precisely so it can be used as an
+          attribute argument, which <code>static readonly</code> cannot
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:59</code>).
+          The configuration side stays a string a host types, and no source in this tree types it.</li>
+          <li><strong>Walkthrough</strong>: one member.<ul>
+          <li><code>DataExport = &quot;Privacy.DataExport&quot;</code> (line 9), documented as the flag controlling the data-subject
+          export (DSAR) endpoint (line 8). The value is dotted, matching the flag-name convention the
+          feature-management configuration section uses.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/031-feature-flag-management.html" target="_blank" rel="noopener">ADR-031</a>
+          settles on <code>Microsoft.FeatureManagement</code> and enforces one flag name on two surfaces (a
+          <code>[FeatureGate]</code> on controllers, <code>IFeatureGated</code> on CQRS handlers), with a disabled feature
+          answering <strong>404, not 403</strong>, so a turned-off capability is indistinguishable from one that was never
+          deployed. <a href="https://ivanball.github.io/docs/adr/076-data-subject-export.html" target="_blank" rel="noopener">ADR-076</a> then chooses
+          to ship the whole export endpoint behind that gate, so adopting the framework does not silently
+          publish a route that returns a complete dossier on a person.</li>
+          <li><strong>Where it&#39;s used</strong>: as the argument to the class-level
+          <code>[FeatureGate(PrivacyFeatures.DataExport)]</code> on
+          <a href="group-12-api-hosting-mapping.html#dataexportcontrollerbasetquery"><code>DataExportControllerBase&lt;TQuery&gt;</code></a>
+          (<code>DataExportControllerBase.cs:59</code>, with the rationale in its remarks at <code>:50-55</code>), and asserted by
+          <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Controllers/Privacy/DataExportControllerBaseTests.cs:149</code>,
+          which reflects over the attribute so the gate cannot be dropped in a refactor.</li>
+          <li><strong>Caveats / not-in-source</strong>: no <code>appsettings*.json</code> in this workspace declares a
+          <code>Privacy.DataExport</code> entry, and no production controller derives from
+          <code>DataExportControllerBase&lt;TQuery&gt;</code> (ADC and Store keep their own earlier export endpoints, see
+          <a href="#userdataexportdto"><code>UserDataExportDTO</code></a>). So the flag is defined and gated on, but not currently
+          enabled by any host in this tree.</li>
+          </ul>
           <h3 id="releaser">Releaser</h3>
           <blockquote>
           <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Concurrency</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:78</code> · Level 0 · record struct (readonly, nested)</p>
@@ -2648,12 +2762,74 @@
           <a href="group-12-api-hosting-mapping.html#idempotencyfilter"><code>IdempotencyFilter</code></a>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:208</code>),
           <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:99</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:102</code>),
           <a href="group-09-caching.html#memorycacheservice"><code>MemoryCacheService</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/MemoryCacheService.cs:101</code>, <code>:112</code>,
-          <code>:132</code>), and
+          <code>:132</code>), the default <code>GetOrCreateAsync</code> implementation on
+          <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:112</code>), and
           <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:67</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:89</code>).</li>
+          </ul>
+          <h3 id="userdataexportsectiondto">UserDataExportSectionDTO</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Privacy</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:61</code> · Level 0 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: one section of a data-subject export package: the data a single contributor holds
+          about the subject, plus whether that contributor could be reached at all
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:51-89</code>).</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <code>System.Runtime.Serialization</code>&#39;s <code>DataContract</code> / <code>DataMember</code> (BCL, line 1). No
+          first-party types. It is the element type of <a href="#userdataexportdto"><code>UserDataExportDTO</code></a><code>.Sections</code>.</p>
+          </li>
+          <li><p><strong>Concept introduced, the degradation envelope: reporting &quot;not retrieved&quot; as data rather than as an
+          error.</strong> <code>[Rubric §29, Resilience &amp; Business Continuity]</code> assesses whether a partial failure
+          degrades a response instead of failing it, and <code>[Rubric §30, Compliance / Privacy / Data Governance]</code> assesses whether a legal obligation is actually met under fault. A data-subject access
+          request is a deadline with a statutory obligation attached, and this document is assembled by
+          fanning out over contributors that in an extracted topology are <strong>other services</strong>. If any one of
+          them being unreachable failed the whole export, one peer outage would deny the subject their entire
+          package. So the shape carries the outcome instead: an unreachable contributor still produces an
+          envelope, with <code>Available = false</code> and a caller-safe reason. The doc comment states the invariant
+          the reader depends on (lines 67-70): <code>Available = false</code> means &quot;incomplete, retry later&quot;, <strong>not</strong>
+          &quot;the subject has no data here&quot;. Without that flag those two cases are the same empty payload, and a
+          subject could be told their record is empty when a service was simply down.</p>
+          <p>The second half of the concept is the <strong>caller-safe</strong> reason string (lines 82-86): it explicitly
+          never carries exception messages, stack traces, connection strings or peer addresses, because this
+          string is handed to the data subject. <code>[Rubric §11, Security]</code> applies: an error surface that leaks
+          infrastructure detail to an unauthenticated-adjacent audience is a disclosure bug, and the diagnostic
+          detail belongs in the log instead. The producer honours that split, logging the exception and
+          substituting a fixed generic reason
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs:187-197</code>).</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: four <code>init</code>-only properties, no behavior, each with an explicit <code>[DataMember(Order = n)]</code> so the wire order is declared rather than inherited from declaration order.</p>
+          <ul>
+          <li><code>SectionName</code> (<code>required</code>, Order 1, line 65): the stable identifier for the section, for example
+          &quot;Engagement&quot; or &quot;Sales&quot;.</li>
+          <li><code>Available</code> (<code>required</code>, Order 2, line 72): whether the section was produced successfully. Both
+          of these are <code>required</code>, so a section envelope cannot be constructed without answering the two
+          questions the reader must have.</li>
+          <li><code>Data</code> (Order 3, line 80): the contributor&#39;s own payload, or <code>null</code> when the section is
+          unavailable. Typed <code>object</code> for the same reason <a href="#userdataexportdto"><code>UserDataExportDTO</code></a><code>.Subject</code>
+          is (taught there): the payload shape is owned by the contributor, not by the framework.</li>
+          <li><code>UnavailableReason</code> (Order 4, line 88): the short caller-safe explanation, <code>null</code> when the section
+          is available.</li>
+          </ul>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/076-data-subject-export.html" target="_blank" rel="noopener">ADR-076</a>
+          makes per-section degradation the rule rather than an implementation detail, and the two <code>required</code>
+          members are what stop a producer from emitting an ambiguous envelope. <code>sealed record</code> gives value
+          equality and <code>init</code>-only immutability for free, so an assembled package cannot be mutated on its way
+          out.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: produced by
+          <a href="group-14-module-system-composition.html#exportuserdatahandlerbasetuser-tquery"><code>ExportUserDataHandlerBase&lt;TUser, TQuery&gt;</code></a><code>.RunSectionAsync</code>
+          on both the success path (<code>ExportUserDataHandlerBase.cs:177-183</code>, copying the fields off the
+          contributor&#39;s <a href="group-14-module-system-composition.html#userdataexportsectionresult"><code>UserDataExportSectionResult</code></a>)
+          and the degraded path (<code>:192-197</code>, stamping
+          <a href="group-14-module-system-composition.html#userdataexportsectiondefaults"><code>UserDataExportSectionDefaults</code></a><code>.UnavailableReason</code>);
+          collected into <code>Sections</code> at <code>:104-107</code> and <code>:116</code>.</p>
+          </li>
           </ul>
           <h3 id="keyedsemaphorestripe">KeyedSemaphoreStripe</h3>
           <blockquote>
@@ -2692,7 +2868,7 @@
           <ul>
           <li><code>DefaultWidth = 256</code> (line 25): the default stripe count, documented as &quot;ample concurrency without
           a meaningful memory cost&quot; (line 24). It is <code>public const</code>, which is what lets a test compute a
-          deliberate collision (see Testability below).</li>
+          deliberate collision (see Caveats below).</li>
           <li><code>private readonly SemaphoreSlim[] _stripes</code> (line 27): the fixed table.</li>
           <li>Parameterless constructor (lines 30-33): chains to the width overload with <code>DefaultWidth</code>.</li>
           <li><code>KeyedSemaphoreStripe(int width)</code> (lines 37-47): guards with
@@ -2724,37 +2900,43 @@
           <a href="https://ivanball.github.io/docs/adr/017-request-idempotency.html" target="_blank" rel="noopener">ADR-017</a> was revised to make the
           idempotency guard an <a href="group-05-cqrs-pipeline.html#idistributedlock"><code>IDistributedLock</code></a> resolved from
           DI, keeping the stripe only as the fallback for a host that registers none
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:32-37</code> and
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:36</code> and
           <code>:197-199</code>). <code>[Rubric §7, Microservices Readiness]</code> is the lens here: a primitive that is correct on
           one node and insufficient on several is exactly the kind of assumption an extraction has to
           re-examine.</p>
           </li>
-          <li><p><strong>Where it&#39;s used</strong>: four call sites, all double-check-locking a cache.
+          <li><p><strong>Where it&#39;s used</strong>: five call sites, all double-check-locking a cache.
           <a href="group-12-api-hosting-mapping.html#idempotencyfilter"><code>IdempotencyFilter</code></a> holds a static instance
-          (<code>IdempotencyFilter.cs:92</code>, with the same &quot;why not one semaphore per key&quot; rationale restated at
-          <code>:84-91</code>) and runs the guarded section under it when no distributed lock is registered
-          (<code>IdempotencyFilter.cs:208-215</code>).
+          (<code>IdempotencyFilter.cs:92</code>) and runs the guarded section under it when no distributed lock is
+          registered (<code>IdempotencyFilter.cs:208-215</code>).
           <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a> holds a per-instance one
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:59</code>) so
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:62</code>) so
           concurrent SSR requests carrying the same expired cookie do not each burn the refresh token
-          (<code>:99-104</code>). <a href="group-09-caching.html#memorycacheservice"><code>MemoryCacheService</code></a> uses one to make its
+          (<code>:102-105</code>). <a href="group-09-caching.html#memorycacheservice"><code>MemoryCacheService</code></a> uses one to make its
           read-modify-write paths atomic per key
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/MemoryCacheService.cs:38</code>, <code>:101</code>,
-          <code>:112</code>, <code>:132</code>), and
+          <code>:112</code>, <code>:132</code>). The default <code>GetOrCreateAsync</code> on
+          <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a> collapses a factory stampede through an
+          <code>internal</code> non-generic holder, <code>CacheKeyLocks.Locks</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:112</code>, holder at
+          <code>:142-146</code>), and
           <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a>
-          uses a shared static set to collapse a cache stampede on the same query key
-          (<code>CachingQueryDecorator.cs:175</code> and <code>:67</code>).</p>
+          does the same for a query key through its own holder <code>QueryCacheKeyLocks</code>
+          (<code>CachingQueryDecorator.cs:89</code>, holder field at <code>:197</code>). The two holders are deliberately separate
+          tables, not one shared set: the remarks on <code>CacheKeyLocks</code> (<code>ICacheService.cs:134-141</code>) note that
+          sharing stripes across unrelated call sites would only widen the unrelated-key collisions striping
+          already tolerates.</p>
           </li>
           <li><p><strong>Caveats / not-in-source</strong>: <code>[Rubric §14, Testability]</code> shows up in an unusual way here. Because
           <code>DefaultWidth</code> is public, <code>CookieSessionRefresherTests</code> computes a key that provably lands on a
           <em>different</em> stripe rather than hoping, so the test cannot flake on the one-in-256 collision
-          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/CookieSessionRefresherTests.cs:219</code>
-          and <code>:240</code>). The primitive&#39;s own behavior is covered by
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/CookieSessionRefresherTests.cs:274</code>
+          and <code>:289-291</code>). The primitive&#39;s own behavior is covered by
           <code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Concurrency/KeyedSemaphoreStripeTests.cs</code>, which
-          drives it at <code>width: 1</code>, <code>2</code> and <code>4</code> to force collisions deterministically. Note also that
-          <code>string.GetHashCode</code> is randomized per process by default in .NET, so which key lands on which
-          stripe is stable within a run and not across runs; nothing in the design depends on it being stable
-          across runs.</p>
+          drives it at <code>width: 1</code>, <code>2</code> and <code>4</code> (<code>:40</code>, <code>:78</code>, <code>:98</code>) to force collisions deterministically.
+          Note also that <code>string.GetHashCode</code> is randomized per process by default in .NET, so which key lands
+          on which stripe is stable within a run and not across runs; nothing in the design depends on it being
+          stable across runs.</p>
           </li>
           </ul>
           <h3 id="loginrequestvalidator">LoginRequestValidator</h3>
@@ -2764,20 +2946,20 @@
           <ul>
           <li><strong>What it is</strong>: the FluentValidation rule set for <a href="#loginrequest"><code>LoginRequest</code></a>: the email must be
           present and well-formed, the password must be present. Nothing else
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/LoginRequestValidator.cs:11-21</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/LoginRequestValidator.cs:11-22</code>).</li>
           <li><strong>Depends on</strong>: FluentValidation&#39;s <code>AbstractValidator&lt;T&gt;</code> (NuGet, line 1) and
           <a href="#loginrequest"><code>LoginRequest</code></a> from <code>MMCA.Common.Shared.Auth</code> (line 2).</li>
           <li><strong>Concept introduced, validation that deliberately stops short.</strong> <code>[Rubric §11, Security]</code> assesses
           whether authentication avoids leaking information to an unauthenticated caller. The doc comment
-          (lines 6-10) is explicit that the minimalism is the design: &quot;detailed credential verification
-          happens in the authentication service to avoid leaking information about which field was wrong.&quot; A
+          (lines 6-10) is explicit that the minimalism is the design: detailed credential verification happens
+          in the authentication service to avoid leaking information about which field was wrong. A
           validator that answered &quot;no account with that email&quot; would turn the login endpoint into an account
           enumeration oracle. Instead the shape check happens here, and every credential outcome collapses
           into the single <code>Auth.InvalidCredentials</code> / &quot;Invalid email or password.&quot; failure that
           <a href="#authenticationservicebasetuser"><code>AuthenticationServiceBase&lt;TUser&gt;</code></a> returns for both a missing
           user and a wrong password
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:100-102</code> and
-          <code>:115-117</code>). <code>[Rubric §9, API &amp; Contract Design]</code> also applies: shape validation belongs at the edge
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:100-101</code> and
+          <code>:115-116</code>). <code>[Rubric §9, API &amp; Contract Design]</code> also applies: shape validation belongs at the edge
           of the request, semantic validation belongs in the workflow.</li>
           <li><strong>Walkthrough</strong>: one constructor (line 13) with two rules.<ul>
           <li><code>RuleFor(x =&gt; x.Email).NotEmpty().EmailAddress()</code> (lines 15-17), with the messages &quot;Email is
@@ -2795,10 +2977,10 @@
           because password policy and required profile fields are an application decision.</li>
           <li><strong>Where it&#39;s used</strong>: registered by <code>AddApplication()</code> via
           <code>services.AddValidatorsFromAssemblyContaining&lt;ClassReference&gt;()</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:36-39</code>); the comment there
-          records why it cannot ride on the module scan, <code>ScanModuleApplicationServices</code> only scans a module&#39;s
-          own assembly. DI then injects it into <a href="#authenticationvalidators"><code>AuthenticationValidators</code></a> as the
-          <code>IValidator&lt;LoginRequest&gt;</code>, and
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:40</code>); the comment there
+          (<code>:37-39</code>) records why it cannot ride on the module scan, <code>ScanModuleApplicationServices</code> only scans
+          a module&#39;s own assembly. DI then injects it into
+          <a href="#authenticationvalidators"><code>AuthenticationValidators</code></a> as the <code>IValidator&lt;LoginRequest&gt;</code>, and
           <a href="#authenticationservicebasetuser"><code>AuthenticationServiceBase&lt;TUser&gt;.LoginAsync</code></a> runs it first
           (<code>AuthenticationServiceBase.cs:77-81</code>).</li>
           </ul>
@@ -2809,7 +2991,7 @@
           <ul>
           <li><strong>What it is</strong>: the sibling rule set for <a href="#refreshtokenrequest"><code>RefreshTokenRequest</code></a>: both tokens
           must be non-empty
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/RefreshTokenRequestValidator.cs:10-19</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/RefreshTokenRequestValidator.cs:10-20</code>).</li>
           <li><strong>Depends on</strong>: FluentValidation&#39;s <code>AbstractValidator&lt;T&gt;</code> (line 1) and
           <a href="#refreshtokenrequest"><code>RefreshTokenRequest</code></a> (line 2). Structurally identical to
           <a href="#loginrequestvalidator"><code>LoginRequestValidator</code></a>; the shared shape and the &quot;stop short on purpose&quot;
@@ -2828,83 +3010,94 @@
           their guesses were shaped right.</li>
           <li><strong>Where it&#39;s used</strong>: registered by the same
           <code>AddValidatorsFromAssemblyContaining&lt;ClassReference&gt;()</code> call
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:39</code>), bundled into
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:40</code>), bundled into
           <a href="#authenticationvalidators"><code>AuthenticationValidators</code></a> as the <code>IValidator&lt;RefreshTokenRequest&gt;</code>, and
           run first by
           <a href="#authenticationservicebasetuser"><code>AuthenticationServiceBase&lt;TUser&gt;.RefreshTokenAsync</code></a>
           (<code>AuthenticationServiceBase.cs:222-226</code>).</li>
           </ul>
-          <h3 id="softdeletedusercache">SoftDeletedUserCache</h3>
+          <h3 id="userdataexportdto">UserDataExportDTO</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Auth</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:17</code> · Level 1 · class (static)</p>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Privacy</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:15</code> · Level 1 · record (sealed)</p>
           </blockquote>
           <ul>
-          <li><p><strong>What it is</strong>: the shared cache contract for the <strong>soft-deleted user marker</strong> (BR-133): the key
-          shape, the marker lifetime, and a one-call helper that writes it. The API middleware reads the
-          marker on every authenticated request; the module that soft-deletes a user writes it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:6-10</code>).</p>
+          <li><p><strong>What it is</strong>: the portable data-subject export package (GDPR/CCPA access and portability): a
+          snapshot of the account itself plus one <a href="#userdataexportsectiondto"><code>UserDataExportSectionDTO</code></a>
+          envelope per registered section of the user&#39;s data
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:5-49</code>).</p>
           </li>
-          <li><p><strong>Depends on</strong>: <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a> (line 2), the
-          <code>UserIdentifierType</code> alias, and <code>System.Globalization.CultureInfo</code> (BCL, line 1).</p>
+          <li><p><strong>Depends on</strong>: <code>System.Runtime.Serialization</code>&#39;s <code>DataContract</code> / <code>DataMember</code> (BCL, line 1), the
+          <code>UserIdentifierType</code> alias, and <a href="#userdataexportsectiondto"><code>UserDataExportSectionDTO</code></a> (line 48).
+          Nothing else: it is a pure contract type, which is why it sits in <code>Shared</code> where the Application
+          handler, the API controller and any client can all see it.</p>
           </li>
-          <li><p><strong>Concept introduced, revoking a stateless credential without a per-request lookup.</strong> <code>[Rubric §11, Security]</code> assesses whether a revoked principal actually loses access, and <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses whether such a concern is factored so both ends share one
-          definition. A JWT is a bearer credential: signature validation never asks &quot;is this account still
-          active?&quot;, so soft-deleting a user leaves their already-issued access token passing validation until
-          it expires
-          (<a href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html" target="_blank" rel="noopener">ADR-047</a>). The
-          textbook fixes (a deny-list, or an account-status query on every request) reintroduce exactly the
-          per-request state that stateless JWT was chosen to avoid. This type is the middle path: a short-lived
-          cache marker written at deletion time and read cheaply on the hot path.</p>
-          <p>The <code>remarks</code> (lines 11-16) explain why the constants live in the <strong>Application</strong> layer rather than
-          next to the middleware that reads them: a downstream application deleting an account has to write
-          the exact same key the middleware reads, and a private constant in the presentation layer is
-          unreachable from an application-layer command handler. Same reasoning as
-          <a href="#idempotencyheaders"><code>IdempotencyHeaders</code></a>, applied one layer up.</p>
+          <li><p><strong>Concept introduced, the versioned envelope with app-owned payloads.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> assesses whether a contract can evolve without breaking readers, and <code>[Rubric §30, Compliance / Privacy / Data Governance]</code> assesses whether personal data is handled with an explicit,
+          documented shape. Two design choices carry the whole idea:</p>
+          <ol>
+          <li><strong><code>FormatVersion</code> is read before parsing</strong> (lines 17-22). The framework owns the <em>envelope</em>, so
+          when the envelope changes a consumer can detect it rather than guess. Crucially the version
+          covers the envelope only: an app changing its own subject or section payloads does not move it
+          (<code>ExportUserDataHandlerBase.cs:57-61</code>, where the constant <code>CurrentFormatVersion = &quot;1.0&quot;</code> lives).</li>
+          <li><strong><code>Subject</code> and each section&#39;s <code>Data</code> are typed <code>object</code></strong> (lines 32-40). This looks like a lost
+          type, and the doc comment explains why it is the point: the framework owns the envelope, each app
+          owns which of <em>its</em> fields are portable personal data, and a property typed <code>object</code> serializes
+          <strong>by its runtime type</strong> under System.Text.Json. So ADC can put its
+          <a href="group-24-identity-module.html#userdataexportsubjectdto"><code>UserDataExportSubjectDTO</code></a> in that slot and
+          Store can put a different one, with no generic parameter threaded through the controller, the
+          handler and the response type. The cost is that a <em>reader</em> deserializing back into this record
+          gets a <code>JsonElement</code> rather than the app&#39;s type, which is exactly what the round-trip test
+          asserts
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Controllers/Privacy/DataExportControllerBaseTests.cs:99</code>).</li>
+          </ol>
+          <p>The third thing to internalise is the header comment (lines 8-12): this document is <strong>PII by
+          design</strong>. It exists to hand a data subject everything an app holds about them, so it must only ever
+          be produced for the account owner (or a privileged role) and must never be logged, cached, or
+          persisted by the pipeline that serves it. The producer honours that literally: the export query
+          implements no <code>IQueryCacheable</code>, so the caching decorator does not apply to it
+          (<code>ExportUserDataHandlerBase.cs:42-45</code>). <code>[Rubric §11, Security]</code> and <code>[Rubric §13, Observability &amp; Operability]</code> pull in opposite directions here, and privacy wins: this is one payload you do not log.</p>
           </li>
-          <li><p><strong>Walkthrough</strong>: three static members, no state.</p>
+          <li><p><strong>Walkthrough</strong>: five <code>init</code>-only properties, explicit <code>[DataMember(Order = n)]</code> on each so the wire
+          order is declared rather than incidental.</p>
           <ul>
-          <li><code>MarkerDuration =&gt; TimeSpan.FromSeconds(30)</code> (line 29). The remarks (lines 22-28) justify the
-          number rather than leaving it magic: the marker only has to cover the window between the delete
-          committing and the next token validation, because once it expires the validator query is the
-          source of truth again and gives the same answer. Short-lived access tokens (15 minutes, the BR-205
-          default in <a href="#itokenservice"><code>ITokenService</code></a>) bound the rest of the exposure, so a longer marker
-          would buy nothing and would keep stale entries alive for users who were never deleted.</li>
-          <li><code>KeyFor(UserIdentifierType userId)</code> (lines 42-43): builds <code>user:deleted:{userId}</code> through
-          <code>string.Create(CultureInfo.InvariantCulture, ...)</code>. The remarks (lines 36-41) name the bug this
-          prevents: an identifier renders differently under some cultures (digit shapes, group separators),
-          so a culture-sensitive key would be written under one request&#39;s culture and missed under another,
-          silently letting a deleted user keep making requests. This is a case where the analyzer rule about
-          culture-invariant formatting is guarding a security property, not just a formatting nicety.</li>
-          <li><code>MarkDeletedAsync(ICacheService cache, UserIdentifierType userId, CancellationToken)</code> (lines
-          53-61): null-guards the cache (line 58) and writes <code>true</code> under <code>KeyFor(userId)</code> for
-          <code>MarkerDuration</code> (line 60). It returns the task without awaiting, so there is no extra async state
-          machine for a one-call passthrough.</li>
+          <li><code>FormatVersion</code> (<code>required</code>, Order 1, line 22): the envelope version, described above.</li>
+          <li><code>GeneratedOn</code> (<code>required</code>, Order 2, line 26): the UTC instant the export was produced, sourced
+          from the injected <code>TimeProvider</code> (<code>ExportUserDataHandlerBase.cs:113</code>), never <code>DateTime.UtcNow</code>.</li>
+          <li><code>UserId</code> (<code>required</code>, Order 3, line 30): the subject the export describes, in the
+          <code>UserIdentifierType</code> alias.</li>
+          <li><code>Subject</code> (Order 4, line 40): the app&#39;s account snapshot, <code>object?</code>, null when the app publishes
+          no subject fields.</li>
+          <li><code>Sections</code> (Order 5, line 48): the section envelopes, defaulting to <code>[]</code> so an export with no
+          registered contributors is an empty list rather than a null a reader has to guard. The doc comment
+          (lines 42-46) pins the two guarantees a consumer relies on: the order is the registration order,
+          and a section that could not be produced is <em>still present</em> reporting <code>Available = false</code>, so
+          &quot;no data&quot; is distinguishable from &quot;not retrieved&quot;.</li>
           </ul>
+          <p>The three <code>required</code> members mean the compiler refuses a package missing its version, timestamp or
+          subject id: the three facts that make the document self-describing.</p>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: publishing the key shape and the TTL as framework API is what keeps the
-          writer and the reader honest, and it is a precondition for the module boundary in
-          <a href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html" target="_blank" rel="noopener">ADR-047</a>:
-          Identity owns the delete, every service hosts the middleware, and the only thing they share is a
-          cache entry rather than a database. <code>[Rubric §7, Microservices Readiness]</code> applies directly, an
-          extracted service can enforce the revocation without a reference to the Identity database.</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/076-data-subject-export.html" target="_blank" rel="noopener">ADR-076</a>
+          hoists the export idiom ADC and Store each wrote by hand into one framework contract, mirroring the
+          delete-handler shape, and makes per-section degradation the rule. <code>sealed record</code> with <code>init</code>-only
+          members gives an immutable, structurally-equal document, which is what lets a test compare an
+          assembled package by value. Erasure (the other half of the data-subject story) is a separate
+          decision, <a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>.</p>
           </li>
-          <li><p><strong>Where it&#39;s used</strong>: read by
-          <a href="group-12-api-hosting-mapping.html#softdeletedusermiddleware"><code>SoftDeletedUserMiddleware</code></a>, which
-          builds the key (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:85</code>),
-          short-circuits with 401 when the marker is <code>true</code> (<code>:102-106</code>), and on a miss falls back to the
-          validator query and caches <strong>that</strong> answer, deleted or not, for the same <code>MarkerDuration</code>
-          (<code>:131-133</code>). Written by the Identity delete path: ADC&#39;s
-          <a href="group-24-identity-module.html#deleteuserhandler"><code>DeleteUserHandler</code></a> queues it as an after-commit
-          action and swallows a cache fault so a failed marker cannot turn a successful erasure into an error
-          the caller would retry
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:56-68</code>).</p>
+          <li><p><strong>Where it&#39;s used</strong>: assembled by
+          <a href="group-14-module-system-composition.html#exportuserdatahandlerbasetuser-tquery"><code>ExportUserDataHandlerBase&lt;TUser, TQuery&gt;</code></a>,
+          whose whole contract is <code>IQueryHandler&lt;TQuery, Result&lt;UserDataExportDTO&gt;&gt;</code>
+          (<code>ExportUserDataHandlerBase.cs:53</code>, assembly at <code>:110-117</code>). Served by
+          <a href="group-12-api-hosting-mapping.html#dataexportcontrollerbasetquery"><code>DataExportControllerBase&lt;TQuery&gt;</code></a>,
+          which deliberately serializes it to UTF-8 bytes and returns a <code>File(...)</code> download rather than
+          <code>Ok(export)</code>, because the document exists to be saved by the person it describes
+          (<code>DataExportControllerBase.cs:104-110</code>), naming the file from the package&#39;s own <code>GeneratedOn</code> so the
+          name and the document always agree (<code>:134-135</code>).</p>
           </li>
-          <li><p><strong>Caveats / not-in-source</strong>: the marker is best effort on both ends by design. The middleware fails
-          <strong>open</strong> on a cache outage (falling through to the validator query, and proceeding if that is also
-          unavailable, <code>SoftDeletedUserMiddleware.cs:93-100</code> and <code>:118-125</code>), and the writer logs and
-          continues on a cache fault. The exposure that leaves is bounded by the access-token lifetime, which
-          is the trade-off ADR-047 accepts explicitly. ADC&#39;s handler is the only writer in the source tree
-          today; MMCA.Store soft-deletes users without writing the marker.</p>
+          <li><p><strong>Caveats / not-in-source</strong>: the shipped controller base has no production subclass in this
+          workspace today. Both apps keep their earlier standalone export endpoints, which return the same
+          <code>UserDataExportDTO</code> inline via <code>Ok(result.Value)</code> with no feature gate and no file download
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:153-168</code>,
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs:39-54</code>).
+          ADR-076 records that non-adoption explicitly; the type itself is shared by both paths.</p>
           </li>
           </ul>
           <h3 id="iloginprotectionservice">ILoginProtectionService</h3>
@@ -2944,10 +3137,85 @@
           the null-IP &quot;skip&quot; keeps the limiter from becoming an availability hazard
           (<a href="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html" target="_blank" rel="noopener">ADR-029</a>).</p>
           </li>
-          <li><p><strong>Where it&#39;s used</strong>: injected into <a href="#authenticationservicebasetuser"><code>AuthenticationServiceBase&lt;TUser&gt;</code></a>,
-          which calls all five methods across its login and registration flows; the concrete, cache-backed
+          <li><p><strong>Where it&#39;s used</strong>: injected into <a href="#authenticationservicebasetuser"><code>AuthenticationServiceBase&lt;TUser&gt;</code></a>
+          (constructor, <code>AuthenticationServiceBase.cs:38</code>), which calls all five methods across its login and
+          registration flows (<code>:84</code>, <code>:99</code>, <code>:114</code>, <code>:128</code>, <code>:146</code>, <code>:207</code>); the concrete, cache-backed
           <a href="#loginprotectionservice"><code>LoginProtectionService</code></a> (tuned by
           <a href="#loginprotectionsettings"><code>LoginProtectionSettings</code></a>) implements it.</p>
+          </li>
+          </ul>
+          <h3 id="softdeletedusercache">SoftDeletedUserCache</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Auth</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:17</code> · Level 4 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: the shared cache contract for the <strong>soft-deleted user marker</strong> (BR-133): the key
+          shape, the marker lifetime, and a one-call helper that writes it. The API middleware reads the
+          marker on every authenticated request; the module that soft-deletes a user writes it
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:6-10</code>).</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a> (line 2), the
+          <code>UserIdentifierType</code> alias, and <code>System.Globalization.CultureInfo</code> (BCL, line 1).</p>
+          </li>
+          <li><p><strong>Concept introduced, revoking a stateless credential without a per-request lookup.</strong> <code>[Rubric §11, Security]</code> assesses whether a revoked principal actually loses access, and <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses whether such a concern is factored so both ends share one
+          definition. A JWT is a bearer credential: signature validation never asks &quot;is this account still
+          active?&quot;, so soft-deleting a user leaves their already-issued access token passing validation until
+          it expires
+          (<a href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html" target="_blank" rel="noopener">ADR-047</a>). The
+          textbook fixes (a deny-list, or an account-status query on every request) reintroduce exactly the
+          per-request state that stateless JWT was chosen to avoid. This type is the middle path: a short-lived
+          cache marker written at deletion time and read cheaply on the hot path.</p>
+          <p>The <code>remarks</code> (lines 11-16) explain why the constants live in the <strong>Application</strong> layer rather than
+          next to the middleware that reads them: a downstream application deleting an account has to write
+          the exact same key the middleware reads, and a private constant in the presentation layer is
+          unreachable from an application-layer command handler. Same reasoning as
+          <a href="#idempotencyheaders"><code>IdempotencyHeaders</code></a>, applied one layer up.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: three static members, no state.</p>
+          <ul>
+          <li><code>MarkerDuration =&gt; TimeSpan.FromSeconds(30)</code> (line 29). The remarks (lines 22-28) justify the
+          number rather than leaving it magic: the marker only has to cover the window between the delete
+          committing and the next token validation, because once it expires the validator query is the
+          source of truth again and gives the same answer. Short-lived access tokens (15 minutes, the BR-205
+          default on <a href="#itokenservice"><code>ITokenService</code></a>) bound the rest of the exposure, so a longer marker
+          would buy nothing and would keep stale entries alive for users who were never deleted.</li>
+          <li><code>KeyFor(UserIdentifierType userId)</code> (lines 42-43): builds <code>user:deleted:{userId}</code> through
+          <code>string.Create(CultureInfo.InvariantCulture, ...)</code>. The remarks (lines 36-41) name the bug this
+          prevents: an identifier renders differently under some cultures (digit shapes, group separators),
+          so a culture-sensitive key would be written under one request&#39;s culture and missed under another,
+          silently letting a deleted user keep making requests. This is a case where the analyzer rule about
+          culture-invariant formatting is guarding a security property, not just a formatting nicety.</li>
+          <li><code>MarkDeletedAsync(ICacheService cache, UserIdentifierType userId, CancellationToken)</code> (lines
+          53-61): null-guards the cache (line 58) and writes <code>true</code> under <code>KeyFor(userId)</code> for
+          <code>MarkerDuration</code> (line 60). It returns the task without awaiting, so there is no extra async state
+          machine for a one-call passthrough.</li>
+          </ul>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: publishing the key shape and the TTL as framework API is what keeps the
+          writer and the reader honest, and it is a precondition for the module boundary in
+          <a href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html" target="_blank" rel="noopener">ADR-047</a>:
+          Identity owns the delete, every service hosts the middleware, and the only thing they share is a
+          cache entry rather than a database. <code>[Rubric §7, Microservices Readiness]</code> applies directly, an
+          extracted service can enforce the revocation without a reference to the Identity database.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: read by
+          <a href="group-12-api-hosting-mapping.html#softdeletedusermiddleware"><code>SoftDeletedUserMiddleware</code></a>, which
+          builds the key (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:85</code>),
+          short-circuits with 401 when the marker is <code>true</code> (<code>:102-106</code>), and on a miss falls back to the
+          validator query and caches <strong>that</strong> answer, deleted or not, for the same <code>MarkerDuration</code>
+          (<code>:131-133</code>). Written by the Identity delete path: ADC&#39;s
+          <a href="group-24-identity-module.html#deleteuserhandler"><code>DeleteUserHandler</code></a> queues it as an after-commit
+          action and swallows a cache fault so a failed marker cannot turn a successful erasure into an error
+          the caller would retry
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:68-80</code>,
+          inside the <code>OnAfterSoftDeleteAsync</code> override at <code>:46</code>).</p>
+          </li>
+          <li><p><strong>Caveats / not-in-source</strong>: the marker is best effort on both ends by design. The middleware fails
+          <strong>open</strong> on a cache outage (falling through to the validator query, and proceeding if that is also
+          unavailable, <code>SoftDeletedUserMiddleware.cs:93-100</code> and <code>:118-125</code>), and the writer logs and
+          continues on a cache fault. The exposure that leaves is bounded by the access-token lifetime, which
+          is the trade-off ADR-047 accepts explicitly. ADC&#39;s handler is the only writer in the source tree
+          today; MMCA.Store soft-deletes users without writing the marker.</p>
           </li>
           </ul>
           <h3 id="authenticationvalidators">AuthenticationValidators</h3>
@@ -3168,12 +3436,12 @@
           <a href="group-24-identity-module.html#authenticationservice"><code>AuthenticationService</code></a> (for example
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:35</code>,
           which binds <code>TUser = User</code>, adds the Attendee default role (BR-45) and the <code>speaker_id</code> claim
-          (BR-209), and re-lists <code>IAuthenticationService</code> so it can re-implement <code>RegisterAsync</code> and
-          <code>ExternalLoginAsync</code> outright: ADC raises its <code>UserRegistered</code> integration event inside one
-          <code>ExecuteInTransactionAsync</code> unit rather than through the <code>OnUserRegisteredAsync</code> hook, because the
-          identity column means the id does not exist until the first save
-          (<code>AuthenticationService.cs:14-32</code>, <code>:44</code>). MMCA.Store supplies its own subclass with a <code>customer_id</code>
-          claim. Consumed by the Identity API controllers via the
+          (BR-209, built at <code>:249-252</code>), and re-lists <code>IAuthenticationService</code> so it can re-implement
+          <code>RegisterAsync</code> (<code>:57-62</code>) and <code>ExternalLoginAsync</code> (<code>:130-137</code>) outright: ADC raises its
+          registration side-effects inside one <code>ExecuteInTransactionAsync</code> unit rather than through the
+          <code>OnUserRegisteredAsync</code> hook, because the identity column means the id does not exist until the first
+          save (<code>AuthenticationService.cs:16-32</code>, <code>:44</code>). MMCA.Store supplies its own subclass with a
+          <code>customer_id</code> claim. Consumed by the Identity API controllers via the
           <a href="#iauthenticationservice"><code>IAuthenticationService</code></a> port.</li>
           <li><strong>Caveats / not-in-source</strong>: the <code>user_id</code> claim is parsed with <code>int.TryParse</code> (line 238), so the
           refresh flow assumes <code>UserIdentifierType</code> is <code>int</code> (the framework alias today, per
@@ -3201,6 +3469,7 @@
             <li><a href="#reading-identity-from-claims">Reading identity from claims</a></li>
             <li><a href="#authorization-roles-permissions-ownership">Authorization: roles, permissions, ownership</a></li>
             <li><a href="#session-cookies-keeping-ssr-authenticated">Session cookies: keeping SSR authenticated</a></li>
+            <li><a href="#privacy-the-data-subject-export-package">Privacy: the data-subject export package</a></li>
             <li><a href="#shared-primitives-and-adjacent-members">Shared primitives and adjacent members</a></li>
             </ul>
           </nav>

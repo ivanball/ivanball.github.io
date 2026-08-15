@@ -4,16 +4,17 @@
 **Conference bounded context**, the largest and richest domain in MMCA.ADC. It models everything an
 organizer curates and an attendee browses: the **Event** (the conference itself, with its rooms,
 speaker roster, and venue details), the **Session** (a talk on the schedule), the **Speaker**, the
-**Category**/**CategoryItem** taxonomy (tracks, levels, session formats), and the **Question**/answer
-machinery that captures structured metadata about events, sessions, and speakers. Five aggregate
-roots, a sixth AI-scoring aggregate, a dozen child entities, the static **invariant** classes that
-guard their business rules, the **domain events** every mutation raises, a pure **domain service**
-that coordinates the cross-aggregate cascade delete, and, across the package boundary in
-`MMCA.ADC.Conference.Shared`, the **DTO contracts**, the cross-module **service interfaces** the
-Engagement module calls, the **integration events** that keep the User-to-Speaker link consistent
-across services, and the **decision-support** read models that power the organizer's session-selection
-dashboard. The detailed per-type sections follow; this overview shows how the pieces fit and how a
-single change flows through them.
+**Sponsor** (the sold sponsorship and expo-booth record), the **Category**/**CategoryItem** taxonomy
+(tracks, levels, session formats), and the **Question**/answer machinery that captures structured
+metadata about events, sessions, and speakers. Seven aggregate roots (one of them an AI scorecard), a
+dozen child entities, the static **invariant** classes that guard their business rules, the **domain
+events** every mutation raises, a pure **domain service** that coordinates the cross-aggregate cascade
+delete, and, across the package boundary in `MMCA.ADC.Conference.Shared`, the **DTO contracts**, the
+cross-module **service interfaces** the Engagement module calls, the **integration events** that keep
+the User-to-Speaker link and the engagement points ledger consistent across services, and the
+**decision-support** read models that power the organizer's session-selection dashboard. The detailed
+per-type sections follow; this overview shows how the pieces fit and how a single change flows through
+them.
 
 This chapter is almost entirely an *instantiation* of the framework taught in groups 1 through 14,
 applied to a real, non-trivial domain. If a pattern here looks unfamiliar, it was introduced upstream
@@ -21,7 +22,8 @@ and is only cross-referenced now: the [`Result`](group-01-result-error-handling.
 (G01), the
 [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
 entity hierarchy, the [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute)
-marker, and [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (G02), the
+marker, the [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity) change-history opt-in,
+and [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (G02), the
 [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype)
 event base and the outbox spine (G04), the
 [`INavigationPopulator<in TEntity>`](group-11-navigation-populators.md#inavigationpopulatorin-tentity)
@@ -29,8 +31,8 @@ cross-container eager-loading extension point (G11), and the
 [`IModule`](group-14-module-system-composition.md#imodule) composition system (G14). The lens this
 chapter most strongly embodies is `[Rubric §4, Domain-Driven Design]` (does the model mirror the
 business: aggregates, value objects, invariants, ubiquitous language?): this is the codebase's most
-complete DDD specimen, and it is worth reading slowly, because the same shapes repeat across all five
-aggregates.
+complete DDD specimen, and it is worth reading slowly, because the same shapes repeat across every
+aggregate.
 
 ## Two packages, one bounded context
 
@@ -43,7 +45,8 @@ returned by the API, the cross-module validation interfaces the Engagement modul
 ([`ISessionBookmarkValidationService`](#isessionbookmarkvalidationservice) and
 [`IEventLiveValidationService`](#ieventlivevalidationservice)), the
 [`SpeakerLinkedToUser`](#speakerlinkedtouser)/[`SpeakerUnlinkedFromUser`](#speakerunlinkedfromuser)
-integration events Identity subscribes to, and the feature-flag, permission, and status constants.
+and [`SessionFeedbackSubmitted`](#sessionfeedbacksubmitted)/[`EventFeedbackSubmitted`](#eventfeedbacksubmitted)
+integration events other modules subscribe to, and the feature-flag, permission, and status constants.
 `Shared` is the package every other layer, including the Blazor WebAssembly UI, can reference without
 dragging in the domain. The [`AssemblyReference`](#assemblyreference)/[`ClassReference`](#classreference)
 anchor pair in `Domain`
@@ -51,36 +54,48 @@ anchor pair in `Domain`
 trivial type that assembly scanning and the architecture-fitness tests pin to when they need to *name*
 the Conference domain assembly.
 
-## Five aggregates, a sixth scorecard, and their ownership boundaries
+## Seven aggregates and their ownership boundaries
 
 An **aggregate** is a root entity plus the children it exclusively owns; invariants are enforced
-*inside* the boundary, and references *across* aggregates are by ID, never by object graph. The
-Conference context has five roots, all deriving from
-[`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
-so they inherit soft-delete, audit stamping, and the buffered `DomainEvents` collection:
+*inside* the boundary, and references *across* aggregates are by ID, never by object graph. Every root
+here derives from
+[`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype),
+so it inherits soft-delete, audit stamping, and the buffered `DomainEvents` collection:
 
 - [`Event`](#event)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:17`) owns
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:23`) owns
   [`Room`](#room) (the physical rooms), [`EventSpeaker`](#eventspeaker) (the speaker roster, a join to
   `Speaker` *by ID*), and [`EventQuestionAnswer`](#eventquestionanswer) (event-level structured
-  answers). Its `Id` is database-generated (marked `[IdValueGenerated]`, `Event.cs:16`).
+  answers). Its `Id` is database-generated (marked `[IdValueGenerated]`, `Event.cs:22`), and it also
+  carries the per-event live-layer moderation default (`Event.cs:71`), the published flag
+  (`Event.cs:65`), the organizer contact email and sponsorship packet URL that drive the public pages
+  (`Event.cs:56,62`), and the Sessionize refresh stamp written by `RecordSessionizeRefresh`
+  (`Event.cs:74,77,302`).
 - [`Session`](#session)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:16`) owns
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:22`) owns
   [`SessionSpeaker`](#sessionspeaker), [`SessionCategoryItem`](#sessioncategoryitem), and
   [`SessionQuestionAnswer`](#sessionquestionanswer). Critically, a Session references its `Event` and
-  `Room` by scalar FK (`EventId` at `Session.cs:58`, `RoomId` at `Session.cs:61`): they are *separate*
-  aggregates, even though the model exposes `Event`/`Room` navigations (`Session.cs:64-69`, both
+  `Room` by scalar FK (`EventId` at `Session.cs:64`, `RoomId` at `Session.cs:67`): they are *separate*
+  aggregates, even though the model exposes `Event`/`Room` navigations (`Session.cs:69-75`, both
   `[Navigation]`-decorated with public setters so the populator and query filtering can hydrate them)
   used only for read-side filtering, never to reach across the boundary and mutate. Session `Id`s are
   Sessionize-assigned, not database-generated, and `Duration` is a computed property over
-  `StartsAt`/`EndsAt` rather than a stored column (`Session.cs:74-76`).
+  `StartsAt`/`EndsAt` rather than a stored column (`Session.cs:80-82`).
 - [`Speaker`](#speaker)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:15`) owns
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:22`) owns
   [`SpeakerCategoryItem`](#speakercategoryitem) and [`SpeakerQuestionAnswer`](#speakerquestionanswer),
-  holds an optional `Email` [value object](group-02-domain-building-blocks.md#email) (`Speaker.cs:24`),
-  and carries the cross-module `LinkedUserId` FK to an Identity `User` (`Speaker.cs:51`). Speaker `Id`s
+  holds an optional `Email` [value object](group-02-domain-building-blocks.md#email) (`Speaker.cs:31`),
+  and carries the cross-module `LinkedUserId` FK to an Identity `User` (`Speaker.cs:58`). Speaker `Id`s
   are Sessionize-assigned GUIDs, with a fallback to `Guid.NewGuid()` for organizer-created and seeded
-  speakers (see the in-code note at `Speaker.cs:141-146`).
+  speakers (see the in-code note at `Speaker.cs:148-153`).
+- [`Sponsor`](#sponsor)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/Sponsor.cs:18`) is a flat
+  root belonging to exactly one event by scalar `EventId` (`Sponsor.cs:45`, with a read-only
+  `[Navigation]` `Event` for public visibility filtering at `Sponsor.cs:49`). It carries a
+  [`SponsorTier`](#sponsortier) that drives public placement, branding links, and the optional expo
+  booth (`IsExhibitor`/`BoothNumber`, `Sponsor.cs:52,58`); its `Id` is database-generated
+  (`Sponsor.cs:17`) because sponsors are sold, not imported from Sessionize. Moving a sponsor between
+  events is deliberately not an update: `Update` omits the event entirely (`Sponsor.cs:153`).
 - [`Category`](#category)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:16`) owns
   [`CategoryItem`](#categoryitem): the taxonomy roots ("Level", "Track", "Session format") and their
@@ -89,19 +104,29 @@ so they inherit soft-delete, audit stamping, and the buffered `DomainEvents` col
 - [`Question`](#question)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/Question.cs:14`) is a flat
   aggregate (no children); its answers live on the *other* aggregates as `*QuestionAnswer` join
-  entities, keyed by `QuestionId`.
+  entities, keyed by `QuestionId`. Its three free-text enum-like fields (`QuestionEntity`,
+  `QuestionType`, `QuestionSource`, `Question.cs:20,23,32`) are validated against allow-lists rather
+  than modeled as C# enums, so an unfamiliar Sessionize value fails validation instead of breaking
+  deserialization.
+- [`SessionAiScore`](#sessionaiscore)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:13`) is an
+  AI-generated scorecard for a session: an overall score plus six per-criteria scores, all `decimal`
+  (`SessionAiScore.cs:19-37`), together with the model's reasoning and model identifier
+  (`SessionAiScore.cs:40-43`), each score range-guarded to 1.0 through 10.0 by a private helper
+  (`SessionAiScore.cs:134-141`). It is stored one per session and replaced on re-scoring through
+  `Update` (`SessionAiScore.cs:98`), and it is the persistence side of the decision-support feature
+  described below. That a *scorecard* is modeled as its own aggregate, referencing the Session by scalar
+  `SessionId` (`SessionAiScore.cs:16`) rather than nesting under it, is a clean aggregate-boundary call:
+  scores have an independent lifecycle (computed asynchronously, re-run on demand) and should not be
+  loaded every time a Session is read. It is also the one root here that raises no domain events: no
+  other part of the system reacts to a score being written.
 
-A sixth root, [`SessionAiScore`](#sessionaiscore)
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:13`), is an
-AI-generated scorecard for a session: an overall score plus six per-criteria scores, all `decimal`
-(`SessionAiScore.cs:19-37`), together with the model's reasoning and model identifier
-(`SessionAiScore.cs:40-43`), each score range-guarded to 1.0 through 10.0 by a private helper
-(`SessionAiScore.cs:134-141`). It is stored one per session and replaced on re-scoring through
-`Update` (`SessionAiScore.cs:98`), and it is the persistence side of the decision-support feature
-described below. That a *scorecard* is modeled as its own aggregate, referencing the Session by scalar
-`SessionId` (`SessionAiScore.cs:16`) rather than nesting under it, is a clean aggregate-boundary call:
-scores have an independent lifecycle (computed asynchronously, re-run on demand) and should not be
-loaded every time a Session is read.
+Three of the roots opt into the framework's change-history trail by also implementing
+[`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity): `Event` (`Event.cs:23`),
+`Session` (`Session.cs:22`), and `Speaker` (`Speaker.cs:22`). The in-code rationale is worth reading
+(`Event.cs:16-20`, `Session.cs:16-20`, `Speaker.cs:15-20`): these three are written by organizers *and*
+overwritten by the Sessionize sync, and "which edit moved this, and was it a person or the importer" is
+a question that only a history answers. Sponsors, categories, and questions do not carry that cost.
 
 ## The aggregate shape, taught once
 
@@ -109,42 +134,49 @@ Open any of the roots and you will see the *same* skeleton; this repetition is t
 what makes the per-type sections that follow read quickly. The shape, using [`Event`](#event) as the
 exemplar:
 
-1. **Private-setter properties** (`Name { get; private set; }`, `Event.cs:20`): state can only change
+1. **Private-setter properties** (`Name { get; private set; }`, `Event.cs:26`): state can only change
    through the aggregate's own methods, never by an outside caller assigning a property. This is
    encapsulation as a compile-time guarantee (`[Rubric §4, Domain-Driven Design]`, `[Rubric §1,
    SOLID]`).
-2. **Backing-field collections exposed as `IReadOnlyCollection<T>`** (`_rooms` at `Event.cs:61` becomes
-   `Rooms => _rooms.AsReadOnly()` at `Event.cs:65`). Children can only be added, updated, or removed
+2. **Backing-field collections exposed as `IReadOnlyCollection<T>`** (`_rooms` at `Event.cs:79` becomes
+   `Rooms => _rooms.AsReadOnly()` at `Event.cs:83`). Children can only be added, updated, or removed
    through `AddRoom`/`UpdateRoom`/`RemoveRoom`-style methods that enforce invariants (for example the
-   duplicate-name rejection at `Event.cs:335-342`). Most collections are decorated
+   duplicate-name rejection at `Event.cs:687-704`). Most collections are decorated
    `[Navigation(IsCollection = true)]` so the navigation-populator machinery (G11) eager-loads them,
-   but two deliberately are **not**: `Event.EventQuestionAnswers` (`Event.cs:78-85`) and
-   `Session.SessionQuestionAnswers` (`Session.cs:89-98`) opt out because those collections grow with
+   but two deliberately are **not**: `Event.EventQuestionAnswers` (`Event.cs:93-103`) and
+   `Session.SessionQuestionAnswers` (`Session.cs:92-104`) opt out because those collections grow with
    attendance rather than with the schedule and were riding along on hot anonymous public reads that
    never render them. Handlers that genuinely need them pass an explicit `includes:` list. That is a
    `[Rubric §12, Performance & Scalability]` decision expressed as a deliberately absent attribute.
-3. **A private EF Core constructor** (`Event.cs:88`, for materialization) plus a **private state
-   constructor** (`Event.cs:94`) used only by the factory.
+3. **A private EF Core constructor** (`Event.cs:106`, for materialization) plus a **private state
+   constructor** (`Event.cs:112`) used only by the factory.
 4. **A static `Create(...)` factory returning [`Result<T>`](group-01-result-error-handling.md#result)**
-   (`Event.cs:131`): it validates invariants via `Result.Combine(...)` *before* constructing anything
-   (`Event.cs:144-147`), so an invalid aggregate is unrepresentable, then raises an `Added` domain
-   event (`Event.cs:168`). The `isIdValueGenerated ? default : id!.Value` dance (`Event.cs:151,164`)
+   (`Event.cs:155`): it validates invariants via `Result.Combine(...)` *before* constructing anything
+   (`Event.cs:170-173`), so an invalid aggregate is unrepresentable, then raises an `Added` domain
+   event (`Event.cs:196`). The `isIdValueGenerated ? default : id!.Value` dance (`Event.cs:177,192`)
    reconciles database-generated IDs with explicitly supplied ones. Each root spells that
    reconciliation slightly differently: [`Speaker`](#speaker) generates a GUID when no id is supplied
-   (`Speaker.cs:146`), and [`Category`](#category) throws for a missing id when identity is not
+   (`Speaker.cs:153`), and [`Category`](#category) throws for a missing id when identity is not
    database-generated (`Category.cs:69`).
-5. **Mutator methods** (`Update` at `Event.cs:187`, `Publish`/`Unpublish` at `Event.cs:224,244`,
-   `LinkUser`/`UnlinkUser` on Speaker at `Speaker.cs:244,262`) that re-validate, mutate, and raise an
+5. **Mutator methods** (`Update` at `Event.cs:217`, `Publish`/`Unpublish` at `Event.cs:258,278`,
+   `LinkUser`/`UnlinkUser` on Speaker at `Speaker.cs:260,278`) that re-validate, mutate, and raise an
    `Updated` event. Lifecycle guards return failures rather than throwing: publishing an already
-   published event yields the `"Event.AlreadyPublished"` invariant error (`Event.cs:228-232`).
-6. **An overridden `Delete()`** (`Event.cs:280`) that calls `base.Delete()` (the soft-delete from G02),
+   published event yields the `"Event.AlreadyPublished"` invariant error (`Event.cs:262-266`).
+6. **An overridden `Delete()`** (`Event.cs:314`) that calls `base.Delete()` (the soft-delete from G02),
    then **cascade-soft-deletes each owned child** (rooms, event speakers, and event answers at
-   `Event.cs:286-305`) and raises a `Deleted` event (`Event.cs:307`). [`Session`](#session) does the
-   same for its three child collections (`Session.cs:271-298`), [`Category`](#category) for its items
-   (`Category.cs:102-116`), and [`Speaker`](#speaker) uses its override for a different job: clearing
-   the cross-context link (`Speaker.cs:223-235`). Soft-delete is the default everywhere (`[Rubric §8,
-   Data Architecture]`: the `IsDeleted` flag plus EF Core global query filters, never a hard `DELETE`).
-7. **`internal SetX(...)` methods** (`Event.cs:414,474,551`) delegating to the framework's `SetItems`
+   `Event.cs:320-339`) and raises a `Deleted` event (`Event.cs:341`). [`Session`](#session) does the
+   same for its three child collections (`Session.cs:283-304`), [`Category`](#category) for its items
+   (`Category.cs:109-116`), [`Sponsor`](#sponsor) has nothing to cascade to and simply raises its
+   `Deleted` event (`Sponsor.cs:190-197`), and [`Speaker`](#speaker) uses its override for a different
+   job: clearing the cross-context link (`Speaker.cs:239-253`). Soft-delete is the default everywhere
+   (`[Rubric §8, Data Architecture]`: the `IsDeleted` flag plus EF Core global query filters, never a
+   hard `DELETE`; [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)).
+7. **Restore methods for the Sessionize round-trip** (`RestoreRoom` at `Event.cs:439`,
+   `RestoreEventSpeaker` at `Event.cs:548`, and the equivalents on Session and Speaker): a re-imported
+   child that was previously soft-deleted is reactivated in place rather than re-inserted. A restore
+   has to clear the same uniqueness bar as an add, which is why `RestoreRoom` re-runs the duplicate-name
+   check before reactivating (`Event.cs:455`).
+8. **`internal SetX(...)` methods** (`Event.cs:500,596,673`) delegating to the framework's `SetItems`
    helper: the hooks the navigation populators call to hydrate the read-only collections after a batch
    load.
 
@@ -157,15 +189,17 @@ joins, the three `*QuestionAnswer` types) and their `*Changed` domain events are
 Each aggregate has a co-located static **invariant class**, [`EventInvariants`](#eventinvariants)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:10`),
 [`SessionInvariants`](#sessioninvariants), [`SpeakerInvariants`](#speakerinvariants),
-[`CategoryInvariants`](#categoryinvariants), and [`QuestionInvariants`](#questioninvariants), whose
-methods each return a [`Result`](group-01-result-error-handling.md#result) and are combined with
-`Result.Combine(...)` in the factory and mutators. They build on
+[`SponsorInvariants`](#sponsorinvariants), [`CategoryInvariants`](#categoryinvariants), and
+[`QuestionInvariants`](#questioninvariants), whose methods each return a
+[`Result`](group-01-result-error-handling.md#result) and are combined with `Result.Combine(...)` in the
+factory and mutators. They build on
 [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (G02) for the generic
 string-not-empty and max-length checks and add domain-specific rules. They also carry the **length
 constants shared with the EF Core configuration**, so the domain rule and the column constraint can
-never drift (`EventInvariants.cs:13-46`,
+never drift (`EventInvariants.cs:13-49`,
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:13-34`,
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerInvariants.cs:13-40`).
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerInvariants.cs:13-40`,
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/SponsorInvariants.cs:13-31`).
 
 The domain-specific rules are where the ubiquitous language shows up. `SessionInvariants` holds the
 BR-91 service-session guard (`SessionInvariants.cs:91`), the BR-49 status-eligibility check
@@ -175,36 +209,43 @@ BR-91 service-session guard (`SessionInvariants.cs:91`), the BR-49 status-eligib
 (`SessionInvariants.cs:41-44`, mirrored for questions at
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/QuestionInvariants.cs:37-40`).
 `QuestionInvariants` validates the free-text enum-like fields against allow-lists
-(`QuestionInvariants.cs:28-34`, checked at `:68,83,98`) and, for answers, checks each value against
-its question type: Rating must parse as an integer 1 through 5 (`QuestionInvariants.cs:128-140`), Text
-is capped at 2000 characters (`:25,142-154`), and Email must parse as a `System.Net.Mail.MailAddress`
-(`:156-171`). `CategoryInvariants` enforces case-insensitive uniqueness of an item name within its
-category (BR-138,
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryInvariants.cs:37`,
-invoked from `Category.cs:137-138`). Centralizing each rule as a named, side-effect-free method is
-what makes the domain exhaustively unit-testable (`[Rubric §14, Testability]`), and the error codes
-(`"Event.AlreadyPublished"` at `Event.cs:229`, `"Session.StatusIneligible"` at
-`SessionInvariants.cs:110`) *are* the business vocabulary. The recurring `// BR-NN` comments are
-traceability links back to the business-requirements catalogue.
+(`QuestionInvariants.cs:28,31,34`, checked at `:68,83,98`) and, for answers, checks each value against
+its question type: Rating must parse as an integer 1 through 5 (`QuestionInvariants.cs:130`), Text is
+capped at 2000 characters (`QuestionInvariants.cs:25`), and Email must parse as a
+`System.Net.Mail.MailAddress` (`QuestionInvariants.cs:160`). `CategoryInvariants` enforces
+case-insensitive uniqueness of an item name within its category (BR-138,
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryInvariants.cs:37`),
+and its in-code note explains why the exclusion parameter is nullable rather than defaulted: a
+database-generated `CategoryItem` id is 0 until the save, so a `default` exclusion would silently
+exempt every unsaved sibling (`CategoryInvariants.cs:43-45`). Centralizing each rule as a named,
+side-effect-free method is what makes the domain exhaustively unit-testable (`[Rubric §14,
+Testability]`), and the error codes (`"Event.AlreadyPublished"` at `Event.cs:263`,
+`"Session.StatusIneligible"` at `SessionInvariants.cs:110`) *are* the business vocabulary. The
+recurring `// BR-NN` comments are traceability links back to the business-requirements catalogue.
 
 A nuance worth flagging: the `Status` field on Session is free text, imported verbatim from Sessionize
-(`Session.cs:31`), and [`SessionStatuses`](#sessionstatuses)
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionStatuses.cs:8`) is the
+(`Session.cs:37`), and [`SessionStatuses`](#sessionstatuses)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionStatuses.cs:14`) is the
 constant catalogue of the recognized values (`Accepted`, `Waitlisted`, `Accept_Queue`, `Nominated`,
-`Decline_Queue`, `Declined`, at `SessionStatuses.cs:11-26`, enumerated for organizer filter dropdowns
-at `SessionStatuses.cs:31`) plus the `IsEligible(...)` rule: everything except `Declined` and
-`Cancelled` is eligible for public display, bookmarking, and feedback (BR-49,
-`SessionStatuses.cs:45-47`). Using `const string` values instead of a C# `enum` means an unrecognized
-Sessionize status does not break deserialization; the type lives in `Domain` because eligibility is a
-domain rule, and it is referenced from the cross-module bookmark validation too. `[Rubric §8, Data
-Architecture]` (deliberate handling of externally sourced data).
+`Decline_Queue`, `Declined`, at `SessionStatuses.cs:17-32`, enumerated for organizer filter dropdowns
+at `SessionStatuses.cs:37`) plus the `IsEligible(...)` rule. Read that rule carefully, because it is an
+**allow-list, not a deny-list**: only `Accepted`, or an unset status (organizer-created sessions never
+carry one), is eligible for public display, bookmarking, and feedback; every other value, known or
+unknown, is ineligible (BR-49, `SessionStatuses.cs:54-56`, with the reasoning at
+`SessionStatuses.cs:8-13`). Adding a constant to this class therefore does not make that status
+publicly visible, which is the safe default for a free-text field fed by an external system. Using
+`const string` values instead of a C# `enum` means an unrecognized Sessionize status does not break
+deserialization; the type lives in `Domain` because eligibility is a domain rule, and it is referenced
+from the cross-module bookmark validation too. `[Rubric §8, Data Architecture]` (deliberate handling of
+externally sourced data).
 
 ## Domain events and the outbox spine
 
 Every state-changing method raises a domain event through the inherited `AddDomainEvent(...)`. The
 events come in two shapes. The **aggregate-level** ones, [`EventChanged`](#eventchanged),
 [`SessionChanged`](#sessionchanged), [`SpeakerChanged`](#speakerchanged),
-[`CategoryChanged`](#categorychanged), and [`QuestionChanged`](#questionchanged), derive from
+[`CategoryChanged`](#categorychanged), [`QuestionChanged`](#questionchanged), and
+[`SponsorChanged`](#sponsorchanged), derive from
 [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype)
 and carry the [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate)
 (Added/Updated/Deleted) plus a friendly label, and sometimes one extra correlating field:
@@ -215,10 +256,11 @@ The **child-level** ones, [`RoomChanged`](#roomchanged), [`EventSpeakerChanged`]
 [`SessionCategoryItemChanged`](#sessioncategoryitemchanged),
 [`SpeakerCategoryItemChanged`](#speakercategoryitemchanged), [`CategoryItemChanged`](#categoryitemchanged),
 and the `*QuestionAnswerChanged` set, carry both the parent and child IDs (for example
-`RoomChanged(state, Id, room.Id, room.Name)` at `Event.cs:352`) so a consumer can target the precise
+`RoomChanged(state, Id, room.Id, room.Name)` at `Event.cs:381`) so a consumer can target the precise
 change and the module can invalidate the right output-cache tag. These are **intra-module domain
-events**: they ride the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) but are consumed inside Conference. They do not cross the
-wire to other services; that is the job of integration events.
+events**: they ride the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html))
+but are consumed inside Conference. They do not cross the wire to other services; that is the job of
+integration events.
 
 The flow is exactly the outbox spine from [G04](group-04-events-outbox.md): a mutator buffers the event
 on the aggregate; on `SaveChangesAsync` the domain-event save-changes interceptor serializes it into an
@@ -227,7 +269,7 @@ then delivers it at least once. Nothing in this chapter's code does any dispatch
 only *declare* what happened, which is the Clean Architecture division of labor (`[Rubric §6, CQRS &
 Event-Driven]`). One domain detail matters for the cross-context link: `Speaker.Delete()` captures the
 previous `LinkedUserId` *before* clearing it and passes it into the `Deleted`
-[`SpeakerChanged`](#speakerchanged) event (`Speaker.cs:226,233,235`), whose optional
+[`SpeakerChanged`](#speakerchanged) event (`Speaker.cs:242,249,251`), whose optional
 `PreviousLinkedUserId` payload field
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/DomainEvents/SpeakerChanged.cs:20`)
 exists precisely so the cross-context cleanup handler has what it needs even though the field is
@@ -236,30 +278,36 @@ already nulled within Conference (BR-70).
 ## The cross-aggregate cascade: a pure domain service
 
 One business rule cannot live inside a single aggregate: deleting an `Event` must also delete every
-`Session` belonging to it (BR-127), but Sessions are a *separate* aggregate (referenced by `EventId`,
-not owned). Putting a `List<Session>` inside `Event` would violate the aggregate boundary. The answer
-is a **domain service**, [`IEventCascadeDeletionDomainService`](#ieventcascadedeletiondomainservice)
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/IEventCascadeDeletionDomainService.cs:12`)
+`Session` belonging to it (BR-127) and every `Sponsor` sold against it, but sessions and sponsors are
+*separate* aggregates (referenced by `EventId`, not owned). Putting a `List<Session>` inside `Event`
+would violate the aggregate boundary. The answer is a **domain service**,
+[`IEventCascadeDeletionDomainService`](#ieventcascadedeletiondomainservice)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/IEventCascadeDeletionDomainService.cs:13`)
 and its implementation [`EventCascadeDeletionDomainService`](#eventcascadedeletiondomainservice)
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/EventCascadeDeletionDomainService.cs:11`),
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/EventCascadeDeletionDomainService.cs:14`),
 a pure, infrastructure-free coordinator that takes the pre-fetched `Event` plus its already-loaded
-`Session` collection and orchestrates the deletes: soft-delete each session first (BR-55 cascades to
-*its* children), then soft-delete the event (BR-72 cascades to rooms, event speakers, and event
-answers) (`EventCascadeDeletionDomainService.cs:14-24`). This is `[Rubric §4, Domain-Driven Design]`'s
-textbook "domain service for behavior that spans aggregates and belongs to no single one," and
-`[Rubric §3, Clean Architecture]`'s purity discipline: the service does no I/O; the *application* layer
-fetches the aggregates and saves them. It is the only Level 7/8 type in the chapter precisely because
-it depends on two aggregates.
+`Session` and `Sponsor` collections and orchestrates the deletes: soft-delete each session first (BR-55
+cascades to *its* children), then each sponsor, then the event itself (BR-72 cascades to rooms, event
+speakers, and event answers) (`EventCascadeDeletionDomainService.cs:17-39`). The ordering is what makes
+the failure path safe: the first child that refuses to delete short-circuits the cascade and returns its
+own failure unchanged, so the event is never deleted and the caller (which saves only on success)
+discards the aborted in-memory mutations rather than persisting a half-deleted graph
+(`EventCascadeDeletionDomainService.cs:19-36`). This is `[Rubric §4, Domain-Driven Design]`'s textbook
+"domain service for behavior that spans aggregates and belongs to no single one," and `[Rubric §3, Clean
+Architecture]`'s purity discipline: the service does no I/O; the *application* layer fetches the
+aggregates and saves them. It is the highest-level type in the chapter precisely because it depends on
+three aggregates at once.
 
 ## Read models and the AI decision-support feature
 
 The largest cluster in `Conference.Shared` is the **DTO** layer, the wire contracts that decouple the
-API from the domain entities (`[Rubric §9, API & Contract Design]`; [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) chose manual/Mapperly
+API from the domain entities (`[Rubric §9, API & Contract Design]`;
+[ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) chose manual/Mapperly
 mapping over reflection-based AutoMapper). Most are straightforward projections:
 [`EventDTO`](#eventdto), [`SessionDTO`](#sessiondto), [`SpeakerDTO`](#speakerdto),
-[`ConferenceCategoryDTO`](#conferencecategorydto), [`CategoryItemDTO`](#categoryitemdto),
-[`QuestionDTO`](#questiondto), [`RoomDTO`](#roomdto), and the per-child join DTOs
-([`EventSpeakerDTO`](#eventspeakerdto), [`SessionSpeakerDTO`](#sessionspeakerdto),
+[`SponsorDTO`](#sponsordto), [`ConferenceCategoryDTO`](#conferencecategorydto),
+[`CategoryItemDTO`](#categoryitemdto), [`QuestionDTO`](#questiondto), [`RoomDTO`](#roomdto), and the
+per-child join DTOs ([`EventSpeakerDTO`](#eventspeakerdto), [`SessionSpeakerDTO`](#sessionspeakerdto),
 [`SessionCategoryItemDTO`](#sessioncategoryitemdto),
 [`SpeakerCategoryItemDTO`](#speakercategoryitemdto), and the three `*QuestionAnswerDTO` records:
 [`EventQuestionAnswerDTO`](#eventquestionanswerdto),
@@ -268,12 +316,15 @@ mapping over reflection-based AutoMapper). Most are straightforward projections:
 [`SessionFeedbackDTO`](#sessionfeedbackdto) with its [`RatingQuestionSummary`](#ratingquestionsummary)
 and [`TextQuestionResponses`](#textquestionresponses) members (BR-210,
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/SessionFeedbackDTO.cs:6,22,38`).
-They carry the entity's `Id` via the framework's `IBaseDTO<T>` contract and `required init`-only
-properties: read contracts, immutable after construction. Some also implement `IConcurrencyAware` and
-round-trip the `RowVersion` token
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventDTO.cs:9,15`), which is
-what [`EventTransitionRequest`](#eventtransitionrequest) echoes back on publish and unpublish so a
-transition decided against a stale view surfaces as 409 Conflict instead of applying silently ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html),
+They carry the entity's `Id` via the framework's
+[`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) contract and
+`required init`-only properties: read contracts, immutable after construction. Some also implement
+[`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) and round-trip the `RowVersion`
+token (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventDTO.cs:9,15`, and the
+same pair on `SponsorDTO.cs:9,15`), which is what
+[`EventTransitionRequest`](#eventtransitionrequest) echoes back on publish and unpublish so a
+transition decided against a stale view surfaces as 409 Conflict instead of applying silently
+([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html),
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventTransitionRequest.cs:14,17`;
 its own doc comment records that MMCA.Common's `ConcurrencyTokenRequest` supersedes it at the next
 framework sweep, `EventTransitionRequest.cs:12`). Alongside those sit the small task-shaped contracts:
@@ -288,10 +339,10 @@ A distinct and more interesting subgroup is the **`DecisionSupport`** namespace:
 purely to help an organizer *curate* a conference.
 [`SessionSelectionDashboardDTO`](#sessionselectiondashboarddto)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DecisionSupport/SessionSelectionDashboardDTO.cs:8`)
-is the composite; for one event it carries the accepted, accept-queue, pending, and declined counts
-(`SessionSelectionDashboardDTO.cs:17-29`), a [`CategoryDistributionDTO`](#categorydistributiondto) (how
-sessions spread across tracks and levels, itself built from
-[`CategoryGroupDistribution`](#categorygroupdistribution) and
+is the composite; for one event it carries the total, accepted, accept-queue, pending, and declined
+counts (`SessionSelectionDashboardDTO.cs:17-29`), a
+[`CategoryDistributionDTO`](#categorydistributiondto) (how sessions spread across tracks and levels,
+itself built from [`CategoryGroupDistribution`](#categorygroupdistribution) and
 [`CategoryItemDistribution`](#categoryitemdistribution)), a
 [`SpeakerSessionOverlapDTO`](#speakersessionoverlapdto) (speakers with multiple submissions, via
 [`MultiSessionSpeaker`](#multisessionspeaker) and [`SpeakerSessionSummary`](#speakersessionsummary)),
@@ -299,14 +350,16 @@ per-tier [`SpeakerLocalitySummary`](#speakerlocalitysummary) counts
 (`SessionSelectionDashboardDTO.cs:38,45`), and a list of [`SessionAiScoreDTO`](#sessionaiscoredto)
 (`SessionSelectionDashboardDTO.cs:41`). The locality breakdown is the Atlanta-versus-elsewhere signal
 behind the local-speaker preference, and it is derived from a **locality category** in the taxonomy
-rather than from a field on `Speaker`: the dashboard handler resolves each speaker's tier through a
-locality-category lookup
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetSessionSelectionDashboard/GetSessionSelectionDashboardHandler.cs:69-70,280`).
+rather than from a field on `Speaker`: the dashboard handler resolves each speaker's tier through the
+[`SpeakerLocalityHelper`](group-18-conference-application.md#speakerlocalityhelper) lookup
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetSessionSelectionDashboard/GetSessionSelectionDashboardHandler.cs:75-76,286`).
 [`ContentSimilarityDTO`](#contentsimilaritydto) and its [`SimilarSessionPair`](#similarsessionpair)
-rows (near-duplicate talks) are *not* members of the composite record: they are served by their own
-endpoint on the same controller
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSelectionController.cs:83`).
-The AI scores are produced by an Anthropic-backed scoring service (in `Conference.Infrastructure`,
+rows (near-duplicate talks, scored 0.0 to 1.0 with the shared category items and keywords that drove the
+score, `ContentSimilarityDTO.cs:34-41`) are *not* members of the composite record: they are served by
+their own endpoint on the same controller
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSelectionController.cs:81`).
+The AI scores are produced by an Anthropic-backed scoring service in `Conference.Infrastructure`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:16`,
 outside this chapter) and persisted as the [`SessionAiScore`](#sessionaiscore) aggregate;
 [`ScoreEventSessionsResultDTO`](#scoreeventsessionsresultdto) reports a batch run's scored and failed
 counts
@@ -323,27 +376,33 @@ the Sessionize external sync that seeds the raw session data this dashboard then
 and returns the flag name from its `FeatureName` property
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeCommand.cs:13,19`),
 so the decorator pipeline short-circuits it when the flag is off (`[Rubric §10, Cross-Cutting
-Concerns]`, [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html)). The scoring and dashboard handlers are not flag-gated.
+Concerns]`, [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html)). The
+scoring and dashboard handlers are not flag-gated.
 
 ## Authorization vocabulary and current-event selection
 
 Two more `Shared` helpers deserve a mention because they encode policy the whole module relies on.
 [`ConferencePermissions`](#conferencepermissions)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:9`)
-is the catalogue of the module's seven **capability permissions** (`conference:events:manage`,
-`conference:sessions:manage`, and so on, `ConferencePermissions.cs:12-30`), the stable string
-identifiers endpoints require via `[HasPermission(...)]` rather than by role name. The `All` and
-`ContentManagement` subsets (`ConferencePermissions.cs:33,49`) let a role grant an entire capability
-set or the narrower session-catalog-curation slice (sessions, speakers, and the category taxonomy) at
-once, a distinction capability checks express centrally and role checks cannot. This is the
-permission-based authorization story (`[Rubric §11, Security]`, [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)), decided by the
+is the catalogue of the module's eight **capability permissions** (`conference:events:manage`,
+`conference:sessions:manage`, `conference:sponsors:manage`, and so on,
+`ConferencePermissions.cs:12-33`), the stable string identifiers endpoints require via
+`[HasPermission(...)]` rather than by role name. The `All` and `ContentManagement` subsets
+(`ConferencePermissions.cs:36,53`) let a role grant an entire capability set or the narrower
+catalog-curation slice (sessions, speakers, sponsors, and the category taxonomy) at once, a distinction
+capability checks express centrally and role checks cannot. This is the permission-based authorization
+story (`[Rubric §11, Security]`,
+[ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)), decided by the
 role-to-permission grants declared in the module's registration rather than scattered across
 controllers. Beside it sits [`ConferenceReadAudience`](#conferencereadaudience)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferenceReadAudience.cs:23`),
 the answer to the *other* question a caller raises, not "may I change this" but "how much of the catalog
-may I see": exactly two audiences exist, the privileged readers (`Organizer` and `ContentEditor`) and
-everyone else, and naming them once is what keeps the output-cache bypass list and the API-layer
-visibility checks from ever disagreeing.
+may I see": exactly two audiences exist, the privileged readers
+([`RoleNames`](group-08-auth.md#rolenames)`.Organizer` and `.ContentEditor`,
+`ConferenceReadAudience.cs:26-30`) and everyone else, and naming them once is what keeps the
+output-cache bypass list and the API-layer visibility checks from ever disagreeing. A third,
+partially-privileged audience would need its own cache key, which is why the type's own remarks tell you
+to check the cache policies before extending the list (`ConferenceReadAudience.cs:17-21`).
 
 [`CurrentEventSelector`](#currenteventselector)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:10`) is
@@ -352,16 +411,19 @@ event live now (soonest to end), else the next upcoming (soonest to start), else
 ended (`CurrentEventSelector.cs:38-52`). It shares the exact live-window math the backend enforces:
 `StartDate` at 00:00 local through `EndDate + 1 day` at 00:00 local (exclusive), converted from the
 event's IANA time zone to UTC, with an unknown time-zone id degrading to treating the local dates as
-UTC (`CurrentEventSelector.cs:64-85`). Because it is generic over the event model, each consumer passes
-its own DTO plus accessor delegates, so the selection rule lives in one tested place rather than being
-re-derived per surface; [`CurrentEventDefaults`](#currenteventdefaults)
+UTC (`CurrentEventSelector.cs:64-83`). One subtlety earns its own method: both window boundaries land on
+local midnight, which does not exist in zones that spring forward at 00:00, so `ToUtc` shifts an invalid
+wall-clock time forward by an hour rather than letting `TimeZoneInfo.ConvertTimeToUtc` throw
+(`CurrentEventSelector.cs:96-107`). Because the selector is generic over the event model, each consumer
+passes its own DTO plus accessor delegates, so the selection rule lives in one tested place rather than
+being re-derived per surface; [`CurrentEventDefaults`](#currenteventdefaults)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventDefaults.cs:8,17-23`)
 is the thin wrapper that binds those delegates for the common [`EventDTO`](#eventdto) shape.
 
 ## Crossing the module boundary: contracts, stubs, and integration events
 
-Conference does not live alone. Three connection points join it to other modules, and all live in
-`Conference.Shared` so neither side reaches into the other's domain (`[Rubric §7, Microservices
+Conference does not live alone. Three kinds of connection point join it to other modules, and all live
+in `Conference.Shared` so neither side reaches into the other's domain (`[Rubric §7, Microservices
 Readiness]`, `[Rubric §3, Clean Architecture]`):
 
 - **Synchronous bookmark validation (inbound).** The Engagement module needs to validate that a
@@ -370,236 +432,283 @@ Readiness]`, `[Rubric §3, Clean Architecture]`):
   [`ISessionBookmarkValidationService`](#isessionbookmarkvalidationservice) *interface*
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10,19,30`),
   implemented in `Conference.Application` in process, or by a gRPC adapter when the modules run as
-  separate services ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)). When Conference is *disabled* in a host,
+  separate services ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)). When
+  Conference is *disabled* in a host,
   [`DisabledSessionBookmarkValidationService`](#disabledsessionbookmarkvalidationservice)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DisabledSessionBookmarkValidationService.cs:30`)
   is registered as a null-object stub that approves every validation and returns an empty ID set
   (`DisabledSessionBookmarkValidationService.cs:33-38`): graceful degradation rather than a
   missing-dependency crash.
 
-- **Synchronous live-layer validation (inbound).** The Engagement conference-day live layer (polls and
-  session Q&A) asks Conference whether a target event is published and inside its live window, and,
-  for a session, who the assigned speakers are (BR-236), whether it is a plenum session, and the
-  event's question moderation default. That contract is
+- **Synchronous live-layer validation (inbound).** The Engagement conference-day live layer asks
+  Conference four questions, and the four members of
   [`IEventLiveValidationService`](#ieventlivevalidationservice)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IEventLiveValidationService.cs:11,21,32`),
-  returning [`EventLiveInfo`](#eventliveinfo)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventLiveInfo.cs:13`) and
-  [`SessionLiveInfo`](#sessionliveinfo)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/SessionLiveInfo.cs:17`)
-  snapshots so the caller never references a Conference domain entity. The moderation default is the
-  [`QuestionModerationDefault`](#questionmoderationdefault) enum (`Pending = 0`/`Approved = 1`, BR-233,
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IEventLiveValidationService.cs:11`)
+  are exactly those questions: is this event published and inside its live window
+  ([`EventLiveInfo`](#eventliveinfo), `IEventLiveValidationService.cs:21`); for a session, who are the
+  assigned speakers (BR-236), is it a plenum session, and what is the event's question moderation
+  default ([`SessionLiveInfo`](#sessionliveinfo), `IEventLiveValidationService.cs:32`); for a sponsor
+  scanned from a printed booth QR code, does it exist and belong to a published event
+  ([`SponsorLiveInfo`](#sponsorliveinfo), `IEventLiveValidationService.cs:43`); and which session is a
+  given room hosting right now ([`RoomSessionInfo`](#roomsessioninfo),
+  `IEventLiveValidationService.cs:59-62`), so a check-in never has to trust a client-supplied session
+  id. Each returns a snapshot record, never a Conference domain entity. Note where the policy line
+  falls on that last one: the grace window travels *in the request* as a parameter rather than living in
+  Conference config, because how early a session counts as current is check-in policy and Conference
+  only answers the schedule question (`IEventLiveValidationService.cs:50-53`,
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/RoomSessionInfo.cs:8-12`). The
+  moderation default is the [`QuestionModerationDefault`](#questionmoderationdefault) enum
+  (`Pending = 0`/`Approved = 1`, BR-233,
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/QuestionModerationDefault.cs:7-13`)
-  carried on the `Event` (`Event.cs:53`, defaulted to `Pending` in both `Create` and `Update`,
-  `Event.cs:142,197`). Its disabled stub,
+  carried on the `Event` (`Event.cs:71`, defaulted to `Pending` in both `Create` and `Update`,
+  `Event.cs:166,227`). The disabled stub,
   [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/DisabledEventLiveValidationService.cs:22`),
-  deliberately **fails open**: it reports the event as published with an always-open window, a default
-  event id, and no assigned speakers (`DisabledEventLiveValidationService.cs:25-42`) so the live-layer
-  handlers can run without an in-process Conference module, at the cost of skipping the published and
-  live-window checks until the host is wired to the Conference gRPC adapter.
+  deliberately **fails open** on all four: an always-open window and a published flag for events and
+  sponsors, a default event id with no assigned speakers for sessions, and the room's own id echoed
+  back as the session id (`DisabledEventLiveValidationService.cs:25-62`), so the live-layer handlers can
+  run without an in-process Conference module, at the cost of skipping those checks until the host is
+  wired to the Conference gRPC adapter.
 
-- **Asynchronous speaker linking (outbound).** When Conference links or unlinks a Speaker to or from an
-  Identity `User` (the manual link command, or the automatic email-match triggered by Identity's
-  `UserRegistered` event), it publishes [`SpeakerLinkedToUser`](#speakerlinkedtouser) /
-  [`SpeakerUnlinkedFromUser`](#speakerunlinkedfromuser)
+- **Asynchronous notifications (outbound).** Two families of integration event leave the module. When
+  Conference links or unlinks a Speaker to or from an Identity `User` (the manual link command, or the
+  automatic email-match triggered by Identity's `UserRegistered` event), it publishes
+  [`SpeakerLinkedToUser`](#speakerlinkedtouser) / [`SpeakerUnlinkedFromUser`](#speakerunlinkedfromuser)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/IntegrationEvents/SpeakerLinkedToUser.cs:20`
-  and `.../IntegrationEvents/SpeakerUnlinkedFromUser.cs:17`), integration events extending
+  and `.../IntegrationEvents/SpeakerUnlinkedFromUser.cs:17`), records extending
   [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent) and carrying just the two
   identifiers. Identity subscribes and sets or clears `User.LinkedSpeakerId`, so the next JWT refresh
-  carries the `speaker_id` claim (BR-209). This is the eventually consistent replacement for what used
-  to be a direct cross-module service call: the User-to-Speaker bidirectional link now survives the
-  service split because it travels as an event over the broker ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
+  carries the `speaker_id` claim (BR-209). When an attendee submits feedback, the answer handlers raise
+  [`SessionFeedbackSubmitted`](#sessionfeedbacksubmitted) /
+  [`EventFeedbackSubmitted`](#eventfeedbacksubmitted)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:19`,
+  `.../Events/IntegrationEvents/EventFeedbackSubmitted.cs:18`), which Engagement consumes to award
+  points. Two details in those two records are load-bearing: they are raised on the **create path only**,
+  never on the BR-107 update path of the feedback upsert, and the consumer is independently idempotent
+  because one submitted form writes one row per question and therefore raises the event once per new
+  answer (`SessionFeedbackSubmitted.cs:8-13`). They are also added to the aggregate pre-save with
+  `AddDomainEvent`, so the outbox captures them atomically with the answer in the same
+  `SaveChangesAsync`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/AddSessionQuestionAnswer/AddSessionQuestionAnswerHandler.cs:131-136`).
+  All four are the eventually consistent replacement for what would otherwise be direct cross-module
+  service calls: the links and the points ledger survive the service split because they travel as events
+  over the broker ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
 
 ## End-to-end: one organizer action
 
 To see the chapter cooperate, follow an organizer renaming a room on an event. The application handler
 loads the [`Event`](#event) aggregate (with its `Rooms` hydrated by the navigation populator), calls
-`event.UpdateRoom(...)` (`Event.cs:368`), which routes through the private `GetRoomOrNotFound` helper
-(`Event.cs:377-380`, delegating to the framework's `GetChildOrNotFound` at `Event.cs:555-558`, so a
-missing or soft-deleted room comes back as a `NotFound`
-[`Result`](group-01-result-error-handling.md#result) rather than an exception), delegates to the
-child's own `Room.Update(...)` (which validates *its* invariants), and on success raises a
-[`RoomChanged`](#roomchanged) `Updated` event (`Event.cs:386`). The handler calls `SaveChangesAsync`;
-the interceptor writes the `RoomChanged` to the outbox in the same transaction; in-process dispatch
-busts the relevant output-cache tags so the next read is fresh. No exception was thrown on the expected
-not-found path, no child was mutated from outside its aggregate, no event was hand-dispatched, and the
-same code path would behave identically whether Conference runs in the monolith or as its own service,
-which is exactly the property the framework groups (G01 through G14) exist to provide, here made
-concrete in a domain you can reason about. For the *why* behind each design choice, [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) (manual
-mapping), [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) (navigation populators), [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) (outbox), [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)/[ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)
-(database-per-service, gRPC extraction, service topology), [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) (permission-based authorization),
-[ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html) (feature flags), and [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) (optimistic concurrency) are the primary references; the business
-rules themselves are catalogued in ADC's specifications guide.
+`event.UpdateRoom(...)` (`Event.cs:397`), which routes through the private `GetRoomOrNotFound` helper
+(`Event.cs:706-709`, delegating to the framework's `GetChildOrNotFound`, so a missing or soft-deleted
+room comes back as a `NotFound` [`Result`](group-01-result-error-handling.md#result) rather than an
+exception), re-checks the case-insensitive room-name uniqueness rule that mirrors the database index
+(`Event.cs:411`, implemented at `Event.cs:687-704`), delegates to the child's own `Room.Update(...)`
+(which validates *its* invariants), and on success raises a [`RoomChanged`](#roomchanged) `Updated`
+event (`Event.cs:419`). The handler calls `SaveChangesAsync`; the interceptor writes the `RoomChanged`
+to the outbox in the same transaction; in-process dispatch busts the relevant output-cache tags so the
+next read is fresh. No exception was thrown on the expected not-found path, no child was mutated from
+outside its aggregate, no event was hand-dispatched, and the same code path would behave identically
+whether Conference runs in the monolith or as its own service, which is exactly the property the
+framework groups (G01 through G14) exist to provide, here made concrete in a domain you can reason
+about. For the *why* behind each design choice,
+[ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) (manual mapping),
+[ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) (navigation populators),
+[ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) (outbox),
+[ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) (soft-delete versus
+erasure),
+[ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)/[ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)
+(database-per-service, gRPC extraction, service topology),
+[ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)
+(permission-based authorization),
+[ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html) (feature flags), and
+[ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) (optimistic concurrency)
+are the primary references; the business rules themselves are catalogued in ADC's specifications guide.
 
 ### AssemblyReference, ClassReference
 <a id="assemblyreference"></a><a id="classreference"></a>
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/AssemblyReference.cs:5` · Level 0 · class (static) + class
 
-- **What it is**: the two assembly-marker types that give `typeof()`-based assembly scanning a stable handle to the `MMCA.ADC.Conference.Domain` assembly. No behavior.
+- **What it is**: the two assembly-marker types that give `typeof()`-based assembly scanning a stable handle on the `MMCA.ADC.Conference.Domain` assembly. No behavior.
 
 | Type | File:Line | Notes (what differs) |
 |------|-----------|----------------------|
-| `AssemblyReference` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/AssemblyReference.cs:5` | `static class` exposing `Assembly` (the `typeof(AssemblyReference).Assembly`, line 7) and `AssemblyName` (line 8) |
-| `ClassReference` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/AssemblyReference.cs:11` | one-line empty `public class ClassReference { }`, a generic-argument handle for scanners that want a *type*, not an `Assembly` |
+| `AssemblyReference` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/AssemblyReference.cs:5` | `static class` exposing `Assembly` (`typeof(AssemblyReference).Assembly`, line 7) and `AssemblyName` (line 8, `Assembly.GetName().Name ?? string.Empty`) |
+| `ClassReference` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/AssemblyReference.cs:11` | a one-line empty `public class ClassReference { }`, a handle for APIs that want a *type* rather than an `Assembly` |
 
-- **Depends on**: nothing first-party (`System.Reflection` only, `AssemblyReference.cs:1`).
-- **Concept introduced, the assembly-marker pattern.** `[Rubric §2, Design Patterns]` (assesses whether patterns are idiomatic and solve a real problem): instead of hard-coding an assembly name string, scanners take a `typeof(...)` from a type they know lives in the target assembly. `AssemblyReference.Assembly` (`AssemblyReference.cs:7`) caches `typeof(AssemblyReference).Assembly`; `ClassReference` (`AssemblyReference.cs:11`) exists so a generic API like `AddSomething(typeof(ClassReference))` has a non-static type to point at. Every layer of every ADC module ships this same pair (see the same pair in [group-18 Conference.Application](group-18-conference-application.md#assemblyreference), [group-19 Conference.Infrastructure](group-19-conference-infrastructure.md#assemblyreference), and [group-20 Conference.API](group-20-conference-api-grpc.md#assemblyreference)), so the module loader and EF/handler discovery code is uniform across the codebase.
-- **Walkthrough**: `AssemblyReference.Assembly` (`AssemblyReference.cs:7`) is a `static readonly Assembly`; `AssemblyName` (`AssemblyReference.cs:8`) is its `GetName().Name ?? string.Empty`. `ClassReference` (`AssemblyReference.cs:11`) has no members.
-- **Why it's built this way**: a `typeof()` handle is refactor-safe (rename the assembly and the reference still compiles) where a magic string is not.
-- **Where it's used**: Scrutor assembly scanning that registers domain-event handlers, EF entity configurations, and the like; the `ModuleLoader` reflection pass.
+- **Depends on**: nothing first-party; only `System.Reflection` (`AssemblyReference.cs:1`).
+- **Concept introduced, the assembly-marker pattern.** `[Rubric §2, Design Patterns]` (assesses whether the patterns in use are idiomatic and solve a real problem): instead of hard-coding an assembly-name string, a scanner takes a `typeof(...)` from a type it knows lives in the target assembly, so renaming the assembly cannot silently break discovery. Every layer of every ADC module ships this same pair (see the sibling pairs in [group-18 Conference.Application](group-18-conference-application.md#assemblyreference), [group-19 Conference.Infrastructure](group-19-conference-infrastructure.md#assemblyreference), and [group-20 Conference.API](group-20-conference-api-grpc.md#assemblyreference)), so registration and discovery code reads the same way in every project.
+- **Walkthrough**: `AssemblyReference.Assembly` (`AssemblyReference.cs:7`) is a `public static readonly Assembly`; `AssemblyName` (`AssemblyReference.cs:8`) is its short name, falling back to `string.Empty` when reflection returns null. `ClassReference` (`AssemblyReference.cs:11`) has no members at all.
+- **Why it's built this way**: a `typeof()` handle is refactor-safe where a magic string is not, and a non-static `ClassReference` can be passed where a static class cannot (a static type is not a legal generic argument or `Type` parameter target in every API shape).
+- **Where it's used**: assembly-scanning registration of domain-event handlers and EF entity configurations, and the reflection pass in the module loader (group-14).
 
 ---
 
 ### ConferenceFeatures
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/ConferenceFeatures.cs:8` · Level 0 · class (static)
 
-- **What it is**: the feature-flag name catalog for the Conference module. Currently one constant: `SessionizeIntegration = "Conference.SessionizeIntegration"` (`ConferenceFeatures.cs:15`), which gates the Sessionize external-data sync capability.
+- **What it is**: the feature-flag name catalog for the Conference module. It holds exactly one constant today: `SessionizeIntegration = "Conference.SessionizeIntegration"` (`ConferenceFeatures.cs:15`), which gates the Sessionize external-data sync capability.
 - **Depends on**: nothing first-party.
-- **Concept introduced, feature flags as named constants.** `[Rubric §10, Cross-Cutting Concerns]` (assesses how cross-cutting behavior like flags/config is centralized rather than scattered). The constant value matches a key under the `"FeatureManagement"` configuration section (doc comment `ConferenceFeatures.cs:3-7`) and is consumed with `Microsoft.FeatureManagement` via `[FeatureGate]` attributes and the [`IFeatureGated`](group-05-cqrs-pipeline.md#ifeaturegated) marker. Centralizing the *string* here means the flag name appears once; a typo cannot silently split a flag into two. The `"{Module}.{Feature}"` naming convention keeps flags from different modules unambiguous in one config file.
-- **Walkthrough**: a single `public const string` (`ConferenceFeatures.cs:15`). The doc comment (`ConferenceFeatures.cs:10-14`) records the runtime contract: when the flag is disabled, `RefreshFromSessionizeCommand` short-circuits with a failure result and organizers must manage event data manually.
-- **Why it's built this way**: isolating Sessionize sync behind a flag lets organizers turn the integration off during a Sessionize API maintenance window without redeploying.
-- **Where it's used**: checked via `IFeatureManager` at the top of the [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) handler (group-18).
+- **Concept introduced, feature flags as named constants.** `[Rubric §10, Cross-Cutting Concerns]` (assesses whether cross-cutting behavior such as flags and configuration is centralized rather than scattered). The constant's value matches a key under the `"FeatureManagement"` configuration section, and per the class doc comment (`ConferenceFeatures.cs:3-7`) it is consumed with `[FeatureGate]` attributes and the [`IFeatureGated`](group-05-cqrs-pipeline.md#ifeaturegated) marker interface. Centralizing the *string* here means the flag name is written once: a typo cannot silently split one flag into two, one of which is never configured and therefore always off. The `"{Module}.{Feature}"` naming convention keeps flags from different modules unambiguous inside one configuration file.
+- **Walkthrough**: a single `public const string` (`ConferenceFeatures.cs:15`). The member doc comment (`ConferenceFeatures.cs:10-14`) records the runtime contract: when the flag is disabled, `RefreshFromSessionizeCommand` short-circuits with a failure result and organizers manage event data manually instead of syncing.
+- **Why it's built this way**: putting the Sessionize sync behind a flag lets organizers turn the integration off (for example during a Sessionize API maintenance window) through configuration, with no redeploy.
+- **Where it's used**: [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) implements `IFeatureGated` and returns this constant from its `FeatureName` property (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeCommand.cs:19`), so the pipeline decorator (group-05), not the handler body, does the gating.
 
 ---
 
 ### ConferencePermissions
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Authorization` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:9` · Level 0 · class (static)
 
-- **What it is**: the Conference module's **capability permission catalog**, the stable string identifiers its endpoints require via [`[HasPermission(...)]`](group-08-auth.md#haspermissionattribute) instead of role names. Seven `manage` capabilities (`conference:events:manage`, `:sessions:manage`, `:speakers:manage`, `:rooms:manage`, `:categories:manage`, `:questions:manage`, `:session-selection:manage`) plus two curated sets.
+- **What it is**: the Conference module's **capability permission catalog**: the stable string identifiers its endpoints require through [`[HasPermission(...)]`](group-08-auth.md#haspermissionattribute) instead of role names. Eight `manage` capabilities plus two curated groupings of them.
 - **Depends on**: nothing first-party.
-- **Concept reinforced, capability permissions over role names (the consumer side).** `[Rubric §11, Security]` (assesses whether authorization is expressed as fine-grained capabilities rather than coarse role checks scattered across controllers). This is ADC's use of the framework's permission mechanism (see [`IPermissionRegistry`](group-08-auth.md#ipermissionregistry) and [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute) in [G08](group-08-auth.md)). The values are deliberately stable strings (the doc comment, `ConferencePermissions.cs:3-8`, notes they may appear in tokens or logs). The class also exposes two `IReadOnlyList<string>` groupings: `All` (every Conference permission, for granting an entire capability set to a role at once) and `ContentManagement` (the curation subset, `SessionsManage` + `SpeakersManage` + `CategoriesManage`). `ContentManagement` is the load-bearing one: per its doc comment (`ConferencePermissions.cs:44-48`), a content-editor role (see [`RoleNames`](group-08-auth.md#rolenames)) holds exactly the catalog-curation capabilities *without* event structure, rooms, questions, or session selection, a distinction the registry expresses centrally that scattered `[Authorize(Roles = ...)]` lists could not.
-- **Walkthrough**: seven `public const string` capability fields (`ConferencePermissions.cs:12-30`), then `All` (`ConferencePermissions.cs:33-42`) and `ContentManagement` (`ConferencePermissions.cs:49-54`) as collection-expression `IReadOnlyList<string>` properties.
-- **Why it's built this way**: a per-module catalog keeps each module's capabilities self-contained; pairing the constants with named subsets means the role-to-permission grants in the module's registration read declaratively (`[.. All]` for the organizer, `[.. ContentManagement]` for the content editor).
-- **Where it's used**: referenced by every Conference controller's `[HasPermission(...)]` attributes and by the role-to-permission grants in [`AddModuleConferenceAPI`](group-20-conference-api-grpc.md#dependencyinjection) (which calls [`AddPermissions`](group-08-auth.md#authorizationextensions)).
+- **Concept reinforced, capability permissions over role names (the consumer side).** `[Rubric §11, Security]` (assesses whether authorization is expressed as fine-grained capabilities rather than coarse role checks scattered through controllers). This is ADC's use of the framework mechanism taught in [G08](group-08-auth.md) ([`IPermissionRegistry`](group-08-auth.md#ipermissionregistry), [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute)). The class doc comment (`ConferencePermissions.cs:3-8`) states the two properties that make the catalog work: who-can-do-what is decided by the role-to-permission grants declared in the module's registration rather than by controller attributes, and the values are deliberately stable strings because they may end up inside tokens or logs.
+- **Walkthrough**
+  - Eight `public const string` capabilities: `EventsManage` = `conference:events:manage` (`ConferencePermissions.cs:12`), `SessionsManage` (`:15`), `SpeakersManage` (`:18`), `RoomsManage` (`:21`), `CategoriesManage` (`:24`), `QuestionsManage` (`:27`), `SessionSelectionManage` = `conference:session-selection:manage` (`:30`), and `SponsorsManage` = `conference:sponsors:manage` (`:33`). The `{module}:{resource}:{verb}` shape keeps the namespace collision-free across modules.
+  - `All` (`ConferencePermissions.cs:36-46`): an `IReadOnlyList<string>` collection expression naming every one of the eight, for granting an entire capability set to a role in one line.
+  - `ContentManagement` (`ConferencePermissions.cs:53-59`): the catalog-curation subset, `SessionsManage` + `SpeakersManage` + `CategoriesManage` + `SponsorsManage`. Its doc comment (`ConferencePermissions.cs:48-52`) is the load-bearing part: a content-editor role holds these but *not* event structure, rooms, questions, or session selection, a distinction that capability checks express centrally and role checks cannot.
+- **Why it's built this way**: a per-module catalog keeps each module's capability vocabulary self-contained (the Conference module can add a capability without touching Identity), and pairing the constants with named subsets makes the grants read declaratively at the registration site instead of as a hand-maintained string list.
+- **Where it's used**: every Conference controller's `[HasPermission(...)]` attributes, and the role-to-permission grants in the module's API registration: `Organizer` and `Admin` each receive `[.. ConferencePermissions.All]` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43-44`) and `ContentEditor` receives `[.. ConferencePermissions.ContentManagement]` (`DependencyInjection.cs:50`), all through [`RoleNames`](group-08-auth.md#rolenames).
 
 ---
 
 ### SessionStatuses
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionStatuses.cs:14` · Level 0 · class (static)
 
-- **What it is**: the catalog of the six recognized Sessionize session-status strings, plus a behavioral predicate `IsEligible()` that gates public display, attendee bookmarking, and post-session feedback (BR-49). `Session.Status` is a free-text field imported from Sessionize; this class is the single place in the domain that gives those strings behavioral significance.
-- **Depends on**: nothing first-party (`System.StringComparison` only).
-- **Concept introduced, avoiding premature enumeration for external data.** `[Rubric §4, Domain-Driven Design]` (assesses a model that mirrors the business and uses ubiquitous language) and `[Rubric §8, Data Architecture]` (assesses deliberate handling of externally-sourced data). Sessionize can return a status string not yet in this list; using `const string` values instead of a C# `enum` means an unknown status does not break deserialization, the domain simply treats it as unrecognized rather than eligible. `AllKnownStatuses` lets callers populate filter dropdowns without re-listing the constants by hand.
+- **What it is**: the catalog of the six recognized Sessionize session-status strings, plus the predicate `IsEligible()` that decides public display, attendee bookmarking, and post-session feedback (BR-49). [`Session.Status`](#session) is a free-text field imported from Sessionize; this class is the one place in the domain that gives those strings behavioral meaning.
+- **Depends on**: nothing first-party (only `StringComparison` from the BCL).
+- **Concept introduced, the allow-list over external free text.** `[Rubric §4, Domain-Driven Design]` (assesses whether the model mirrors the business and speaks its language) and `[Rubric §8, Data Architecture]` (assesses deliberate handling of externally-sourced data). Two design choices are worth reading carefully:
+  - **`const string`, not a C# `enum`.** Sessionize can return a status this list has never seen. String constants mean an unknown value simply fails to match; a deserialization-bound enum would have to decide what to do with it.
+  - **Visibility is an allow-list decided centrally, not a per-constant flag.** The remarks (`SessionStatuses.cs:8-13`) say so outright: a status is publicly visible only if it is `Accepted` or unset, so *adding a constant here does not make it publicly visible*. That is the safe default for a field fed by an external system: the failure mode of a new Sessionize status is "not shown yet", not "leaked".
 - **Walkthrough**
-  - Six `const string` values (`SessionStatuses.cs:11-26`): `Accepted`, `Waitlisted`, `AcceptQueue` (`"Accept_Queue"`), `Nominated`, `DeclineQueue` (`"Decline_Queue"`), `Declined`. Note two of the literal values carry an underscore the C# identifier does not.
-  - `AllKnownStatuses` (`SessionStatuses.cs:31-39`): a `static readonly IReadOnlyList<string>` collection-expression of all six, for organizer filter UIs.
-  - `IsEligible(string? status)` (`SessionStatuses.cs:45-47`): returns `true` unless `status` equals `"Declined"` or the literal `"Cancelled"` (case-insensitive, `StringComparison.OrdinalIgnoreCase`). `"Cancelled"` is deliberately *not* in `AllKnownStatuses`, it is a defensive guard for a Sessionize value seen in the wild but not part of the formal six.
-- **Why it's built this way**: keeping the eligibility predicate in the domain (not the application or API layer) ensures every consumer, command handler, query filter, and UI visibility check applies the identical definition. Adding a new ineligible status is a one-line edit here, not a grep across handlers.
-- **Where it's used**: [`SessionInvariants.EnsureStatusIsEligible`](#sessioninvariants) (same group), the Sessionize sync strategy's pre-import eligibility check, the session-selection dashboard's status bucketing, the public session-list query filter, and the bookmark/feedback guards (groups 18-22).
+  - Six `const string` values: `Accepted` (`SessionStatuses.cs:17`), `Waitlisted` (`:20`), `AcceptQueue` = `"Accept_Queue"` (`:23`), `Nominated` (`:26`), `DeclineQueue` = `"Decline_Queue"` (`:29`), `Declined` (`:32`). Note that two of the literal values carry an underscore the C# identifier does not.
+  - `AllKnownStatuses` (`SessionStatuses.cs:37-45`): a `static readonly IReadOnlyList<string>` collection expression of all six, so organizer filter dropdowns do not re-list the constants by hand.
+  - `IsEligible(string? status)` (`SessionStatuses.cs:54-56`): returns true when `status is null` **or** equals `Accepted` case-insensitively (`StringComparison.OrdinalIgnoreCase`). Everything else is ineligible, known and unknown alike. The null branch is not an oversight: organizer-created sessions never carry a status, and the doc comment (`SessionStatuses.cs:47-53`) names them.
+- **Why it's built this way**: keeping the eligibility predicate in the domain (not in a handler, a query, or the UI) means every consumer applies the identical definition, and tightening the rule is a one-line edit here rather than a search across layers.
+- **Where it's used**: [`SessionInvariants.EnsureStatusIsEligible`](#sessioninvariants) (`SessionInvariants.cs:108`); the calendar-export filter, which names this the single source of truth (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:28`); the organizer session-selection dashboard's status bucketing (`.../DecisionSupport/GetSessionSelectionDashboard/GetSessionSelectionDashboardHandler.cs:81-85`); and the decision-support handlers for category distribution and speaker overlap (groups 18).
+- **Caveats / not-in-source**: one consumer deliberately does *not* call `IsEligible`. `PublicSessionStatusSpecification` restates the same rule as an expression tree, `s => s.Status == null || s.Status == SessionStatuses.Accepted` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Specifications/PublicSessionStatusSpecification.cs:24`), because a method call cannot be translated to SQL; its own doc comment (`:16`) records the reason. The two definitions are therefore kept in sync by hand.
 
 ---
 
 ### ConferenceReadAudience
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Authorization` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferenceReadAudience.cs:23` · Level 1 · class (static)
 
-- **What it is**: the Conference module's **read-audience catalog**: one `IReadOnlyList<string> PrivilegedRoles` naming the two roles that read the whole catalog, [`RoleNames`](group-08-auth.md#rolenames)`.Organizer` and `RoleNames.ContentEditor` (`ConferenceReadAudience.cs:26-30`). Every other caller (attendee, speaker, anonymous visitor) gets the *public projection*: published events (BR-108), accepted-or-unset sessions (BR-49), and their speakers (BR-239), exactly as the class doc comment states (`ConferenceReadAudience.cs:5-9`).
-- **Depends on**: [`RoleNames`](group-08-auth.md#rolenames) from `MMCA.Common.Shared.Auth` (`ConferenceReadAudience.cs:1`). Nothing else, which is why it can sit in `Shared` and be referenced from the Blazor WebAssembly UI as easily as from the service host.
-- **Concept introduced, the read audience as a thing distinct from the capability permission.** `[Rubric §11, Security]` (assesses authorization that is fine-grained and data-scoped rather than a scattering of coarse role checks). Two different questions are asked in this module, and this type answers only the second:
+- **What it is**: the Conference module's **read-audience catalog**. One member, `PrivilegedRoles`, names the two roles that read the whole catalog: [`RoleNames`](group-08-auth.md#rolenames)`.Organizer` and `RoleNames.ContentEditor` (`ConferenceReadAudience.cs:26-30`). Everyone else (attendees, speakers, anonymous visitors) sees the public projection: accepted-or-unset sessions (BR-49), published events (BR-108), and their speakers (BR-239), exactly as the class doc comment states (`ConferenceReadAudience.cs:5-9`).
+- **Depends on**: [`RoleNames`](group-08-auth.md#rolenames) from `MMCA.Common.Shared.Auth` (`ConferenceReadAudience.cs:1`), and nothing else. That is why it can live in `Shared` and be referenced from the Blazor UI as easily as from the service host.
+- **Concept introduced, the read audience as a thing distinct from the capability permission.** `[Rubric §11, Security]` (assesses fine-grained, data-scoped authorization rather than scattered coarse role checks). Two different questions get asked in this module, and this type answers only the second:
   - *"May this caller change X?"* is a **capability** question, answered by [`ConferencePermissions`](#conferencepermissions) and enforced per endpoint with [`[HasPermission(...)]`](group-08-auth.md#haspermissionattribute).
-  - *"How much of the catalog may this caller see?"* is a **read-audience** question. It cannot be a per-endpoint attribute, because the answer changes the *rows* rather than the verdict: the same anonymous-allowed GET has to return a narrower list. So the audience is declared once, here, and read paths compare against it.
+  - *"How much of the catalog may this caller see?"* is a **read-audience** question. It cannot be a per-endpoint attribute, because the answer changes the *rows* rather than the verdict: the same anonymous-allowed GET must return a narrower list. So the audience is declared once, here, and every read path compares against it.
 
-  The API-layer helper that consumes it spells the boundary out: `IsPrivilegedConferenceReader()` "is a read-visibility check, not an authorization gate: mutations stay gated by `[HasPermission(...)]` capabilities, which a role check must never stand in for" (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:20-25`). `[Rubric §12, Performance & Scalability]` applies for a less obvious reason: the same list drives the output-cache bypass, so the audience definition is simultaneously a cache-correctness invariant (see **Where it's used**).
-- **Walkthrough**: one member. `PrivilegedRoles` (`ConferenceReadAudience.cs:26-30`) is a `static IReadOnlyList<string>` initialized with a collection expression of the two constants. There are no methods and no state: callers do the matching themselves with `Any(...IsInRole)`.
-- **Why it's built this way**: the remarks (`ConferenceReadAudience.cs:10-16`) name the exact failure the single declaration prevents. The output-cache bypass list and the API-layer visibility checks must name the *same* roles; if the two lists drifted apart, a privileged caller's everything-inclusive response would land in a shared public cache entry and then be served to anonymous visitors. Declaring the audience once "makes that drift impossible instead of merely unlikely". The second paragraph (`ConferenceReadAudience.cs:17-21`) records what keeps the list at exactly two entries: a third, partially privileged audience would need its own cache key, so extending it means revisiting the cache policies first.
-- **Where it's used**: four call sites across three layers.
-  - The Conference service host spreads it into `adminBypassRoles` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:201`) and hands that array to eight named output-cache policies (`Program.cs:202-224`); the comment above it states the single-source-of-truth rule outright, "if these two lists ever named different roles, a privileged payload would be cached and served to the public" (`Program.cs:198-200`). One policy deliberately takes no bypass list, `NowNextCache`, because its payload is identical for every role (`Program.cs:214-216`).
-  - The API layer wraps it as the [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) extension `IsPrivilegedConferenceReader()` (`CurrentUserServiceExtensions.cs:24-25`), which the Conference controllers call to decide whether to apply a public filter specification at all.
-  - The Blazor UI reads it directly when sizing its event filters: `_isPrivileged = ConferenceReadAudience.PrivilegedRoles.Any(authState.User.IsInRole)` in both `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionList.razor.cs:149` and `.../Public/PublicSpeakerList.razor.cs:97`.
+  The API-layer helper that wraps it spells the boundary out in its doc comment: the check is about read visibility, not authorization, and mutations stay gated by capability permissions that a role check must never stand in for (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:16-25`). `[Rubric §12, Performance & Scalability]` applies for a less obvious reason: the same list drives the output-cache bypass, so this audience definition doubles as a cache-correctness invariant (see **Where it's used**).
+- **Walkthrough**: one member. `PrivilegedRoles` (`ConferenceReadAudience.cs:26-30`) is a `static IReadOnlyList<string>` initialized with a collection expression of the two role-name constants. There are no methods and no state; callers do the matching themselves with `Any(...IsInRole)`.
+- **Why it's built this way**: the remarks (`ConferenceReadAudience.cs:10-21`) name the exact failure a single declaration prevents. The output-cache bypass list and the API-layer visibility checks must name the *same* roles; if the two lists drifted apart, a privileged caller's everything-inclusive response would land in a shared public cache entry and then be served to anonymous visitors. Declaring the audience once makes that drift impossible instead of merely unlikely. The second paragraph records what keeps the list at exactly two entries: a third, partially privileged audience would need its own cache key, so extending this list means revisiting the cache policies in the Conference service first.
+- **Where it's used**: three layers, one definition.
+  - The Conference service host spreads it into `adminBypassRoles` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:230`) and hands that array to nine named output-cache policies (`Program.cs:231-254`: `ConferencePublicCache`, `EventsCache`, `SessionsCache`, `SpeakersCache`, `RoomsCache`, `CategoriesCache`, `QuestionsCache`, `SponsorsCache`, `BookmarkCountsCache`). The comment directly above states the single-source-of-truth rule and its consequence: if the two lists ever named different roles, a privileged payload would be cached and served to the public (`Program.cs:227-229`). One policy deliberately takes no bypass list, `NowNextCache`, because its payload is identical for every role (`Program.cs:244-246`).
+  - The API layer wraps it as the [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) extension `IsPrivilegedConferenceReader()` (`CurrentUserServiceExtensions.cs:24-25`), which the controllers use to decide whether to apply a public filter specification at all: `EventsController` picks `null` or a `PublishedEventSpecification` from it (`.../Controllers/EventsController.cs:67`), and `SessionsController`, `SpeakersController`, `SponsorsController`, `SessionSpeakersController`, `SessionCategoryItemsController`, `SpeakerCategoryItemsController`, and `EventSpeakersController` each expose it as a private `IsPrivileged` property (for example `.../Controllers/SessionsController.cs:58`).
+  - The Blazor UI reads it directly when sizing its filters: `_isPrivileged = ConferenceReadAudience.PrivilegedRoles.Any(authState.User.IsInRole)` in `.../MMCA.ADC.Conference.UI/Pages/Public/PublicSessionList.razor.cs:149` and `.../Public/PublicSpeakerList.razor.cs:97`.
 
-  The rows themselves are narrowed one layer up by [`PublicConferenceVisibility`](group-18-conference-application.md#publicconferencevisibility) and the public filter handlers built on it (G18).
-- **Caveats / not-in-source**: case-insensitive role comparison is a property of `ICurrentUserService.IsInRole`, not of this type (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:7-11`). Whether a given JWT actually carries one of these roles is decided by the Identity module and is not visible from this file.
-
----
-
-### SessionInvariants
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:10` · Level 4 · class (static)
-
-- **What it is**: the domain invariant-rule library for the [`Session`](#session) aggregate and its children: title non-empty/max-length, answer-value non-empty/max-length, a not-a-service-session guard (BR-91), status eligibility for engagement actions (BR-49), and an end-after-start time check (BR-122). The length **constants** declared here are referenced by *both* domain validation and EF configuration so a column constraint and a domain rule can never silently diverge (doc comment, `SessionInvariants.cs:6-9`).
-- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (Level 3), [`Result`](group-01-result-error-handling.md#result)/[`Error`](group-01-result-error-handling.md#error) (group-01), and [`SessionStatuses`](#sessionstatuses) (same group, Level 0).
-- **Concept**: the static-invariant-class pattern (methods returning [`Result`](group-01-result-error-handling.md#result), combined with `Result.Combine`) was introduced for the framework in [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants). `[Rubric §4, Domain-Driven Design]` (invariants live in the domain, not in handlers or the database). Two members are worth calling out:
-  - `EnsureStatusIsEligible` (`SessionInvariants.cs:78-85`) delegates to `SessionStatuses.IsEligible(status)`, so the eligibility whitelist lives in the Level-0 catalog and is reused here: there is one definition of "eligible".
-  - `EnsureEndsAtIsAfterStartsAt` (`SessionInvariants.cs:95-107`) guards zero-duration sessions: `endsAt <= startsAt` fails with an invariant error, and both nullable parameters must be non-null for the check to run (null means "not yet scheduled").
-- **Walkthrough**: eight `const int` length constants (`SessionInvariants.cs:13-34`) plus two `static readonly` range constants (`SessionInvariants.cs:41-44`), the latter the `ManualIdRangeStart` (`999_999_000`) / `ManualIdRangeEnd` (`999_999_999`) reserved id window for sessions *not* imported from Sessionize (organizer-created and seeded samples sit above any real Sessionize id so they never collide, the int PK *is* the Sessionize id). Then five `Ensure*` methods returning `Result`: `EnsureTitleIsValid` (line 46), `EnsureAnswerValueIsValid` (line 51), `EnsureNotServiceSession` (line 62), `EnsureStatusIsEligible` (line 78), and `EnsureEndsAtIsAfterStartsAt` (line 95), each tagging errors with a `source` string for tracing.
-- **Why it's built this way**: sharing `TitleMaxLength` etc. between `HasMaxLength(SessionInvariants.TitleMaxLength)` in EF config and the domain check keeps schema and rule in lockstep; the reserved id range encodes the Sessionize-id-is-the-PK design decision in one documented place.
-- **Where it's used**: [`Session.Create`/`Update`](#session) and [`SessionQuestionAnswer.Create`/`UpdateAnswer`](#sessionquestionanswer); the application-layer Session validators; and EF configurations for column lengths (groups 18-19).
+  The rows themselves are narrowed one layer up by [`PublicConferenceVisibility`](group-18-conference-application.md#publicconferencevisibility) and the public filter specifications built on it (G18).
+- **Caveats / not-in-source**: case-insensitive role comparison is a property of `ICurrentUserService.IsInRole`, not of this type. Whether a given JWT actually carries one of these roles is decided by the Identity module and is not visible from this file.
 
 ---
 
 ### SessionAiScore
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:13` · Level 5 · class (sealed)
 
-- **What it is**: an aggregate root storing the AI-generated score for one session across seven criteria (topic relevance, description quality, novelty, actionable takeaways, depth/insight, credibility/experience, and an overall score), plus the model's free-text `Reasoning` and the `ModelUsed` identifier. One score per session; re-scoring replaces the existing record via `Update`.
-- **Depends on**: [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) (bound to `SessionAiScoreIdentifierType`), [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), [`Result`](group-01-result-error-handling.md#result)/[`Error`](group-01-result-error-handling.md#error) (group-01).
-- **Concept**: the factory-method-returns-`Result<T>` aggregate pattern (private ctor + `static Result<T> Create`) was introduced in [group-02](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype). `[Rubric §4, DDD]` and `[Rubric §11, Security]` overlap interestingly here: validating AI output *inside* the domain (range 1.0-10.0) means a model response is checked before it can reach the database, so an out-of-range or hallucinated value cannot enter storage even though the data originates from an external model. The `[IdValueGenerated]` attribute (`SessionAiScore.cs:11`) marks the id as database-generated.
+- **What it is**: an aggregate root holding the AI-generated score for one session across seven criteria (overall, topic relevance, description quality, novelty, actionable takeaways, depth or insight quality, credibility and experience), plus the model's free-text `Reasoning` and the `ModelUsed` identifier. One live score per session.
+- **Depends on**: [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) bound to `SessionAiScoreIdentifierType`, [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), and [`Result`](group-01-result-error-handling.md#result) / [`Error`](group-01-result-error-handling.md#error) (group-01). The alias resolves to `int` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:12`).
+- **Concept**: the private-constructor plus `static Result<T> Create` factory pattern was introduced in [group-02](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype). What this type adds to the discussion is *where you validate machine output*. `[Rubric §4, DDD]` and `[Rubric §11, Security]` overlap here: the 1.0 to 10.0 range check runs inside the domain, so a hallucinated or out-of-range model response is rejected before it can reach the database, even though nothing about the data's origin is visible to the entity. The `[IdValueGenerated]` attribute (`SessionAiScore.cs:12`) marks the identity as database-generated.
 - **Walkthrough**
-  - Ten `private set` properties (`SessionAiScore.cs:15-42`): the FK `SessionId`, seven `decimal` scores (`OverallScore`, `TopicRelevanceScore`, `DescriptionQualityScore`, `NoveltyScore`, `ActionableTakeawaysScore`, `DepthOrInsightQualityScore`, `CredibilityExperienceScore`), and the `Reasoning`/`ModelUsed` text. The EF parameterless ctor (`SessionAiScore.cs:45-49`) seeds `Reasoning`/`ModelUsed` to `string.Empty` to satisfy non-nullable init.
-  - `Create` (`SessionAiScore.cs:54-92`): combines seven `EnsureScoreInRange` checks via `Result.Combine`; on failure returns `Result.Failure<SessionAiScore>(result.Errors)`, otherwise constructs with `Id = default` (`SessionAiScore.cs:80`, the DB fills it).
-  - `Update` (`SessionAiScore.cs:97-131`): re-runs the same seven range checks, then replaces every score field and the reasoning/model, used when re-scoring.
-  - `EnsureScoreInRange` (`SessionAiScore.cs:133-140`): a private helper using the C# pattern `score is >= 1.0m and <= 10.0m`, shared by both `Create` and `Update` (no duplication).
-  - Note: no domain events are emitted on scoring (there is no `AddDomainEvent` call in the file), because there are no domain-event consumers for score changes, so persistence alone suffices.
-- **Why it's built this way**: self-contained range validation in the domain is the last line of defense against bad AI data; replacing (not appending) on re-score keeps exactly one current score per session.
-- **Where it's used**: created/updated by the `ScoreEventSessions` handler (group-18), which calls the Anthropic scoring service (group-19); read by the organizer session-selection dashboard (group-21).
-- **Caveats / not-in-source**: the `SessionAiScoreIdentifierType` alias is defined in `Conference.Shared`; its underlying type (int vs Guid) is not visible in this file.
+  - Ten `private set` properties (`SessionAiScore.cs:16-43`): the FK `SessionId`, seven `decimal` scores, and the `Reasoning` / `ModelUsed` text. `decimal` rather than `double` keeps the stored values exactly as the model reported them.
+  - The EF parameterless constructor (`SessionAiScore.cs:46-50`) seeds `Reasoning` and `ModelUsed` to `string.Empty`, satisfying non-nullable reference types without an `= null!` escape hatch.
+  - `Create` (`SessionAiScore.cs:55-93`): combines seven `EnsureScoreInRange` checks through `Result.Combine` (`:67-74`) so a caller sees *every* out-of-range field at once rather than the first; on failure it returns `Result.Failure<SessionAiScore>(result.Errors)` (`:77`), otherwise it constructs with `Id = default` (`:81`) and leaves identity to the database.
+  - `Update` (`SessionAiScore.cs:98-132`): re-runs the identical seven checks, then replaces every score plus reasoning and model.
+  - `EnsureScoreInRange` (`SessionAiScore.cs:134-141`): a private helper using the C# relational pattern `score is >= 1.0m and <= 10.0m`, shared by both `Create` and `Update`, so the range exists once. The failure message is built with `string.Create(CultureInfo.InvariantCulture, ...)` (`:139`) so a machine-readable diagnostic does not change shape with the request culture.
+  - No domain events are raised anywhere in this file: there is no `AddDomainEvent` call, because no other module reacts to a score change.
+- **Why it's built this way**: range validation belongs to the domain because it is a statement about what a score *is*, not about who asked for one. Keeping the check in a private helper shared by the two public entry points means a future range change cannot be applied to one path and forgotten on the other.
+- **Where it's used**: created by the scoring handler (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsHandler.cs:79`), configured by `SessionAiScoreConfiguration` in Infrastructure (group-19), projected as `SessionAiScoreDTO` (`.../MMCA.ADC.Conference.Shared/Sessions/DecisionSupport/SessionAiScoreDTO.cs`), and rendered by the organizer page `SessionSelectionAiScores.razor` (group-21).
+- **Caveats / not-in-source**: `Update` is not on the re-scoring path today. The handler replaces a session's score with a delete-then-add pair inside the same step that writes the new one (`ScoreEventSessionsHandler.cs:105-107`), a choice its comment justifies by partial-failure behavior: N sequential paid model calls follow, so a run that dies partway through has replaced only what it actually re-scored, and the unique filtered index on `SessionId` keeps at most one live row either way (`ScoreEventSessionsHandler.cs:94-103`). `Update` therefore remains a valid domain operation with no current caller in `Source`.
+
+---
+
+### SessionInvariants
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:10` · Level 6 · class (static)
+
+- **What it is**: the invariant-rule library for the [`Session`](#session) aggregate and its children: title validity, optional-text max lengths, answer-value validity, a not-a-service-session guard (BR-91), status eligibility for engagement actions (BR-49), and an end-after-start check (BR-122). The length **constants** declared here are referenced by both domain validation and EF configuration, so a column constraint and a domain rule cannot silently diverge (doc comment, `SessionInvariants.cs:6-9`).
+- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (`SessionInvariants.cs:1`), [`Result`](group-01-result-error-handling.md#result) / [`Error`](group-01-result-error-handling.md#error) (`:2`), and [`SessionStatuses`](#sessionstatuses) (same namespace).
+- **Concept**: the static-invariant-class pattern (methods returning [`Result`](group-01-result-error-handling.md#result), composed with `Result.Combine`) was introduced for the framework in [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants). `[Rubric §4, Domain-Driven Design]`: the rules live in the domain, not in handlers, validators, or the database. `[Rubric §8, Data Architecture]` also applies through the shared constants: the same `int` bounds the EF `HasMaxLength(...)` call and the domain check.
+- **Walkthrough**
+  - **Length constants** (`SessionInvariants.cs:13-34`): `TitleMaxLength` 500 (`:13`), `DescriptionMaxLength` 4000 (`:16`), `StatusMaxLength` 100 (`:19`), `AccessibilityInfoMaxLength` 500 (`:22`), `ResourceLinksMaxLength` 2000 (`:25`), `LiveUrlMaxLength` 2000 (`:28`), `RecordingUrlMaxLength` 2000 (`:31`), `AnswerValueMaxLength` 4000 (`:34`).
+  - **Reserved id range** (`SessionInvariants.cs:41,44`): `ManualIdRangeStart` = `999_999_000` and `ManualIdRangeEnd` = `999_999_999`, both `static readonly SessionIdentifierType`. The doc comment (`:36-40`) encodes the design decision behind them: session ids are app-assigned because the int PK *is* the Sessionize id, so ids for sessions never imported from Sessionize (organizer-created and seeded samples) sit above any real Sessionize id and never collide. It mirrors `QuestionInvariants` (see [`QuestionInvariants`](#questioninvariants)).
+  - `EnsureTitleIsValid` (`SessionInvariants.cs:46-49`): combines a not-empty and a max-length check from `CommonInvariants`, each tagged with a stable error code (`Session.Title.Empty`, `Session.Title.TooLong`) and the caller's `source` string for tracing.
+  - `EnsureOptionalTextLengthsAreValid` (`SessionInvariants.cs:64-78`): one call validating description, status, live URL, recording URL, accessibility info, and resource links against their constants. Its doc comment (`:51-55`) gives both reasons it exists: oversize input should fail as a domain validation error rather than as a database constraint violation, and the URL fields are length-checked only because the values are stored as opaque strings for Sessionize compatibility.
+  - `EnsureAnswerValueIsValid` (`SessionInvariants.cs:80-83`): the not-empty plus max-length pair for [`SessionQuestionAnswer.AnswerValue`](#sessionquestionanswer).
+  - `EnsureNotServiceSession` (`SessionInvariants.cs:91-98`): fails with `Session.IsServiceSession` when the session is a service slot such as lunch or a break (BR-91), which is how bookmarking and feedback are kept off non-content sessions.
+  - `EnsureStatusIsEligible` (`SessionInvariants.cs:107-114`): delegates to [`SessionStatuses.IsEligible`](#sessionstatuses) (`:108`) and turns a false into a `Session.StatusIneligible` error carrying the offending status in its message. The eligibility whitelist stays in the Level 0 catalog: there is exactly one definition of "eligible".
+  - `EnsureEndsAtIsAfterStartsAt` (`SessionInvariants.cs:124-136`): the only method with a statement body. Both values must be non-null for the check to run (null means not yet scheduled), and `endsAt <= startsAt` fails with `Session.Duration.Invalid`, so a zero-duration session is rejected as firmly as an inverted one (BR-122).
+- **Why it's built this way**: sharing `TitleMaxLength` and its siblings between the EF configuration and the domain check keeps schema and rule in lockstep, and expressing each rule as a `Result`-returning function makes them composable: [`Session.Create`](#session) combines three of them in one `Result.Combine` and reports all failures together.
+- **Where it's used**: [`Session.Create` and `Session.Update`](#session) (`Session.cs:179-182` and `:245-248`), [`SessionQuestionAnswer.Create` / `UpdateAnswer`](#sessionquestionanswer) (`SessionQuestionAnswer.cs:52` and `:73`), the application-layer session validators (group-18), and the EF entity configurations for column lengths (group-19).
 
 ---
 
 ### Session
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:16` · Level 6 · class (sealed)
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:22` · Level 8 · class (sealed)
 
-- **What it is**: the richest aggregate root in the Conference module. `Session` owns three child collections ([`SessionSpeaker`](#sessionspeaker), [`SessionCategoryItem`](#sessioncategoryitem), [`SessionQuestionAnswer`](#sessionquestionanswer)) and coordinates their full lifecycle: creation, update, cascade soft-deletion, and a domain event for every structural change. Session IDs are Sessionize-assigned, not database-generated.
-- **Depends on**: [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) (bound to `SessionIdentifierType`), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate), [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), [`EntityTypeExtensions`](group-02-domain-building-blocks.md#entitytypeextensions) (the `IsIdValueGenerated` extension), [`Result`](group-01-result-error-handling.md#result)/[`Error`](group-01-result-error-handling.md#error) (group-01); the domain entities [`Event`](#event) and [`Room`](#room) (reference navigations); [`SessionInvariants`](#sessioninvariants); the child entities and their domain events [`SessionChanged`](#sessionchanged), [`SessionSpeakerChanged`](#sessionspeakerchanged), [`SessionCategoryItemChanged`](#sessioncategoryitemchanged), [`SessionQuestionAnswerChanged`](#sessionquestionanswerchanged).
-- **Concept introduced, the aggregate root as consistency boundary.** `[Rubric §4, Domain-Driven Design]` (assesses aggregates with a single transactional boundary and correct child-entity lifecycle management). An **aggregate root** is the only entry point for mutations inside its boundary: nothing outside `Session` can add or remove a `SessionSpeaker` directly, all such operations go through `Session.AddSessionSpeaker` / `RemoveSessionSpeaker`, etc. This guarantees three things at once:
-  - **Invariant checking**: `AddSessionSpeaker` rejects a duplicate speaker (`Session.cs:308-315`).
-  - **Event emission**: every structural change raises a domain event, making the change observable to other modules through the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) without the aggregate knowing who listens. `[Rubric §6, CQRS & Event-Driven]`.
-  - **Cascade soft-delete**: `Delete()` (`Session.cs:263`) soft-deletes each non-deleted child before emitting `SessionChanged(Deleted)`, implementing BR-55 at the domain level rather than via a DB cascade or handler glue.
+- **What it is**: the richest aggregate root in the Conference module. `Session` owns three child collections ([`SessionSpeaker`](#sessionspeaker), [`SessionCategoryItem`](#sessioncategoryitem), [`SessionQuestionAnswer`](#sessionquestionanswer)) and coordinates their whole lifecycle: creation, update, restore, cascade soft-delete, and a domain event for every structural change. Session ids are Sessionize-assigned, not database-generated.
+- **Depends on**: [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) bound to `SessionIdentifierType`, [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate), [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), [`EntityTypeExtensions`](group-02-domain-building-blocks.md#entitytypeextensions) (the `IsIdValueGenerated` extension), [`Result`](group-01-result-error-handling.md#result) / [`Error`](group-01-result-error-handling.md#error); the sibling entities [`Event`](#event) and [`Room`](#room) as reference navigations; [`SessionInvariants`](#sessioninvariants); its three children and their domain events [`SessionChanged`](#sessionchanged), [`SessionSpeakerChanged`](#sessionspeakerchanged), [`SessionCategoryItemChanged`](#sessioncategoryitemchanged), [`SessionQuestionAnswerChanged`](#sessionquestionanswerchanged).
+- **Concept introduced, the aggregate root as consistency boundary.** `[Rubric §4, Domain-Driven Design]` (assesses aggregates with a single transactional boundary and correct child lifecycle management). An **aggregate root** is the only entry point for mutations inside its boundary: nothing outside `Session` constructs or removes a `SessionSpeaker`, every such operation goes through `Session.AddSessionSpeaker` / `RemoveSessionSpeaker`. Three guarantees follow at once:
+  - **Cross-child invariants have a home.** `AddSessionSpeaker` rejects a duplicate live speaker (`Session.cs:322-329`) and `AddSessionCategoryItem` rejects a duplicate live category item (`Session.cs:418-425`). Neither check could live on the child, which cannot see its siblings.
+  - **Event emission is not optional.** Every structural change raises a domain event, making the change observable to other modules through the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) without the aggregate knowing who listens. `[Rubric §6, CQRS & Event-Driven]`.
+  - **Cascade soft-delete is domain behavior.** `Delete()` (`Session.cs:277`) soft-deletes each non-deleted child before raising `SessionChanged(Deleted)`, implementing BR-55 in the model rather than through a database cascade or handler glue.
 
-  The `private` constructors (`Session.cs:99` and `:101`) plus `static Result<Session> Create` (`Session.cs:150`) enforce that a `Session` is only ever built through a validated, event-emitting path.
+  The private constructors (`Session.cs:113` and `:115`) plus the `static Result<Session> Create` factory (`Session.cs:163`) are what make that boundary real: there is no way to obtain a `Session` that skipped validation or the creation event.
+
+  **A second concept lands here too: the change trail.** The class is marked [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity) (`Session.cs:22`), and the class doc comment (`Session.cs:16-20`) gives the reason in business terms: sessions are written by organizers *and* overwritten by the Sessionize sync, so "what changed this title, room, or time slot, and was it a person or the importer" is a question that actually gets asked, and only a change history answers it. `[Rubric §13, Observability & Operability]`: audit stamps say who touched the row last, the trail says what the sequence was.
 - **Walkthrough**
-  - **Properties** (`Session.cs:19-63`): fifteen `private set` domain fields, callers must use the mutation methods, not direct assignment. `Title` is non-nullable; `LiveUrl`/`RecordingUrl` (`Session.cs:47,51`) each carry a justified `[SuppressMessage(..."CA1056"...)]` (they hold a `string` from Sessionize rather than a `Uri`); `EventId`/`RoomId` (`Session.cs:60,63`) are scalar FKs.
-  - **Reference navigations** (`Session.cs:66-71`): `Event?` and `Room?` are `[Navigation]`-tagged `get; set;` properties (not read-only) that EF and the navigation populator (group-11) hydrate; the doc comment notes `Event` exists for query filtering (BR-132).
-  - **`Duration`** (`Session.cs:76-78`): a computed `int?` property (no column), derived from `StartsAt`/`EndsAt`.
-  - **Child collections** (`Session.cs:80-96`): three `private readonly List<T>` fields exposed as `IReadOnlyCollection<T>` via `.AsReadOnly()`, each tagged `[Navigation(IsCollection = true)]`. The backing lists are mutable only through aggregate methods, the consistency boundary in code.
-  - **`Create`** (`Session.cs:150`): validates `EnsureTitleIsValid` + `EnsureEndsAtIsAfterStartsAt` (`Session.cs:166-168`), then constructs and emits `SessionChanged(Added)` (`Session.cs:192`). Line 172 reads `typeof(Session).IsIdValueGenerated`; `Session` has no `[IdValueGenerated]` (IDs are Sessionize-assigned), so the factory assigns `id!.Value` directly rather than leaving `default` (`Session.cs:189`).
-  - **`Update`** (`Session.cs:216`): same two-invariant check (`Session.cs:232-234`), mutates every field, emits `SessionChanged(Updated)` (`Session.cs:253`).
-  - **`Delete`** (`Session.cs:263`): calls `base.Delete()` (sets `IsDeleted`), then iterates the three child lists soft-deleting each non-deleted child (`Session.cs:269-288`), then emits `SessionChanged(Deleted)` (`Session.cs:290`). Bails on the first child failure.
-  - **Child mutation methods** (`AddSessionSpeaker`/`RemoveSessionSpeaker` at `Session.cs:304,335`; `AddSessionCategoryItem`/`RemoveSessionCategoryItem` at `:364,395`; `AddSessionQuestionAnswer`/`UpdateSessionQuestionAnswer`/`RemoveSessionQuestionAnswer` at `:425,449,472`): each delegates to the child's `Create`/`Delete`/`UpdateAnswer`, mutates the private list, and emits the child-specific `*Changed` event. The `Remove*`/`Update*` helpers route through `GetChildOrNotFound<...>` (the private wrappers at `Session.cs:494-507`) so a missing child id yields a `NotFound` result, not a null-ref.
-  - **`SetSession*` methods** (`Session.cs:353,413,490`): `internal` setters used **only** by the navigation populator, they call `SetItems(_list, items)` (the base helper from `AuditableAggregateRootEntity`) to replace in-memory collections during query-side population, bypassing domain logic; never used on the command side.
-- **Why it's built this way**: the aggregate boundary makes atomicity natural: one `SaveChangesAsync` commits the session and all its children together, and domain events on every method surface state changes to other modules via the outbox without tight coupling. `[Rubric §29, Resilience]`: cascade soft-delete prevents children being orphaned in a live-but-unreachable state.
-- **Where it's used**: the central Conference entity: persisted by `EntityTypeConfigurationSQLServer<Session, SessionIdentifierType>` (group-19), read through `IEntityQueryService<Session, SessionDTO, SessionIdentifierType>`, and mutated by the Session command handlers (group-18).
+  - **Scalar properties** (`Session.cs:25-67`): fifteen `private set` fields. `Title` is the only non-nullable text (`:25`); `Status` is free text imported from Sessionize (`:37`); the booleans `IsInformed` / `IsConfirmed` (`:40,43`) track the speaker-communication workflow, and `IsServiceSession` / `IsPlenumSession` (`:46,49`) classify the slot. `LiveUrl` and `RecordingUrl` (`:52,55`) are `string?`, not `Uri`, for Sessionize compatibility. `EventId` (`:64`) and `RoomId` (`:67`) are scalar FKs, the latter nullable because a session may not have a room yet.
+  - **Reference navigations** (`Session.cs:70-75`): `Event?` and `Room?` are `[Navigation]`-tagged `get; set;` properties (deliberately not read-only) that EF and the navigation populator (group-11) hydrate. The `Event` doc comment notes it exists for query filtering (BR-132).
+  - **`Duration`** (`Session.cs:80-82`): a computed `int?` in minutes derived from `StartsAt` / `EndsAt`, with no backing column.
+  - **Child collections** (`Session.cs:84-110`): three `private readonly List<T>` fields exposed as `IReadOnlyCollection<T>` through `.AsReadOnly()`. `SessionSpeakers` (`:88`) and `SessionCategoryItems` (`:110`) carry `[Navigation(IsCollection = true)]`. `SessionQuestionAnswers` (`:104`) deliberately does **not**, and its remarks (`:95-103`) are worth reading in full: the collection grows with attendance rather than with the schedule, it was riding along on the hottest public reads (the session grid, session detail, the speaker dashboard) which never render it, and it is the one child collection here that is not public data, since its dedicated controller is authenticated and scopes rows per caller while `GET /sessions?includeChildren=true` is anonymous. Handlers that genuinely need the answers pass an explicit includes list. `[Rubric §12, Performance & Scalability]` and `[Rubric §11, Security]` in one attribute that is absent.
+  - **`Create`** (`Session.cs:163-209`): combines `EnsureTitleIsValid`, `EnsureEndsAtIsAfterStartsAt`, and `EnsureOptionalTextLengthsAreValid` (`:179-182`) so all validation failures surface together, then reads `typeof(Session).IsIdValueGenerated` (`:186`). `Session` carries no `[IdValueGenerated]` attribute, so that is false and the factory assigns `id!.Value` (`:203`); the identical line in a database-generated entity leaves `default`. It ends by raising `SessionChanged(Added)` (`:206`).
+  - **`Update`** (`Session.cs:229-270`): the same three-invariant combine (`:245-248`), then assigns every mutable field including the two workflow booleans and `RoomId`, and raises `SessionChanged(Updated)` (`:267`).
+  - **`Delete`** (`Session.cs:277-308`): calls `base.Delete()` first, and only on success walks the three child lists, deleting each non-deleted child and returning immediately on the first child failure (`:283-302`), then raises `SessionChanged(Deleted)` (`:304`).
+  - **Child mutation methods**: speakers at `Session.cs:318` (`AddSessionSpeaker`), `:355` (`RestoreSessionSpeaker`), `:385` (`RemoveSessionSpeaker`); category items at `:414`, `:452`, `:482`; question answers at `:512` (`AddSessionQuestionAnswer`), `:536` (`UpdateSessionQuestionAnswer`), `:559` (`RemoveSessionQuestionAnswer`). Each delegates to the child's own `Create` / `UpdateAnswer` / `Delete`, mutates the private list, and raises the child-specific `*Changed` event.
+  - **The restore path** (`Session.cs:355-378` and `:452-475`) is the interesting one. It takes the join *instance* rather than an id, because a soft-deleted row is excluded by the global query filter and so must be resolved by the caller (remarks at `:348-352`). It refuses a not-deleted association with `Session.Speaker.NotDeleted` (`:361-366`), calls the child's `Reactivate()`, re-adds it to the list only if absent (`:372-373`), and raises `SessionSpeakerChanged(Added)` because the association re-enters the visible set (`:375`). BR-135: an association that reappears in the Sessionize feed is reactivated rather than duplicated by a second row.
+  - **Lookup helpers** (`Session.cs:581-594`): the three private `Get*OrNotFound` wrappers route through the base `GetChildOrNotFound<TChild, TChildId>` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:103`), so a missing child id yields a `NotFound` result instead of a null reference.
+  - **`SetSession*` methods** (`Session.cs:403`, `:500`, `:577`): `internal`, used only by the navigation populator. They call the base `SetItems` helper (`AuditableAggregateRootEntity.cs:60`) to replace in-memory collections during query-side population, bypassing domain logic. They are never on the command path.
+- **Why it's built this way**: the aggregate boundary makes atomicity natural, one `SaveChangesAsync` commits the session and all of its children together, and domain events raised inside the same transaction reach other modules through the outbox without the aggregate knowing they exist. `[Rubric §29, Resilience & Business Continuity]`: cascade soft-delete keeps children from surviving in a live-but-unreachable state after their parent is gone.
+- **Where it's used**: the central Conference entity. Persisted through its EF configuration and repositories (group-19), read as `SessionDTO` through the query services, and mutated by the Session command handlers (group-18); its ids and eligibility rules are consumed cross-service by Engagement through the bookmark and live-validation contracts.
 
 ---
 
 ### SessionCategoryItem
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionCategoryItem.cs:13` · Level 6 · class (sealed)
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionCategoryItem.cs:13` · Level 8 · class (sealed)
 
-- **What it is**: a join entity linking a [`Session`](#session) to a [`CategoryItem`](#categoryitem), with database-generated identity (`[IdValueGenerated]`, `SessionCategoryItem.cs:12`). It is a child of the `Session` aggregate.
-- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (bound to `SessionCategoryItemIdentifierType`), [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), [`EntityTypeExtensions`](group-02-domain-building-blocks.md#entitytypeextensions), [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), [`Result`](group-01-result-error-handling.md#result), [`Session`](#session) (back-reference).
-- **Concept introduced, the join entity.** `[Rubric §4, DDD]`: rather than a raw EF join *table*, a many-to-many association is modeled as a domain entity, so it can carry its own identity, audit fields, and participate in domain events through the owning aggregate. The three Session children ([`SessionSpeaker`](#sessionspeaker), this, and [`SessionQuestionAnswer`](#sessionquestionanswer)) all share this shape, they differ only in the FK(s) and any payload they carry.
-- **Walkthrough**: `CategoryItemId` (`SessionCategoryItem.cs:16`, `private set`); `Session?` back-navigation (`SessionCategoryItem.cs:20`, `[Navigation]`); `SessionId` (`SessionCategoryItem.cs:23`, get-only, set by EF when the child is added to `Session._sessionCategoryItems`). `Create(id?, categoryItemId)` (`SessionCategoryItem.cs:36-48`): reads `typeof(SessionCategoryItem).IsIdValueGenerated` (`true` here), so `Id` stays `default` for the database to fill (`SessionCategoryItem.cs:44`). No domain validation (the association is structurally always valid).
-- **Where it's used**: managed exclusively through [`Session.AddSessionCategoryItem`/`RemoveSessionCategoryItem`](#session).
+- **What it is**: the join entity linking a [`Session`](#session) to a [`CategoryItem`](#categoryitem), with database-generated identity (`[IdValueGenerated]`, `SessionCategoryItem.cs:12`). A child of the `Session` aggregate.
+- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) bound to `SessionCategoryItemIdentifierType`, [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), [`EntityTypeExtensions`](group-02-domain-building-blocks.md#entitytypeextensions), [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), [`Result`](group-01-result-error-handling.md#result), and [`Session`](#session) as the back-reference.
+- **Concept introduced, the join entity.** `[Rubric §4, DDD]`: rather than letting EF create a raw join *table*, a many-to-many association is modeled as a domain entity, so it carries its own identity, audit fields, and soft-delete state, and participates in domain events through the owning aggregate. All three `Session` children share this shape and differ only in the FK they carry and whether they hold a payload.
+- **Walkthrough**: `CategoryItemId` (`SessionCategoryItem.cs:16`, `private set`); the `Session?` back-navigation (`:19-20`, `[Navigation]`); `SessionId` (`:23`), get-only because EF sets it as the shadow-side FK when the child is added to the parent's list. Two constructors: the EF parameterless one (`:26`) and a private assigning one (`:28`). `Create(id?, categoryItemId)` (`:36-48`) reads `typeof(SessionCategoryItem).IsIdValueGenerated` (`:40`), which is true here, so `Id` stays `default` for the database to fill (`:44`); it performs no validation, because the association is structurally always valid. `Reactivate()` (`:56`) exposes the protected base `Undelete()` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:67`) to the aggregate root; its doc comment (`:50-55`) explains why the join is reactivated rather than re-created when an association reappears in the Sessionize feed (BR-135).
+- **Where it's used**: managed exclusively through [`Session.AddSessionCategoryItem` / `RestoreSessionCategoryItem` / `RemoveSessionCategoryItem`](#session).
 
 ---
 
 ### SessionQuestionAnswer
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionQuestionAnswer.cs:13` · Level 6 · class (sealed)
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionQuestionAnswer.cs:13` · Level 8 · class (sealed)
 
-- **What it is**: a child entity of [`Session`](#session) storing an answer to a [`Question`](#question) for that session. Database-generated identity (`[IdValueGenerated]`, `SessionQuestionAnswer.cs:12`).
-- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (bound to `SessionQuestionAnswerIdentifierType`), [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), [`EntityTypeExtensions`](group-02-domain-building-blocks.md#entitytypeextensions), [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), [`Result`](group-01-result-error-handling.md#result), [`Session`](#session), [`SessionInvariants`](#sessioninvariants).
-- **Concept**: same join-entity pattern as [`SessionCategoryItem`](#sessioncategoryitem); the difference is a validated `AnswerValue` payload. `[Rubric §4, DDD]`.
-- **Walkthrough**: `QuestionId` (`SessionQuestionAnswer.cs:16`) and `AnswerValue` (`SessionQuestionAnswer.cs:19`, seeded to `string.Empty` by the EF ctor on `SessionQuestionAnswer.cs:29`); `Session?` navigation (`SessionQuestionAnswer.cs:23`); get-only `SessionId` (`SessionQuestionAnswer.cs:26`). `Create(id?, questionId, answerValue)` (`SessionQuestionAnswer.cs:46-64`) validates non-empty/max-length via `SessionInvariants.EnsureAnswerValueIsValid` before constructing. `UpdateAnswer(answerValue)` (`SessionQuestionAnswer.cs:71-80`) re-validates and mutates the field.
-- **Where it's used**: managed through [`Session.AddSessionQuestionAnswer`/`UpdateSessionQuestionAnswer`/`RemoveSessionQuestionAnswer`](#session).
+- **What it is**: a child entity of [`Session`](#session) storing the answer to a [`Question`](#question) for that session. Database-generated identity (`[IdValueGenerated]`, `SessionQuestionAnswer.cs:12`).
+- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) bound to `SessionQuestionAnswerIdentifierType`, [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), [`EntityTypeExtensions`](group-02-domain-building-blocks.md#entitytypeextensions), [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), [`Result`](group-01-result-error-handling.md#result), [`Session`](#session), and [`SessionInvariants`](#sessioninvariants).
+- **Concept**: the same join-entity shape as [`SessionCategoryItem`](#sessioncategoryitem), with one difference that matters: it carries a validated payload, so unlike its two siblings its `Create` can fail. `[Rubric §4, DDD]`.
+- **Walkthrough**: `QuestionId` (`SessionQuestionAnswer.cs:16`) and `AnswerValue` (`:19`), the `Session?` navigation (`:22-23`), and the get-only `SessionId` (`:26`). The EF constructor seeds `AnswerValue` to `string.Empty` (`:29`); the private assigning constructor is at `:31-37`. `Create(id?, questionId, answerValue)` (`:46-64`) validates through `SessionInvariants.EnsureAnswerValueIsValid` (`:52`) before touching identity, then applies the same `IsIdValueGenerated` branch as its siblings (`:56,60`). `UpdateAnswer(answerValue)` (`:71-80`) re-runs the identical invariant (`:73`) and mutates the field, so an update cannot bypass a rule that creation enforced. There is no `Reactivate()` here: an answer is content, not a Sessionize-fed association.
+- **Where it's used**: managed through [`Session.AddSessionQuestionAnswer` / `UpdateSessionQuestionAnswer` / `RemoveSessionQuestionAnswer`](#session), and exposed as `SessionQuestionAnswerDTO` through a dedicated authenticated controller (group-20).
 
 ---
 
 ### SessionSpeaker
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionSpeaker.cs:13` · Level 6 · class (sealed)
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionSpeaker.cs:13` · Level 8 · class (sealed)
 
-- **What it is**: a join entity linking a [`Session`](#session) to a [`Speaker`](#speaker), with database-generated identity (`[IdValueGenerated]`, `SessionSpeaker.cs:12`).
-- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (bound to `SessionSpeakerIdentifierType`), [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), [`EntityTypeExtensions`](group-02-domain-building-blocks.md#entitytypeextensions), [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), [`Result`](group-01-result-error-handling.md#result), [`Session`](#session).
-- **Concept**: the same join-entity pattern as [`SessionCategoryItem`](#sessioncategoryitem); the thinnest of the three (only a `SpeakerId` payload).
-- **Walkthrough**: `SpeakerId` (`SessionSpeaker.cs:16`), `Session?` navigation (`SessionSpeaker.cs:20`), get-only `SessionId` (`SessionSpeaker.cs:23`). `Create(id?, speakerId)` (`SessionSpeaker.cs:36-48`) just assigns identity, no domain validation here. Crucially, the **duplicate-speaker** invariant lives in [`Session.AddSessionSpeaker`](#session) (`Session.cs:308-315`), not in this child: the aggregate root, not the child, owns cross-child uniqueness, the textbook placement of an invariant that spans the collection.
-- **Where it's used**: managed through [`Session.AddSessionSpeaker`/`RemoveSessionSpeaker`](#session).
+- **What it is**: the join entity linking a [`Session`](#session) to a [`Speaker`](#speaker), with database-generated identity (`[IdValueGenerated]`, `SessionSpeaker.cs:12`).
+- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) bound to `SessionSpeakerIdentifierType`, [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), [`EntityTypeExtensions`](group-02-domain-building-blocks.md#entitytypeextensions), [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), [`Result`](group-01-result-error-handling.md#result), and [`Session`](#session).
+- **Concept**: the same join-entity pattern as [`SessionCategoryItem`](#sessioncategoryitem), and the thinnest of the three (a single `SpeakerId` payload). Its value as a teaching example is where the *uniqueness* rule is not: the duplicate-speaker invariant lives in [`Session.AddSessionSpeaker`](#session) (`Session.cs:322-329`), not here. A rule that spans a collection belongs to the aggregate root that owns the collection, because the child can only see itself. `[Rubric §4, DDD]`.
+- **Walkthrough**: `SpeakerId` (`SessionSpeaker.cs:16`), the `Session?` navigation (`:19-20`), the get-only `SessionId` (`:23`), the EF and assigning constructors (`:26,28`). `Create(id?, speakerId)` (`:36-48`) only resolves identity through `IsIdValueGenerated` (`:40,44`) and always succeeds. `Reactivate()` (`:56`) forwards to the protected base `Undelete()`; its doc comment (`:50-55`) records the BR-135 rationale, that the row carries the Sessionize-assigned speaker id, so a returning association is reactivated rather than duplicated.
+- **Where it's used**: managed through [`Session.AddSessionSpeaker` / `RestoreSessionSpeaker` / `RemoveSessionSpeaker`](#session); its projection `SessionSpeakerDTO` is what the public session grid renders for speaker names.
 
 ### EventLiveInfo
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventLiveInfo.cs:13` · Level 0 · record (sealed)
@@ -609,7 +718,7 @@ rules themselves are catalogued in ADC's specifications guide.
 - **Concept introduced, the cross-module live-window snapshot.** `[Rubric §7, Microservices Readiness]` (assesses whether a module exposes a small, stable contract instead of leaking its internal entities across a boundary): rather than shipping the whole `Event` entity to another module (or, after extraction, another process), Conference does the time-zone arithmetic once, server-side, and hands back three plain values. The consumer then compares them against `DateTime.UtcNow` with **no** time-zone logic of its own (doc comment, `EventLiveInfo.cs:3-8`). The window is derived from the event's `StartDate`/`EndDate` and its IANA time zone: start is `StartDate` at 00:00 local, end (exclusive) is `EndDate + 1 day` at 00:00 local, both converted to UTC. `[Rubric §9, API & Contract Design]` (a narrow, purpose-built contract) also applies: this record carries exactly what a consumer needs to gate a live feature, nothing more.
 - **Walkthrough**: a positional `sealed record` (`EventLiveInfo.cs:13`) with three parameters, `IsPublished` (`bool`), `LiveWindowStartUtc` and `LiveWindowEndUtc` (both `DateTime`, the end being exclusive per the param docs on `EventLiveInfo.cs:10-12`). There is no behavior: the type is a pure value carrier, and being a `record` it gets structural equality for free.
 - **Why it's built this way**: keeping the "when is an event live" definition in the owning module and putting only UTC instants on the wire means the rule lives in exactly one place, and the contract itself is time-zone-free. Consumers cannot drift from the canonical window because they never recompute it.
-- **Where it's used**: produced by the real [`EventLiveValidationService`](group-18-conference-application.md#eventlivevalidationservice) (Conference.Application) behind [`IEventLiveValidationService.GetEventLiveInfoAsync`](#ieventlivevalidationservice), and across the process boundary by the [`EventLiveValidationServiceGrpcAdapter`](group-20-conference-api-grpc.md#eventlivevalidationservicegrpcadapter) (group-20). The fail-open stub [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) returns `new EventLiveInfo(true, DateTime.MinValue, DateTime.MaxValue)`. It is consumed by the Engagement event-wide [`LivePoll`](group-23-engagement-live-layer.md#livepoll) paths: [`CreateLivePollHandler`](group-23-engagement-live-layer.md#createlivepollhandler) reads `IsPublished` to enforce BR-222 (`CreateLivePollHandler.cs:70-84`), and [`OpenLivePollHandler`](group-23-engagement-live-layer.md#openlivepollhandler) reads the two window bounds and passes them into `LivePoll.Open` (`OpenLivePollHandler.cs:72-80`).
+- **Where it's used**: produced by the real [`EventLiveValidationService`](group-18-conference-application.md#eventlivevalidationservice) (Conference.Application) behind [`IEventLiveValidationService.GetEventLiveInfoAsync`](#ieventlivevalidationservice), and across the process boundary by the [`EventLiveValidationServiceGrpcAdapter`](group-20-conference-api-grpc.md#eventlivevalidationservicegrpcadapter) (group-20). The fail-open stub [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) returns `new EventLiveInfo(true, DateTime.MinValue, DateTime.MaxValue)` (`DisabledEventLiveValidationService.cs:26`). It is consumed by the Engagement event-wide [`LivePoll`](group-23-engagement-live-layer.md#livepoll) paths: [`CreateLivePollHandler`](group-23-engagement-live-layer.md#createlivepollhandler) reads `IsPublished` to enforce BR-222 (`CreateLivePollHandler.cs:70-77`), and [`OpenLivePollHandler`](group-23-engagement-live-layer.md#openlivepollhandler) reads the two window bounds and passes them into `LivePoll.Open` (`OpenLivePollHandler.cs:73-78`). The Engagement check-in path uses it too: [`CheckInProcessor`](group-22-engagement-module.md#checkinprocessor) fetches it for an event-scope check-in and rejects an unpublished event (`CheckInProcessor.cs:114-118`).
 
 ---
 
@@ -621,7 +730,7 @@ rules themselves are catalogued in ADC's specifications guide.
 - **Concept introduced, the per-event moderation policy knob.** `[Rubric §6, CQRS & Event-Driven]` (assesses whether the data crossing a boundary carries enough context to be acted on without extra lookups): this small enum is the vocabulary the Engagement live layer reads to decide whether a freshly submitted [`SessionQuestion`](group-23-engagement-live-layer.md#sessionquestion) starts hidden or visible. Making it a two-value enum rather than a bare `bool` leaves room for future moderation modes and reads self-documentingly at the call site.
 - **Walkthrough**: two explicitly numbered members, `Pending = 0` (`QuestionModerationDefault.cs:10`, the safe default: an unset/zero value means "hold for review") and `Approved = 1` (`QuestionModerationDefault.cs:13`). Explicit numbering keeps the wire meaning stable if the members are ever reordered.
 - **Why it's built this way**: `Pending = 0` makes the conservative choice the default value. An event that never set a moderation preference holds new questions for review rather than publishing them unmoderated.
-- **Where it's used**: carried on [`EventDTO.QuestionModerationDefault`](#eventdto) (`EventDTO.cs:48`) and inside [`SessionLiveInfo`](#sessionliveinfo) (`SessionLiveInfo.cs:24`), so the live layer learns the owning event's policy in the same call that fetches session facts. The stub [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) reports `Pending` (`DisabledEventLiveValidationService.cs:42`). Consumed by the Engagement [`SubmitQuestionHandler`](group-23-engagement-live-layer.md#submitquestionhandler), which maps `Approved` to `QuestionStatus.Approved` and everything else to `QuestionStatus.Pending` when creating the question (`SubmitQuestionHandler.cs:76-87`).
+- **Where it's used**: carried on [`EventDTO.QuestionModerationDefault`](#eventdto) (`EventDTO.cs:54`) and inside [`SessionLiveInfo`](#sessionliveinfo) (`SessionLiveInfo.cs:24`), so the live layer learns the owning event's policy in the same call that fetches session facts. The stub [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) reports `Pending` (`DisabledEventLiveValidationService.cs:42`). Consumed by the Engagement [`SubmitQuestionHandler`](group-23-engagement-live-layer.md#submitquestionhandler), which maps `Approved` to `QuestionStatus.Approved` and everything else to `QuestionStatus.Pending` when creating the question (`SubmitQuestionHandler.cs:81-91`).
 
 ---
 
@@ -631,21 +740,45 @@ rules themselves are catalogued in ADC's specifications guide.
 - **What it is**: the response DTO for the Sessionize refresh endpoint (`POST /Events/{id}/refresh`, UC-6). It reports per-entity sync counts plus a list of non-fatal warnings, so an organizer can confirm what was actually imported.
 - **Depends on**: nothing first-party (BCL only).
 - **Concept introduced, the informative mutation response.** `[Rubric §9, API & Contract Design]` (assesses stable, useful response contracts): rather than returning `204 No Content` for a bulk sync, the endpoint returns counts so the caller can verify that the expected number of sessions, speakers, and categories landed. This is the read-back shape of a bulk write. `[Rubric §13, Observability & Operability]` also applies in the small: the `Warnings` list turns silent partial-import oddities into something an operator can read off the response.
-- **Walkthrough**: eight `required init` properties (`RefreshFromSessionizeResultDTO.cs:10-31`). Six are `int` counts, `CategoriesSynced` (line 10), `CategoryItemsSynced` (line 13), `RoomsSynced` (line 16), `QuestionsSynced` (line 19), `SpeakersSynced` (line 22), and `SessionsSynced` (line 25). `SkippedSoftDeleted` (line 28) counts entities that a sync re-encountered but did not restore because the app had soft-deleted them (BR-136). `Warnings` (line 31) is an `IReadOnlyList<string>` of non-fatal issues such as a zero-duration session or a date-range mismatch. Every property is `required`, so a partial or forgotten field cannot be constructed.
-- **Why it's built this way**: `SkippedSoftDeleted` is surfaced explicitly because an organizer who soft-deleted a session and then re-ran a sync would otherwise be puzzled why the count does not match Sessionize. The handler even folds that count into the warning list when it is non-zero (`RefreshFromSessionizeHandler.cs:122-125`).
-- **Where it's used**: built by the [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) handler, which reads the per-strategy [`SessionizeSyncResult`](group-18-conference-application.md#sessionizesyncresult) values and the shared sync context into it (`RefreshFromSessionizeHandler.cs:137-147`), with an all-zero instance returned when Sessionize sends an empty response (`RefreshFromSessionizeHandler.cs:94-104`). Returned as `200 OK` by [`EventsController.RefreshAsync`](group-20-conference-api-grpc.md#eventscontroller) (`EventsController.cs:289-290`) and surfaced to the organizer UI through [`EventService.RefreshFromSessionizeAsync`](group-21-conference-ui.md#eventservice) (`EventService.cs:47-55`).
+- **Walkthrough**: eight `required init` properties (`RefreshFromSessionizeResultDTO.cs:10-31`). Six are `int` counts, `CategoriesSynced` (line 10), `CategoryItemsSynced` (line 13), `RoomsSynced` (line 16), `QuestionsSynced` (line 19), `SpeakersSynced` (line 22), and `SessionsSynced` (line 25). `SkippedSoftDeleted` (line 28) counts entities that a sync re-encountered but did not restore because the app had soft-deleted them (BR-136). `Warnings` (line 31) is an `IReadOnlyList<string>` of non-fatal issues such as a duration violation or a date-range mismatch. Every property is `required`, so a partial or forgotten field cannot be constructed.
+- **Why it's built this way**: `SkippedSoftDeleted` is surfaced explicitly because an organizer who soft-deleted a session and then re-ran a sync would otherwise be puzzled why the count does not match Sessionize. The handler even folds that count into the warning list when it is non-zero (`RefreshFromSessionizeHandler.cs:128-131`).
+- **Where it's used**: built by the [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) handler, which reads the per-strategy [`SessionizeSyncResult`](group-18-conference-application.md#sessionizesyncresult) values and the shared sync context into it (`RefreshFromSessionizeHandler.cs:143-153`), with an all-zero instance returned when Sessionize sends an empty response (`RefreshFromSessionizeHandler.cs:100-110`). Returned by [`EventsController.RefreshAsync`](group-20-conference-api-grpc.md#eventscontroller) (`EventsController.cs:338`) and surfaced to the organizer UI through [`EventService.RefreshFromSessionizeAsync`](group-21-conference-ui.md#eventservice) (`EventService.cs:47-55`), which the `EventDetail` page holds as `_refreshResult` (`EventDetail.razor.cs:68`).
+
+---
+
+### RoomSessionInfo
+> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/RoomSessionInfo.cs:18` · Level 0 · record (sealed)
+
+- **What it is**: the answer to "which session is this room hosting right now": the resolved session id and title, the owning event, and that event's published flag. It is what the Engagement room check-in flow gets back when an attendee scans a printed room QR.
+- **Depends on**: the `SessionIdentifierType` and `EventIdentifierType` aliases; BCL otherwise. No first-party types.
+- **Concept introduced, the server-resolved target (never trust a client-supplied id).** `[Rubric §11, Security]` (assesses whether authorization-relevant inputs are decided server-side): the attendee's device sends a **room** id, not a session id, and Conference resolves which session that room is hosting at the call instant. A tampered QR therefore cannot record a check-in against an arbitrary session. `[Rubric §9, API & Contract Design]` also applies in a subtle way: `SessionTitle` rides along so the caller can render a confirmation without a second cross-module call, and the **grace window travels in the request** rather than living on this record, because "how early does a scan count" is check-in policy owned by Engagement, not schedule data owned by Conference (doc comment, `RoomSessionInfo.cs:8-12`, and the same split restated on the interface, `IEventLiveValidationService.cs:50-53`).
+- **Walkthrough**: a positional `sealed record` with four parameters (`RoomSessionInfo.cs:18-22`), `SessionId` (the session the room is hosting at the query instant, line 19), `SessionTitle` (line 20), `EventId` (the owning event, line 21), and `IsPublished` (line 22). No behavior.
+- **Why it's built this way**: bundling the title and the published flag with the id keeps the door-scan path to a single cross-module round-trip, and keeping the grace window out of the record preserves the boundary: Conference answers the schedule question, Engagement decides the policy.
+- **Where it's used**: produced by [`EventLiveValidationService.GetCurrentRoomSessionInfoAsync`](group-18-conference-application.md#eventlivevalidationservice), which excludes unscheduled sessions (`EventLiveValidationService.cs:157-165`), converts session wall-clock times with the event's zone (`EventLiveValidationService.cs:187-195`), and prefers an in-progress session over an upcoming one inside the grace window (`EventLiveValidationService.cs:199-206`) before building the record (`EventLiveValidationService.cs:214-218`). Carried over the wire by [`EventLiveValidationServiceGrpcAdapter`](group-20-conference-api-grpc.md#eventlivevalidationservicegrpcadapter) (`EventLiveValidationServiceGrpcAdapter.cs:148-183`) against the `GetCurrentRoomSessionInfo` rpc (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/Protos/event_live_validation.proto:47`). Consumed by the Engagement [`RecordRoomCheckInHandler`](group-22-engagement-module.md#recordroomcheckinhandler), which passes the configured grace window (`RecordRoomCheckInHandler.cs:51-53`, from `CheckInSettings.RoomCheckInGraceMinutes`, default 15, `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/CheckIns/CheckInSettings.cs:21`), collapses a `NotFound` into a generic "no session starting here" message so room ids do not leak (`RecordRoomCheckInHandler.cs:61-63`), rejects an unpublished event (`RecordRoomCheckInHandler.cs:67-74`), and uses the resolved `SessionId`/`SessionTitle` for the check-in row and its response (`RecordRoomCheckInHandler.cs:80`, `:93`, `:118`).
+
+---
+
+### SponsorLiveInfo
+> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/SponsorLiveInfo.cs:12` · Level 0 · record (sealed)
+
+- **What it is**: a sponsor's live-layer facts for the booth-visit flow: the owning event's id and published flag, plus the sponsor's display name.
+- **Depends on**: the `EventIdentifierType` alias; BCL otherwise. No first-party types.
+- **Concept**: the same server-resolved cross-module snapshot [`RoomSessionInfo`](#roomsessioninfo) introduces, applied to a [`Sponsor`](#sponsor). `[Rubric §7, Microservices Readiness]`: Engagement never references the `Sponsor` entity; it asks Conference three questions and gets three values. `[Rubric §11, Security]`: because the QR is **printed**, the server must confirm the sponsor still exists and its event is published before recording anything, and the soft-delete query filter means a pulled sponsor answers exactly like one that never existed, so an old printed QR simply stops working (`EventLiveValidationService.cs:108-121`).
+- **Walkthrough**: a positional `sealed record` with three parameters (`SponsorLiveInfo.cs:12-15`), `EventId` (line 13), `IsPublished` (line 14), and `SponsorName` (line 15, carried so a consumer can render a confirmation without a second cross-module call, per the doc comment `SponsorLiveInfo.cs:3-7`).
+- **Why it's built this way**: the booth-visit write needs the owning event for scoping, the published flag for the gate, and the name for the confirmation screen. Returning all three in one record keeps the scan path to a single round-trip.
+- **Where it's used**: produced by [`EventLiveValidationService.GetSponsorLiveInfoAsync`](group-18-conference-application.md#eventlivevalidationservice) (`EventLiveValidationService.cs:104-140`), served over gRPC via the `GetSponsorLiveInfo` rpc (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/Protos/event_live_validation.proto:40`) and its adapter (`EventLiveValidationServiceGrpcAdapter.cs:111-143`). Consumed by the Engagement [`RecordSponsorVisitHandler`](group-22-engagement-module.md#recordsponsorvisithandler), which propagates a lookup failure unchanged (`RecordSponsorVisitHandler.cs:57-61`), rejects an unpublished event (`RecordSponsorVisitHandler.cs:64-71`), and echoes `SponsorName` on both the idempotent-replay and the first-visit responses (`RecordSponsorVisitHandler.cs:91`, `:117`). The fail-open stub returns `new SponsorLiveInfo(default, true, string.Empty)` (`DisabledEventLiveValidationService.cs:50`).
 
 ---
 
 ### EventQuestionAnswerDTO
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventQuestionAnswerDTO.cs:9` · Level 1 · record (class)
 
-- **What it is**: the read/write DTO for one event-level question answer, linking an event to a metadata question with the answer text an organizer supplied. It is one of the three child-collection DTOs that [`EventDTO`](#eventdto) composes.
+- **What it is**: the read/write DTO for one event-level question answer, linking an event to a metadata question with the answer text a speaker or organizer supplied. It is one of the three child-collection DTOs that [`EventDTO`](#eventdto) composes.
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) (`EventQuestionAnswerDTO.cs:1,9`), closed over `EventQuestionAnswerIdentifierType`; the foreign-key fields use the `EventIdentifierType` and `QuestionIdentifierType` aliases.
-- **Concept introduced, the child-collection DTO.** The DTO shape and the [`IBaseDTO`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) contract were taught in group-12; this is the family of child DTOs that an aggregate DTO composes. `[Rubric §9, API & Contract Design]` (DTOs decoupled from domain entities, stable contracts): this record is the wire shape clients see, and the [`EventQuestionAnswer`](#eventquestionanswer) join entity never crosses the boundary. Cross-aggregate references appear as **scalar foreign keys** (`QuestionId`), never nested objects, consistent with database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), where the related aggregate may live in a different database.
+- **Concept introduced, the child-collection DTO.** The DTO shape and the [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) contract were taught in group-12; this is the family of child DTOs that an aggregate DTO composes. `[Rubric §9, API & Contract Design]` (DTOs decoupled from domain entities, stable contracts): this record is the wire shape clients see, and the [`EventQuestionAnswer`](#eventquestionanswer) join entity never crosses the boundary. Cross-aggregate references appear as **scalar foreign keys** (`QuestionId`), never nested objects, consistent with database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), where the related aggregate may live in a different database.
 - **Walkthrough**: four `required init` properties (`EventQuestionAnswerDTO.cs:12-21`), `Id` (the strong id alias, line 12), `EventId` (foreign key to the parent event, line 15), `QuestionId` (foreign key to the question, line 18), and `AnswerValue` (the answer text, line 21). Being a `record class` with all-`required` members, it cannot be partially constructed and is immutable after creation.
 - **Why it's built this way**: modelling the join as a flat DTO with scalar foreign keys keeps the contract stable and portable across a process boundary, and it is the same shape the sibling child DTOs use.
-- **Where it's used**: nested in [`EventDTO.EventQuestionAnswers`](#eventdto) (`EventDTO.cs:63`); mapped from the [`EventQuestionAnswer`](#eventquestionanswer) entity by [`EventQuestionAnswerDTOMapper`](group-18-conference-application.md#eventquestionanswerdtomapper) (group-18).
+- **Where it's used**: nested in [`EventDTO.EventQuestionAnswers`](#eventdto) (`EventDTO.cs:69`); mapped from the [`EventQuestionAnswer`](#eventquestionanswer) entity by [`EventQuestionAnswerDTOMapper`](group-18-conference-application.md#eventquestionanswerdtomapper) (group-18).
 
 ---
 
@@ -656,7 +789,7 @@ rules themselves are catalogued in ADC's specifications guide.
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) (`EventSpeakerDTO.cs:8`) closed over `EventSpeakerIdentifierType`; the foreign keys use `EventIdentifierType` and `SpeakerIdentifierType`.
 - **Concept**: the same child-collection DTO shape introduced on [`EventQuestionAnswerDTO`](#eventquestionanswerdto), a flat `record class` with `required init` members and scalar foreign keys. `[Rubric §9, API & Contract Design]`.
 - **Walkthrough**: three `required init` properties (`EventSpeakerDTO.cs:11-17`), `Id` (line 11), `EventId` (foreign key to the parent event, line 14), and `SpeakerId` (foreign key to the speaker, line 17). Nothing else: this row exists only to associate an [`Event`](#event) with a [`Speaker`](#speaker).
-- **Where it's used**: nested in [`EventDTO.EventSpeakers`](#eventdto) (`EventDTO.cs:60`); mapped from the [`EventSpeaker`](#eventspeaker) entity by [`EventSpeakerDTOMapper`](group-18-conference-application.md#eventspeakerdtomapper) (group-18).
+- **Where it's used**: nested in [`EventDTO.EventSpeakers`](#eventdto) (`EventDTO.cs:66`); mapped from the [`EventSpeaker`](#eventspeaker) entity by [`EventSpeakerDTOMapper`](group-18-conference-application.md#eventspeakerdtomapper) (group-18).
 
 ---
 
@@ -667,8 +800,8 @@ rules themselves are catalogued in ADC's specifications guide.
 - **Depends on**: [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) (`EventTransitionRequest.cs:1,14`).
 - **Concept introduced, the concurrency token on a body-less state transition.** `[Rubric §8, Data Architecture]` (assesses how concurrent writes are reconciled) and `[Rubric §9, API & Contract Design]` (assesses how a contract stays usable while still being safe): a publish/unpublish `POST` has no payload of its own, so there would normally be nothing to attach a rowversion to. This record exists purely to give one a home. Per [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html), the client echoes the `RowVersion` it saw on the [`EventDTO`](#eventdto) it acted on, so a transition decided against a stale view of the event surfaces as `409 Conflict` instead of applying silently (doc comment, `EventTransitionRequest.cs:5-13`). The token is **nullable and the body is optional**: callers that omit it skip the stale-view check and rely on the fresh-load domain guard alone, which keeps the endpoint callable from a plain `curl` while still letting the UI opt into the stronger check.
 - **Walkthrough**: one member, `byte[]? RowVersion { get; init; }` (`EventTransitionRequest.cs:17`), the `IConcurrencyAware` implementation. No validation, no behavior: the handler decides what a null token means.
-- **Why it's built this way**: [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) pushed the lifecycle toggles onto the same optimistic-concurrency footing as ordinary updates, without making the token mandatory (which would have broken every non-UI caller at once). The type's own doc comment records that it is scheduled to be replaced by MMCA.Common's [`ConcurrencyTokenRequest`](group-12-api-hosting-mapping.md#concurrencytokenrequest) at the next framework sweep (`EventTransitionRequest.cs:12`); as of this source, the ADC-local record is still the one in use.
-- **Where it's used**: bound with `[FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)]` by [`EventsController.PublishAsync`](group-20-conference-api-grpc.md#eventscontroller) (`EventsController.cs:251`) and `UnpublishAsync` (`EventsController.cs:273`), which forward `request?.RowVersion` into [`PublishEventCommand`](group-18-conference-application.md#publisheventcommand) (`EventsController.cs:255`) and [`UnpublishEventCommand`](group-18-conference-application.md#unpublisheventcommand) (`EventsController.cs:277`). Sent by [`EventService.PublishAsync`/`UnpublishAsync`](group-21-conference-ui.md#eventservice) in the Conference UI (`EventService.cs:25`, `EventService.cs:40`).
+- **Why it's built this way**: [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) pushed the lifecycle toggles onto the same optimistic-concurrency footing as ordinary updates, without making the token mandatory (which would have broken every non-UI caller at once). The type's own doc comment records that it is superseded by MMCA.Common's [`ConcurrencyTokenRequest`](group-12-api-hosting-mapping.md#concurrencytokenrequest) at the next framework sweep (`EventTransitionRequest.cs:12`); as of this source, the ADC-local record is still the one in use.
+- **Where it's used**: bound with `[FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)]` by [`EventsController.PublishAsync`](group-20-conference-api-grpc.md#eventscontroller) (`EventsController.cs:298`) and `UnpublishAsync` (`EventsController.cs:320`), which forward `request?.RowVersion` into [`PublishEventCommand`](group-18-conference-application.md#publisheventcommand) (`EventsController.cs:302`) and [`UnpublishEventCommand`](group-18-conference-application.md#unpublisheventcommand) (`EventsController.cs:324`); both actions declare `409 Conflict` as a documented response (`EventsController.cs:295`, `:317`). Sent by [`EventService.PublishAsync`/`UnpublishAsync`](group-21-conference-ui.md#eventservice) in the Conference UI (`EventService.cs:25`, `EventService.cs:40`).
 
 ---
 
@@ -680,7 +813,7 @@ rules themselves are catalogued in ADC's specifications guide.
 - **Concept**: the same child-DTO shape as [`EventQuestionAnswerDTO`](#eventquestionanswerdto), extended with optional presentation fields. `[Rubric §9, API & Contract Design]`: nullable optional members let a room carry only the metadata that actually exists instead of forcing empty strings on the wire. `[Rubric §21, Accessibility]` is worth naming here too, because accessibility data is modelled as first-class room data (`AccessibilityInfo`, `RoomDTO.cs:29`) rather than being buried in a free-text description.
 - **Walkthrough**: three `required` members, `Id` (`RoomDTO.cs:11`), `Name` (`RoomDTO.cs:14`), and `EventId` (`RoomDTO.cs:32`, the parent foreign key, declared last in the file). `Sort` (`RoomDTO.cs:17`) is a plain `int` display order that defaults to zero. Four optional members follow, `Capacity` (`int?`, line 20), `Floor` (`string?`, line 23), `Location` (`string?`, line 26), and `AccessibilityInfo` (`string?`, line 29), each null when absent.
 - **Why it's built this way**: a room imported from Sessionize often has nothing beyond a name and a sort order, so everything past those is nullable. Making `EventId` required keeps a room from existing on the wire without an owning event.
-- **Where it's used**: nested in [`EventDTO.Rooms`](#eventdto) (`EventDTO.cs:57`); mapped from the [`Room`](#room) entity by [`RoomDTOMapper`](group-18-conference-application.md#roomdtomapper) (group-18); rendered by the Conference [`RoomList`](group-21-conference-ui.md#roomlist) page and its detail form (group-21).
+- **Where it's used**: nested in [`EventDTO.Rooms`](#eventdto) (`EventDTO.cs:63`); mapped from the [`Room`](#room) entity by [`RoomDTOMapper`](group-18-conference-application.md#roomdtomapper) (group-18); rendered by the Conference [`RoomList`](group-21-conference-ui.md#roomlist) page and its detail form (group-21).
 
 ---
 
@@ -692,7 +825,7 @@ rules themselves are catalogued in ADC's specifications guide.
 - **Concept introduced, the enriched cross-module session snapshot.** `[Rubric §7, Microservices Readiness]` (a single, sufficient contract crossing the boundary): the Engagement live layer must answer several questions before it lets someone open a poll or moderate a question. Is the event published and live? Who are the session's speakers, so it can grant them moderation rights (BR-236)? Is it a plenum session? What is the default status for new questions (BR-233)? Rather than force several separate cross-service calls, Conference bundles all of it into one record returned by [`GetSessionLiveInfoAsync`](#ieventlivevalidationservice). `[Rubric §12, Performance & Scalability]` (one round-trip instead of many) is the payoff of that bundling.
 - **Walkthrough**: a positional `sealed record` with seven parameters (`SessionLiveInfo.cs:17-24`), `EventId` (the owning event, line 18), `IsPublished` (line 19), `LiveWindowStartUtc` and `LiveWindowEndUtc` (lines 20-21, same live-window semantics as [`EventLiveInfo`](#eventliveinfo)), `SpeakerIds` (`IReadOnlyCollection<SpeakerIdentifierType>`, the session's non-deleted assigned speakers, line 22), `IsPlenumSession` (line 23), and `QuestionModerationDefault` (line 24). No behavior: a pure value carrier.
 - **Why it's built this way**: the producer already loads the session and its owning event to compute the window, so it enriches the same result with the speaker set, plenum flag, and moderation default instead of making the consumer chase those separately. That keeps the speaker-rights and moderation decisions on data the owning module vouches for.
-- **Where it's used**: produced by [`EventLiveValidationService.GetSessionLiveInfoAsync`](group-18-conference-application.md#eventlivevalidationservice) (which also enforces the eligibility rules BR-49/BR-91) and by its gRPC adapter (group-20). Consumed by every Engagement live-layer entry point: [`CreateLivePollHandler`](group-23-engagement-live-layer.md#createlivepollhandler) (`CreateLivePollHandler.cs:38-59`, including the "session belongs to this event" check that is deliberately skipped when `EventId` is `default`), [`OpenLivePollHandler`](group-23-engagement-live-layer.md#openlivepollhandler) (`OpenLivePollHandler.cs:52-63`), `CloseLivePollHandler` (`CloseLivePollHandler.cs:49`), [`SubmitQuestionHandler`](group-23-engagement-live-layer.md#submitquestionhandler) (`SubmitQuestionHandler.cs:36-87`), `ModerateQuestionHandler` (`ModerateQuestionHandler.cs:50`), and `GetModerationQueueHandler` (`GetModerationQueueHandler.cs:33`).
+- **Where it's used**: produced by [`EventLiveValidationService.GetSessionLiveInfoAsync`](group-18-conference-application.md#eventlivevalidationservice) (which also enforces the eligibility rules BR-49/BR-91) and by its gRPC adapter (group-20). Consumed by every Engagement live-layer entry point: [`CreateLivePollHandler`](group-23-engagement-live-layer.md#createlivepollhandler) (`CreateLivePollHandler.cs:38-59`, including the "session belongs to this event" check that is deliberately skipped when `EventId` is `default`, `CreateLivePollHandler.cs:44-45`), [`OpenLivePollHandler`](group-23-engagement-live-layer.md#openlivepollhandler) (`OpenLivePollHandler.cs:53-64`), [`CloseLivePollHandler`](group-23-engagement-live-layer.md#closelivepollhandler) (`CloseLivePollHandler.cs:49`), [`SubmitQuestionHandler`](group-23-engagement-live-layer.md#submitquestionhandler) (`SubmitQuestionHandler.cs:37-92`), [`ModerateQuestionHandler`](group-23-engagement-live-layer.md#moderatequestionhandler) (`ModerateQuestionHandler.cs:51`), and [`GetModerationQueueHandler`](group-23-engagement-live-layer.md#getmoderationqueuehandler) (`GetModerationQueueHandler.cs:33`). The speaker set is what [`LivePollAuthorization`](group-23-engagement-live-layer.md#livepollauthorization) checks the caller against (`CreateLivePollHandler.cs:54-55`). The Engagement check-in path uses it too, for a session-scope check-in (`CheckInProcessor.cs:104-108`).
 
 ---
 
@@ -705,25 +838,27 @@ rules themselves are catalogued in ADC's specifications guide.
 - **Walkthrough**
   - Identity and concurrency: `Id` (`required`, `EventDTO.cs:12`) and the nullable `RowVersion` (`EventDTO.cs:15`).
   - Required core: `Name` (line 18), `StartDate` and `EndDate` (both `DateOnly`, lines 24 and 27), and `TimeZone` (line 30, the IANA id used to compute the live window).
-  - Optional scalars: `Description` (line 21), `SessionizeCode` (line 33), `VenueAddress` (line 36), `VenueMapUrl` (line 39), and `WiFiInfo` (line 42), all `string?`; plus `IsPublished` (line 45) and `QuestionModerationDefault` (line 48, BR-233).
-  - Sessionize refresh audit: `LastSessionizeRefreshOn` (`DateTime?`, line 51) and `LastSessionizeRefreshBy` (`string?`, line 54), stamped by the refresh handler so the UI can show when the last import ran and who ran it.
-  - Child collections (`EventDTO.cs:57-63`): `Rooms`, `EventSpeakers`, and `EventQuestionAnswers`, each an `IReadOnlyCollection<>` of the matching child DTO, each defaulting to an empty collection (`= []`) so an event with no children is safe to render.
+  - Optional scalars: `Description` (line 21), `SessionizeCode` (line 33), `VenueAddress` (line 36), `VenueMapUrl` (line 39), `WiFiInfo` (line 42), `OrganizerContactEmail` (line 45, the contact published to attendees), and `SponsorshipPacketUrl` (line 48, the published sponsorship packet for this edition), all `string?`; plus `IsPublished` (line 51) and `QuestionModerationDefault` (line 54, BR-233).
+  - Sessionize refresh audit: `LastSessionizeRefreshOn` (`DateTime?`, line 57) and `LastSessionizeRefreshBy` (`string?`, line 60), stamped by the refresh handler so the UI can show when the last import ran and who ran it.
+  - Child collections (`EventDTO.cs:63-69`): `Rooms`, `EventSpeakers`, and `EventQuestionAnswers`, each an `IReadOnlyCollection<>` of the matching child DTO, each defaulting to an empty collection (`= []`) so an event with no children is safe to render.
 - **Why it's built this way**: composing the children inline lets a single `GET /Events/{id}` return the whole event graph without follow-up calls, and defaulting the collections to `[]` avoids null checks in the UI. The `IConcurrencyAware` token is the write-path guard that turns a lost update into a `409` instead of a silent overwrite.
-- **Where it's used**: produced by [`EventDTOMapper`](group-18-conference-application.md#eventdtomapper) (group-18); it is the DTO type parameter of [`EventsController`](group-20-conference-api-grpc.md#eventscontroller) itself (`EventsController.cs:45,57-58`), so every inherited GetAll/GetById/Create action speaks it; and it is consumed throughout the Events UI (group-21). It is also the concrete event model that [`CurrentEventDefaults`](#currenteventdefaults) binds [`CurrentEventSelector`](#currenteventselector) to.
+- **Where it's used**: produced by [`EventDTOMapper`](group-18-conference-application.md#eventdtomapper) (group-18); it is the DTO type parameter of [`EventsController`](group-20-conference-api-grpc.md#eventscontroller) itself (`EventsController.cs:45-46,57-58`), so every inherited GetAll/GetById/Create action speaks it, and the same type parameter drives the UI's `EntityServiceBase` in [`EventService`](group-21-conference-ui.md#eventservice) (`EventService.cs:14-15`). It is also the concrete event model that [`CurrentEventDefaults`](#currenteventdefaults) binds [`CurrentEventSelector`](#currenteventselector) to.
 
 ---
 
 ### IEventLiveValidationService
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IEventLiveValidationService.cs:11` · Level 3 · interface
 
-- **What it is**: the cross-module service contract the Engagement live layer calls to validate an event's or a session's live-layer eligibility, returning [`EventLiveInfo`](#eventliveinfo) / [`SessionLiveInfo`](#sessionliveinfo) without the caller ever referencing a Conference domain entity.
-- **Depends on**: [`Result<T>`](group-01-result-error-handling.md#result) (via `MMCA.Common.Shared.Abstractions`, `IEventLiveValidationService.cs:1`); [`EventLiveInfo`](#eventliveinfo) and [`SessionLiveInfo`](#sessionliveinfo); the `EventIdentifierType`/`SessionIdentifierType` aliases.
+- **What it is**: the cross-module service contract the Engagement live and check-in layers call to validate an event's, a session's, a sponsor's, or a room's live-layer facts, returning small snapshot records without the caller ever referencing a Conference domain entity.
+- **Depends on**: [`Result`](group-01-result-error-handling.md#result) (via `MMCA.Common.Shared.Abstractions`, `IEventLiveValidationService.cs:1`); [`EventLiveInfo`](#eventliveinfo), [`SessionLiveInfo`](#sessionliveinfo), [`SponsorLiveInfo`](#sponsorliveinfo), and [`RoomSessionInfo`](#roomsessioninfo); the `EventIdentifierType`, `SessionIdentifierType`, `SponsorIdentifierType`, and `RoomIdentifierType` aliases.
 - **Concept introduced, the owned-interface cross-module boundary.** `[Rubric §7, Microservices Readiness]` (assesses boundaries that survive extraction into separate processes) and `[Rubric §3, Clean Architecture]` (a module depends on an interface it can consume, not on another module's internals): the interface lives in Conference's `*.Shared` project, so the module that **owns** the data publishes the contract, and it is defined in terms of ids and small DTOs only. When both modules run in one host, the real Conference.Application implementation is injected directly; after extraction, the same interface is satisfied by a gRPC adapter. Engagement's code does not change either way. This is the same pattern the module uses for [`ISessionBookmarkValidationService`](#isessionbookmarkvalidationservice).
-- **Walkthrough**: two methods, both returning `Task<Result<...>>` with a trailing `CancellationToken`.
+- **Walkthrough**: four methods, all returning `Task<Result<...>>` with a trailing `CancellationToken`.
   - `GetEventLiveInfoAsync` (`IEventLiveValidationService.cs:21`): returns the event's published flag and live window, or a `NotFound` failure when the event does not exist. Consumers layer their own rules on top (draft creation requires published; opening a poll requires now to be inside the window), as stated in the doc comment (`IEventLiveValidationService.cs:13-20`).
   - `GetSessionLiveInfoAsync` (`IEventLiveValidationService.cs:32`): returns a session's live facts (the owning event's window plus speakers, plenum flag, and moderation default), or a failure when the session does not exist, is a service session (BR-91), or has an ineligible status (BR-49), per the doc comment (`IEventLiveValidationService.cs:23-31`).
-- **Why it's built this way**: returning [`Result<T>`](group-01-result-error-handling.md#result) rather than throwing lets the consumer branch on `NotFound` and eligibility failures as ordinary control flow. Keeping the contract in `*.Shared`, expressed in ids and DTOs only, is what makes Conference extractable without breaking Engagement.
-- **Where it's used**: implemented in-process by [`EventLiveValidationService`](group-18-conference-application.md#eventlivevalidationservice) (Conference.Application, group-18), served over gRPC by [`EventLiveValidationGrpcService`](group-20-conference-api-grpc.md#eventlivevalidationgrpcservice) and consumed across the boundary via [`EventLiveValidationServiceGrpcAdapter`](group-20-conference-api-grpc.md#eventlivevalidationservicegrpcadapter). The Engagement service host calls `AddConferenceEventLiveValidationClient()` (`MMCA.ADC.Engagement.Service/Program.cs:186`), which `Replace`s whatever registration is already in the container (`MMCA.ADC.Conference.Contracts/DependencyInjection.cs:79`). Injected into the Engagement [`LivePoll`](group-23-engagement-live-layer.md#livepoll) and [`SessionQuestion`](group-23-engagement-live-layer.md#sessionquestion) handlers (group-23). When Conference is not loaded in a host, [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) stands in.
+  - `GetSponsorLiveInfoAsync` (`IEventLiveValidationService.cs:43`): returns the sponsor's owning event id, that event's published flag, and the sponsor name, or a `NotFound` failure. The doc comment names the caller: the booth-visit flow where an attendee scans a printed deep-link QR and the server must confirm the sponsor exists and belongs to a published event before recording anything (`IEventLiveValidationService.cs:34-42`).
+  - `GetCurrentRoomSessionInfoAsync` (`IEventLiveValidationService.cs:59-62`): resolves which session a room is hosting at the call instant "so a consumer never has to trust a client-supplied session id". A session qualifies when the instant falls inside `[StartsAt - graceMinutes, EndsAt)`; an in-progress session wins over an upcoming one, and the earliest upcoming one wins among several (`IEventLiveValidationService.cs:45-58`). `graceMinutes` is a **parameter, not a Conference setting**, because it is check-in policy: Conference only answers the schedule question.
+- **Why it's built this way**: returning [`Result`](group-01-result-error-handling.md#result) rather than throwing lets the consumer branch on `NotFound` and eligibility failures as ordinary control flow. Keeping the contract in `*.Shared`, expressed in ids and DTOs only, is what makes Conference extractable without breaking Engagement. Passing the grace window in rather than reading it from Conference config keeps policy on the consuming side of the boundary.
+- **Where it's used**: implemented in-process by [`EventLiveValidationService`](group-18-conference-application.md#eventlivevalidationservice) (Conference.Application, group-18), served over gRPC by [`EventLiveValidationGrpcService`](group-20-conference-api-grpc.md#eventlivevalidationgrpcservice) and consumed across the boundary via [`EventLiveValidationServiceGrpcAdapter`](group-20-conference-api-grpc.md#eventlivevalidationservicegrpcadapter). The Engagement service host calls `AddConferenceEventLiveValidationClient()` (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:251`), which `Replace`s whatever registration is already in the container (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:73-81`). Injected into the Engagement live-layer handlers (group-23) and into the check-in handlers [`RecordRoomCheckInHandler`](group-22-engagement-module.md#recordroomcheckinhandler) (`RecordRoomCheckInHandler.cs:26`), [`RecordSponsorVisitHandler`](group-22-engagement-module.md#recordsponsorvisithandler) (`RecordSponsorVisitHandler.cs:34`), [`ManualCheckInHandler`](group-22-engagement-module.md#manualcheckinhandler) (`ManualCheckInHandler.cs:18`), [`CheckInAttendeeHandler`](group-22-engagement-module.md#checkinattendeehandler) (`CheckInAttendeeHandler.cs:20`), and [`CheckInProcessor`](group-22-engagement-module.md#checkinprocessor) (`CheckInProcessor.cs:34,96`). When Conference is not loaded in a host, [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) stands in.
 
 ---
 
@@ -731,37 +866,41 @@ rules themselves are catalogued in ADC's specifications guide.
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/DisabledEventLiveValidationService.cs:22` · Level 4 · class (sealed)
 
 - **What it is**: the fail-open stub implementation of [`IEventLiveValidationService`](#ieventlivevalidationservice), registered when the Conference module is not loaded in a host (for example when Engagement runs as its own service without Conference in-process).
-- **Depends on**: [`IEventLiveValidationService`](#ieventlivevalidationservice), [`Result`](group-01-result-error-handling.md#result), [`EventLiveInfo`](#eventliveinfo), [`SessionLiveInfo`](#sessionliveinfo), [`QuestionModerationDefault`](#questionmoderationdefault).
+- **Depends on**: [`IEventLiveValidationService`](#ieventlivevalidationservice), [`Result`](group-01-result-error-handling.md#result), [`EventLiveInfo`](#eventliveinfo), [`SessionLiveInfo`](#sessionliveinfo), [`SponsorLiveInfo`](#sponsorliveinfo), [`RoomSessionInfo`](#roomsessioninfo), [`QuestionModerationDefault`](#questionmoderationdefault).
 - **Concept introduced, the fail-open disabled-module stub (a Null Object variant).** `[Rubric §2, Design Patterns]` (a Null-Object-style stub keeps consumers running when a dependency is absent) and `[Rubric §29, Resilience & Business Continuity]` (assesses graceful degradation): this stub deliberately **fails open**. It reports the event as published with an always-open window, so the Engagement live-layer handlers can complete without an in-process Conference module, at the cost of skipping the published and live-window checks (doc comment, `DisabledEventLiveValidationService.cs:9-15`). Real validation is restored when the host is wired to the Conference gRPC adapter, which `Replace`s this stub. It mirrors the convention where each owning module's `*.Shared` project ships a `Disabled*Service` stub for the cross-module interfaces it exposes, naming [`DisabledSessionBookmarkValidationService`](#disabledsessionbookmarkvalidationservice) as the precedent (`DisabledEventLiveValidationService.cs:16-20`).
-- **Walkthrough**: two expression-bodied methods, each returning a completed `Task` wrapping a success `Result`.
+- **Walkthrough**: four expression-bodied methods, each returning a completed `Task` wrapping a success `Result`.
   - `GetEventLiveInfoAsync` (`DisabledEventLiveValidationService.cs:25-26`): `Result.Success(new EventLiveInfo(true, DateTime.MinValue, DateTime.MaxValue))`, published, with a window spanning all of time.
   - `GetSessionLiveInfoAsync` (`DisabledEventLiveValidationService.cs:34-42`): a success [`SessionLiveInfo`](#sessionliveinfo) with a `default` (unknown) event id, the always-open window, no speakers (`[]`), `IsPlenumSession = false`, and `QuestionModerationDefault.Pending`. The remarks (`DisabledEventLiveValidationService.cs:29-33`) record the downstream effect: consumers skip the event-match check when the event id is `default` (see `CreateLivePollHandler.cs:44-45`), and speaker-based rights resolve to organizers only.
-- **Why it's built this way**: failing open rather than closed is the right default here because the stub is only reached in a host that is **not** the authority on live windows. Blocking every poll and question in that configuration would be worse than skipping a check that a properly wired gRPC client will perform. The choice is explicit and documented, not accidental.
-- **Where it's used**: registered by `ConferenceModule.RegisterDisabledStubs` as a singleton `IEventLiveValidationService` (`MMCA.ADC.Conference.API/ConferenceModule.cs:24`), the hook the module system calls when Conference is disabled in a host; then `Replace`d by the gRPC adapter in the Engagement service's production wiring (`MMCA.ADC.Conference.Contracts/DependencyInjection.cs:73-81`).
+  - `GetSponsorLiveInfoAsync` (`DisabledEventLiveValidationService.cs:49-50`): reports every sponsor as belonging to a published event, with a `default` event id and an empty name, so a consumer that renders the name simply shows nothing (remarks, `DisabledEventLiveValidationService.cs:45-48`).
+  - `GetCurrentRoomSessionInfoAsync` (`DisabledEventLiveValidationService.cs:58-62`): echoes the room's own id as the session id, with an empty title and a published flag of `true`. The remarks (`DisabledEventLiveValidationService.cs:53-57`) explain the choice: without a Conference module there is no schedule to consult, and returning a `NotFound` instead would turn the disabled-module stub into a hard rejection rather than a skipped check.
+- **Why it's built this way**: failing open rather than closed is the right default here because the stub is only reached in a host that is **not** the authority on live windows. Blocking every poll, question, and scan in that configuration would be worse than skipping a check that a properly wired gRPC client will perform. The choice is explicit and documented per method, not accidental.
+- **Where it's used**: registered by `ConferenceModule.RegisterDisabledStubs` as a singleton `IEventLiveValidationService` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:24`, the hook the module system calls when Conference is disabled in a host, declared at `ConferenceModule.cs:21`); then `Replace`d by the gRPC adapter in the Engagement service's production wiring (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:73-81`).
+- **Caveats / not-in-source**: the stub's fail-open posture is safe only because every host that actually serves live traffic wires the gRPC client. Whether that holds for a given deployment is host configuration, not something this file can guarantee.
 
 ---
 
 ### CurrentEventSelector
-> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:10` · Level 6 · class (static)
+> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:10` · Level 8 · class (static)
 
-- **What it is**: a static, generic helper that picks which event a landing surface should feature (live now, else the next upcoming, else the most recently ended) using the same live-window math the backend enforces. It also exposes that window computation itself as a public method.
+- **What it is**: a static, generic helper that picks which event a landing surface should feature (live now, else the next upcoming, else the most recently ended) using the same live-window math the backend enforces. It also exposes the window computation and the DST-safe local-to-UTC conversion as public methods.
 - **Depends on**: nothing first-party (BCL `TimeZoneInfo`, `DateOnly`/`DateTime`, LINQ). It is generic over the caller's event model via accessor delegates.
 - **Concept introduced, the shared selection algorithm parameterized by accessors.** `[Rubric §16, Maintainability]` and `[Rubric §1, SOLID]` (one algorithm serving many callers without a shared base type): several surfaces need "which event is current", the ADC home page, the Engagement live-event service, the Conference list pages, and a server-side query handler, and they do not all hold the same event model. Rather than duplicate the classify-and-rank logic, `SelectCurrentOrNext<TEvent>` takes `Func<TEvent, ...>` accessors for start date, end date, and time-zone id, so it works over any shape without coupling to a concrete type. `[Rubric §27, Internationalization]` also applies: the window math is computed per the event's IANA time zone, and an unknown zone id degrades to treating the local dates as UTC rather than throwing.
 - **Walkthrough**
   - `SelectCurrentOrNext<TEvent>(events, startDate, endDate, timeZoneId, utcNow)` (`CurrentEventSelector.cs:22-53`, constrained `where TEvent : class`): projects each event to its `(StartUtc, EndUtc)` window via `GetLiveWindowUtc` (`CurrentEventSelector.cs:30-36`), then applies the preference order. **Live** events (`StartUtc <= utcNow && utcNow < EndUtc`) ordered by soonest to end (`CurrentEventSelector.cs:38-42`), else **upcoming** events (`StartUtc > utcNow`) ordered by soonest to start (`CurrentEventSelector.cs:44-48`), else the most recently ended event (`OrderByDescending(EndUtc)`, `CurrentEventSelector.cs:52`). Returns `null` when `events` is empty. Ties resolve by input order because LINQ's `OrderBy` is a stable sort (doc comment, `CurrentEventSelector.cs:8`).
-  - `GetLiveWindowUtc(startDate, endDate, timeZoneId)` (`CurrentEventSelector.cs:64-85`): computes `startLocal` as `StartDate` at 00:00 (`CurrentEventSelector.cs:69`) and `endLocal` as `EndDate + 1 day` at 00:00 (`CurrentEventSelector.cs:70`), then converts both from the event's zone to UTC via `TimeZoneInfo.FindSystemTimeZoneById` and `ConvertTimeToUtc` (`CurrentEventSelector.cs:74-77`). On `TimeZoneNotFoundException` it falls back to `DateTime.SpecifyKind(..., DateTimeKind.Utc)` (`CurrentEventSelector.cs:79-84`), treating the local dates as UTC to match the existing consumers.
-- **Why it's built this way**: the accessor-delegate design lets one vetted implementation of the "current event" rule serve every surface, so the home page, the live layer, and the list-page default filter can never disagree about which event is featured. Colocating `GetLiveWindowUtc` here keeps the window definition identical to the one [`EventLiveInfo`](#eventliveinfo) advertises (its doc comment points at that record, `CurrentEventSelector.cs:5`).
-- **Where it's used**: the Conference [`ADCHome`](group-21-conference-ui.md#adchome) page (`ADCHome.razor.cs:148`), the Conference list and dashboard pages that default their event filter, [`SpeakerList`](group-21-conference-ui.md#speakerlist) (`SpeakerList.razor.cs:103`), [`RoomList`](group-21-conference-ui.md#roomlist) (`RoomList.razor.cs:96`), `PublicSpeakerList` (`PublicSpeakerList.razor.cs:128`), [`SpeakerDashboard`](group-21-conference-ui.md#speakerdashboard) (`SpeakerDashboard.razor.cs:144`), [`SessionSelectionDashboard`](group-21-conference-ui.md#sessionselectiondashboard) (`SessionSelectionDashboard.razor.cs:71`); the Engagement [`LiveEventService`](group-23-engagement-live-layer.md#liveeventservice), which uses both methods (`LiveEventService.cs:27`, `LiveEventService.cs:38`); and server-side by [`GetNowNextHandler`](group-18-conference-application.md#getnownexthandler), which resolves the current event and its window for the Now/Next query (`GetNowNextHandler.cs:74`, `GetNowNextHandler.cs:107`). Callers holding an [`EventDTO`](#eventdto) usually go through the [`CurrentEventDefaults`](#currenteventdefaults) wrapper instead.
+  - `GetLiveWindowUtc(startDate, endDate, timeZoneId)` (`CurrentEventSelector.cs:64-83`): computes `startLocal` as `StartDate` at 00:00 (`CurrentEventSelector.cs:69`) and `endLocal` as `EndDate + 1 day` at 00:00 (`CurrentEventSelector.cs:70`), resolves the zone with `TimeZoneInfo.FindSystemTimeZoneById` and converts both through `ToUtc` (`CurrentEventSelector.cs:74-75`). On `TimeZoneNotFoundException` it falls back to `DateTime.SpecifyKind(..., DateTimeKind.Utc)` (`CurrentEventSelector.cs:77-82`), treating the local dates as UTC to match the existing consumers. The returned tuple names its second element `EndExclusiveUtc` (`CurrentEventSelector.cs:64`), a reminder that the end bound is exclusive.
+  - `ToUtc(localWallClock, timeZone)` (`CurrentEventSelector.cs:96-107`): the DST guard. Both window boundaries land on **local midnight**, which is inside the spring-forward gap in zones that transition at 00:00 (the doc comment names America/Santiago and Asia/Beirut, `CurrentEventSelector.cs:87-91`); that wall time never existed, so a raw `TimeZoneInfo.ConvertTimeToUtc` would throw. The method null-guards the zone (`CurrentEventSelector.cs:98`), re-kinds the input as `Unspecified` (`CurrentEventSelector.cs:100`), and shifts an invalid time forward by one hour into the hour that did exist (`CurrentEventSelector.cs:101-104`) before converting (`CurrentEventSelector.cs:106`). Ambiguous (fall-back) times resolve to the zone's standard offset, which is `ConvertTimeToUtc`'s own behavior.
+- **Why it's built this way**: the accessor-delegate design lets one vetted implementation of the "current event" rule serve every surface, so the home page, the live layer, and the list-page default filter can never disagree about which event is featured. Colocating `GetLiveWindowUtc` here keeps the window definition identical to the one [`EventLiveInfo`](#eventliveinfo) advertises (its doc comment points at that record, `CurrentEventSelector.cs:5`), and making `ToUtc` public means the same spring-forward-gap fix is reused rather than re-derived: the home page's countdown calls it directly for that reason (`ADCHome.razor.cs:241-246`).
+- **Where it's used**: the Conference [`ADCHome`](group-21-conference-ui.md#adchome) page (`ADCHome.razor.cs:165` for the selection, `ADCHome.razor.cs:245-246` for `ToUtc`), and the Conference list and dashboard pages that default their event filter: [`SpeakerList`](group-21-conference-ui.md#speakerlist) (`SpeakerList.razor.cs:103`), [`RoomList`](group-21-conference-ui.md#roomlist) (`RoomList.razor.cs:96`), [`PublicSpeakerList`](group-21-conference-ui.md#publicspeakerlist) (`PublicSpeakerList.razor.cs:131`), [`PublicSponsorList`](group-21-conference-ui.md#publicsponsorlist) (`PublicSponsorList.razor.cs:52`), [`SponsorList`](group-21-conference-ui.md#sponsorlist) (`SponsorList.razor.cs:106`), [`SponsorCreate`](group-21-conference-ui.md#sponsorcreate) (`SponsorCreate.razor.cs:56`), [`SpeakerDashboard`](group-21-conference-ui.md#speakerdashboard) (`SpeakerDashboard.razor.cs:147`), and [`SessionSelectionDashboard`](group-21-conference-ui.md#sessionselectiondashboard) (`SessionSelectionDashboard.razor.cs:80`); the Engagement [`LiveEventService`](group-23-engagement-live-layer.md#liveeventservice), which uses both `SelectCurrentOrNext` and `GetLiveWindowUtc` (`LiveEventService.cs:27`, `LiveEventService.cs:38`); and server-side by [`GetNowNextHandler`](group-18-conference-application.md#getnownexthandler), which resolves the current event and its window for the Now/Next query (`GetNowNextHandler.cs:74`, `GetNowNextHandler.cs:107`) and by [`EventLiveValidationService`](group-18-conference-application.md#eventlivevalidationservice) itself (`EventLiveValidationService.cs:243`). Callers holding an [`EventDTO`](#eventdto) usually go through the [`CurrentEventDefaults`](#currenteventdefaults) wrapper instead.
 
 ---
 
 ### CurrentEventDefaults
-> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventDefaults.cs:8` · Level 7 · class (static)
+> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventDefaults.cs:8` · Level 9 · class (static)
 
 - **What it is**: a thin convenience wrapper over [`CurrentEventSelector`](#currenteventselector) specialized to the [`EventDTO`](#eventdto) shape, so the list pages and services that already work with `EventDTO` do not repeat the same accessor lambdas.
 - **Depends on**: [`CurrentEventSelector`](#currenteventselector), [`EventDTO`](#eventdto).
 - **Concept, the type-specialized wrapper (DRY over the generic helper).** `[Rubric §16, Maintainability]`: the generic [`CurrentEventSelector.SelectCurrentOrNext<TEvent>`](#currenteventselector) needs three accessor delegates on every call. Since many callers pass `EventDTO`, this wrapper binds those lambdas once, so a call site shrinks to `SelectCurrentOrNext(events, utcNow)`.
-- **Walkthrough**: one method, `SelectCurrentOrNext(IEnumerable<EventDTO> events, DateTime utcNow)` (`CurrentEventDefaults.cs:17`), which forwards to [`CurrentEventSelector.SelectCurrentOrNext`](#currenteventselector) with the three `EventDTO` accessors `e => e.StartDate`, `e => e.EndDate`, `e => e.TimeZone` (`CurrentEventDefaults.cs:18-23`) and returns the selected `EventDTO?` (null when the input is empty). No other logic: all the ranking lives in the generic helper.
+- **Walkthrough**: one method, `SelectCurrentOrNext(IEnumerable<EventDTO> events, DateTime utcNow)` (`CurrentEventDefaults.cs:17`), which forwards to [`CurrentEventSelector.SelectCurrentOrNext`](#currenteventselector) with the three `EventDTO` accessors `e => e.StartDate`, `e => e.EndDate`, `e => e.TimeZone` (`CurrentEventDefaults.cs:18-23`) and returns the selected `EventDTO?` (null when the input is empty). No other logic: all the ranking lives in the generic helper. The doc comment notes that callers pass the role-appropriate candidate set (`CurrentEventDefaults.cs:14`), so filtering to published events stays the caller's job.
 - **Why it's built this way**: keeping the `EventDTO` accessors in one place means renaming an `EventDTO` date or time-zone property is a single edit here, not a change scattered across every list page.
 - **Where it's used**: the Conference [`SessionList`](group-21-conference-ui.md#sessionlist) page (`SessionList.razor.cs:120`) and [`PublicSessionList`](group-21-conference-ui.md#publicsessionlist) page (`PublicSessionList.razor.cs:193`), each setting its default selected event id. Callers passing a non-`EventDTO` model call the generic [`CurrentEventSelector`](#currenteventselector) directly.
 
@@ -1133,27 +1272,37 @@ rules themselves are catalogued in ADC's specifications guide.
 ### LinkUserRequest
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/LinkUserRequest.cs:6` · Level 0 · record (sealed)
 
-- **What it is**: the request body a client sends to manually bind an Identity `User` to a
-  [`Speaker`](#speaker) (BR-209). It carries exactly one field, the `UserId` to link.
-- **Depends on**: nothing first-party (uses the `UserIdentifierType` module alias → `int`); BCL only.
+- **What it is**: the request body a client sends to manually bind an Identity user to a
+  [`Speaker`](#speaker) (BR-209, `LinkUserRequest.cs:4`). It carries exactly one field, the `UserId` to
+  link.
+- **Depends on**: nothing first-party. Its one member is typed over the `UserIdentifierType` alias,
+  which is `int` and is authored in the *Identity* module
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`)
+  yet compiled into every other project by a linked `<Compile Include>` in
+  `MMCA.ADC/Directory.Build.props:81-83`. That is how a Conference contract can name an Identity id
+  without referencing the Identity assembly (see the [primer](00-primer.md) on identifier-type aliases).
 - **Concept introduced, the request record (API input contract).** `[Rubric §9, API & Contract Design]`
   (assesses whether inbound payloads are declared as explicit, typed contracts rather than loose
   parameters) and `[Rubric §7, Microservices Readiness]` (the contract lives in `Shared`, the project a
   caller can reference without pulling in Conference's Domain). Where the DTOs below are *outbound* read
-  shapes, this is an *inbound* write shape: a `sealed record` with a single `required init`
-  `UserId` (`LinkUserRequest.cs:9`). `required` means the model binder cannot leave it unset, and `init`
-  makes it immutable once bound, so a controller receives a validated, read-only value rather than a
-  mutable bag. The type is deliberately tiny: it exists so the link endpoint has a named, versionable
-  body instead of a bare route/query scalar.
+  shapes, this is an *inbound* write shape: a `sealed record` with a single `required init` `UserId`
+  (`LinkUserRequest.cs:9`). `required` means the model binder cannot leave it unset, and `init` makes it
+  immutable once bound, so a controller receives a read-only value rather than a mutable bag. The type is
+  deliberately tiny: it exists so the link endpoint has a named, versionable body instead of a bare
+  route or query scalar.
 - **Walkthrough**: one member, `UserId` (`LinkUserRequest.cs:9`), the Identity-side id to attach to the
-  speaker. There is no `SpeakerId` on the body, that comes from the route (the speaker being edited).
+  speaker. There is no `SpeakerId` on the body: that comes from the route (the speaker being edited).
 - **Why it's built this way**: strongly typing the body over the `UserIdentifierType` alias keeps "who"
   named end to end, and placing it in `Shared` lets the UI and any future extracted client bind the same
   contract without a Domain reference.
-- **Where it's used**: the `SpeakersController` link action
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakersController.cs:46`)
-  binds it and maps it to the [`LinkUserToSpeakerCommand`](group-18-conference-application.md#linkusertospeakercommand),
-  whose handler publishes the [`SpeakerLinkedToUser`](#speakerlinkedtouser) integration event.
+- **Where it's used**: bound by `SpeakersController.LinkUserAsync`, a `PUT /Speakers/{id}/link` gated by
+  `[HasPermission(ConferencePermissions.SpeakersManage)]`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakersController.cs:363-372`),
+  which forwards `request.UserId` into the
+  [`LinkUserToSpeakerCommand`](group-18-conference-application.md#linkusertospeakercommand). That
+  command's handler raises [`SpeakerLinkedToUser`](#speakerlinkedtouser) on the aggregate *before* the
+  save (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/LinkUser/LinkUserToSpeakerHandler.cs:54`),
+  so the outbox row lands in the same transaction as the link itself.
 
 ---
 
@@ -1163,20 +1312,65 @@ rules themselves are catalogued in ADC's specifications guide.
 - **What it is**: one row of a session's aggregated *rating* feedback, the per-question roll-up of a
   numeric rating: the question, its average score, and how many responses fed that average. It is a
   child component of [`SessionFeedbackDTO`](#sessionfeedbackdto).
-- **Depends on**: nothing first-party (uses the `QuestionIdentifierType` alias); BCL only.
+- **Depends on**: nothing first-party (uses the `QuestionIdentifierType` alias, `int`); BCL only.
 - **Concept introduced, the hand-built query-projection record.** `[Rubric §6, CQRS & Event-Driven]`
   (assesses read models shaped for the query, not the table) and `[Rubric §9, API & Contract Design]`.
   Unlike the entity DTOs later in this part, this record does **not** implement
   [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) and is **not**
   produced by a Mapperly mapper: it is a bespoke aggregation shape assembled by a query handler from a
-  GROUP-BY over answers. It exists purely as the wire shape of a computed report.
+  group-by over answers. It exists purely as the wire shape of a computed report.
 - **Walkthrough**: four `required init` members (`SessionFeedbackDTO.cs:25-34`), `QuestionId`,
   `QuestionText` (so the client renders a label without a second lookup), `AverageRating` (a `double`,
-  the computed mean), and `ResponseCount` (the sample size behind that mean).
+  the computed mean), and `ResponseCount` (the sample size behind that mean). The mean is computed in
+  memory over the answers that parse as integers
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/GetSessionFeedback/GetSessionFeedbackHandler.cs:75-88`),
+  so `ResponseCount` counts *parseable* ratings, not raw answer rows.
 - **Why it's built this way**: carrying `QuestionText` and `ResponseCount` alongside the average makes
-  the record self-describing, a UI can show "4.6 (from 32 responses)" straight from the payload.
+  the record self-describing, so a UI can show "4.6 (from 32 responses)" straight from the payload.
 - **Where it's used**: nested in [`SessionFeedbackDTO.Ratings`](#sessionfeedbackdto); built by
   [`GetSessionFeedbackHandler`](group-18-conference-application.md#getsessionfeedbackhandler).
+
+---
+
+### SponsorTier
+> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Sponsors` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sponsors/SponsorTier.cs:12` · Level 0 · enum
+
+- **What it is**: the sponsorship package a conference sponsor bought, from `Platinum` down to
+  `Community`. It is the one enum in the Sponsors contract and it drives where a sponsor appears in the
+  public sponsor strip.
+- **Depends on**: nothing. Four named `int` members, no attributes, no BCL types beyond the enum itself.
+- **Concept introduced, the ordinal-as-ordering enum.** `[Rubric §9, API & Contract Design]` (assesses
+  whether a contract's vocabulary is closed and explicit rather than a loose string) and `[Rubric §16,
+  Maintainability]`. Two conventions are visible in the declaration and both are load-bearing:
+  1. **The numeric values are the display order**, stated in the type's own doc comment
+     (`SponsorTier.cs:4-6`): `Platinum = 0`, `Gold = 1`, `Silver = 2`, `Community = 3`
+     (`SponsorTier.cs:15-24`). A plain ascending sort therefore renders the largest package first with no
+     lookup table, and [`PublicSponsorList`](group-21-conference-ui.md#publicsponsorlist) relies on
+     exactly that: it groups by `Tier` and calls `.OrderBy(g => g.Key)`
+     (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSponsorList.razor.cs:76-85`),
+     breaking ties inside a tier by `Sort` then `Name`. Renumbering a member would silently reorder the
+     public page.
+  2. **It is zero-based** because CA1008 requires a zero member (`SponsorTier.cs:9-11`), which has the
+     side effect that an omitted tier defaults to the *top* package rather than to an "unknown" bucket.
+     The type's remarks call this out rather than leaving it as an accident.
+
+  Contrast this with the loose status strings elsewhere in the Conference contract (for example
+  `SessionDTO.Status`, which carries Sessionize's vocabulary as free text): tiers are sold by ADC itself,
+  so the set is closed and can be an enum.
+- **Walkthrough**: four members with explicit values (`SponsorTier.cs:15-24`). There is no `None`,
+  `Unknown`, or `[Flags]` member: a sponsor always has exactly one package.
+- **Why it's built this way**: encoding package rank in the ordinal keeps ordering logic out of the UI
+  and out of SQL; the explicit values (rather than implicit ones) make the ordering contract visible in
+  the source so a future insertion has to be a deliberate decision.
+- **Where it's used**: the [`Sponsor`](#sponsor) aggregate stores it
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/Sponsor.cs:24`) and takes it
+  on create and update (`Sponsor.cs:65,108,155`); it crosses the API boundary on
+  [`SponsorDTO.Tier`](#sponsordto) and on
+  [`SponsorCreateRequest`](group-18-conference-application.md#sponsorcreaterequest) /
+  [`SponsorUpdateRequest`](group-18-conference-application.md#sponsorupdaterequest); the UI renders it
+  through a localized resource key, `L[$"Tier.{tier}"]`
+  (`PublicSponsorList.razor.cs:42`), which is `[Rubric §27, i18n]` in miniature: the enum member name is
+  the resource key, so the label translates without a switch statement.
 
 ---
 
@@ -1184,14 +1378,20 @@ rules themselves are catalogued in ADC's specifications guide.
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/SessionFeedbackDTO.cs:38` · Level 0 · record (sealed)
 
 - **What it is**: the free-text counterpart to [`RatingQuestionSummary`](#ratingquestionsummary): all the
-  individual text answers given to one free-text feedback question, grouped under that question. Also a
+  individual text answers given to one non-rating feedback question, grouped under that question. Also a
   child component of [`SessionFeedbackDTO`](#sessionfeedbackdto).
 - **Depends on**: nothing first-party (uses the `QuestionIdentifierType` alias); BCL only.
-- **Concept**: the hand-built query-projection record (see [`RatingQuestionSummary`](#ratingquestionsummary)).
-  Where a rating collapses to a mean, text answers cannot be averaged, so they are grouped verbatim.
+- **Concept**: the hand-built query-projection record (see
+  [`RatingQuestionSummary`](#ratingquestionsummary)). Where a rating collapses to a mean, text answers
+  cannot be averaged, so they are grouped verbatim.
 - **Walkthrough**: three `required init` members (`SessionFeedbackDTO.cs:41-47`), `QuestionId`,
   `QuestionText`, and `Responses` (an `IReadOnlyList<string>`, the raw text answers). Exposing the list
-  as `IReadOnlyList<string>` signals the payload is a read-only snapshot.
+  as `IReadOnlyList<string>` signals the payload is a read-only snapshot. Which questions land here is
+  decided by elimination: the handler routes a question to `Ratings` only when its `QuestionType` is the
+  literal `"Rating"`, and everything else falls into this record
+  (`GetSessionFeedbackHandler.cs:73,92-100`).
+- **Why it's built this way**: grouping by question (rather than returning a flat answer list) lets the
+  speaker dashboard render one comment block per prompt without regrouping client-side.
 - **Where it's used**: nested in [`SessionFeedbackDTO.TextResponses`](#sessionfeedbackdto); built by
   [`GetSessionFeedbackHandler`](group-18-conference-application.md#getsessionfeedbackhandler).
 
@@ -1204,32 +1404,36 @@ rules themselves are catalogued in ADC's specifications guide.
   example "Beginner" or "Advanced" inside a "Level" category). Carries the item id, display name, sort
   order, and the FK to its parent [`ConferenceCategoryDTO`](#conferencecategorydto).
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype)
-  (from `MMCA.Common.Shared.DTOs`); the aliases `CategoryItemIdentifierType` and
-  `ConferenceCategoryIdentifierType`.
+  (from `MMCA.Common.Shared.DTOs`, `CategoryItemDTO.cs:1,8`); the aliases `CategoryItemIdentifierType`
+  and `ConferenceCategoryIdentifierType` (both `int`).
 - **Concept introduced, the entity read DTO (mapped by Mapperly).** `[Rubric §4, DDD]` and `[Rubric §3,
-  Clean Architecture]` (the read model is separate from the domain entity, so the API surface never
-  leaks the aggregate), `[Rubric §9, API & Contract Design]` (a typed, versionable response shape), and
+  Clean Architecture]` (the read model is separate from the domain entity, so the API surface never leaks
+  the aggregate), `[Rubric §9, API & Contract Design]` (a typed, versionable response shape), and
   `[Rubric §7, Microservices Readiness]` (it lives in `Shared`, referenceable without Domain). Every
-  Conference entity has a companion DTO with the same shape rule:
+  Conference entity has a companion DTO built to the same two rules:
   1. **It implements [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype)**,
-     the framework's minimal read-model contract, a single `required init Id` of the entity's id alias
-     (`CategoryItemDTO.cs:11`). That is the hook the generic query/serialization plumbing keys on.
+     the framework's minimal read-model contract: a single `required init Id` of the entity's id alias
+     (`CategoryItemDTO.cs:11`). That is the hook the generic query and serialization plumbing keys on.
   2. **It is populated by a Mapperly-generated mapper, not by hand.** The companion
-     [`IEntityDTOMapper<CategoryItem, CategoryItemDTO, CategoryItemIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype)
-     (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/DTOs/CategoryItemDTOMapper.cs:12`)
-     is a `[Mapper] partial class`, the source generator writes the field-by-field copy at compile time
-     ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)), so there is no reflection cost and a shape mismatch is a build error.
+     [`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype)
+     implementation
+     (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/DTOs/CategoryItemDTOMapper.cs:11-13`)
+     is a `[Mapper] partial class`, so the source generator writes the field-by-field copy at compile
+     time ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)): no reflection
+     cost, and a shape mismatch is a build error rather than a runtime surprise.
 - **Walkthrough**: four members (`CategoryItemDTO.cs:11-20`), `Id` (the `IBaseDTO` contract), the
-  `required` `Name`, an optional `Sort` (`int`, display order), and the `required` `CategoryId` FK back to
-  the parent category. `Sort` is a plain `int` (defaults to 0) rather than `required`, so an item without
-  an explicit order sorts first.
+  `required` `Name`, a plain `Sort` (`int`, display order), and the `required` `CategoryId` FK back to
+  the parent category. `Sort` is not `required`, so it defaults to 0 and an item without an explicit
+  order sorts first. Note what is absent: no `RowVersion`, because a category item is edited through its
+  parent [`Category`](#category) aggregate, which is where the concurrency token lives.
 - **Why it's built this way**: keeping the DTO a flat record with `init`-only members makes it an
   immutable snapshot the query pipeline can project, serialize, and cache without defensive copying;
-  Mapperly keeps the entity→DTO copy allocation-light and drift-proof.
-- **Where it's used**: nested inside [`ConferenceCategoryDTO.CategoryItems`](#conferencecategorydto) and
-  [`SpeakerCategoryItemDTO`](#speakercategoryitemdto)/session tagging; projected by an
-  [`IEntityQueryService<CategoryItem, CategoryItemDTO, ...>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
-  and returned by the Categories controllers.
+  Mapperly keeps the entity to DTO copy allocation-light and drift-proof.
+- **Where it's used**: nested inside [`ConferenceCategoryDTO.CategoryItems`](#conferencecategorydto), and
+  referenced by id from [`SpeakerCategoryItemDTO`](#speakercategoryitemdto) and the session tagging
+  DTOs; projected by an
+  [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
+  and returned by [`ConferenceCategoriesController`](group-20-conference-api-grpc.md#conferencecategoriescontroller).
 
 ---
 
@@ -1240,51 +1444,70 @@ rules themselves are catalogued in ADC's specifications guide.
   "Dietary requirements" or "T-shirt size") that events, sessions, or speakers can be asked to answer.
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype),
   [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) (both from
-  `MMCA.Common.Shared.DTOs`); the alias `QuestionIdentifierType`.
-- **Concept introduced, the concurrency-aware DTO.** `[Rubric §8, Data Architecture]` (assesses optimistic
-  concurrency carried end to end). In addition to the entity-DTO pattern from
-  [`CategoryItemDTO`](#categoryitemdto), this DTO implements
-  [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware), which adds a nullable
-  `byte[]? RowVersion` (`QuestionDTO.cs:16`), the EF SQL Server `rowversion` token round-tripped to the
-  client so a later update can be rejected if the row changed underneath it. The `[SuppressMessage(...
-  CA1819 ...)]` on the property (`QuestionDTO.cs:15`) is a scoped, justified suppression: exposing a
-  `byte[]` from a property normally trips CA1819, but the token must round-trip as raw bytes.
-- **Walkthrough**: eight members (`QuestionDTO.cs:12-34`), `Id` + `RowVersion` (the two contracts), the
-  `required` `QuestionText`, then the optional descriptors `QuestionEntity` ("session"/"speaker"),
-  `QuestionType` ("text"/"select"), `Sort`, `IsRequired`, and `QuestionSource` ("Sessionize" or "User",
-  recording whether the question was imported or added in-app).
+  `MMCA.Common.Shared.DTOs`, `QuestionDTO.cs:1,9`); the alias `QuestionIdentifierType`.
+- **Concept introduced, the concurrency-aware DTO.** `[Rubric §8, Data Architecture]` (assesses whether
+  optimistic concurrency is carried end to end rather than resolved last-write-wins). On top of the
+  entity-DTO pattern from [`CategoryItemDTO`](#categoryitemdto), this DTO implements
+  [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware), which contributes a nullable
+  `byte[]? RowVersion` (`QuestionDTO.cs:15`), the SQL Server `rowversion` token round-tripped to the
+  client so a later update can be rejected if the row changed underneath it. The interface itself
+  documents the failure mode it prevents: without the round-trip an update reloads the row and saves it,
+  so two concurrent editors silently overwrite each other and the mapped `409 Conflict` never fires
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IConcurrencyAware.cs:9-12`). The CA1819 suppression
+  that lets a property return `byte[]` is declared once on the interface member
+  (`IConcurrencyAware.cs:19`), not repeated on each DTO, so implementing types stay clean.
+- **Walkthrough**: eight members (`QuestionDTO.cs:12-33`), `Id` + `RowVersion` (the two contracts), the
+  `required` `QuestionText`, then the optional descriptors `QuestionEntity` ("session" or "speaker"),
+  `QuestionType` ("text" or "select"), `Sort`, `IsRequired`, and `QuestionSource` ("Sessionize" or
+  "User", recording whether the question was imported or added in-app). The descriptors are plain
+  nullable strings, not enums: they arrive from Sessionize and the vocabulary is not ADC's to close.
 - **Why it's built this way**: carrying `RowVersion` on the DTO lets an edit form send back the exact
-  token it read, so the concurrency check happens at the persistence boundary without the client tracking
-  version state itself; the optional descriptors keep one DTO usable for every question flavor.
+  token it read, so the concurrency check happens at the persistence boundary without the client
+  tracking version state itself; the optional descriptors keep one DTO usable for every question flavor.
 - **Where it's used**: mapped by
-  `QuestionDTOMapper` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Questions/DTOs/QuestionDTOMapper.cs`);
-  returned by the Questions controller and consumed by the answer-collection UI.
+  [`QuestionDTOMapper`](group-18-conference-application.md#questiondtomapper)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Questions/DTOs/QuestionDTOMapper.cs:11-13`);
+  returned by [`QuestionsController`](group-20-conference-api-grpc.md#questionscontroller) and consumed
+  by the answer-collection UI. `QuestionType` is also the switch
+  [`GetSessionFeedbackHandler`](group-18-conference-application.md#getsessionfeedbackhandler) reads when
+  it splits feedback into ratings and text (`GetSessionFeedbackHandler.cs:73`).
 
 ---
 
 ### SessionFeedbackDTO
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/SessionFeedbackDTO.cs:6` · Level 1 · record (sealed)
 
-- **What it is**: the aggregated feedback report for a single session, shown to the session's speaker
-  (BR-210): the session identity plus two grouped result sets, numeric ratings and free-text responses.
+- **What it is**: the aggregated feedback report for a single session (BR-210, `SessionFeedbackDTO.cs:4`):
+  the session identity plus two grouped result sets, numeric ratings and free-text responses.
 - **Depends on**: [`RatingQuestionSummary`](#ratingquestionsummary),
-  [`TextQuestionResponses`](#textquestionresponses); the aliases `SessionIdentifierType`,
+  [`TextQuestionResponses`](#textquestionresponses); the aliases `SessionIdentifierType` (a `Guid`) and
   `QuestionIdentifierType`.
 - **Concept, the composed query-projection report.** `[Rubric §6, CQRS & Event-Driven]` (a read model
-  purpose-built for one query rather than a mapped entity). This is the parent that composes the two
-  Level-0 records above. It does **not** implement
-  [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype), it is not a
-  CRUD read model but a computed report, so it is assembled by a handler, not a Mapperly mapper.
+  purpose-built for one query rather than a mapped entity) and `[Rubric §12, Performance & Scalability]`.
+  This is the parent that composes the two Level-0 records above. It does **not** implement
+  [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype): it is not a
+  CRUD read model but a computed report, so it is assembled by a handler rather than a Mapperly mapper.
 - **Walkthrough**: four `required init` members (`SessionFeedbackDTO.cs:9-18`), `SessionId` and
   `SessionTitle` (the report header), `Ratings` (an `IReadOnlyList<RatingQuestionSummary>`, one entry per
-  rating question) and `TextResponses` (an `IReadOnlyList<TextQuestionResponses>`, one entry per free-text
-  question). Splitting ratings from text mirrors the two answer kinds a session can collect.
+  rating question) and `TextResponses` (an `IReadOnlyList<TextQuestionResponses>`, one entry per
+  non-rating question). Splitting ratings from text mirrors the two answer kinds a session collects. The
+  producing handler shows how the shape is filled and where it refuses: it loads the session with its
+  `SessionSpeakers` and `SessionQuestionAnswers`, returns `Forbidden` if the requested speaker is not
+  assigned to that session, returns an empty-but-valid report when there are no answers, then groups the
+  answers by question and routes each group to `Ratings` or `TextResponses`
+  (`GetSessionFeedbackHandler.cs:24-53,68-101`).
 - **Why it's built this way**: pre-aggregating on the server (averages and groupings) keeps the speaker
-  UI a thin renderer and avoids shipping every raw answer row to the client.
-- **Where it's used**: returned by the `SpeakersController` feedback action
-  (`SpeakersController.cs:48`) via
-  [`GetSessionFeedbackHandler`](group-18-conference-application.md#getsessionfeedbackhandler); rendered by
-  the Speaker dashboard UI.
+  UI a thin renderer and avoids shipping every raw answer row to the client; returning an empty report
+  rather than a 404 when nobody answered keeps the dashboard's happy path free of special cases.
+- **Where it's used**: returned by
+  `GET /Speakers/{speakerId}/sessions/{sessionId}/feedback`, which is `[AllowAnonymous]` under the
+  `ConferencePublicCache` output-cache policy (`SpeakersController.cs:402-412`), via
+  [`GetSessionFeedbackHandler`](group-18-conference-application.md#getsessionfeedbackhandler); rendered
+  by [`SpeakerDashboardService`](group-21-conference-ui.md#speakerdashboardservice) and the speaker
+  dashboard page.
+- **Caveats / not-in-source**: the answers this report aggregates are the Conference module's
+  `SessionQuestionAnswers`, not the Engagement module's feedback aggregates; nothing in this DTO or its
+  handler reads across that module boundary.
 
 ---
 
@@ -1292,21 +1515,24 @@ rules themselves are catalogued in ADC's specifications guide.
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/SpeakerCategoryItemDTO.cs:8` · Level 1 · record (class)
 
 - **What it is**: the read-model shape of the [`SpeakerCategoryItem`](#speakercategoryitem) join row, the
-  many-to-many link that attaches a [`CategoryItem`](#categoryitem) (a topic or locality) to a
+  many-to-many link that attaches a [`CategoryItem`](#categoryitem) (a topic or a locality tier) to a
   [`Speaker`](#speaker).
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype);
-  the aliases `SpeakerCategoryItemIdentifierType`, `SpeakerIdentifierType`, `CategoryItemIdentifierType`.
+  the aliases `SpeakerCategoryItemIdentifierType` (`int`), `SpeakerIdentifierType` (`Guid`), and
+  `CategoryItemIdentifierType` (`int`).
 - **Concept**: the entity read DTO (see [`CategoryItemDTO`](#categoryitemdto)), here for a *join* entity:
-  a flat record of foreign keys, no editable content of its own.
-- **Walkthrough**: three `required init` members (`SpeakerCategoryItemDTO.cs:11-17`), `Id` (the `IBaseDTO`
-  contract), `SpeakerId` (parent FK), and `CategoryItemId` (the linked item). No concurrency token, a bare
-  join row is add/remove only, so there is nothing to update optimistically.
-- **Why it's built this way**: modeling the speaker→category-item relationship as an explicit join DTO
+  a flat record of foreign keys with no editable content of its own.
+- **Walkthrough**: three `required init` members (`SpeakerCategoryItemDTO.cs:11-17`), `Id` (the
+  `IBaseDTO` contract), `SpeakerId` (parent FK), and `CategoryItemId` (the linked item). No concurrency
+  token: a bare join row is add or remove only, so there is nothing to update optimistically.
+- **Why it's built this way**: modeling the speaker-to-category-item relationship as an explicit join DTO
   (rather than an inline id list) keeps the child collection uniform with every other Conference join and
   lets the mapper project it like any other entity.
 - **Where it's used**: nested in [`SpeakerDTO.SpeakerCategoryItems`](#speakerdto); mapped by
-  `SpeakerCategoryItemDTOMapper`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DTOs/SpeakerCategoryItemDTOMapper.cs`).
+  [`SpeakerCategoryItemDTOMapper`](group-18-conference-application.md#speakercategoryitemdtomapper)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DTOs/SpeakerCategoryItemDTOMapper.cs:11-13`),
+  which [`SpeakerDTOMapper`](group-18-conference-application.md#speakerdtomapper) pulls in as a
+  `[UseMapper]` dependency (`SpeakerDTOMapper.cs:18,23-24`).
 
 ---
 
@@ -1318,15 +1544,62 @@ rules themselves are catalogued in ADC's specifications guide.
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype);
   the aliases `SpeakerQuestionAnswerIdentifierType`, `SpeakerIdentifierType`, `QuestionIdentifierType`.
 - **Concept**: the entity read DTO (see [`CategoryItemDTO`](#categoryitemdto)). Unlike the bare
-  [`SpeakerCategoryItemDTO`](#speakercategoryitemdto) join, this one carries a payload, the answer text, so
-  it is a link *plus* a value.
+  [`SpeakerCategoryItemDTO`](#speakercategoryitemdto) join, this one carries a payload, the answer text,
+  so it is a link *plus* a value.
 - **Walkthrough**: four `required init` members (`SpeakerQuestionAnswerDTO.cs:12-21`), `Id`, `SpeakerId`
   (parent FK), `QuestionId` (the answered question), and `AnswerValue` (the response, stored as a string
-  regardless of the question's declared type).
+  regardless of the question's declared [`QuestionDTO.QuestionType`](#questiondto)).
 - **Why it's built this way**: keeping the answer as a flat `string AnswerValue` lets one DTO carry any
-  question type's answer (text, a selected option) without a type-specific shape.
-- **Where it's used**: nested in [`SpeakerDTO.SpeakerQuestionAnswers`](#speakerdto); mapped by the
-  speaker DTO mappers in the Conference Application layer.
+  question type's answer (free text, a selected option, a numeric rating) without a type-specific shape;
+  the cost is that consumers parse, which is exactly what the feedback handler does when it averages
+  ratings (`GetSessionFeedbackHandler.cs:75-79`).
+- **Where it's used**: nested in [`SpeakerDTO.SpeakerQuestionAnswers`](#speakerdto); mapped by
+  [`SpeakerQuestionAnswerDTOMapper`](group-18-conference-application.md#speakerquestionanswerdtomapper)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DTOs/SpeakerQuestionAnswerDTOMapper.cs:11-13`).
+
+---
+
+### SponsorDTO
+> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Sponsors` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sponsors/SponsorDTO.cs:9` · Level 1 · record (class)
+
+- **What it is**: the read-model shape of the [`Sponsor`](#sponsor) aggregate root: display name,
+  [`SponsorTier`](#sponsortier), branding links, the owning event's id, and the optional expo-floor booth
+  details.
+- **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype),
+  [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) (`SponsorDTO.cs:1,9`),
+  [`SponsorTier`](#sponsortier); the aliases `SponsorIdentifierType` (`int`) and `EventIdentifierType`.
+- **Concept, the DTO that drops the navigation.** `[Rubric §9, API & Contract Design]` and `[Rubric §3,
+  Clean Architecture]`. Structurally this is the concurrency-aware entity DTO already introduced by
+  [`QuestionDTO`](#questiondto), but it is the cleanest illustration of what a DTO deliberately leaves
+  behind. The [`Sponsor`](#sponsor) entity carries both an `EventId` scalar and a `[Navigation] Event?`
+  reference used for public-visibility filtering
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/Sponsor.cs:44-49`); the DTO
+  keeps only the scalar `EventId` (`SponsorDTO.cs:42`). The parent event never rides along, so a sponsor
+  response cannot accidentally serialize an entire event graph. `[Rubric §11, Security]` shows up by
+  contrast with [`SpeakerDTO`](#speakerdto): the sponsor mapper redacts nothing, and says why in its own
+  doc comment, sponsor data is bought placement and therefore public
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/DTOs/SponsorDTOMapper.cs:10`).
+- **Walkthrough**: thirteen members (`SponsorDTO.cs:12-48`). `Id` + `RowVersion` are the two contracts. The
+  `required` `Name` is the only mandatory content field. `Tier` (line 21) is the enum that drives public
+  ordering. `LogoUrl`, `Description`, `WebsiteUrl`, `LinkedInUrl`, and `TwitterHandle` (lines 24-36) are
+  all optional branding, typed as plain nullable strings rather than `Uri` because they are operator-
+  entered. `Sort` (line 39) is the tie-breaker *within* a tier. `EventId` (line 42) scopes the sponsor to
+  exactly one event. `IsExhibitor` + `BoothNumber` (lines 45-48) model the expo floor; the domain keeps a
+  stored booth number even when the flag is false, because the flag drives display and does not reject
+  stored data (`Sponsor.cs:54-57`).
+- **Why it's built this way**: sponsors are sold rather than imported, so unlike the Sessionize-sourced
+  entities this contract is fully ADC's own: a closed enum for tier, a required name, everything else
+  optional so an organizer can create a sponsor the moment a deal closes and fill in the logo later.
+- **Where it's used**: mapped by
+  [`SponsorDTOMapper`](group-18-conference-application.md#sponsordtomapper) (`SponsorDTOMapper.cs:12-17`);
+  projected by the
+  [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
+  injected into [`SponsorsController`](group-20-conference-api-grpc.md#sponsorscontroller)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SponsorsController.cs:37-47`),
+  where non-privileged callers are narrowed to sponsors of published events by a specification
+  (`SponsorsController.cs:49-70`); rendered by
+  [`PublicSponsorList`](group-21-conference-ui.md#publicsponsorlist) and the organizer-facing
+  [`SponsorList`](group-21-conference-ui.md#sponsorlist).
 
 ---
 
@@ -1334,38 +1607,46 @@ rules themselves are catalogued in ADC's specifications guide.
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Categories.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/DomainEvents/CategoryItemChanged.cs:13` · Level 2 · record (sealed)
 
 - **What it is**: the domain event a [`Category`](#category) aggregate raises when one of its
-  [`CategoryItem`](#categoryitem) children is added, updated, or removed. It carries the parent
-  category id, the child item id, and the item's display name.
+  [`CategoryItem`](#categoryitem) children is added, updated, or removed. It carries the parent category
+  id, the child item id, and the item's display name.
 - **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) (Level 1),
-  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (Level 0); the
-  identifier-type aliases `ConferenceCategoryIdentifierType` and `CategoryItemIdentifierType` (module
-  `global using` aliases, see the [primer](00-primer.md)).
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (Level 0), both from
+  `MMCA.Common.Domain` (`CategoryItemChanged.cs:1-2`); the aliases `ConferenceCategoryIdentifierType` and
+  `CategoryItemIdentifierType`.
 - **Concept introduced, the child-change domain event.** `[Rubric §6, CQRS & Event-Driven]` (assesses
   whether state changes are expressed as typed, first-class events that typed handlers can subscribe to)
-  and `[Rubric §4, DDD]` (domain events are part of the ubiquitous language, an aggregate announces what
-  happened inside its boundary). Every Conference child or join entity has a companion `Changed` record.
-  Two design choices are visible here and reused across this whole family:
+  and `[Rubric §4, DDD]` (domain events are part of the ubiquitous language: an aggregate announces what
+  happened inside its boundary). Every Conference child or join entity has a companion `Changed` record,
+  and two design choices visible here are reused across that whole family:
   1. **It derives from [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) directly, not from
      [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype).**
-     `EntityChangedEvent<T>` models a single aggregate-root id; a child change needs *two* identifiers
-     (the parent aggregate and the child) plus a descriptor, so it cannot fit that one-id shape. The
-     aggregate-root lifecycle events later in this part ([`CategoryChanged`](#categorychanged) and its
-     siblings) do use `EntityChangedEvent<T>`.
-  2. **It is a `sealed record class` with no behavior.** Structural equality and the inherited
-     `MessageId` / `DateOccurred` come from `BaseDomainEvent`; the type exists purely so
-     `IDomainEventHandler<CategoryItemChanged>` can be registered and dispatched independently of every
-     other event type.
+     `EntityChangedEvent<T>` models a single entity id
+     (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/EntityChangedEvent.cs:24-27`); a child
+     change needs *two* identifiers (the parent aggregate and the child) plus a descriptor, so it does
+     not fit that one-id shape. The aggregate-root lifecycle events, [`CategoryChanged`](#categorychanged)
+     and its siblings, do use `EntityChangedEvent<T>`.
+  2. **It is a `sealed record class` with no behavior.** Structural equality plus the inherited
+     `DateOccurred` and event id come from `BaseDomainEvent`
+     (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:26-32`); the type
+     exists purely so `IDomainEventHandler<CategoryItemChanged>` can be registered and dispatched
+     independently of every other event type.
 - **Walkthrough**: four positional members (`CategoryItemChanged.cs:13-17`), `State` (the
   `Added`/`Updated`/`Deleted` transition), `CategoryId` (the parent), `CategoryItemId` (the child), and
-  `Name` (the item's display name, so a handler or log line has a human-readable label without re-loading
-  the entity).
+  `Name` (the item's display name, so a handler or log line has a human-readable label without
+  re-loading the entity).
 - **Why it's built this way**: keeping the payload flat and self-describing (ids plus a name) means a
   downstream handler never has to re-query the aggregate to act, and the event survives serialization
   through the dispatch pipeline unchanged.
-- **Where it's used**: raised by [`Category`](#category)'s `AddCategoryItem`/`UpdateCategoryItem`/
-  `RemoveCategoryItem`; collected on the aggregate and dispatched in-process by
+- **Where it's used**: raised by [`Category`](#category) at all three child mutation points,
+  `AddCategoryItem`, `UpdateCategoryItem`, and `RemoveCategoryItem`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:150,182,203`);
+  collected on the aggregate and dispatched in-process by
   [`DomainEventDispatcher`](group-04-events-outbox.md#domaineventdispatcher) after `SaveChangesAsync`.
-  No dedicated handler subscribes to it today; it is available for future observers and audit.
+- **Caveats / not-in-source**: no handler subscribes to it in the ADC source today; it is available for
+  future observers and audit. Note also the one asymmetry: deleting the parent category cascade
+  soft-deletes its items (BR-71) but raises a single
+  [`CategoryChanged`](#categorychanged)`(Deleted)` rather than one `CategoryItemChanged` per item
+  (`Category.cs:106-117`), so a subscriber must treat parent deletion as implying its children.
 
 ---
 
@@ -1380,75 +1661,23 @@ rules themselves are catalogued in ADC's specifications guide.
 - **Concept, the aggregate-root read DTO with a child collection.** `[Rubric §9, API & Contract Design]`
   and `[Rubric §8, Data Architecture]`. This combines both patterns seen above: it is a concurrency-aware
   DTO (`RowVersion`, as in [`QuestionDTO`](#questiondto)) *and* it nests a child collection of
-  [`CategoryItemDTO`](#categoryitemdto), so the whole aggregate (category + its options) serializes in one
-  response.
-- **Walkthrough**: six members (`ConferenceCategoryDTO.cs:12-28`), `Id` + `RowVersion` (the contracts),
-  the `required` `Title`, an optional `Sort` and `Type` ("session"/"speaker"), and the
-  `CategoryItems` collection, an `IReadOnlyCollection<CategoryItemDTO>` initialized to `[]`
-  (`ConferenceCategoryDTO.cs:28`) so it is never null even when the category has no items yet.
+  [`CategoryItemDTO`](#categoryitemdto), so the whole aggregate (category plus its options) serializes in
+  one response. The concurrency token sits here and not on the child, which is the aggregate boundary
+  showing through the read model: you version the root, not each option.
+- **Walkthrough**: six members (`ConferenceCategoryDTO.cs:12-27`), `Id` + `RowVersion` (the contracts),
+  the `required` `Title`, an optional `Sort` and `Type` ("session" or "speaker"), and the `CategoryItems`
+  collection, an `IReadOnlyCollection<CategoryItemDTO>` initialized to `[]`
+  (`ConferenceCategoryDTO.cs:27`) so it is never null even when the category has no items yet.
 - **Why it's built this way**: defaulting the child collection to an empty collection literal removes
-  null-checks downstream; nesting the items lets the categories UI render an editable category-with-options
-  block from a single fetch.
-- **Where it's used**: mapped by `ConferenceCategoryDTOMapper`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/DTOs/ConferenceCategoryDTOMapper.cs`);
-  returned by the Categories controller and consumed by the category-management UI.
-
----
-
-### EventQuestionAnswerChanged
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/EventQuestionAnswerChanged.cs:13` · Level 2 · record (sealed)
-
-- **What it is**: the child-change event an [`Event`](#event) aggregate raises when one of its
-  [`EventQuestionAnswer`](#eventquestionanswer) children is added, updated, or removed.
-- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent),
-  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `EventIdentifierType`,
-  `EventQuestionAnswerIdentifierType`, `QuestionIdentifierType`.
-- **Concept**: the child-change domain event introduced by [`CategoryItemChanged`](#categoryitemchanged).
-  The descriptor differs: instead of a display name it carries `QuestionId` (line 16), the FK to the
-  [`Question`](#question) that was answered, so a handler knows *which* question the answer belongs to.
-- **Walkthrough**: `State`, `EventId` (parent), `EventQuestionAnswerId` (child), `QuestionId` (the
-  answered question), lines 14-17.
-- **Where it's used**: raised by [`Event`](#event)'s event-question-answer management methods; dispatched
-  in-process. No dedicated handler subscribes today.
-
----
-
-### EventSpeakerChanged
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/EventSpeakerChanged.cs:13` · Level 2 · record (sealed)
-
-- **What it is**: the change event an [`Event`](#event) raises when an [`EventSpeaker`](#eventspeaker)
-  join entity is added or removed (linking the event to a [`Speaker`](#speaker)).
-- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent),
-  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `EventIdentifierType`,
-  `EventSpeakerIdentifierType`, `SpeakerIdentifierType`.
-- **Concept**: the child-change domain event (see [`CategoryItemChanged`](#categoryitemchanged)), for a
-  *join* entity. The doc comment (line 7) says "added or removed" with no `Updated` case: a pure FK-pair
-  join carries no editable content, so its lifecycle has only two meaningful transitions. `State` is
-  still `DomainEntityState` (it can hold `Added`/`Deleted`).
-- **Walkthrough**: `State`, `EventId` (parent), `EventSpeakerId` (the join row), `SpeakerId` (the linked
-  speaker), lines 14-17.
-- **Where it's used**: raised by [`Event`](#event)'s `AddEventSpeaker`/`RemoveEventSpeaker`; dispatched
-  in-process. No dedicated handler subscribes today.
-
----
-
-### RoomChanged
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/RoomChanged.cs:13` · Level 2 · record (sealed)
-
-- **What it is**: the child-change event an [`Event`](#event) raises when one of its [`Room`](#room)
-  children is added, updated, or removed. Carries the parent event id, the room id, and the room name.
-- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent),
-  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `EventIdentifierType`,
-  `RoomIdentifierType`.
-- **Concept**: the child-change domain event (see [`CategoryItemChanged`](#categoryitemchanged)). This is
-  the one member of the Level-2 family with a *dedicated* handler, so it is a concrete sighting of the
-  `IDomainEventHandler<T>` boundary: [`RoomChangedHandler`](group-18-conference-application.md#roomchangedhandler)
-  in the Conference Application layer subscribes to it and reacts on the `State` transition.
-  `[Rubric §6, CQRS & Event-Driven]` (typed event to typed handler, dispatched by Scrutor-discovered
-  registration).
-- **Walkthrough**: `State`, `EventId` (parent), `RoomId` (child), `RoomName` (display label), lines 14-17.
-- **Where it's used**: raised by [`Event`](#event)'s `AddRoom`/`UpdateRoom`/`RemoveRoom`; dispatched
-  in-process and consumed by [`RoomChangedHandler`](group-18-conference-application.md#roomchangedhandler).
+  null checks downstream; nesting the items lets the categories UI render an editable
+  category-with-options block from a single fetch.
+- **Where it's used**: mapped by
+  [`ConferenceCategoryDTOMapper`](group-18-conference-application.md#conferencecategorydtomapper), which
+  takes [`CategoryItemDTOMapper`](group-18-conference-application.md#categoryitemdtomapper) as a
+  constructor dependency to project the children
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/DTOs/ConferenceCategoryDTOMapper.cs:12-15`);
+  returned by [`ConferenceCategoriesController`](group-20-conference-api-grpc.md#conferencecategoriescontroller)
+  and consumed by the category-management UI.
 
 ---
 
@@ -1460,32 +1689,45 @@ rules themselves are catalogued in ADC's specifications guide.
   answers). It is the richest DTO in this unit.
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype),
   [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware),
-  [`SpeakerCategoryItemDTO`](#speakercategoryitemdto), [`SpeakerQuestionAnswerDTO`](#speakerquestionanswerdto);
-  the aliases `SpeakerIdentifierType`, `UserIdentifierType`.
-- **Concept, the cross-context read DTO.** `[Rubric §7, Microservices Readiness]` and `[Rubric §8, Data
-  Architecture]`. Like [`ConferenceCategoryDTO`](#conferencecategorydto) it is a concurrency-aware
-  aggregate DTO with nested child collections, but it also surfaces `LinkedUserId`
-  (`SpeakerDTO.cs:58`), a *nullable, cross-database* FK to an Identity `User`. That id is a scalar, not an
-  EF navigation, because the User and Speaker live in separate databases ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)); the link is reconciled
-  by events (see [`SpeakerChanged`](#speakerchanged) and [`SpeakerLinkedToUser`](#speakerlinkedtouser)),
-  never a cross-database join. Three URL-ish fields (`LinkedInUrl`/`GitHubUrl`/`WebsiteUrl`) carry a
-  scoped `[SuppressMessage(... CA1056 ...)]` (`SpeakerDTO.cs:46,50,54`) because they are stored as strings
-  from the Sessionize import.
-- **Walkthrough**: seventeen members (`SpeakerDTO.cs:12-64`), `Id` + `RowVersion` (contracts); the
-  `required` name fields `FirstName`/`LastName`/`FullName` (`FullName` is denormalized so the client shows
-  a display name without concatenating); optional profile fields (`Email`, `Bio`, `TagLine`,
-  `ProfilePicture`, the `IsTopSpeaker` flag, the three social URLs); the nullable `LinkedUserId`; and the
-  two child collections `SpeakerCategoryItems` and `SpeakerQuestionAnswers`, both
-  `IReadOnlyCollection<...>` defaulted to `[]` (`SpeakerDTO.cs:61,64`).
+  [`SpeakerCategoryItemDTO`](#speakercategoryitemdto),
+  [`SpeakerQuestionAnswerDTO`](#speakerquestionanswerdto); the aliases `SpeakerIdentifierType` (a `Guid`,
+  because speakers are imported with Sessionize-side identity) and `UserIdentifierType` (an `int`, owned
+  by Identity).
+- **Concept, the cross-context read DTO and the redacting mapper.** `[Rubric §7, Microservices
+  Readiness]`, `[Rubric §8, Data Architecture]`, `[Rubric §11, Security]`. Two things make this DTO worth
+  studying beyond its size:
+  1. **`LinkedUserId` is a bare nullable scalar** (`SpeakerDTO.cs:54`), not a nested user object and not
+     an EF navigation, because the user and the speaker live in separate databases
+     ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). The link is
+     reconciled by events ([`SpeakerLinkedToUser`](#speakerlinkedtouser) and
+     [`SpeakerUnlinkedFromUser`](#speakerunlinkedfromuser)), never by a cross-database join.
+  2. **`Email` is nullable on the DTO although the entity holds an `Email` value object**, because
+     [`SpeakerDTOMapper`](group-18-conference-application.md#speakerdtomapper) redacts it: after the
+     generated copy runs it returns `dto with { Email = null }` unless the caller is in the `Organizer`
+     role (BR-66,
+     `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DTOs/SpeakerDTOMapper.cs:13,35-36`).
+     The redaction is in the mapper rather than the controller, so every read path inherits it. This is
+     the DTO layer doing real work, not just shape translation.
+- **Walkthrough**: seventeen members (`SpeakerDTO.cs:12-60`). `Id` + `RowVersion` are the contracts. The
+  `required` name fields are `FirstName`, `LastName`, and `FullName` (lines 18-24); `FullName` is a
+  computed expression on the entity (`Speaker.cs:61`) flattened into a stored string here, so a client
+  renders a display name without concatenating. Then the optional profile fields, `Email` (line 27, the
+  redacted one), `Bio`, `TagLine`, `ProfilePicture`, the `IsTopSpeaker` flag, and the social handles
+  `TwitterHandle`, `LinkedInUrl`, `GitHubUrl`, `WebsiteUrl` (lines 30-51, plain nullable strings because
+  they come through the Sessionize import). `LinkedUserId` (line 54) is the cross-context link. The two
+  child collections `SpeakerCategoryItems` and `SpeakerQuestionAnswers` (lines 57-60) are both
+  `IReadOnlyCollection<...>` defaulted to `[]`, and both are filled by `[UseMapper]` child mappers rather
+  than by hand (`SpeakerDTOMapper.cs:23-27`).
 - **Why it's built this way**: denormalizing `FullName` and defaulting both collections keeps the speaker
-  UI a thin renderer; exposing `LinkedUserId` as a bare nullable id (not a nested user object) is exactly
-  the database-per-service posture, the Conference read model knows the *id* of the linked user but never
-  reaches across the boundary to fetch it.
-- **Where it's used**: projected by an
-  [`IEntityQueryService<Speaker, SpeakerDTO, SpeakerIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
-  injected into the `SpeakersController` (`SpeakersController.cs:42`); mapped by `SpeakerDTOMapper`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DTOs/SpeakerDTOMapper.cs`);
-  rendered by the Speaker dashboard UI.
+  UI a thin renderer; exposing `LinkedUserId` as a bare nullable id is exactly the database-per-service
+  posture, since the Conference read model knows the *id* of the linked user but never reaches across the
+  boundary to fetch it; and redacting `Email` in the mapper means the PII rule cannot be forgotten by a
+  new endpoint.
+- **Where it's used**: projected by the
+  [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
+  injected into [`SpeakersController`](group-20-conference-api-grpc.md#speakerscontroller)
+  (`SpeakersController.cs:44-47`), and returned by its create and update commands; rendered by the public
+  speaker pages and by [`SpeakerDashboardService`](group-21-conference-ui.md#speakerdashboardservice).
 
 ---
 
@@ -1496,608 +1738,1430 @@ rules themselves are catalogued in ADC's specifications guide.
   updated, or deleted. Carries the category id and its title.
 - **Depends on**:
   [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype)
-  (Level 2), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (Level 0); alias
-  `ConferenceCategoryIdentifierType`.
+  (Level 2), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (Level 0); the
+  alias `ConferenceCategoryIdentifierType`.
 - **Concept introduced, the aggregate-root lifecycle event.** `[Rubric §6, CQRS & Event-Driven]` and
-  `[Rubric §16, Maintainability]` (a single event type per aggregate instead of a separate
+  `[Rubric §16, Maintainability]` (one event type per aggregate instead of a separate
   `Created`/`Updated`/`Deleted` trio). Where the Level-2 events above derive from
   [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) directly, the root-level events derive
   from `EntityChangedEvent<TIdentifierType>`, which consolidates the CRUD-lifecycle pattern: it holds
   `State` plus a single generic `EntityId`, and each concrete record passes its own id up to that base
-  (line 16: `: EntityChangedEvent<ConferenceCategoryIdentifierType>(State, CategoryId)`). A subtle but
-  real consequence: the derived record re-exposes the id under a domain-meaningful name (`CategoryId`)
-  while the same value is also reachable as the inherited generic `EntityId`, one identity, two property
-  names, so handlers written against `EntityChangedEvent<T>` and handlers written against the concrete
-  type both work.
-- **Walkthrough**: three positional members (lines 13-15), `State`, `CategoryId`, and `Title`; `State`
-  and `CategoryId` are forwarded to the base constructor (line 16), `Title` is the record's own added
-  property.
-- **Why it's built this way**: one lifecycle event per aggregate keeps the event surface small ([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)
-  contract-versioning applies to the shared base), and `State` lets a handler branch on the transition
-  rather than subscribing to three separate types.
-- **Where it's used**: raised from [`Category`](#category)'s `Create`/`Update`/`Delete`; dispatched
-  in-process by [`DomainEventDispatcher`](group-04-events-outbox.md#domaineventdispatcher).
+  (`CategoryChanged.cs:16`: `: EntityChangedEvent<ConferenceCategoryIdentifierType>(State, CategoryId)`).
+  A subtle but real consequence: the derived record re-exposes the id under a domain-meaningful name
+  (`CategoryId`) while the same value is also reachable as the inherited generic `EntityId`, one identity
+  under two property names, so handlers written against `EntityChangedEvent<T>` and handlers written
+  against the concrete type both work. The base's own doc comment draws the dividing line, generic CRUD
+  lifecycle belongs here while a business transition such as `OrderPaid` keeps inheriting
+  `BaseDomainEvent` directly
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/EntityChangedEvent.cs:16-18`).
+- **Walkthrough**: three positional members (`CategoryChanged.cs:13-15`), `State`, `CategoryId`, and
+  `Title`; `State` and `CategoryId` are forwarded to the base constructor (line 16), and `Title` is the
+  record's own added property, the human-readable descriptor a handler or log line can use without
+  re-loading the aggregate.
+- **Why it's built this way**: one lifecycle event per aggregate keeps the event surface small, and
+  `State` lets a handler branch on the transition rather than subscribing to three separate types.
+- **Where it's used**: raised from [`Category`](#category)'s `Create` (`Added`), `Update` (`Updated`),
+  and `Delete` (`Deleted`) at `Category.cs:72,95,116`; dispatched in-process by
+  [`DomainEventDispatcher`](group-04-events-outbox.md#domaineventdispatcher) after `SaveChangesAsync`.
+- **Caveats / not-in-source**: like [`CategoryItemChanged`](#categoryitemchanged), no handler subscribes
+  to it in the ADC source today. It is an in-process domain event, not an integration event, so it never
+  reaches the outbox or the broker on its own.
+
+### EventQuestionAnswerChanged
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/EventQuestionAnswerChanged.cs:13` · Level 2 · record (sealed)
+
+- **What it is**: the domain event an [`Event`](#event) aggregate raises when one of its
+  [`EventQuestionAnswer`](#eventquestionanswer) children is added, updated, or removed. It announces a
+  change *inside* the aggregate boundary, not a change of the aggregate root itself.
+- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) (the base record) and the
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) enum, both from
+  `MMCA.Common.Domain`; the module identifier aliases `EventIdentifierType`,
+  `EventQuestionAnswerIdentifierType`, and `QuestionIdentifierType` (BCL scalars behind a `global using`
+  alias, see the [primer](00-primer.md)). No NuGet dependency.
+- **Concept introduced, the child-change domain event.** `[Rubric §6, CQRS & Event-Driven]` (assesses
+  whether state transitions are published as typed, first-class events that typed handlers can subscribe
+  to, instead of leaking out as ad-hoc side effects) and `[Rubric §4, DDD]` (assesses whether the
+  aggregate root is the sole author of change inside its consistency boundary and names that change in
+  the ubiquitous language). Every child and join entity in the Conference model has a companion
+  `...Changed` record, and this family shares three design choices worth learning once:
+  1. **It derives from [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) directly, not from
+     [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype).**
+     That base models exactly one identifier (`State` plus a generic `EntityId`,
+     `MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/EntityChangedEvent.cs:24-27`), which a child
+     change cannot fit: it needs the parent id *and* the child id, plus a descriptor. The aggregate-root
+     lifecycle events later in this part ([`EventChanged`](#eventchanged) and siblings) do use it.
+  2. **It is a `sealed record class` with no behavior.** Structural equality is free, and the inherited
+     `MessageId` / `DateOccurred` come from the base
+     (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:28-35`). The type exists
+     so `IDomainEventHandler<EventQuestionAnswerChanged>` can be registered and dispatched independently of
+     every other event type.
+  3. **The payload is flat ids plus a descriptor.** The event must survive being serialized into an
+     [`OutboxMessage`](group-04-events-outbox.md#outboxmessage) row in the same transaction as the data
+     ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)), so it carries no entity
+     references. How a raised event reaches the outbox and the in-process handlers is taught once in
+     [Group 04](group-04-events-outbox.md); this part only produces them.
+- **Walkthrough**: four positional members
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/EventQuestionAnswerChanged.cs:13-17`):
+  `State` (the `Added` / `Updated` / `Deleted` transition), `EventId` (the parent aggregate), `EventQuestionAnswerId`
+  (the child row), and `QuestionId` (line 17), the FK to the [`Question`](#question) that was answered, so a handler
+  knows which question the answer belongs to without re-loading the aggregate.
+- **Why it's built this way**: publishing ids rather than the entity keeps the event a self-describing,
+  serializable fact and keeps a subscriber out of the aggregate's internals. Raising one event per child
+  type (rather than a single generic "event updated") lets cache invalidation and projections target
+  exactly what moved.
+- **Where it's used**: raised by [`Event`](#event)'s `AddEventQuestionAnswer` / `UpdateEventQuestionAnswer` /
+  `RemoveEventQuestionAnswer`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:621`, `:645`, `:666`);
+  collected on the aggregate and dispatched in-process by
+  [`DomainEventDispatcher`](group-04-events-outbox.md#domaineventdispatcher) after `SaveChangesAsync`.
+- **Caveats / not-in-source**: no dedicated `IDomainEventHandler` subscribes to it today (the Conference
+  Application layer has handlers only for [`RoomChanged`](#roomchanged), [`SessionChanged`](#sessionchanged),
+  and [`SpeakerChanged`](#speakerchanged)); the event is raised and recorded regardless.
 
 ---
 
-### EventChanged
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/EventChanged.cs:12` · Level 3 · record (sealed)
+### EventSpeakerChanged
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/EventSpeakerChanged.cs:13` · Level 2 · record (sealed)
 
-- **What it is**: the aggregate-lifecycle event an [`Event`](#event) raises when it is created, updated,
-  or deleted (including on publish/unpublish, which flip state and emit `EventChanged(Updated)`). Carries
-  the event id and name.
-- **Depends on**:
-  [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype),
-  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); alias `EventIdentifierType`.
-- **Concept**: the aggregate-root lifecycle event introduced by [`CategoryChanged`](#categorychanged);
-  structurally identical, carrying `Name` (line 14) as its descriptor.
-- **Walkthrough**: `State`, `EventId`, `Name` (lines 13-15); `State` + `EventId` forwarded to the base
-  (line 16).
-- **Where it's used**: raised from [`Event`](#event)'s `Create`/`Update`/`Publish`/`Unpublish`/`Delete`;
-  dispatched in-process.
+- **What it is**: the change event an [`Event`](#event) raises when an [`EventSpeaker`](#eventspeaker) join
+  entity is added or removed, that is, when a [`Speaker`](#speaker) is attached to or detached from the event.
+- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `EventIdentifierType`,
+  `EventSpeakerIdentifierType`, `SpeakerIdentifierType`.
+- **Concept**: the child-change domain event introduced by
+  [`EventQuestionAnswerChanged`](#eventquestionanswerchanged), here for a *join* entity.
+  `[Rubric §6, CQRS & Event-Driven]`. The XML doc says "added or removed" with no update case
+  (`EventSpeakerChanged.cs:7`): a pure FK-pair join carries no editable content, so only two transitions are
+  meaningful. The parameter type stays `DomainEntityState` (nothing narrows it structurally), and the raise
+  sites use only `Added` and `Deleted`.
+- **Walkthrough**: `State`, `EventId` (parent), `EventSpeakerId` (the join row), `SpeakerId` (the linked
+  speaker), lines 14-17.
+- **Where it's used**: raised by [`Event`](#event)'s `AddEventSpeaker` / `RemoveEventSpeaker`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:532`, `:568`, `:589`);
+  dispatched in-process. No dedicated handler subscribes today.
+
+---
+
+### RoomChanged
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/RoomChanged.cs:13` · Level 2 · record (sealed)
+
+- **What it is**: the child-change event an [`Event`](#event) raises when one of its [`Room`](#room) children
+  is added, updated, or removed. Carries the parent event id, the room id, and the room name.
+- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `EventIdentifierType`,
+  `RoomIdentifierType`.
+- **Concept**: the child-change domain event (see [`EventQuestionAnswerChanged`](#eventquestionanswerchanged)).
+  `[Rubric §6, CQRS & Event-Driven]`. This is the one member of the Level-2 family with a *dedicated*
+  subscriber, so it is the concrete sighting of the `IDomainEventHandler<T>` extension point:
+  [`RoomChangedHandler`](group-18-conference-application.md#roomchangedhandler)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/DomainEventHandlers/RoomChangedHandler.cs:11-12`)
+  implements `IDomainEventHandler<RoomChanged>` and branches on the `State` transition. Note the descriptor
+  choice: `RoomName` is a display label rather than an FK, so a log line or projection reads without a reload.
+- **Walkthrough**: `State`, `EventId` (parent), `RoomId` (child), `RoomName` (display label), lines 14-17.
+- **Where it's used**: raised by [`Event`](#event)'s `AddRoom` / `UpdateRoom` / `RemoveRoom`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:381`, `:419`, `:472`, `:493`);
+  consumed by [`RoomChangedHandler`](group-18-conference-application.md#roomchangedhandler).
+
+---
 
 ### SessionCategoryItemChanged
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/DomainEvents/SessionCategoryItemChanged.cs:13` · Level 2 · record (sealed)
 
-- **What it is**: the domain event a [`Session`](#session) raises when one of its [`SessionCategoryItem`](#sessioncategoryitem) join rows is added or removed. It is the narrowest kind of Conference event: a notice that a *child collection* of an aggregate changed, not that the aggregate root itself changed.
-- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) (base record) and the [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) enum; the module id aliases `SessionIdentifierType`, `SessionCategoryItemIdentifierType`, `CategoryItemIdentifierType` (BCL scalars behind the alias). No NuGet dependency.
-- **Concept introduced, the child-collection domain event.** `[Rubric §6, CQRS & Event-Driven]` (assesses whether state changes are announced as first-class events rather than leaked as side effects) and `[Rubric §4, Domain-Driven Design]` (assesses whether the aggregate root is the sole author of change inside its consistency boundary). The aggregate-root-level events later in this part ([`SessionChanged`](#sessionchanged), [`SpeakerChanged`](#speakerchanged)) derive from [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype); this event and its four siblings instead derive **directly** from [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) because a join/child row has no independent lifecycle event of its own to reuse. It carries three ids so a handler can react without reloading: the parent [`Session`](#session), the join entity, and the [`CategoryItem`](#categoryitem) that was linked. How a raised event reaches the outbox and in-process handlers is taught once in [Group 04](group-04-events-outbox.md); this part only produces them.
-- **Walkthrough**: a positional `sealed record class` with four members (`SessionCategoryItemChanged.cs:13-17`): `State` (the [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate), `Added` or `Deleted` for a join row), `SessionId`, `SessionCategoryItemId`, and `CategoryItemId`. Being a record, structural equality and immutability come for free; the primary-constructor parameters are the only state.
-- **Why it's built this way**: publishing the ids rather than the entity keeps the event a flat, serializable fact (it must survive an outbox round-trip, [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) and keeps a handler from touching the aggregate's internals. Raising a distinct event per join type (rather than one generic "session updated") lets read-side cache invalidation and projections target exactly what moved.
-- **Where it's used**: raised inside [`Session`](#session)'s category-item add/remove methods; consumed by in-process `IDomainEventHandler` implementations and captured by the outbox in `SaveChangesAsync`.
+- **What it is**: the domain event a [`Session`](#session) raises when one of its
+  [`SessionCategoryItem`](#sessioncategoryitem) join rows is added or removed (the tags, track, and level
+  assignments on a session).
+- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SessionIdentifierType`,
+  `SessionCategoryItemIdentifierType`, `CategoryItemIdentifierType`.
+- **Concept**: the child-change domain event ([`EventQuestionAnswerChanged`](#eventquestionanswerchanged)),
+  applied to the [`Session`](#session) aggregate. `[Rubric §6, CQRS & Event-Driven]` and
+  `[Rubric §4, DDD]`. It carries three ids so a handler can react without reloading: the parent session, the
+  join row, and the [`CategoryItem`](#categoryitem) that was linked.
+- **Walkthrough**: `sealed record class` with `State`, `SessionId`, `SessionCategoryItemId`, `CategoryItemId`
+  (`SessionCategoryItemChanged.cs:13-17`). Being a record, immutability and structural equality come for free;
+  the primary-constructor parameters are the only state.
+- **Where it's used**: raised by [`Session`](#session)'s category-item add/remove methods
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:435`, `:472`, `:493`);
+  captured by the outbox in `SaveChangesAsync` and dispatched in-process. No dedicated handler today.
 
 ---
 
 ### SessionQuestionAnswerChanged
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/DomainEvents/SessionQuestionAnswerChanged.cs:13` · Level 2 · record (sealed)
 
-- **What it is**: the domain event a [`Session`](#session) raises when a [`SessionQuestionAnswer`](#sessionquestionanswer) child row is added, updated, or removed. Same shape as [`SessionCategoryItemChanged`](#sessioncategoryitemchanged), but for the answer child rather than the category join.
-- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SessionIdentifierType`, `SessionQuestionAnswerIdentifierType`, `QuestionIdentifierType`.
-- **Concept**: the child-collection domain event introduced by [`SessionCategoryItemChanged`](#sessioncategoryitemchanged). `[Rubric §6, CQRS & Event-Driven]`. The one behavioral difference is the `Updated` state: an answer's text can change in place (a join row cannot), so this event's `State` spans `Added`, `Updated`, and `Deleted`.
-- **Walkthrough**: `sealed record class` with `State`, `SessionId`, `SessionQuestionAnswerId`, `QuestionId` (`SessionQuestionAnswerChanged.cs:13-17`).
-- **Where it's used**: raised by [`Session`](#session)'s question-answer methods; captured by the outbox.
+- **What it is**: the domain event a [`Session`](#session) raises when a
+  [`SessionQuestionAnswer`](#sessionquestionanswer) child row is added, updated, or removed. Same shape as
+  [`SessionCategoryItemChanged`](#sessioncategoryitemchanged), for the answer child rather than the category join.
+- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SessionIdentifierType`,
+  `SessionQuestionAnswerIdentifierType`, `QuestionIdentifierType`.
+- **Concept**: the child-change domain event ([`EventQuestionAnswerChanged`](#eventquestionanswerchanged)).
+  `[Rubric §6, CQRS & Event-Driven]`. The behavioral difference against a join event is the `Updated` state:
+  an answer's text can change in place (a join row cannot), and the raise sites use all three transitions.
+- **Walkthrough**: `sealed record class` with `State`, `SessionId`, `SessionQuestionAnswerId`, `QuestionId`
+  (`SessionQuestionAnswerChanged.cs:13-17`).
+- **Where it's used**: raised by [`Session`](#session)'s question-answer methods
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:525`, `:549`, `:570`);
+  captured by the outbox. Do not confuse it with
+  [`SessionFeedbackSubmitted`](#sessionfeedbacksubmitted), the cross-module event the *application* layer
+  raises alongside the create path.
 
 ---
 
 ### SessionSpeakerChanged
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/DomainEvents/SessionSpeakerChanged.cs:13` · Level 2 · record (sealed)
 
-- **What it is**: the domain event a [`Session`](#session) raises when a [`SessionSpeaker`](#sessionspeaker) join row (session-to-speaker association) is added or removed.
-- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SessionIdentifierType`, `SessionSpeakerIdentifierType`, `SpeakerIdentifierType`.
-- **Concept**: the child-collection domain event ([`SessionCategoryItemChanged`](#sessioncategoryitemchanged)). `[Rubric §6, CQRS & Event-Driven]`. A join row, so `State` is `Added` or `Deleted` only.
-- **Walkthrough**: `sealed record class` with `State`, `SessionId`, `SessionSpeakerId`, `SpeakerId` (`SessionSpeakerChanged.cs:13-17`).
-- **Where it's used**: raised by [`Session`](#session)'s speaker-association methods; captured by the outbox.
+- **What it is**: the domain event a [`Session`](#session) raises when a [`SessionSpeaker`](#sessionspeaker)
+  join row (the session-to-speaker association) is added or removed.
+- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SessionIdentifierType`,
+  `SessionSpeakerIdentifierType`, `SpeakerIdentifierType`.
+- **Concept**: the child-change domain event ([`EventQuestionAnswerChanged`](#eventquestionanswerchanged)),
+  join-entity flavor as in [`EventSpeakerChanged`](#eventspeakerchanged). `[Rubric §6, CQRS & Event-Driven]`.
+  The XML doc records "added or removed" (`SessionSpeakerChanged.cs:7`), and the raise sites use only `Added`
+  and `Deleted`.
+- **Walkthrough**: `sealed record class` with `State`, `SessionId`, `SessionSpeakerId`, `SpeakerId`
+  (`SessionSpeakerChanged.cs:13-17`).
+- **Where it's used**: raised by [`Session`](#session)'s speaker-association methods
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:339`, `:375`, `:396`);
+  captured by the outbox.
 
 ---
 
 ### SpeakerCategoryItemChanged
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/DomainEvents/SpeakerCategoryItemChanged.cs:13` · Level 2 · record (sealed)
 
-- **What it is**: the [`Speaker`](#speaker)-side twin of [`SessionCategoryItemChanged`](#sessioncategoryitemchanged): raised when a [`SpeakerCategoryItem`](#speakercategoryitem) join row is added or removed from a speaker (for example a speaker's topic or locality tags).
-- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SpeakerIdentifierType`, `SpeakerCategoryItemIdentifierType`, `CategoryItemIdentifierType`.
-- **Concept**: the child-collection domain event ([`SessionCategoryItemChanged`](#sessioncategoryitemchanged)). `[Rubric §6, CQRS & Event-Driven]`. Structurally identical to the session variant with the parent id swapped from session to speaker.
-- **Walkthrough**: `sealed record class` with `State`, `SpeakerId`, `SpeakerCategoryItemId`, `CategoryItemId` (`SpeakerCategoryItemChanged.cs:13-17`).
-- **Where it's used**: raised by [`Speaker`](#speaker)'s category-item methods; captured by the outbox.
+- **What it is**: the [`Speaker`](#speaker)-side twin of
+  [`SessionCategoryItemChanged`](#sessioncategoryitemchanged): raised when a
+  [`SpeakerCategoryItem`](#speakercategoryitem) join row is added or removed from a speaker (for example the
+  speaker's topic or locality tags).
+- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SpeakerIdentifierType`,
+  `SpeakerCategoryItemIdentifierType`, `CategoryItemIdentifierType`.
+- **Concept**: the child-change domain event ([`EventQuestionAnswerChanged`](#eventquestionanswerchanged)).
+  `[Rubric §6, CQRS & Event-Driven]`. Structurally identical to the session variant with the parent id swapped
+  from session to speaker, which is exactly the point of the family: one shape, one id triple, one type per
+  relationship so handlers stay narrow.
+- **Walkthrough**: `sealed record class` with `State`, `SpeakerId`, `SpeakerCategoryItemId`, `CategoryItemId`
+  (`SpeakerCategoryItemChanged.cs:13-17`).
+- **Where it's used**: raised by [`Speaker`](#speaker)'s category-item methods
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:323`, `:360`, `:381`);
+  captured by the outbox.
 
 ---
 
 ### SpeakerQuestionAnswerChanged
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/DomainEvents/SpeakerQuestionAnswerChanged.cs:13` · Level 2 · record (sealed)
 
-- **What it is**: the [`Speaker`](#speaker)-side twin of [`SessionQuestionAnswerChanged`](#sessionquestionanswerchanged): raised when a [`SpeakerQuestionAnswer`](#speakerquestionanswer) child row is added, updated, or removed from a speaker.
-- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SpeakerIdentifierType`, `SpeakerQuestionAnswerIdentifierType`, `QuestionIdentifierType`.
-- **Concept**: the child-collection domain event ([`SessionCategoryItemChanged`](#sessioncategoryitemchanged)). `[Rubric §6, CQRS & Event-Driven]`. As with the session answer, the answer text is mutable, so `State` spans `Added`, `Updated`, and `Deleted`.
-- **Walkthrough**: `sealed record class` with `State`, `SpeakerId`, `SpeakerQuestionAnswerId`, `QuestionId` (`SpeakerQuestionAnswerChanged.cs:13-17`).
-- **Where it's used**: raised by [`Speaker`](#speaker)'s question-answer methods; captured by the outbox.
+- **What it is**: the [`Speaker`](#speaker)-side twin of
+  [`SessionQuestionAnswerChanged`](#sessionquestionanswerchanged): raised when a
+  [`SpeakerQuestionAnswer`](#speakerquestionanswer) child row is added, updated, or removed.
+- **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SpeakerIdentifierType`,
+  `SpeakerQuestionAnswerIdentifierType`, `QuestionIdentifierType`.
+- **Concept**: the child-change domain event ([`EventQuestionAnswerChanged`](#eventquestionanswerchanged)).
+  `[Rubric §6, CQRS & Event-Driven]`. As with the session answer, the answer text is mutable, so the raise
+  sites span `Added`, `Updated`, and `Deleted`.
+- **Walkthrough**: `sealed record class` with `State`, `SpeakerId`, `SpeakerQuestionAnswerId`, `QuestionId`
+  (`SpeakerQuestionAnswerChanged.cs:13-17`).
+- **Where it's used**: raised by [`Speaker`](#speaker)'s question-answer methods
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:413`, `:437`, `:458`);
+  captured by the outbox.
+
+---
+
+### EventChanged
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/EventChanged.cs:12` · Level 3 · record (sealed)
+
+- **What it is**: the aggregate-root lifecycle event an [`Event`](#event) raises when it is created, updated,
+  or deleted. Publish and unpublish also flip state and emit it with `Updated`. It carries the event id and name.
+- **Depends on**:
+  [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype) (the
+  base record), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); alias
+  `EventIdentifierType`.
+- **Concept introduced, the aggregate-root lifecycle event.** `[Rubric §6, CQRS & Event-Driven]` (assesses
+  whether the write model announces its transitions as consumable events) and `[Rubric §16, Maintainability]`
+  (assesses whether a recurring shape is factored once instead of copied: one event type per aggregate rather
+  than a separate `Created` / `Updated` / `Deleted` trio). Where the Level-2 events above derive from
+  [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) directly, the root-level events derive from
+  `EntityChangedEvent<TIdentifierType>`, which consolidates the CRUD lifecycle into `State` plus a single
+  generic `EntityId`
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/EntityChangedEvent.cs:24-27`), and each concrete
+  record forwards its own id to that base (line 16:
+  `: EntityChangedEvent<EventIdentifierType>(State, EventId)`). A subtle but real consequence: the derived
+  record re-exposes the identity under a domain-meaningful name (`EventId`) while the same value is also
+  reachable as the inherited `EntityId`, so a handler written against `EntityChangedEvent<T>` and one written
+  against the concrete type both work. The base's own doc is explicit that this shape is for *generic CRUD
+  lifecycle only*: a business transition with a unique payload should derive straight from `BaseDomainEvent`
+  (`EntityChangedEvent.cs:15-19`).
+- **Walkthrough**: three positional members
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/EventChanged.cs:12-16`):
+  `State`, `EventId`, and `Name`; the first two are forwarded to the base constructor on line 16, `Name` is
+  the record's own added property and exists so a log line or cache-invalidation handler has a human-readable
+  label without a reload.
+- **Why it's built this way**: one lifecycle event per aggregate keeps the event surface small and lets a
+  subscriber branch on `State` rather than subscribing to three separate types. Because these records are
+  serialized through the outbox, keeping the base shared also keeps their contract shape stable
+  ([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html) governs the
+  versioning rules for anything that crosses a boundary).
+- **Where it's used**: raised from [`Event`](#event)'s `Create` / `Update` / `Publish` / `Unpublish` / `Delete`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:196`, `:251`, `:271`, `:291`,
+  `:341`); dispatched in-process by
+  [`DomainEventDispatcher`](group-04-events-outbox.md#domaineventdispatcher) after `SaveChangesAsync`.
+
+---
+
+### EventFeedbackSubmitted
+> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events.IntegrationEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:18` · Level 3 · record (sealed)
+
+- **What it is**: the cross-module **integration event** Conference raises when an attendee submits feedback on
+  an event. The Engagement module subscribes and awards the attendee points for the feedback.
+- **Depends on**: [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent) (the base record);
+  aliases `UserIdentifierType`, `EventIdentifierType`; BCL `DateTime`.
+- **Concept introduced, the integration event (as distinct from the domain event).**
+  `[Rubric §7, Microservices Readiness]` (assesses whether cross-module coupling runs through a published
+  contract a peer can consume without a code reference back into the producer's domain) and
+  `[Rubric §9, API & Contract Design]` (the async message *is* a public contract, versioned like one). Two
+  things separate it from every event above. First, it derives from
+  [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent), which adds a virtual
+  `SchemaVersion` defaulting to `1`
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:22`) and implements
+  `IIntegrationEvent`, the marker that makes `SaveChangesAsync` leave its outbox row *unprocessed* so the
+  [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) publishes it over the message bus instead of
+  dispatching it in process. Second, it lives in the `.Shared` project, not `.Domain`, precisely so a
+  subscribing module can reference the contract without pulling in Conference's domain model.
+  [ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html) is the rule for
+  evolving it: additive changes keep the version, a breaking change means a new type plus a consumer-side
+  upcaster.
+- **Walkthrough**: three positional members
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:18-22`):
+  `UserId` (the attendee), `EventId` (the subject), and `SubmittedOnUtc` (when the answer was recorded, in UTC).
+  The producer supplies that instant from an injected `TimeProvider`, never an ambient clock
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/AddEventQuestionAnswer/AddEventQuestionAnswerHandler.cs:112`).
+- **Why it's built this way**: the delivery semantics are the interesting part, and the XML doc states them
+  (`EventFeedbackSubmitted.cs:8-13`). Event feedback is an upsert writing one row per form question (BR-107),
+  so one submitted form raises this event once per *newly created* answer, and only on the create path: the
+  update branch of the same handler raises nothing
+  (`AddEventQuestionAnswerHandler.cs:87-93` versus `:102-116`). Because at-least-once outbox delivery and a
+  multi-question form both mean the consumer can see the message more than once, the consumer is idempotent on
+  its own side: it collapses everything onto one subject key and lets the awarder's uniqueness rule reject the
+  duplicates
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/IntegrationEventHandlers/EventFeedbackSubmittedPointsHandler.cs:38-45`).
+  That is the standard posture for [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html):
+  the producer guarantees the fact was recorded atomically with the data, the consumer guarantees the effect
+  happens once.
+- **Where it's used**: raised on the aggregate pre-save by
+  [`AddEventQuestionAnswerHandler`](group-18-conference-application.md#addeventquestionanswerhandler)
+  (`:112`), so the outbox captures it in the same `SaveChangesAsync`; consumed by
+  [`EventFeedbackSubmittedPointsHandler`](group-22-engagement-module.md#eventfeedbacksubmittedpointshandler),
+  registered as a broker consumer in the Engagement service host
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:301`).
 
 ---
 
 ### QuestionChanged
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Questions.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/DomainEvents/QuestionChanged.cs:12` · Level 3 · record (sealed)
 
-- **What it is**: the aggregate-root lifecycle event for a [`Question`](#question): raised when a question (the reusable custom-form question definition) is created, updated, or deleted.
-- **Depends on**: [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype) (base), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); alias `QuestionIdentifierType`.
-- **Concept introduced, the aggregate-root change event via `EntityChangedEvent<T>`.** `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §4, Domain-Driven Design]`. Where the Level-2 events above derive straight from [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent), the root-level events derive from the shared [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype) base (taught in Group 04), which standardizes the `(State, Id)` pair every "an entity's lifecycle moved" event needs. The record adds only what a subscriber needs beyond that pair.
-- **Walkthrough**: `sealed record class QuestionChanged(DomainEntityState State, QuestionIdentifierType QuestionId, string QuestionText)` passing `(State, QuestionId)` up to the `EntityChangedEvent<QuestionIdentifierType>` primary constructor (`QuestionChanged.cs:12-16`). The extra `QuestionText` rides along so a projection or cache-invalidation handler can act without a reload.
-- **Why it's built this way**: reusing `EntityChangedEvent<T>` keeps the `State`/`Id` contract uniform across every aggregate's change event, so generic subscribers (audit, cache) can treat them polymorphically.
-- **Where it's used**: raised by the [`Question`](#question) factory/update/delete methods; captured by the outbox and dispatched in-process.
+- **What it is**: the aggregate-root lifecycle event for a [`Question`](#question), the reusable custom-form
+  question definition: raised when one is created, updated, or deleted.
+- **Depends on**:
+  [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); alias `QuestionIdentifierType`.
+- **Concept**: the aggregate-root lifecycle event introduced by [`EventChanged`](#eventchanged).
+  `[Rubric §6, CQRS & Event-Driven]`. Structurally identical, with `QuestionText` as its descriptor.
+- **Walkthrough**: `sealed record class QuestionChanged(DomainEntityState State, QuestionIdentifierType QuestionId, string QuestionText)`
+  forwarding `(State, QuestionId)` to `EntityChangedEvent<QuestionIdentifierType>`
+  (`QuestionChanged.cs:12-16`).
+- **Where it's used**: raised from [`Question`](#question)'s create, update, and delete paths
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/Question.cs:94`, `:128`, `:140`);
+  dispatched in-process. No dedicated handler subscribes today.
 
 ---
 
 ### SessionChanged
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/DomainEvents/SessionChanged.cs:13` · Level 3 · record (sealed)
 
-- **What it is**: the aggregate-root lifecycle event for a [`Session`](#session): raised on session create, update, or delete.
-- **Depends on**: [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SessionIdentifierType`, `EventIdentifierType`.
-- **Concept**: the aggregate-root change event introduced by [`QuestionChanged`](#questionchanged). `[Rubric §6, CQRS & Event-Driven]`. It carries the parent `EventId` in addition to `Title`, so a subscriber knows which event's schedule was touched (useful for scoped cache invalidation of that event's session list).
-- **Walkthrough**: `sealed record class SessionChanged(DomainEntityState State, SessionIdentifierType SessionId, string Title, EventIdentifierType EventId)` chaining `(State, SessionId)` to the base (`SessionChanged.cs:13-18`).
-- **Where it's used**: raised by [`Session`](#session)'s lifecycle methods; captured by the outbox.
+- **What it is**: the aggregate-root lifecycle event for a [`Session`](#session): raised on create, update, or
+  delete.
+- **Depends on**:
+  [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SessionIdentifierType`,
+  `EventIdentifierType`.
+- **Concept**: the aggregate-root lifecycle event ([`EventChanged`](#eventchanged)).
+  `[Rubric §6, CQRS & Event-Driven]`. It is the one root event that carries a *second* identifier, the parent
+  `EventId`, in addition to `Title`, so a subscriber knows which event's schedule moved (useful for
+  invalidating that event's session list rather than the whole cache). This is also where the `State` filter
+  earns its keep: [`SessionCreatedHandler`](group-18-conference-application.md#sessioncreatedhandler) subscribes
+  to the single type and returns early unless `State` is `Added`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/DomainEventHandlers/SessionCreatedHandler.cs:17-20`).
+- **Walkthrough**: `sealed record class SessionChanged(DomainEntityState State, SessionIdentifierType SessionId, string Title, EventIdentifierType EventId)`
+  chaining `(State, SessionId)` to the base (`SessionChanged.cs:13-18`).
+- **Where it's used**: raised by [`Session`](#session)'s lifecycle methods
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:206`, `:267`, `:304`);
+  consumed by [`SessionCreatedHandler`](group-18-conference-application.md#sessioncreatedhandler).
+
+---
+
+### SessionFeedbackSubmitted
+> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Sessions.IntegrationEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:19` · Level 3 · record (sealed)
+
+- **What it is**: the session-level counterpart of [`EventFeedbackSubmitted`](#eventfeedbacksubmitted): the
+  integration event Conference raises when an attendee submits feedback on a session, which Engagement turns
+  into a points award.
+- **Depends on**: [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent); aliases
+  `UserIdentifierType`, `SessionIdentifierType`, `EventIdentifierType`; BCL `DateTime`.
+- **Concept**: the integration event introduced by [`EventFeedbackSubmitted`](#eventfeedbacksubmitted).
+  `[Rubric §7, Microservices Readiness]` and `[Rubric §9, API & Contract Design]`. Same delivery contract
+  (BR-107 upsert, create path only, idempotent consumer, `SessionFeedbackSubmitted.cs:8-13`); the only payload
+  difference is that it carries **both** the `SessionId` and the owning `EventId` (lines 21-22), so the
+  consumer can scope the award without a call back into Conference to resolve the session's parent. That extra
+  id is the whole point of a self-contained contract: a cross-service consumer must not need a synchronous
+  lookup to interpret the message.
+- **Walkthrough**: four positional members
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:19-24`):
+  `UserId`, `SessionId`, `EventId`, and `SubmittedOnUtc`.
+- **Where it's used**: raised on the aggregate pre-save by
+  [`AddSessionQuestionAnswerHandler`](group-18-conference-application.md#addsessionquestionanswerhandler)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/AddSessionQuestionAnswer/AddSessionQuestionAnswerHandler.cs:134`),
+  with the timestamp taken from the injected `TimeProvider`; consumed by
+  [`SessionFeedbackSubmittedPointsHandler`](group-22-engagement-module.md#sessionfeedbacksubmittedpointshandler),
+  registered as a broker consumer in the Engagement service host
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:300`).
 
 ---
 
 ### SpeakerChanged
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/DomainEvents/SpeakerChanged.cs:16` · Level 3 · record (sealed)
 
-- **What it is**: the aggregate-root lifecycle event for a [`Speaker`](#speaker): raised on speaker create, update, or delete. Its distinctive feature is a nullable `PreviousLinkedUserId` that captures the speaker-to-user link as it stood *before* a delete.
-- **Depends on**: [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SpeakerIdentifierType`, `UserIdentifierType`.
-- **Concept**: the aggregate-root change event ([`QuestionChanged`](#questionchanged)), plus **carrying pre-mutation state on the event** for cross-context cleanup. `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §7, Microservices Readiness]` (a delete in Conference must trigger unlink cleanup on the Identity side, and that must not depend on reading a field the delete has already cleared). Per the XML doc (`SpeakerChanged.cs:12-15`), `PreviousLinkedUserId` is populated only on `DomainEntityState.Deleted` so the handler can perform BR-70 cross-context cleanup after the entity's own link field has been nulled.
-- **Walkthrough**: `sealed record class SpeakerChanged(DomainEntityState State, SpeakerIdentifierType SpeakerId, string FullName, UserIdentifierType? PreviousLinkedUserId = null)` chaining `(State, SpeakerId)` to the base (`SpeakerChanged.cs:16-21`). The default `null` means non-delete transitions omit it.
-- **Why it's built this way**: an event is an immutable record of *what already happened*; snapshotting the prior link onto the event avoids a lost-update race where the cleanup handler would otherwise read a cleared field. It also decouples the delete transaction from the downstream unlink, which crosses a module (and eventually a service) boundary.
-- **Where it's used**: raised by [`Speaker`](#speaker)'s lifecycle methods; a Conference-side handler translates the delete into the [`SpeakerUnlinkedFromUser`](#speakerunlinkedfromuser) integration event.
+- **What it is**: the aggregate-root lifecycle event for a [`Speaker`](#speaker): raised on create, update, or
+  delete. Its distinctive feature is a nullable `PreviousLinkedUserId` that snapshots the speaker-to-user link
+  as it stood *before* the operation.
+- **Depends on**:
+  [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); aliases `SpeakerIdentifierType`,
+  `UserIdentifierType`.
+- **Concept**: the aggregate-root lifecycle event ([`EventChanged`](#eventchanged)), plus **carrying
+  pre-mutation state on the event**. `[Rubric §6, CQRS & Event-Driven]` and
+  `[Rubric §7, Microservices Readiness]` (a delete in Conference must trigger unlink cleanup on the Identity
+  side, and that cleanup must not depend on reading a field the delete has already cleared). Per the XML doc
+  (`SpeakerChanged.cs:12-15`), `PreviousLinkedUserId` is populated on the `Deleted` transition so the handler
+  can perform the BR-70 cross-context cleanup after the entity's own link field has been nulled.
+- **Walkthrough**: `sealed record class SpeakerChanged(DomainEntityState State, SpeakerIdentifierType SpeakerId, string FullName, UserIdentifierType? PreviousLinkedUserId = null)`
+  chaining `(State, SpeakerId)` to the base (`SpeakerChanged.cs:16-21`). The default `null` on the fourth
+  parameter is what keeps the non-delete raise sites a three-argument call
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:156`, `:223`, `:272`,
+  `:290`), while the delete path passes the captured value
+  (`Speaker.cs:251`).
+- **Why it's built this way**: an event is an immutable record of what already happened, so snapshotting the
+  prior link onto the event avoids a lost-update race in which the cleanup handler would read an
+  already-cleared field. It also decouples the delete transaction from the downstream unlink, which crosses a
+  module and (in the deployed topology) a process boundary.
+- **Where it's used**: consumed by
+  [`SpeakerDeletedHandler`](group-18-conference-application.md#speakerdeletedhandler), which ignores every
+  transition except `Deleted`, then publishes
+  [`SpeakerUnlinkedFromUser`](#speakerunlinkedfromuser) through `IEventBus` when `PreviousLinkedUserId` has a
+  value, from a fresh DI scope because the handler is a singleton
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DomainEventHandlers/SpeakerDeletedHandler.cs:29-45`).
+  Identity then clears `User.LinkedSpeakerId`.
 
 ---
+
+### SponsorChanged
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sponsors.DomainEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/DomainEvents/SponsorChanged.cs:12` · Level 3 · record (sealed)
+
+- **What it is**: the aggregate-root lifecycle event for a [`Sponsor`](#sponsor): raised when a sponsor is
+  created, updated, or soft-deleted. Carries the sponsor id and display name.
+- **Depends on**:
+  [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); alias `SponsorIdentifierType`.
+- **Concept**: the aggregate-root lifecycle event ([`EventChanged`](#eventchanged)).
+  `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §16, Maintainability]`. Sponsors are the newest aggregate in
+  this bounded context, and the fact that its event is a three-line record derived from the same base is the
+  payoff of the shared shape: a new aggregate gets the full lifecycle-event story without inventing anything.
+- **Walkthrough**: three positional members (`SponsorChanged.cs:12-16`): `State`, `SponsorId`, and `Name`,
+  with `(State, SponsorId)` forwarded to `EntityChangedEvent<SponsorIdentifierType>` on line 16.
+- **Where it's used**: raised from [`Sponsor`](#sponsor)'s `Create` factory
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/Sponsor.cs:133`), its update path
+  (`:183`), and its `Delete` override, which calls the base soft-delete first and raises the event only when
+  that base call returned success (`:190-198`); dispatched in-process. No dedicated handler subscribes today.
 
 ### SpeakerLinkedToUser
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Speakers.IntegrationEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/IntegrationEvents/SpeakerLinkedToUser.cs:20` · Level 3 · record (sealed)
 
-- **What it is**: the cross-module **integration event** Conference publishes when it binds a [`Speaker`](#speaker) to an Identity `User` (either via the manual link command or via automatic email-match linking triggered by `UserRegistered`). Identity subscribes to it and sets `User.LinkedSpeakerId`, so the next JWT refresh carries the `speaker_id` claim (BR-209).
-- **Depends on**: [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent) (base); aliases `UserIdentifierType`, `SpeakerIdentifierType`.
-- **Concept introduced, the integration event (vs the domain event).** `[Rubric §7, Microservices Readiness]` (assesses whether cross-module coupling runs through published contracts a peer can consume without a code reference back) and `[Rubric §9, API & Contract Design]` (the async message *is* a public contract). Two things distinguish it from every event above. First, it derives from [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent), not `BaseDomainEvent`: a domain event stays inside the producing module, an integration event is meant to cross a module/service boundary over the broker (RabbitMQ locally, Azure Service Bus in production) via the outbox. Second, it lives in the `.Shared` project, not `.Domain`, precisely so the subscribing Identity module can reference the contract without pulling in Conference's domain model. Per the XML doc (`SpeakerLinkedToUser.cs:11-16`), it replaced a former direct in-process service call (`IUserSpeakerLinkService.LinkSpeakerAsync`), making the bidirectional User-Speaker link eventually consistent across boundaries.
-- **Walkthrough**: `sealed record class SpeakerLinkedToUser(UserIdentifierType UserId, SpeakerIdentifierType SpeakerId) : BaseIntegrationEvent` (`SpeakerLinkedToUser.cs:20-23`). Just the two ids of the link; the receiver needs nothing more to set `LinkedSpeakerId`.
-- **Why it's built this way**: modeling the link as a published fact rather than a synchronous call is the outbox/eventual-consistency story ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)); it lets Identity and Conference run as separate services with no shared database and no cross-database FK.
-- **Where it's used**: published by the Conference link-command handler; consumed by Identity's `SpeakerLinkedToUserHandler`.
-
----
+- **What it is**: the cross-module **integration event** Conference publishes when it binds a
+  [`Speaker`](#speaker) to an Identity `User`, either through the manual `LinkUserToSpeaker` command or
+  through automatic email-match linking triggered by `UserRegistered`. Identity subscribes and sets
+  `User.LinkedSpeakerId`, so the next token refresh carries the `speaker_id` claim (BR-209, per the XML
+  doc at `SpeakerLinkedToUser.cs:5-17`).
+- **Depends on**: [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent) (the base it
+  derives from, `SpeakerLinkedToUser.cs:23`); the identifier aliases `UserIdentifierType` and
+  `SpeakerIdentifierType`.
+- **Concept introduced, the integration event (as distinct from the domain event).** `[Rubric §7,
+  Microservices Readiness]` assesses whether cross-module coupling runs through a published contract a
+  peer can consume without a code reference back into the producer, and `[Rubric §9, API & Contract
+  Design]` treats the asynchronous message as a public contract in its own right. Two things separate
+  this record from the domain events in this chapter. First, it derives from
+  [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent) rather than
+  [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent): a domain event stays inside the
+  producing module, an integration event is meant to cross a module (and eventually a service) boundary
+  over the broker via the outbox. Second, it lives in the `.Shared` project, not `.Domain`, precisely so
+  the subscribing Identity module can reference the contract without pulling in Conference's domain
+  model.
+- **Walkthrough**: the whole type is a positional record, `sealed record class SpeakerLinkedToUser(
+  UserIdentifierType UserId, SpeakerIdentifierType SpeakerId) : BaseIntegrationEvent`
+  (`SpeakerLinkedToUser.cs:20-23`). Two ids and nothing else: the receiver needs no more than that to set
+  `LinkedSpeakerId`. The XML doc records that it replaced a former direct in-process call,
+  `IUserSpeakerLinkService.LinkSpeakerAsync` (`SpeakerLinkedToUser.cs:11-16`).
+- **Why it's built this way**: modeling the link as a published fact rather than a synchronous call is the
+  outbox and eventual-consistency story of
+  [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html); it lets Identity and
+  Conference run as separate services with no shared database and no cross-database FK
+  ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
+- **Where it's used**: published by the Conference link-command handler (Application tier, Group 18) and
+  by [`UserRegisteredHandler`](group-18-conference-application.md#userregisteredhandler)'s auto-link path;
+  consumed on the Identity side.
 
 ### SpeakerUnlinkedFromUser
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Speakers.IntegrationEvents` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/IntegrationEvents/SpeakerUnlinkedFromUser.cs:17` · Level 3 · record (sealed)
 
-- **What it is**: the inverse of [`SpeakerLinkedToUser`](#speakerlinkedtouser): the integration event Conference publishes when a speaker is unlinked from a user (via the unlink command, or as cascade cleanup when a speaker is soft-deleted). Identity subscribes and clears `User.LinkedSpeakerId`.
-- **Depends on**: [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent); aliases `UserIdentifierType`, `SpeakerIdentifierType`.
-- **Concept**: the integration event introduced by [`SpeakerLinkedToUser`](#speakerlinkedtouser). `[Rubric §7, Microservices Readiness]`. Same contract shape; the `SpeakerId` here is carried mainly for audit/log correlation (the id being cleared is `UserId`), per the XML doc (`SpeakerUnlinkedFromUser.cs:15-16`).
-- **Walkthrough**: `sealed record class SpeakerUnlinkedFromUser(UserIdentifierType UserId, SpeakerIdentifierType SpeakerId) : BaseIntegrationEvent` (`SpeakerUnlinkedFromUser.cs:17-20`).
-- **Why it's built this way**: it closes the loop on the eventually-consistent link (replacing the former `IUserSpeakerLinkService.ClearLinkedSpeakerAsync` direct call, `SpeakerUnlinkedFromUser.cs:10-13`), and it is the downstream half of a [`SpeakerChanged`](#speakerchanged) delete (which is why that event snapshots `PreviousLinkedUserId`).
-- **Where it's used**: published by the Conference unlink-command handler and by the speaker-delete cleanup path; consumed by Identity's `SpeakerUnlinkedFromUserHandler`.
-
----
-
-### EventInvariants
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:10` · Level 4 · class (static)
-
-- **What it is**: the static invariants toolbox for the [`Event`](#event) aggregate and its children ([`Room`](#room), [`EventQuestionAnswer`](#eventquestionanswer)). It holds the field-length constants and the `Ensure...` rule methods that both the domain factories and the EF configuration reuse, so a business rule is stated once.
-- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (the reusable lower layer it delegates to), [`Result`](group-01-result-error-handling.md#result) / [`Error`](group-01-result-error-handling.md#error); BCL `TimeZoneInfo` and `DateOnly`. Alias `RoomIdentifierType`.
-- **Concept introduced, the module invariants class.** `[Rubric §4, Domain-Driven Design]` (invariants live in the domain, expressed as reusable rules) and `[Rubric §8, Data Architecture]` (the `MaxLength` constants are the single source of truth shared by EF column config and validation, keeping schema and rule in sync). This is the same static-invariants idiom taught for value objects in [Group 02](group-02-domain-building-blocks.md), applied to an aggregate: each `Ensure...` returns a [`Result`](group-01-result-error-handling.md#result), and callers combine several via `Result.Combine`.
-- **Walkthrough**, in teaching order:
-  - **Length constants** (`EventInvariants.cs:13-46`): `NameMaxLength` (500), `DescriptionMaxLength` (4000), `TimeZoneMaxLength` (100), `SessionizeCodeMaxLength` (100), `VenueAddressMaxLength` (500), `VenueMapUrlMaxLength` (2000), `WiFiInfoMaxLength` (500), the four `Room...` limits (`RoomNameMaxLength` 255, `RoomFloorMaxLength` 100, `RoomLocationMaxLength` 255, `RoomAccessibilityInfoMaxLength` 500), and `AnswerValueMaxLength` (4000). Referenced by both domain checks and EF config.
-  - **Reserved id range** (`EventInvariants.cs:53-56`): `RoomManualIdRangeStart` (999_999_000) and `RoomManualIdRangeEnd` (999_999_999). Rooms carry app-assigned ids where the int PK *is* the Sessionize id; organizer-created rooms draw from this reserved high range so they never collide with a real Sessionize id (mirrors `SessionInvariants.ManualIdRangeStart`).
-  - **`EnsureNameIsValid`** (`:58`): combines a not-empty and a max-length check via [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants).
-  - **`EnsureTimeZoneIsValid`** (`:69`): not-empty, then max-length, then `TimeZoneInfo.FindSystemTimeZoneById` inside a try/catch that maps `TimeZoneNotFoundException` to an `Event.TimeZone.Invalid` invariant error (BR-87, IANA identifier check).
-  - **`EnsureDateRangeIsValid`** (`:107`): fails with `Event.DateRange.Invalid` when `endDate < startDate`.
-  - **`EnsureRoomCapacityIsValid`** (`:122`): rejects a non-positive capacity when one is supplied (`capacity is <= 0`, BR-93).
-  - **`EnsureRoomNameIsValid`** (`:131`) and **`EnsureAnswerValueIsValid`** (`:136`): not-empty plus max-length pairs for the two children.
-  - **`EnsureEventIsPublished`** (`:147`): guards actions that require a published event (BR-108).
-- **Why it's built this way**: keeping the length limits as `const`/`static readonly` fields on the invariants class, and having EF configuration read the same constants, prevents the classic drift where a validator allows a value the column truncates. Returning [`Result`](group-01-result-error-handling.md#result) (never throwing) keeps validation composable at the factory.
-- **Where it's used**: [`Event`](#event), [`Room`](#room), and [`EventQuestionAnswer`](#eventquestionanswer) factories/updaters call these; the Events EF configuration reads the length constants.
-
----
-
-### Event
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:17` · Level 5 · class (sealed, aggregate root)
-
-- **What it is**: the aggregate root for a conference event. It owns three child collections ([`Room`](#room)s, [`EventSpeaker`](#eventspeaker) associations, and [`EventQuestionAnswer`](#eventquestionanswer)s) and enforces every rule about them through its own methods. Event ids are database-generated (not sourced from Sessionize).
-- **Depends on**: [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) (base), [`EventInvariants`](#eventinvariants), the [`Result`](group-01-result-error-handling.md#result)/[`Error`](group-01-result-error-handling.md#error) types, [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate), the [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), and the [`EventChanged`](#eventchanged)/[`RoomChanged`](#roomchanged)/[`EventSpeakerChanged`](#eventspeakerchanged)/[`EventQuestionAnswerChanged`](#eventquestionanswerchanged) domain events. Uses [`QuestionModerationDefault`](#questionmoderationdefault) and `TimeProvider` for clock-free refresh stamping. Aliases `EventIdentifierType`, `RoomIdentifierType`, `EventSpeakerIdentifierType`, `EventQuestionAnswerIdentifierType`, `SpeakerIdentifierType`, `QuestionIdentifierType`, `UserIdentifierType`.
-- **Concept introduced, the aggregate root as the consistency boundary.** `[Rubric §4, Domain-Driven Design]` (assesses whether invariants are enforced inside the boundary and children are mutated only through the root) and `[Rubric §1, SOLID]`. This is the fullest expression in this part of the aggregate pattern taught in [Group 02](group-02-domain-building-blocks.md): child collections are exposed only as read-only views over private backing lists, all mutation flows through root methods, each mutation validates and then raises a domain event, and the root owns cascade delete. `[Rubric §6, CQRS & Event-Driven]`: every state change announces itself.
-- **Walkthrough**, in teaching order:
-  - **`[IdValueGenerated]`** on the class (`Event.cs:16`): marks the id as database-generated; the factory reads this at runtime via `typeof(Event).IsIdValueGenerated`.
-  - **Scalar state** (`Event.cs:20-60`): `Name`, `Description?`, `StartDate`/`EndDate` (`DateOnly`), `TimeZone`, `SessionizeCode?`, `VenueAddress?`, `VenueMapUrl?`, `WiFiInfo?`, `IsPublished`, `QuestionModerationDefault` (the BR-233 default status a newly submitted live-layer question gets), and the nullable `LastSessionizeRefreshOn`/`LastSessionizeRefreshBy` refresh-audit pair. All have private setters.
-  - **Child collections** (`Event.cs:62-78`): private `List<Room>`/`List<EventSpeaker>`/`List<EventQuestionAnswer>` exposed as `IReadOnlyCollection<...>` marked `[Navigation(IsCollection = true)]` for the populator ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)).
-  - **Constructors** (`Event.cs:81-107`): a parameterless EF constructor that seeds non-null strings, plus a private ctor used by the factory.
-  - **`Create`** (`Event.cs:125`): combines `EnsureNameIsValid` + `EnsureTimeZoneIsValid` + `EnsureDateRangeIsValid`; on success builds the instance, assigns `Id` as `default` when id-value-generated (else the passed id), sets `QuestionModerationDefault`, and raises `EventChanged(Added)`. Returns [`Result<Event>`](group-01-result-error-handling.md#result).
-  - **`Update`** (`Event.cs:182`): re-validates the same three invariants, writes the scalars, raises `EventChanged(Updated)`.
-  - **`Publish`/`Unpublish`** (`Event.cs:219`, `:239`): flip `IsPublished`, refusing a no-op transition with an invariant error, and raise `EventChanged(Updated)`.
-  - **`RecordSessionizeRefresh`** (`Event.cs:263`): stamps `LastSessionizeRefreshOn/By` from a caller-supplied UTC instant (drawn from an injected `TimeProvider`) so the domain never reads an ambient clock.
-  - **`Delete`** (`Event.cs:275`): overrides the base soft-delete, then cascade soft-deletes every non-deleted room, event-speaker, and answer (BR-72), and raises `EventChanged(Deleted)`. Session cascade is deliberately handled at the application layer (BR-127).
-  - **Child management** (`Event.cs:321-547`): `AddRoom`/`UpdateRoom`/`RemoveRoom`, `AddEventSpeaker`/`RemoveEventSpeaker`, `AddEventQuestionAnswer`/`UpdateEventQuestionAnswer`/`RemoveEventQuestionAnswer`. Each guards duplicates (for example a room name or a repeated speaker), delegates creation to the child factory, mutates the private list, and raises the matching child event. `SetRooms`/`SetEventSpeakers`/`SetEventQuestionAnswers` (internal) let the populator replace a collection via the base `SetItems` helper.
-  - **Private helpers** (`Event.cs:550-563`): `GetRoomOrNotFound`/`GetEventSpeakerOrNotFound`/`GetEventQuestionAnswerOrNotFound` wrap the base `GetChildOrNotFound<T>` so a missing child returns an [`Error.NotFound`](group-01-result-error-handling.md#error) rather than a null.
-- **Why it's built this way**: routing every child change through the root is what makes the invariants (no duplicate room name, cascade-on-delete) enforceable and what gives the outbox a single, ordered stream of change events. Passing the clock in rather than reading `DateTime.UtcNow` keeps the domain deterministic and testable (`[Rubric §14, Testability]`).
-- **Where it's used**: loaded and mutated by the Conference application-layer command handlers (Group 18); persisted via the Events EF configuration; projected to DTOs for the read endpoints.
-
----
-
-### EventQuestionAnswer
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventQuestionAnswer.cs:13` · Level 5 · class (sealed, child entity)
-
-- **What it is**: a child entity of [`Event`](#event) storing the event's answer to one custom-form [`Question`](#question). Database-generated id.
-- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (base, a child not an aggregate root), [`EventInvariants`](#eventinvariants), [`Result`](group-01-result-error-handling.md#result), [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute). Aliases `EventQuestionAnswerIdentifierType`, `QuestionIdentifierType`, `EventIdentifierType`.
-- **Concept introduced, the child entity (vs the aggregate root).** `[Rubric §4, Domain-Driven Design]`. A child derives from [`AuditableBaseEntity`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype), so it has identity, soft-delete, and audit fields but **no** domain-event list: children never raise events themselves, the owning root ([`Event`](#event)) does. It carries the FK `EventId` and a back-navigation `Event?` for EF.
-- **Walkthrough**: `[IdValueGenerated]` (`:12`); `QuestionId` (FK) and `AnswerValue` with private setters (`:16-19`); `[Navigation] Event?` and `EventId` (`:22-26`); an EF ctor and a private ctor (`:29-37`); `Create` (`:46`) which validates `EnsureAnswerValueIsValid` and assigns the id per the id-generation flag; `UpdateAnswer` (`:71`) which re-validates then sets `AnswerValue`. Neither method raises an event, the root wraps them and raises [`EventQuestionAnswerChanged`](#eventquestionanswerchanged).
-- **Why it's built this way**: keeping the answer a child of the event (rather than a standalone aggregate) means it shares the event's transaction and cascade-delete, and its lifecycle events flow through the root's ordered stream.
-- **Where it's used**: created and mutated only through [`Event`](#event)'s `AddEventQuestionAnswer`/`UpdateEventQuestionAnswer`/`RemoveEventQuestionAnswer`.
-
----
-
-### EventSpeaker
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventSpeaker.cs:13` · Level 5 · class (sealed, join entity)
-
-- **What it is**: the join entity linking an [`Event`](#event) to a [`Speaker`](#speaker) (which speakers appear at which event). Database-generated id.
-- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype), [`Result`](group-01-result-error-handling.md#result), [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute). Aliases `EventSpeakerIdentifierType`, `SpeakerIdentifierType`, `EventIdentifierType`.
-- **Concept**: the child/join entity introduced by [`EventQuestionAnswer`](#eventquestionanswer). `[Rubric §4, Domain-Driven Design]`. This is the thinnest child in the family: it holds only the `SpeakerId` FK plus the standard back-navigation and `EventId`, so its `Create` (`:36`) does no validation beyond assigning the id per the id-generation flag and returns [`Result<EventSpeaker>`](group-01-result-error-handling.md#result). There is no `Update`: a join either exists or it does not.
-- **Walkthrough**: `[IdValueGenerated]` (`:12`); `SpeakerId` (`:16`); `[Navigation] Event?` and `EventId` (`:19-23`); EF ctor and private ctor (`:26-28`); `Create` (`:36-48`).
-- **Why it's built this way**: modeling the many-to-many as an explicit join entity (rather than an EF-implicit link table) gives the association its own id, soft-delete, and audit trail, and lets [`Event`](#event) raise [`EventSpeakerChanged`](#eventspeakerchanged) when it is added or removed.
-- **Where it's used**: created/removed only through [`Event`](#event)'s `AddEventSpeaker`/`RemoveEventSpeaker`; the duplicate-speaker guard lives in the root.
-
----
-
-### Room
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Room.cs:12` · Level 5 · class (sealed, child entity)
-
-- **What it is**: a child entity of [`Event`](#event) representing a physical or virtual room where sessions take place. Unlike its siblings, a room's id is **Sessionize-assigned**, not database-generated (note the absence of `[IdValueGenerated]`).
-- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype), [`EventInvariants`](#eventinvariants), [`Result`](group-01-result-error-handling.md#result). Aliases `RoomIdentifierType`, `EventIdentifierType`.
-- **Concept**: the child entity ([`EventQuestionAnswer`](#eventquestionanswer)), with an **externally-assigned id**. `[Rubric §8, Data Architecture]`. Because `Room` is not marked `[IdValueGenerated]`, `Create` (`:69`) always assigns the supplied id (its `typeof(Room).IsIdValueGenerated` is false), which is how a Sessionize room id becomes the PK directly. Organizer-created rooms draw from the reserved high range ([`EventInvariants`](#eventinvariants) `RoomManualIdRangeStart`) so app-assigned ids never collide with imported ones.
-- **Walkthrough**: scalars `Name`, `Sort`, `Capacity?`, `Floor?`, `Location?`, `AccessibilityInfo?` (`:15-30`); `[Navigation] Event?` and `EventId` (`:33-37`); EF ctor and private ctor (`:40-56`); `Create` (`:69`) validating `EnsureRoomNameIsValid` + `EnsureRoomCapacityIsValid`; `Update` (`:110`) re-validating the same pair and writing the scalars. As a child, it raises no events itself.
-- **Why it's built this way**: preserving the Sessionize id as the PK keeps imported rooms stable across refreshes (a re-import updates in place rather than creating duplicates), and the reserved manual range lets organizers add rooms without an id clash.
-- **Where it's used**: created/updated/removed through [`Event`](#event)'s `AddRoom`/`UpdateRoom`/`RemoveRoom` (which raise [`RoomChanged`](#roomchanged)); referenced by [`Session`](#session) scheduling.
-
-### QuestionInvariants
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Questions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/QuestionInvariants.cs:10` · Level 4 · class (static)
-
-- **What it is**: domain rules for the [`Question`](#question) aggregate: text length, target entity
-  (`Session`/`Event`/`Speaker`), input type (`Rating`/`Text`/`Email`), source (`Sessionize`/`User`),
-  and, the richest part, type-specific answer validation (BR-124).
-- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (Level 3),
-  [`Error`](group-01-result-error-handling.md#error) (Level 1),
-  [`Result`](group-01-result-error-handling.md#result) (Level 2); BCL `MailAddress`, `int.TryParse`.
-- **Concept**: the same Invariants-class pattern used across the Conference aggregates (see
-  [`EventInvariants`](#eventinvariants)), but notably richer. `[Rubric §4, DDD]` (closed value sets and
-  answer rules expressed *as domain logic*, not as API/UI validation). The permitted values are held as
-  data, not as long `switch`es: `ValidQuestionEntities`, `ValidQuestionTypes`, `ValidQuestionSources`
-  are `private static readonly string[]` (lines 28-34) checked with `StringComparer.OrdinalIgnoreCase`.
-- **Walkthrough**
-  - Length constants (lines 13-25) and the user-created id-range constants `ManualIdRangeStart/End`
-    (lines 37-40, distinguishing Sessionize ids from user-created ones).
-  - `EnsureQuestionTextIsValid` (line 48): explicit `IsNullOrWhiteSpace` guard then max-length via
-    `CommonInvariants.EnsureStringMaxLength`.
-  - `EnsureQuestionEntityIsValid` / `EnsureQuestionTypeIsValid` / `EnsureQuestionSourceIsValid`
-    (lines 68, 83, 98): membership tests against the closed arrays.
-  - `EnsureAnswerValueMatchesQuestionType` (line 115): a `switch` on `questionType` dispatching to three
-    private validators, *what counts as a valid answer depends on the question's type*:
-    - `ValidateRatingAnswer` (line 128): `int.TryParse` with `NumberStyles.Integer` +
-      `CultureInfo.InvariantCulture`, must be `1..5`; otherwise `Error.Validation`. (Culture-invariant
-      parsing, see the [primer §27 note](00-primer.md#6-the-34-category-architecture-evaluation-lens).)
-    - `ValidateTextAnswer` (line 142): length not exceeding `TextAnswerMaxLength` (2000).
-    - `ValidateEmailAnswer` (line 156): constructs a `System.Net.Mail.MailAddress` and treats a
-      `FormatException` as invalid, the BCL is the format authority.
-    - An unknown type returns `Error.Invariant("Question.QuestionType.Unknown")`.
-- **Why it's built this way**: encoding answer-shape rules in the domain means the model rejects a
-  malformed rating or email before it can reach the database or a handler; expressing the allowed sets
-  as arrays keeps adding a new question type a one-line data change.
-- **Where it's used**: called from [`Question`](#question)'s `Create`/`Update`; the answer-matching
-  rule is used by the answer-recording handlers (Application tier); length constants feed EF config.
-
-### SpeakerInvariants
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerInvariants.cs:10` · Level 4 · class (static)
-
-- **What it is**: domain rules for the [`Speaker`](#speaker) aggregate: first-name, last-name, and
-  answer-value non-empty/length constraints, plus the length constants for every profile field.
-- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (Level 3),
-  [`Result`](group-01-result-error-handling.md#result) (Level 2).
-- **Concept**: cross-reference [`EventInvariants`](#eventinvariants). This is the simplest sibling: no
-  cross-field or type-dispatch checks. The bulk of the class is length constants for the rich speaker
-  profile, `FirstNameMaxLength` (200), `EmailMaxLength` (255), `TagLineMaxLength` (500), and the four
-  social/URL fields at 2000 (`ProfilePictureMaxLength`, `LinkedInUrlMaxLength`, `GitHubUrlMaxLength`,
-  `WebsiteUrlMaxLength`), all `const int` (lines 12-40) and read by the Speaker EF configuration so
-  column widths stay in sync.
-- **Walkthrough**: three `EnsureXxx` methods (lines 42-55), each a `Result.Combine` of
-  `CommonInvariants.EnsureStringIsNotEmpty` + `EnsureStringMaxLength`
-  (`EnsureFirstNameIsValid`/`EnsureLastNameIsValid`/`EnsureAnswerValueIsValid`, the last using
-  `AnswerValueMaxLength` of 4000). Note that **email is *not* validated here**, the
-  [`Speaker`](#speaker) factory parses it through the
-  [`Email`](group-02-domain-building-blocks.md#email) value object instead.
-- **Where it's used**: [`Speaker`](#speaker)'s `Create`/`Update` and
-  [`SpeakerQuestionAnswer`](#speakerquestionanswer)'s `Create`/`UpdateAnswer`; length constants feed EF
-  config.
+- **What it is**: the inverse of [`SpeakerLinkedToUser`](#speakerlinkedtouser). Conference publishes it
+  when a speaker is unlinked from a user, either via the `UnlinkUserFromSpeaker` command or as cascade
+  cleanup when a speaker is soft-deleted; Identity subscribes and clears `User.LinkedSpeakerId`
+  (`SpeakerUnlinkedFromUser.cs:5-13`).
+- **Depends on**: [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent)
+  (`SpeakerUnlinkedFromUser.cs:20`); the aliases `UserIdentifierType`, `SpeakerIdentifierType`.
+- **Concept**: the integration event taught at [`SpeakerLinkedToUser`](#speakerlinkedtouser). `[Rubric §7,
+  Microservices Readiness]`. Same contract shape, same `.Shared` placement. The one nuance worth reading
+  off the parameter docs: the id actually being cleared is `UserId`, and `SpeakerId` rides along for
+  audit and log correlation (`SpeakerUnlinkedFromUser.cs:15-16`).
+- **Walkthrough**: `sealed record class SpeakerUnlinkedFromUser(UserIdentifierType UserId,
+  SpeakerIdentifierType SpeakerId) : BaseIntegrationEvent` (`SpeakerUnlinkedFromUser.cs:17-20`). Like its
+  sibling it replaced a direct call, here `IUserSpeakerLinkService.ClearLinkedSpeakerAsync`
+  (`SpeakerUnlinkedFromUser.cs:9-13`).
+- **Why it's built this way**: it closes the loop on the eventually-consistent link, and it is the
+  downstream half of a [`SpeakerChanged`](#speakerchanged) delete. That is exactly why
+  [`Speaker.Delete`](#speaker) snapshots the previous link id onto the domain event before clearing the
+  field (`Speaker.cs:242`): the handler that publishes this integration event would otherwise have nothing
+  left to read.
+- **Where it's used**: published by the Conference unlink-command handler and by the speaker-delete
+  cleanup path; consumed on the Identity side.
 
 ### Category
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:16` · Level 5 · class (sealed), SCC with `CategoryInvariants`, `CategoryItem`
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:16` · Level 6 · class (sealed, aggregate root)
 
-- **What it is**: the aggregate root for conference categories (e.g. "Level", "Track", "Session
-  Format"). Each category owns a collection of [`CategoryItem`](#categoryitem) children representing the
-  selectable options within it.
-- **Depends on**,
+- **What it is**: the aggregate root for a conference category, for example "Level", "Track", or "Session
+  format" (`Category.cs:10-13`). Each category owns a collection of [`CategoryItem`](#categoryitem)
+  children representing the selectable options inside it.
+- **Depends on**:
   [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
-  (Level 4), [`CategoryInvariants`](#categoryinvariants) (SCC), [`CategoryItem`](#categoryitem) (SCC),
+  (the base, `Category.cs:16`), [`CategoryInvariants`](#categoryinvariants),
+  [`CategoryItem`](#categoryitem), [`Result`](group-01-result-error-handling.md#result),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate),
+  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute),
+  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), and the domain events
+  [`CategoryChanged`](#categorychanged) and [`CategoryItemChanged`](#categoryitemchanged). Identifier
+  aliases `ConferenceCategoryIdentifierType` and `CategoryItemIdentifierType`.
+- **Concept introduced, the aggregate root as the consistency boundary.** `[Rubric §4, Domain-Driven
+  Design]` assesses whether invariants are enforced inside a boundary and whether children are mutated
+  only through their root. An **aggregate root** is the only member of its cluster a repository hands out;
+  callers never hold a bare `CategoryItem`. Two consequences are visible directly in this file:
+  1. **All child mutation routes through the parent.** `AddCategoryItem`, `UpdateCategoryItem`, and
+     `RemoveCategoryItem` (`Category.cs:131`, `:162`, `:192`) live on `Category`, never on
+     [`CategoryItem`](#categoryitem), and each raises a [`CategoryItemChanged`](#categoryitemchanged) from
+     the root (for example `Category.cs:150`) so observers learn the aggregate changed.
+  2. **The private list enforces encapsulation.** `_categoryItems` is a `private readonly
+     List<CategoryItem>` (`Category.cs:27`); the public surface is the read-only projection
+     `CategoryItems => _categoryItems.AsReadOnly()` (`Category.cs:31`). EF still materializes the backing
+     field, which is why the private parameterless constructor exists (`Category.cs:34`).
+
+  `[Rubric §8, Data Architecture]` also applies: cascade soft-delete is orchestrated by the aggregate, not
+  by a handler. `Delete()` (`Category.cs:102-120`) cascade-soft-deletes every non-deleted child in domain
+  code per BR-71 before raising `CategoryChanged(Deleted)`.
+- **Walkthrough**
+  - **Marker** `[IdValueGenerated]` (`Category.cs:15`): category PKs are database-generated, and Sessionize
+    imports still supply explicit ids via `IDENTITY_INSERT` (`Category.cs:13`).
+  - **Fields** (`Category.cs:19-31`): `Title`, `Sort`, the optional `Type` (for example "session" or
+    "speaker"), the private list, and the `CategoryItems` projection tagged `[Navigation(IsCollection =
+    true)]` so the populator knows this is a child collection
+    ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)).
+  - **Constructors** (`Category.cs:34-44`): the private EF constructor sets `Title = string.Empty` to
+    satisfy the non-nullable field before EF assigns columns; the private field constructor is what the
+    factory calls.
+  - **`Create`** (`Category.cs:54-75`): validate through `CategoryInvariants.EnsureTitleIsValid`, then
+    resolve whether the id is database-generated via `typeof(Category).IsIdValueGenerated`
+    (`Category.cs:65`), then construct. The id expression is worth reading closely:
+    `Id = id ?? (isIdValueGenerated ? default : throw new ArgumentNullException(nameof(id)))`
+    (`Category.cs:69`), so a supplied id always wins, an omitted id is legal only because this type is
+    id-value-generated, and any other combination fails loudly rather than silently writing a zero.
+    Finally `AddDomainEvent(new CategoryChanged(DomainEntityState.Added, ...))` (`Category.cs:72`). This is
+    the canonical validate, then construct, then emit shape used by every aggregate in this chapter.
+  - **`Update`** (`Category.cs:84`): re-validates the title, writes the three scalars, raises
+    `CategoryChanged(Updated)`.
+  - **`AddCategoryItem`** (`Category.cs:131-153`): uniqueness check first (BR-138) via
+    `CategoryInvariants.EnsureCategoryItemNameIsUnique`, then delegate construction to
+    `CategoryItem.Create`, then add to the private list, then emit. Callers never `new CategoryItem(...)`.
+  - **`UpdateCategoryItem`** (`Category.cs:162`): resolves the child through the private
+    `GetCategoryItemOrNotFound` helper (`Category.cs:214`, which wraps the base
+    `GetChildOrNotFound<T, TId>` so a missing child becomes an
+    [`Error`](group-01-result-error-handling.md#error) rather than a null), re-checks uniqueness while
+    excluding the item being renamed, then delegates to the child's own `Update`.
+  - **`SetCategoryItems`** (`Category.cs:210`): an `internal` hook used only by the navigation populator
+    after a cross-source load. It calls the base `SetItems(_categoryItems, ...)` and raises **no** domain
+    events, because it is hydration, not a domain mutation.
+- **Why it's built this way**: a single class owning uniqueness, cascade delete, and event emission keeps
+  the consistency rules in one place instead of scattered across handlers.
+  [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) explains why
+  `SetCategoryItems` exists at all: when category and items share a database EF `Include()` loads them
+  together, but when they could be split the populator queries separately and calls the hook, so the
+  aggregate stays agnostic to the load path.
+- **Where it's used**: loaded through
+  [`IReadRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#ireadrepositorytentity-tidentifiertype),
+  mutated by the Conference category command handlers (Group 18), and projected for the category UI.
+
+### CategoryInvariants
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryInvariants.cs:11` · Level 6 · class (static)
+
+- **What it is**: the invariant rules for [`Category`](#category) and its
+  [`CategoryItem`](#categoryitem) children: title validation, item-name validation, and case-insensitive
+  uniqueness checking (BR-138).
+- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (the reusable
+  lower layer it delegates to), [`Result`](group-01-result-error-handling.md#result),
+  [`Error`](group-01-result-error-handling.md#error), [`CategoryItem`](#categoryitem) (it takes the child
+  collection as a parameter); BCL `CultureInfo`.
+- **Concept**: the module invariants class taught at [`EventInvariants`](#eventinvariants). The
+  distinctive method here, which the simpler invariant classes lack, is the **collection-aware uniqueness
+  guard**. `[Rubric §4, Domain-Driven Design]`: the ubiquitous-language rule "an item name is unique
+  within its category" is expressed directly in the domain rather than deferred to a database index or a
+  UI check.
+- **Walkthrough**
+  - `TitleMaxLength` (255) and `CategoryItemNameMaxLength` (500) at `CategoryInvariants.cs:14` and `:17`.
+    Note these are `public static readonly int` here rather than the `const int` used by the other
+    invariant classes in this chapter; both still feed the EF column widths.
+  - `EnsureTitleIsValid` (`:19`) and `EnsureCategoryItemNameIsValid` (`:24`): each a `Result.Combine` of
+    `CommonInvariants.EnsureStringIsNotEmpty` plus `CommonInvariants.EnsureStringMaxLength`, with the
+    message built through `string.Create(CultureInfo.InvariantCulture, ...)` so the text does not vary by
+    ambient culture.
+  - `EnsureCategoryItemNameIsUnique` (`:37-58`): takes the existing item collection plus an optional
+    `excludeItemId` (so renaming an item to its own name during an update does not self-conflict). It
+    skips `IsDeleted` items and compares with `StringComparison.OrdinalIgnoreCase` (`:47-49`), returning
+    `Error.Conflict` on a duplicate (`:52`). The inline comment at `:43-45` records why the exclusion is
+    modeled as a nullable rather than defaulted: defaulting to `default(id)` would silently exclude every
+    unsaved sibling, since a database-generated `CategoryItem` id is 0 until the save.
+- **Why it's built this way**: co-locating the rules per aggregate keeps the entity itself readable, and
+  the `Result`-returning style composes with `Result.Combine`. The uniqueness method takes the collection
+  as a parameter so it stays a **pure** function with no repository and no EF dependency, which is what
+  lets the aggregate call it in memory.
+- **Where it's used**: called from [`Category`](#category)'s `Create`, `Update`, `AddCategoryItem`, and
+  `UpdateCategoryItem`, and from [`CategoryItem`](#categoryitem)'s `Create` and `Update`; the length
+  constants are read by the Categories EF configuration.
+
+### CategoryItem
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryItem.cs:14` · Level 6 · class (sealed, child entity)
+
+- **What it is**: the child entity of [`Category`](#category): one selectable option inside a category,
+  for example "Beginner" within "Level" or "C#" within "Language" (`CategoryItem.cs:8-11`). It carries
+  `Name`, `Sort`, the back-navigation `Category?`, and the FK `CategoryId`.
+- **Depends on**:
+  [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
+  (`CategoryItem.cs:14`), [`Category`](#category), [`CategoryInvariants`](#categoryinvariants),
+  [`Result`](group-01-result-error-handling.md#result),
+  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute),
+  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute).
+- **Concept introduced, the child entity as distinct from the aggregate root.** `[Rubric §4,
+  Domain-Driven Design]` covers the entity hierarchy *within* an aggregate. A **child entity** has its own
+  identity (it extends
+  [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype),
+  so it gets soft-delete and audit fields) but it is owned by a root, is never fetched directly from a
+  repository, and, decisively, **raises no domain events**: its `Create` (`CategoryItem.cs:47-65`) mirrors
+  the root's validate-then-construct shape but ends without an `AddDomainEvent` call, because event
+  emission is the root's job.
+- **Walkthrough**
+  - `[IdValueGenerated]` (`CategoryItem.cs:13`): item PKs are database-generated, with the same Sessionize
+    `IDENTITY_INSERT` exception as the parent.
+  - `[Navigation] public Category? Category { get; set; }` (`CategoryItem.cs:23-24`): the back-navigation.
+    The setter is public because EF wires the navigation after materialization.
+  - `CategoryId` (`CategoryItem.cs:27`): the FK, get-only, never externally assigned.
+  - `Create` (`CategoryItem.cs:47-65`): validates the name through
+    [`CategoryInvariants`](#categoryinvariants), resolves `typeof(CategoryItem).IsIdValueGenerated`
+    (`:57`), and constructs with the same `id ?? (isIdValueGenerated ? default : throw ...)` expression as
+    the root (`:61`).
+  - `Update` (`CategoryItem.cs:73-85`): re-validates the name, then writes `Name` and `Sort`. Again no
+    event; the root's `UpdateCategoryItem` raises [`CategoryItemChanged`](#categoryitemchanged) around it.
+- **Why it's built this way**: keeping the child lean, holding only its own field constraints, means a
+  caller cannot bypass the parent's uniqueness and cascade rules by reaching in and calling
+  `categoryItem.Update(...)` directly. The parent method is the only path that also runs BR-138.
+- **Where it's used**: loaded through [`Category`](#category) (EF `Include` or the navigation populator);
+  referenced by [`SpeakerCategoryItem`](#speakercategoryitem) as the target of that many-to-many bridge.
+
+### EventInvariants
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:10` · Level 6 · class (static)
+
+- **What it is**: the static invariants toolbox for the [`Event`](#event) aggregate and its children
+  ([`Room`](#room), [`EventQuestionAnswer`](#eventquestionanswer)). It holds the field-length constants
+  and the `Ensure...` rule methods that both the domain factories and the EF configuration reuse, so a
+  business rule is stated once (`EventInvariants.cs:6-9`).
+- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants),
+  [`Result`](group-01-result-error-handling.md#result),
+  [`Error`](group-01-result-error-handling.md#error); BCL `TimeZoneInfo` and `DateOnly`. Alias
+  `RoomIdentifierType`.
+- **Concept introduced, the module invariants class.** `[Rubric §4, Domain-Driven Design]` (invariants
+  live in the domain, expressed as reusable named rules rather than inline `if` blocks) and `[Rubric §8,
+  Data Architecture]` (the `MaxLength` constants are the single source of truth shared by the EF column
+  configuration and by validation, keeping schema and rule in sync). This is the same static-invariants
+  idiom taught for value objects in
+  [Group 02](group-02-domain-building-blocks.md#commoninvariants), applied to an aggregate: each
+  `Ensure...` returns a [`Result`](group-01-result-error-handling.md#result) rather than throwing, and
+  callers combine several through `Result.Combine`.
+- **Walkthrough**, in teaching order:
+  - **Length constants** (`EventInvariants.cs:13-52`), all `public const int`: `NameMaxLength` (500),
+    `DescriptionMaxLength` (4000), `TimeZoneMaxLength` (100), `SessionizeCodeMaxLength` (100),
+    `VenueAddressMaxLength` (500), `VenueMapUrlMaxLength` (2000), `WiFiInfoMaxLength` (500),
+    `OrganizerContactEmailMaxLength` (255, `:34`), `SponsorshipPacketUrlMaxLength` (2000, `:37`), the four
+    room limits (`RoomNameMaxLength` 255, `RoomFloorMaxLength` 100, `RoomLocationMaxLength` 255,
+    `RoomAccessibilityInfoMaxLength` 500), and `AnswerValueMaxLength` (4000).
+  - **Reserved id range** (`EventInvariants.cs:54-62`): `RoomManualIdRangeStart` (999_999_000) and
+    `RoomManualIdRangeEnd` (999_999_999). Room ids are app-assigned, the int PK **is** the Sessionize id,
+    so organizer-created rooms draw from this reserved high range and never collide with a real Sessionize
+    id. The comment notes it mirrors [`SessionInvariants`](#sessioninvariants)`.ManualIdRangeStart`.
+  - **`EnsureNameIsValid`** (`:64`): a `Result.Combine` of a not-empty and a max-length check delegated to
+    [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants).
+  - **`EnsureTimeZoneIsValid`** (`:75-104`): not-empty, then max-length, then
+    `TimeZoneInfo.FindSystemTimeZoneById` inside a `try`/`catch` that maps `TimeZoneNotFoundException` to
+    an `Event.TimeZone.Invalid` invariant error (BR-87). The BCL is the authority on what counts as a
+    valid IANA identifier.
+  - **`EnsureDateRangeIsValid`** (`:113`): fails with `Event.DateRange.Invalid` when `endDate < startDate`.
+  - **`EnsureRoomCapacityIsValid`** (`:128`): rejects a non-positive capacity when one is supplied, written
+    as the pattern `capacity is <= 0` so a `null` capacity passes (BR-93).
+  - **`EnsureRoomNameIsValid`** (`:137`) and **`EnsureAnswerValueIsValid`** (`:142`): not-empty plus
+    max-length pairs for the two children.
+  - **`EnsureEventIsPublished`** (`:153`): guards actions that require a published event (BR-108).
+- **Why it's built this way**: keeping the length limits as constants on the invariants class, and having
+  the EF configuration read the same constants, prevents the classic drift where a validator accepts a
+  value the column then truncates. Returning [`Result`](group-01-result-error-handling.md#result) instead
+  of throwing keeps validation composable at the factory, where several checks are combined into one error
+  list.
+- **Where it's used**: the [`Event`](#event), [`Room`](#room), and
+  [`EventQuestionAnswer`](#eventquestionanswer) factories and updaters call these; the Events EF
+  configuration reads the length constants.
+- **Caveats / not-in-source**: the reserved room-id range is defined here but nothing in this file assigns
+  from it. Which caller draws the next manual room id is not determinable from this source file.
+
+### QuestionInvariants
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Questions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/QuestionInvariants.cs:10` · Level 6 · class (static)
+
+- **What it is**: the domain rules for the [`Question`](#question) aggregate: text length, target entity
+  ("Session", "Event", "Speaker"), input type ("Rating", "Text", "Email"), source ("Sessionize", "User"),
+  and, the richest part, type-specific answer validation (BR-124).
+- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants),
+  [`Result`](group-01-result-error-handling.md#result),
+  [`Error`](group-01-result-error-handling.md#error); BCL `int.TryParse`, `NumberStyles`, `CultureInfo`,
+  and `System.Net.Mail.MailAddress`.
+- **Concept**: the same invariants-class pattern as [`EventInvariants`](#eventinvariants), but notably
+  richer. `[Rubric §4, Domain-Driven Design]`: the closed value sets and the answer rules are expressed as
+  domain logic, not as API or UI validation. The permitted values are held as **data** rather than as long
+  `switch` statements: `ValidQuestionEntities`, `ValidQuestionTypes`, and `ValidQuestionSources` are
+  `private static readonly string[]` (`QuestionInvariants.cs:28-34`) checked with
+  `StringComparer.OrdinalIgnoreCase`.
+- **Walkthrough**
+  - Length constants (`QuestionInvariants.cs:13-25`): `QuestionTextMaxLength` (1000), the three 20-char
+    discriminator limits, and `TextAnswerMaxLength` (2000).
+  - The user-created id range `ManualIdRangeStart` / `ManualIdRangeEnd` (`:37`, `:40`, both 999_999_000 to
+    999_999_999), distinguishing Sessionize ids from user-created ones.
+  - `EnsureQuestionTextIsValid` (`:48`): an explicit `IsNullOrWhiteSpace` guard first, then max-length via
+    `CommonInvariants.EnsureStringMaxLength`.
+  - `EnsureQuestionEntityIsValid` (`:68`), `EnsureQuestionTypeIsValid` (`:83`), and
+    `EnsureQuestionSourceIsValid` (`:98`): membership tests against the closed arrays, each returning a
+    specific `Error.Invariant` code.
+  - `EnsureAnswerValueMatchesQuestionType` (`:115-126`): a `switch` expression on `questionType`
+    dispatching to three private validators, because what counts as a valid answer depends on the
+    question's type:
+    - `ValidateRatingAnswer` (`:128`): `int.TryParse` with `NumberStyles.Integer` and
+      `CultureInfo.InvariantCulture`, requiring 1 to 5, otherwise `Error.Validation`. The invariant culture
+      is deliberate: a rating must parse identically wherever the request originates.
+    - `ValidateTextAnswer` (`:142`): length must not exceed `TextAnswerMaxLength` (2000).
+    - `ValidateEmailAnswer` (`:156`): constructs a `System.Net.Mail.MailAddress` and treats a
+      `FormatException` as invalid, again letting the BCL be the format authority.
+    - An unrecognized type falls through to `Error.Invariant("Question.QuestionType.Unknown")` (`:121`).
+      Note the dispatch is an ordinal `switch` on the literal strings, so it is case-sensitive here even
+      though `EnsureQuestionTypeIsValid` accepts any casing.
+- **Why it's built this way**: encoding answer-shape rules in the domain means the model rejects a
+  malformed rating or email before it can reach a handler or the database, and expressing the allowed sets
+  as arrays keeps adding a new question type a one-line data change rather than a code restructure.
+- **Where it's used**: called from [`Question`](#question)'s `Create` and `Update`; the answer-matching
+  rule is used by the answer-recording handlers in the Application tier; the length constants feed the
+  Questions EF configuration.
+
+### SpeakerInvariants
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerInvariants.cs:10` · Level 6 · class (static)
+
+- **What it is**: the domain rules for the [`Speaker`](#speaker) aggregate: first-name, last-name, and
+  answer-value non-empty and length constraints, plus the length constants for every profile field.
+- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants),
+  [`Result`](group-01-result-error-handling.md#result).
+- **Concept**: cross-reference [`EventInvariants`](#eventinvariants) for the pattern. This is the simplest
+  sibling in the family: no cross-field checks, no type dispatch. The bulk of the class is length
+  constants for the rich speaker profile (`SpeakerInvariants.cs:13-40`): `FirstNameMaxLength` and
+  `LastNameMaxLength` (200), `EmailMaxLength` (255), `TagLineMaxLength` (500),
+  `TwitterHandleMaxLength` (100), the four URL fields at 2000 (`ProfilePictureMaxLength`,
+  `LinkedInUrlMaxLength`, `GitHubUrlMaxLength`, `WebsiteUrlMaxLength`), and `AnswerValueMaxLength` (4000).
+  All are `public const int` and are read by the Speakers EF configuration so column widths stay in sync.
+- **Walkthrough**: three `Ensure...` methods (`SpeakerInvariants.cs:42-55`), each a `Result.Combine` of
+  `CommonInvariants.EnsureStringIsNotEmpty` plus `CommonInvariants.EnsureStringMaxLength`:
+  `EnsureFirstNameIsValid` (`:42`), `EnsureLastNameIsValid` (`:47`), and `EnsureAnswerValueIsValid`
+  (`:52`, using `AnswerValueMaxLength`). Note what is **absent**: email is not validated here even though
+  `EmailMaxLength` is declared. The [`Speaker`](#speaker) factory parses it through the
+  [`Email`](group-02-domain-building-blocks.md#email) value object instead (`Speaker.cs:125`), so format
+  correctness is the value object's responsibility and the constant exists only to size the column.
+- **Why it's built this way**: the split is a deliberate division of labor. Rules that are genuinely
+  speaker-specific live here; anything that is a reusable concept in its own right (a well-formed email)
+  becomes a value object that any module can hold.
+- **Where it's used**: [`Speaker`](#speaker)'s `Create` and `Update`, and
+  [`SpeakerQuestionAnswer`](#speakerquestionanswer)'s `Create` and `UpdateAnswer`; the length constants
+  feed the Speakers EF configuration.
+
+### Event
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:23` · Level 7 · class (sealed, aggregate root)
+
+- **What it is**: the aggregate root for a conference event. It owns three child collections
+  ([`Room`](#room)s, [`EventSpeaker`](#eventspeaker) associations, and
+  [`EventQuestionAnswer`](#eventquestionanswer)s) and enforces every rule about them through its own
+  methods. Event ids are database-generated, not sourced from Sessionize (`Event.cs:12-15`).
+- **Depends on**:
+  [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
+  and [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity) (both on `Event.cs:23`),
+  [`EventInvariants`](#eventinvariants), [`Result`](group-01-result-error-handling.md#result) and
+  [`Error`](group-01-result-error-handling.md#error),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate),
+  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute),
+  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute),
+  [`QuestionModerationDefault`](#questionmoderationdefault), and the
+  [`EventChanged`](#eventchanged) / [`RoomChanged`](#roomchanged) /
+  [`EventSpeakerChanged`](#eventspeakerchanged) /
+  [`EventQuestionAnswerChanged`](#eventquestionanswerchanged) domain events. Aliases
+  `EventIdentifierType`, `RoomIdentifierType`, `EventSpeakerIdentifierType`,
+  `EventQuestionAnswerIdentifierType`, `SpeakerIdentifierType`, `QuestionIdentifierType`,
+  `UserIdentifierType`.
+- **Concept**: the aggregate root taught at [`Category`](#category), here in its fullest expression in
+  this chapter, plus two things `Category` does not show. `[Rubric §4, Domain-Driven Design]` and
+  `[Rubric §1, SOLID]`: child collections are exposed only as read-only views over private backing lists,
+  all mutation flows through root methods, each mutation validates and then raises a domain event, and the
+  root owns cascade delete. `[Rubric §6, CQRS & Event-Driven]`: every state change announces itself, which
+  is what gives the outbox a single ordered stream. Two additions worth naming:
+  1. **Selective auditing.** `Event` implements
+     [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity) (`Event.cs:23`). The class doc
+     (`Event.cs:16-20`) states the reason as a cost-benefit judgment rather than a blanket policy: the
+     event record is the schedule everything else hangs off, several organizers edit it, and a wrong date
+     or venue is felt by every attendee, so one trail row per change is worth it.
+  2. **Selective navigation.** `Rooms` and `EventSpeakers` are marked `[Navigation(IsCollection = true)]`
+     (`Event.cs:82`, `:88`) but `EventQuestionAnswers` deliberately is **not** (`Event.cs:93-103`).
+     `[Rubric §12, Performance & Scalability]`: the remarks record that the collection grows with
+     attendance rather than with the schedule, and that it was riding along on public reads that never
+     render it. Handlers that genuinely need it pass an explicit `includes:` list instead.
+- **Walkthrough**, in teaching order:
+  - **`[IdValueGenerated]`** on the class (`Event.cs:22`): the factory reads this at runtime through
+    `typeof(Event).IsIdValueGenerated` (`Event.cs:177`).
+  - **Scalar state** (`Event.cs:25-77`): `Name`, `Description?`, `StartDate`/`EndDate` (`DateOnly`),
+    `TimeZone`, `SessionizeCode?`, `VenueAddress?`, `VenueMapUrl?`, `WiFiInfo?`,
+    `OrganizerContactEmail?` (`:56`, falling back to the host-configured support address when absent),
+    `SponsorshipPacketUrl?` (`:62`, whose absence hides the sponsorship call to action entirely),
+    `IsPublished`, `QuestionModerationDefault` (`:71`, the BR-233 initial status a newly submitted
+    live-layer question receives), and the nullable `LastSessionizeRefreshOn`/`LastSessionizeRefreshBy`
+    refresh-audit pair. All have private setters.
+  - **Child collections** (`Event.cs:79-103`): three private `List<T>` backing fields exposed as
+    `IReadOnlyCollection<T>` projections.
+  - **Constructors** (`Event.cs:106-136`): a private parameterless EF constructor that seeds the
+    non-nullable strings, plus a private field constructor used by the factory.
+  - **`Create`** (`Event.cs:155-199`): combines `EnsureNameIsValid`, `EnsureTimeZoneIsValid`, and
+    `EnsureDateRangeIsValid` (`:170-173`); on success builds the instance with
+    `Id = isIdValueGenerated ? default : id!.Value` (`:192`), sets `QuestionModerationDefault`, and raises
+    `EventChanged(Added)` (`:196`).
+  - **`Update`** (`Event.cs:217`): re-validates the same three invariants, writes the scalars including the
+    moderation default, raises `EventChanged(Updated)`.
+  - **`Publish`** and **`Unpublish`** (`Event.cs:258`, `:278`): flip `IsPublished`, refusing a no-op
+    transition with `Event.AlreadyPublished` / `Event.AlreadyUnpublished`, and raise
+    `EventChanged(Updated)`.
+  - **`RecordSessionizeRefresh`** (`Event.cs:302`): stamps `LastSessionizeRefreshOn`/`By` from a
+    caller-supplied UTC instant. The parameter doc (`:298-301`) is explicit that the value comes from an
+    injected `TimeProvider` so the domain never reads an ambient clock. `[Rubric §14, Testability]`. Note
+    this method returns `void` and raises no event.
+  - **`Delete`** (`Event.cs:314-345`): overrides the base soft-delete, then cascade soft-deletes every
+    non-deleted room, event-speaker, and answer (BR-72), and raises `EventChanged(Deleted)`. Session
+    cascade is deliberately **not** here: it is handled a layer up (BR-127) because sessions are separate
+    aggregates, which is what
+    [`IEventCascadeDeletionDomainService`](#ieventcascadedeletiondomainservice) exists for.
+  - **Room management** (`Event.cs:360-501`): `AddRoom` (`:360`) checks name uniqueness first, delegates to
+    `Room.Create`, adds, and raises `RoomChanged(Added)`; `UpdateRoom` (`:397`) resolves the child,
+    re-checks uniqueness excluding itself, and delegates; `RestoreRoom` (`:439`) is the BR-135 reactivation
+    path, taking the room **instance** rather than an id because a soft-deleted row is excluded by the
+    global query filter and so is not reachable through the loaded collection (`:430-434`). It re-runs the
+    uniqueness bar, calls `room.Update` before `room.Reactivate()` so a rejected name leaves the room
+    untouched and still deleted rather than half-restored (`:459-467`), and raises `RoomChanged(Added)`
+    because the room re-enters the visible set. `RemoveRoom` (`:482`) soft-deletes and raises
+    `RoomChanged(Deleted)`.
+  - **Event-speaker management** (`Event.cs:511-597`): `AddEventSpeaker` (`:511`) guards duplicates in
+    memory (`:515`) with `Event.Speaker.Duplicate`; `RestoreEventSpeaker` (`:548`) is the join-entity
+    counterpart to `RestoreRoom` and needs no field re-apply because the join carries no organizer-entered
+    data (`:541-545`); `RemoveEventSpeaker` (`:578`) soft-deletes.
+  - **Answer management** (`Event.cs:608-674`): `AddEventQuestionAnswer`, `UpdateEventQuestionAnswer`,
+    `RemoveEventQuestionAnswer`. Unlike the two collections above, the add has **no** duplicate guard: an
+    event answering the same question twice is not blocked in the domain.
+  - **Populator hooks** (`Event.cs:500`, `:596`, `:673`): `SetRooms`, `SetEventSpeakers`, and
+    `SetEventQuestionAnswers` are `internal` and call the base `SetItems`, raising no events
+    ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)).
+  - **Private helpers** (`Event.cs:687-719`): `EnsureRoomNameIsUnique` (`:687`), whose doc comment notes
+    the ordinal-ignore-case comparison is chosen to match the database uniqueness index under the server's
+    default case-insensitive collation; and the three `Get...OrNotFound` wrappers over the base
+    `GetChildOrNotFound` so a missing child returns an
+    [`Error`](group-01-result-error-handling.md#error) rather than a null.
+- **Why it's built this way**: routing every child change through the root is what makes the invariants
+  (no duplicate room name, cascade on delete) enforceable at all, and what gives the outbox an ordered
+  change stream. Passing the clock in rather than reading `DateTime.UtcNow` keeps the domain
+  deterministic. The restore methods exist because Sessionize is an upstream feed that can withdraw and
+  reinstate a room or a speaker, and reactivating a soft-deleted row preserves its id and history where
+  re-creating it would not (BR-135).
+- **Where it's used**: loaded and mutated by the Conference application-layer command handlers (Group 18);
+  persisted through the Events EF configuration; projected to DTOs for the read endpoints.
+
+### EventQuestionAnswer
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventQuestionAnswer.cs:13` · Level 7 · class (sealed, child entity)
+
+- **What it is**: a child entity of [`Event`](#event) storing the event's answer to one custom-form
+  [`Question`](#question) (`EventQuestionAnswer.cs:8-10`). Database-generated id.
+- **Depends on**:
+  [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
+  (`EventQuestionAnswer.cs:13`), [`EventInvariants`](#eventinvariants),
+  [`Result`](group-01-result-error-handling.md#result),
+  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute),
+  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute). Aliases
+  `EventQuestionAnswerIdentifierType`, `QuestionIdentifierType`, `EventIdentifierType`.
+- **Concept**: the child entity taught at [`CategoryItem`](#categoryitem), here under a different root.
+  `[Rubric §4, Domain-Driven Design]`. It has identity, soft-delete, and audit fields but no domain-event
+  list of its own: neither `Create` nor `UpdateAnswer` calls `AddDomainEvent`, because [`Event`](#event)
+  wraps both and raises [`EventQuestionAnswerChanged`](#eventquestionanswerchanged) itself.
+- **Walkthrough**: `[IdValueGenerated]` (`:12`); `QuestionId` (the FK to the answered question) and
+  `AnswerValue`, both with private setters (`:15-19`); the `[Navigation] Event?` back-navigation and the
+  get-only `EventId` FK (`:21-26`); a private EF constructor that seeds `AnswerValue = string.Empty` and a
+  private field constructor (`:29-37`); `Create` (`:46-64`), which validates through
+  `EventInvariants.EnsureAnswerValueIsValid` and assigns
+  `Id = isIdValueGenerated ? default : id!.Value` (`:60`); `UpdateAnswer` (`:71-80`), which re-validates
+  and then writes `AnswerValue`.
+- **Why it's built this way**: keeping the answer a child of the event rather than a standalone aggregate
+  means it shares the event's transaction and cascade delete, and its lifecycle notifications flow through
+  the root's ordered event stream.
+- **Where it's used**: created and mutated only through [`Event`](#event)'s `AddEventQuestionAnswer`,
+  `UpdateEventQuestionAnswer`, and `RemoveEventQuestionAnswer`. Because the collection is not marked
+  `[Navigation]`, handlers that need it request it explicitly rather than getting it from the populator.
+
+### EventSpeaker
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventSpeaker.cs:13` · Level 7 · class (sealed, join entity)
+
+- **What it is**: the join entity linking an [`Event`](#event) to a [`Speaker`](#speaker), that is, which
+  speakers appear at which event (`EventSpeaker.cs:8-10`). Database-generated id.
+- **Depends on**:
+  [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
+  (`EventSpeaker.cs:13`), [`Result`](group-01-result-error-handling.md#result),
+  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute),
+  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute). Aliases
+  `EventSpeakerIdentifierType`, `SpeakerIdentifierType`, `EventIdentifierType`.
+- **Concept introduced, the explicit join entity.** `[Rubric §4, Domain-Driven Design]` and `[Rubric §8,
+  Data Architecture]`. Rather than let EF create an implicit link table, the many-to-many is modeled as a
+  real entity, which is what gives the association its own id, its own soft-delete flag, and its own audit
+  trail. This is the thinnest child in the chapter: it holds only the `SpeakerId` FK plus the standard
+  back-navigation and `EventId`, so `Create` (`:36-48`) does no validation at all beyond assigning the id.
+  There is no `Update`, because a join either exists or it does not.
+- **Walkthrough**: `[IdValueGenerated]` (`:12`); `SpeakerId` (`:16`); `[Navigation] Event?` and the
+  get-only `EventId` (`:18-23`); an empty private EF constructor and a one-line private field constructor
+  (`:26-28`); `Create` (`:36`); and `Reactivate()` (`:56`), a one-line delegation to the base `Undelete()`.
+  The `Reactivate` doc (`:50-54`) explains its reason for existing: the join row carries the
+  Sessionize-assigned speaker id, so an association that reappears in the feed is reactivated rather than
+  duplicated by a second row (BR-135).
+- **Why it's built this way**: an explicit join entity is what lets [`Event`](#event) raise
+  [`EventSpeakerChanged`](#eventspeakerchanged) when the association is added, restored, or removed, and
+  it is what makes the soft-delete-then-reactivate cycle possible under a repeatedly re-run import.
+- **Where it's used**: created, restored, and removed only through [`Event`](#event)'s `AddEventSpeaker`,
+  `RestoreEventSpeaker`, and `RemoveEventSpeaker`; the duplicate-speaker guard lives in the root
+  (`Event.cs:515`), not here.
+
+### Question
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Questions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/Question.cs:14` · Level 7 · class (sealed, aggregate root)
+
+- **What it is**: a standalone aggregate root for a survey or custom-form question, for example "Dietary
+  requirements" or "T-shirt size" (`Question.cs:9-12`). A question targets an entity type
+  (`QuestionEntity`), has an input type (`QuestionType`), a sort order, an `IsRequired` flag, and a
+  `QuestionSource`. Unlike the other roots in this part it owns **no** children: answers live on the
+  answering entity ([`EventQuestionAnswer`](#eventquestionanswer),
+  [`SpeakerQuestionAnswer`](#speakerquestionanswer)).
+- **Depends on**:
+  [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
+  (`Question.cs:14`), [`QuestionInvariants`](#questioninvariants),
+  [`Result`](group-01-result-error-handling.md#result),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate), and the
+  [`QuestionChanged`](#questionchanged) domain event. Alias `QuestionIdentifierType`.
+- **Concept**: a "thin" aggregate root, where the consistency boundary is just the record itself. The
+  detail worth noticing is the **absent** attribute: the class header carries no `[IdValueGenerated]`
+  (`Question.cs:14`), so question ids are explicitly assigned, typically by Sessionize. `Create` still
+  runs the same `typeof(Question).IsIdValueGenerated` check (`:87`), which here evaluates to `false`, so
+  the `id!.Value` branch is always taken (`:91`). `[Rubric §8, Data Architecture]`: the id-origin decision
+  is expressed once, as an attribute on the type, and every factory reads it uniformly.
+- **Walkthrough**
+  - **Scalars** (`Question.cs:16-32`): `QuestionText`, `QuestionEntity`, `QuestionType`, `Sort`,
+    `IsRequired`, `QuestionSource`, all with private setters. The three discriminators are plain strings
+    validated against the closed sets in [`QuestionInvariants`](#questioninvariants) rather than enums.
+  - **Constructors** (`Question.cs:35-57`): the EF constructor seeds all four non-nullable strings.
+  - **`Create`** (`Question.cs:70-97`): four invariant checks (text, entity, type, source) combined through
+    `Result.Combine` (`:79-83`) so the caller gets every problem at once, then construct, then emit
+    `QuestionChanged(Added)` (`:94`).
+  - **`Update`** (`Question.cs:108-131`): re-validates text, entity, and type, but **drops the
+    `questionSource` parameter entirely**. Source is immutable after creation, a business rule encoded by
+    absence rather than by a guard clause.
+  - **`Delete`** (`Question.cs:135-143`): calls the base soft-delete and, on success, emits
+    `QuestionChanged(Deleted)`. No cascade, because it owns nothing.
+- **Why it's built this way**: validating against closed value lists rather than accepting free-form
+  strings means the domain rejects an invalid type, entity, or source before persistence. Making
+  `QuestionSource` non-updatable preserves the provenance distinction between an imported question and a
+  user-created one, which is what the reserved manual id range in
+  [`QuestionInvariants`](#questioninvariants) also protects.
+- **Where it's used**: referenced by scalar FK (`QuestionId`) from
+  [`EventQuestionAnswer`](#eventquestionanswer) and [`SpeakerQuestionAnswer`](#speakerquestionanswer);
+  fed into the feedback and custom-form features in the Application and UI tiers.
+- **Caveats / not-in-source**: `QuestionEntity` accepts "Speaker" (`QuestionInvariants.cs:28`) while the
+  property's own XML doc still says "Session" or "Event" (`Question.cs:19`). The array is the operative
+  rule; the doc comment is stale.
+
+### Room
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Room.cs:12` · Level 7 · class (sealed, child entity)
+
+- **What it is**: a child entity of [`Event`](#event) representing a physical or virtual room where
+  sessions take place. Unlike its siblings, a room's id is **Sessionize-assigned**, not database-generated
+  (`Room.cs:8-10`, and note the absence of `[IdValueGenerated]` on `Room.cs:12`).
+- **Depends on**:
+  [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype),
+  [`EventInvariants`](#eventinvariants), [`Result`](group-01-result-error-handling.md#result),
+  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute). Aliases
+  `RoomIdentifierType`, `EventIdentifierType`.
+- **Concept**: the child entity ([`CategoryItem`](#categoryitem), [`EventQuestionAnswer`](#eventquestionanswer))
+  with an **externally assigned id**. `[Rubric §8, Data Architecture]`. Because `Room` is not marked
+  `[IdValueGenerated]`, `typeof(Room).IsIdValueGenerated` (`Room.cs:84`) is false and `Create` always
+  assigns the supplied id (`:94`), which is how a Sessionize room id becomes the PK directly.
+  Organizer-created rooms therefore draw from the reserved high range
+  ([`EventInvariants`](#eventinvariants)`.RoomManualIdRangeStart`) so app-assigned ids never collide with
+  imported ones.
+- **Walkthrough**: scalars `Name`, `Sort`, `Capacity?`, `Floor?`, `Location?`, `AccessibilityInfo?`
+  (`Room.cs:14-30`); `[Navigation] Event?` and the get-only `EventId` (`:32-37`); the EF constructor and
+  the private field constructor (`:40-56`); `Create` (`:69-98`) validating `EnsureRoomNameIsValid` plus
+  `EnsureRoomCapacityIsValid`; `Update` (`:110-132`) re-validating the same pair and writing all six
+  scalars; `Reactivate()` (`:140`), a one-line delegation to the base `Undelete()` whose doc (`:134-139`)
+  explains that a room reappearing in the Sessionize feed has to be reactivated rather than re-created
+  precisely because its id is externally owned (BR-135). As a child it raises no events itself.
+- **Why it's built this way**: preserving the Sessionize id as the PK keeps imported rooms stable across
+  refreshes, so a re-import updates in place instead of creating duplicates, and the reserved manual range
+  lets organizers add rooms without an id clash. Note the room-name uniqueness rule is **not** here: it
+  lives in [`Event`](#event) (`Event.cs:687`), because uniqueness is a statement about the collection,
+  which only the root can see.
+- **Where it's used**: created, updated, restored, and removed through [`Event`](#event)'s `AddRoom`,
+  `UpdateRoom`, `RestoreRoom`, and `RemoveRoom`, each of which raises [`RoomChanged`](#roomchanged);
+  referenced by [`Session`](#session) scheduling.
+
+### Speaker
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:22` · Level 7 · class (sealed, aggregate root)
+
+- **What it is**: the aggregate root for a conference speaker. It carries rich profile data (names, an
+  optional [`Email`](group-02-domain-building-blocks.md#email) value object, bio, tag line, social and URL
+  links, `IsTopSpeaker`), owns [`SpeakerCategoryItem`](#speakercategoryitem) join entities and
+  [`SpeakerQuestionAnswer`](#speakerquestionanswer) children, and holds the cross-module link
+  `LinkedUserId`. Speaker ids are Sessionize-assigned GUIDs (`Speaker.cs:12-14`).
+- **Depends on**:
+  [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
+  and [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity) (`Speaker.cs:22`),
+  [`SpeakerInvariants`](#speakerinvariants), [`Email`](group-02-domain-building-blocks.md#email),
+  [`SpeakerCategoryItem`](#speakercategoryitem), [`SpeakerQuestionAnswer`](#speakerquestionanswer),
+  [`Result`](group-01-result-error-handling.md#result) and
+  [`Error`](group-01-result-error-handling.md#error),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate),
+  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), and the
+  [`SpeakerChanged`](#speakerchanged) / [`SpeakerCategoryItemChanged`](#speakercategoryitemchanged) /
+  [`SpeakerQuestionAnswerChanged`](#speakerquestionanswerchanged) domain events. Aliases
+  `SpeakerIdentifierType` (a `Guid`), `UserIdentifierType`, `CategoryItemIdentifierType`,
+  `SpeakerCategoryItemIdentifierType`, `SpeakerQuestionAnswerIdentifierType`, `QuestionIdentifierType`.
+- **Concept**: the aggregate root pattern (see [`Category`](#category)) plus a **cross-module link field**
+  and **value-object composition**. `[Rubric §7, Microservices Readiness]` and `[Rubric §8, Data
+  Architecture]`: `LinkedUserId` (`Speaker.cs:58`) is a nullable **scalar** FK to `User` in the Identity
+  database. It cannot be an EF navigation, because the two entities live in different databases
+  ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)); the bidirectional link
+  is instead maintained through the integration events
+  [`SpeakerLinkedToUser`](#speakerlinkedtouser) and
+  [`SpeakerUnlinkedFromUser`](#speakerunlinkedfromuser). `[Rubric §11, Security]` and `[Rubric §30,
+  Compliance and Privacy]`: the class implements
+  [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity), and the doc (`Speaker.cs:15-20`)
+  gives the reason: the record carries personal data and the link that grants a person speaker rights over
+  their sessions, so "who linked this account to this speaker" has to be answerable.
+- **Walkthrough**
+  - **Profile scalars** (`Speaker.cs:24-55`) and the computed `FullName => $"{FirstName} {LastName}"`
+    (`:61`), which is a projection, not a stored column.
+  - **Child collections** (`Speaker.cs:63-73`): both `SpeakerCategoryItems` and `SpeakerQuestionAnswers`
+    are private lists exposed read-only and marked `[Navigation(IsCollection = true)]`. (Contrast
+    [`Event`](#event), where the answers collection is deliberately unmarked.)
+  - **`Create`** (`Speaker.cs:112-159`): parses `email` into an
+    [`Email`](group-02-domain-building-blocks.md#email) value object **first** (`:122-129`), so a supplied
+    but malformed email fails before the name checks run and the caller is not handed a partial error
+    list; then `Result.Combine`s the two name invariants. The id assignment (`:153`) is the one that
+    differs from every sibling in this chapter: `Id = id ?? (isIdValueGenerated ? default :
+    Guid.NewGuid())`. The inline comment (`:148-152`) records why: `SpeakerIdentifierType` is a
+    client-assigned `Guid`, and organizer-created speakers and the sample-data seeder both pass `null`, so
+    the factory generates one rather than dereferencing a null `Nullable`. The old `id!.Value` threw
+    "Nullable object must have a value" and killed both Conference's startup seeding and every organizer
+    "create speaker" call.
+  - **`Update`** (`Speaker.cs:183-226`): the same email-first shape, then the name invariants, then eleven
+    scalar writes and `SpeakerChanged(Updated)`. Read the remarks (`:164-170`): the method deliberately
+    does **not** touch `LinkedUserId`, because `LinkUser`/`UnlinkUser` are the only paths that carry the
+    BR-208 uniqueness check and raise the link and unlink events that keep Identity's `User.LinkedSpeakerId`
+    in sync. Writing the link here would silently desynchronize the two sides.
+  - **`Delete`** (`Speaker.cs:239-255`): the BR-70 cross-context cleanup. It captures `LinkedUserId` into a
+    local **before** `base.Delete()` (`:242`), clears the field within the Conference context (`:249`),
+    then raises `SpeakerChanged(Deleted, ..., previousLinkedUserId)` (`:251`) so the downstream handler can
+    clear `User.LinkedSpeakerId` in Identity without a synchronous call back
+    ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)). The doc (`:228-237`)
+    also records a deliberate **non**-cascade: the child associations survive the soft-delete and are not
+    cascaded (BR-70, BR-71), because the Sessionize import reactivates them in place when the speaker
+    returns (BR-135) and no cascade-restore counterpart exists; junction reads follow the parent's
+    visibility (BR-132), so the surviving children are not observable meanwhile. This is the opposite
+    choice from [`Category`](#category) and [`Event`](#event), and it is worth understanding why: cascade
+    is right when children have no independent upstream lifecycle, and wrong when they do.
+  - **`LinkUser`** / **`UnlinkUser`** (`Speaker.cs:260`, `:278`): guard against already-linked and
+    not-linked with `Speaker.AlreadyLinked` / `Speaker.NotLinked` (BR-209), set or clear `LinkedUserId`,
+    and raise `SpeakerChanged(Updated)`.
+  - **Category-item management** (`Speaker.cs:302-389`): `AddSpeakerCategoryItem` (`:302`) runs an
+    in-memory duplicate guard (`:306`) returning `Speaker.CategoryItem.Duplicate` before delegating to the
+    child factory, the same shape as `Event.AddEventSpeaker`; `RestoreSpeakerCategoryItem` (`:340`) is the
+    BR-135 reactivation counterpart; `RemoveSpeakerCategoryItem` (`:370`) soft-deletes.
+  - **Answer management** (`Speaker.cs:400-466`): `AddSpeakerQuestionAnswer` (`:400`),
+    `UpdateSpeakerQuestionAnswer` (`:424`), `RemoveSpeakerQuestionAnswer` (`:447`). As with
+    [`Event`](#event)'s answers, the add carries **no** duplicate guard: a speaker answering the same
+    question twice is not blocked in the domain.
+  - **Populator hooks and helpers** (`Speaker.cs:388`, `:465`, `:469-477`): `SetSpeakerCategoryItems` and
+    `SetSpeakerQuestionAnswers` are `internal` and event-free; the two `Get...OrNotFound` wrappers turn a
+    missing child into an [`Error`](group-01-result-error-handling.md#error).
+- **Why it's built this way**: `LinkedUserId` as a nullable scalar rather than a navigation is the direct
+  consequence of database-per-service
+  ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), and the link is kept
+  consistent through integration events
+  ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) rather than a
+  cross-database FK. Note also what is **not** a field here: speaker locality is modeled as a
+  [`CategoryItem`](#categoryitem) attached through
+  [`SpeakerCategoryItem`](#speakercategoryitem), not as a `Speaker.Location` property, which is why that
+  collection exists rather than a scalar.
+- **Where it's used**: read and projected by the Conference query handlers, mutated by the speaker command
+  handlers (Group 18), and referenced by FK from [`EventSpeaker`](#eventspeaker), the Engagement bookmark
+  entities, and Identity's `User`.
+
+### SpeakerCategoryItem
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerCategoryItem.cs:13` · Level 7 · class (sealed, join entity)
+
+- **What it is**: the join entity linking a [`Speaker`](#speaker) to a [`CategoryItem`](#categoryitem)
+  (`SpeakerCategoryItem.cs:8-10`). It holds `CategoryItemId`, the back-navigation `Speaker?`, and the FK
+  `SpeakerId`. Database-generated id.
+- **Depends on**:
+  [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
+  (`SpeakerCategoryItem.cs:13`), [`Speaker`](#speaker),
+  [`Result`](group-01-result-error-handling.md#result),
+  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute),
+  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute).
+- **Concept**: the explicit join entity taught at [`EventSpeaker`](#eventspeaker), structurally identical
+  apart from which two entities it bridges. `[Rubric §4, Domain-Driven Design]`. This is also the physical
+  representation of how a speaker's topics **and locality** are tracked: rather than a `Speaker.Location`
+  field, locality is a [`CategoryItem`](#categoryitem) attached through this join.
+- **Walkthrough**: `[IdValueGenerated]` (`:12`); `CategoryItemId` (`:16`); `[Navigation] Speaker?` and the
+  get-only `SpeakerId` (`:18-23`); an empty private EF constructor and a one-line field constructor
+  (`:26-28`); `Create` (`:36-48`), a pure FK assignment with no content validation and no domain event
+  ([`Speaker`](#speaker) raises [`SpeakerCategoryItemChanged`](#speakercategoryitemchanged)); and
+  `Reactivate()` (`:56`), the same `Undelete()` delegation as [`EventSpeaker`](#eventspeaker), for the same
+  BR-135 reason (`:50-55`).
+- **Why it's built this way**: modeling locality and topic as category items rather than as scalar speaker
+  columns means the vocabulary is organizer-editable data ([`Category`](#category) rows) instead of a code
+  change, and the explicit join gives each association its own soft-delete and reactivation path.
+- **Where it's used**: loaded through `Speaker.SpeakerCategoryItems`; created, restored, and removed only
+  through [`Speaker`](#speaker)'s `AddSpeakerCategoryItem`, `RestoreSpeakerCategoryItem`, and
+  `RemoveSpeakerCategoryItem`; consumed by the speaker-detail and locality features.
+
+### SpeakerQuestionAnswer
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerQuestionAnswer.cs:13` · Level 7 · class (sealed, child entity)
+
+- **What it is**: the child entity of [`Speaker`](#speaker) holding that speaker's answer to one
+  [`Question`](#question), for example a T-shirt size (`SpeakerQuestionAnswer.cs:8-10`). It holds
+  `QuestionId`, `AnswerValue`, the back-navigation `Speaker?`, and the FK `SpeakerId`. Database-generated
+  id.
+- **Depends on**:
+  [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
+  (`SpeakerQuestionAnswer.cs:13`), [`Speaker`](#speaker), [`SpeakerInvariants`](#speakerinvariants),
+  [`Result`](group-01-result-error-handling.md#result),
+  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute),
+  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute).
+- **Concept**: the child-entity discipline of [`EventQuestionAnswer`](#eventquestionanswer), differing only
+  in its parent and in which invariants class it calls. `[Rubric §4, Domain-Driven Design]`. The two types
+  are worth reading side by side: same `[IdValueGenerated]` marker, same `QuestionId` plus `AnswerValue`
+  pair, same back-navigation shape, same event-free factory and updater.
+- **Walkthrough**: `[IdValueGenerated]` (`:12`); `QuestionId` and `AnswerValue` (`:15-19`);
+  `[Navigation] Speaker?` and the get-only `SpeakerId` (`:21-26`); the EF constructor seeding
+  `AnswerValue = string.Empty` and the private field constructor (`:29-37`); `Create` (`:46-64`) and
+  `UpdateAnswer` (`:71-80`), both validating through `SpeakerInvariants.EnsureAnswerValueIsValid` and
+  neither raising a domain event ([`Speaker`](#speaker) raises
+  [`SpeakerQuestionAnswerChanged`](#speakerquestionanswerchanged)).
+- **Why it's built this way**: the same reasoning as its `Event` twin. Keeping the answer a child of the
+  answering entity puts it inside that aggregate's transaction and gives the root a single place to
+  announce the change.
+- **Caveats / not-in-source**: neither this type nor [`Speaker`](#speaker) checks that `AnswerValue`
+  matches the referenced question's type. `QuestionInvariants.EnsureAnswerValueMatchesQuestionType`
+  (`QuestionInvariants.cs:115`) exists for that, but it is not called from either file, so the BR-124 check
+  must be applied by a caller in the Application tier.
+- **Where it's used**: loaded through `Speaker.SpeakerQuestionAnswers`; created, updated, and removed only
+  through [`Speaker`](#speaker)'s `AddSpeakerQuestionAnswer`, `UpdateSpeakerQuestionAnswer`, and
+  `RemoveSpeakerQuestionAnswer`.
+
+### SponsorInvariants
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sponsors` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/SponsorInvariants.cs:10` · Level 6 · class (static)
+
+- **What it is**: the domain rule set for the [`Sponsor`](#sponsor) aggregate. It holds the seven
+  field-length constants for a sponsor record and three `EnsureXxx` guards that the aggregate calls
+  before it mutates anything.
+- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (Level 5),
+  [`Result`](group-01-result-error-handling.md#result) (Level 2). No BCL or NuGet dependency beyond
+  string interpolation.
+- **Concept**: cross-reference [`CategoryInvariants`](#categoryinvariants) for the invariant-class
+  pattern itself. What this sibling adds is the **shared-constant contract**, called out in the class
+  doc comment on lines 6-9: "Length constants are referenced by both domain validation and EF
+  configuration to keep constraints in sync." `[Rubric §8, Data Architecture]` (assesses whether the
+  storage schema and the domain rules can drift apart): every `HasMaxLength` in
+  [`SponsorConfiguration`](group-19-conference-infrastructure.md#sponsorconfiguration) reads the constant
+  rather than a literal (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SponsorConfiguration.cs:20`,
+  `:30`, `:34`, `:38`, `:42`, `:46`, `:56`), and so does every FluentValidation rule in
+  `SponsorValidationRules` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/Validation/SponsorValidationRules.cs:17-90`).
+  One `const` change moves the domain guard, the API-level validator message, and the column width
+  together. `[Rubric §16, Maintainability]`: the constant is the single definition point, so the three
+  layers cannot disagree about what "too long" means.
+- **Walkthrough**
+  - **Constants** (lines 13-31): `NameMaxLength` 200 (line 13), `LogoUrlMaxLength` 2000 (line 16),
+    `DescriptionMaxLength` 2000 (line 19), `WebsiteUrlMaxLength` 2000 (line 22), `LinkedInUrlMaxLength`
+    2000 (line 25), `TwitterHandleMaxLength` 100 (line 28), `BoothNumberMaxLength` 50 (line 31). The
+    2000-char URL fields match the URL columns used elsewhere in the module; the 100-char handle and
+    50-char booth number are the two deliberately tight ones.
+  - `EnsureNameIsValid(string name, string source)` (lines 39-42): the only *required* field check.
+    A `Result.Combine` of `CommonInvariants.EnsureStringIsNotEmpty` (error code `Sponsor.Name.Empty`)
+    and `CommonInvariants.EnsureStringMaxLength` (`Sponsor.Name.TooLong`). The `source` parameter is
+    the caller's method name, threaded into the error for tracing.
+  - `EnsureLogoUrlIsValid(string? logoUrl, string source)` (lines 51-54): **optional-field shape**.
+    `string.IsNullOrEmpty` short-circuits to `Result.Success()` (lines 52-53), so absence is legal;
+    only a supplied value is length-checked (`Sponsor.LogoUrl.TooLong`). The doc comment on lines
+    44-47 records why nothing else is checked: the value is a plain URL string with no upload
+    pipeline behind it, so only the storage constraint applies.
+  - `EnsureBoothNumberIsValid(string? boothNumber, string source)` (lines 63-66): the same
+    optional-field shape (`Sponsor.BoothNumber.TooLong`). Note the rule the comment on lines 56-58
+    states explicitly: a booth number is accepted even when the sponsor is not flagged
+    `IsExhibitor`. The flag drives display, it does not reject stored data, so there is deliberately
+    **no cross-field invariant** between the two.
+- **Why it's built this way**: keeping lengths as `const int` in the Domain layer lets the outer layers
+  depend inward on them ([Clean Architecture](00-primer.md#the-layered-dependency-flow-clean-architecture)) instead of each layer
+  re-typing a number. Static methods returning [`Result`](group-01-result-error-handling.md#result)
+  keep the aggregate free of exceptions on the validation path.
+- **Where it's used**: [`Sponsor.Create`](#sponsor) (lines 120-122) and `Sponsor.Update` (lines
+  166-168); the constants additionally feed
+  [`SponsorConfiguration`](group-19-conference-infrastructure.md#sponsorconfiguration) and
+  `SponsorValidationRules`. Covered directly by
+  [`SponsorInvariantsTests`](group-27-testing-infrastructure.md#sponsorinvariantstests).
+- **Caveats / not-in-source**: only three of the seven constants have a matching `EnsureXxx` method.
+  `Description`, `WebsiteUrl`, `LinkedInUrl` and `TwitterHandle` lengths are enforced by the
+  application validator and the EF column width, not by a domain guard, so a caller that constructs a
+  `Sponsor` through the domain factory alone (a test, or a future importer) can exceed those four
+  lengths and only fail at `SaveChangesAsync`.
+
+### Sponsor
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sponsors` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/Sponsor.cs:18` · Level 8 · class (sealed)
+
+- **What it is**: the aggregate root for a conference sponsor or exhibitor. A sponsor belongs to
+  exactly one [`Event`](#event), carries a [`SponsorTier`](#sponsortier) that drives its public
+  placement, and optionally staffs an expo booth (class doc comment, lines 12-16).
+- **Depends on**:
+  [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
+  (Level 4), [`SponsorInvariants`](#sponsorinvariants) (Level 6), [`SponsorTier`](#sponsortier)
+  (Level 0), [`Event`](#event) (Level 7, navigation only),
+  [`SponsorChanged`](#sponsorchanged) (Level 3),
   [`Result`](group-01-result-error-handling.md#result) (Level 2),
   [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (Level 0),
   [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute) (Level 0),
-  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute) (Level 0); domain events
-  [`CategoryChanged`](#categorychanged), [`CategoryItemChanged`](#categoryitemchanged) (Level 2-3).
-- **Concept introduced, the aggregate root.** `[Rubric §4, Domain-Driven Design]` (assesses
-  aggregates as the central consistency boundary, all mutations route through the root). An **aggregate
-  root** is the only member of its cluster a repository hands out; callers never hold a bare
-  `CategoryItem`. Two consequences visible here:
-  1. **All child mutations route through the parent.** `AddCategoryItem`, `UpdateCategoryItem`,
-     `RemoveCategoryItem` (lines 131-206) live on `Category`, never on `CategoryItem`; each emits a
-     [`CategoryItemChanged`](#categoryitemchanged) from the root (e.g. line 150) so observers learn the
-     aggregate boundary changed.
-  2. **The private list enforces encapsulation.** `_categoryItems` is `private readonly
-     List<CategoryItem>` (line 27); the public surface is the read-only `CategoryItems` (line 31). EF
-     still materializes the backing field via the private parameterless constructor (line 34).
+  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute) (Level 0). The
+  identifier alias is `SponsorIdentifierType = int`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:20`).
+- **Concept**: the aggregate-root mechanics are taught on [`Category`](#category); this section covers
+  what is different here. `[Rubric §4, Domain-Driven Design]` (assesses whether each aggregate owns a
+  consistency boundary sized to a real transaction): `Sponsor` is a **flat, childless aggregate**. It
+  has no owned collection, so `Delete()` has nothing internal to cascade to, and its whole invariant
+  surface is field validation. That flatness is exactly why it is a separate root instead of a child
+  of [`Event`](#event): sponsors are sold and edited on their own cadence, and loading an event to add
+  one would widen the event's transaction for no benefit.
 
-  `[Rubric §8, Data Architecture]` (cascade soft-delete is orchestrated by the aggregate, not the
-  handler): `Delete()` (lines 102-120) cascade-soft-deletes every active child *in domain code* (BR-71)
-  before raising `CategoryChanged(Deleted)`.
+  `[Rubric §8, Data Architecture]` (assesses identity generation and relational shape): the class
+  carries `[IdValueGenerated]` (line 17), so sponsor IDs come from the database. The doc comment on
+  line 15 gives the reason in one clause: "sponsors are sold, not imported from Sessionize". Every
+  other Conference aggregate has to accept an externally supplied ID because the Sessionize import
+  supplies one; `Sponsor` never does. Relationally it is the many side of a plain FK to `Event`
+  (`SponsorConfiguration.cs:62-65`) with a soft-delete-filtered index on `EventId`
+  (`SponsorConfiguration.cs:67-68`), and `Tier` is persisted through `HasConversion<int>()`
+  (`SponsorConfiguration.cs:25-27`) so the tier ordering is a plain column sort.
 - **Walkthrough**
-  - **Marker** `[IdValueGenerated]` (line 15): Category PKs are DB-generated; Sessionize imports still
-    supply explicit ids via `IDENTITY_INSERT`.
-  - **Fields** (lines 19-31): `Title`, `Sort`, `Type?`, the private list, and `CategoryItems` tagged
-    `[Navigation(IsCollection = true)]` ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html), signals the populator this is a child collection).
-  - **EF ctor** (line 34): parameterless, private, sets `Title = string.Empty` to satisfy the
-    non-nullable field before EF assigns columns.
-  - `Create` (lines 54-75): validate via `CategoryInvariants.EnsureTitleIsValid` then resolve whether
-    the id is DB-generated (`typeof(Category).IsIdValueGenerated`, line 65) then construct with the
-    computed `Id` then `AddDomainEvent(new CategoryChanged(Added, …))`. The canonical *validate then
-    construct then emit* shape.
-  - `AddCategoryItem` (lines 131-153): uniqueness check (BR-138) via
-    `CategoryInvariants.EnsureCategoryItemNameIsUnique` then delegate construction to
-    `CategoryItem.Create` then add to the private list then emit the change event. Callers never `new
-    CategoryItem(...)`.
-  - `SetCategoryItems` (line 210): `internal` hook used only by the navigation populator after a
-    cross-source load; `SetItems(_categoryItems, …)` replaces the in-memory list *without* raising
-    domain events (it is hydration, not a domain mutation).
-- **Why it's built this way**: a single class owning uniqueness, cascade-delete and event emission
-  keeps consistency rules in one place. [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) explains why `SetCategoryItems` exists: when category
-  and items share a database EF `Include()` loads them together; when they could cross databases the
-  populator queries separately and calls `SetCategoryItems`, the aggregate is agnostic to the path.
-- **Where it's used**: loaded by `IReadRepository<Category, …>`, mutated by the Conference category
-  command handlers (Application tier), and projected via `IEntityQueryService` for the category UI.
-
-### CategoryInvariants
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryInvariants.cs:11` · Level 5 · class (static), SCC with `Category`, `CategoryItem`
-
-- **What it is**: invariant rules for [`Category`](#category) and its [`CategoryItem`](#categoryitem)
-  children: title validation, item-name validation, and case-insensitive uniqueness checking (BR-138).
-- **Depends on**: [`CategoryItem`](#categoryitem) (SCC),
-  [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (Level 3),
-  [`Error`](group-01-result-error-handling.md#error) (Level 1),
-  [`Result`](group-01-result-error-handling.md#result) (Level 2).
-- **Concept**: the Invariants-class pattern (see [`EventInvariants`](#eventinvariants)); the
-  distinctive method here is the **collection-aware uniqueness guard**, which the simpler invariant
-  classes lack. `[Rubric §4, DDD]` (the ubiquitous language, "an item name is unique within its
-  category", expressed directly in the domain).
-- **Walkthrough**
-  - `TitleMaxLength` (255) and `CategoryItemNameMaxLength` (500), note these are `static readonly int`
-    here (lines 13, 16) rather than the `const int` used by the other invariant classes; both feed the EF
-    column widths.
-  - `EnsureTitleIsValid` (line 18) / `EnsureCategoryItemNameIsValid` (line 23): `Result.Combine` of
-    non-empty + max-length.
-  - `EnsureCategoryItemNameIsUnique` (lines 36-54): takes the existing item collection and an optional
-    `excludeItemId` (so renaming an item to its own name during an update doesn't self-conflict). It
-    skips `IsDeleted` items (line 43) and compares with `StringComparison.OrdinalIgnoreCase` (line 44),
-    returning `Error.Conflict` on a duplicate.
-- **Why it's built this way**: co-locating invariants per aggregate without bloating the entity; the
-  `Result`-returning style composes with `Result.Combine`, and the uniqueness method takes the
-  collection as a parameter so it stays a *pure* function (no repository, no EF) the aggregate can call
-  in-memory.
-- **Where it's used**: called from [`Category`](#category)'s `Create`/`Update`/`AddCategoryItem`/
-  `UpdateCategoryItem` and [`CategoryItem`](#categoryitem)'s `Create`/`Update`; length constants read by
-  the EF configurations.
-
-### CategoryItem
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryItem.cs:14` · Level 5 · class (sealed), SCC with `Category`, `CategoryInvariants`
-
-- **What it is**: the child entity of [`Category`](#category): a selectable option within a category
-  (e.g. "Beginner" within "Level"). Carries `Name`, `Sort`, the back-navigation `Category?`, and the FK
-  `CategoryId`.
-- **Depends on**,
-  [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
-  (Level 3), [`Category`](#category) (SCC), [`CategoryInvariants`](#categoryinvariants) (SCC),
-  [`Result`](group-01-result-error-handling.md#result) (Level 2),
-  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute) (Level 0),
-  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute) (Level 0).
-- **Concept introduced, child entity vs. aggregate root.** `[Rubric §4, DDD]` (the entity hierarchy
-  *within* an aggregate). A **child entity** has identity (it extends `AuditableBaseEntity<T>`) but is
-  owned by a root and is never fetched directly from a repository, always loaded through its parent.
-  Its `Create` factory (lines 47-65) mirrors the root's *validate then construct* shape but emits **no
-  domain event**, event emission is the root's responsibility.
-- **Walkthrough**
-  - `[Navigation] public Category? Category { get; set; }` (lines 23-24): the back-navigation; `set` is
-    public so EF can wire the navigation after materialization.
-  - `CategoryId` (line 27): the FK, `get`-only, never externally set.
-  - `Create` (lines 47-65): validates the name, resolves `IsIdValueGenerated` (line 57), constructs. No
-    `AddDomainEvent`, [`Category`](#category) raises [`CategoryItemChanged`](#categoryitemchanged).
-  - `Update` (lines 73-85): re-validates and sets `Name`/`Sort`; again no event.
-- **Why it's built this way**: the child stays lean (only its own field constraints) so callers cannot
-  bypass the parent's uniqueness/cascade rules by calling `categoryItem.Update(...)` directly.
-- **Where it's used**: loaded through [`Category`](#category) (EF `Include` or navigation populator);
-  referenced by [`SpeakerCategoryItem`](#speakercategoryitem) as the many-to-many bridge target.
-
-### Question
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Questions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/Question.cs:14` · Level 5 · class (sealed)
-
-- **What it is**: a standalone aggregate root for a survey/feedback question. A question targets an
-  entity type (`QuestionEntity`: "Session"/"Event"/"Speaker"), has an input type (`QuestionType`:
-  "Rating"/"Text"/"Email"), a sort order, an `IsRequired` flag, and a source ("Sessionize"/"User").
-  Unlike the other aggregates here it owns no children, answers live on the answering entity
-  ([`EventQuestionAnswer`](#eventquestionanswer), [`SpeakerQuestionAnswer`](#speakerquestionanswer)).
-- **Depends on**,
-  [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
-  (Level 4), [`QuestionInvariants`](#questioninvariants) (Level 4),
-  [`Result`](group-01-result-error-handling.md#result),
-  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); domain event
-  [`QuestionChanged`](#questionchanged).
-- **Concept**: a "thin" aggregate root: the consistency boundary is just the question record itself.
-  Note it is **not** marked `[IdValueGenerated]` (the class header has no attribute, line 15), Question
-  ids are explicitly assigned (e.g. Sessionize), and `Create` resolves this through the same
-  `typeof(Question).IsIdValueGenerated` check (line 88), which here returns `false` (so the `id!.Value`
-  branch is taken, line 92).
-- **Walkthrough**
-  - `Create` (lines 71-98): four `QuestionInvariants` checks (text, entity, type, source) combined via
-    `Result.Combine` (lines 80-84); construct; emit `QuestionChanged(Added)` (line 95).
-  - `Update` (lines 109-132): re-validates text/entity/type but **drops the `questionSource`
-    parameter**, source is immutable after creation (a business rule encoded by absence).
-  - `Delete` (lines 136-144): emits `QuestionChanged(Deleted)`.
-- **Why it's built this way**: validating against `QuestionInvariants`' closed value-lists (not
-  free-form strings) means the domain rejects an invalid type/entity/source before persistence; making
-  `QuestionSource` non-updatable preserves the provenance distinction (user-created vs. imported).
-- **Where it's used**: referenced (by scalar FK `QuestionId`) from
-  [`EventQuestionAnswer`](#eventquestionanswer) and [`SpeakerQuestionAnswer`](#speakerquestionanswer);
-  fed into the feedback reports (Application/UI tiers).
-
-### Speaker
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:15` · Level 5 · class (sealed), SCC with `SpeakerCategoryItem`, `SpeakerQuestionAnswer`
-
-- **What it is**: the aggregate root for a conference speaker. Carries rich profile data (name, email
-  as an [`Email`](group-02-domain-building-blocks.md#email) value object, bio, tag line, social/URL
-  links, `IsTopSpeaker`), owns [`SpeakerCategoryItem`](#speakercategoryitem) join entities (which
-  category items, topics, locality, describe the speaker) and
-  [`SpeakerQuestionAnswer`](#speakerquestionanswer) children, and holds the cross-module link
-  `LinkedUserId`. IDs are Sessionize-assigned GUIDs.
-- **Depends on**,
-  [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
-  (Level 4), [`SpeakerInvariants`](#speakerinvariants) (Level 4),
-  [`Email`](group-02-domain-building-blocks.md#email) (Level 4),
-  [`SpeakerCategoryItem`](#speakercategoryitem) (SCC), [`SpeakerQuestionAnswer`](#speakerquestionanswer)
-  (SCC), [`Result`](group-01-result-error-handling.md#result), [`Error`](group-01-result-error-handling.md#error),
-  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate),
-  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute); domain event
-  [`SpeakerChanged`](#speakerchanged), [`SpeakerCategoryItemChanged`](#speakercategoryitemchanged),
-  [`SpeakerQuestionAnswerChanged`](#speakerquestionanswerchanged).
-- **Concept**: the aggregate-root pattern (see [`Category`](#category)) plus a **cross-module link
-  field** and **value-object composition**. `[Rubric §7, Microservices Readiness]` and `[Rubric §8,
-  Data Architecture]`: `LinkedUserId` (line 55) is a nullable *scalar* FK to `User` in the Identity
-  database, it cannot be an EF navigation because the two entities live in different databases
-  ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). `Email` is a value object, so an invalid email can never be stored.
-- **Walkthrough**
-  - `FullName` (line 58): a computed `=>` property (`$"{FirstName} {LastName}"`), not stored.
-  - `Create` (lines 110-157): parses `email` into an [`Email`](group-02-domain-building-blocks.md#email)
-    value object *first* (lines 120-127), if email is supplied but invalid the factory fails before the
-    name checks, avoiding a partial error list, then `Result.Combine`s the name invariants. The id
-    assignment (line 151) is **the one that differs from its siblings**:
-    `id ?? (isIdValueGenerated ? default : Guid.NewGuid())`. The inline comment (lines 146-150) records
-    why: `SpeakerIdentifierType` is a client-assigned `Guid`; when no id is supplied (organizer-created
-    speakers and the seeder both pass `null`) it *generates* one rather than dereferencing a null
-    `Nullable`, the old `id!.Value` threw "Nullable object must have a value" and crashed Conference's
-    startup seeding and every organizer "create speaker" call.
-  - `Delete` (lines 229-245): BR-70 cross-context cleanup. It captures `LinkedUserId` into a local
-    *before* `base.Delete()` (line 232), clears `LinkedUserId` within the Conference context (line 239),
-    then emits `SpeakerChanged(Deleted, …, previousLinkedUserId)` (line 241) so the cross-context
-    integration-event handler can clear `User.LinkedSpeakerId` in Identity. The event carries enough
-    data for the handler to act without a synchronous call back ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
-  - `LinkUser`/`UnlinkUser` (lines 250-282): guard against already-linked / not-linked (BR-209), set or
-    clear `LinkedUserId`, and emit `SpeakerChanged(Updated)`.
-  - `AddSpeakerCategoryItem`/`RemoveSpeakerCategoryItem` (lines 292-337) and the
-    `SpeakerQuestionAnswer` management methods (lines 353-414): the same aggregate-manages-child shape.
-    `AddSpeakerCategoryItem` (line 292) **does** run an in-memory duplicate guard
-    (`_speakerCategoryItems.Exists(...)`, lines 296-303), returning
-    `Error.Invariant("Speaker.CategoryItem.Duplicate")` before delegating to the child factory, the same
-    shape as `Event.AddEventSpeaker`. `AddSpeakerQuestionAnswer` (line 353), by contrast, has **no**
-    duplicate guard, a speaker answering the same question twice is not blocked in the domain.
-  - `SetSpeakerCategoryItems`/`SetSpeakerQuestionAnswers` (lines 341, 418): `internal` populator hooks.
-- **Why it's built this way**: `LinkedUserId` as a nullable scalar (not a navigation) is the direct
-  consequence of database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)): the bidirectional User↔Speaker link is maintained
-  through integration events ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) and gRPC, never a cross-database FK. (Per the project memory,
-  speaker locality is modeled as a `CategoryItem`, not a `Speaker.Location` field, hence the
-  `SpeakerCategoryItem` collection rather than a scalar location property.)
-- **Where it's used**: read by `IEntityQueryService`, mutated by the speaker handlers, and referenced
-  (by FK) from [`EventSpeaker`](#eventspeaker), the Engagement bookmark entities, and the Identity
-  `User`.
-
-### SpeakerCategoryItem
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerCategoryItem.cs:13` · Level 5 · class (sealed), SCC with `Speaker`, `SpeakerQuestionAnswer`
-
-- **What it is**: the join entity linking a [`Speaker`](#speaker) to a [`CategoryItem`](#categoryitem).
-  Holds `CategoryItemId` (FK), back-navigation `Speaker?`, and FK `SpeakerId`. DB-generated id.
-- **Depends on**,
-  [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
-  (Level 3), [`Speaker`](#speaker) (SCC), [`Result`](group-01-result-error-handling.md#result),
-  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute),
-  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute).
-- **Concept**: the same explicit-join-entity pattern as [`EventSpeaker`](#eventspeaker). This is the
-  physical representation of how a speaker's topics *and locality* are tracked: rather than a
-  `Speaker.Location` field, locality is a `CategoryItem` (Category 121854 in the project notes) attached
-  via this join. It is `[IdValueGenerated]` (line 12). `Create` (lines 36-48) is a pure FK pair with no
-  content validation and no domain events ([`Speaker`](#speaker) raises
-  [`SpeakerCategoryItemChanged`](#speakercategoryitemchanged)).
-- **Where it's used**: loaded via `Speaker.SpeakerCategoryItems`; consumed by speaker-detail and
-  locality-report features.
-
-### SpeakerQuestionAnswer
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerQuestionAnswer.cs:13` · Level 5 · class (sealed), SCC with `Speaker`, `SpeakerCategoryItem`
-
-- **What it is**: the child entity of [`Speaker`](#speaker) holding an answer to a
-  [`Question`](#question) for the speaker (e.g. "T-shirt size?"). Holds `QuestionId` (FK), `AnswerValue`,
-  back-navigation `Speaker?`, and FK `SpeakerId`. DB-generated id.
-- **Depends on**,
-  [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
-  (Level 3), [`Speaker`](#speaker) (SCC), [`SpeakerInvariants`](#speakerinvariants) (Level 4),
-  [`Result`](group-01-result-error-handling.md#result),
-  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute),
-  [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute).
-- **Concept**: the child-entity discipline of [`EventQuestionAnswer`](#eventquestionanswer), differing
-  only in parent and the invariant class used. `Create` (lines 46-64) and `UpdateAnswer` (lines 71-80)
-  validate via `SpeakerInvariants.EnsureAnswerValueIsValid`; no domain events ([`Speaker`](#speaker)
-  raises [`SpeakerQuestionAnswerChanged`](#speakerquestionanswerchanged)).
-- **Where it's used**: loaded via `Speaker.SpeakerQuestionAnswers`; shown on speaker feedback UIs.
+  - **Scalar state** (lines 21-58), every setter `private set` so mutation can only happen through
+    `Update`: `Name` (21), `Tier` (24), `LogoUrl` (27), `Description` (30), `WebsiteUrl` (33),
+    `LinkedInUrl` (36), `TwitterHandle` (39), `Sort` (42, the display order **within** the tier),
+    `EventId` (45), `IsExhibitor` (52), `BoothNumber` (58).
+  - **Navigation** (lines 48-49): `[Navigation] public Event? Event { get; set; }`. This is the one
+    property with a public setter, because a navigation populator assigns it after a cross-source load
+    ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)); it is not part of
+    the aggregate's own invariants.
+  - **EF constructor** (line 61): private, parameterless, and it assigns `Name = string.Empty` so the
+    non-nullable field is definitely assigned before EF writes the columns.
+  - **Private constructor** (lines 63-87): takes all eleven values and assigns them. Being private,
+    it can only be reached through the factory, which guarantees validation ran first.
+  - `Create(...)` (lines 105-136): the canonical *validate then resolve identity then construct then
+    emit* shape.
+    1. `Result.Combine` of the three guards (lines 119-122), returning
+       `Result.Failure<Sponsor>(result.Errors)` on any failure (lines 123-124) so **all** validation
+       errors surface at once rather than the first one.
+    2. `typeof(Sponsor).IsIdValueGenerated` (line 126) reads the `[IdValueGenerated]` marker by
+       reflection (`MMCA.Common/Source/Core/MMCA.Common.Domain/Extensions/EntityTypeExtensions.cs:19`).
+    3. Construction with `Id = isIdValueGenerated ? default : id!.Value` (line 130): the caller may
+       pass an explicit ID, but with the marker present it is ignored and the database assigns one.
+    4. `AddDomainEvent(new SponsorChanged(DomainEntityState.Added, sponsor.Id, sponsor.Name))`
+       (line 133). Note the ID captured here is `default` under DB-generated identity, since the row
+       does not exist yet.
+  - `Update(...)` (lines 153-186): re-runs the same three guards (lines 165-168), returns the combined
+    failure unchanged (lines 169-170), then assigns the ten mutable fields (lines 172-181) and emits
+    `SponsorChanged(Updated, ...)` (line 183). **`EventId` is absent from the parameter list on
+    purpose**: the doc comment on line 140 states that moving a sponsor between events is a create
+    plus a delete, not an update, so the owning-event relationship is immutable for the lifetime of
+    the row.
+  - `Delete()` (lines 190-198): overrides the base soft-delete, calls `base.Delete()` first (line 192),
+    and only raises `SponsorChanged(Deleted, ...)` when that succeeded (lines 194-195). No child
+    cascade, because there are no children.
+- **Why it's built this way**: `[Rubric §6, CQRS and Event-Driven]` (assesses whether state changes
+  announce themselves): all three lifecycle transitions raise the same
+  [`SponsorChanged`](#sponsorchanged) record differing only by
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate), so a single handler can
+  invalidate the sponsor output cache for any change. Soft delete rather than row removal follows
+  [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html); the aggregate never
+  hard-deletes itself.
+- **Where it's used**: created and edited by
+  [`CreateSponsorHandler`](group-18-conference-application.md#createsponsorhandler) and
+  [`UpdateSponsorHandler`](group-18-conference-application.md#updatesponsorhandler); cascade-deleted by
+  [`EventCascadeDeletionDomainService`](#eventcascadedeletiondomainservice); projected to
+  [`SponsorDTO`](#sponsordto) by
+  [`SponsorDTOMapper`](group-18-conference-application.md#sponsordtomapper); exposed over REST by
+  [`SponsorsController`](group-20-conference-api-grpc.md#sponsorscontroller); mapped by
+  [`SponsorConfiguration`](group-19-conference-infrastructure.md#sponsorconfiguration). Unit-tested by
+  [`SponsorTests`](group-27-testing-infrastructure.md#sponsortests).
+- **Caveats / not-in-source**: the `Event` navigation's doc comment (line 47) describes it as being
+  there "for public visibility filtering", but the public sponsor filter does **not** join through it:
+  [`GetPublicSponsorFilterHandler`](group-18-conference-application.md#getpublicsponsorfilterhandler)
+  resolves published event IDs first and returns an `EventId IN (...)` criteria instead
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/UseCases/GetPublicSponsorFilter/GetPublicSponsorFilterHandler.cs:29-30`),
+  which its own doc comment (lines 13-14) justifies as keeping the criteria translatable on any engine.
+  Treat the navigation as available for populators and detail screens, not as the visibility path.
 
 ### IEventCascadeDeletionDomainService
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Services` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/IEventCascadeDeletionDomainService.cs:12` · Level 7 · interface
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Services` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/IEventCascadeDeletionDomainService.cs:13` · Level 9 · interface
 
-- **What it is**: a pure domain-service interface that coordinates the cascade soft-delete of an
-  [`Event`](#event) together with all of its [`Session`](#session)s (BR-127). Sessions are *separate*
-  aggregates from `Event`, so they cannot be reached through `Event.Delete()` alone.
-- **Depends on**: [`Event`](#event), [`Session`](#session) (domain aggregates),
-  [`Result`](group-01-result-error-handling.md#result).
-- **Concept introduced, domain services for cross-aggregate coordination.** `[Rubric §4, DDD]`
-  (assesses domain services for logic that belongs to no single aggregate) and `[Rubric §3, Clean
-  Architecture]` (domain services live in the Domain layer with no infrastructure dependency). When a
-  business operation spans two or more aggregate boundaries it belongs in a **domain service**, not in
-  either aggregate. Deleting an event must also soft-delete its sessions (BR-127, BR-55), but
-  [`Event`](#event) and [`Session`](#session) have separate identity and lifecycle. The service receives
-  *pre-fetched* aggregates (loaded by the handler from the repository) and orchestrates the deletion
-  purely in memory, no DB access, no repository calls. The interface lives in the Domain layer; the
-  concrete [`EventCascadeDeletionDomainService`](#eventcascadedeletiondomainservice) lives **alongside
-  it in the same namespace** (Domain), not in Infrastructure.
-- **Walkthrough**: one method:
-  `Result CascadeDelete(Event @event, IReadOnlyCollection<Session> sessions)` (line 21). The handler
-  loads the event and its active sessions (with children), then calls
-  `service.CascadeDelete(event, sessions)`.
-- **Why it's built this way**: putting cascade logic in a domain service keeps the handler thin (fetch
-  then service then save), keeps the domain expressive (cascade deletion is a named business concept),
-  and keeps the domain infrastructure-free (it receives entities, not repositories). `[Rubric §14,
-  Testability]`: trivially unit-testable, pass domain objects, assert `IsDeleted` and domain events
-  without touching EF.
-- **Where it's used**: consumed by
-  [`DeleteEventHandler`](group-18-conference-application.md#deleteeventhandler) (Application tier), which
-  resolves the abstraction from DI.
-- **Caveats / not-in-source**: the prior tier guide described the implementation as living in
-  `MMCA.ADC.Conference.Infrastructure`; the source places both interface and implementation in
-  `MMCA.ADC.Conference.Domain.Services` (the implementation is a pure domain service with no
-  infrastructure dependency).
+- **What it is**: a pure domain-service abstraction that coordinates the cascade soft-delete of an
+  [`Event`](#event) together with its [`Session`](#session)s (BR-127) and its
+  [`Sponsor`](#sponsor)s. Sessions and sponsors are *separate* aggregates from `Event`, so
+  `Event.Delete()` alone cannot reach them.
+- **Depends on**: [`Event`](#event) (Level 7), [`Session`](#session) (Level 8),
+  [`Sponsor`](#sponsor) (Level 8), [`Result`](group-01-result-error-handling.md#result) (Level 2).
+  Nothing else: no repository, no `DbContext`, no logger.
+- **Concept introduced, domain services for cross-aggregate coordination.** `[Rubric §4,
+  Domain-Driven Design]` (assesses whether logic belonging to no single aggregate gets a named home
+  instead of leaking into a handler) and `[Rubric §3, Clean Architecture]` (assesses whether the Domain
+  layer stays free of outward dependencies). When a business operation spans two or more aggregate
+  boundaries it belongs in a **domain service**. Deleting an event must also soft-delete its sessions
+  (BR-127, BR-55) and its sponsors, but all three have separate identity and lifecycle, so no one of
+  them can own the rule. The interface takes **pre-fetched aggregates** (the doc comment on lines
+  10-11 says so: "Operates on pre-fetched aggregates with no infrastructure dependencies"), which is
+  what keeps the abstraction in the Domain layer: loading is the caller's job, orchestration is this
+  type's job. Both the interface and its implementation live in
+  `MMCA.ADC.Conference.Domain.Services`, not in Infrastructure, because neither needs anything the
+  Domain layer cannot reference.
+- **Walkthrough**: one member,
+  `Result CascadeDelete(Event @event, IReadOnlyCollection<Session> sessions, IReadOnlyCollection<Sponsor> sponsors)`
+  (line 25). The parameter types are read-only collections, which states that the service will mutate
+  the *entities* but never the collections. The contract documented on lines 15-19 is the important
+  part: the first session or sponsor that fails to delete aborts the cascade, so the event is not
+  deleted when any child aggregate delete fails, and the returned `Result` is either that failing
+  child result or the result of the event deletion.
+- **Why it's built this way**: an interface here buys two things. `[Rubric §14, Testability]`: the
+  concrete service can be unit-tested with plain domain objects, and
+  [`DeleteEventHandler`](group-18-conference-application.md#deleteeventhandler) can be tested against
+  a stub without constructing a real cascade. `[Rubric §1, SOLID]`: the handler depends on the
+  abstraction and stays a thin fetch then coordinate then persist slice, so adding a fourth
+  cascade target changes this contract and its one implementation rather than the handler's control
+  flow.
+- **Where it's used**: injected into
+  [`DeleteEventHandler`](group-18-conference-application.md#deleteeventhandler)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/Delete/DeleteEventHandler.cs:19`)
+  and invoked at line 54 of that file. Registered as a singleton in the Conference Application DI:
+  `services.TryAddSingleton<IEventCascadeDeletionDomainService, EventCascadeDeletionDomainService>()`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:44`,
+  under the `Domain services` banner comment on line 43).
 
 ### EventCascadeDeletionDomainService
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Services` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/EventCascadeDeletionDomainService.cs:13` · Level 8 · class (sealed)
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Services` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/EventCascadeDeletionDomainService.cs:14` · Level 10 · class (sealed)
 
-- **What it is**: the concrete implementation of
-  [`IEventCascadeDeletionDomainService`](#ieventcascadedeletiondomainservice): a stateless, pure domain
-  service that cascade-soft-deletes an event's [`Session`](#session)s and then the [`Event`](#event)
-  itself.
-- **Depends on**: [`IEventCascadeDeletionDomainService`](#ieventcascadedeletiondomainservice),
-  [`Event`](#event), [`Session`](#session), [`Result`](group-01-result-error-handling.md#result).
+- **What it is**: the one implementation of
+  [`IEventCascadeDeletionDomainService`](#ieventcascadedeletiondomainservice). A stateless class that
+  soft-deletes an event's [`Session`](#session)s, then its [`Sponsor`](#sponsor)s, then the
+  [`Event`](#event) itself.
+- **Depends on**: [`IEventCascadeDeletionDomainService`](#ieventcascadedeletiondomainservice)
+  (Level 9), [`Event`](#event), [`Session`](#session), [`Sponsor`](#sponsor),
+  [`Result`](group-01-result-error-handling.md#result). Its four `using` directives (lines 1-4) are the
+  whole dependency list, and none of them is an infrastructure namespace.
 - **Concept**: see [`IEventCascadeDeletionDomainService`](#ieventcascadedeletiondomainservice) for the
   domain-service rationale. This class is the smallest possible realization of it: no fields, no
-  constructor, one method, no infrastructure references, the class doc comment (lines 7-10) states it
-  explicitly ("Pure domain service -- no infrastructure dependencies"). Because it is stateless it is
-  registered as a singleton in the Conference Application DI via
-  `services.TryAddSingleton<IEventCascadeDeletionDomainService, EventCascadeDeletionDomainService>()`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:43`).
-- **Walkthrough**: `CascadeDelete(Event @event, IReadOnlyCollection<Session> sessions)` (line 14):
-  1. **Sessions first** (lines 17-20): `foreach` session call `session.Delete()` (BR-127; each session
-     in turn cascades to its own children per BR-55). Note the per-session `Result` is *not* inspected
-     here, the loop fires every delete unconditionally.
-  2. **Then the event** (line 23): `return @event.Delete()`, which itself cascades to the event's owned
-     children (rooms, event speakers, event question answers) per BR-72, and that `Result` is returned.
-  Each `Delete()` also queues the corresponding domain events on its aggregate, which the unit of work
-  dispatches after `SaveChangesAsync`.
-- **Why it's built this way**: keeping the orchestration in a tiny pure class makes the multi-aggregate
-  delete a single named, unit-testable unit while leaving each aggregate responsible for its own
-  internal cascade. The handler stays a thin fetch then coordinate then persist slice.
-- **Where it's used**: resolved (via the interface) and invoked by
-  [`DeleteEventHandler`](group-18-conference-application.md#deleteeventhandler) after it loads the event
-  and its active sessions; the `Result` it returns becomes the handler's outcome.
-- **Caveats / not-in-source**: the method returns only the event's `Delete()` result, a failure inside
-  an individual `session.Delete()` is not surfaced as the method's return value (each `session.Delete()`
-  is a soft-delete of an `AuditableBaseEntity`, which in the current base implementation does not fail
-  under normal conditions).
+  constructor, one method. The class doc comment states the property that makes it safe to register as
+  a singleton, "Pure domain service -- no infrastructure dependencies" (line 10), and being stateless
+  it is thread-safe by construction.
+- **Walkthrough**: `CascadeDelete(Event @event, IReadOnlyCollection<Session> sessions, IReadOnlyCollection<Sponsor> sponsors)`
+  (line 17) runs three phases in a fixed order:
+  1. **Sessions first** (lines 22-27): `foreach` session, call `session.Delete()` (BR-127; each
+     session in turn cascades to its own children per BR-55, per the inline comment on line 24). The
+     per-session `Result` **is** inspected: `if (sessionResult.IsFailure) return sessionResult;`
+     (lines 25-26) exits immediately with that child's error.
+  2. **Then sponsors** (lines 31-36): the identical shape over `sponsor.Delete()`, with the same
+     short-circuit (lines 34-35). The comment on lines 29-30 records the intent: a sponsor that
+     refuses to delete leaves the event untouched.
+  3. **Then the event** (line 39): `return @event.Delete()`, which itself cascades to the event's
+     owned children (rooms, event speakers, event question answers) per BR-72, and that `Result`
+     becomes the method's return value.
+
+  Each `Delete()` also queues its aggregate's domain event
+  ([`SponsorChanged(Deleted)`](#sponsorchanged) for a sponsor, and the equivalent for sessions and the
+  event), which the unit of work dispatches after `SaveChangesAsync`.
+- **Why it's built this way**: `[Rubric §8, Data Architecture]` (assesses whether a multi-entity write
+  can leave the store half-changed): the short-circuit plus the caller's save discipline is the whole
+  consistency story. The service aborts in memory, and
+  [`DeleteEventHandler`](group-18-conference-application.md#deleteeventhandler) calls
+  `SaveChangesAsync` **only** when the returned `Result` is a success
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/Delete/DeleteEventHandler.cs:55-57`),
+  so the already-applied `IsDeleted` flags on the earlier aggregates are discarded with the scoped
+  `DbContext` instead of being persisted. The inline comment on lines 19-21 spells that contract out,
+  which matters: the safety depends on the *caller*, so a future consumer that saves unconditionally
+  would persist a half-deleted graph. `[Rubric §14, Testability]`: with no infrastructure to stub, the
+  whole behavior is exercised by passing domain objects and asserting `IsDeleted` and the queued
+  domain events.
+- **Where it's used**: resolved through the interface by
+  [`DeleteEventHandler`](group-18-conference-application.md#deleteeventhandler), which loads the event
+  with its owned children (line 30 of that file), its active sessions with their children (lines
+  37-42) and its active sponsors (lines 46-51), all `asTracking: true`, before calling
+  `CascadeDelete` (line 54). Unit-tested by
+  [`EventCascadeDeletionDomainServiceTests`](group-27-testing-infrastructure.md#eventcascadedeletiondomainservicetests).
+- **Caveats / not-in-source**: the ordering (sessions, then sponsors, then event) is fixed by the
+  method body and is not configurable; nothing in the source explains why sessions precede sponsors,
+  and since both are short-circuiting the choice only affects which error a caller sees when both
+  would fail.
 
 
 ---

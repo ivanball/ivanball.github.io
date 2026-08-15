@@ -2,7 +2,7 @@
 
 **What this chapter covers.** This is the **adapter** layer of the Conference module, the place where
 the engine-agnostic domain meets concrete technology. Three concerns live here: (1) **persistence
-mapping**, the 15 EF Core entity configurations that turn plain domain classes into SQL Server tables,
+mapping**, the 16 EF Core entity configurations that turn plain domain classes into SQL Server tables,
 the abstract `DbContext` that declares the module's `DbSet`s, and the seeder that puts the real
 conference events and feedback questions into a fresh database; (2) **outbound integration and
 background work**, the HTTP clients that talk to **Sessionize** (the conference's session-submission
@@ -23,109 +23,161 @@ Anthropic concern is quarantined in Infrastructure, so the domain entities in
 The most important idea in this chapter is one the entities themselves never express: **what storage
 engine each entity uses is decided here, not in the domain.** A Conference domain entity,
 [`Session`](group-17-conference-domain.md#session), [`Speaker`](group-17-conference-domain.md#speaker),
-[`Event`](group-17-conference-domain.md#event), the join entities, is a plain class. The *only* thing
-that binds it to SQL Server is which base class its configuration inherits from. All 15 configs in this
-group ([`SessionConfiguration`](#sessionconfiguration), [`SpeakerConfiguration`](#speakerconfiguration),
-[`EventConfiguration`](#eventconfiguration), and the rest) derive from
+[`Event`](group-17-conference-domain.md#event), [`Sponsor`](group-17-conference-domain.md#sponsor), the
+join entities, is a plain class. The *only* thing that binds it to SQL Server is which base class its
+configuration inherits from. All 16 configs in this group
+([`SessionConfiguration`](#sessionconfiguration), [`SpeakerConfiguration`](#speakerconfiguration),
+[`EventConfiguration`](#eventconfiguration), [`SponsorConfiguration`](#sponsorconfiguration), and the
+rest) derive from
 [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype)
-(for example `MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionConfiguration.cs:12`),
+(for example `MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionConfiguration.cs:12-13`),
 which is a thin shim carrying `[UseDataSource(DataSource.SQLServer)]`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfigurationSQLServer.cs:16`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfigurationSQLServer.cs:16-17`)
 over the engine-neutral
 [`EntityTypeConfiguration<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationtentity-tidentifiertype).
 That attribute is what [`EntityDataSourceRegistry`](group-07-persistence-ef-core.md#entitydatasourceregistry)
 reads to decide which physical database an entity belongs to. Swapping just that one base class would
 re-point the same `Session` to Cosmos or SQLite with zero change to the domain, the application
 handlers, or the entity: this is the per-entity half of the **database-per-service** strategy
-([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html), [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)). `[Rubric §8, Data Architecture]` (deliberate persistence: transactions, migrations,
-soft-delete, audit, concurrency) is the dominant lens for the whole persistence half of this chapter.
+([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html),
+[ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)). `[Rubric §8, Data
+Architecture]` (deliberate persistence: transactions, migrations, soft-delete, audit, concurrency) is
+the dominant lens for the whole persistence half of this chapter.
 
 ## Each config inherits the cross-cutting behavior, then adds entity specifics
 
 Every configuration's `Configure` method begins with `base.Configure(builder)` (for example
-`SessionConfiguration.cs:17`) and *then* adds its own mappings. That one `base` call is where the
+`SessionConfiguration.cs:18`) and *then* adds its own mappings. That one `base` call is where the
 framework injects the conventions applied uniformly: the strongly-typed key, the table name and module
 schema, and the concurrency token, none of which any individual config re-states. The per-entity bodies
 then declare what is unique: column lengths sourced from the domain's invariant constants
-(`SessionInvariants.TitleMaxLength` at `SessionConfiguration.cs:20`, `EventInvariants.NameMaxLength` at
-`EventConfiguration.cs:20`), required and optional flags, computed properties excluded with
-`builder.Ignore(...)` (`Session.Duration` at `SessionConfiguration.cs:66`, `Speaker.FullName` at
-`SpeakerConfiguration.cs:70`), value-object conversions (`Speaker.Email` round-trips through
-`Email.Create` at `SpeakerConfiguration.cs:42-47`), decimal precision (`HasPrecision(3, 1)` on all seven
-AI sub-scores, `SessionAiScoreConfiguration.cs:22-48`), and **filtered indexes**. The filters come in
-two flavors and both matter. Soft-delete filters scope uniqueness to live rows, so a soft-deleted link
-does not block a re-insert: `HasFilter("[IsDeleted] = 0")` appears on the unique (SessionId, SpeakerId)
-pair (`SessionSpeakerConfiguration.cs:30-32`), on the one-score-per-session index
-(`SessionAiScoreConfiguration.cs:59-61`), on the EventSpeaker, SessionCategoryItem, and
-SpeakerCategoryItem pairs, and on the non-unique lookup indexes for `Session.EventId`
-(`SessionConfiguration.cs:76-77`) and `EventQuestionAnswer.EventId`. Sparse filters skip nulls:
-`Speaker.LinkedUserId` is unique only where it is set (`SpeakerConfiguration.cs:65-67`, the
+(`SessionInvariants.TitleMaxLength` at `SessionConfiguration.cs:20-22`, `EventInvariants.NameMaxLength`
+at `EventConfiguration.cs:19-21`, `SponsorInvariants.NameMaxLength` at `SponsorConfiguration.cs:19-21`),
+required and optional flags, computed properties excluded with `builder.Ignore(...)` (`Session.Duration`
+at `SessionConfiguration.cs:67`, `Speaker.FullName` at `SpeakerConfiguration.cs:68`), value conversions
+(`Speaker.Email` round-trips through
+[`NullableEmailValueConverter`](group-07-persistence-ef-core.md#nullableemailvalueconverter) at
+`SpeakerConfiguration.cs:42-45`, and `Sponsor.Tier` is stored as its underlying `int` with
+`HasConversion<int>()` so tier ordering is a plain column sort and adding a package later does not
+rewrite existing rows, `SponsorConfiguration.cs:23-27`), and decimal precision (`HasPrecision(3, 1)` on
+all seven AI sub-scores, `SessionAiScoreConfiguration.cs:22-48`, next to a 4000-character `Reasoning`
+and a 100-character `ModelUsed`, `SessionAiScoreConfiguration.cs:50-56`).
+
+**Filtered indexes** are where the soft-delete convention becomes visible, and the split is worth
+learning because it is easy to misread. Unique indexes on a soft-deletable entity get the
+`IsDeleted = 0` predicate **automatically**, applied by
+[`SoftDeleteUniqueIndexConvention`](group-07-persistence-ef-core.md#softdeleteuniqueindexconvention)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:43-51`),
+so a soft-deleted link never blocks a re-insert;
+[`CategoryItemConfiguration`](#categoryitemconfiguration) relies on exactly that and declares its unique
+(CategoryId, Name) index with no filter call at all (`CategoryItemConfiguration.cs:30-31`). A
+hand-authored **non-unique** index is deliberately left alone by the convention and opts in explicitly
+through
+[`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions)`.HasSoftDeleteFilter()`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/IndexBuilderExtensions.cs:19-30`),
+which replaces the old literal `HasFilter("[IsDeleted] = 0")` by reading the column name from the model
+and the quoting from the engine. Three lookup indexes here take that opt-in: `Session.EventId`
+(`SessionConfiguration.cs:77-78`), `Sponsor.EventId` (`SponsorConfiguration.cs:67-68`), and
+`EventQuestionAnswer.EventId` (`EventQuestionAnswerConfiguration.cs:35-36`). Several unique indexes also
+call it explicitly for readability even though the convention would supply it:
+[`SessionSpeakerConfiguration`](#sessionspeakerconfiguration)'s (SessionId, SpeakerId) pair
+(`SessionSpeakerConfiguration.cs:30-32`), the one-score-per-session index on
+[`SessionAiScoreConfiguration`](#sessionaiscoreconfiguration) (`SessionAiScoreConfiguration.cs:59-61`),
+the equivalent pairs on [`EventSpeakerConfiguration`](#eventspeakerconfiguration)
+(`EventSpeakerConfiguration.cs:30-32`),
+[`SessionCategoryItemConfiguration`](#sessioncategoryitemconfiguration)
+(`SessionCategoryItemConfiguration.cs:30-32`) and
+[`SpeakerCategoryItemConfiguration`](#speakercategoryitemconfiguration)
+(`SpeakerCategoryItemConfiguration.cs:30-32`), the per-event room name on
+[`RoomConfiguration`](#roomconfiguration) (`RoomConfiguration.cs:52-54`), and the one-answer-per-user
+(entity, question, creator) triples on
+[`SessionQuestionAnswerConfiguration`](#sessionquestionanswerconfiguration)
+(`SessionQuestionAnswerConfiguration.cs:43-45`) and
+[`EventQuestionAnswerConfiguration`](#eventquestionanswerconfiguration)
+(`EventQuestionAnswerConfiguration.cs:42-44`). Two configs declare no index at all and map columns only,
+[`QuestionConfiguration`](#questionconfiguration) (`QuestionConfiguration.cs:10`) and
+[`SpeakerQuestionAnswerConfiguration`](#speakerquestionanswerconfiguration)
+(`SpeakerQuestionAnswerConfiguration.cs:10`). **Sparse** filters are a different thing again and stay
+literal, because they filter on a nullable business column rather than on soft-delete:
+`Speaker.LinkedUserId` is unique only where it is set (`SpeakerConfiguration.cs:63-65`, the
 User-to-Speaker link), and `Event.SessionizeCode` is indexed only where present
 (`EventConfiguration.cs:41-42`). Two further quirks are worth knowing:
 [`ConferenceCategoryConfiguration`](#conferencecategoryconfiguration) calls
 `ToTable("Category", "Conference")` explicitly (`ConferenceCategoryConfiguration.cs:24`) so the
 Conference `Category` table cannot collide with another module's `Category`, and
 [`SessionConfiguration`](#sessionconfiguration) maps the Session-to-Room relationship with
-`OnDelete(DeleteBehavior.Restrict)` (`SessionConfiguration.cs:86`) so deleting a room can never cascade
-sessions away.
+`OnDelete(DeleteBehavior.Restrict)` (`SessionConfiguration.cs:83-87`) so deleting a room can never
+cascade sessions away.
 
 ## DbSets, the context shape, and how the configurations are actually found
 
 [`ModuleApplicationDbContext`](#moduleapplicationdbcontext)
-(`MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:18`) is the
-Conference module's abstract `DbContext`. It does one job: declare 13 `internal DbSet<T>` properties
+(`MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:19`) is the
+Conference module's abstract `DbContext`. It does one job: declare 14 `internal DbSet<T>` properties
 (`Events`, `Rooms`, `EventSpeakers`, `EventQuestionAnswers`, `Sessions`, `SessionSpeakers`,
 `SessionQuestionAnswers`, `SessionCategoryItems`, `Speakers`, `SpeakerCategoryItems`, `Categories`,
-`CategoryItems`, `Questions`, at `ModuleApplicationDbContext.cs:26-62`). It is **abstract** and inherits
-from the Common [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext), from
-which it gets the real machinery: the `SaveChangesAsync` override that stamps audit fields, captures
-domain events into the outbox, and the global soft-delete query filters applied to every
-`IAuditableEntity`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:243-257`).
-The concrete class EF actually instantiates is the single
-[`SQLServerDbContext`](group-07-persistence-ef-core.md#sqlserverdbcontext) in the Common framework:
-**one concrete context class per engine, one instance per database** ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). The codebase
-deliberately does not split into per-module context classes.
+`CategoryItems`, `Questions`, `Sponsors`, at `ModuleApplicationDbContext.cs:27-66`). It is **abstract**
+and inherits from the Common
+[`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) through its primary
+constructor (`ModuleApplicationDbContext.cs:19-24`), from which it gets the real machinery: the
+`SaveChangesAsync` override that stamps audit fields and captures domain events into the outbox, and the
+global soft-delete query filters applied to every auditable entity. The concrete class EF actually
+instantiates is the single [`SQLServerDbContext`](group-07-persistence-ef-core.md#sqlserverdbcontext) in
+the Common framework: **one concrete context class per engine, one instance per database**
+([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). The codebase deliberately
+does not split into per-module context classes.
 
 A detail that surprises most readers: a `DbSet` is *not* what puts an entity in the model. The base
 context walks the registered configuration assemblies and applies every
 `IEntityTypeConfigurationSQLServer<,>` implementation whose entity resolves to this context's data
-source key (`ApplicationDbContext.cs:351-377`). That is why two entities with a configuration here,
-`SessionAiScore` and `SpeakerQuestionAnswer`, are mapped and queryable through the repository layer even
-though `ModuleApplicationDbContext` declares no `DbSet` for either: 15 configurations, 13 `DbSet`s, and
-the configurations win. `[Rubric §7, Microservices Readiness]` (can a module become its own service
-without a rewrite?) is embodied here: the Conference module already runs as `MMCA.ADC.Conference.Service`
-over its own `ADC_Conference` database with its own `dbo.OutboxMessages`, and cross-module references
-(a speaker's linked user, a bookmark's session) are scalar columns resolved via gRPC and integration
-events, never cross-database foreign keys.
+source key
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:610-636`,
+with the engine-to-interface switch at `:612-618` and the registry filter at `:625-635`). That is why two
+entities with a configuration here, [`SessionAiScore`](group-17-conference-domain.md#sessionaiscore) and
+[`SpeakerQuestionAnswer`](group-17-conference-domain.md#speakerquestionanswer), are mapped and queryable
+through the repository layer even though `ModuleApplicationDbContext` declares no `DbSet` for either:
+16 configurations, 14 `DbSet`s, and the configurations win. `[Rubric §7, Microservices Readiness]` (can a
+module become its own service without a rewrite?) is embodied here: the Conference module already runs as
+`MMCA.ADC.Conference.Service` over its own `ADC_Conference` database with its own `dbo.OutboxMessages`,
+and cross-module references (a speaker's linked user, a bookmark's session) are scalar columns resolved
+via gRPC and integration events, never cross-database foreign keys.
 
 ## Seeding: two real events always, sample data only in dev and CI
 
 [`ConferenceModuleDbSeeder`](#conferencemoduledbseeder)
-(`MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:22`)
-derives from the framework's [`DbSeeder`](group-07-persistence-ef-core.md#dbseeder) and runs after
-schema initialization, constructed by `ConferenceModuleSeeder` in the API layer
-(`MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:28`). It is idempotent: every step first issues an
-`ExistsAsync` check through the repository and returns early if the row is present, which is what makes
-it safe to run on every startup under the production `Migrate` init strategy ([ADR-030](https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html)). It **always**
-seeds three things (`ConferenceModuleDbSeeder.cs:35-37`): the **2026 Atlanta Cloud + AI Conference**
-(2026-05-30, `America/New_York`, Sessionize code `z1ecmzux`, `ConferenceModuleDbSeeder.cs:59-69`), the
-**2026 Atlanta Developers Conference** (2026-10-17, no Sessionize code,
-`ConferenceModuleDbSeeder.cs:91-101`), both published immediately after creation, and the fixed set of
-**10 feedback questions** (5 session ratings plus a session comment, 3 conference ratings plus a
-conference comment, `ConferenceModuleDbSeeder.cs:123-135`) whose ids start at
+(`MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:24`)
+derives from the framework's [`DbSeeder`](group-07-persistence-ef-core.md#dbseeder) and runs after schema
+initialization, constructed by [`ConferenceModuleSeeder`](group-20-conference-api-grpc.md#conferencemoduleseeder)
+in the API layer (`MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:28`). It is idempotent: every step
+first issues an `ExistsAsync` check through the repository and returns early if the row is present
+(`ConferenceModuleDbSeeder.cs:64-69`, `:98-103`, `:132-137`), which is what makes it safe to run on every
+startup under the production `Migrate` init strategy
+([ADR-030](https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html)). It **always** seeds three
+things (`ConferenceModuleDbSeeder.cs:46-48`): the **2026 Atlanta Cloud + AI Conference** (2026-05-30,
+`America/New_York`, Sessionize code `z1ecmzux`, `ConferenceModuleDbSeeder.cs:71-83`), the **2026 Atlanta
+Developers Conference** (2026-10-17, Sessionize code `sf1nopko`, `ConferenceModuleDbSeeder.cs:105-117`),
+both published immediately after creation (`:88` and `:122`) and both carrying the shared venue address,
+map URL and their own published sponsorship-packet URL (`ConferenceModuleDbSeeder.cs:26-38`), and the
+fixed set of **10 feedback questions** (5 session ratings plus a session comment, 3 conference ratings
+plus a conference comment, `ConferenceModuleDbSeeder.cs:139-151`) whose ids start at
 [`QuestionInvariants`](group-17-conference-domain.md#questioninvariants)`.ManualIdRangeStart`
-(`ConferenceModuleDbSeeder.cs:137`) so they never collide with imported data. It **conditionally** seeds
-two sample speakers (Ada Lovelace and Alan Turing, `ConferenceModuleDbSeeder.cs:165-166`), two sample
-sessions, one per seeded event (`ConferenceModuleDbSeeder.cs:220-224`), and the EventSpeaker plus
-SessionSpeaker links between them (`ConferenceModuleDbSeeder.cs:270-294`), only when `includeSampleData`
-is set. The flag comes from `Seeding:IncludeSampleConferenceData` (`ConferenceModuleSeeder.cs:26`), which
-the local Aspire AppHost sets (`MMCA.ADC.AppHost/Program.cs:164`) and production leaves unset. The reason
-is documented in the seeder's own remarks (`ConferenceModuleDbSeeder.cs:14-21`): the public-browse E2E
-tests need at least one session and one speaker row to exist deterministically, while production's real
-sessions and speakers arrive through the Sessionize import. The sample links are created on *both* paths
-deliberately, so the direct and the transitive branches of the speakers-by-event filter are exercised in
-dev and CI (`ConferenceModuleDbSeeder.cs:286-290`).
+(`ConferenceModuleDbSeeder.cs:153`) so they never collide with imported data.
+
+It **conditionally** seeds four more things (`ConferenceModuleDbSeeder.cs:50-56`): two sample speakers
+(Ada Lovelace and Alan Turing, `:179-183`), two sample sessions with app-assigned ids from
+[`SessionInvariants`](group-17-conference-domain.md#sessioninvariants)`.ManualIdRangeStart`, one per
+seeded event (`:236-240`, and the ids are explicit because a Session's int PK *is* its Sessionize id, so
+the sample rows take a reserved range above any real one, `:232-235`), the EventSpeaker plus
+SessionSpeaker links between them (`:305-306`), and four sample sponsors across the Platinum, Gold, Silver
+and Community tiers, two of them exhibitors with booth numbers (`:344-350`). All of that runs only when
+`includeSampleData` is set. The flag comes from `Seeding:IncludeSampleConferenceData`
+(`MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:26`), which the local Aspire AppHost sets
+(`MMCA.ADC.AppHost/Program.cs:162`) and production leaves unset. The reason is documented in the seeder's
+own remarks (`ConferenceModuleDbSeeder.cs:16-23`): the public-browse E2E tests need at least one session
+and one speaker row to exist deterministically, while production's real sessions and speakers arrive
+through the Sessionize import. The links are created on *both* paths deliberately, so the direct
+(EventSpeaker) and the transitive (SessionSpeaker) branches of the speakers-by-event filter are both
+exercised in dev and CI (`ConferenceModuleDbSeeder.cs:302-304`).
 
 ## The Sessionize adapter
 
@@ -135,15 +187,15 @@ client: the whole class is one method. Given a Sessionize event code it builds t
 `{code}/view/All` (`SessionizeService.cs:15`), calls `GetAsync`, asserts success with
 `EnsureSuccessStatusCode` (`SessionizeService.cs:20`), and deserializes into the
 [`SessionizeResponse`](group-18-conference-application.md#sessionizeresponse) model owned by the
-Application layer. Unlike the AI adapter it **does** throw on a bad status, because the import use-case
-that calls it is a foreground operation with a caller waiting on the result. It is registered as a typed
-`HttpClient` in [`DependencyInjection`](#dependencyinjection) with the base address
-`https://sessionize.com/api/v2/` baked in
+Application layer (`SessionizeService.cs:22-24`). Unlike the AI adapter it **does** throw on a bad
+status, because the import use-case that calls it is a foreground operation with a caller waiting on the
+result. It is registered as a typed `HttpClient` in [`DependencyInjection`](#dependencyinjection) with
+the base address `https://sessionize.com/api/v2/` baked in
 (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:21-23`), so it inherits the standard Aspire
-resilience handler (Polly retry, timeout, circuit breaker) unchanged: `[Rubric §29, Resilience]`, the
-[ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) policy that every outbound client gets resilience by default. The thinness is intentional:
-parsing, mapping, and the import workflow live in Application use-cases, and this adapter owns only the
-wire call.
+resilience handler (Polly retry, timeout, circuit breaker) unchanged: `[Rubric §29, Resilience &
+Business Continuity]`, the [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html)
+policy that every outbound client gets resilience by default. The thinness is intentional: parsing,
+mapping, and the import workflow live in Application use-cases, and this adapter owns only the wire call.
 
 ## The Anthropic AI scoring adapter
 
@@ -153,9 +205,9 @@ adapters: it scores one session proposal against a Program Committee rubric usin
 Messages API**. It implements [`IAiScoringService`](group-18-conference-application.md#iaiscoringservice),
 exposes the model id it uses (`claude-haiku-4-5-20251001`, `AnthropicScoringService.cs:22`), reads the
 API key from configuration (`Anthropic:ApiKey`, expected in user secrets,
-`AnthropicScoringService.cs:29`), POSTs to the relative `v1/messages` endpoint with an `x-api-key` header
-(`AnthropicScoringService.cs:47-48`), and caps the response at 256 tokens
-(`AnthropicScoringService.cs:44`). Its contract is precise about failure: it **never throws for a scoring
+`AnthropicScoringService.cs:29-34`), POSTs to the relative `v1/messages` endpoint with an `x-api-key`
+header (`AnthropicScoringService.cs:47-49`), and caps the response at 256 tokens
+(`AnthropicScoringService.cs:43`). Its contract is precise about failure: it **never throws for a scoring
 failure**, but **cancellation propagates**. Every failure path (missing key, non-2xx status, no text block
 in the response, unparseable JSON, any other exception) funnels into `FailedResult`, which returns zero
 scores with `Success = false` (`AnthropicScoringService.cs:179-192`), while the catch filter
@@ -167,7 +219,7 @@ The wire shapes are five private sealed records nested inside the service: the r
 [`AnthropicRequest`](#anthropicrequest) (`AnthropicScoringService.cs:200`) with its
 [`AnthropicMessage`](#anthropicmessage) list (`AnthropicScoringService.cs:212`), the response envelope
 [`AnthropicResponse`](#anthropicresponse) (`AnthropicScoringService.cs:221`) with its
-[`AnthropicContentBlock`](#anthropiccontentblock) array (`AnthropicScoringService.cs:227`), and
+[`AnthropicContentBlock`](#anthropiccontentblock) list (`AnthropicScoringService.cs:227`), and
 [`AiScoreResponse`](#aiscoreresponse) (`AnthropicScoringService.cs:238`), the score JSON the model is
 prompted to emit. Their snake_case `[JsonPropertyName]` names are the only place the vendor's contract
 appears, so the Application layer sees only
@@ -182,54 +234,84 @@ Accepted scores are clamped to `[1.0, 10.0]` and rounded to one decimal with ban
 (`AnthropicScoringService.cs:177`), and the speaker block of the prompt is formatted with
 `CultureInfo.InvariantCulture` (`AnthropicScoringService.cs:166-171`) to stay culture-deterministic.
 `[Rubric §11, Security]` shows up in the obvious place (the API key is a configuration secret, never
-hard-coded) and `[Rubric §13, Observability]` in the `[LoggerMessage]` source-generated warning that
-records every scoring failure with the session id and reason (`AnthropicScoringService.cs:196-197`).
+hard-coded) and `[Rubric §13, Observability & Operability]` in the `[LoggerMessage]` source-generated
+warning that records every scoring failure with the session id and reason
+(`AnthropicScoringService.cs:196-197`).
 
-## Scoring runs on a hosted drain, not on the request thread
+## Scoring runs on a hosted drain, guarded across replicas
 
 [`SessionScoringProcessor`](#sessionscoringprocessor)
-(`MMCA.ADC.Conference.Infrastructure/Services/SessionScoringProcessor.cs:31`) is the piece that makes a
+(`MMCA.ADC.Conference.Infrastructure/Services/SessionScoringProcessor.cs:49`) is the piece that makes a
 multi-minute paid AI pass safe to trigger from an HTTP POST. It is a `BackgroundService` that consumes
 [`SessionScoringQueue`](group-18-conference-application.md#sessionscoringqueue) with
-`ReadAllAsync(stoppingToken)` (`SessionScoringProcessor.cs:47`), so the host owns the work: shutdown
+`ReadAllAsync(stoppingToken)` (`SessionScoringProcessor.cs:107`), so the host owns the work: shutdown
 cancels it and waits for it to unwind instead of a deploy or a scale-in tearing down a half-finished run.
-This is the concrete adoption of [ADR-052](https://ivanball.github.io/docs/adr/052-background-job-execution.html) (bounded queue plus single-reader hosted drain), and it replaced
-an untracked fire-and-forget task the controller used to start. Per item it creates its own DI scope
-(`CreateAsyncScope`, `SessionScoringProcessor.cs:79`) because the drain itself is a singleton while the
+This is the concrete adoption of
+[ADR-052](https://ivanball.github.io/docs/adr/052-background-job-execution.html) (bounded queue plus
+single-reader hosted drain), and it replaced an untracked fire-and-forget task the controller used to
+start.
+
+The queue's dedup lives in one process's memory, and Conference runs at `maxReplicas: 2`
+(the `conferenceApp` container app at `MMCA.ADC/infra/main.bicep:1219`, scale rule at
+`MMCA.ADC/infra/main.bicep:1335`), so the queue alone never stopped two organizer triggers landing on
+different replicas from each running a full paid pass over the same sessions. The worker therefore takes
+a **cross-replica lock** before invoking the handler: it creates a per-item DI scope
+(`CreateAsyncScope`, `SessionScoringProcessor.cs:160`) because the drain itself is a singleton while the
 [`ScoreEventSessionsCommand`](group-18-conference-application.md#scoreeventsessionscommand) handler is
-scoped, resolves that handler through
-[`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
-(`SessionScoringProcessor.cs:80-81`), and releases the queue's dedup claim in a `finally`
-(`queue.MarkCompleted(eventId)`, `SessionScoringProcessor.cs:68`) so a failed or interrupted run does not
-permanently block the same event. Failure handling is decided once instead of per call site: a
-cancellation during shutdown logs and returns (`SessionScoringProcessor.cs:53-59`), and any other
-exception is caught under an explicit `CA1031` suppression whose comment states the rule, one failed run
-must not kill the drain (`SessionScoringProcessor.cs:60-65`). The output cache is evicted **twice** per
-run, once up front so polling clients stop seeing stale scores and once after a successful pass
-(`SessionScoringProcessor.cs:77` and `SessionScoringProcessor.cs:93`), and it evicts the narrow
+scoped, resolves an [`IDistributedLock`](group-05-cqrs-pipeline.md#idistributedlock) from that scope
+(`:175`), and calls `TryAcquireAsync` on the key `scoring:inflight:{eventId}` with a 15-minute
+time-to-live and a zero wait (`:85`, `:92`, `:101-102`, `:177-179`). A losing replica logs and returns
+rather than queueing behind the winner (`:181-188`), because waiting would only mean paying for the same
+pass twice in a row. The handle is disposed by an `await using` around the whole run, so the lock comes
+back on success, on failure, and via its time-to-live even when the replica is killed mid-pass: the
+comment at `:162-174` records that this replaced a cache counter released in a `finally`, which left a
+killed replica's key stuck at 1 and locked the event out until an operator cleared it by hand. Note the
+doc drift here: ADR-052 still describes dedup as per-replica and the distributed lock as a future step
+(`Website/docs-src/adr/052-background-job-execution.md:85-87`), but the lock is in the code today.
+
+Failure handling is decided once instead of per call site. A cancellation during shutdown logs and
+returns without requeuing (`SessionScoringProcessor.cs:115-123`); any other exception is caught under an
+explicit `CA1031` suppression whose comment states the rule, one failed run must not kill the drain
+(`:124-129`); the queue's dedup claim is released in a `finally` (`queue.MarkCompleted(item.EventId)`,
+`:130-136`) *before* any requeue, because the order matters (`MarkCompleted` would otherwise clear the
+claim a requeue had just re-taken). A thrown failure is retried by re-queuing the item with an incremented
+attempt up to `MaxAttempts = 3` (`:74`, `:143-147`), and the ceiling is low on purpose: scoring is paid,
+so retries exist to absorb a rate-limit blip, not to grind against an outage. A run that instead returns a
+[`Result`](group-01-result-error-handling.md#result) failure is deliberately **not** retried (`:196-205`):
+the handler answered, and a business refusal replayed twice more just costs money. When every attempt is
+exhausted the terminal path increments the `scoring.run.failed.terminal` counter tagged by event
+(`:96-99`, `:150`) on the `MMCA.ADC.Conference.Scoring` meter (`:59`), which the service host exports by
+registering that meter name (`MMCA.ADC.Conference.Service/Program.cs:134`): that is
+`[Rubric §13, Observability & Operability]` closing the loop on work that no user is waiting for.
+
+The output cache is evicted **twice** per run, once up front so polling clients stop seeing stale scores
+and once after a successful pass (`SessionScoringProcessor.cs:158` and `:208`), and it evicts the narrow
 `conference:sessions` tag rather than the root `conference` tag. The comment above that constant records
-why in production terms (`SessionScoringProcessor.cs:37-42`): evicting the root flushed events, speakers,
-rooms, categories, and questions too, so an organizer triggering a scoring run during the event emptied
-the whole public read surface onto the Basic-tier database while attendees were browsing.
-`[Rubric §12, Performance & Scalability]` and `[Rubric §31, Cost/FinOps]` both live in that one constant
-([ADR-026](https://ivanball.github.io/docs/adr/026-caching-strategy.html), [ADR-040](https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html)).
+why in production terms (`:61-66`): evicting the root flushed events, speakers, rooms, categories, and
+questions too, so an organizer triggering a scoring run during the event emptied the whole public read
+surface onto the Basic-tier database while attendees were browsing. `[Rubric §12, Performance &
+Scalability]` and `[Rubric §31, Cost/FinOps]` both live in that one constant
+([ADR-026](https://ivanball.github.io/docs/adr/026-caching-strategy.html),
+[ADR-040](https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html)).
 
 ## DI wiring and a deliberate resilience override
 
 [`DependencyInjection`](#dependencyinjection)
 (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:11`) is a single
 `extension(IServiceCollection)` block (the codebase's standard DI-registration idiom, taught in the
-primer) exposing `AddModuleConferenceInfrastructure()`. It registers both adapters as typed HTTP clients
-and the drain as a hosted service (`DependencyInjection.cs:45`). The Anthropic client gets a **custom
-resilience policy**: a 5-minute `HttpClient.Timeout` and the `anthropic-version: 2023-06-01` header
-(`DependencyInjection.cs:31-32`), then `RemoveAllResilienceHandlers()` followed by a re-added
-`StandardResilienceHandler` with a 3-minute attempt timeout, a 7-minute circuit-breaker sampling window,
-a 5-minute total request timeout, and only **one** retry (`DependencyInjection.cs:34-41`). The inline
-comment explains why (`DependencyInjection.cs:25-26`): AI scoring of a large batch can take minutes,
-which would blow through Aspire's default 30s attempt and 90s total limits, and retrying an expensive LLM
-call aggressively is wasteful. This is a precise illustration of [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html): every outbound client is
-resilient by default, but a client with genuinely different latency characteristics tunes the policy
-rather than disabling it. The Sessionize client takes the defaults unchanged.
+primer) exposing `AddModuleConferenceInfrastructure()` (`DependencyInjection.cs:13-19`). It registers
+both adapters as typed HTTP clients and the drain as a hosted service (`DependencyInjection.cs:45`). The
+Anthropic client gets a **custom resilience policy**: a 5-minute `HttpClient.Timeout` and the
+`anthropic-version: 2023-06-01` header (`DependencyInjection.cs:30-32`), then
+`RemoveAllResilienceHandlers()` followed by a re-added `StandardResilienceHandler` with a 3-minute attempt
+timeout, a 7-minute circuit-breaker sampling window, a 5-minute total request timeout, and only **one**
+retry (`DependencyInjection.cs:34-41`). The inline comment explains why (`DependencyInjection.cs:25-26`):
+AI scoring of a large batch can take minutes, which would blow through Aspire's default 30s attempt and
+90s total limits, and retrying an expensive LLM call aggressively is wasteful. This is a precise
+illustration of [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html):
+every outbound client is resilient by default, but a client with genuinely different latency
+characteristics tunes the policy rather than disabling it. The Sessionize client takes the defaults
+unchanged.
 
 ## How it fits together at runtime
 
@@ -243,13 +325,13 @@ organizer triggers a Sessionize refresh; the Application use-case calls
 adapter makes the outbound call inside the default Polly pipeline, and the parsed `SessionizeResponse`
 flows back for mapping. **Scoring flow:** the organizer POSTs to the scoring endpoint, the controller
 only calls `TryEnqueue` and returns `202 Accepted` or `409 Conflict`
-(`MMCA.ADC.Conference.API/Controllers/SessionSelectionController.cs:108-116`),
+(`MMCA.ADC.Conference.API/Controllers/SessionSelectionController.cs:110-128`),
 [`SessionScoringProcessor`](#sessionscoringprocessor) picks the event up, evicts the sessions cache tag,
-runs the scoped command handler which calls [`AnthropicScoringService`](#anthropicscoringservice) once per
-session under the tuned resilience policy, persists one `SessionAiScore` row per session behind the unique
-filtered index, and evicts the tag again. The two marker types in this assembly,
-[`AssemblyReference`](#assemblyreference) and [`ClassReference`](#classreference)
-(`MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:5` and
+claims the event's distributed lock, runs the scoped command handler which calls
+[`AnthropicScoringService`](#anthropicscoringservice) once per session under the tuned resilience policy,
+persists one `SessionAiScore` row per session behind the unique filtered index, and evicts the tag again.
+The two marker types in this assembly, [`AssemblyReference`](#assemblyreference) and
+[`ClassReference`](#classreference) (`MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:5` and
 `MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:11`), exist purely so the module loader and the
 configuration-assembly scan can reach this assembly by a stable `typeof()` handle instead of a hard-coded
 type list, the same extension point every module assembly provides.
@@ -417,220 +499,502 @@ type list, the same extension point every module assembly provides.
 
 ---
 
-### ModuleApplicationDbContext
+### CategoryItemConfiguration
 
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:18` · Level 7 · class (abstract)
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/CategoryItemConfiguration.cs:10` · Level 8 · class
 
-- **What it is**: an **abstract** EF Core context for the Conference module that declares typed `DbSet`s for thirteen Conference entities and inherits auditing, soft-delete and domain-event dispatch from the framework's [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext).
-- **Depends on**: first-party: [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) (base), [`IEntityConfigurationAssemblyProvider`](group-07-persistence-ef-core.md#ientityconfigurationassemblyprovider), [`PhysicalDataSource`](group-07-persistence-ef-core.md#physicaldatasource), and the Conference entities it sets: [`Event`](group-17-conference-domain.md#event), [`Room`](group-17-conference-domain.md#room), [`EventSpeaker`](group-17-conference-domain.md#eventspeaker), [`EventQuestionAnswer`](group-17-conference-domain.md#eventquestionanswer), [`Session`](group-17-conference-domain.md#session), [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker), [`SessionQuestionAnswer`](group-17-conference-domain.md#sessionquestionanswer), [`SessionCategoryItem`](group-17-conference-domain.md#sessioncategoryitem), [`Speaker`](group-17-conference-domain.md#speaker), [`SpeakerCategoryItem`](group-17-conference-domain.md#speakercategoryitem), [`Category`](group-17-conference-domain.md#category), [`CategoryItem`](group-17-conference-domain.md#categoryitem), [`Question`](group-17-conference-domain.md#question). External: `Microsoft.EntityFrameworkCore`.
-- **Concept introduced, the module-scoped DbSet manifest.** `[Rubric §8, Data Architecture]` assesses how persistence is organized per bounded context and `[Rubric §4, DDD]` assesses aggregate boundaries: this one file is the readable inventory of what the Conference database owns. The primary constructor forwards all four parameters straight to the base (`:18-23`), so it inherits audit stamping in `SaveChangesAsync`, the soft-delete global query filters, and the outbox capture of domain events with no code of its own ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) soft-delete, [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) outbox).
-- **Walkthrough**: the primary constructor `(DbContextOptions options, IServiceProvider serviceProvider, IEntityConfigurationAssemblyProvider assemblyProvider, PhysicalDataSource physicalDataSource)` chains to `ApplicationDbContext(...)` (`:18-23`). The body is nothing but thirteen `internal DbSet<T> { get; set; }` declarations (`:26-62`), each XML-documented. There is **no** `OnModelCreating` or `OnConfiguring` override: mapping comes entirely from the per-entity `EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>` classes discovered by assembly scanning (see the configurations later in this chapter).
-- **Why it's built this way**: it mirrors database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). Each module declares its own table surface inside its own Infrastructure project, so extracting the module into a standalone service (which ADC has already done, `MMCA.ADC.Conference.Service` over `ADC_Conference`) does not require untangling a shared context. The `DbSet`s are `internal` because only Infrastructure code addresses them directly.
-- **Caveats / not-in-source**: **this abstract class is never inherited or instantiated anywhere in the ADC source or tests.** A repo-wide search for the symbol returns exactly three hits, the three declarations themselves (Conference `:18`, plus the identical files in Identity and Engagement Infrastructure). At runtime the concrete context is the sealed [`SQLServerDbContext`](group-07-persistence-ef-core.md#sqlserverdbcontext) from MMCA.Common, which also derives from `ApplicationDbContext` and builds its model by scanning `IEntityTypeConfiguration` types, not from these `DbSet`s ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) mandates one concrete context class per engine). So treat this file as a **declarative manifest of the Conference bounded context's table surface**, not a live runtime context. A concrete symptom of that status: [`SessionAiScore`](group-17-conference-domain.md#sessionaiscore) is a real, configured, migrated Conference entity but has **no** `DbSet` here, and nothing breaks, because the manifest does not drive the model.
+- **What it is**: the EF Core persistence map for the [`CategoryItem`](group-17-conference-domain.md#categoryitem) entity: column facets, the parent relationship to [`Category`](group-17-conference-domain.md#category), and a composite unique index. It is the smallest complete member of the sixteen-class configuration family in this folder, so it is the one this chapter uses to teach the shared shape.
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype) (base, `:11`), [`CategoryItem`](group-17-conference-domain.md#categoryitem), [`Category`](group-17-conference-domain.md#category), [`CategoryInvariants`](group-17-conference-domain.md#categoryinvariants) (`:19`). External: `Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<T>`.
+- **Concept introduced, the per-entity configuration class and what the base already did.** Every configuration in this folder is an `internal sealed class` deriving from `EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>` and overriding one method, `Configure(EntityTypeBuilder<TEntity> builder)`, whose first statement is always `base.Configure(builder)` (`:16`). Knowing exactly what that base call does is what stops you re-declaring things by hand:
+  - `EntityTypeConfigurationSQLServer` is a **shim with no body** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfigurationSQLServer.cs:17`). Its whole contribution is the `[UseDataSource(DataSource.SQLServer)]` attribute it carries (`:16`), an instance of [`UseDataSourceAttribute`](group-14-module-system-composition.md#usedatasourceattribute).
+  - The real work is in [`EntityTypeConfiguration<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationtentity-tidentifiertype). Its `Configure` reads the attribute off `GetType()` and throws if it is missing (`EntityTypeConfiguration.cs:43-46`), then calls `ApplyEngineConventions` (`:48`). For `DataSource.SQLServer` that means `ToTable(typeof(TEntity).Name, NamespaceConventions.GetModuleName(typeof(TEntity)) ?? "dbo")`, so table name comes from the CLR type and **schema comes from the module segment of the entity's namespace** (`:66`), then `HasKey(p => p.Id)` (`:67`) and either `ValueGeneratedOnAdd()` or `ValueGeneratedNever()` depending on `IsIdValueGenerated` (`:68-71`).
+  - Below that, [`EntityTypeConfigurationBase<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationbasetentity-tidentifiertype) does exactly one thing: `builder.Ignore(nameof(AuditableAggregateRootEntity<>.DomainEvents))` for aggregate roots (`EntityTypeConfigurationBase.cs:29-32`), keeping the in-memory event list out of the schema.
+  - What the base chain does **not** do is equally important. The soft-delete global query filter, the `rowversion` concurrency token and the soft-delete index convention are installed by the context, not by these classes: [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) adds the query filter at `ApplicationDbContext.cs:348`, marks the concurrency property at `:469` and `:473`, and registers [`SoftDeleteUniqueIndexConvention`](group-07-persistence-ef-core.md#softdeleteuniqueindexconvention) at `:296`. So a configuration class in this folder is only ever about *this entity's* columns, relationships and indexes.
+
+  Because the engine is pinned entirely by the base type, re-pointing a Conference entity at SQLite or Cosmos is a base-class swap with no edit to the body of `Configure`: the domain entity, the handlers and everything above stay untouched. All sixteen Conference configurations use the SQL Server base, since ADC runs SQL Server only.
+
+  `[Rubric §8, Data Architecture]` assesses whether persistence is designed deliberately (typed lengths, correct nullability, FK relationships, purposeful indexes) rather than left to convention defaults: this family is where all of that lives for the Conference database. `[Rubric §3, Clean Architecture]` assesses dependency direction: EF mapping is confined to Infrastructure, and the domain entities carry zero EF attributes, so the domain layer stays framework-free.
+- **Concept introduced, length constants sourced from the domain invariants.** Nearly every `HasMaxLength` call in this folder reads a constant from the entity's `…Invariants` class instead of a literal. Here it is `CategoryInvariants.CategoryItemNameMaxLength` (`:19`). The same constant is what the Application layer's FluentValidation rules use, so the column width and the request validator are a **single source of truth**: change the constant once and both move. `[Rubric §16, Maintainability]` assesses exactly this kind of single-definition-point discipline.
+- **Walkthrough**
+  - **Class declaration** (`:10-11`): `internal sealed class CategoryItemConfiguration : EntityTypeConfigurationSQLServer<CategoryItem, CategoryItemIdentifierType>`. `internal` because nothing outside this assembly configures the model; the second type argument is the module's identifier alias, not a raw CLR type.
+  - **`base.Configure(builder)`** (`:16`): table `CategoryItem`, schema `Conference`, key on `Id`, value generation per the entity.
+  - **Column facets** (`:18-23`): `Name` is `HasMaxLength(CategoryInvariants.CategoryItemNameMaxLength).IsRequired()`; `Sort` is `IsRequired()`.
+  - **Parent relationship** (`:25-28`): `HasOne(p => p.Category).WithMany(p => p.CategoryItems).HasForeignKey(p => p.CategoryId).IsRequired()`. Both ends of the navigation are named, so EF maps the aggregate's real collection property rather than inventing a shadow one.
+  - **Composite unique index** (`:30-31`): `HasIndex(p => new { p.CategoryId, p.Name }).IsUnique()`. Note there is **no** explicit filter call here, and none is needed: `SoftDeleteUniqueIndexConvention` runs at model finalizing and adds the `IsDeleted = 0` predicate to every unique index on a soft-deletable entity that does not already declare a filter (`SoftDeleteUniqueIndexConvention.cs:51-55`). The shipped index is therefore filtered, so soft-deleting a category item frees its `(CategoryId, Name)` slot for re-use.
+- **Why it's built this way**: one small single-responsibility class per entity keeps the domain a pure POCO set (the Clean Architecture dependency rule) and lets EF discover configurations by assembly scan, so adding an entity is "add a config class" with no central registration edit.
+- **Where it's used**: discovered and applied when the concrete [`SQLServerDbContext`](group-07-persistence-ef-core.md#sqlserverdbcontext) builds its model; the resulting schema is snapshotted by the Conference migrations project (`MMCA.ADC.Migrations.SqlServer.Conference`). See also the declarative table-surface manifest [`ModuleApplicationDbContext`](#moduleapplicationdbcontext).
 
 ---
 
-### Conference EF entity configurations
+### ConferenceCategoryConfiguration
 
-> 15 `internal sealed` classes in `MMCA.ADC.Conference.Infrastructure`, namespace
-> `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration`, all Level 7, each extending
-> [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype).
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/ConferenceCategoryConfiguration.cs:13` · Level 8 · class
 
-These are the per-entity persistence maps for the Conference module. Every one follows the same
-two-step shape: override `Configure(EntityTypeBuilder<TEntity> builder)`, call `base.Configure(builder)`
-**first** (the framework base derives the table name from `typeof(TEntity).Name`, derives the schema
-from the module namespace, installs the soft-delete global query filter, configures the audit fields,
-and adds the `rowversion` concurrency token), then declare the entity-specific property constraints,
-relationships, and indexes. Because the storage engine is decided **entirely** by the base class they
-inherit (the `…SQLServer` base, see [primer §2 "engine-agnostic entities"](00-primer.md#2-architectural-styles-this-codebase-commits-to)),
-re-pointing any of these entities to Cosmos or SQLite would mean swapping only the base type, the
-domain entity and everything above it stay untouched. All 15 use the `…SQLServer` base (ADC runs SQL
-Server only).
+- **What it is**: the persistence map for the [`Category`](group-17-conference-domain.md#category) aggregate, the parent of [`CategoryItem`](group-17-conference-domain.md#categoryitem). It is the only configuration in the folder whose class name does not match `{Entity}Configuration`.
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`Category`](group-17-conference-domain.md#category), [`CategoryInvariants`](group-17-conference-domain.md#categoryinvariants). External: `Microsoft.EntityFrameworkCore` (for `ToTable`).
+- **Concept**: the shared shape is taught under [`CategoryItemConfiguration`](#categoryitemconfiguration); the only new idea here is the deliberate name/table split.
+- **Walkthrough**
+  - **Class name** (`:13-14`): the type is `ConferenceCategoryConfiguration`, not `CategoryConfiguration`. The XML doc (`:8-12`) gives the reason: the ADC codebase carries more than one `Category` concept, and a distinct configuration class name avoids ambiguity for a reader scanning the folder.
+  - **Explicit table mapping** (`:24`): `builder.ToTable("Category", "Conference")`. The comment (`:21-23`) is honest that this is **redundant**, the base would already derive `Category` from `typeof(Category).Name` and `Conference` from the namespace; it is written out for clarity given the class-name mismatch above.
+  - **Columns** (`:26-35`): `Title` required at `CategoryInvariants.TitleMaxLength`; `Sort` required; `Type` optional with a literal `HasMaxLength(100)`, one of the few places in the family that does not read a constant.
+- **Why it's built this way**: naming the configuration for the bounded context rather than for the CLR type is a small readability trade: the class is findable by module, and the explicit `ToTable` keeps the physical target visible at the call site rather than implied by a base-class convention two files away.
+- **Where it's used**: same discovery path as the rest of the family (see [`CategoryItemConfiguration`](#categoryitemconfiguration)).
+- **Caveats / not-in-source**: the doc comment cites a Catalog-module `Category` as the collision being avoided. Catalog is a **MMCA.Store** module, not an ADC one, so within this repo nothing would actually collide; treat the comment as historical rationale carried over from the shared framework vocabulary.
 
-`[Rubric §8, Data Architecture]` (assesses deliberate persistence design: correct length
-constraints, soft-delete-aware unique indexes, FK relationships, and ignoring computed properties so
-they never reach a column). `[Rubric §3, Clean Architecture]` (assesses dependency direction, EF
-configuration is confined to the Infrastructure layer; the [`Event`](group-17-conference-domain.md#event),
-[`Session`](group-17-conference-domain.md#session), [`Speaker`](group-17-conference-domain.md#speaker)
-etc. domain entities carry no EF attributes whatsoever, so the domain stays framework-free).
+---
 
-**Concept reinforced, length constants from the domain invariants.** Almost every `HasMaxLength`
-call reads a constant from the entity's `…Invariants` class
-([`EventInvariants`](group-17-conference-domain.md#eventinvariants),
-[`SessionInvariants`](group-17-conference-domain.md#sessioninvariants),
-[`SpeakerInvariants`](group-17-conference-domain.md#speakerinvariants),
-[`CategoryInvariants`](group-17-conference-domain.md#categoryinvariants),
-[`QuestionInvariants`](group-17-conference-domain.md#questioninvariants)) rather than a literal. That
-makes the field length a **single source of truth** shared between the schema (here) and the
-FluentValidation rule objects in the Application layer, change the constant once and both the column
-width and the validator move together.
+### EventConfiguration
 
-**Concept reinforced, the soft-delete-aware filtered unique index.** Several join/child configs
-declare `HasIndex(...).IsUnique().HasFilter("[IsDeleted] = 0")`. A plain unique index would forbid a
-user from ever re-creating an association they previously soft-deleted (the old soft-deleted row still
-occupies the unique slot). Filtering the index to `IsDeleted = 0` makes the constraint apply **only to
-live rows**, so a delete-then-recreate cycle is legal while still guaranteeing at most one active
-association at a time. This is the same pattern used framework-wide (compare `UserSessionBookmark` in
-the Engagement module).
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/EventConfiguration.cs:11` · Level 8 · class
 
-| Type | File:Line | Entity mapped | Notable configuration |
-|------|-----------|---------------|----------------------|
-| `CategoryItemConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/CategoryItemConfiguration.cs:11` | [`CategoryItem`](group-17-conference-domain.md#categoryitem) | `Name` (required, `CategoryItemNameMaxLength`), `Sort`; required FK to `Category`; composite unique index `(CategoryId, Name)` |
-| `ConferenceCategoryConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/ConferenceCategoryConfiguration.cs:13` | [`Category`](group-17-conference-domain.md#category) | Explicit `ToTable("Category", "Conference")`; `Title` (required, `TitleMaxLength`), `Sort`, `Type` (optional, max 100) |
-| `EventConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/EventConfiguration.cs:11` | [`Event`](group-17-conference-domain.md#event) | `Name`, dates, `TimeZone` (required); optional `Description`, `SessionizeCode`, venue fields, `WiFiInfo`; filtered (non-unique) index on `SessionizeCode` |
-| `EventQuestionAnswerConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/EventQuestionAnswerConfiguration.cs:11` | [`EventQuestionAnswer`](group-17-conference-domain.md#eventquestionanswer) | `EventId`, `QuestionId`, `AnswerValue` (required); FK to `Event`; filtered index on `EventId` |
-| `EventSpeakerConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/EventSpeakerConfiguration.cs:11` | [`EventSpeaker`](group-17-conference-domain.md#eventspeaker) | FK to `Event`; soft-delete-aware unique index `(EventId, SpeakerId)` |
-| `QuestionConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/QuestionConfiguration.cs:10` | [`Question`](group-17-conference-domain.md#question) | `QuestionText`, `QuestionEntity`, `QuestionType`, `Sort`, `IsRequired`, `QuestionSource` (all required) |
-| `RoomConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/RoomConfiguration.cs:10` | [`Room`](group-17-conference-domain.md#room) | `Name`, `Sort` (required); optional `Capacity`, `Floor`, `Location`, `AccessibilityInfo`; required FK to `Event` |
-| `SessionAiScoreConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionAiScoreConfiguration.cs:11` | [`SessionAiScore`](group-17-conference-domain.md#sessionaiscore) | Seven `decimal(3,1)` score columns, `Reasoning` (max 4000), `ModelUsed` (max 100); one-score-per-session unique filtered index |
-| `SessionCategoryItemConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionCategoryItemConfiguration.cs:11` | [`SessionCategoryItem`](group-17-conference-domain.md#sessioncategoryitem) | FK to `Session`; soft-delete-aware unique index `(SessionId, CategoryItemId)` |
-| `SessionConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionConfiguration.cs:12` | [`Session`](group-17-conference-domain.md#session) | `Title` required; optional `Status`/dates/URLs; four `bool` flags; `Ignore(Duration)`; FKs to `Event` and (restrict-delete) `Room` |
-| `SessionQuestionAnswerConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionQuestionAnswerConfiguration.cs:10` | [`SessionQuestionAnswer`](group-17-conference-domain.md#sessionquestionanswer) | `SessionId`, `QuestionId`, `AnswerValue` (required); FK to `Session` |
-| `SessionSpeakerConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionSpeakerConfiguration.cs:11` | [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker) | FK to `Session`; soft-delete-aware unique index `(SessionId, SpeakerId)` |
-| `SpeakerCategoryItemConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SpeakerCategoryItemConfiguration.cs:11` | [`SpeakerCategoryItem`](group-17-conference-domain.md#speakercategoryitem) | FK to `Speaker`; soft-delete-aware unique index `(SpeakerId, CategoryItemId)` |
-| `SpeakerConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SpeakerConfiguration.cs:12` | [`Speaker`](group-17-conference-domain.md#speaker) | `Email` value-object conversion; filtered unique index on `LinkedUserId`; `Ignore(FullName)` |
-| `SpeakerQuestionAnswerConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SpeakerQuestionAnswerConfiguration.cs:10` | [`SpeakerQuestionAnswer`](group-17-conference-domain.md#speakerquestionanswer) | `SpeakerId`, `QuestionId`, `AnswerValue` (required); FK to `Speaker` |
+- **What it is**: the persistence map for [`Event`](group-17-conference-domain.md#event), the top aggregate of the Conference module (the conference itself: dates, venue, publication state, Sessionize linkage).
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`Event`](group-17-conference-domain.md#event), [`EventInvariants`](group-17-conference-domain.md#eventinvariants), [`QuestionModerationDefault`](group-17-conference-domain.md#questionmoderationdefault). External: `Microsoft.EntityFrameworkCore`.
+- **Concept reinforced, the filtered non-unique index.** `HasIndex(p => p.SessionizeCode).HasFilter("[SessionizeCode] IS NOT NULL")` (`:41-42`) is filtered but **not** unique. A filtered index only covers the rows matching its predicate, so this one indexes just the events that carry a Sessionize code, which is the population the import path looks up by. It deliberately does not forbid two events sharing a code, and it costs nothing for the (many) events with a null code. `[Rubric §12, Performance and Scalability]` assesses whether indexes are chosen for the actual query shape rather than sprayed across columns: this is a narrow index sized to one lookup.
+- **Walkthrough**
+  - **Required core** (`:19-35`): `Name` (`EventInvariants.NameMaxLength`), `StartDate`, `EndDate`, and `TimeZone` (`EventInvariants.TimeZoneMaxLength`). Storing the IANA time-zone id as a column rather than baking a UTC offset into the dates is what lets the schedule render correctly across DST.
+  - **Optional descriptive and venue columns** (`:23-25`, `:44-62`): `Description`, `VenueAddress`, `VenueMapUrl`, `WiFiInfo`, `OrganizerContactEmail`, `SponsorshipPacketUrl`, each `IsRequired(false)` with its own invariant-sourced max length.
+  - **Sessionize linkage** (`:37-42`, `:71-75`): `SessionizeCode` optional plus the filtered index above; `LastSessionizeRefreshOn` / `LastSessionizeRefreshBy` are optional audit-style columns recording the last import run. `[Rubric §13, Observability and Operability]` assesses whether the system records the provenance of imported data: these two columns answer "when was this event last synced, and by whom" from the row itself.
+  - **State flags** (`:64-69`): `IsPublished` required; `QuestionModerationDefault` required, with the comment (`:67`) noting it is stored as an `int` through EF's default enum conversion and that `Pending` (0) is the safe default per BR-233. There is no `HasConversion` call, EF's default enum-to-int mapping is used as-is, so the safe default is also the zero value in the database.
+- **Why it's built this way**: everything the organizer may not know at creation time is nullable, so an event can be created early and enriched later without a two-phase workflow; only the four facts that make an event an event are required.
+- **Where it's used**: `Event` is the FK target of [`RoomConfiguration`](#roomconfiguration), [`SessionConfiguration`](#sessionconfiguration), [`EventSpeakerConfiguration`](#eventspeakerconfiguration), [`EventQuestionAnswerConfiguration`](#eventquestionanswerconfiguration) and [`SponsorConfiguration`](#sponsorconfiguration).
 
-**`CategoryItemConfiguration`, the reference example** (lines 11-34). After `base.Configure`, it sets
-`Name` to `HasMaxLength(CategoryInvariants.CategoryItemNameMaxLength).IsRequired()` and `Sort` to
-`IsRequired()`, declares the parent relationship fluently,
-`HasOne(p => p.Category).WithMany(p => p.CategoryItems).HasForeignKey(p => p.CategoryId).IsRequired()`
-(lines 26-29), then `HasIndex(p => new { p.CategoryId, p.Name }).IsUnique()` (lines 31-32), a
-**composite** unique index so the same item name can't appear twice in one category. (Note: this one is
-*not* `IsDeleted`-filtered, the uniqueness is on category+name regardless of delete state.)
+---
 
-**`ConferenceCategoryConfiguration`** (line 13) is the only one that overrides the table name
-explicitly: `builder.ToTable("Category", "Conference")` (line 24). The base would already derive
-`Category` from `typeof(Category).Name`, so the call is for clarity / disambiguation from any other
-module's `Category`, the doc comment (lines 10-11) cites avoiding a collision with a Catalog-module
-`Category`. `Type` is optional (`HasMaxLength(100).IsRequired(false)`).
+### EventQuestionAnswerConfiguration
 
-**`EventConfiguration`** (line 11) maps the event aggregate root: required `Name`
-(`EventInvariants.NameMaxLength`), `StartDate`, `EndDate`, and `TimeZone`; everything else optional.
-The `SessionizeCode` index (lines 41-42) is `HasIndex(p => p.SessionizeCode).HasFilter("[SessionizeCode] IS NOT NULL")`,
-**filtered but not unique** (it indexes only events that have a Sessionize code, accelerating
-import lookups, without forbidding two events from sharing a code or both being null).
-`LastSessionizeRefreshOn`/`LastSessionizeRefreshBy` are optional audit-style columns for the
-Sessionize sync.
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/EventQuestionAnswerConfiguration.cs:11` · Level 8 · class
 
-**`SessionConfiguration`** (line 12) is the busiest entity config. `Title` is required; `Description`,
-`StartsAt`, `EndsAt`, `Status` (max `SessionInvariants.StatusMaxLength`), and the URL/accessibility/
-resource fields are all optional. Four booleans (`IsInformed`, `IsConfirmed`, `IsServiceSession`,
-`IsPlenumSession`) are required. `builder.Ignore(p => p.Duration)` (line 67) keeps the computed
-`Duration` property out of the schema. Two relationships: a required FK to `Event` declared with
-`WithMany()` (no inverse navigation collection on `Event`, lines 72-75) plus a filtered index on
-`EventId` (lines 77-78), and an **optional** FK to `Room` configured with
-`.OnDelete(DeleteBehavior.Restrict)` (lines 83-87) so deleting a room cannot cascade-orphan the
-sessions scheduled in it. (`Status` is stored as a plain nullable string with a max length, it is
-*not* an enum-to-string `HasConversion`, so adding a status value needs no migration anyway.)
+- **What it is**: the persistence map for [`EventQuestionAnswer`](group-17-conference-domain.md#eventquestionanswer), one attendee's answer to one event-scoped [`Question`](group-17-conference-domain.md#question).
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`EventQuestionAnswer`](group-17-conference-domain.md#eventquestionanswer), [`Event`](group-17-conference-domain.md#event), [`EventInvariants`](group-17-conference-domain.md#eventinvariants), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions) (`HasSoftDeleteFilter`). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept introduced, `HasSoftDeleteFilter()` and the database as the concurrency backstop.**
+  - `HasSoftDeleteFilter()` (`IndexBuilderExtensions.cs:50-64`) replaces a hand-typed `HasFilter("[IsDeleted] = 0")`. It builds the predicate through [`SoftDeleteFilterSql`](group-07-persistence-ef-core.md#softdeletefiltersql) from the live model (`:56`), so a renamed soft-delete column follows automatically and the identifier quoting comes from the engine instead of a SQL-Server-shaped literal. Its `engine` parameter defaults to `DataSource.SQLServer` (`:51`), which is exactly what the `…SQLServer` base already implies. On a **unique** index the call is technically redundant with `SoftDeleteUniqueIndexConvention`, which would apply the same predicate at model finalizing; writing it explicitly keeps the intent readable at the call site, and because the convention skips any index that already declares a filter (`SoftDeleteUniqueIndexConvention.cs:53`) the two can never disagree. On a **non-unique** index like the `EventId` lookup here, the convention deliberately does nothing, so the explicit call is the only way to get the filter.
+  - The `(EventId, QuestionId, CreatedBy)` unique index (`:42-44`) is a **race backstop**, and the comment (`:39-41`) is unusually candid about why: the application-level upsert only inspects the in-memory collection, so two concurrent submits can both take the create branch. The database refuses the second one, and the shared `DbUpdateException` handler turns the violation into a 409 for the client. `[Rubric §8, Data Architecture]` assesses whether invariants that matter are enforced where they cannot be raced, and `[Rubric §15, Best Practices and Code Quality]` assesses whether known limitations are documented at the point of the compensating control rather than left for the next reader to discover.
+- **Walkthrough**: required `EventId` and `QuestionId` scalars (`:19-23`); required `AnswerValue` at `EventInvariants.AnswerValueMaxLength` (`:25-27`); required parent relationship `HasOne(p => p.Event).WithMany(p => p.EventQuestionAnswers).HasForeignKey(p => p.EventId)` (`:29-32`); soft-delete-filtered lookup index on `EventId` (`:35-36`); the BR-123 filtered unique index (`:42-44`).
+- **Why it's built this way**: `CreatedBy` is part of the uniqueness tuple, so "one live answer per question" is scoped **per author**, not globally, which is what a per-attendee feedback form needs.
+- **Where it's used**: written by the Conference event-feedback command handlers; read by the feedback queries. Compare its sibling [`SessionQuestionAnswerConfiguration`](#sessionquestionanswerconfiguration), which carries the same BR-123 index but treats its parent lookup index differently for a specific reason.
 
-**`SessionAiScoreConfiguration`** (line 11) persists the Anthropic-generated session scoring. Seven
-score properties (`OverallScore`, `TopicRelevanceScore`, `DescriptionQualityScore`, `NoveltyScore`,
-`ActionableTakeawaysScore`, `DepthOrInsightQualityScore`, `CredibilityExperienceScore`) each use
-`HasPrecision(3, 1)`, a `decimal(3,1)`, i.e. a 0.0–99.9 column sized for a one-decimal 0–10 rating
-(lines 22-48). `Reasoning` is capped at 4000 chars and `ModelUsed` at 100. The
-`HasIndex(p => p.SessionId).IsUnique().HasFilter("[IsDeleted] = 0")` (lines 59-61) enforces **one live
-AI score per session**. `[Rubric §13, Observability & Operability]` (assesses recording the *origin*
-of derived data): persisting `ModelUsed` and free-text `Reasoning` alongside the numeric scores keeps
-the AI judgement auditable and reproducible, you can tell which model produced a given score and why.
+---
 
-**`SpeakerConfiguration`** (line 12) carries the only value-object mapping in the set. The `Email`
-property (lines 42-47) uses
-`HasConversion(e => e == null ? null : e.Value, v => v == null ? null : Email.Create(v).Value)` to
-round-trip the [`Email`](group-02-domain-building-blocks.md#email) value object to/from a nullable
-`string` column (speaker email is optional). The unique index on `LinkedUserId`
-(`IsUnique().HasFilter("[LinkedUserId] IS NOT NULL")`, lines 65-67) enforces the 1:1 User↔Speaker link
-only among speakers that *have* a linked user, leaving unlinked speakers unconstrained.
-`builder.Ignore(p => p.FullName)` (line 70) drops the computed `FullName` from the schema.
+### EventSpeakerConfiguration
 
-**The join-entity configs** (`EventSpeaker`, `SessionSpeaker`, `SpeakerCategoryItem`,
-`SessionCategoryItem`) are structurally identical: both FK scalar columns required, a required `HasOne`
-relationship to the *owning* aggregate (the one whose collection navigation they belong to), and a
-**soft-delete-aware composite unique index** on the two FKs. `EventQuestionAnswer`,
-`SessionQuestionAnswer`, and `SpeakerQuestionAnswer` follow the same FK pattern but carry a required
-`AnswerValue` string column instead of a second association; only `EventQuestionAnswer` adds a filtered
-lookup index on its parent FK.
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/EventSpeakerConfiguration.cs:11` · Level 8 · class
 
-**Why they're built this way**: confining all EF mapping to small, single-responsibility
-configuration classes in Infrastructure keeps the domain entities pure POCOs (Clean Architecture
-dependency rule) and lets Scrutor auto-discover every `IEntityTypeConfiguration` by assembly scan, so
-adding an entity is "add the config class" with no central registration edit. Driving every length
-from the shared invariants constant prevents schema/validator drift.
+- **What it is**: the persistence map for the [`EventSpeaker`](group-17-conference-domain.md#eventspeaker) join entity, which records that a speaker is part of an event's line-up.
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`EventSpeaker`](group-17-conference-domain.md#eventspeaker), [`Event`](group-17-conference-domain.md#event), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept introduced, the join-entity template.** Four configurations in this folder are structurally identical, and this is the first: both FK scalars required, one `HasOne(...).WithMany(...)` relationship to the **owning** aggregate only (the side whose collection navigation the join belongs to), and a soft-delete-filtered composite unique index on the two FKs. The other side of the pair is deliberately *not* configured as a relationship, which keeps the entity a one-way child of a single aggregate and matches the DDD rule that an aggregate owns its children. `[Rubric §4, DDD]` assesses aggregate boundary discipline; `[Rubric §8, Data Architecture]` assesses the uniqueness guarantee.
+  The soft-delete filter on the unique index is what makes a delete-then-re-add cycle legal: a plain unique index would let a soft-deleted association keep occupying its slot forever, so an organizer could never re-add a speaker they had removed.
+- **Walkthrough**: required `EventId` (`:19-20`) and `SpeakerId` (`:22-23`); `HasOne(p => p.Event).WithMany(p => p.EventSpeakers).HasForeignKey(p => p.EventId).IsRequired()` (`:25-28`); `HasIndex(p => new { p.EventId, p.SpeakerId }).IsUnique().HasSoftDeleteFilter()` (`:30-32`).
+- **Where it's used**: the same template appears in [`SessionSpeakerConfiguration`](#sessionspeakerconfiguration), [`SessionCategoryItemConfiguration`](#sessioncategoryitemconfiguration) and [`SpeakerCategoryItemConfiguration`](#speakercategoryitemconfiguration).
 
-**Where they're used**: discovered and applied by the Conference module's `DbContext`
-(`ModuleApplicationDbContext` → the concrete `SQLServerDbContext`) when EF builds the model; the
-per-module migrations project (`MMCA.ADC.Migrations.SqlServer.Conference`) snapshots the resulting
-schema. Cross-module FKs (e.g. `UserSessionBookmark.SessionId → Session`) are deliberately **not**
-configured here, that would create a cross-module Infrastructure→Domain coupling, and instead degrade
-to scalar columns under the database-per-service model (see [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
+| Type | File:Line | Owning aggregate | Unique index |
+|------|-----------|------------------|--------------|
+| `EventSpeakerConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/EventSpeakerConfiguration.cs:11` | [`Event`](group-17-conference-domain.md#event) | `(EventId, SpeakerId)` |
+| `SessionSpeakerConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionSpeakerConfiguration.cs:11` | [`Session`](group-17-conference-domain.md#session) | `(SessionId, SpeakerId)` |
+| `SessionCategoryItemConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionCategoryItemConfiguration.cs:11` | [`Session`](group-17-conference-domain.md#session) | `(SessionId, CategoryItemId)` |
+| `SpeakerCategoryItemConfiguration` | `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SpeakerCategoryItemConfiguration.cs:11` | [`Speaker`](group-17-conference-domain.md#speaker) | `(SpeakerId, CategoryItemId)` |
 
-- **Caveats / not-in-source**: `SessionAiScore` persistence exists, but whether AI scoring is run in
-  production at all is a runtime/config concern not visible in these configs (see the Anthropic scoring
-  service and feature gating elsewhere). The configs only define the table that *would* hold scores.
+---
+
+### QuestionConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/QuestionConfiguration.cs:10` · Level 8 · class
+
+- **What it is**: the persistence map for [`Question`](group-17-conference-domain.md#question), the definition of a feedback question (its text, what it attaches to, how it renders, and where it came from).
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`Question`](group-17-conference-domain.md#question), [`QuestionInvariants`](group-17-conference-domain.md#questioninvariants). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept**: the shared shape is taught under [`CategoryItemConfiguration`](#categoryitemconfiguration). What is worth noticing here is that this is the flattest configuration in the folder: six required properties, **no relationships and no indexes at all**.
+- **Walkthrough** (`:18-38`): all six columns are `IsRequired()`. `QuestionText`, `QuestionEntity`, `QuestionType` and `QuestionSource` each take their length from `QuestionInvariants`; `Sort` and `IsRequired` (the boolean, not the fluent call) are plain required scalars. `QuestionEntity` and `QuestionType` are stored as **strings, not enums**, so adding a question type or a new attachable entity needs no migration and no enum-to-string conversion.
+- **Why it's built this way**: questions are attached to events, sessions and speakers by the three `…QuestionAnswer` entities, and those answers carry a plain `QuestionId` scalar rather than a navigation, so `Question` itself needs no relationship configuration. Modelling the discriminators as strings keeps the question catalogue extensible from data rather than from code.
+- **Where it's used**: referenced by `QuestionId` from [`EventQuestionAnswerConfiguration`](#eventquestionanswerconfiguration), [`SessionQuestionAnswerConfiguration`](#sessionquestionanswerconfiguration) and [`SpeakerQuestionAnswerConfiguration`](#speakerquestionanswerconfiguration).
+
+---
+
+### RoomConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/RoomConfiguration.cs:11` · Level 8 · class
+
+- **What it is**: the persistence map for [`Room`](group-17-conference-domain.md#room), a physical room belonging to an [`Event`](group-17-conference-domain.md#event).
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`Room`](group-17-conference-domain.md#room), [`Event`](group-17-conference-domain.md#event), [`EventInvariants`](group-17-conference-domain.md#eventinvariants), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept introduced, re-declaring an index EF would otherwise drop.** The explicit `builder.HasIndex(p => p.EventId)` (`:48`) looks redundant next to the `(EventId, Name)` composite below it, and the comment (`:46-47`) says exactly why it is not: EF removes the conventional foreign-key index as redundant once a composite index **leads with the same column**, but the composite is filtered, and the plain FK lookups still want an unfiltered index. This is a good example of a mapping decision that only makes sense once you know EF's own de-duplication rule; without the comment the line reads as a mistake. `[Rubric §12, Performance and Scalability]` assesses whether index choices survive framework conventions rather than being silently optimized away.
+- **Walkthrough**
+  - **Required** (`:19-24`): `Name` at `EventInvariants.RoomNameMaxLength`, and `Sort`.
+  - **Optional** (`:26-39`): `Capacity` (a nullable scalar with no length), plus `Floor`, `Location` and `AccessibilityInfo`, each with an invariant-sourced max length. `AccessibilityInfo` being a first-class room column, not a note bolted onto the description, is the schema-level half of ADC's WCAG commitment. `[Rubric §21, Accessibility]` assesses whether accessibility is designed into the data rather than added at the view.
+  - **Parent relationship** (`:41-44`): required `HasOne(p => p.Event).WithMany(p => p.Rooms).HasForeignKey(p => p.EventId)`.
+  - **Indexes** (`:48`, `:52-54`): the re-declared plain `EventId` index, then `HasIndex(p => new { p.EventId, p.Name }).IsUnique().HasSoftDeleteFilter()`. The comment (`:50-51`) states its purpose plainly: it backstops the aggregate's duplicate-room-name invariant, and the soft-delete filter means a deleted room never blocks reusing its name.
+- **Why it's built this way**: the domain already refuses a duplicate room name inside the `Event` aggregate; the filtered unique index is the database-side guarantee for the concurrent case the in-memory check cannot see, the same defence-in-depth reasoning as BR-123 in [`EventQuestionAnswerConfiguration`](#eventquestionanswerconfiguration).
+- **Where it's used**: `Room` is the optional FK target of [`SessionConfiguration`](#sessionconfiguration), which restricts deletes against it.
+
+---
+
+### SessionAiScoreConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionAiScoreConfiguration.cs:11` · Level 8 · class
+
+- **What it is**: the persistence map for [`SessionAiScore`](group-17-conference-domain.md#sessionaiscore), the row that stores a language model's rating of one session across seven dimensions plus its written reasoning.
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`SessionAiScore`](group-17-conference-domain.md#sessionaiscore), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept introduced, sizing a decimal column to the value's actual range.** Each of the seven score columns is declared `HasPrecision(3, 1)`, that is `decimal(3,1)`: three total digits, one after the point (`:22-48`). That is the smallest exact-decimal shape that holds a one-decimal rating without the rounding surprises a `float`/`double` column would introduce. Choosing exact decimal for a value that is compared and sorted, rather than binary floating point, is the point. `[Rubric §8, Data Architecture]` assesses type fidelity of stored values.
+- **Concept reinforced, recording the provenance of derived data.** `ModelUsed` (`:54-56`, max 100) and `Reasoning` (`:50-52`, max 4000) are both **required**. Persisting which model produced a score, and the sentence explaining it, alongside the numbers is what makes an AI judgement auditable: you can tell after the fact whether a given score came from a model you have since replaced. `[Rubric §13, Observability and Operability]` assesses whether derived values carry enough context to be explained later.
+- **Walkthrough**: required `SessionId` scalar (`:19-20`); seven `decimal(3,1)` required score columns, `OverallScore`, `TopicRelevanceScore`, `DescriptionQualityScore`, `NoveltyScore`, `ActionableTakeawaysScore`, `DepthOrInsightQualityScore`, `CredibilityExperienceScore` (`:22-48`); required `Reasoning` and `ModelUsed` (`:50-56`); and `HasIndex(p => p.SessionId).IsUnique().HasSoftDeleteFilter()` (`:59-61`), commented "One score per session (among non-deleted)". There is **no** `HasOne` relationship to [`Session`](group-17-conference-domain.md#session): `SessionId` is a plain scalar, so the score row is not a child of the session aggregate.
+- **Why it's built this way**: keeping the score in its own table behind a unique-per-session index means re-scoring is a soft-delete plus insert (the filter frees the slot) rather than an in-place overwrite, and the previous scoring run stays on disk for comparison.
+- **Where it's used**: written by the Conference scoring pipeline, whose adapter and processor are covered earlier in this chapter under [`AnthropicScoringService`](#anthropicscoringservice) and [`SessionScoringProcessor`](#sessionscoringprocessor).
+- **Caveats / not-in-source**: this configuration only defines the table. Whether scoring runs in a given environment is a configuration and feature-gating question decided outside this file. Note also that [`ModuleApplicationDbContext`](#moduleapplicationdbcontext) declares no `DbSet` for `SessionAiScore`, and nothing breaks, because that manifest does not drive the model.
+
+---
+
+### SpeakerCategoryItemConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SpeakerCategoryItemConfiguration.cs:11` · Level 8 · class
+
+- **What it is**: the persistence map for the [`SpeakerCategoryItem`](group-17-conference-domain.md#speakercategoryitem) join entity, which tags a speaker with a [`CategoryItem`](group-17-conference-domain.md#categoryitem) (locality, expertise and so on).
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`SpeakerCategoryItem`](group-17-conference-domain.md#speakercategoryitem), [`Speaker`](group-17-conference-domain.md#speaker), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept**: an exact instance of the join-entity template taught under [`EventSpeakerConfiguration`](#eventspeakerconfiguration).
+- **Walkthrough**: required `SpeakerId` (`:19-20`) and `CategoryItemId` (`:22-23`); `HasOne(p => p.Speaker).WithMany(p => p.SpeakerCategoryItems).HasForeignKey(p => p.SpeakerId).IsRequired()` (`:25-28`); `HasIndex(p => new { p.SpeakerId, p.CategoryItemId }).IsUnique().HasSoftDeleteFilter()` (`:30-32`). The `CategoryItem` end is intentionally left unmapped as a relationship, so the row belongs to the speaker aggregate alone.
+- **Where it's used**: the speaker-profile read paths join through it to resolve a speaker's tags.
+
+---
+
+### SpeakerConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SpeakerConfiguration.cs:12` · Level 8 · class
+
+- **What it is**: the persistence map for [`Speaker`](group-17-conference-domain.md#speaker): name, bio, social links, the optional link to an Identity user, and the one value-object column in the Conference module.
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`Speaker`](group-17-conference-domain.md#speaker), [`SpeakerInvariants`](group-17-conference-domain.md#speakerinvariants), [`NullableEmailValueConverter`](group-07-persistence-ef-core.md#nullableemailvalueconverter), and transitively the [`Email`](group-02-domain-building-blocks.md#email) value object. External: `Microsoft.EntityFrameworkCore`.
+- **Concept introduced, mapping a value object with `HasConversion` instead of `OwnsOne`.** `builder.Property(p => p.Email).HasConversion(new NullableEmailValueConverter())` (`:42-43`) round-trips the `Email?` value object to a plain nullable string column. The converter (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/EmailValueConverter.cs:60-70`) passes `null` straight through on both legs, so "no email" stays a SQL `NULL` rather than becoming an empty string or a failed `Email.Create` call. Two design points worth carrying forward:
+  - **Why `HasConversion` and not `OwnsOne`**: the backing column stays a plain string, so adopting the value object on a property that used to be a `string` is not a schema change (`EmailValueConverter.cs:8-10`).
+  - **Facets stay at the call site**: the converter deliberately owns no length or requiredness, which is why `HasMaxLength(SpeakerInvariants.EmailMaxLength)` and `IsRequired(false)` are chained here (`:44-45`). Those differ per entity and are not the converter's business (`EmailValueConverter.cs:20-22`).
+
+  `[Rubric §4, DDD]` assesses whether value objects survive the trip to storage instead of being flattened into primitives at the boundary. `[Rubric §16, Maintainability]` applies too: the conversion logic lives once in MMCA.Common, so every entity with an email gets identical semantics.
+- **Concept reinforced, the partially filtered unique index.** `HasIndex(p => p.LinkedUserId).IsUnique().HasFilter("[LinkedUserId] IS NOT NULL")` (`:63-65`) enforces the one-to-one User to Speaker link **only among speakers that have one**. Without the predicate, SQL Server would treat multiple `NULL`s as duplicates and allow at most one unlinked speaker, which would be nonsense. Note this one is a hand-written literal rather than `HasSoftDeleteFilter()`, because the predicate is about `LinkedUserId`, not about soft delete; the soft-delete clause is added on top automatically, since the index is unique and the convention only skips indexes that already have a filter (`SoftDeleteUniqueIndexConvention.cs:53`).
+- **Walkthrough**
+  - **Required identity** (`:20-26`, `:39-40`): `FirstName`, `LastName`, `IsTopSpeaker`.
+  - **Optional profile** (`:28-37`, `:47-61`): `Bio` (no max length, so `nvarchar(max)`), `TagLine`, `ProfilePicture`, `TwitterHandle`, `LinkedInUrl`, `GitHubUrl`, `WebsiteUrl`, each length-capped from `SpeakerInvariants`.
+  - **Email** (`:42-45`) and the **`LinkedUserId` index** (`:63-65`), described above.
+  - **Computed property excluded** (`:68`): `builder.Ignore(p => p.FullName)` keeps the derived `FullName` out of the schema. Ignoring computed properties explicitly is how this codebase keeps derived state a domain concern and off the table.
+- **Why it's built this way**: `LinkedUserId` is a **scalar with no FK**, deliberately. The Identity user lives in a different service database, so a cross-database foreign key is not available under database-per-service; the unique index gives the guarantee the FK would have, within the one database that can enforce it. See [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html). `[Rubric §7, Microservices Readiness]` assesses whether the schema is already free of cross-service constraints, which is what makes the Conference service extractable.
+- **Where it's used**: `Speaker` is the owning aggregate for [`SpeakerCategoryItemConfiguration`](#speakercategoryitemconfiguration) and [`SpeakerQuestionAnswerConfiguration`](#speakerquestionanswerconfiguration), and the FK target of the `SpeakerId` scalar in [`EventSpeakerConfiguration`](#eventspeakerconfiguration) and [`SessionSpeakerConfiguration`](#sessionspeakerconfiguration).
+
+---
+
+### SpeakerQuestionAnswerConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SpeakerQuestionAnswerConfiguration.cs:10` · Level 8 · class
+
+- **What it is**: the persistence map for [`SpeakerQuestionAnswer`](group-17-conference-domain.md#speakerquestionanswer), a speaker's answer to a speaker-scoped [`Question`](group-17-conference-domain.md#question) (the fields Sessionize collects on a submission form).
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`SpeakerQuestionAnswer`](group-17-conference-domain.md#speakerquestionanswer), [`Speaker`](group-17-conference-domain.md#speaker), [`SpeakerInvariants`](group-17-conference-domain.md#speakerinvariants). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept**: the answer-entity shape is taught under [`EventQuestionAnswerConfiguration`](#eventquestionanswerconfiguration). This is the **stripped-down** member of the three: it declares no indexes at all.
+- **Walkthrough** (`:18-31`): required `SpeakerId`, `QuestionId` and `AnswerValue` (at `SpeakerInvariants.AnswerValueMaxLength`), then `HasOne(p => p.Speaker).WithMany(p => p.SpeakerQuestionAnswers).HasForeignKey(p => p.SpeakerId).IsRequired()`. Only the conventional EF index on the `SpeakerId` foreign key exists.
+- **Why it's built this way**: these rows arrive from the Sessionize import as part of a speaker payload and are read back with the speaker, never queried independently or submitted concurrently by two authors, so neither the BR-123 anti-race unique index nor an extra lookup index earns its cost here. Contrast with the event and session answer configurations, where an attendee-facing form can be double-submitted.
+- **Where it's used**: populated by the Sessionize sync path and read as part of the speaker detail projection.
+
+---
+
+### SessionCategoryItemConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionCategoryItemConfiguration.cs:11` · Level 9 · class
+
+- **What it is**: the persistence map for the [`SessionCategoryItem`](group-17-conference-domain.md#sessioncategoryitem) join entity, which tags a session with a [`CategoryItem`](group-17-conference-domain.md#categoryitem) (topic, level, track).
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`SessionCategoryItem`](group-17-conference-domain.md#sessioncategoryitem), [`Session`](group-17-conference-domain.md#session), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept**: an exact instance of the join-entity template taught under [`EventSpeakerConfiguration`](#eventspeakerconfiguration).
+- **Walkthrough**: required `SessionId` (`:19-20`) and `CategoryItemId` (`:22-23`); `HasOne(p => p.Session).WithMany(p => p.SessionCategoryItems).HasForeignKey(p => p.SessionId).IsRequired()` (`:25-28`); `HasIndex(p => new { p.SessionId, p.CategoryItemId }).IsUnique().HasSoftDeleteFilter()` (`:30-32`).
+- **Where it's used**: the session browse and filter queries resolve topic tags through these rows.
+
+---
+
+### SessionConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionConfiguration.cs:12` · Level 9 · class
+
+- **What it is**: the persistence map for [`Session`](group-17-conference-domain.md#session), the busiest entity in the Conference schema: talk metadata, schedule window, status flags, links, and the relationships to its event and room.
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`Session`](group-17-conference-domain.md#session), [`Event`](group-17-conference-domain.md#event), [`Room`](group-17-conference-domain.md#room), [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore` (for `DeleteBehavior`).
+- **Concept introduced, `DeleteBehavior.Restrict` as a schedule-integrity guard.** The optional room relationship (`:83-87`) ends in `.OnDelete(DeleteBehavior.Restrict)`. Under EF's default for an optional relationship the FK would be **set to null** on delete, silently unscheduling every talk in the room; `Restrict` makes the database refuse the delete instead, forcing the organizer to move the sessions first. `[Rubric §8, Data Architecture]` assesses whether referential actions match the business meaning of the relationship rather than the framework default.
+- **Concept reinforced, navigation configured on one side only.** Both relationships here use the parameterless `WithMany()` (`:73`, `:84`), meaning **there is no inverse collection navigation** on `Event` or `Room` for sessions. Sessions are a large collection queried with paging and filters, so exposing them as an aggregate navigation would invite accidental full loads; the read paths go through explicit queries instead.
+- **Walkthrough**
+  - **Required** (`:20-22`, `:38-48`, `:69-70`): `Title` at `SessionInvariants.TitleMaxLength`; four booleans, `IsInformed`, `IsConfirmed`, `IsServiceSession`, `IsPlenumSession`; and the `EventId` scalar.
+  - **Optional** (`:24-36`, `:50-64`, `:80-81`): `Description`, `StartsAt`, `EndsAt`, `Status`, `LiveUrl`, `RecordingUrl`, `AccessibilityInfo`, `ResourceLinks`, `RoomId`. That `StartsAt`, `EndsAt` and `RoomId` are all nullable is the schema admitting that a session exists as an accepted talk long before it is scheduled.
+  - **`Status` is a plain string** (`:34-36`) capped at `SessionInvariants.StatusMaxLength`, not an enum with a conversion, so adding a status value needs no migration.
+  - **Computed property excluded** (`:67`): `builder.Ignore(p => p.Duration)`, since `Duration` is derived from `StartsAt` and `EndsAt`.
+  - **Event relationship** (`:72-75`) required, plus `HasIndex(p => p.EventId).HasSoftDeleteFilter()` (`:77-78`), a non-unique filtered lookup index for "all live sessions of this event", the single hottest read in the app.
+  - **Room relationship** (`:83-87`) optional, with the `Restrict` behaviour described above.
+- **Why it's built this way**: the required or optional split mirrors the real conference workflow (accept first, schedule later), and the two relationship decisions, no inverse navigation and restricted room deletes, both trade a little convenience for predictable performance and predictable schedule integrity.
+- **Where it's used**: `Session` is the owning aggregate for [`SessionSpeakerConfiguration`](#sessionspeakerconfiguration), [`SessionCategoryItemConfiguration`](#sessioncategoryitemconfiguration) and [`SessionQuestionAnswerConfiguration`](#sessionquestionanswerconfiguration), and the scalar target of [`SessionAiScoreConfiguration`](#sessionaiscoreconfiguration).
+
+---
+
+### SessionQuestionAnswerConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionQuestionAnswerConfiguration.cs:11` · Level 9 · class
+
+- **What it is**: the persistence map for [`SessionQuestionAnswer`](group-17-conference-domain.md#sessionquestionanswer), one attendee's answer to one session-scoped feedback [`Question`](group-17-conference-domain.md#question).
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`SessionQuestionAnswer`](group-17-conference-domain.md#sessionquestionanswer), [`Session`](group-17-conference-domain.md#session), [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept introduced, when a filtered index is the wrong index.** This configuration keeps a plain, unfiltered `HasIndex(p => p.SessionId)` (`:37`) alongside the filtered composite, and the comment (`:34-36`) gives a reason worth internalising: the Sessionize sync reads this table by `SessionId` **with the query filters OFF**, and a filtered index cannot serve a query that does not carry the filter's predicate. Soft-delete-filtered indexes are the default choice for application reads, but any code path that deliberately bypasses the global query filter needs an unfiltered index or it falls back to a scan. Compare [`EventQuestionAnswerConfiguration`](#eventquestionanswerconfiguration), whose equivalent parent index **is** filtered, because nothing reads event answers with the filters off. `[Rubric §12, Performance and Scalability]` assesses whether indexes match the queries that actually run, including the maintenance ones.
+- **Walkthrough**: required `SessionId`, `QuestionId` and `AnswerValue` at `SessionInvariants.AnswerValueMaxLength` (`:19-27`); required parent relationship `HasOne(p => p.Session).WithMany(p => p.SessionQuestionAnswers).HasForeignKey(p => p.SessionId)` (`:29-32`); the deliberately unfiltered `SessionId` index (`:37`); and the BR-123 index `HasIndex(p => new { p.SessionId, p.QuestionId, p.CreatedBy }).IsUnique().HasSoftDeleteFilter()` (`:43-45`), whose comment (`:39-42`) repeats the concurrency rationale taught under [`EventQuestionAnswerConfiguration`](#eventquestionanswerconfiguration): the in-memory upsert can be raced, the database refuses the loser, and the shared `DbUpdateException` handler renders it as a 409.
+- **Why it's built this way**: it carries both index shapes because it serves two different consumers, an attendee-facing form that must not double-submit, and an import job that reads across soft-deleted rows.
+- **Where it's used**: written by the session-feedback command handlers, read by the feedback aggregation queries and by the Sessionize sync.
+
+---
+
+### SessionSpeakerConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionSpeakerConfiguration.cs:11` · Level 9 · class
+
+- **What it is**: the persistence map for the [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker) join entity, which records who is presenting a session.
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker), [`Session`](group-17-conference-domain.md#session), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept**: an exact instance of the join-entity template taught under [`EventSpeakerConfiguration`](#eventspeakerconfiguration).
+- **Walkthrough**: required `SessionId` (`:19-20`) and `SpeakerId` (`:22-23`); `HasOne(p => p.Session).WithMany(p => p.SessionSpeakers).HasForeignKey(p => p.SessionId).IsRequired()` (`:25-28`); `HasIndex(p => new { p.SessionId, p.SpeakerId }).IsUnique().HasSoftDeleteFilter()` (`:30-32`). The composite unique index is what stops the same speaker being added twice to one session, while still allowing a remove-then-re-add.
+- **Where it's used**: joined by the session detail and speaker detail read paths to resolve a session's presenters.
+
+---
+
+### SponsorConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SponsorConfiguration.cs:11` · Level 9 · class
+
+- **What it is**: the persistence map for [`Sponsor`](group-17-conference-domain.md#sponsor): a sponsoring organization's branding, tier, links, and optional expo-booth details, scoped to one [`Event`](group-17-conference-domain.md#event).
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`Sponsor`](group-17-conference-domain.md#sponsor), [`SponsorTier`](group-17-conference-domain.md#sponsortier), [`SponsorInvariants`](group-17-conference-domain.md#sponsorinvariants), [`Event`](group-17-conference-domain.md#event), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept introduced, storing an enum as its underlying int on purpose.** `builder.Property(p => p.Tier).HasConversion<int>().IsRequired()` (`:25-27`) makes the [`SponsorTier`](group-17-conference-domain.md#sponsortier) enum a plain `int` column. EF would map an enum to `int` by default anyway, so the value of writing it out is documentary: the comment (`:23-24`) states the two consequences the team wants pinned down, that **tier ordering becomes a plain column sort** (Platinum before Gold falls out of the numeric ordering, no lookup table and no `CASE` expression), and that **adding a package later does not rewrite existing rows**, which a string-backed enum with a renamed member would. `[Rubric §8, Data Architecture]` assesses whether a stored representation is chosen for the queries and the migrations it will have to survive.
+  Contrast this with `Session.Status` (a plain string, [`SessionConfiguration`](#sessionconfiguration) `:34-36`) and `Question.QuestionType` (also a string, [`QuestionConfiguration`](#questionconfiguration) `:26-28`). The codebase does not apply one rule everywhere: values with a meaningful **order** are ints, open-ended vocabularies stay strings.
+- **Walkthrough**
+  - **Required** (`:19-27`, `:49-53`, `:59-60`): `Name` at `SponsorInvariants.NameMaxLength`; `Tier` as above; `Sort`; `IsExhibitor`; the `EventId` scalar.
+  - **Optional branding and links** (`:29-47`): `LogoUrl`, `Description`, `WebsiteUrl`, `LinkedInUrl`, `TwitterHandle`, each length-capped from `SponsorInvariants`. A sponsor row is useful the moment it has a name and a tier; everything the sponsor sends over later is nullable.
+  - **Optional booth detail** (`:55-57`): `BoothNumber`, paired with the required `IsExhibitor` flag. Sponsorship and exhibiting are separate facts: a sponsor can have a tier without a booth.
+  - **Event relationship** (`:62-65`): required `HasOne(p => p.Event).WithMany().HasForeignKey(p => p.EventId)`, with the parameterless `WithMany()`, so `Event` exposes no sponsors collection, the same one-sided-navigation choice made in [`SessionConfiguration`](#sessionconfiguration).
+  - **Lookup index** (`:67-68`): `HasIndex(p => p.EventId).HasSoftDeleteFilter()`, a non-unique filtered index for "all live sponsors of this event", which is exactly what the public sponsor wall queries.
+- **Why it's built this way**: the sponsor wall is a public, cached read that always filters by event and orders by tier then `Sort`; making the tier an int and the event lookup a filtered index means that page is a single indexed range scan with an ordering the database can satisfy directly.
+- **Where it's used**: the Conference sponsor endpoints and the public sponsor wall UI; the schema is snapshotted by `MMCA.ADC.Migrations.SqlServer.Conference` like the rest of the family.
+
+---
 
 ### ConferenceModuleDbSeeder
 
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts.Seeding` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:22` · Level 8 · class
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts.Seeding` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:24` · Level 9 · class
 
-- **What it is**: the Conference module's idempotent database seeder. It always seeds the default
-  conference event and the standard feedback questions, and *optionally* seeds sample browse data
-  (speakers + sessions) when an `includeSampleData` flag is set. It derives from the framework's
-  [`DbSeeder`](group-07-persistence-ef-core.md#dbseeder) base.
-- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (ctor); the domain
-  factories/repositories for [`Event`](group-17-conference-domain.md#event),
-  [`Question`](group-17-conference-domain.md#question),
-  [`Speaker`](group-17-conference-domain.md#speaker), and
-  [`Session`](group-17-conference-domain.md#session); the invariants constants
-  ([`QuestionInvariants`](group-17-conference-domain.md#questioninvariants)`.ManualIdRangeStart`,
-  [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants)`.ManualIdRangeStart`); BCL
-  (`DateOnly`, `DateTime`).
-- **Concept reinforced, idempotent, environment-gated seeding through the domain factories.**
-  `[Rubric §17, DevOps & Deployment]` (assesses repeatable, safe-to-re-run database initialization)
-  and `[Rubric §14, Testability]` (deterministic fixtures the E2E suite can rely on). Every seed
-  method calls `repository.ExistsAsync(...)` before inserting (lines 45-50 for the event, 77-82 for the
-  questions, 134-139 per speaker, 193-201 per session), so re-running on an already-seeded database is a
-  no-op. Crucially, seed rows go through the same `Event.Create` / `Question.Create` / `Speaker.Create`
-  / `Session.Create` factory methods the handlers use (each returns a `Result<T>` that is checked for
-  `IsFailure` before `AddAsync`), so seeded data satisfies the identical domain invariants as
-  user-created data, there is no "raw insert" back door.
+- **What it is**: the Conference module's idempotent database seeder. It always seeds the **two**
+  conference events (Cloud + AI and Developers) and the standard feedback questions, and *optionally*
+  seeds sample browse data (speakers, sessions, event/session speaker links, and sponsors) when an
+  `includeSampleData` flag is set. It derives from the framework's
+  [`DbSeeder`](group-07-persistence-ef-core.md#dbseeder) base
+  (`ConferenceModuleDbSeeder.cs:24`), which is the abstract implementation of
+  [`IDbSeeder`](group-07-persistence-ef-core.md#idbseeder).
+- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (the single constructor
+  dependency, `:24`), from which every seed method pulls a typed
+  [`IRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#irepositorytentity-tidentifiertype)
+  (`:61`, `:130`, `:177`, `:230`, `:342`); the domain factories for
+  [`Event`](group-17-conference-domain.md#event), [`Question`](group-17-conference-domain.md#question),
+  [`Speaker`](group-17-conference-domain.md#speaker), [`Session`](group-17-conference-domain.md#session)
+  and [`Sponsor`](group-17-conference-domain.md#sponsor); the aggregate methods
+  `Event.AddEventSpeaker` and `Session.AddSessionSpeaker` that create the
+  [`EventSpeaker`](group-17-conference-domain.md#eventspeaker) /
+  [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker) links; the
+  [`SponsorTier`](group-17-conference-domain.md#sponsortier) enum from the module's Shared project
+  (`:6`); and the reserved-id constants
+  [`QuestionInvariants`](group-17-conference-domain.md#questioninvariants)`.ManualIdRangeStart` and
+  [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants)`.ManualIdRangeStart`. Externals
+  are BCL only (`DateOnly`, `TimeOnly`, `DateTime`, tuple arrays, LINQ `FirstOrDefault`).
+- **Concept reinforced, idempotent and environment-gated seeding through the domain factories.**
+  `[Rubric §17, DevOps & Deployment]` assesses whether database initialization is repeatable and safe to
+  re-run on every start; `[Rubric §14, Testability]` assesses whether the system provides deterministic
+  fixtures a test tier can rely on. Every seed step asks the repository first
+  (`ExistsAsync` at `:64`, `:98`, `:132`, `:189`, `:249`, `:359`) and returns or `continue`s when the row
+  is already there, so re-running against a seeded database writes nothing. `[Rubric §4, DDD]` shows up
+  in *how* the rows are written: seed data goes through the same `Event.Create` / `Question.Create` /
+  `Speaker.Create` / `Session.Create` / `Sponsor.Create` factories the command handlers use, each
+  returning a `Result<T>` that is checked for `IsFailure` before `AddAsync` (`:85`, `:166`, `:206`,
+  `:275`, `:380`), so seeded rows satisfy exactly the same invariants as user-created rows. There is no
+  raw-insert back door.
 - **Walkthrough**
-  - **Constructor** (line 22): primary constructor `(IUnitOfWork unitOfWork, bool includeSampleData = false)`;
-    `unitOfWork` is null-guarded (line 24), `includeSampleData` defaults to `false` (production-safe).
-  - **`SeedAsync`** (lines 28-38): awaits `SeedEventAsync` then `SeedQuestionsAsync` unconditionally;
-    only if `_includeSampleData` does it then run `SeedSpeakersAsync` and `SeedSessionsAsync`. This is
-    the **environment gate**, the real event + feedback questions are always present, sample
-    browse rows only in dev/CI.
-  - **`SeedEventAsync`** (lines 41-71): if no event named "Atlanta Cloud + AI Conference" exists,
-    builds it via `Event.Create(...)` (single-day 2026-05-30, `America/New_York`, Sessionize code
-    `z1ecmzux`, FCS Innovation Academy venue), calls `.Publish()` on the result (line 67) so it is
-    immediately public, then `AddAsync` + `SaveChangesAsync`. The hard-coded venue map URL carries a
-    justified `S1075` suppression (line 40), `[Rubric §15, Best Practices]` (suppressions are scoped
-    and explained, not blanket-disabled).
-  - **`SeedQuestionsAsync`** (lines 73-118): seeds ten standard feedback questions, six Session-scoped
-    (five `Rating` + one `Text` `Comments`) and four Event-scoped, all with `questionSource: "User"`.
-    IDs are explicitly assigned from `QuestionInvariants.ManualIdRangeStart` upward (line 98), reserving
-    a manual ID band so they never collide with Sessionize-imported or organizer-created questions.
-  - **`SeedSpeakersAsync` / `SeedSessionsAsync`** (lines 120-230, sample-only): seed two sample speakers
-    (Ada Lovelace, Alan Turing) and two sample sessions, each existence-checked individually. Sessions
-    are assigned explicit IDs from `SessionInvariants.ManualIdRangeStart` (lines 184-185), the comment
-    (lines 178-181) explains the Session int PK *is* the Sessionize id, so sample sessions take IDs at
-    the top of a reserved range above any real Sessionize id to avoid collision.
-- **Why it's built this way**: seeding through the domain factories keeps seed data valid by
-  construction; the `includeSampleData` flag (default `false`) keeps test/browse fixtures out of
-  production while guaranteeing the public-browse E2E tests (`PublicBrowseTests.PublicSessionList_*` /
-  `PublicSpeakerList_*`, cited in the remarks, lines 17-20) always have at least one session and
-  speaker row in dev/CI.
-- **Where it's used**: instantiated and run by `ConferenceModuleSeeder`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:26-29`), which
-  reads `Seeding:IncludeSampleConferenceData` from configuration, resolves an `IUnitOfWork`, constructs
-  `new ConferenceModuleDbSeeder(unitOfWork, includeSampleData)`, and calls `SeedAsync`. That module
-  seeder is invoked by the framework's database-initialization path after schema migration. The
-  `IncludeSampleConferenceData` flag is set only by the local Aspire AppHost and the E2E CI workflow;
-  production leaves it unset.
-- **Caveats / not-in-source**: the seeder itself does not read configuration; the
-  `includeSampleData` boolean is decided by the caller (`ConferenceModuleSeeder`, API layer). The exact
-  step that calls `ConferenceModuleSeeder.SeedAsync` (database-initialization extension) lives outside
-  this file and is covered in the persistence/module chapters.
+  - **Constants and suppressions** (`:26`-`:38`): the shared `VenueAddress` literal (`:26`), the venue
+    map embed URL (`:29`), the placeholder sample-sponsor website (`:32`), and the two published
+    sponsorship-packet URLs, one per event (`:35`, `:38`). Each URL constant carries its own narrowly
+    scoped `S1075` (`URIs should not be hardcoded`) suppression with a written justification (`:28`,
+    `:31`, `:34`, `:37`). `[Rubric §15, Best Practices & Code Quality]` assesses exactly this: analyzer
+    suppressions are per-symbol and explained, never a blanket file- or project-level disable.
+  - **Constructor** (`:24`): a primary constructor `(IUnitOfWork unitOfWork, bool includeSampleData = false)`.
+    `unitOfWork` is null-guarded into a readonly field (`:40`) and the flag is copied (`:41`). The default
+    is `false`, so the production-safe path is the one you get by forgetting the argument.
+  - **`SeedAsync`** (`:44`-`:57`): the ordered entry point. Three unconditional steps run first, the
+    Cloud + AI event, the Developers event, then the questions (`:46`-`:48`). Only when
+    `_includeSampleData` is true does it continue into `SeedSpeakersAsync`, `SeedSessionsAsync`,
+    `SeedSampleEventLinksAsync`, and `SeedSponsorsAsync` (`:50`-`:56`). That `if` is the entire
+    **environment gate**: real events and feedback questions always exist, sample browse rows exist only
+    where the caller asked for them.
+  - **`SeedCloudAiConferenceEventAsync`** (`:59`-`:92`): the existence probe deliberately matches **two**
+    names, `"2026 Atlanta Cloud + AI Conference"` and the pre-rename `"Atlanta Cloud + AI Conference"`
+    (`:64`-`:66`, with the reason in the comment at `:63`), so a database seeded before the rename is not
+    given a duplicate. When absent it builds the event through `Event.Create` (`:71`-`:83`): single-day
+    2026-05-30, `America/New_York`, Sessionize code `z1ecmzux`, the shared venue constants, organizer
+    contact `atlcloudconf@gmail.com`, and the Cloud + AI sponsorship packet URL. A failed `Result` simply
+    returns (`:85`-`:86`). It then calls `eventResult.Value!.Publish()` (`:88`) so the event is publicly
+    visible the moment it lands, and finishes with `AddAsync` + `SaveChangesAsync` (`:90`-`:91`).
+  - **`SeedDevelopersConferenceEventAsync`** (`:94`-`:126`): structurally identical, one name only
+    (`"2026 Atlanta Developers Conference"`, `:99`), 2026-10-17, Sessionize code `sf1nopko`, organizer
+    contact `atldevcon@gmail.com`, and the Developers-edition packet URL. Both events share the same
+    physical venue constants.
+  - **`SeedQuestionsAsync`** (`:128`-`:173`): guarded by a single probe for `"Rate the Session"` with
+    `QuestionSource == "User"` (`:132`-`:134`), it then walks a literal tuple array of ten questions
+    (`:139`-`:151`): six Session-scoped (five `Rating` plus a free-text `Comments`) and four Event-scoped
+    (three `Rating` plus `Comments`). Ids are **explicitly assigned**, starting at
+    `QuestionInvariants.ManualIdRangeStart` and incrementing (`:153`, `:158`); that constant is
+    `999_999_000` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/QuestionInvariants.cs:37`),
+    a reserved band sitting above any real Sessionize id so imported questions can never collide with
+    these. One `SaveChangesAsync` commits the whole set (`:172`).
+  - **`SeedSpeakersAsync`** (`:175`-`:215`, sample-only): two sample speakers, Ada Lovelace and Alan
+    Turing (`:179`-`:183`), each existence-checked by first and last name individually (`:189`-`:191`) so
+    a partially seeded database is topped up rather than skipped wholesale. Both are created with
+    `isTopSpeaker: true`. An `added` flag means `SaveChangesAsync` is called only when something actually
+    changed (`:213`-`:214`), the same guard every sample step uses.
+  - **`SeedSessionsAsync`** (`:217`-`:284`, sample-only): resolves both seeded events through the shared
+    `GetSampleEventsAsync` helper (`:227`-`:228`), then declares two sample sessions, one per event
+    (`:236`-`:240`): the keynote on the Cloud + AI event and the Azure talk on the Developers event. Ids
+    are assigned from `SessionInvariants.ManualIdRangeStart` and `+ 1` (`:238`-`:239`; the constant is
+    `999_999_000` at
+    `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:41`),
+    because a Session's int primary key **is** its Sessionize id (comment at `:232`-`:235`), so app-created
+    sessions must take ids from a reserved high band. Start time is computed off the owning event's date,
+    `sessionEvent.StartDate.ToDateTime(new TimeOnly(13, 0), DateTimeKind.Utc)` (`:257`), one hour long
+    (`:264`), status `"Accepted"`, no room.
+  - **`SeedSampleEventLinksAsync`** (`:286`-`:310`, sample-only): loads the two sample speakers untracked
+    (`:290`-`:295`), bails if either is missing (`:299`-`:300`), then calls both link helpers and combines
+    their results with `added |=` (`:305`-`:306`), the non-short-circuiting operator, so the session-link
+    pass always runs even when the event-link pass reported nothing new.
+  - **`LinkSampleEventSpeakersAsync`** (`:312`-`:331`): re-reads the events **tracked** and with the
+    `EventSpeakers` collection included (`:316`-`:317`, the include is required because the aggregate
+    checks that collection), then links Ada to Cloud + AI and Alan to Developers (`:324`, `:327`).
+    Idempotency here is delegated to the aggregate: `Event.AddEventSpeaker` returns a
+    `Event.Speaker.Duplicate` failure when a non-deleted link for that speaker already exists
+    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:515`-`:522`), so the
+    seeder only has to look at `IsSuccess`.
+  - **`LinkSampleSessionSpeakersAsync`** (`:410`-`:430`): the same trick on the other side, sessions
+    loaded tracked with `SessionSpeakers` included (`:414`-`:418`), then each sample session gets its
+    matching speaker by title (`:424`-`:425`). Linking **both** paths is deliberate (comment at
+    `:302`-`:304`): the speakers-by-event filter has a direct `EventSpeaker` branch and a transitive
+    `SessionSpeaker` branch, and dev/CI data exercises both.
+  - **`SeedSponsorsAsync`** (`:333`-`:389`, sample-only): four sample sponsors spread across the two
+    events (`:344`-`:350`), a Platinum and a Gold exhibitor with booth numbers on the Cloud + AI event, a
+    Silver and a Community non-exhibitor on the Developers event. Sponsors are per-event, so a null event
+    is skipped (`:355`-`:356`) and each name is existence-checked (`:359`-`:361`) before `Sponsor.Create`
+    (`:366`-`:378`).
+  - **`GetSampleEventsAsync`** (`:391`-`:408`): a `static` helper that fetches both events in one tracked
+    `GetAllAsync` with a caller-supplied `includes` list (`:397`-`:402`), picks the Developers event by
+    exact name and treats "anything else in the result" as the Cloud + AI event (`:404`-`:405`), which is
+    how the pre-rename name keeps resolving. Passing `includes` in lets one helper serve both the
+    no-navigation callers (`:228`, `:340`) and the `EventSpeakers`-loading caller (`:317`).
+- **Why it's built this way**: seeding through domain factories keeps seed rows valid by construction
+  rather than by hand-written SQL that drifts from the invariants; per-row existence probes make the
+  whole seeder safe to run on every startup, which is what the deployed hosts do (each service migrates
+  and seeds its own database, see [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html));
+  and the `includeSampleData` default of `false` keeps browse fixtures out of production while
+  guaranteeing dev and CI always have at least one session and one speaker. The class remarks
+  (`:16`-`:23`) name the two public-browse E2E tests (`PublicBrowseTests.PublicSessionList_*` /
+  `PublicSpeakerList_*`) that depend on exactly that guarantee.
+- **Where it's used**: constructed and driven by
+  [`ConferenceModuleSeeder`](group-20-conference-api-grpc.md#conferencemoduleseeder)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:28`-`:29`), the
+  module's [`IModuleSeeder`](group-14-module-system-composition.md#imoduleseeder) implementation, which
+  resolves `IUnitOfWork` from the service provider (`ConferenceModuleSeeder.cs:21`), reads
+  `Seeding:IncludeSampleConferenceData` from configuration (`:26`), and awaits `SeedAsync`. Module
+  seeders are invoked by [`ModuleLoader`](group-14-module-system-composition.md#moduleloader) in module
+  registration order.
+- **Caveats / not-in-source**: (1) the seeder reads no configuration itself, the boolean is the caller's
+  decision, so which hosts set `Seeding:IncludeSampleConferenceData=true` is a configuration fact, not a
+  code fact (the class remarks at `:17`-`:20` say the local AppHost and the E2E CI workflow do, and
+  production leaves it unset). (2) Idempotency is by **name/title match**, so renaming a seeded event,
+  question, speaker, session, or sponsor in the database causes the next run to insert a fresh copy; the
+  Cloud + AI probe carries an explicit second name (`:65`) precisely because that already happened once.
+  (3) In `SeedQuestionsAsync` a mid-loop factory failure `return`s before the single `SaveChangesAsync`
+  (`:166`-`:167`), so the already-added questions in that batch are never committed, deliberate
+  all-or-nothing behavior, but it means a partial question set is not possible and a silent no-op is.
+  (4) The comment at `:223`-`:226` records that databases seeded before the sample sessions were split
+  across the two events keep the old both-on-one-event shape, because the skip-by-title check never moves
+  an existing row; the documented remedy is resetting the local SQL volume.
+
+### ModuleApplicationDbContext
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:19` · Level 9 · class (abstract)
+
+- **What it is**: the Conference module's abstract EF Core `DbContext`. It adds nothing but a typed
+  inventory: fourteen `internal DbSet<T>` properties naming the entities this module persists
+  (`:27`-`:66`), on top of the framework base
+  [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext).
+- **Depends on**: [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) (base,
+  `:24`) and its four constructor inputs, EF Core's `DbContextOptions`, `IServiceProvider`,
+  [`IEntityConfigurationAssemblyProvider`](group-07-persistence-ef-core.md#ientityconfigurationassemblyprovider),
+  and [`PhysicalDataSource`](group-07-persistence-ef-core.md#physicaldatasource) (`:20`-`:23`); the
+  Conference domain entities [`Event`](group-17-conference-domain.md#event),
+  [`Room`](group-17-conference-domain.md#room),
+  [`EventSpeaker`](group-17-conference-domain.md#eventspeaker),
+  [`EventQuestionAnswer`](group-17-conference-domain.md#eventquestionanswer),
+  [`Session`](group-17-conference-domain.md#session),
+  [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker),
+  [`SessionQuestionAnswer`](group-17-conference-domain.md#sessionquestionanswer),
+  [`SessionCategoryItem`](group-17-conference-domain.md#sessioncategoryitem),
+  [`Speaker`](group-17-conference-domain.md#speaker),
+  [`SpeakerCategoryItem`](group-17-conference-domain.md#speakercategoryitem),
+  [`Category`](group-17-conference-domain.md#category),
+  [`CategoryItem`](group-17-conference-domain.md#categoryitem),
+  [`Question`](group-17-conference-domain.md#question), and
+  [`Sponsor`](group-17-conference-domain.md#sponsor) (`:27`-`:66`). External: `Microsoft.EntityFrameworkCore`.
+- **Concept reinforced, one context class per engine, not per module.** `[Rubric §8, Data Architecture]`
+  assesses whether the persistence topology is a deliberate design rather than an accident of code
+  organization. The instinctive reading of this file, "each module has its own DbContext class", is
+  **not** how the runtime works. The context that actually executes queries is the framework's sealed
+  [`SQLServerDbContext`](group-07-persistence-ef-core.md#sqlserverdbcontext)
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/SQLServerDbContext.cs:16`),
+  one class per storage engine, instantiated once per physical database. Its `OnModelCreating` calls
+  `ApplyConfigurationsForEntitiesInContext(DataSource.SQLServer, modelBuilder)`
+  (`SQLServerDbContext.cs:88`), which scans every module assembly supplied by the
+  `IEntityConfigurationAssemblyProvider` for `IEntityTypeConfigurationSQLServer<,>` implementations and
+  applies only those whose entity maps to *this* instance's `DataSourceKey`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:610`-`:637`,
+  filtering through [`EntityDataSourceRegistry`](group-07-persistence-ef-core.md#entitydatasourceregistry)).
+  In other words the EF model is built from the **entity configurations**, not from `DbSet` declarations,
+  and `DataSourceModelCacheKeyFactory` keys the model cache per data source so the same class can hold
+  different models per database. That is the design recorded in
+  [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) and
+  [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html): splitting the context
+  per module is explicitly rejected, because engine choice, not module membership, is what a context
+  class encodes.
+- **Walkthrough**
+  - **Primary constructor** (`:19`-`:24`): four parameters, `DbContextOptions options`,
+    `IServiceProvider serviceProvider`, `IEntityConfigurationAssemblyProvider assemblyProvider`, and
+    `PhysicalDataSource physicalDataSource`, forwarded verbatim to the base (`:24`). No parameter is
+    stored, transformed, or validated here; the whole file is pass-through plus declarations.
+  - **The fourteen `DbSet` properties** (`:27`-`:66`): aggregate roots (`Events`, `Sessions`, `Speakers`,
+    `Categories`, `Questions`, `Sponsors`), their children (`Rooms`, `CategoryItems`), and the join and
+    answer entities (`EventSpeakers`, `EventQuestionAnswers`, `SessionSpeakers`,
+    `SessionQuestionAnswers`, `SessionCategoryItems`, `SpeakerCategoryItems`). They are `internal`, not
+    `public`: nothing outside this assembly can reach a `DbSet`, which keeps application code on the
+    repository and unit-of-work abstractions instead of on EF directly.
+  - **Inherited behavior**: the class body defines no overrides at all. Audit stamping, soft-delete and
+    tenant query filters, domain-event capture, and outbox persistence all come from the base and its
+    interceptors, [`AuditSaveChangesInterceptor`](group-07-persistence-ef-core.md#auditsavechangesinterceptor)
+    and [`DomainEventSaveChangesInterceptor`](group-07-persistence-ef-core.md#domaineventsavechangesinterceptor),
+    which is how a Conference `SaveChangesAsync` writes an
+    [`OutboxMessage`](group-04-events-outbox.md#outboxmessage) row in the same transaction as the
+    aggregate change ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
+- **Why it's built this way**: the per-module abstract context is the module's declared persistence
+  surface, one file you can read to learn exactly which tables the Conference module owns, without
+  fragmenting the runtime into per-module contexts (which would break cross-module transactions and
+  multiply model caches). Each sibling module declares its own identically named class in its own
+  namespace, Engagement at
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:19`
+  and Identity at
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:15`,
+  so the three read as parallel inventories of three module-owned databases (`ADC_Conference`,
+  `ADC_Engagement`, `ADC_Identity`).
+- **Where it's used**: as a declaration, and only as one, today. A repository-wide search for the type
+  name across `MMCA.ADC/Source` and `MMCA.ADC/Tests` returns nothing but the three class declarations
+  themselves, so **no concrete class in this repository derives from it** and no code resolves it from
+  DI; the Conference tables are reached through
+  [`SQLServerDbContext`](group-07-persistence-ef-core.md#sqlserverdbcontext) instances created by the
+  framework's context factories, and the entity configurations covered in the sibling section of this
+  chapter are what put those tables in the model.
+- **Caveats / not-in-source**: (1) The XML doc comment (`:14`-`:18`) says the class "declares the DbSets
+  for all Conference entities". Two entities that **do** have SQL Server configurations in this module,
+  [`SessionAiScore`](group-17-conference-domain.md#sessionaiscore) (`SessionAiScoreConfiguration.cs`) and
+  `SpeakerQuestionAnswer` (`SpeakerQuestionAnswerConfiguration.cs`), have no `DbSet` here, and they are
+  still mapped and still persisted, which is the clearest available proof that the model comes from the
+  configurations rather than from this list. Treat the `DbSet` block as a helpful but non-authoritative
+  index. (2) Because nothing derives from this abstract class, whether a future engine-specific or
+  test-specific subclass is intended is not determinable from source.
 
 
 ---

@@ -2,7 +2,7 @@
 
 > **Chapter scope note.** The tier chapters (`tier-00` through the sweep) document every type
 > in the production codebase one by one. Test types are the logged exception: this chapter covers
-> the **1,246** types that live in test projects, grouped by project purpose and foundational
+> the **1,533** types that live in test projects, grouped by project purpose and foundational
 > infrastructure, not written as one section per `[Fact]`. Individual test methods are cited only
 > as worked examples. Cross-reference the tier chapters for the production types being tested.
 > The counts come from the Roslyn inventory (`00-inventory.md:23-117`), which scans
@@ -153,56 +153,56 @@ The inventory below is drawn from `00-inventory.md:23-117` (test-assembly counts
 files above. Counts are distinct types per project as reported by the Roslyn inventory scan, not
 `[Fact]` counts.
 
-### MMCA.Common, 659 test types across 11 in-solution projects + 27 across 4 out-of-solution
+### MMCA.Common, 845 test types across 11 in-solution projects + 30 across 4 out-of-solution
 
 **Unit, Core layer**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.Common.Shared.Tests` | 25 | Unit tests for the Result pattern, `Error`, `ErrorType`, value objects, DTO contracts, supported cultures |
-| `MMCA.Common.Domain.Tests` | 43 | Unit tests for entity hierarchy, aggregate root, domain events, specifications, soft-delete, PII redaction |
-| `MMCA.Common.Application.Tests` | 175 | Unit tests for CQRS dispatcher, decorator pipeline, module loader, `IMessageBus`, validators, query pipeline |
-| `MMCA.Common.Infrastructure.Tests` | 204 | Unit/integration tests for EF base contexts, outbox processor, repository, caching, JWT generation, JWKS provider, data-source resolver |
+| `MMCA.Common.Shared.Tests` | 32 | Unit tests for the Result pattern, `Error`, `ErrorType`, value objects, DTO contracts, supported cultures |
+| `MMCA.Common.Domain.Tests` | 45 | Unit tests for entity hierarchy, aggregate root, domain events, specifications, soft-delete, PII redaction |
+| `MMCA.Common.Application.Tests` | 211 | Unit tests for CQRS dispatcher, decorator pipeline, module loader, `IMessageBus`, validators, query pipeline, plus the enterprise-wave additions: the exportable-user-data handler base (`Users/ExportUserDataHandlerBaseTests.cs`), tenant-scoped cache keys (`Decorators/CachingDecoratorTenantScopingTests.cs`) and `ICacheService.GetOrCreate` (`Interfaces/CacheServiceGetOrCreateTests.cs`) |
+| `MMCA.Common.Infrastructure.Tests` | 279 | Unit/integration tests for EF base contexts, outbox processor, repository, caching, JWT generation, JWKS provider, data-source resolver, plus the enterprise-wave subtrees: `Scheduling/` (cron runner, metrics, model gate), `Persistence/Tenancy/` (tenant filter, interceptor, per-tenant data-source target), `Persistence/AuditTrail/` (interceptor, reader, cleanup job) and `Caching/HybridCacheServiceTests.cs` |
 
 **Unit, Presentation layer**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.Common.API.Tests` | 67 | Tests for `ApiControllerBase`, exception handlers, idempotency filter, middleware, JWKS endpoint (also the consolidated home of the ADC/Store middleware coverage) |
+| `MMCA.Common.API.Tests` | 94 | Tests for `ApiControllerBase`, exception handlers, idempotency filter, middleware, JWKS endpoint (also the consolidated home of the ADC/Store middleware coverage), plus the session-cookie auth handler and refresher (`SessionCookies/`), CSV export (`Export/CsvWriterTests.cs`, `Controllers/EntityControllerBaseExportTests.cs`) and `Middleware/TenantResolutionMiddlewareTests.cs` |
 | `MMCA.Common.Grpc.Tests` | 15 | Tests for `GrpcResultExceptionInterceptor`, `JwtForwardingClientInterceptor`, Result to `RpcException` mapping |
-| `MMCA.Common.UI.Tests` | 78 | bUnit component tests for shared Blazor components (login/register forms, nav, theming, notification pages) |
+| `MMCA.Common.UI.Tests` | 87 | bUnit component tests for shared Blazor components (login/register forms, nav, theming, notification pages) |
 | `MMCA.Common.UI.Web.Tests` | 4 | The Blazor Web host layer: `ServerTokenStorageService`, `BlazorCspPolicyProvider`, `WebFormFactor` |
 
 **Hosting**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.Common.Aspire.Tests` | 13 | Tests for `AddServiceDefaults`, health-check registration, `OutboxPollFilterProcessor` telemetry suppression |
-| `MMCA.Common.Testing.Tests` | 9 | The framework dogfooding its own shipped test bases: `DecoratorPipelineOrderTests` over a synthetic `PingCommand`/`PingQuery` pair, and `HandlerTestBaseTests` |
+| `MMCA.Common.Aspire.Tests` | 28 | Tests for `AddServiceDefaults`, health-check registration, `OutboxPollFilterProcessor` telemetry suppression, the warmup readiness gate and its hosted service (`Warmup/`), the metrics-instrumentation and trace-sample-ratio toggles (`Telemetry/`), security headers, Key Vault configuration, data protection and the Kestrel endpoint extensions |
+| `MMCA.Common.Testing.Tests` | 16 | The framework dogfooding its own shipped test bases and helpers: `DecoratorPipelineOrderTests` over a synthetic `PingCommand`/`PingQuery` pair, `HandlerTestBaseTests`, `CrossServiceFixtureBaseTests`, `DependencyInjectionAssertTests`, `JwtTokenGeneratorTests` and `TestPollingTests` |
 
 **Architecture**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.Common.Architecture.Tests` | 26 | 19 fitness-function classes (see section 4) plus `CommonArchitectureMap` and their fixtures |
+| `MMCA.Common.Architecture.Tests` | 34 | 20 fitness-function classes (see section 4) plus two conformance subclasses over fake modules, `CommonArchitectureMap` and their fixtures |
 
 **Out-of-solution (each run by its own dedicated CI job)**
 
 | Project | Types | Purpose |
 |---|---|---|
 | `MMCA.Common.UI.Gallery` | 9 | Backend-less Blazor host; renders the real login/register pages, a primitives showcase and the notification pages for Playwright to hit |
-| `MMCA.Common.UI.E2E.Tests` | 11 | Playwright axe-core WCAG 2.1 AA scans, render smoke, dark mode, web vitals, pseudo-localization and mobile top row against the Gallery |
-| `MMCA.Common.Infrastructure.Redis.Tests` | 1 | `DistributedCacheService` against a real Redis via Testcontainers (storage FORMAT fidelity: a mocked `IDistributedCache` cannot answer WRONGTYPE) |
+| `MMCA.Common.UI.E2E.Tests` | 13 | Playwright axe-core WCAG 2.1 AA scans, render smoke, dark mode, web vitals, pseudo-localization and mobile top row against the Gallery |
+| `MMCA.Common.Infrastructure.Redis.Tests` | 2 | `DistributedCacheService` against a real Redis via Testcontainers (storage FORMAT fidelity: a mocked `IDistributedCache` cannot answer WRONGTYPE) |
 | `MMCA.Common.Benchmarks` | 6 | BenchmarkDotNet hot-path suite behind the ADR-060 performance gate (section 7) |
 
-### MMCA.ADC, 560 test types across 30 in-solution projects
+### MMCA.ADC, 658 test types across 30 in-solution projects
 
 **Unit, per-module, per-layer (Identity module)**
 
 | Project | Types | Purpose |
 |---|---|---|
 | `MMCA.ADC.Identity.Domain.Tests` | 4 | `User` aggregate factory methods, invariants, soft-delete |
-| `MMCA.ADC.Identity.Application.Tests` | 21 | Command/query handler tests for register, login, external OAuth, profile management |
+| `MMCA.ADC.Identity.Application.Tests` | 26 | Command/query handler tests for register, login, external OAuth, profile management, plus the GDPR export path: `ExportUserDataHandlerTests`, `ExportUserDataRegistrationTests` and the per-module section tests (`EngagementUserDataExportSectionTests`, `NotificationUserDataExportSectionTests`) |
 | `MMCA.ADC.Identity.Shared.Tests` | 3 | DTO/enum tests |
 | `MMCA.ADC.Identity.API.Tests` | 7 | Controller helper tests, rate-limit bypass |
 | `MMCA.ADC.Identity.Infrastructure.Tests` | 4 | Token service, JWKS provider, EF configuration |
@@ -212,23 +212,23 @@ files above. Counts are distinct types per project as reported by the Roslyn inv
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.Conference.Domain.Tests` | 22 | Event/Session/Speaker aggregate factory, invariants, domain events |
-| `MMCA.ADC.Conference.Application.Tests` | 142 | Handler tests for the Conference controllers' use cases (bulk) |
+| `MMCA.ADC.Conference.Domain.Tests` | 25 | Event/Session/Speaker/Sponsor aggregate factories, invariants, domain events |
+| `MMCA.ADC.Conference.Application.Tests` | 148 | Handler tests for the Conference controllers' use cases (bulk), including the `Sponsors/` create, update, public-filter and mapper tests |
 | `MMCA.ADC.Conference.Shared.Tests` | 17 | DTO validation, enum coverage |
-| `MMCA.ADC.Conference.API.Tests` | 16 | Controller registration, route tests |
-| `MMCA.ADC.Conference.Infrastructure.Tests` | 10 | EF configuration, repository behavior |
-| `MMCA.ADC.Conference.UI.Tests` | 28 | bUnit tests for session/speaker components and dashboards |
+| `MMCA.ADC.Conference.API.Tests` | 18 | Controller registration, route tests, `SponsorsControllerTests` and `EntityExportAuthorizationTests` |
+| `MMCA.ADC.Conference.Infrastructure.Tests` | 13 | EF entity configuration, module seeding, the Sessionize import and the AI session-scoring services |
+| `MMCA.ADC.Conference.UI.Tests` | 37 | bUnit tests for session/speaker components and dashboards, plus the sponsor create/detail pages and the public sponsor list |
 
 **Unit, per-module, per-layer (Engagement module)**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.Engagement.Domain.Tests` | 6 | Bookmark, LivePoll and SessionQuestion aggregates |
-| `MMCA.ADC.Engagement.Application.Tests` | 30 | Bookmark, feedback and live-layer command/query handlers |
-| `MMCA.ADC.Engagement.Shared.Tests` | 2 | DTO tests |
-| `MMCA.ADC.Engagement.API.Tests` | 6 | Controller surface |
+| `MMCA.ADC.Engagement.Domain.Tests` | 11 | Bookmark, LivePoll and SessionQuestion aggregates, plus `CheckIn`, `PointsEntry` and the leaderboard opt-in |
+| `MMCA.ADC.Engagement.Application.Tests` | 56 | Bookmark, feedback and live-layer command/query handlers, plus the `CheckIns/` subtree (attendee, manual, room and sponsor-visit check-in, badge issue, attendance stats) and the `Points/` subtree (awarder, leaderboard, my-points, organizer overview, and the domain/integration-event points handlers) |
+| `MMCA.ADC.Engagement.Shared.Tests` | 7 | DTO tests, plus the badge payload, check-in scope names and settings, and the points settings and subject keys |
+| `MMCA.ADC.Engagement.API.Tests` | 8 | Controller surface (bookmarks, live polls, session questions, check-ins, points) and the module's permission grants |
 | `MMCA.ADC.Engagement.Infrastructure.Tests` | 4 | EF config |
-| `MMCA.ADC.Engagement.UI.Tests` | 21 | bUnit tests for the conference-day live surfaces (Happening Now, session Live, presenter UI) |
+| `MMCA.ADC.Engagement.UI.Tests` | 34 | bUnit tests for the conference-day live surfaces (Happening Now, session Live, presenter UI), the QR check-in pages (scan, my badge, organizer attendance, room check-in, sponsor visit), the points pages (my points, organizer overview), and `CurrentEventNotificationScopeProviderTests` for the event-scoped notification provider |
 
 **Unit, per-module (Notification module, API + Application only)**
 
@@ -256,31 +256,31 @@ files above. Counts are distinct types per project as reported by the Roslyn inv
 |---|---|---|
 | `MMCA.ADC.Identity.IntegrationTests` | 33 | Full HTTP tests of the Identity service host against real SQL Server; auth flows, OAuth challenges, attendee/organizer access, outbox fidelity |
 | `MMCA.ADC.Conference.IntegrationTests` | 36 | Full HTTP tests of the Conference service host, plus its 409-conflict ProblemDetails extension and the versioning contract |
-| `MMCA.ADC.Engagement.IntegrationTests` | 13 | Full HTTP tests of the Engagement service host |
-| `MMCA.ADC.Notification.IntegrationTests` | 8 | Full HTTP tests of the Notification service host |
+| `MMCA.ADC.Engagement.IntegrationTests` | 22 | Full HTTP tests of the Engagement service host, including the check-in authorization and scan, room-check-in and sponsor-visit round trips and the points award round trip and endpoints |
+| `MMCA.ADC.Notification.IntegrationTests` | 9 | Full HTTP tests of the Notification service host |
 
 **Testcontainers tiers (in `MMCA.ADC.slnx` but in neither `.slnf`; need Docker)**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.CrossService.IntegrationTests` | 12 | Boots the three REST hosts in one process against real SQL Server + RabbitMQ containers; exercises the genuine outbox to broker to consumer round-trip and the Conference to Engagement gRPC read |
+| `MMCA.ADC.CrossService.IntegrationTests` | 11 | Boots the three REST hosts in one process against real SQL Server + RabbitMQ containers; exercises the genuine outbox to broker to consumer round-trip and the Conference to Engagement gRPC read |
 | `MMCA.ADC.ServiceBusEmulator.IntegrationTests` | 3 | MassTransit smoke against the official Azure Service Bus emulator (broker parity) |
 
 **E2E (in `MMCA.ADC.slnx` but excluded from both `.slnf` filters)**
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.E2E.Tests` | 60 | Playwright browser-automation tests across login, register, conference browsing, bookmark and live flows, plus the 20-scan `AccessibilityTests` suite; requires the Aspire stack running |
+| `MMCA.ADC.E2E.Tests` | 70 | Playwright browser-automation tests across login, register, conference browsing, bookmark and live flows, plus the 31-scan `AccessibilityTests` suite (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs`, 31 `[Fact]` methods, each one `ScanAsync`/`ScanGridAsync` call); requires the Aspire stack running |
 
 ### Test-type totals
 
-- **MMCA.Common:** the 11 in-solution projects sum to 25 + 43 + 175 + 204 + 67 + 15 + 78 + 4 + 13 +
-  9 + 26 = **659**; the 4 out-of-solution projects add 9 + 11 + 1 + 6 = **27**, for **686**.
-- **MMCA.ADC:** 45 (Identity) + 235 (Conference) + 69 (Engagement) + 6 (Notification) + 30
-  (architecture) + 90 (four integration projects) + 15 (two Testcontainers tiers) + 5 (Gateway) + 5
-  (Services) + 60 (E2E) = **560**.
-- **Combined test projects: 1,246.** Separately, the four shipped testing packages contribute
-  another **89** types (`MMCA.Common.Testing` 14, `.Testing.Architecture` 39, `.Testing.E2E` 21,
+- **MMCA.Common:** the 11 in-solution projects sum to 32 + 45 + 211 + 279 + 94 + 15 + 87 + 4 + 28 +
+  16 + 34 = **845**; the 4 out-of-solution projects add 9 + 13 + 2 + 6 = **30**, for **875**.
+- **MMCA.ADC:** 50 (Identity) + 258 (Conference) + 120 (Engagement) + 6 (Notification) + 30
+  (architecture) + 100 (four integration projects) + 14 (two Testcontainers tiers) + 5 (Gateway) + 5
+  (Services) + 70 (E2E) = **658**.
+- **Combined test projects: 1,533.** Separately, the four shipped testing packages contribute
+  another **95** types (`MMCA.Common.Testing` 18, `.Testing.Architecture` 40, `.Testing.E2E` 22,
   `.Testing.UI` 15): those are shipped product, not tests, which is why they are counted apart.
 
 [Rubric §14, Testability & Test Strategy]: §14 assesses the breadth and meaningfulness of the
@@ -295,19 +295,19 @@ demonstrates deliberate stratification rather than a single catch-all integratio
 MMCA.Common ships **four** of its fifteen packages as testing infrastructure that downstream apps
 consume as NuGet references rather than writing their own harness (`MMCA.Common/FACTS.md:19,33-36`):
 
-- `MMCA.Common.Testing` (14 types), integration-test base, JWT generator, SQL fixture base, handler
+- `MMCA.Common.Testing` (18 types), integration-test base, JWT generator, SQL fixture base, handler
   scaffold, entity builders, and the six ADR-058 runtime conformance bases (this section).
-- `MMCA.Common.Testing.E2E` (21 types), Playwright fixtures, Blazor nav helpers, Identity and
+- `MMCA.Common.Testing.E2E` (22 types), Playwright fixtures, Blazor nav helpers, Identity and
   Preferences workflow bases, page objects, the `AxeOptions` accessibility contract and a web-vitals
   collector (this section).
 - `MMCA.Common.Testing.UI` (15 types), bUnit component-test base, MudBlazor provider harness, HTTP
   test doubles and a markup snapshot helper (this section; see the bUnit worked example in section 6).
-- `MMCA.Common.Testing.Architecture` (39 types), the shared NetArchTest fitness-function rule library
-  plus 31 abstract test bases (covered in section 4, where each repo's `*.Architecture.Tests` consumes it).
+- `MMCA.Common.Testing.Architecture` (40 types), the shared NetArchTest fitness-function rule library
+  plus 32 abstract test bases (covered in section 4, where each repo's `*.Architecture.Tests` consumes it).
 
 ### MMCA.Common.Testing
 
-`MMCA.Common/Source/Hosting/MMCA.Common.Testing/`, 14 types, shipped as `MMCA.Common.Testing`.
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing/`, 18 types, shipped as `MMCA.Common.Testing`.
 
 #### `IIntegrationTestFixture`
 `MMCA.Common/Source/Hosting/MMCA.Common.Testing/IIntegrationTestFixture.cs:8`
@@ -464,9 +464,34 @@ A C# preview `extension(IServiceCollection services)` block (line 12) exposing
 `appsettings.json`. Allows integration tests to exercise both the flag-on and flag-off code
 paths without changing the real config file.
 
+#### The cross-service and polling helpers
+
+Three more shipped types close out the package, all of them for the tiers above the unit loop:
+
+- `CrossServiceFixtureBase` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:41`)
+  and its `CrossServiceDataSource` record (line 15) are the scaffolding for the cross-service
+  real-broker tier: several service hosts booted in **one** process against a real Testcontainers SQL
+  Server and a real Testcontainers RabbitMQ. The class remarks (lines 26-39) record the load-bearing
+  constraint: each host reads its connection string, message-bus provider and JWT settings from
+  configuration at configure-time, before `builder.Build()` and therefore before a
+  `WebApplicationFactory` config delta could apply, so **process environment variables are the only
+  override channel** and the hosts must be booted strictly sequentially, re-pointing the connection
+  string between boots. ADC's `CrossServiceFixture`
+  (`MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:23`)
+  is its one subclass, carrying only the ADC-specific parts.
+- `DependencyInjectionAssert` (`DependencyInjectionAssert.cs:13`) asserts the fluent-registration
+  contract: `ReturnsSameCollection` (line 21) proves a registration extension hands back the very
+  `IServiceCollection` it was given. An extension that returns a different collection silently drops
+  every registration chained after it, and nothing else catches that because the dropped services are
+  simply absent (lines 6-11).
+- `TestPolling.PollUntilAsync` (`TestPolling.cs:22`) is the poll-with-timeout helper for
+  eventually-consistent assertions, defaulting to a 60-second budget and a 500ms interval
+  (lines 31-32). It returns the **last probed value** either way (line 40), so a timeout fails on the
+  test's real assertion message rather than on a bare timeout.
+
 ### MMCA.Common.Testing.E2E
 
-`MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/`, 21 types, shipped as
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/`, 22 types, shipped as
 `MMCA.Common.Testing.E2E`. [Rubric §28, Front-End Testing & Quality]: §28 assesses whether UI
 components have browser-level automated coverage; this package is the shared foundation for that
 coverage.
@@ -708,9 +733,9 @@ names, so a developer adding a forbidden reference sees exactly which type broke
 reusable rule library (the `ArchitectureRules.*` partial classes: `Layers`, `Purity`, `Transport`,
 `Modules`, `Handlers`, `Entities`, `Naming`, `Events`, `Controllers`, `Governance`,
 `HandlerResults`, `Immutability`, `Slices`, `Specifications`, `Localization`, `LocalizedText`) and
-**31 abstract `*TestsBase` classes**, one per rule family, in `Bases/`, all parameterized by an
-`IArchitectureMap`. The package declares **96 test methods across those 31 bases**, and MMCA.Common's
-own build executes **61** of them: the methods of the bases its arch-tests subclass, plus its
+**32 abstract `*TestsBase` classes**, one per rule family, in `Bases/`, all parameterized by an
+`IArchitectureMap`. The package declares **100 test methods across those 32 bases**, and MMCA.Common's
+own build executes **78** of them: the methods of the bases its arch-tests subclass, plus its
 Common-only direct tests (`MMCA.Common/FACTS.md:44,47-48`, which is generated from source and
 CI-gated, so it is the number to quote rather than a hand count).
 
@@ -741,19 +766,22 @@ The walkthroughs below describe **what each rule enforces** (and the count of fa
 the rule *implementations* live in the shared package's `ArchitectureRules.*` + `*TestsBase` files,
 not in the per-repo test class.
 
-### MMCA.Common.Architecture.Tests, 26 types
+### MMCA.Common.Architecture.Tests, 34 types
 
-Located at `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/`. Nineteen are fitness-function
-classes; the rest are `CommonArchitectureMap` and per-test fixtures. Thin subclasses of the shared
+Located at `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/`. Twenty are fitness-function
+classes; two more (`FakeLeafModuleConformanceTests` and `FakeDependentModuleConformanceTests`, both in
+`ModuleConformanceTestsBaseTests.cs:51,60`) run a shared base against fake modules; the rest are
+`CommonArchitectureMap` and per-test fixtures. Thin subclasses of the shared
 bases: `LayerDependencyTests`, `DomainPurityTests`, `MicroserviceExtractionTests`, `PiiConventionTests`,
 `AggregateConventionTests`, `DependencyVersionTests`, `EventVersioningConventionTests`,
 `SliceCohesionTests`, `HandlerResultConventionTests`, `RawQueryableConventionTests`,
 `UIArchitectureConventionTests`, `StateManagementConventionTests`, `LocalizationResourceTests`,
-`LocalizedTextConventionTests`. Five are Common-only direct tests, not subclasses of a mapped rule:
+`LocalizedTextConventionTests`. Six are Common-only direct tests, not subclasses of a mapped rule:
 `FrameworkSanityTests`, `PiiErasureContractFitnessTests`, `SpecificationFitnessTests`,
-`NavigationContractTests`, and `ObservabilityConventionTestsBaseTests`.
+`NavigationContractTests`, `ObservabilityConventionTestsBaseTests`, and
+`ModuleConformanceTestsBaseTests`.
 
-Three of those five deserve naming, because they exist to stop a gate becoming a decoration:
+Four of those six deserve naming, because they exist to stop a gate becoming a decoration:
 
 - `PiiErasureContractFitnessTests` forces a representative `[Pii]`-carrying data subject through
   `PiiRedactor` and `IAnonymizable` end to end, because the mapped `PiiConventionTests` scan is
@@ -765,6 +793,18 @@ Three of those five deserve naming, because they exist to stop a gate becoming a
   *different assembly* than the base, because the base must read the embedded IaC resources of the
   subclass's assembly. Resolving against the base's own assembly would be a silent break that the
   framework's own CI would never catch.
+- `ModuleConformanceTestsBaseTests` (`ModuleConformanceTestsBaseTests.cs:86`) is adversarial coverage
+  for `ModuleConformanceTestsBase<TModule>`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ModuleConformanceTestsBase.cs:21`),
+  the base the consumer repos' near-identical `{X}ModuleTests` files collapse into. Three facts assert
+  each conformance check actually **fails** on the drift it claims to catch (name, dependencies,
+  `RequiresDependencies`), driven by a `private` drifted subclass so xUnit does not collect its
+  deliberately failing inherited facts as tests of their own (line 131). A fourth runs the base against
+  a leaf module that overrides neither member (line 15), proving the base reaches `IModule`'s
+  **default interface implementations** rather than members on the concrete type, which is the one
+  thing that would break silently across the package boundary (lines 9-14). The fifth pins the
+  disabled-stub hook as vacuous by default (line 124), with the dependent fixture (line 31) asserting
+  the real stub registration.
 
 #### `LayerDependencyTests`
 `MMCA.Common.Architecture.Tests/LayerDependencyTests.cs:9`
@@ -1037,7 +1077,7 @@ real broker or a real cross-service call. Two Docker-dependent projects close th
 `MMCA.ADC.slnx` but in neither `.slnf`, so a full `dotnet test --solution MMCA.ADC.slnx` needs a
 Docker daemon.
 
-- `MMCA.ADC.CrossService.IntegrationTests` (12 types) boots the three REST hosts in one process
+- `MMCA.ADC.CrossService.IntegrationTests` (11 types) boots the three REST hosts in one process
   against real SQL Server and RabbitMQ containers and drives the genuine outbox to broker to
   consumer round-trip (the `UserRegistered` speaker auto-link, the `SpeakerLinked`/`Unlinked`
   back-link) plus the real Conference to Engagement gRPC read.
@@ -1054,7 +1094,7 @@ the arrangement exactly, with `MMCA.Store.CrossService.IntegrationTests` and
 
 ### MMCA.Common unit-level infrastructure tests
 
-`MMCA.Common.Infrastructure.Tests` (204 types) uses SQLite-backed `EnsureCreated` contexts for
+`MMCA.Common.Infrastructure.Tests` (279 types) uses SQLite-backed `EnsureCreated` contexts for
 tests that need a real EF pipeline. SQLite avoids the SQL Server dependency entirely, which is why
 `MMCA.Common` builds and tests without any SQL Server or Docker in the local environment. The tradeoff
 is that SQLite does not support all SQL Server features (row-level locking, certain index
@@ -1067,7 +1107,7 @@ Testcontainers, out of the slnx.
 
 ### E2E tests
 
-`MMCA.ADC.E2E.Tests` (60 types) and `MMCA.Common.UI.E2E.Tests` (11 types) require either the
+`MMCA.ADC.E2E.Tests` (70 types) and `MMCA.Common.UI.E2E.Tests` (13 types) require either the
 full Aspire stack (`dotnet run --project Source/Hosting/MMCA.ADC.AppHost`) or the Gallery
 backend (`MMCA.Common.UI.Gallery`) respectively. The Aspire AppHost starts SQL Server, Redis,
 RabbitMQ, MailDev, all four service hosts, the Gateway, and the UI; it cannot be launched
@@ -1089,8 +1129,9 @@ stay on a Mon/Thu schedule in `e2e.yml`. Section 7 has the gate wiring.
 [Rubric §21, Accessibility]: the `AssertNoAccessibilityViolationsAsync` call in the shipped workflow
 bases, in each app's own `AccessibilityTests`, and in `MMCA.Common.UI.E2E.Tests` is the runtime
 axe-core gate for WCAG 2.1 AA. Coverage beyond the shared bases is hand-maintained: nothing forces a
-new page into `AccessibilityTests`, and today that suite holds 20 scans in ADC
-(`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17`) and 22 in Store, against
+new page into `AccessibilityTests`, and today that suite holds 31 scans in ADC
+(`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17`) and 23 in Store
+(`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs`), against
 far larger page inventories.
 
 ---

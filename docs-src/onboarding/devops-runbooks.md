@@ -107,7 +107,7 @@ service's rows, producing duplicate dispatch (the precise defect documented in [
 
 **The [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) decision.** Adopt database-per-service. Each service owns `ADC_Identity`,
 `ADC_Conference`, `ADC_Engagement`, or `ADC_Notification`, locally on the Aspire SQL container,
-in Azure as four Basic-tier databases on the same SQL server (`main.bicep:639-662`, Basic 5 DTU
+in Azure as four Basic-tier databases on the same SQL server (`main.bicep:661-677`, Basic 5 DTU
 with a 2 GB cap each). The legacy `AtlDevCon` database is retained **read-only** as an archive and
 rollback path and is never deleted. Cross-service references become scalar IDs (no cross-database
 foreign keys); `CrossDataSourceDegradeConvention` removes FK constraints at the EF level;
@@ -130,9 +130,9 @@ data loss:
    post-cutover runbook below.
 
 All of it has landed. `main.bicep` now injects the per-service connection strings into the
-container apps as Key Vault secret references (`main.bicep:1043` is Identity's
+container apps as Key Vault secret references (`main.bicep:1082` is Identity's
 `DataSources__Identity__SQLServerConnectionString`), and the `AtlDevCon` resource is declared at
-the Basic archive SKU (`main.bicep:614-628`). The cutover workflow and the downgrade runbook below
+the Basic archive SKU (`main.bicep:629-643`). The cutover workflow and the downgrade runbook below
 are therefore history rather than pending steps, and they are documented here because they are the
 recovery-time reference for rebuilding this topology from the archive.
 
@@ -336,7 +336,7 @@ not copy it at all.
 
 ## infra/DISASTER-RECOVERY.md, DR runbook
 
-**File:** `MMCA.ADC/infra/DISASTER-RECOVERY.md` (153 lines; not the Store file of the same name)
+**File:** `MMCA.ADC/infra/DISASTER-RECOVERY.md` (175 lines; not the Store file of the same name)
 
 **What it is.** The authoritative disaster-recovery runbook for the ADC production environment.
 Mandated by [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html): every consuming app must declare RTO/RPO per failure scenario, document the
@@ -354,11 +354,15 @@ and the freshness gates.
 
 [Rubric §29, Resilience & Business Continuity] assesses whether the system has documented RTO/RPO
 targets and a drilled restore procedure. The DR file addresses both: the objectives table
-(`DISASTER-RECOVERY.md:10-14`) and a recorded drill (`DISASTER-RECOVERY.md:140-142`), a PITR
-restore of `ADC_Conference` on 2026-06-20 that completed in 2.6 min against the 2 h RTO and came
-back Online. The status block (`DISASTER-RECOVERY.md:144-152`) records TD-10 as closed on the
-strength of that drill plus the Polly fault-injection tests in MMCA.Common and the Azure Monitor
-SLO workbook (`main.bicep:515`, the `sloWorkbook` resource embedding
+(`DISASTER-RECOVERY.md:10-14`) and a maintained drill ledger of six rows
+(`DISASTER-RECOVERY.md:151-158`), whose newest entry is a PITR restore of `ADC_Conference` on
+2026-08-10 that completed in 2.1 min against the 2 h RTO and came back Online. The status block
+(`DISASTER-RECOVERY.md:160-165`) reads that ledger as a rotation rather than as a single success:
+every `ADC_*` database now carries a recovery proof, and the number it quotes is the **slowest**
+measured restore in the rotation (4.4 min), not the fastest. A second status paragraph is retained
+for the record (`DISASTER-RECOVERY.md:167-175`); it closes TD-10 on the strength of the original
+2026-06-20 drill plus the Polly fault-injection tests in MMCA.Common and the Azure Monitor SLO
+workbook (`main.bicep:530`, the `sloWorkbook` resource embedding
 `infra/workbooks/adc-slo-workbook.json`).
 
 [Rubric §13, Observability] assesses alerting and monitoring. The DR file's alert table
@@ -367,9 +371,9 @@ severities: failed requests count > 10 (sev 2), average server response time > 3
 dependency failures count > 10 (sev 2), each evaluated every 5 minutes over a 15-minute window.
 Those numbers are current, but the resource type in the prose above the table
 (`DISASTER-RECOVERY.md:45-47`, "metric alerts") is not: the live rules are KQL log-search alerts
-built from `sloAlertSpecs` (`main.bicep:261-289`, materialized as `scheduledQueryRules` at
-`main.bicep:291-333`), and the original metric alerts of the same names are kept declared with
-`enabled: false` (`main.bicep:335-377`) because an incremental ARM deployment never deletes a
+built from `sloAlertSpecs` (`main.bicep:276-304`, materialized as `scheduledQueryRules` at
+`main.bicep:306-348`), and the original metric alerts of the same names are kept declared with
+`enabled: false` (`main.bicep:357-392`) because an incremental ARM deployment never deletes a
 resource that simply left the template. Per-alert triage lives in `infra/OPERATIONS.md` below.
 
 [Rubric §11, Security] assesses credential hardening. The managed-identity section
@@ -413,7 +417,7 @@ Two tiers (`DISASTER-RECOVERY.md:33-41`):
   default). Covers the "undo the last bad change" case with an RPO of minutes.
 - **LTR**: long-term retention on all four live per-service databases: weekly P4W, monthly P12M,
   yearly P1Y (week 1). Declared via the `serviceDatabaseLtr` resource in `infra/main.bicep`
-  (`main.bicep:668-679`). `AtlDevCon` is excluded (static archive, never written after cutover).
+  (`main.bicep:683-694`). `AtlDevCon` is excluded (static archive, never written after cutover).
 
 ### Recovery procedures
 
@@ -437,21 +441,50 @@ does not serve. Manual rollback example is also given.
 
 `DISASTER-RECOVERY.md:116-138` defines the drill: PITR-restore a throwaway copy, confirm it comes
 back Online, record the measured restore time, then delete the copy. Only a copy is ever created,
-so the live databases are never touched. Two automated paths are documented
-(`DISASTER-RECOVERY.md:122-126`): the `dr-drill.yml` workflow, and `pwsh
-./scripts/dr-restore-drill.ps1` locally after `az login`. Both wrap the same `az sql db restore`,
-verify, `az sql db delete` sequence (`DISASTER-RECOVERY.md:129-134`); there is no `sqlcmd` anywhere
-in the drill path.
+so the live databases are never touched. The file documents three ways to run it
+(`DISASTER-RECOVERY.md:120-130`) and names the scheduled one as the enforcing path:
+
+- **Scheduled** (`DISASTER-RECOVERY.md:122-125`), the weekly cron, which rotates across the four
+  live per-service databases by ISO week number so each earns a recovery proof roughly monthly.
+  The retired `AtlDevCon` archive is deliberately absent from the rotation and can never be the
+  scheduled target.
+- **One-click** (`DISASTER-RECOVERY.md:126-129`), the `dr-drill.yml` workflow's manual
+  `workflow_dispatch`, for a chosen database (default `ADC_Identity`, with `AtlDevCon` still
+  selectable as a manual-only archive check) and a chosen point in time. It prints the
+  drill-result row in the job summary, ready to paste into the ledger.
+- **Local / CLI** (`DISASTER-RECOVERY.md:130`), `pwsh ./scripts/dr-restore-drill.ps1
+  -SourceDatabase ADC_Conference` after `az login`.
+
+All three wrap the same `az sql db restore`, verify, `az sql db delete` sequence
+(`DISASTER-RECOVERY.md:132-138`); there is no `sqlcmd` anywhere in the drill path.
 
 The stated SLO is at least one successful drill per release train and after any backup or
 retention change, with the restore completing inside the 2 h RTO; a missed or failed drill is
-called a release-blocking regression for §29 (`DISASTER-RECOVERY.md:136-138`). The drill-result
-table (`DISASTER-RECOVERY.md:140-142`) carries one row today: 2026-06-20, `ADC_Conference` (PITR),
-PASS in 2.6 min, status Online.
+called a release-blocking regression for §29 (`DISASTER-RECOVERY.md:140-142`). The drill-result
+table (`DISASTER-RECOVERY.md:151-158`) is where that claim is cashed, and it carries six rows:
 
-One detail the DR file has not caught up with: its one-click bullet still describes `dr-drill.yml`
-as manual `workflow_dispatch` (`DISASTER-RECOVERY.md:122-123`). The workflow also runs on a weekly
-cron, and the workflow file is the source of truth. The next section walks it.
+| Drill date | Source | Result |
+|---|---|---|
+| 2026-06-20 | ADC_Conference (PITR) | PASS in 2.6 min, Online |
+| 2026-07-20 | ADC_Identity (PITR) | PASS in 1.8 min, Online |
+| 2026-07-20 | ADC_Engagement (PITR) | PASS in 2.3 min, Online |
+| 2026-07-27 | ADC_Notification (PITR) | PASS in 2.1 min, Online |
+| 2026-08-03 | ADC_Identity (PITR) | PASS in 4.4 min, Online |
+| 2026-08-10 | ADC_Conference (PITR) | PASS in 2.1 min, Online |
+
+Read the shape of that table, not just the last row. The first entry is the pre-rotation drill in
+which one database stood in for all four; everything from 2026-07-20 onward is the weekly rotation,
+and those rows are the first recovery proofs `ADC_Identity`, `ADC_Engagement` and `ADC_Notification`
+ever had (`DISASTER-RECOVERY.md:144-149`). The spread is the other lesson: the same `ADC_Identity`
+database restored in 1.8 min in July and 4.4 min in August, which is why the status block quotes the
+slowest number against the 2 h RTO (`DISASTER-RECOVERY.md:160-165`). A ledger that keeps growing is
+what makes a claim like "restores take about two minutes" falsifiable; a single row cannot show
+variance at all.
+
+The ledger stays honest because it is gated, not remembered: `dr-freshness` fails a deploy when the
+newest successful `dr-drill.yml` run is older than 8 days (`deploy.yml:557`,
+`DISASTER-RECOVERY.md:163-165`). The rotation itself is prose here but arithmetic in the workflow,
+which is the source of truth. The next section walks it.
 
 ---
 
@@ -464,7 +497,8 @@ database and logs in to Azure via OIDC, the PowerShell script does the restore, 
 verification and the cleanup, and prints a drill-result row ready to paste into
 `infra/DISASTER-RECOVERY.md` (`dr-restore-drill.ps1:2-6`).
 
-**When it runs.** Both on a schedule and on demand, which is the fact most often mis-stated:
+**When it runs.** Both on a schedule and on demand, and the scheduled half is the one that carries
+the §29 weight:
 
 - **Weekly cron**, Mondays 06:00 UTC (`dr-drill.yml:30-32`). This is the enforcing path: a
   throwaway-copy restore is cheap and is deleted immediately after, so recovery is proven
@@ -536,7 +570,7 @@ defers restore procedure, RTO/RPO and accepted SPOFs to `DISASTER-RECOVERY.md` a
 triage only (`OPERATIONS.md:3-6`).
 
 **When to consult.** When an alert email arrives from the `adc-prod-alerts-*` action group
-(`main.bicep:231-245`), whose only receiver is the address in the `ALERT_EMAIL` repository
+(`main.bicep:246-260`), whose only receiver is the address in the `ALERT_EMAIL` repository
 variable (`OPERATIONS.md:8-11`).
 
 [Rubric §13, Observability & Operability] assesses whether alerts lead anywhere. A threshold with
@@ -564,16 +598,16 @@ by embedding both files as manifest resources named `infra.main.bicep` and `infr
    alert bicep no longer provisions is an orphan and also fails the build.
 
 The parse window is the text between `var sloAlertSpecs` and `resource sloAlerts`
-(`ObservabilityConventionTestsBase.cs:109-110`). In ADC's bicep that is `main.bicep:261` through
-`main.bicep:348`, which happens to contain both the live `sloAlertSpecs` (261-289) and the
-superseded `legacySloMetricAlertSpecs` (342-346). The parser therefore sees the same three keys
+(`ObservabilityConventionTestsBase.cs:109-110`). In ADC's bicep that is `main.bicep:276` through
+`main.bicep:363`, which happens to contain both the live `sloAlertSpecs` (276-304) and the
+superseded `legacySloMetricAlertSpecs` (357-361). The parser therefore sees the same three keys
 twice with identical severities, which is harmless: the counts of keys and severities still match,
 and both copies resolve to the same runbook section.
 
 ADC's three sections are `adc-alert-failed-requests` (sev 2, `OPERATIONS.md:15`),
 `adc-alert-server-response-time` (sev 3, `OPERATIONS.md:29`) and `adc-alert-dependency-failures`
 (sev 2, `OPERATIONS.md:42`). The headings use the pre-`v2` rule names while the live scheduled-query
-rules are provisioned as `adc-prod-alert-<key>-v2` (`main.bicep:296`); the gate matches on the
+rules are provisioned as `adc-prod-alert-<key>-v2` (`main.bicep:311`); the gate matches on the
 `-alert-<key>` infix (`ObservabilityConventionTestsBase.cs:32`, 73), so the suffix does not break
 the pairing.
 
@@ -583,13 +617,13 @@ The pairing is honest only about the alerts inside that parse window. Three more
 provisioned outside it, so they are neither gated nor runbooked:
 
 - `adc-prod-alert-outbox-dead-letter`, severity 2, fires on any `AppTraces` row matching
-  `dead-lettered` (`main.bicep:392-398`, 407-439). Every hit means an integration event was
-  permanently lost from a service's outbox.
+  `dead-lettered` (`main.bicep:408-413`, materialized at 422-454). Every hit means an integration
+  event was permanently lost from a service's outbox.
 - `adc-prod-alert-sql-dependency-failures`, severity 2, threshold 10 failed SQL dependency calls
-  over 15 minutes (`main.bicep:399-405`).
-- `adc-prod-alert-gateway-availability`, severity 1 (`main.bicep:481-505`), driven by the standard
+  over 15 minutes (`main.bicep:414-419`).
+- `adc-prod-alert-gateway-availability`, severity 1 (`main.bicep:496-520`), driven by the standard
   web test that pings the public Gateway `/health` from three Azure locations every 5 minutes with
-  a 2-of-3 failed-location threshold (`main.bicep:448-479`).
+  a 2-of-3 failed-location threshold (`main.bicep:463-494`).
 
 Adding, renaming or re-tiering any of those cannot fail the build, and `OPERATIONS.md` carries no
 `###` triage section for any of them, including the only Sev 1 alert in the system. Treat the
@@ -600,9 +634,13 @@ pairing gate as covering the three SLO alerts, not the alert surface as a whole.
 `OPERATIONS.md:55-68` is the fast reference: roll a bad revision back with `az containerapp
 revision list` / `revision copy`, follow `DISASTER-RECOVERY.md` for a database restore, re-run the
 referenced workflow when a freshness gate blocks a deploy, and revert a conference-day surge when
-`cost-guard.yml` fails. One caution when reading it: its freshness quick-reference
-(`OPERATIONS.md:63-66`) quotes a 3-day cross-service window, while `deploy.yml:673` sets 5 days.
-The DR window it quotes, 8 days, does match `deploy.yml:557`.
+`cost-guard.yml` fails. Its freshness quick-reference (`OPERATIONS.md:63-66`) names all three
+windows and each one matches the workflow that enforces it: `dr-freshness` 8 days
+(`deploy.yml:557`), `load-freshness` 35 days (`deploy.yml:614`), `cross-service-freshness` 5 days
+(`deploy.yml:673`). Those numbers live in two places, so treat the workflow as the source of truth
+and re-check the runbook line whenever a window moves: the cross-service window was widened from 3
+to 5 days when that suite went weekday-nightly (`deploy.yml:671-672`), and the runbook text
+followed separately.
 
 ---
 
@@ -646,7 +684,7 @@ stage is independently deployable and reversible.
 
 1. **Stage 1, add the Entra admin.** Set the `SQL_AAD_ADMIN_LOGIN` and `SQL_AAD_ADMIN_OID`
    repository variables; `deploy.yml:1054-1060` folds them into the bicep parameter file, and
-   `main.bicep:597-603` provisions the AAD admin only when the object id is non-empty. Additive,
+   `main.bicep:612-621` provisions the AAD admin only when the object id is non-empty. Additive,
    zero app impact.
 2. **Stage 2, grant the identity in each database** (`SQL-MANAGED-IDENTITY.md:56-68`). Connect to
    each of the four `ADC_*` databases as the Entra admin and run `CREATE USER
@@ -674,7 +712,7 @@ and, once stages 1 to 3 land, no shared SQL password at all.
 **What it is.** A step-by-step runbook for the third and final commit of the database-per-service
 rollout: downgrading `AtlDevCon` from S0 to Basic tier in `main.bicep`. This is a cost-reduction
 step that must be taken only after the per-service databases have been proven in production. It
-has already been applied (`main.bicep:614-628` declares the Basic SKU), so read it as the record
+has already been applied (`main.bicep:629-643` declares the Basic SKU), so read it as the record
 of how that was done and as the procedure to repeat after a DR rebuild.
 
 **When to run.** After the per-service databases (`ADC_*`) have been running and verified for at
@@ -930,11 +968,11 @@ Cross-links:
   `ALERT_EMAIL` repository Actions variable. Whether that variable is currently set in the
   `ivanball/ADC` repository is not determinable from the files; check Settings → Variables. If it
   is unset the rules still exist and fire in Azure Monitor, they simply email nobody.
-- **Whether the weekly drill is currently green**: the drill-result table records one drill
-  (2026-06-20) but `dr-drill.yml` has run weekly since, and each run appends only to the Actions
-  history unless an operator pastes the printed row back into `DISASTER-RECOVERY.md`. The live
-  answer is the newest successful `dr-drill.yml` run, which is exactly what `dr-freshness` queries;
-  it cannot be read from the repository.
-- **S0 and Basic list prices**: the DTU counts are in source (`main.bicep:622` sets Basic capacity
+- **Whether the newest weekly drill is green**: the drill ledger is maintained through 2026-08-10
+  (`DISASTER-RECOVERY.md:151-158`), but `dr-drill.yml` runs every Monday and a run reaches the
+  ledger only when an operator pastes the printed row back into `DISASTER-RECOVERY.md`. Any drill
+  newer than the last ledger row exists only in the Actions history, which is exactly what
+  `dr-freshness` queries (`deploy.yml:557`); it cannot be read from the repository.
+- **S0 and Basic list prices**: the DTU counts are in source (`main.bicep:637` sets Basic capacity
   5), but the monthly costs are Azure list pricing, not a repository fact. Check the Azure pricing
   page before quoting a saving.
