@@ -221,6 +221,16 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <code>ICommandHandler</code>/<code>IQueryHandler</code> contracts and their decorators in
           <a href="group-05-cqrs-pipeline.html"><code>group-05</code></a>.</p>
           </li>
+          <li><p><strong>One shared HTTP middleware pipeline (<a href="https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html" target="_blank" rel="noopener">ADR-079</a>).</strong> The
+          HTTP-side sibling of the decorator chain: every REST/gRPC service host builds its request pipeline
+          from one <code>UseCommonMiddlewarePipeline</code> call, which fixes the middleware order once (exception
+          handler through controllers) with the load-bearing adjacencies commented in code (authentication
+          before the rate limiter and before tenant resolution, forwarded headers before both). Conditional
+          middleware registers unconditionally and stays inert by config, so hosts differ by configuration,
+          not by pipeline shape. Adopted by all seven ADC/Store service hosts, Helpdesk, and the template;
+          the gateways and Blazor UI hosts sit deliberately outside it. First concrete code:
+          <a href="group-12-api-hosting-mapping.html"><code>group-12</code></a>.</p>
+          </li>
           <li><p><strong>Vertical Slice Architecture.</strong> Within a module, a feature is a cohesive slice (command/query +
           handler + validator + DTO + mapper together), not scattered across horizontal <code>Services/</code>,
           <code>Repositories/</code>, <code>Validators/</code> folders. Adding a feature means adding a slice.</p>
@@ -287,7 +297,26 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           </li>
           <li><p><strong>Soft-delete + audit fields.</strong> Entities are never hard-deleted; an <code>IsDeleted</code> flag plus EF global
           query filters exclude them. <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code> are stamped centrally in
-          <code>SaveChangesAsync</code>. For genuine erasure (GDPR/CCPA) there is a separate anonymize path. (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>.)</p>
+          <code>SaveChangesAsync</code>. For genuine erasure (GDPR/CCPA) there is a separate anonymize path. (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>.)
+          Since <a href="https://ivanball.github.io/docs/adr/075-audit-trail.html" target="_blank" rel="noopener">ADR-075</a> the same idea extends to
+          an opt-in field-level <strong>audit trail</strong>: a third <code>SaveChangesInterceptor</code>, registered last so it
+          diffs freshly stamped values, writes per-property <code>AuditTrailEntries</code> in the same transaction as
+          the data, with <code>[Pii]</code> values captured redacted (opt-in twice: <code>AddAuditTrail</code> plus an
+          <code>IAuditedEntity</code> marker per entity; retention is an ADR-074 scheduled purge).</p>
+          </li>
+          <li><p><strong>Multi-tenancy as a persistence-layer commitment (<a href="https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html" target="_blank" rel="noopener">ADR-073</a>).</strong>
+          Tenancy is not per-handler filtering: a second <strong>named</strong> EF query filter, <code>&quot;Tenant&quot;</code>, composes by
+          AND with the <code>&quot;SoftDelete&quot;</code> filter and embeds the executing tenant as a SQL parameter, so one
+          cached model per source serves every tenant (a null tenant is the system context and sees all).
+          <code>ITenantContext</code> resolves claim-then-header behind <code>TenantResolutionMiddleware</code>, a dedicated
+          <code>SaveChangesInterceptor</code> stamps writes and refuses cross-tenant ones, the outbox drains per
+          <code>(source, tenant)</code> pair, the caching decorators prefix keys with the tenant, and DB-per-tenant is
+          a per-tenant connection-string override under the same <code>DataSourceKey</code>.
+          <em>Adoption note (verified by source):</em> like the polyglot machinery above, this is a real, tested
+          capability with one reference adopter: <strong>MMCA.Helpdesk</strong> runs it end to end, while <strong>ADC and Store
+          stay single-tenant</strong> (the filter is inert without opt-in). First concrete code:
+          <a href="group-07-persistence-ef-core.html"><code>group-07</code></a> (filters, interceptor) and
+          <a href="group-12-api-hosting-mapping.html"><code>group-12</code></a> (resolution middleware).</p>
           </li>
           <li><p><strong>Primitive identifier type aliases (<a href="https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html" target="_blank" rel="noopener">ADR-048</a>).</strong> Each entity&#39;s ID type is a per-module
           <code>global using XIdentifierType = int;</code> (or <code>= System.Guid;</code>) alias, linked into every project via
