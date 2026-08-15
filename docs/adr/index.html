@@ -383,7 +383,7 @@
           <tr>
           <td><a href="037-field-level-encryption-at-rest.html">037</a></td>
           <td>Field-level encryption at rest (AES-256-GCM EF converter)</td>
-          <td>An <code>EncryptedStringConverter</code> transparently encrypts string columns with authenticated AES-256-GCM (random 12-byte nonce, 128-bit tag, Base64 <code>nonce+ct+tag</code> layout; consumer supplies the 32-byte key). Shipped and unit-tested but <strong>unadopted</strong>: no entity configuration wires it yet (the shipped-but-latent posture ADR-018 also records).</td>
+          <td>An <code>EncryptedStringConverter</code> transparently encrypts string columns with authenticated AES-256-GCM (random 12-byte nonce, 128-bit tag, Base64 <code>version+nonce+ct+tag</code> envelope; consumer supplies the 32-byte keys). A versioned key ring makes rotation zero-downtime: writes stamp the current version, reads resolve their key from the version byte in the stored value, and AES-GCM authenticates that byte as associated data so it cannot be rewritten. Shipped and unit-tested but <strong>unadopted</strong>: no entity configuration wires it yet (the shipped-but-latent posture ADR-018 also records), which is exactly what made the un-versioned format free to replace.</td>
           </tr>
           <tr>
           <td><a href="038-supply-chain-provenance.html">038</a></td>
