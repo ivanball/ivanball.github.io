@@ -2,7 +2,11 @@
 
 ## Status
 Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit
-event dispatch; see Revision below).
+event dispatch; see Revision below). Revised 2026-08-18 (**the pipeline order changed**: an
+Authorization decorator was inserted between FeatureGate and Logging, and a Timeout decorator between
+Validating and Transactional, on both the command and the query chain; the order is now pinned by a
+shipped conformance test. The order stated in the Decision below is the pre-2026-08-18 one: read the
+Revision (2026-08-18) at the end for the current chain).
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -20,7 +24,8 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   (ADR-013).
 - Cross-cutting concerns are decorators registered with Scrutor `TryDecorate` in
   `AddApplicationDecorators()`. Because `TryDecorate` applies in **reverse** registration order (last
-  registered is outermost), the execution order (outermost to innermost) is:
+  registered is outermost), the execution order (outermost to innermost) is (**superseded by the
+  Revision (2026-08-18)**, which inserts Authorization and Timeout into both chains):
   - **Commands:** FeatureGate -> Logging -> Caching -> Validating -> Transactional -> Handler
   - **Queries:** FeatureGate -> Logging -> Caching -> Handler
   - plus an optional pair of `Profiling` decorators (`ProfilingCommandDecorator` /
@@ -77,6 +82,94 @@ Two Transactional-decorator semantics changed with the 2026-07-19 full review:
 
 The pipeline order and the "cache invalidation outside the transaction" rule are unchanged.
 
+## Revision (2026-08-18)
+**Two decorators were added to both chains, so the order recorded in the Decision above is no longer
+the shipped one.** The registration site is unchanged in kind: `AddApplicationDecorators()`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:102`) still uses Scrutor
+`TryDecorate` and still documents the reverse-registration rule inline (`:49-51`), now with ASCII
+nesting diagrams of both chains beside it (`:53-74`). The literal registration sequence is
+`:107-113` for commands and `:116-120` for queries, so the execution order (outermost to innermost) is
+now:
+
+- **Commands:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout ->
+  Transactional -> Handler
+- **Queries:** FeatureGate -> Authorization -> Logging -> Caching -> Timeout -> Handler
+
+**Both new decorators are opt-in by marker**, consistent with the existing `ITransactional` /
+`IQueryCacheable` / `ICacheInvalidating` model, so a use case that declares neither pays nothing.
+
+1. **Authorization, keyed on `IRequiresPermission`.** The marker is a single member,
+   `string Permission { get; }`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/IRequiresPermission.cs:16,23`).
+   `AuthorizationCommandDecorator<TCommand, TResult>`
+   (`.../UseCases/Decorators/AuthorizationCommandDecorator.cs:26-29`) and its query twin
+   (`AuthorizationQueryDecorator.cs:21-24`) take `ICurrentUserService` and `IPermissionRegistry`, and
+   resolve the check as `permissionRegistry.HasPermission(currentUser.Roles, requiresPermission.Permission)`
+   (`AuthorizationCommandDecorator.cs:61`, `AuthorizationQueryDecorator.cs:56`), against
+   `bool HasPermission(IEnumerable<string> roles, string permission)`
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/IPermissionRegistry.cs:28`) and the
+   `IEnumerable<string> Roles` default interface member on `ICurrentUserService`
+   (`.../Interfaces/Infrastructure/ICurrentUserService.cs:45`). A denial returns
+   `Error.Forbidden("Authorization.PermissionDenied", ...)` (`:68-71` / `:63-66`) rather than
+   throwing, so it short-circuits as an ordinary ADR-013 failure value; a request that does not
+   implement the marker passes straight through (`:58-59` / `:53-54`). Denials are counted on
+   `cqrs.authorization.denied.count` (counter `AuthorizationDenied`, unit `{request}`, tag
+   `request_type`, `.../Decorators/CqrsMetrics.cs:53-56,76-77`) on the existing `MMCA.Common.Cqrs`
+   meter (`CqrsMetrics.cs:24`, ADR-041). This is the pipeline-side surface of ADR-020's permission
+   registry, which previously had only the `[HasPermission]` controller attribute.
+2. **Timeout, keyed on `IHasTimeout`.** The marker is `TimeSpan Timeout { get; }`
+   (`.../UseCases/IHasTimeout.cs:14,21`), a `TimeSpan` rather than a seconds int, and a value
+   `<= TimeSpan.Zero` means "no budget, pass through" (`:17-20`, guard at
+   `TimeoutCommandDecorator.cs:63`). The decorator links a fresh source to the caller's token
+   (`CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)` plus
+   `budget.CancelAfter(hasTimeout.Timeout)`, `TimeoutCommandDecorator.cs:66-67`) and invokes the inner
+   handler with `budget.Token` (`:71`). On expiry it returns
+   `Error.Failure("Request.TimedOut", ...)` (`:79-84`); `Request.TimedOut` is the error **code** and
+   the `ErrorType` is `Failure`, because the ADR-013 taxonomy has no timeout member (rationale at
+   `TimeoutCommandDecorator.cs:12-17`). **Caller cancellation still propagates unchanged**: the catch
+   is filtered as
+   `catch (OperationCanceledException) when (budget.IsCancellationRequested && !cancellationToken.IsCancellationRequested)`
+   (`:73`), so a client that aborted fails the filter and the exception keeps travelling rather than
+   being reported as a timeout. Expiries are counted on `cqrs.timeout.count` (counter
+   `TimeoutExpired`, unit `{request}`, tag `request_type`, `CqrsMetrics.cs:59-62,81-82`, recorded at
+   `TimeoutCommandDecorator.cs:76`). The query twin is identical (`TimeoutQueryDecorator.cs:63-84`).
+
+**Two placements are load-bearing and are argued in code, not only here.** Authorization sits
+**outside** caching deliberately: a cache lookup ahead of the permission check would serve another
+caller's rows to a principal not allowed to run the query, so a denied request must neither read nor
+populate the cache (`DependencyInjection.cs:83-85`, restated at
+`AuthorizationCommandDecorator.cs:13-16`, which also notes that a denied command never starts a
+transaction and never runs validation). FeatureGate stays outside Authorization so that a disabled
+feature does not leak which permission guards it (`DependencyInjection.cs:79-82`), which preserves
+ADR-031's "disabled is indistinguishable from nonexistent" property. Timeout sits **inside**
+validation and **outside** the transaction, so an invalid command never consumes budget and an expired
+budget still unwinds through the transactional decorator's rollback path.
+
+**The order is now pinned by a test rather than by comments alone.** `DecoratorPipelineOrderTestsBase`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:38`) resolves the
+handlers from a real `ServiceCollection` and unwraps the constructed object graph by reflection
+(`:104-124`), asserting both sequences outermost-first (`:49-58` commands, `:61-68` queries) and that
+the innermost element is not itself a decorator (`:95-96`). Both expected sequences are
+`protected virtual`, so a consumer with a different chain can override them. MMCA.Common subclasses it
+against its own registration sequence
+(`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21-39`) without
+overriding either list, so the base order is pinned in Common's default test pass. Whether ADC, Store
+or Helpdesk subclass it was not verified for this revision; treat cross-repo coverage as unconfirmed.
+This closes the "one place to read the pipeline" claim in the Rationale, which until now rested
+entirely on the inline comments the Trade-offs cite as the mitigation for the Scrutor foot-gun.
+
+The trade-off list above gains one entry by construction: the chain is now seven decorators deep for a
+command that declares every marker, and two of the seven were inserted between existing neighbours, so
+the "placing it wrong can silently change semantics" warning is no longer hypothetical. The caching
+and transactional placements from the original record are unchanged.
+
 ## Related
-ADR-013 (Result, the short-circuit currency of the pipeline), ADR-003 (handlers raise domain events
-that the outbox drains after `SaveChanges`; its 2026-07-19 revision pairs with this one).
+ADR-013 (Result, the short-circuit currency of the pipeline, and the `Failure` error type the timeout
+decorator reuses because the taxonomy has no timeout member), ADR-003 (handlers raise domain events
+that the outbox drains after `SaveChanges`; its 2026-07-19 revision pairs with this one), ADR-020 (the
+`IPermissionRegistry` and role-to-permission model the Authorization decorator consumes: this is its
+pipeline-side surface beside the `[HasPermission]` controller attribute), ADR-041 (the
+`MMCA.Common.Cqrs` meter the two new counters join), ADR-031 (the feature gate that stays outermost so
+a disabled feature does not reveal which permission guards it), ADR-026 (the caching substrate the
+Authorization decorator is deliberately placed outside of), ADR-058 (the runtime conformance suites a
+consumer subclasses; the decorator-order base is one of them).

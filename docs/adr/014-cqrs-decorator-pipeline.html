@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-014: CQRS Handlers with a Decorator Pipeline · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit event dispatch; see Revision below).">
+  <meta name="description" content="Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit event dispatch; see Revision below). Revised…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-014: CQRS Handlers with a Decorator Pipeline">
-  <meta property="og:description" content="Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit event dispatch; see Revision below).">
+  <meta property="og:description" content="Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit event dispatch; see Revision below). Revised…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-014: CQRS Handlers with a Decorator Pipeline">
-  <meta name="twitter:description" content="Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit event dispatch; see Revision below).">
+  <meta name="twitter:description" content="Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit event dispatch; see Revision below). Revised…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"014 · CQRS Handlers with a Decorator Pipeline","item":"https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 84 ADRs</summary>
+        <summary>All 87 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -184,6 +184,9 @@
         <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
         <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
         <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
           </ol>
         </nav>
       </details>
@@ -193,7 +196,11 @@
           <h1 id="adr-014-cqrs-handlers-with-a-decorator-pipeline">ADR-014: CQRS Handlers with a Decorator Pipeline</h1>
           <h2 id="status">Status</h2>
           <p>Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit
-          event dispatch; see Revision below).</p>
+          event dispatch; see Revision below). Revised 2026-08-18 (<strong>the pipeline order changed</strong>: an
+          Authorization decorator was inserted between FeatureGate and Logging, and a Timeout decorator between
+          Validating and Transactional, on both the command and the query chain; the order is now pinned by a
+          shipped conformance test. The order stated in the Decision below is the pre-2026-08-18 one: read the
+          Revision (2026-08-18) at the end for the current chain).</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -209,7 +216,8 @@
           (ADR-013).</li>
           <li>Cross-cutting concerns are decorators registered with Scrutor <code>TryDecorate</code> in
           <code>AddApplicationDecorators()</code>. Because <code>TryDecorate</code> applies in <strong>reverse</strong> registration order (last
-          registered is outermost), the execution order (outermost to innermost) is:<ul>
+          registered is outermost), the execution order (outermost to innermost) is (<strong>superseded by the
+          Revision (2026-08-18)</strong>, which inserts Authorization and Timeout into both chains):<ul>
           <li><strong>Commands:</strong> FeatureGate -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Transactional -&gt; Handler</li>
           <li><strong>Queries:</strong> FeatureGate -&gt; Logging -&gt; Caching -&gt; Handler</li>
           <li>plus an optional pair of <code>Profiling</code> decorators (<code>ProfilingCommandDecorator</code> /
@@ -269,9 +277,94 @@
           back with the data, so nothing is delivered on either failure path.</li>
           </ul>
           <p>The pipeline order and the &quot;cache invalidation outside the transaction&quot; rule are unchanged.</p>
+          <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
+          <p><strong>Two decorators were added to both chains, so the order recorded in the Decision above is no longer
+          the shipped one.</strong> The registration site is unchanged in kind: <code>AddApplicationDecorators()</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:102</code>) still uses Scrutor
+          <code>TryDecorate</code> and still documents the reverse-registration rule inline (<code>:49-51</code>), now with ASCII
+          nesting diagrams of both chains beside it (<code>:53-74</code>). The literal registration sequence is
+          <code>:107-113</code> for commands and <code>:116-120</code> for queries, so the execution order (outermost to innermost) is
+          now:</p>
+          <ul>
+          <li><strong>Commands:</strong> FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt;
+          Transactional -&gt; Handler</li>
+          <li><strong>Queries:</strong> FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Timeout -&gt; Handler</li>
+          </ul>
+          <p><strong>Both new decorators are opt-in by marker</strong>, consistent with the existing <code>ITransactional</code> /
+          <code>IQueryCacheable</code> / <code>ICacheInvalidating</code> model, so a use case that declares neither pays nothing.</p>
+          <ol>
+          <li><strong>Authorization, keyed on <code>IRequiresPermission</code>.</strong> The marker is a single member,
+          <code>string Permission { get; }</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/IRequiresPermission.cs:16,23</code>).
+          <code>AuthorizationCommandDecorator&lt;TCommand, TResult&gt;</code>
+          (<code>.../UseCases/Decorators/AuthorizationCommandDecorator.cs:26-29</code>) and its query twin
+          (<code>AuthorizationQueryDecorator.cs:21-24</code>) take <code>ICurrentUserService</code> and <code>IPermissionRegistry</code>, and
+          resolve the check as <code>permissionRegistry.HasPermission(currentUser.Roles, requiresPermission.Permission)</code>
+          (<code>AuthorizationCommandDecorator.cs:61</code>, <code>AuthorizationQueryDecorator.cs:56</code>), against
+          <code>bool HasPermission(IEnumerable&lt;string&gt; roles, string permission)</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/IPermissionRegistry.cs:28</code>) and the
+          <code>IEnumerable&lt;string&gt; Roles</code> default interface member on <code>ICurrentUserService</code>
+          (<code>.../Interfaces/Infrastructure/ICurrentUserService.cs:45</code>). A denial returns
+          <code>Error.Forbidden(&quot;Authorization.PermissionDenied&quot;, ...)</code> (<code>:68-71</code> / <code>:63-66</code>) rather than
+          throwing, so it short-circuits as an ordinary ADR-013 failure value; a request that does not
+          implement the marker passes straight through (<code>:58-59</code> / <code>:53-54</code>). Denials are counted on
+          <code>cqrs.authorization.denied.count</code> (counter <code>AuthorizationDenied</code>, unit <code>{request}</code>, tag
+          <code>request_type</code>, <code>.../Decorators/CqrsMetrics.cs:53-56,76-77</code>) on the existing <code>MMCA.Common.Cqrs</code>
+          meter (<code>CqrsMetrics.cs:24</code>, ADR-041). This is the pipeline-side surface of ADR-020&#39;s permission
+          registry, which previously had only the <code>[HasPermission]</code> controller attribute.</li>
+          <li><strong>Timeout, keyed on <code>IHasTimeout</code>.</strong> The marker is <code>TimeSpan Timeout { get; }</code>
+          (<code>.../UseCases/IHasTimeout.cs:14,21</code>), a <code>TimeSpan</code> rather than a seconds int, and a value
+          <code>&lt;= TimeSpan.Zero</code> means &quot;no budget, pass through&quot; (<code>:17-20</code>, guard at
+          <code>TimeoutCommandDecorator.cs:63</code>). The decorator links a fresh source to the caller&#39;s token
+          (<code>CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)</code> plus
+          <code>budget.CancelAfter(hasTimeout.Timeout)</code>, <code>TimeoutCommandDecorator.cs:66-67</code>) and invokes the inner
+          handler with <code>budget.Token</code> (<code>:71</code>). On expiry it returns
+          <code>Error.Failure(&quot;Request.TimedOut&quot;, ...)</code> (<code>:79-84</code>); <code>Request.TimedOut</code> is the error <strong>code</strong> and
+          the <code>ErrorType</code> is <code>Failure</code>, because the ADR-013 taxonomy has no timeout member (rationale at
+          <code>TimeoutCommandDecorator.cs:12-17</code>). <strong>Caller cancellation still propagates unchanged</strong>: the catch
+          is filtered as
+          <code>catch (OperationCanceledException) when (budget.IsCancellationRequested &amp;&amp; !cancellationToken.IsCancellationRequested)</code>
+          (<code>:73</code>), so a client that aborted fails the filter and the exception keeps travelling rather than
+          being reported as a timeout. Expiries are counted on <code>cqrs.timeout.count</code> (counter
+          <code>TimeoutExpired</code>, unit <code>{request}</code>, tag <code>request_type</code>, <code>CqrsMetrics.cs:59-62,81-82</code>, recorded at
+          <code>TimeoutCommandDecorator.cs:76</code>). The query twin is identical (<code>TimeoutQueryDecorator.cs:63-84</code>).</li>
+          </ol>
+          <p><strong>Two placements are load-bearing and are argued in code, not only here.</strong> Authorization sits
+          <strong>outside</strong> caching deliberately: a cache lookup ahead of the permission check would serve another
+          caller&#39;s rows to a principal not allowed to run the query, so a denied request must neither read nor
+          populate the cache (<code>DependencyInjection.cs:83-85</code>, restated at
+          <code>AuthorizationCommandDecorator.cs:13-16</code>, which also notes that a denied command never starts a
+          transaction and never runs validation). FeatureGate stays outside Authorization so that a disabled
+          feature does not leak which permission guards it (<code>DependencyInjection.cs:79-82</code>), which preserves
+          ADR-031&#39;s &quot;disabled is indistinguishable from nonexistent&quot; property. Timeout sits <strong>inside</strong>
+          validation and <strong>outside</strong> the transaction, so an invalid command never consumes budget and an expired
+          budget still unwinds through the transactional decorator&#39;s rollback path.</p>
+          <p><strong>The order is now pinned by a test rather than by comments alone.</strong> <code>DecoratorPipelineOrderTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:38</code>) resolves the
+          handlers from a real <code>ServiceCollection</code> and unwraps the constructed object graph by reflection
+          (<code>:104-124</code>), asserting both sequences outermost-first (<code>:49-58</code> commands, <code>:61-68</code> queries) and that
+          the innermost element is not itself a decorator (<code>:95-96</code>). Both expected sequences are
+          <code>protected virtual</code>, so a consumer with a different chain can override them. MMCA.Common subclasses it
+          against its own registration sequence
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21-39</code>) without
+          overriding either list, so the base order is pinned in Common&#39;s default test pass. Whether ADC, Store
+          or Helpdesk subclass it was not verified for this revision; treat cross-repo coverage as unconfirmed.
+          This closes the &quot;one place to read the pipeline&quot; claim in the Rationale, which until now rested
+          entirely on the inline comments the Trade-offs cite as the mitigation for the Scrutor foot-gun.</p>
+          <p>The trade-off list above gains one entry by construction: the chain is now seven decorators deep for a
+          command that declares every marker, and two of the seven were inserted between existing neighbours, so
+          the &quot;placing it wrong can silently change semantics&quot; warning is no longer hypothetical. The caching
+          and transactional placements from the original record are unchanged.</p>
           <h2 id="related">Related</h2>
-          <p>ADR-013 (Result, the short-circuit currency of the pipeline), ADR-003 (handlers raise domain events
-          that the outbox drains after <code>SaveChanges</code>; its 2026-07-19 revision pairs with this one).</p>
+          <p>ADR-013 (Result, the short-circuit currency of the pipeline, and the <code>Failure</code> error type the timeout
+          decorator reuses because the taxonomy has no timeout member), ADR-003 (handlers raise domain events
+          that the outbox drains after <code>SaveChanges</code>; its 2026-07-19 revision pairs with this one), ADR-020 (the
+          <code>IPermissionRegistry</code> and role-to-permission model the Authorization decorator consumes: this is its
+          pipeline-side surface beside the <code>[HasPermission]</code> controller attribute), ADR-041 (the
+          <code>MMCA.Common.Cqrs</code> meter the two new counters join), ADR-031 (the feature gate that stays outermost so
+          a disabled feature does not reveal which permission guards it), ADR-026 (the caching substrate the
+          Authorization decorator is deliberately placed outside of), ADR-058 (the runtime conformance suites a
+          consumer subclasses; the decorator-order base is one of them).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -288,6 +381,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-07-19">Revision (2026-07-19)</a></li>
+            <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

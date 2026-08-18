@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-015: Architecture Invariants Enforced as Fitness Functions · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted">
+  <meta name="description" content="Accepted. Revised 2026-08-18 (two new rule families, namespace dependency cycles and trailing CancellationToken declarations, plus a third enforcement…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-015: Architecture Invariants Enforced as Fitness Functions">
-  <meta property="og:description" content="Accepted">
+  <meta property="og:description" content="Accepted. Revised 2026-08-18 (two new rule families, namespace dependency cycles and trailing CancellationToken declarations, plus a third enforcement…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-015: Architecture Invariants Enforced as Fitness Functions">
-  <meta name="twitter:description" content="Accepted">
+  <meta name="twitter:description" content="Accepted. Revised 2026-08-18 (two new rule families, namespace dependency cycles and trailing CancellationToken declarations, plus a third enforcement…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"015 · Architecture Invariants Enforced as Fitness Functions","item":"https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 84 ADRs</summary>
+        <summary>All 87 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -184,6 +184,9 @@
         <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
         <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
         <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
           </ol>
         </nav>
       </details>
@@ -192,7 +195,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-015-architecture-invariants-enforced-as-fitness-functions">ADR-015: Architecture Invariants Enforced as Fitness Functions</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted</p>
+          <p>Accepted. Revised 2026-08-18 (two new rule families, namespace dependency cycles and trailing
+          <code>CancellationToken</code> declarations, plus a <strong>third enforcement layer</strong>: a compile-time public-API surface
+          gate with committed baselines. The &quot;in two layers&quot; framing in the Decision below is superseded; see the
+          Revision (2026-08-18) at the end).</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -202,7 +208,8 @@
           &quot;Remember the rule&quot; does not survive a growing change history. Several existing ADRs already rely on
           &quot;a fitness function enforces this&quot; without an ADR that establishes the approach itself.</p>
           <h2 id="decision">Decision</h2>
-          <p>Enforce architectural invariants as <strong>automated checks that gate the build</strong>, in two layers.</p>
+          <p>Enforce architectural invariants as <strong>automated checks that gate the build</strong>, in two layers
+          (<strong>a third joined them on 2026-08-18</strong>: see the Revision at the end).</p>
           <ol>
           <li><strong>Compile-time guard.</strong> <code>MMCA.Common.LayerEnforcement.targets</code> (imported for every <code>Source/</code> project)
           inspects <code>ProjectReference</code>s in a pre-build step and <strong>fails the build</strong> before tests run if a layer
@@ -243,9 +250,163 @@
           even though the framework ships the rules. Common-only checks that cannot generalize live in
           <code>FrameworkSanityTests</code>.</li>
           </ul>
+          <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
+          <p>Two new rule families joined the shared library, and a <strong>third enforcement layer</strong> joined the two the
+          Decision above describes. The counts in <code>MMCA.Common/FACTS.md</code> move with them: <strong>102 test methods
+          across 34 abstract <code>*TestsBase</code> classes</strong>, of which MMCA.Common&#39;s own build executes <strong>87</strong>
+          (<code>FACTS.md:44-48</code>). Those are method counts derived lexically by <code>FactsGenerator</code>
+          (<code>MMCA.Common/build/facts/FactsGenerator.cs:138-151</code>, <code>:155-170</code>, <code>:178</code>), so a <code>[Theory]</code> counts once
+          regardless of how many data rows it runs: they are not test-case counts.</p>
+          <p><strong>Both new families are required merge gates, not advisory.</strong> They live in
+          <code>Tests/Architecture/MMCA.Common.Architecture.Tests</code>, which is inside <code>MMCA.Common.slnx</code> (<code>:46</code>) and
+          therefore runs in the <code>build-and-test</code> job (<code>.github/workflows/ci.yml:135-144</code>), and the public API
+          gate fails that same job&#39;s build step (<code>ci.yml:106-108</code>); <code>build-and-test</code> is one of the eight required
+          gates on <code>main</code> (<code>CONTRIBUTING.md:60-61</code>). One caveat: a docs-only PR skips restore, build and test by
+          path filter (<code>ci.yml:103,107,136</code>) while still reporting green, so none of this fires on a
+          documentation change.</p>
+          <h3 id="architecturerulescycles-namespace-dependency-cycles"><code>ArchitectureRules.Cycles</code>: namespace dependency cycles</h3>
+          <p><code>NamespacesHaveNoDependencyCycles(map, allowedCycleNamespaces)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Cycles.cs:45-47</code>)
+          builds a namespace graph for <strong>every</strong> layer in the map (<code>:54</code>, so all seven for MMCA.Common) and
+          reports each strongly connected component in it. Nodes are the layer&#39;s root namespace plus one segment
+          beneath it (<code>:137</code>) and edges never cross assemblies (<code>:104</code>). Components are found by mutual
+          reachability over a boolean transitive closure rather than by Tarjan or Kosaraju (<code>:292</code>, <code>:310</code>), with
+          a breadth-first search picking the shortest path to display (<code>:330</code>). Edges are the type <strong>signature
+          surface</strong>: base types, implemented interfaces, field and property types, method return and parameter
+          types (declared members, public and non-public), and attribute types, with generic arguments and
+          array/by-ref/pointer element types recursively expanded (<code>:25-27</code>, implemented at <code>:174-212</code>). Types
+          outside the layer&#39;s root namespace are ignored.</p>
+          <p>The exemption hook is checked against the <strong>whole strongly connected component, not a single namespace
+          and not merely the displayed path</strong>: <code>component.TrueForAll(allowed.Contains)</code> (<code>:61</code>, rationale at
+          <code>:58-60</code>), so an allowance can never hide a new cycle that merely touches an accepted namespace, and a
+          fourth namespace joining an accepted tangle still fails. Consumers subclass <code>NamespaceCycleTestsBase</code>
+          (<code>Bases/NamespaceCycleTestsBase.cs:15</code>, test at <code>:29</code>) and override <code>AllowedCycleNamespaces</code>. Note that
+          the XML doc on both the rule (<code>:41-43</code>) and the base (<code>NamespaceCycleTestsBase.cs:22-23</code>) describes the
+          check in terms of the cycle&#39;s <em>path</em>; the code is the stricter whole-component test above, and the code
+          is what runs.</p>
+          <p>MMCA.Common has exactly one accepted tangle, inside <code>MMCA.Common.Infrastructure</code>:
+          <code>root -&gt; Settings -&gt; Persistence -&gt; root</code>
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/NamespaceCycleTests.cs:39-44</code>), and
+          the subclass justifies it <strong>per edge</strong> rather than as a blanket allowance (<code>:13-38</code>): the composition
+          root binds every settings class, <code>TenancySettingsValidator</code> takes an optional <code>IDataSourceResolver</code> so
+          a tenant override naming a non-existent physical source fails the boot instead of silently resolving
+          cross-tenant, and the <code>EntityTypeConfiguration*</code> shims carry the <code>[UseDataSource]</code> / <code>[UseDatabase]</code>
+          marker attributes that live in the root namespace precisely because consumers annotate their own
+          configurations with them. All three namespaces ship in one assembly and one package, so none is
+          independently extractable and the tangle costs nothing the layer rules were protecting.</p>
+          <p><strong>The rule is a signature-level statement and says so.</strong> The testing package carries no IL or Roslyn
+          dependency, so this is pure reflection: a reference that exists only inside a method body (a local, a
+          constructor call, a static call) is invisible to it, and compiler-generated closure and iterator types
+          are skipped deliberately so the result stays signature-level rather than half-body (<code>:30-36</code>). A clean
+          report therefore means no structural cycle, never zero coupling. That is the same honest limitation
+          the Trade-offs above already record for the reflection-based rules, stated at the rule this time.</p>
+          <h3 id="architecturerulescancellationtokens-trailing-cancellation-tokens"><code>ArchitectureRules.CancellationTokens</code>: trailing cancellation tokens</h3>
+          <p><code>AsyncMethodsDeclareTrailingCancellationToken(map, exemptMethods)</code>
+          (<code>.../ArchitectureRules.CancellationTokens.cs:35-37</code>) requires every method returning <code>Task</code>,
+          <code>Task&lt;T&gt;</code>, <code>ValueTask</code> or <code>ValueTask&lt;T&gt;</code>, <strong>declared</strong> (not inherited) as a public member of a
+          publicly-visible type in an <code>Application</code> or <code>Infrastructure</code> assembly, to take a <code>CancellationToken</code>
+          as its last parameter named exactly <code>cancellationToken</code> (<code>:15-18</code>, layer scope at <code>:45-47</code>, awaitable
+          check at <code>:105-112</code>, trailing check at <code>:120-122</code>, with distinct diagnostics for a misnamed versus a
+          mispositioned parameter at <code>:129-131</code>). Members are bound <code>Public | Instance | Static | DeclaredOnly</code>
+          (<code>:73-74</code>), so public <strong>static</strong> methods are in scope and inherited members are not. A method with no
+          parameters is not excused: the token would simply be its only parameter (<code>:18-19</code>).</p>
+          <p>The stated reason is mechanical pass-through rather than tidiness: a uniform trailing position and
+          name is what lets the ADR-014 decorator pipeline, the ADR-055 repositories and the generated clients
+          forward a linked token without special-casing each call, and an async method that cannot be cancelled
+          leaves work running against the database after its caller is gone (<code>:9-13</code>), which is exactly what the
+          new Timeout decorator&#39;s budget and a stopping host both produce.</p>
+          <p>Exemptions come in two kinds. <strong>Automatic</strong> ones cover signatures the repository does not own
+          (<code>:20-27</code>, implemented at <code>:95</code>, <code>:99-102</code>, <code>:148-149</code>): <code>Dispose</code> / <code>DisposeAsync</code>,
+          compiler-generated and special-name members (property accessors, operators, event accessors), members
+          of delegate types, an override of a base method declared outside the map&#39;s assemblies, and an implicit
+          implementation of an interface method declared outside them (<code>IHostedService.StartAsync</code>,
+          <code>IHealthCheck</code>, framework middleware). <strong>Declared</strong> ones go through
+          <code>CancellationTokenConventionTestsBase.CancellationTokenExemptMethods</code> in <code>&quot;TypeName.MethodName&quot;</code> form,
+          which the rule documents as being for cases where adding the parameter would break a shipped public
+          API, with the reason recorded beside the entry (<code>:44-48</code>).</p>
+          <p>The suite found exactly two real violations, both on <code>NotificationHub</code>
+          (<code>.../CancellationTokenConventionTests.cs:23-27</code>), and they are the interesting case because the
+          exemption is not a waiver. A SignalR hub method signature <strong>is</strong> the client-visible RPC contract, bound
+          by name and argument list by the dispatcher, and every shipped consumer&#39;s client already invokes
+          <code>JoinChannel</code> / <code>LeaveChannel</code> with one argument, so adding a parameter would break the wire contract
+          (<code>:14-22</code>). The work was made cancellable anyway: both methods pass <code>Context.ConnectionAborted</code> straight
+          into their group calls, so the token is there, just not through a parameter reflection can see. The
+          exemption records a genuine blind spot in the rule rather than an accepted defect.</p>
+          <h3 id="a-third-enforcement-layer-the-public-api-surface-gate">A third enforcement layer: the public API surface gate</h3>
+          <p>This is the structural change to the Decision above, which framed enforcement as two layers (an MSBuild
+          project-reference guard and a NetArchTest suite). The gate is neither: it is a <strong>compile-time analyzer
+          with a committed baseline</strong>, <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> 5.6.0
+          (<code>MMCA.Common/Directory.Packages.props:164</code>), applied to every <code>Source</code> project through one
+          <code>Directory.Build.props</code> ItemGroup rather than per csproj (<code>:78-85</code>), with <code>PublicAPI.Shipped.txt</code> and
+          <code>PublicAPI.Unshipped.txt</code> added as <code>AdditionalFiles</code> (<code>:83-84</code>). Fourteen projects carry the pair.
+          <strong><code>MMCA.Common.UI.Maui</code> is deliberately excluded</strong> and the condition says why (<code>:73-76</code>): it lives
+          outside <code>MMCA.Common.slnx</code> and builds only on the windows <code>build-maui</code> job across four MAUI TFMs
+          (ADR-042), &quot;so its baseline could neither be bootstrapped nor kept honest from the normal build&quot;.</p>
+          <p>The gate is exactly two rules: <strong>RS0016</strong> fails the build on a public member absent from
+          <code>PublicAPI.Shipped.txt</code> and <strong>RS0017</strong> on a declared member that disappeared
+          (<code>Directory.Build.props:68-71</code>, intent stated at <code>:26</code> and <code>.editorconfig:880-884</code>). Neither is
+          explicitly set to <code>error</code>: both are left at the repository&#39;s global analyzer-error default
+          (<code>dotnet_analyzer_diagnostic.severity = error</code>, <code>.editorconfig:312</code>, plus <code>TreatWarningsAsErrors</code>,
+          <code>Directory.Build.props:7</code>), so they are errors by inheritance rather than by their own entry.
+          Widening or breaking a package&#39;s shipped surface therefore becomes a reviewable diff in a text file
+          instead of something a consumer discovers after the release.</p>
+          <p>The baselines hold <strong>5,068 declarations</strong> across the fourteen files (5,082 non-empty lines, each file
+          opening with a <code>#nullable enable</code> header), and every <code>PublicAPI.Unshipped.txt</code> contains that header and
+          nothing else. <strong>What is baselined is the surface as of this branch</strong>, which is the v1.152.0 release
+          plus the unreleased Section A additions: the new rule-library types above already appear in
+          <code>MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt</code>, so this is not a frozen picture of the last
+          release. The gate consequently takes effect from the next release rather than retroactively. Nothing
+          in the repository records a version number for that start, so treat &quot;the discipline begins with the
+          next release&quot; as the decision and not as a cited fact.</p>
+          <p>Three rules from the same analyzer are off, each with the reason recorded rather than silently
+          suppressed (<code>.editorconfig:886-895</code>): <strong>RS0026 / RS0027</strong> (no multiple public overloads with optional
+          parameters) because the surface being baselined already ships those pairs, mostly the repository read
+          and query methods, so obeying the rule now would mean a breaking signature change on every consumer
+          (&quot;off rather than silently baselined as a lie&quot;); and <strong>RS0041</strong> (no oblivious reference types in public
+          members) because every hit is inside Razor generated code that is not nullable-annotated and is not
+          ours to annotate. RS0041 additionally sits in the global <code>NoWarn</code> (<code>Directory.Build.props:22-27</code>), and
+          the duplication is load-bearing rather than sloppy: a <code>dotnet_diagnostic</code> severity does not reach
+          generated code, so the <code>.editorconfig</code> entry alone would not suppress it. RS0051-RS0056, the
+          internal-API analog over <code>InternalAPI.Shipped.txt</code>, are off too (<code>.editorconfig:896-903</code>): only the
+          public, packaged surface is under contract.</p>
+          <p><strong>This formalizes what the <code>consumer-source-build</code> canary only sampled.</strong> That CI job builds
+          MMCA.Helpdesk against the PR&#39;s framework source, so it catches a breaking public-API change only where
+          Helpdesk happens to use the member; the baselines catch it at the declaration, for the whole surface,
+          in the repository that owns it.</p>
+          <h3 id="what-this-revision-costs">What this revision costs</h3>
+          <ul>
+          <li><strong>The Decision&#39;s &quot;two layers&quot; framing is now wrong as written</strong>, and the three layers fail at three
+          different moments with three different diagnostics: a <code>ProjectReference</code> violation at pre-build, a
+          public-surface change at compile, a structural rule at test time.</li>
+          <li><strong>A baseline is a file that must be maintained, and its failure mode is friction.</strong> Every deliberate
+          public API addition now needs a <code>PublicAPI.Unshipped.txt</code> edit in the same PR, and an author who does
+          not know the gate exists meets it as an <code>error</code> on a build that was previously green.</li>
+          <li><strong>Both new rules ship with a live exemption</strong>, so neither is a clean sweep: one accepted namespace
+          cycle and two exempted hub methods. Recorded that way on purpose, since a rule with no exemption hook
+          either gets deleted or gets satisfied by a worse design.</li>
+          <li><strong>The cycle rule cannot see method bodies and the token rule cannot see <code>Context.ConnectionAborted</code>.</strong>
+          Both are structural checks over signatures, which is the same limitation the Trade-offs above already
+          accept for this whole suite, now with two more instances of it.</li>
+          <li><strong>The token rule&#39;s return-type test is a closed list.</strong> Only <code>Task</code>, <code>Task&lt;T&gt;</code>, <code>ValueTask</code> and
+          <code>ValueTask&lt;T&gt;</code> qualify (<code>ArchitectureRules.CancellationTokens.cs:105-112</code>), so an
+          <code>IAsyncEnumerable&lt;T&gt;</code> method or any custom awaitable is silently out of scope despite being exactly
+          the kind of long-running work a token exists for.</li>
+          <li><strong>The public API gate covers 14 of the 15 packages, and only in MMCA.Common.</strong> <code>MMCA.Common.UI.Maui</code>
+          is excluded for build-topology reasons even though it has its own required windows build gate, so
+          &quot;every shipped package&#39;s surface is gated&quot; would be an overstatement. ADC, Store and Helpdesk publish
+          nothing and get no baselines, which leaves the three enforcement layers unevenly distributed across
+          the four repos.</li>
+          </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate), and
-          ADR-006/007/008 (the transport and module-isolation rules the suite enforces).</p>
+          <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
+          lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
+          module-isolation rules the suite enforces), ADR-053 (the dual-registry publishing this surface gate
+          protects: the packages whose consumers a breaking change reaches),
+          <a href="014-cqrs-decorator-pipeline.html">ADR-014</a> and
+          <a href="055-repository-and-specification-contract.html">ADR-055</a> (the decorator pipeline and repository contract
+          whose mechanical token pass-through the trailing-<code>CancellationToken</code> rule exists to keep possible),
+          ADR-058 (the runtime conformance suites, the behavioral counterpart this record deliberately scopes
+          itself against).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -261,6 +422,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

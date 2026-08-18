@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 84 ADRs</summary>
+        <summary>All 87 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -184,6 +184,9 @@
         <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
         <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
         <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
           </ol>
         </nav>
       </details>
@@ -205,7 +208,12 @@
           <code>stage.ps1</code> citation after a named-query-filter remarks block shifted <code>IRepository.cs</code> down; narrowed
           &quot;every read&quot; on <code>IEntityQueryService</code> to the four reads that actually take a specification, and
           narrowed the &quot;no reference&quot; claim about <code>IEntityReader</code> / <code>IEntityQuerier</code> to C# code, since the
-          Helpdesk staging-script comments named in the same paragraph are references of a kind).</p>
+          Helpdesk staging-script comments named in the same paragraph are references of a kind).
+          Revised 2026-08-18 (<strong>substantive</strong>: <code>QuerySpecification</code> gives a specification ordering, includes,
+          paging and tracking; composition drops <code>Expression.Invoke</code> for parameter substitution, retiring the
+          provider-bet trade-off; <code>IEntityQuerier</code> gains specification-first reads and keyset pagination; an
+          optional projector pushes DTO projection into SQL; and paginated reads become deterministically
+          ordered. Two Trade-offs entries below are superseded. See the Revision (2026-08-18) at the end).</p>
           <h2 id="context">Context</h2>
           <p>Every read an application handler performs has to come from somewhere, and the shape of that contract
           decides whether the module can still be lifted into its own service later (ADR-007, ADR-008). The
@@ -387,7 +395,151 @@
           above: dynamic filters and paging arrive from the request, the specification is applied beneath
           them), ADR-035 (the concurrency-token hooks on the write half of the repository), ADR-006 (the
           per-service database each repository instance resolves to), ADR-048 (the identifier aliases that
-          supply <code>TIdentifierType</code>).</p>
+          supply <code>TIdentifierType</code>, and <a href="085-identifier-type-aliases-revisited.html">ADR-085</a>, whose migration
+          blast radius includes every generic surface named here), ADR-001 (the Mapperly mappers the optional
+          projector reuses as an expression rather than as a method call).</p>
+          <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
+          <p>Five changes, four of them widening the contract and one of them fixing a correctness defect. The
+          decision this record states is unchanged: data access is still repository plus specification, the raw
+          queryables still live on the composite only, and the fitness rule still fails the build on <code>.Table</code> in
+          Application code. What the specification can now carry, and what the querier can now be asked, both
+          grew.</p>
+          <h3 id="1-a-specification-can-carry-more-than-a-predicate">1. A specification can carry more than a predicate</h3>
+          <p><code>QuerySpecification&lt;TEntity, TIdentifierType&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/QuerySpecification.cs:38</code>) extends
+          <code>Specification</code> with the query state the last Trade-offs entry above says a specification deliberately
+          does not hold: <code>OrderBy</code> as an ordered <code>IReadOnlyList&lt;OrderExpression&gt;</code> (<code>:54</code>), <code>IncludePaths</code>
+          (<code>:60</code>), <code>Skip</code> / <code>Take</code> (<code>:63</code>, <code>:66</code>), <code>AsTracking</code> (<code>:72</code>, defaulting false) and
+          <code>IgnoreQueryFilters</code> (<code>:82</code>, defaulting false and dropping only the named <code>SoftDelete</code> filter, not the
+          ADR-073 tenant filter). Subclasses populate it through protected builders rather than by assignment:
+          <code>AddOrderBy&lt;TKey&gt;(keySelector, descending = false)</code> (<code>:90</code>), <code>AddInclude(path)</code> (<code>:102</code>, ignoring
+          blanks and duplicates), <code>ApplyPaging(skip, take)</code> (<code>:117</code>, both floored at zero), <code>WithTracking()</code>
+          (<code>:127</code>) and <code>WithSoftDeleted()</code> (<code>:133</code>). <code>OrderExpression</code> is a top-level
+          <code>record (LambdaExpression KeySelector, bool Descending)</code> (<code>:150</code>).</p>
+          <p><strong>That entry is therefore superseded, not corrected</strong>: the smaller predicate-only shape remains
+          available as <code>Specification</code>, and a caller who wants the richer one derives from <code>QuerySpecification</code>.
+          <code>ISpecification</code> itself is unchanged, which is what keeps the two shapes interchangeable everywhere a
+          predicate is all that is consumed.</p>
+          <h3 id="2-composition-no-longer-bets-on-expressioninvoke">2. Composition no longer bets on <code>Expression.Invoke</code></h3>
+          <p>The Trade-offs entry titled &quot;<code>Expression.Invoke</code> composition is a provider bet&quot; is <strong>retired</strong>. The
+          combinators now do what <code>CrossSourceSpecification</code> was already doing by hand: an
+          <code>ExpressionVisitor</code> rebinds one operand&#39;s parameter onto the other&#39;s.
+          <code>ParameterReplacer</code> (<code>.../Domain/Specifications/ParameterReplacer.cs:24</code>, static entry <code>Replace</code> at
+          <code>:34</code>, with a <code>ReferenceEquals</code> short-circuit) is driven by <code>SpecificationComposer</code>
+          (<code>Specification.cs:146</code>), whose <code>Combine</code> (<code>:155</code>) rebinds <code>right.Parameters[0]</code> onto
+          <code>left.Parameters[0]</code> and joins the bodies with <code>AndAlso</code> or <code>OrElse</code>, and whose <code>Negate</code> (<code>:181</code>)
+          wraps the inner body in <code>Expression.Not</code> keeping its own parameter. <code>Expression.Invoke</code> no longer
+          appears in the file, so a composed specification is now translatable on every provider rather than
+          only the ones that inline an invocation, and the divergence between the combinators and the
+          cross-source helper is closed.</p>
+          <p>The composed criteria is built <strong>once per specification instance</strong>, through a lazy field
+          (<code>_criteria ??= ...</code> in <code>AndSpecification</code> at <code>Specification.cs:88,91</code>, <code>OrSpecification</code> at
+          <code>:112,115</code>, <code>NotSpecification</code> at <code>:134,137</code>). It is not a shared or global cache: two separately
+          constructed <code>AndSpecification</code>s over the same operands each build their own tree.</p>
+          <p>Composition also gained a fluent form. <code>SpecificationExtensions</code>
+          (<code>.../Domain/Specifications/SpecificationExtensions.cs:30</code>) declares <code>And</code> (<code>:48</code>), <code>Or</code> (<code>:68</code>) and
+          <code>Not</code> (<code>:85</code>) as <strong>extension members on <code>ISpecification&lt;TEntity, TIdentifierType&gt;</code></strong>, written with a
+          C# extension block (<code>extension&lt;TEntity, TIdentifierType&gt;(ISpecification&lt;...&gt; specification)</code> at
+          <code>:32</code>), not as instance methods on <code>Specification</code>. <code>spec.And(other).Not()</code> therefore reads as a
+          chain while the abstract base stays untouched, and the existing explicit
+          <code>new AndSpecification&lt;...&gt;(a, b)</code> construction the Decision above cites keeps working unchanged.</p>
+          <h3 id="3-the-querier-answers-specification-first-reads">3. The querier answers specification-first reads</h3>
+          <p><code>IEntityQuerier</code> (<code>IRepository.cs:80</code>) gains four members that take an <code>ISpecification</code> rather than a
+          raw predicate or a bag of query parameters: <code>CountAsync</code> (<code>:134</code>, ordering and paging deliberately
+          ignored), <code>ListAsync</code> (<code>:151</code>), a projecting <code>ListAsync&lt;TResult&gt;(specification, select, ...)</code>
+          (<code>:170</code>), and <code>AnyAsync</code> (<code>:182</code>), implemented on <code>EFReadRepository</code> and forwarded by
+          <code>EFReadRepositoryDecorator</code> (<code>:78</code>, <code>:92</code>, <code>:98</code>, <code>:105</code>). Alongside them, <code>IEntityQueryService</code>
+          widened from the abstract <code>Specification&lt;TEntity, TIdentifierType&gt;?</code> to the interface
+          <code>ISpecification&lt;TEntity, TIdentifierType&gt;?</code> on all four of the members that take one
+          (<code>IEntityQueryService.cs:40</code>, <code>:63</code>, <code>:110</code>, <code>:131</code>), which is what lets a <code>QuerySpecification</code>, a
+          composed one, or an <code>InlineSpecification</code> be passed to the same reads.</p>
+          <p>The narrow-interface observation in the Trade-offs is unchanged in kind and sharper in consequence:
+          <code>IUnitOfWork</code> still hands out only the composites, so these members arrive on an interface nothing
+          depends on by name. What changed is that <code>IEntityQuerier</code> is now the only place several of these
+          reads exist, so the ISP split has moved from documentation toward being the shape a handler would
+          actually want.</p>
+          <h3 id="4-projection-can-be-pushed-into-sql">4. Projection can be pushed into SQL</h3>
+          <p>An optional <code>IEntityDTOProjector&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOProjector.cs:51</code>) exposes one
+          member, <code>IQueryable&lt;TEntityDTO&gt; ProjectTo(IQueryable&lt;TEntity&gt; source)</code> (<code>:62</code>), and is auto-registered
+          by the Application assembly scan (<code>.../Application/DependencyInjection.cs:160</code>). When one is
+          registered, the read takes a server-side path, <code>ExecuteProjectedAsync</code>
+          (<code>.../Application/Services/Query/IEntityQueryPipeline.cs:58</code>, implemented at
+          <code>EntityQueryPipeline.cs:60</code>), which applies the projection <strong>last</strong>, after criteria, dynamic filters,
+          sorting and paging (<code>:101-105</code>), so the database returns only the DTO&#39;s columns instead of whole
+          entities that are mapped in memory afterwards.</p>
+          <p>The guard has <strong>three</strong> conditions, not two (<code>EntityQueryService.cs:489</code>): a projector must be
+          registered, the read must not be tracking, and <code>NavigationMetadata.UnsupportedIncludes</code> must be empty,
+          that last set being the navigations requiring manual batch loading because they cross a data source
+          (<code>INavigationMetadata.cs:40</code>). Miss any one and the read falls back to materialize-then-map, which is
+          exactly today&#39;s behavior, so this is a pure opt-in optimization with no change in results. The call
+          site is <code>EntityQueryService.cs:303</code>, reached by both list overloads (<code>:227</code> delegates to <code>:248</code>). The
+          reference implementation is <code>PushNotificationDTOProjector</code>
+          (<code>.../Application/Notifications/PushNotifications/DTOs/PushNotificationDTOProjector.cs:35</code>, registered
+          at <code>.../Notifications/DependencyInjection.cs:51</code>), which wraps the existing Mapperly mapper&#39;s
+          projection form (<code>PushNotificationDTOProjection</code>, <code>:22</code>) rather than hand-writing a <code>Select</code>, so ADR-001&#39;s
+          generated mapper is reused as an expression tree instead of as a method call.</p>
+          <h3 id="5-keyset-pagination-and-deterministic-ordering">5. Keyset pagination, and deterministic ordering</h3>
+          <p><code>GetPageByCursorAsync</code> is declared on <code>IEntityQuerier</code> alone (<code>IRepository.cs:207</code>, inherited by
+          <code>IReadRepository</code> at <code>:221</code>, implemented at <code>EFReadRepository.cs:369</code> and forwarded at
+          <code>EFReadRepositoryDecorator.cs:111</code>):</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">Task&lt;Result&lt;KeysetCollectionResult&lt;TEntity&gt;&gt;&gt; GetPageByCursorAsync(
+    KeysetPageRequest request,
+    ISpecification&lt;TEntity, TIdentifierType&gt;? specification = <span class="hljs-literal">null</span>,
+    CancellationToken cancellationToken = <span class="hljs-literal">default</span>);</code></pre>
+          <p>It is deliberately <strong>not</strong> on <code>IEntityQueryService</code>, so keyset paging is a repository-level capability
+          today and the ADR-034 HTTP query contract still offers offset paging only. <code>KeysetPageRequest</code> and
+          <code>KeysetCollectionResult&lt;T&gt;</code> live in
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/KeysetPagination.cs</code> (<code>:20</code>, <code>:85</code>); the
+          request clamps <code>PageSize</code> into <code>[1, 1000]</code> in both the constructor and the init accessor (<code>:51</code>,
+          <code>:59-62</code>, ceiling at <code>:26</code>) and carries <code>SortColumn</code> / <code>Descending</code> / <code>Cursor</code> (<code>:67</code>, <code>:71</code>, <code>:75</code>),
+          and the result extends <code>CollectionResult&lt;T&gt;</code> with a single <code>NextCursor</code> (<code>:107</code>) and deliberately no
+          total count and no page number, which is the point of keyset paging.</p>
+          <p>The cursor is opaque but versioned: <code>KeysetCursor</code> (<code>:125</code>) encodes base64url over
+          <code>v1|{hasSortValue}|{sortValue}|{id}</code> with <code>Version</code> at <code>:127</code> and each of the two value segments
+          itself base64url-encoded (<code>Encode</code> at <code>:139-153</code>), so the explicit null flag is what distinguishes a
+          missing sort value from an empty one. <code>TryDecode</code> (<code>:169</code>) rejects bad base64, a wrong version, a
+          wrong segment count, or a flag that is not <code>0</code>/<code>1</code>, and <strong>failures are <code>Result</code> values, never
+          exceptions</strong>: an unusable cursor returns <code>Error.Validation(&quot;Error.InvalidCursor&quot;, ...)</code>
+          (<code>EFReadRepository.cs:395-401</code>) and an unknown sort column returns <code>Error.InvalidEntityField</code>
+          (<code>:378-384</code>), both <code>ErrorType.Validation</code> and both therefore mapping to a 400 through the ADR-013
+          edge. One escape remains: <code>KeysetQueryBuilder.Compare</code> throws <code>NotSupportedException</code> for a sort
+          column whose type has neither a relational operator nor <code>IComparable&lt;T&gt;</code>
+          (<code>.../Repositories/KeysetQueryBuilder.cs:246</code>), which is a programming error rather than bad input,
+          but it is an exception on a <code>Result</code>-returning path and is recorded as such.</p>
+          <p><strong>Paged reads are now deterministically ordered, which was a defect.</strong> A page without a total ordering
+          can repeat or skip rows between pages, and nothing previously guaranteed one.
+          <code>EntityQueryPipeline</code> declares <code>PaginationTieBreakProperty = &quot;Id&quot;</code> (<code>:36</code>) and passes it on all three
+          execution paths, the projected one included (<code>:86</code>, <code>:180</code>, <code>:232</code>), but <strong>only when the read is
+          paginated</strong> (<code>PageNumber.HasValue &amp;&amp; PageSize.HasValue</code>). <code>QueryFieldService.ApplySorting</code> (<code>:155</code>)
+          then appends <code>&quot;, Id ascending&quot;</code> to a caller-supplied sort unless the caller already sorted by <code>Id</code>
+          (<code>BuildOrdering</code> at <code>:209</code>, <code>:214-217</code>), and falls back to <code>Id ascending</code> alone when there is no valid
+          sort column and no default sort (<code>:180-182</code>). An <strong>unpaginated</strong> read still gets no ordering at all,
+          deliberately (<code>EntityQueryPipeline.cs:29-35</code>): sorting a full result set the caller did not ask to
+          sort is a cost with no correctness benefit. The keyset builder enforces the same discipline
+          independently, ordering by <code>(sortKey, Id)</code> with the tie-break always ascending or by <code>Id</code> alone when
+          there is no sort key (<code>KeysetQueryBuilder.cs:59</code>, <code>:70</code>, <code>:74</code>).</p>
+          <h3 id="what-this-revision-costs">What this revision costs</h3>
+          <ul>
+          <li><strong>The contract is materially wider.</strong> <code>IEntityQuerier</code> gained five members and <code>ISpecification</code> has
+          a second, richer implementation shape. Every one of them is public API on a lockstep-released
+          package family (ADR-016), so the surface consumers inherit is larger and the ISP split is
+          correspondingly less narrow than the Rationale above describes.</li>
+          <li><strong><code>QuerySpecification</code> reintroduces the coupling the predicate-only shape avoided.</strong> Ordering,
+          includes and paging inside a specification means a specification now encodes query intent, not just
+          a domain predicate, so the same object is less obviously reusable in a domain unit test through
+          <code>IsSatisfiedBy</code>.</li>
+          <li><strong><code>IgnoreQueryFilters</code> is a sharp edge.</strong> <code>WithSoftDeleted()</code> drops the named <code>SoftDelete</code> filter
+          (<code>QuerySpecification.cs:82</code>), which is exactly the invariant ADR-005 relies on. It is scoped to that
+          one named filter rather than being EF&#39;s blanket <code>IgnoreQueryFilters</code>, but it is still a specification
+          able to turn off soft-delete for the reads that use it.</li>
+          <li><strong>Projection pushdown succeeds or falls back silently.</strong> Nothing tells a caller which path ran, so a
+          projector that stops being registered, or a read that quietly acquires a cross-source include, loses
+          the optimization with no signal beyond query latency.</li>
+          <li><strong>Keyset paging stops at the repository.</strong> With no <code>IEntityQueryService</code> or controller surface, the
+          generic HTTP query contract cannot offer it, so a caller wanting stable deep paging today writes a
+          bespoke endpoint, which is the shape ADR-034 exists to avoid.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -404,6 +556,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             </ul>
           </nav>
         </aside>

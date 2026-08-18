@@ -15,6 +15,11 @@ class that does not exist, with the specifications ADC actually ships; refreshed
 "every read" on `IEntityQueryService` to the four reads that actually take a specification, and
 narrowed the "no reference" claim about `IEntityReader` / `IEntityQuerier` to C# code, since the
 Helpdesk staging-script comments named in the same paragraph are references of a kind).
+Revised 2026-08-18 (**substantive**: `QuerySpecification` gives a specification ordering, includes,
+paging and tracking; composition drops `Expression.Invoke` for parameter substitution, retiring the
+provider-bet trade-off; `IEntityQuerier` gains specification-first reads and keyset pagination; an
+optional projector pushes DTO projection into SQL; and paginated reads become deterministically
+ordered. Two Trade-offs entries below are superseded. See the Revision (2026-08-18) at the end).
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -200,4 +205,164 @@ row-scopes collection queries through this contract), ADR-034 (the HTTP query co
 above: dynamic filters and paging arrive from the request, the specification is applied beneath
 them), ADR-035 (the concurrency-token hooks on the write half of the repository), ADR-006 (the
 per-service database each repository instance resolves to), ADR-048 (the identifier aliases that
-supply `TIdentifierType`).
+supply `TIdentifierType`, and [ADR-085](085-identifier-type-aliases-revisited.md), whose migration
+blast radius includes every generic surface named here), ADR-001 (the Mapperly mappers the optional
+projector reuses as an expression rather than as a method call).
+
+## Revision (2026-08-18)
+Five changes, four of them widening the contract and one of them fixing a correctness defect. The
+decision this record states is unchanged: data access is still repository plus specification, the raw
+queryables still live on the composite only, and the fitness rule still fails the build on `.Table` in
+Application code. What the specification can now carry, and what the querier can now be asked, both
+grew.
+
+### 1. A specification can carry more than a predicate
+`QuerySpecification<TEntity, TIdentifierType>`
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/QuerySpecification.cs:38`) extends
+`Specification` with the query state the last Trade-offs entry above says a specification deliberately
+does not hold: `OrderBy` as an ordered `IReadOnlyList<OrderExpression>` (`:54`), `IncludePaths`
+(`:60`), `Skip` / `Take` (`:63`, `:66`), `AsTracking` (`:72`, defaulting false) and
+`IgnoreQueryFilters` (`:82`, defaulting false and dropping only the named `SoftDelete` filter, not the
+ADR-073 tenant filter). Subclasses populate it through protected builders rather than by assignment:
+`AddOrderBy<TKey>(keySelector, descending = false)` (`:90`), `AddInclude(path)` (`:102`, ignoring
+blanks and duplicates), `ApplyPaging(skip, take)` (`:117`, both floored at zero), `WithTracking()`
+(`:127`) and `WithSoftDeleted()` (`:133`). `OrderExpression` is a top-level
+`record (LambdaExpression KeySelector, bool Descending)` (`:150`).
+
+**That entry is therefore superseded, not corrected**: the smaller predicate-only shape remains
+available as `Specification`, and a caller who wants the richer one derives from `QuerySpecification`.
+`ISpecification` itself is unchanged, which is what keeps the two shapes interchangeable everywhere a
+predicate is all that is consumed.
+
+### 2. Composition no longer bets on `Expression.Invoke`
+The Trade-offs entry titled "`Expression.Invoke` composition is a provider bet" is **retired**. The
+combinators now do what `CrossSourceSpecification` was already doing by hand: an
+`ExpressionVisitor` rebinds one operand's parameter onto the other's.
+`ParameterReplacer` (`.../Domain/Specifications/ParameterReplacer.cs:24`, static entry `Replace` at
+`:34`, with a `ReferenceEquals` short-circuit) is driven by `SpecificationComposer`
+(`Specification.cs:146`), whose `Combine` (`:155`) rebinds `right.Parameters[0]` onto
+`left.Parameters[0]` and joins the bodies with `AndAlso` or `OrElse`, and whose `Negate` (`:181`)
+wraps the inner body in `Expression.Not` keeping its own parameter. `Expression.Invoke` no longer
+appears in the file, so a composed specification is now translatable on every provider rather than
+only the ones that inline an invocation, and the divergence between the combinators and the
+cross-source helper is closed.
+
+The composed criteria is built **once per specification instance**, through a lazy field
+(`_criteria ??= ...` in `AndSpecification` at `Specification.cs:88,91`, `OrSpecification` at
+`:112,115`, `NotSpecification` at `:134,137`). It is not a shared or global cache: two separately
+constructed `AndSpecification`s over the same operands each build their own tree.
+
+Composition also gained a fluent form. `SpecificationExtensions`
+(`.../Domain/Specifications/SpecificationExtensions.cs:30`) declares `And` (`:48`), `Or` (`:68`) and
+`Not` (`:85`) as **extension members on `ISpecification<TEntity, TIdentifierType>`**, written with a
+C# extension block (`extension<TEntity, TIdentifierType>(ISpecification<...> specification)` at
+`:32`), not as instance methods on `Specification`. `spec.And(other).Not()` therefore reads as a
+chain while the abstract base stays untouched, and the existing explicit
+`new AndSpecification<...>(a, b)` construction the Decision above cites keeps working unchanged.
+
+### 3. The querier answers specification-first reads
+`IEntityQuerier` (`IRepository.cs:80`) gains four members that take an `ISpecification` rather than a
+raw predicate or a bag of query parameters: `CountAsync` (`:134`, ordering and paging deliberately
+ignored), `ListAsync` (`:151`), a projecting `ListAsync<TResult>(specification, select, ...)`
+(`:170`), and `AnyAsync` (`:182`), implemented on `EFReadRepository` and forwarded by
+`EFReadRepositoryDecorator` (`:78`, `:92`, `:98`, `:105`). Alongside them, `IEntityQueryService`
+widened from the abstract `Specification<TEntity, TIdentifierType>?` to the interface
+`ISpecification<TEntity, TIdentifierType>?` on all four of the members that take one
+(`IEntityQueryService.cs:40`, `:63`, `:110`, `:131`), which is what lets a `QuerySpecification`, a
+composed one, or an `InlineSpecification` be passed to the same reads.
+
+The narrow-interface observation in the Trade-offs is unchanged in kind and sharper in consequence:
+`IUnitOfWork` still hands out only the composites, so these members arrive on an interface nothing
+depends on by name. What changed is that `IEntityQuerier` is now the only place several of these
+reads exist, so the ISP split has moved from documentation toward being the shape a handler would
+actually want.
+
+### 4. Projection can be pushed into SQL
+An optional `IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOProjector.cs:51`) exposes one
+member, `IQueryable<TEntityDTO> ProjectTo(IQueryable<TEntity> source)` (`:62`), and is auto-registered
+by the Application assembly scan (`.../Application/DependencyInjection.cs:160`). When one is
+registered, the read takes a server-side path, `ExecuteProjectedAsync`
+(`.../Application/Services/Query/IEntityQueryPipeline.cs:58`, implemented at
+`EntityQueryPipeline.cs:60`), which applies the projection **last**, after criteria, dynamic filters,
+sorting and paging (`:101-105`), so the database returns only the DTO's columns instead of whole
+entities that are mapped in memory afterwards.
+
+The guard has **three** conditions, not two (`EntityQueryService.cs:489`): a projector must be
+registered, the read must not be tracking, and `NavigationMetadata.UnsupportedIncludes` must be empty,
+that last set being the navigations requiring manual batch loading because they cross a data source
+(`INavigationMetadata.cs:40`). Miss any one and the read falls back to materialize-then-map, which is
+exactly today's behavior, so this is a pure opt-in optimization with no change in results. The call
+site is `EntityQueryService.cs:303`, reached by both list overloads (`:227` delegates to `:248`). The
+reference implementation is `PushNotificationDTOProjector`
+(`.../Application/Notifications/PushNotifications/DTOs/PushNotificationDTOProjector.cs:35`, registered
+at `.../Notifications/DependencyInjection.cs:51`), which wraps the existing Mapperly mapper's
+projection form (`PushNotificationDTOProjection`, `:22`) rather than hand-writing a `Select`, so ADR-001's
+generated mapper is reused as an expression tree instead of as a method call.
+
+### 5. Keyset pagination, and deterministic ordering
+`GetPageByCursorAsync` is declared on `IEntityQuerier` alone (`IRepository.cs:207`, inherited by
+`IReadRepository` at `:221`, implemented at `EFReadRepository.cs:369` and forwarded at
+`EFReadRepositoryDecorator.cs:111`):
+
+```csharp
+Task<Result<KeysetCollectionResult<TEntity>>> GetPageByCursorAsync(
+    KeysetPageRequest request,
+    ISpecification<TEntity, TIdentifierType>? specification = null,
+    CancellationToken cancellationToken = default);
+```
+
+It is deliberately **not** on `IEntityQueryService`, so keyset paging is a repository-level capability
+today and the ADR-034 HTTP query contract still offers offset paging only. `KeysetPageRequest` and
+`KeysetCollectionResult<T>` live in
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/KeysetPagination.cs` (`:20`, `:85`); the
+request clamps `PageSize` into `[1, 1000]` in both the constructor and the init accessor (`:51`,
+`:59-62`, ceiling at `:26`) and carries `SortColumn` / `Descending` / `Cursor` (`:67`, `:71`, `:75`),
+and the result extends `CollectionResult<T>` with a single `NextCursor` (`:107`) and deliberately no
+total count and no page number, which is the point of keyset paging.
+
+The cursor is opaque but versioned: `KeysetCursor` (`:125`) encodes base64url over
+`v1|{hasSortValue}|{sortValue}|{id}` with `Version` at `:127` and each of the two value segments
+itself base64url-encoded (`Encode` at `:139-153`), so the explicit null flag is what distinguishes a
+missing sort value from an empty one. `TryDecode` (`:169`) rejects bad base64, a wrong version, a
+wrong segment count, or a flag that is not `0`/`1`, and **failures are `Result` values, never
+exceptions**: an unusable cursor returns `Error.Validation("Error.InvalidCursor", ...)`
+(`EFReadRepository.cs:395-401`) and an unknown sort column returns `Error.InvalidEntityField`
+(`:378-384`), both `ErrorType.Validation` and both therefore mapping to a 400 through the ADR-013
+edge. One escape remains: `KeysetQueryBuilder.Compare` throws `NotSupportedException` for a sort
+column whose type has neither a relational operator nor `IComparable<T>`
+(`.../Repositories/KeysetQueryBuilder.cs:246`), which is a programming error rather than bad input,
+but it is an exception on a `Result`-returning path and is recorded as such.
+
+**Paged reads are now deterministically ordered, which was a defect.** A page without a total ordering
+can repeat or skip rows between pages, and nothing previously guaranteed one.
+`EntityQueryPipeline` declares `PaginationTieBreakProperty = "Id"` (`:36`) and passes it on all three
+execution paths, the projected one included (`:86`, `:180`, `:232`), but **only when the read is
+paginated** (`PageNumber.HasValue && PageSize.HasValue`). `QueryFieldService.ApplySorting` (`:155`)
+then appends `", Id ascending"` to a caller-supplied sort unless the caller already sorted by `Id`
+(`BuildOrdering` at `:209`, `:214-217`), and falls back to `Id ascending` alone when there is no valid
+sort column and no default sort (`:180-182`). An **unpaginated** read still gets no ordering at all,
+deliberately (`EntityQueryPipeline.cs:29-35`): sorting a full result set the caller did not ask to
+sort is a cost with no correctness benefit. The keyset builder enforces the same discipline
+independently, ordering by `(sortKey, Id)` with the tie-break always ascending or by `Id` alone when
+there is no sort key (`KeysetQueryBuilder.cs:59`, `:70`, `:74`).
+
+### What this revision costs
+- **The contract is materially wider.** `IEntityQuerier` gained five members and `ISpecification` has
+  a second, richer implementation shape. Every one of them is public API on a lockstep-released
+  package family (ADR-016), so the surface consumers inherit is larger and the ISP split is
+  correspondingly less narrow than the Rationale above describes.
+- **`QuerySpecification` reintroduces the coupling the predicate-only shape avoided.** Ordering,
+  includes and paging inside a specification means a specification now encodes query intent, not just
+  a domain predicate, so the same object is less obviously reusable in a domain unit test through
+  `IsSatisfiedBy`.
+- **`IgnoreQueryFilters` is a sharp edge.** `WithSoftDeleted()` drops the named `SoftDelete` filter
+  (`QuerySpecification.cs:82`), which is exactly the invariant ADR-005 relies on. It is scoped to that
+  one named filter rather than being EF's blanket `IgnoreQueryFilters`, but it is still a specification
+  able to turn off soft-delete for the reads that use it.
+- **Projection pushdown succeeds or falls back silently.** Nothing tells a caller which path ran, so a
+  projector that stops being registered, or a read that quietly acquires a cross-source include, loses
+  the optimization with no signal beyond query latency.
+- **Keyset paging stops at the repository.** With no `IEntityQueryService` or controller surface, the
+  generic HTTP query contract cannot offer it, so a caller wanting stable deep paging today writes a
+  bespoke endpoint, which is the shape ADR-034 exists to avoid.

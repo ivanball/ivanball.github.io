@@ -189,4 +189,6 @@ ADR-035 (the `RowVersion` token that serializes concurrent compensations and let
 race to a webhook), ADR-014 (the command pipeline whose commit compensation runs after), ADR-052
 (in-process background work, the hosted-service family this sweep belongs to, with a fixed-interval
 poll instead of a queue drain), ADR-013 (the `Result`-returning guarded transitions the sweep reuses
-rather than bypassing).
+rather than bypassing), [ADR-086](086-process-manager-deferred.md) (the orchestrated alternative to
+the choreography decided here: deferred, with the shape it would take and the trigger that would build
+it, and with this record's reconciliation sweep remaining underneath it).

@@ -9,6 +9,10 @@ evidence and deleted the folders themselves: being empty, they were untracked by
 every fresh clone, so the deferral now rests on the verifiable absence of any wrapper-struct type).
 Revised 2026-08-14 (Conference's alias file now declares sixteen aliases, `SponsorIdentifierType` having
 been added, and the ADC `User` source citations were re-anchored after an expanded doc comment).
+**Revisited by [ADR-085](085-identifier-type-aliases-revisited.md) (2026-08-18)**: the wrapper-struct
+alternative this record deferred was re-evaluated, priced, and deferred again, now against named
+revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
+(2026-08-18) at the end.
 
 ## Context
 Every entity needs an identity type. The framework's base entity is generic over that type:
@@ -111,4 +115,23 @@ not as a wrapper struct.
   ever judged worth paying.
 
 ## Related
-ADR-001 (the per-entity DTO mappers are parameterized by this identifier type, `IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`), ADR-034 (the generic entity controllers and query contract ride on the same identifier type parameter), ADR-006 (aliases are declared per module in the module's own `.Shared` project, matching database-per-service ownership), ADR-015 (the contrast: this convention is not fitness-enforced, unlike the invariants that gate the build).
+ADR-001 (the per-entity DTO mappers are parameterized by this identifier type, `IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`), ADR-034 (the generic entity controllers and query contract ride on the same identifier type parameter), ADR-006 (aliases are declared per module in the module's own `.Shared` project, matching database-per-service ownership), ADR-015 (the contrast: this convention is not fitness-enforced, unlike the invariants that gate the build), [ADR-085](085-identifier-type-aliases-revisited.md) (the 2026-08-18 revisit of the wrapper-struct deferral recorded in the Trade-offs below: same decision, now with a price and named triggers), ADR-068 (the deliberate opposite case, where domain values do get wrapper types).
+
+## Revision (2026-08-18)
+No decision, no behavior and no citation in this record changed. What changed is the standing of the
+deferral it records.
+
+The last Trade-offs entry above ("Revisiting the trade would be a broad change") described the
+wrapper-struct migration as expensive without ever measuring it, and the Decision's last bullet left
+the alternative "deliberately deferred, not planned" with no condition that would re-open it.
+[ADR-085](085-identifier-type-aliases-revisited.md) closes both gaps: it counts the aliases (43 across
+10 files in the four repositories, 42 of them resolving to `int`), counts the migration surface
+(3,641 occurrences of the alias token across 1,016 files in the four `Source` trees, tests excluded),
+names the concrete failure the deferral leaves open with a live example (ADC's `CheckIn` constructor,
+which takes two different `UserIdentifierType` arguments that can be transposed silently), and records
+three triggers that would re-open the question: a production defect traced to an identifier
+transposition, a greenfield fifth consumer, or a materially growing cross-module identifier reference
+graph.
+
+Read the two records together as one position: this record is the decision and its evidence, ADR-085
+is its price and its expiry condition.
