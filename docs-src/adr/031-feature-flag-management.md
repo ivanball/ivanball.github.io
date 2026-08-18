@@ -1,7 +1,9 @@
 # ADR-031: Config-Driven Feature Flags with Dual-Surface Enforcement
 
 ## Status
-Accepted (2026-06-27).
+Accepted (2026-06-27). Revised 2026-08-18 (a targeting-context accessor is now registered, so the
+built-in Targeting and Percentage filters give consistent per-user bucketing across replicas; the
+last Trade-offs entry is narrowed accordingly. See the Revision (2026-08-18) at the end).
 
 ## Context
 The apps need to decouple *release* from *deploy*: ship code dark, flip a kill switch, or roll a feature
@@ -59,7 +61,40 @@ is enforced at two independent surfaces:
   evaluated locally, so consistent assignment across replicas/users needs a deliberate targeting context;
   out of the box the rollout is per-process.
 
+## Revision (2026-08-18)
+**Progressive rollout is now usable, because the targeting context exists.** The Decision above listed
+the Percentage / TimeWindow / Targeting filters as "available", and the last Trade-offs entry recorded
+the catch: without a targeting context wired, bucketing is evaluated per process, so a percentage
+rollout assigns a user differently on each replica and a user can see a feature appear and disappear
+between requests.
+
+`CurrentUserTargetingContextAccessor`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:51-52`)
+implements `ITargetingContextAccessor` and is registered inside `AddAPI` as
+`services.AddFeatureManagement().WithTargeting<CurrentUserTargetingContextAccessor>()`, preceded by
+`AddHttpContextAccessor()` (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:90-92`,
+rationale at `:84-89`). It takes `IHttpContextAccessor` rather than the scoped `ICurrentUserService`
+precisely because `WithTargeting` registers the accessor as a singleton. `UserId` resolves to the
+`user_id` claim falling back to `Identity.Name` (`:86`, claim constant at `:55`), and `Groups` accepts
+role claims under `ClaimTypes.Role`, `"role"` or `"roles"` (`:76-82`), so a rollout can target a role
+as well as a user. An unauthenticated or absent principal yields an empty context rather than an
+exception (`:67-74`), which keeps anonymous traffic evaluating to the flag's non-targeted result
+instead of failing.
+
+**No decorator changed.** `FeatureGateCommandDecorator` still depends only on `IFeatureManager` and
+still calls `IsEnabledAsync(featureGated.FeatureName)` with no targeting argument (`:20`, `:51`); the
+targeting context is resolved inside the filter through the registered accessor. Both enforcement
+surfaces therefore inherit consistent bucketing with no change at either call site, which is the
+property that made this a registration-only change.
+
+The Trade-offs entry above is **narrowed, not removed**: bucketing is now consistent across replicas
+for any host that goes through `AddAPI`, but it is only as consistent as the `user_id` claim is
+stable, and a flag whose filter is configured without a targeting audience still behaves exactly as
+before.
+
 ## Related
 ADR-014 (the decorator pipeline whose outermost slot `FeatureGate` fills, and the ordering that puts it
-first), ADR-013 (the `Result` / `Error` and ProblemDetails edge the disabled responses reuse),
-ADR-019 / ADR-020 / ADR-021 / ADR-026 (the other opt-in, audit-the-inventory capabilities).
+first, now with Authorization registered directly inside it so a disabled feature does not leak which
+permission guards it), ADR-013 (the `Result` / `Error` and ProblemDetails edge the disabled responses
+reuse), ADR-019 / ADR-020 / ADR-021 / ADR-026 (the other opt-in, audit-the-inventory capabilities),
+ADR-020 (the role vocabulary the targeting accessor reads as `Groups`).

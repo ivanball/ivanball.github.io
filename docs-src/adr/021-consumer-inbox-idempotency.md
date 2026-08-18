@@ -1,7 +1,11 @@
 # ADR-021: Consumer-Side Inbox for Integration-Event Idempotency
 
 ## Status
-Accepted (2026-06-09; adoption reviewed 2026-07-15).
+Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inbox stays opt-in, but
+being off is no longer silent: a broker-connected host running `NoOpInboxStore` logs a startup
+warning, `MessageBus:EnableInbox=true` becomes the stated recommendation for any such host, and the
+`InboxMessages` entity is confirmed to be part of the relational model unconditionally. See the
+Revision (2026-08-18) at the end).
 
 ## Context
 ADR-003 makes integration-event delivery **at-least-once**: the outbox guarantees a published event
@@ -107,4 +111,51 @@ repos.
 ADR-003 (the outbox and at-least-once delivery whose consumer side this deduplicates; handler
 idempotency is still required for the crash window), ADR-006 (the inbox lives in the consumer's own
 database), ADR-005 (`OutboxCleanupService` bounds inbox retention too), ADR-017 (the inbound-HTTP-edge
-idempotency this mirrors at the broker-consume edge).
+idempotency this mirrors at the broker-consume edge), ADR-066 (the transport selection whose
+non-`InProcess` providers are exactly the hosts the new startup warning fires in),
+[ADR-087](087-broker-poison-message-handling.md) (second-level redelivery, which can now re-run a
+handler an hour after the original attempt: the inbox and every idempotent handler must hold across
+that gap, not only across a retry burst).
+
+## Revision (2026-08-18)
+**The decision is unchanged: the inbox is still opt-in and `NoOpInboxStore` is still the default.**
+What changed is that the default is now loud.
+
+1. **A broker-connected host with no inbox says so at startup.** `AddBrokerMessaging` returns early
+   for `MessageBusProvider.InProcess`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:656-659`), which is
+   what scopes this to hosts that actually talk to a broker: in-process dispatch never redelivers, so
+   there is nothing to warn about. Past that early return, the `EnableInbox` branch
+   (`:686-698`) registers `EfInboxStore` as scoped (`:688`) when the flag is set, and on the `else`
+   branch registers `NoOpInboxStore` as a singleton (`:692`) **plus** an `IHostedService` whose only
+   job is to emit one `Warning` line naming the consequence and the fix (`:697`). The service is
+   `InboxDisabledWarningService`
+   (`.../Persistence/Inbox/InboxDisabledWarningService.cs:18-19`), and it evaluates nothing at
+   runtime: `StartAsync` logs unconditionally (`:22-26`), because the condition was already decided by
+   which DI branch registered it. Its message text is at `:31-34`. The type is `internal`, so it is a
+   framework behavior rather than a public extension point.
+2. **`MessageBus:EnableInbox=true` is now the stated recommendation, not a neutral option.** The
+   setting is still `bool` with no initializer, so the default is still `false`
+   (`.../Settings/MessageBusSettings.cs:75`), but its own documentation now says "RECOMMENDED true for
+   any broker-connected host" (`:62-72`). The Trade-offs entry above ("a broker-consuming service that
+   forgets `EnableInbox` gets no dedup") therefore keeps its substance and loses its silence: the
+   inventory audit it asks for is now performed by the host at every boot.
+3. **The `InboxMessages` table is part of the relational model unconditionally.**
+   `ApplicationDbContext.OnModelCreating` calls `ConfigureInbox(modelBuilder)` with no flag check
+   (`.../Persistence/DbContexts/ApplicationDbContext.cs:320`, body at `:514-528`, including the unique
+   `IX_InboxMessages_MessageId` at `:520-522`), and it is configured inline in the base context rather
+   than as an `IEntityTypeConfiguration`. `SQLServerDbContext` and `SqliteDbContext` reach it through
+   `base.OnModelCreating`; `CosmosDbContext` deliberately does not call the base (`CosmosDbContext.cs:89`,
+   documented at `ApplicationDbContext.cs:510-513`), so the guarantee is **relational engines only**,
+   consistent with the "Cosmos hosts skip it" statement in the Decision above.
+
+**So the Trade-offs entry above overstated the cost of enabling.** It said that enabling the inbox
+"also requires the migration that creates the table". On a relational host that has applied the
+standard migrations, it does not: the table is part of the shared relational model those migrations
+already create, so flipping `EnableInbox` is a configuration change and a restart with no schema work.
+Every service enumerated in the Decision above is past that point already (ADC's four per-service
+migration projects each carry an `AddInboxMessages` migration; Store's per-service projects create the
+table in `InitialCreate`). The settings documentation says the same thing
+(`MessageBusSettings.cs:60-64`), and notes that the `false` default exists only so an existing host
+does not start querying a table it has not migrated yet. Cosmos hosts remain the exception, as the
+Decision above already states.

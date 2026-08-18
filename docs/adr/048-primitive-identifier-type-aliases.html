@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 84 ADRs</summary>
+        <summary>All 87 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -184,6 +184,9 @@
         <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
         <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
         <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
           </ol>
         </nav>
       </details>
@@ -199,7 +202,11 @@
           evidence and deleted the folders themselves: being empty, they were untracked by git and absent from
           every fresh clone, so the deferral now rests on the verifiable absence of any wrapper-struct type).
           Revised 2026-08-14 (Conference&#39;s alias file now declares sixteen aliases, <code>SponsorIdentifierType</code> having
-          been added, and the ADC <code>User</code> source citations were re-anchored after an expanded doc comment).</p>
+          been added, and the ADC <code>User</code> source citations were re-anchored after an expanded doc comment).
+          <strong>Revisited by <a href="085-identifier-type-aliases-revisited.html">ADR-085</a> (2026-08-18)</strong>: the wrapper-struct
+          alternative this record deferred was re-evaluated, priced, and deferred again, now against named
+          revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
+          (2026-08-18) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Every entity needs an identity type. The framework&#39;s base entity is generic over that type:
           <code>BaseEntity&lt;TIdentifierType&gt;</code> constrains it to <code>notnull</code> and exposes a single <code>required init Id</code>
@@ -302,7 +309,23 @@
           ever judged worth paying.</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-001 (the per-entity DTO mappers are parameterized by this identifier type, <code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code>), ADR-034 (the generic entity controllers and query contract ride on the same identifier type parameter), ADR-006 (aliases are declared per module in the module&#39;s own <code>.Shared</code> project, matching database-per-service ownership), ADR-015 (the contrast: this convention is not fitness-enforced, unlike the invariants that gate the build).</p>
+          <p>ADR-001 (the per-entity DTO mappers are parameterized by this identifier type, <code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code>), ADR-034 (the generic entity controllers and query contract ride on the same identifier type parameter), ADR-006 (aliases are declared per module in the module&#39;s own <code>.Shared</code> project, matching database-per-service ownership), ADR-015 (the contrast: this convention is not fitness-enforced, unlike the invariants that gate the build), <a href="085-identifier-type-aliases-revisited.html">ADR-085</a> (the 2026-08-18 revisit of the wrapper-struct deferral recorded in the Trade-offs below: same decision, now with a price and named triggers), ADR-068 (the deliberate opposite case, where domain values do get wrapper types).</p>
+          <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
+          <p>No decision, no behavior and no citation in this record changed. What changed is the standing of the
+          deferral it records.</p>
+          <p>The last Trade-offs entry above (&quot;Revisiting the trade would be a broad change&quot;) described the
+          wrapper-struct migration as expensive without ever measuring it, and the Decision&#39;s last bullet left
+          the alternative &quot;deliberately deferred, not planned&quot; with no condition that would re-open it.
+          <a href="085-identifier-type-aliases-revisited.html">ADR-085</a> closes both gaps: it counts the aliases (43 across
+          10 files in the four repositories, 42 of them resolving to <code>int</code>), counts the migration surface
+          (3,641 occurrences of the alias token across 1,016 files in the four <code>Source</code> trees, tests excluded),
+          names the concrete failure the deferral leaves open with a live example (ADC&#39;s <code>CheckIn</code> constructor,
+          which takes two different <code>UserIdentifierType</code> arguments that can be transposed silently), and records
+          three triggers that would re-open the question: a production defect traced to an identifier
+          transposition, a greenfield fifth consumer, or a materially growing cross-module identifier reference
+          graph.</p>
+          <p>Read the two records together as one position: this record is the decision and its evidence, ADR-085
+          is its price and its expiry condition.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -319,6 +342,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             </ul>
           </nav>
         </aside>

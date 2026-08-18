@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-021: Consumer-Side Inbox for Integration-Event Idempotency · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15).">
+  <meta name="description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inbox stays opt-in, but being off is no longer silent: a broker-connected…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-021: Consumer-Side Inbox for Integration-Event Idempotency">
-  <meta property="og:description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15).">
+  <meta property="og:description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inbox stays opt-in, but being off is no longer silent: a broker-connected…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-021: Consumer-Side Inbox for Integration-Event Idempotency">
-  <meta name="twitter:description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15).">
+  <meta name="twitter:description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inbox stays opt-in, but being off is no longer silent: a broker-connected…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"021 · Consumer-Side Inbox for Integration-Event Idempotency","item":"https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 84 ADRs</summary>
+        <summary>All 87 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -184,6 +184,9 @@
         <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
         <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
         <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
           </ol>
         </nav>
       </details>
@@ -192,7 +195,11 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-021-consumer-side-inbox-for-integration-event-idempotency">ADR-021: Consumer-Side Inbox for Integration-Event Idempotency</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-09; adoption reviewed 2026-07-15).</p>
+          <p>Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inbox stays opt-in, but
+          being off is no longer silent: a broker-connected host running <code>NoOpInboxStore</code> logs a startup
+          warning, <code>MessageBus:EnableInbox=true</code> becomes the stated recommendation for any such host, and the
+          <code>InboxMessages</code> entity is confirmed to be part of the relational model unconditionally. See the
+          Revision (2026-08-18) at the end).</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 makes integration-event delivery <strong>at-least-once</strong>: the outbox guarantees a published event
           is not lost, and the MassTransit broker redelivers on consumer failure. At-least-once means a
@@ -295,7 +302,53 @@
           <p>ADR-003 (the outbox and at-least-once delivery whose consumer side this deduplicates; handler
           idempotency is still required for the crash window), ADR-006 (the inbox lives in the consumer&#39;s own
           database), ADR-005 (<code>OutboxCleanupService</code> bounds inbox retention too), ADR-017 (the inbound-HTTP-edge
-          idempotency this mirrors at the broker-consume edge).</p>
+          idempotency this mirrors at the broker-consume edge), ADR-066 (the transport selection whose
+          non-<code>InProcess</code> providers are exactly the hosts the new startup warning fires in),
+          <a href="087-broker-poison-message-handling.html">ADR-087</a> (second-level redelivery, which can now re-run a
+          handler an hour after the original attempt: the inbox and every idempotent handler must hold across
+          that gap, not only across a retry burst).</p>
+          <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
+          <p><strong>The decision is unchanged: the inbox is still opt-in and <code>NoOpInboxStore</code> is still the default.</strong>
+          What changed is that the default is now loud.</p>
+          <ol>
+          <li><strong>A broker-connected host with no inbox says so at startup.</strong> <code>AddBrokerMessaging</code> returns early
+          for <code>MessageBusProvider.InProcess</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:656-659</code>), which is
+          what scopes this to hosts that actually talk to a broker: in-process dispatch never redelivers, so
+          there is nothing to warn about. Past that early return, the <code>EnableInbox</code> branch
+          (<code>:686-698</code>) registers <code>EfInboxStore</code> as scoped (<code>:688</code>) when the flag is set, and on the <code>else</code>
+          branch registers <code>NoOpInboxStore</code> as a singleton (<code>:692</code>) <strong>plus</strong> an <code>IHostedService</code> whose only
+          job is to emit one <code>Warning</code> line naming the consequence and the fix (<code>:697</code>). The service is
+          <code>InboxDisabledWarningService</code>
+          (<code>.../Persistence/Inbox/InboxDisabledWarningService.cs:18-19</code>), and it evaluates nothing at
+          runtime: <code>StartAsync</code> logs unconditionally (<code>:22-26</code>), because the condition was already decided by
+          which DI branch registered it. Its message text is at <code>:31-34</code>. The type is <code>internal</code>, so it is a
+          framework behavior rather than a public extension point.</li>
+          <li><strong><code>MessageBus:EnableInbox=true</code> is now the stated recommendation, not a neutral option.</strong> The
+          setting is still <code>bool</code> with no initializer, so the default is still <code>false</code>
+          (<code>.../Settings/MessageBusSettings.cs:75</code>), but its own documentation now says &quot;RECOMMENDED true for
+          any broker-connected host&quot; (<code>:62-72</code>). The Trade-offs entry above (&quot;a broker-consuming service that
+          forgets <code>EnableInbox</code> gets no dedup&quot;) therefore keeps its substance and loses its silence: the
+          inventory audit it asks for is now performed by the host at every boot.</li>
+          <li><strong>The <code>InboxMessages</code> table is part of the relational model unconditionally.</strong>
+          <code>ApplicationDbContext.OnModelCreating</code> calls <code>ConfigureInbox(modelBuilder)</code> with no flag check
+          (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:320</code>, body at <code>:514-528</code>, including the unique
+          <code>IX_InboxMessages_MessageId</code> at <code>:520-522</code>), and it is configured inline in the base context rather
+          than as an <code>IEntityTypeConfiguration</code>. <code>SQLServerDbContext</code> and <code>SqliteDbContext</code> reach it through
+          <code>base.OnModelCreating</code>; <code>CosmosDbContext</code> deliberately does not call the base (<code>CosmosDbContext.cs:89</code>,
+          documented at <code>ApplicationDbContext.cs:510-513</code>), so the guarantee is <strong>relational engines only</strong>,
+          consistent with the &quot;Cosmos hosts skip it&quot; statement in the Decision above.</li>
+          </ol>
+          <p><strong>So the Trade-offs entry above overstated the cost of enabling.</strong> It said that enabling the inbox
+          &quot;also requires the migration that creates the table&quot;. On a relational host that has applied the
+          standard migrations, it does not: the table is part of the shared relational model those migrations
+          already create, so flipping <code>EnableInbox</code> is a configuration change and a restart with no schema work.
+          Every service enumerated in the Decision above is past that point already (ADC&#39;s four per-service
+          migration projects each carry an <code>AddInboxMessages</code> migration; Store&#39;s per-service projects create the
+          table in <code>InitialCreate</code>). The settings documentation says the same thing
+          (<code>MessageBusSettings.cs:60-64</code>), and notes that the <code>false</code> default exists only so an existing host
+          does not start querying a table it has not migrated yet. Cosmos hosts remain the exception, as the
+          Decision above already states.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -312,6 +365,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             </ul>
           </nav>
         </aside>

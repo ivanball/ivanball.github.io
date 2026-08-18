@@ -4,7 +4,11 @@
 Accepted. Revised 2026-08-01 (the `auth-ip` per-IP anonymous-authentication limiter, which the shared
 auth controller applies to login and register by default, is recorded as the third layer; the
 anonymous-surface trade-off was corrected to match; the edge trust posture behind every IP partition
-key was made explicit).
+key was made explicit). Revised 2026-08-18 (the hard-coded limits become a bound `RateLimitingSettings`
+section, a sliding-window algorithm option joins the fixed window, and the global and `UserPolicy`
+partitions gain an optional Redis-backed distributed limiter with a fail-open posture, which partly
+retires the "in-process counters" trade-off below; `auth-ip` stays deliberately local. See the
+Revision (2026-08-18) at the end).
 
 ## Context
 Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
@@ -117,8 +121,70 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
 - **In-process counters.** Limiter state is per-instance, so across N replicas the effective ceiling
   is roughly N times the configured limit. This is an accepted backstop, not a distributed quota.
 
+## Revision (2026-08-18)
+The layering above is unchanged: the global limiter is still authenticated-only, infrastructure and
+anonymous traffic are still exempt, `auth-ip` still covers login and register by default, and
+`FixedPolicy` / `UserPolicy` are still opt-in with nothing applying them. Three things below it
+changed.
+
+1. **The limits are now a validated settings section.** `RateLimitingSettings`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:21`) binds
+   the `"RateLimiting"` section (`:24`) at
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:307`,
+   falling back to a default instance when the section is absent, so an unconfigured host keeps
+   exactly the behavior this record describes. Every figure the Decision quotes now has a named home
+   and a `[Range]`: `GlobalPermitLimit` 300 (`:38-40`), `AuthIpPermitLimit` 30 (`:46-47`),
+   `PerUserPermitLimit` 30 for `UserPolicy` (`:34-36`), and `PermitLimit` 100 plus `QueueLimit` 2 for
+   `FixedPolicy` (`:26-32`).
+2. **A sliding window is selectable.** `Algorithm` (`:53`) takes `RateLimitAlgorithm.FixedWindow`
+   (the default) or `SlidingWindow`
+   (`.../RateLimiting/RateLimitAlgorithm.cs:15,22`), with `SegmentsPerWindow` defaulting to 4
+   (`:61-62`, `[Range(1, 60)]`, ignored under `FixedWindow`). The window itself stays one minute under
+   both algorithms (`RateLimitAlgorithm.cs:5-6`), so this is a smoothing choice, not a new cap: a
+   fixed window lets a caller spend a full minute's budget in the last second of one window and again
+   in the first second of the next, and the segmented window removes that doubling at the cost of
+   holding per-segment state.
+3. **The global and `UserPolicy` partitions can be Redis-backed.** `Distributed` (`:72`, default
+   `false`) swaps in `RedisFixedWindowRateLimiter`
+   (`.../RateLimiting/RedisFixedWindowRateLimiter.cs:37`), which keys on
+   `rl:{partitionKey}:{unixMinute}` (`:129-130`), performs a `StringIncrementAsync` (`:135`), and sets
+   a 65-second TTL only on the increment that created the key (`:137-143`, the 5 seconds of slack
+   being deliberate clock skew, `:139-141`), admitting the request when the returned count is within
+   the permit limit (`:145`). Exactly two partitions opt in: the global limiter
+   (`WebApplicationBuilderExtensions.cs:85-92`, Redis scope `"global"`) and `UserPolicy` (`:109-116`,
+   scope `"user"`).
+
+**`auth-ip` deliberately stays in-memory** (`allowDistributed: false`,
+`WebApplicationBuilderExtensions.cs:216-223`, rationale at `:133-135`), as does `FixedPolicy`
+(`:335-342`). The per-IP cap on the anonymous authentication endpoints is a coarse brute-force
+backstop sitting in front of a control that is already global and stateful, the ADR-029 per-email
+lockout; making it distributed would put a Redis round trip on the login path to tighten a limit whose
+per-replica multiplication is already accounted for in its generous default of 30.
+
+**The distributed limiter fails open.** Any Redis fault other than cancellation is caught and the
+lease is granted (`:147-155`), with a warning emitted at most once per window through an
+`Interlocked.Exchange` guard on a static field (`:149-151`, `:44`). That is the same posture the
+global limiter already takes for a request with no attributable IP: a rate limiter is a backstop, and
+a broken backstop must not become an outage. Two consequences are worth naming. The increment and the
+comparison are not transactional (`:26-29`), so genuinely concurrent requests can overshoot the limit
+slightly, which is accepted for a coarse cap. And setting `Distributed = true` in a host with no
+`IConnectionMultiplexer` registered **silently degrades to the in-memory limiter** rather than failing
+startup (`:150-167`, documented at `RateLimitingSettings.cs:64-71`), so this setting sits outside the
+ADR-070 fail-fast contract and a misconfiguration looks exactly like success.
+
+The "In-process counters" trade-off above is therefore **narrowed rather than removed**: the effective
+ceiling is still roughly N times the configured limit across N replicas for `auth-ip` and
+`FixedPolicy`, and for the global and per-user partitions in any host that has not set `Distributed`
+or has no multiplexer. Every other trade-off in this record stands unchanged, including the
+forwarded-header trust posture, which the Redis partition key inherits verbatim.
+
 ## Related
 ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
 ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
 safeguard against client retries), ADR-029 (the per-email lockout and registration throttle that sit
-on the same two endpoints as the `auth-ip` cap).
+on the same two endpoints as the `auth-ip` cap, and the reason `auth-ip` stays local), ADR-026 (the
+Redis the distributed limiter reuses, and the `IncrementAsync` storage-format lesson the raw `INCR`
+here avoids by owning its own `rl:` keyspace), ADR-070 (the fail-fast configuration contract
+`RateLimitingSettings` binds into, and the `Distributed` degradation that sits outside it), ADR-079
+(the shared middleware pipeline that places `UseRateLimiter` after authentication and after forwarded
+headers, which is what makes both partition keys resolvable).

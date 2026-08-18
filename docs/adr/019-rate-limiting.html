@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 84 ADRs</summary>
+        <summary>All 87 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -184,6 +184,9 @@
         <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
         <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
         <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
           </ol>
         </nav>
       </details>
@@ -195,7 +198,11 @@
           <p>Accepted. Revised 2026-08-01 (the <code>auth-ip</code> per-IP anonymous-authentication limiter, which the shared
           auth controller applies to login and register by default, is recorded as the third layer; the
           anonymous-surface trade-off was corrected to match; the edge trust posture behind every IP partition
-          key was made explicit).</p>
+          key was made explicit). Revised 2026-08-18 (the hard-coded limits become a bound <code>RateLimitingSettings</code>
+          section, a sliding-window algorithm option joins the fixed window, and the global and <code>UserPolicy</code>
+          partitions gain an optional Redis-backed distributed limiter with a fail-open posture, which partly
+          retires the &quot;in-process counters&quot; trade-off below; <code>auth-ip</code> stays deliberately local. See the
+          Revision (2026-08-18) at the end).</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -311,11 +318,70 @@
           <li><strong>In-process counters.</strong> Limiter state is per-instance, so across N replicas the effective ceiling
           is roughly N times the configured limit. This is an accepted backstop, not a distributed quota.</li>
           </ul>
+          <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
+          <p>The layering above is unchanged: the global limiter is still authenticated-only, infrastructure and
+          anonymous traffic are still exempt, <code>auth-ip</code> still covers login and register by default, and
+          <code>FixedPolicy</code> / <code>UserPolicy</code> are still opt-in with nothing applying them. Three things below it
+          changed.</p>
+          <ol>
+          <li><strong>The limits are now a validated settings section.</strong> <code>RateLimitingSettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:21</code>) binds
+          the <code>&quot;RateLimiting&quot;</code> section (<code>:24</code>) at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:307</code>,
+          falling back to a default instance when the section is absent, so an unconfigured host keeps
+          exactly the behavior this record describes. Every figure the Decision quotes now has a named home
+          and a <code>[Range]</code>: <code>GlobalPermitLimit</code> 300 (<code>:38-40</code>), <code>AuthIpPermitLimit</code> 30 (<code>:46-47</code>),
+          <code>PerUserPermitLimit</code> 30 for <code>UserPolicy</code> (<code>:34-36</code>), and <code>PermitLimit</code> 100 plus <code>QueueLimit</code> 2 for
+          <code>FixedPolicy</code> (<code>:26-32</code>).</li>
+          <li><strong>A sliding window is selectable.</strong> <code>Algorithm</code> (<code>:53</code>) takes <code>RateLimitAlgorithm.FixedWindow</code>
+          (the default) or <code>SlidingWindow</code>
+          (<code>.../RateLimiting/RateLimitAlgorithm.cs:15,22</code>), with <code>SegmentsPerWindow</code> defaulting to 4
+          (<code>:61-62</code>, <code>[Range(1, 60)]</code>, ignored under <code>FixedWindow</code>). The window itself stays one minute under
+          both algorithms (<code>RateLimitAlgorithm.cs:5-6</code>), so this is a smoothing choice, not a new cap: a
+          fixed window lets a caller spend a full minute&#39;s budget in the last second of one window and again
+          in the first second of the next, and the segmented window removes that doubling at the cost of
+          holding per-segment state.</li>
+          <li><strong>The global and <code>UserPolicy</code> partitions can be Redis-backed.</strong> <code>Distributed</code> (<code>:72</code>, default
+          <code>false</code>) swaps in <code>RedisFixedWindowRateLimiter</code>
+          (<code>.../RateLimiting/RedisFixedWindowRateLimiter.cs:37</code>), which keys on
+          <code>rl:{partitionKey}:{unixMinute}</code> (<code>:129-130</code>), performs a <code>StringIncrementAsync</code> (<code>:135</code>), and sets
+          a 65-second TTL only on the increment that created the key (<code>:137-143</code>, the 5 seconds of slack
+          being deliberate clock skew, <code>:139-141</code>), admitting the request when the returned count is within
+          the permit limit (<code>:145</code>). Exactly two partitions opt in: the global limiter
+          (<code>WebApplicationBuilderExtensions.cs:85-92</code>, Redis scope <code>&quot;global&quot;</code>) and <code>UserPolicy</code> (<code>:109-116</code>,
+          scope <code>&quot;user&quot;</code>).</li>
+          </ol>
+          <p><strong><code>auth-ip</code> deliberately stays in-memory</strong> (<code>allowDistributed: false</code>,
+          <code>WebApplicationBuilderExtensions.cs:216-223</code>, rationale at <code>:133-135</code>), as does <code>FixedPolicy</code>
+          (<code>:335-342</code>). The per-IP cap on the anonymous authentication endpoints is a coarse brute-force
+          backstop sitting in front of a control that is already global and stateful, the ADR-029 per-email
+          lockout; making it distributed would put a Redis round trip on the login path to tighten a limit whose
+          per-replica multiplication is already accounted for in its generous default of 30.</p>
+          <p><strong>The distributed limiter fails open.</strong> Any Redis fault other than cancellation is caught and the
+          lease is granted (<code>:147-155</code>), with a warning emitted at most once per window through an
+          <code>Interlocked.Exchange</code> guard on a static field (<code>:149-151</code>, <code>:44</code>). That is the same posture the
+          global limiter already takes for a request with no attributable IP: a rate limiter is a backstop, and
+          a broken backstop must not become an outage. Two consequences are worth naming. The increment and the
+          comparison are not transactional (<code>:26-29</code>), so genuinely concurrent requests can overshoot the limit
+          slightly, which is accepted for a coarse cap. And setting <code>Distributed = true</code> in a host with no
+          <code>IConnectionMultiplexer</code> registered <strong>silently degrades to the in-memory limiter</strong> rather than failing
+          startup (<code>:150-167</code>, documented at <code>RateLimitingSettings.cs:64-71</code>), so this setting sits outside the
+          ADR-070 fail-fast contract and a misconfiguration looks exactly like success.</p>
+          <p>The &quot;In-process counters&quot; trade-off above is therefore <strong>narrowed rather than removed</strong>: the effective
+          ceiling is still roughly N times the configured limit across N replicas for <code>auth-ip</code> and
+          <code>FixedPolicy</code>, and for the global and per-user partitions in any host that has not set <code>Distributed</code>
+          or has no multiplexer. Every other trade-off in this record stands unchanged, including the
+          forwarded-header trust posture, which the Redis partition key inherits verbatim.</p>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
           safeguard against client retries), ADR-029 (the per-email lockout and registration throttle that sit
-          on the same two endpoints as the <code>auth-ip</code> cap).</p>
+          on the same two endpoints as the <code>auth-ip</code> cap, and the reason <code>auth-ip</code> stays local), ADR-026 (the
+          Redis the distributed limiter reuses, and the <code>IncrementAsync</code> storage-format lesson the raw <code>INCR</code>
+          here avoids by owning its own <code>rl:</code> keyspace), ADR-070 (the fail-fast configuration contract
+          <code>RateLimitingSettings</code> binds into, and the <code>Distributed</code> degradation that sits outside it), ADR-079
+          (the shared middleware pipeline that places <code>UseRateLimiter</code> after authentication and after forwarded
+          headers, which is what makes both partition keys resolvable).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -331,6 +397,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -1,7 +1,11 @@
 # ADR-009: Resilience Policies & Recovery Objectives
 
 ## Status
-Accepted (2026-06-14)
+Accepted (2026-06-14). **Amended by [ADR-087](087-broker-poison-message-handling.md) (2026-08-18)**:
+the resilience objective extends past outbound HTTP and gRPC clients for the first time, to the
+outbox's broker publish, which gains a circuit breaker. The database posture is deliberately
+unchanged and a per-query database breaker is recorded as rejected. See the Revision (2026-08-18)
+below.
 
 ## Context
 The framework already supplies the *mechanisms* for surviving partial failure: a standard Polly
@@ -61,3 +65,44 @@ only that the numbers exist and the restore is drilled.
   is a visible smell).
 - A gRPC client that needs bespoke timeouts must override the standard handler explicitly rather than
   opt out of resilience entirely: intentional friction.
+
+## Revision (2026-08-18)
+This record's first Decision point scoped resilience to "every outbound `HttpClient` and gRPC client
+registered through the framework's extension methods". That scope was accurate and it was also the
+whole story: no other dependency in the framework had a resilience policy of any kind. Two changes,
+both recorded in full in [ADR-087](087-broker-poison-message-handling.md).
+
+1. **The outbox's broker publish is now a resilience objective.** `OutboxProcessor` holds a Polly
+   `ResiliencePipeline`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:99`,
+   built at `:639-650`) and wraps exactly one call in it, the broker publish (`:516-520`); the
+   in-process dispatch branch and every database call sit outside it by construction (`:88-91`,
+   `:512-515`). Its parameters live beside the HTTP ones as
+   `BrokerResilienceDefaults`
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/BrokerResilienceDefaults.cs:24`: a 0.5
+   failure ratio over a 30-second sampling window, a minimum throughput of 10, and a 15-second break),
+   which is the same shape `HttpResilienceDefaults` already had. It is a **breaker with no retry
+   paired with it** (`:17-22`), because the outbox loop already is the retry, and
+   `BrokenCircuitException` is fed into the ordinary failure path so a short-circuited publish
+   re-leases and eventually dead-letters exactly like any other failed one. What it buys is failing in
+   microseconds instead of a connection timeout during a broker outage, and one log line per batch
+   instead of one per message.
+2. **A per-query database circuit breaker was evaluated and rejected.** It is not a gap and it is not
+   scheduled. EF Core's `EnableRetryOnFailure` execution strategy
+   (`.../Persistence/DbContexts/SQLServerDbContext.cs:64-67`, five retries with a ten-second maximum
+   delay, alongside `CommandTimeoutSeconds` at `:56`) already owns retrying at the persistence layer
+   and constrains how a user-initiated transaction may be written (`:61-63`, restated at
+   `.../Application/Interfaces/Infrastructure/IUnitOfWork.cs:63`), which is why the strategy is
+   materialized explicitly in `DbContextFactory` (`:526`). A Polly breaker wrapped around a call the
+   strategy is already retrying would either count one logical failure many times or force the
+   strategy to be replaced, and replacing it is an EF execution-strategy rework rather than a
+   resilience addition. **The EF retry strategy plus the command timeout remains the database
+   resilience posture**, and the asymmetry with the broker leg is therefore a decision rather than an
+   oversight.
+
+The Decision's second and third points are untouched: consumers still declare RTO/RPO with a drilled
+restore, and graceful degradation is still the default posture. The first point should now be read as
+"every outbound client, plus the outbox broker publish". One thing this revision does **not** change
+is the Trade-offs entry above about test coverage: the breaker's parameters are asserted nowhere, so
+like the HTTP handler it is registration and review that carry them, and the broker breaker has no
+equivalent of the gRPC fault-injection test.

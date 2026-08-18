@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">15</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">84</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">87</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">100</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -408,7 +408,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>84 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>87 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -497,6 +497,9 @@
           <a class="adr" href="docs/adr/082-two-tier-cors-posture.html"><span class="adr-num">082</span><span><span class="adr-title">Two-tier cross-origin posture</span><span class="adr-sum">Service hosts run named allow-listed CORS policies selected per environment inside the shared pipeline; the gateways run a default policy that restricts only origins, because a reverse proxy has to pass arbitrary client headers through.</span></span></a>
           <a class="adr" href="docs/adr/083-crud-lifecycle-event-taxonomy.html"><span class="adr-num">083</span><span><span class="adr-title">CRUD lifecycle event taxonomy</span><span class="adr-sum">One entity-changed event with a state discriminator replaces per-entity Created/Updated/Deleted triples, and handlers filter on the state; business state-machine transitions keep their own event types, and the discriminator rides integration events as a frozen wire field.</span></span></a>
           <a class="adr" href="docs/adr/084-stripe-webhook-ingress.html"><span class="adr-num">084</span><span><span class="adr-title">Stripe webhook ingress contract</span><span class="adr-sum">An anonymous signature-verified endpoint whose status code means accepted-not-processed, because rejections make the provider disable the endpoint; a startup service self-registers the webhook and logs its freshly minted signing secret loudly for an operator to persist.</span></span></a>
+          <a class="adr" href="docs/adr/085-identifier-type-aliases-revisited.html"><span class="adr-num">085</span><span><span class="adr-title">Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</span><span class="adr-sum">Accepted (2026-08-18). Revisits ADR-048, which stays Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the…</span></span></a>
+          <a class="adr" href="docs/adr/086-process-manager-deferred.html"><span class="adr-num">086</span><span><span class="adr-title">A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</span><span class="adr-sum">Accepted (2026-08-18) as a documented deferral. Nothing ships with this record: no state machine, no correlation store, no new package. What ships is…</span></span></a>
+          <a class="adr" href="docs/adr/087-broker-poison-message-handling.html"><span class="adr-num">087</span><span><span class="adr-title">Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</span><span class="adr-sum">Accepted (2026-08-18). Amends ADR-009: the outbox&#39;s broker publish gains a circuit breaker, which is the first resilience policy this workspace applies…</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -522,9 +525,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">146 documents</span>
+            <span class="kicker kicker--accent">149 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 84 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
+            <p>Every collection indexed in one place: 87 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->

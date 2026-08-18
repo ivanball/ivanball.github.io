@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-01). Revised 2026-08-14: refreshed the E2ETestBase helper line anchors (explanatory comments were added above ScanGridAsync), the two…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html">
+  <title>ADR-086: A Process Manager Is Deferred, Not Absent (Relates to ADR-054) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-18) as a documented deferral. Nothing ships with this record: no state machine, no correlation store, no new package. What ships is…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/086-process-manager-deferred.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate">
-  <meta property="og:description" content="Accepted (2026-08-01). Revised 2026-08-14: refreshed the E2ETestBase helper line anchors (explanatory comments were added above ScanGridAsync), the two…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html">
+  <meta property="og:title" content="ADR-086: A Process Manager Is Deferred, Not Absent (Relates to ADR-054)">
+  <meta property="og:description" content="Accepted (2026-08-18) as a documented deferral. Nothing ships with this record: no state machine, no correlation store, no new package. What ships is…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/086-process-manager-deferred.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate">
-  <meta name="twitter:description" content="Accepted (2026-08-01). Revised 2026-08-14: refreshed the E2ETestBase helper line anchors (explanatory comments were added above ScanGridAsync), the two…">
+  <meta name="twitter:title" content="ADR-086: A Process Manager Is Deferred, Not Absent (Relates to ADR-054)">
+  <meta name="twitter:description" content="Accepted (2026-08-18) as a documented deferral. Nothing ships with this record: no state machine, no correlation store, no new package. What ships is…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate","item":"https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)","item":"https://ivanball.github.io/docs/adr/086-process-manager-deferred.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</span>
+        <span class="current">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -162,7 +162,7 @@
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
         <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
         <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
-        <li><a href="063-accessibility-conformance-gate.html" aria-current="page">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
         <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
@@ -185,7 +185,7 @@
         <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
         <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
         <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
-        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="086-process-manager-deferred.html" aria-current="page">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
         <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
           </ol>
         </nav>
@@ -193,160 +193,152 @@
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-063-wcag-21-aa-accessibility-as-a-shipped-test-contract-and-ci-gate">ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</h1>
+          <h1 id="adr-086-a-process-manager-is-deferred-not-absent-relates-to-adr-054">ADR-086: A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-01). Revised 2026-08-14: refreshed the <code>E2ETestBase</code> helper line anchors (explanatory
-          comments were added above <code>ScanGridAsync</code>), the two consumer suite scan counts (ADC now 31, Store now 23),
-          and the MMCA.Helpdesk pin location; no decision changed.</p>
+          <p>Accepted (2026-08-18) <strong>as a documented deferral</strong>. Nothing ships with this record: no state machine,
+          no correlation store, no new package. What ships is the shape the coordinator would take, the
+          constraint that limits the technology choice, and the single condition that would start the work.
+          <a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> remains the accepted mechanism until then.</p>
           <h2 id="context">Context</h2>
-          <p>Accessibility was documented before it was enforced. The narrative guide
-          (<a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, rubric section 21) named WCAG 2.1 AA
-          as the target for the shared <code>MMCA.Common.UI</code> surface and listed the pages that had been checked, but
-          a guide cannot fail a build. That left three open problems.</p>
-          <p>First, the <strong>target itself was ambiguous</strong>. &quot;Run axe&quot; is not a contract: axe ships advisory
-          &quot;best-practice&quot; rules alongside the WCAG rule sets, so two repos running the same tool with different
-          options measure different things and disagree about whether a page passes.</p>
-          <p>Second, <strong>conformance is a property of rendered pixels and the accessibility tree</strong>, not of code
-          structure. ADR-015&#39;s fitness functions gate structure (layer references, purity) and ADR-058&#39;s
-          conformance bases gate a booted host&#39;s runtime contracts (ProblemDetails, OpenAPI, security headers).
-          Neither can see a contrast ratio or a missing accessible name. This tier needs a real browser engine,
-          which means it belongs in the E2E package rather than in either of those.</p>
-          <p>Third, <strong>the regressions are silent and come from shared values</strong>. A theme token changed for visual
-          reasons can drop a filled button&#39;s label under the 4.5:1 floor across every consuming app at once,
-          and nobody notices until a user reports it. Accessibility only stays true if the check runs on the
-          same schedule as the code that can break it.</p>
-          <h2 id="decision">Decision</h2>
-          <p>Ship WCAG 2.1 AA as a <strong>named, versioned test contract in <code>MMCA.Common.Testing.E2E</code></strong>, assert it from
-          the package&#39;s own workflow bases, and wire it as a required merge check and a deploy gate.</p>
+          <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> decided how this workspace achieves
+          cross-boundary consistency without two-phase commit: <strong>choreography</strong>. Each step of a workflow raises
+          a domain event, each compensating action is its own handler, idempotency is a marker committed by the
+          same <code>SaveChanges</code> as the compensating writes, and a periodic reconciliation sweep is the
+          saga-timeout backstop for a step that depends on an external system.</p>
+          <p>That record also states, precisely and without hedging, why choreography was correct for the one
+          workflow it covers: <code>Order.Status</code> plus <code>Order.InventoryRestored</code> <strong>are</strong> the saga state, so an
+          orchestrator would add a state machine and a persistence store to track what the aggregate already
+          records. The rationale is conditional on the workflow, and the condition is not stated as permanent.</p>
+          <p>What ADR-054 does not answer is what happens to that reasoning when a workflow&#39;s state stops fitting
+          on one aggregate in one database. Three properties of a multi-step workflow break the choreography
+          argument, and none of them is present today:</p>
           <ul>
-          <li><strong>One named target, shipped in the package.</strong> <code>AxeOptions.Wcag21Aa</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Infrastructure/AxeOptions.cs:17</code>) pins every
-          scan to a <code>RunOnly</code> tag list of exactly <code>wcag2a</code>, <code>wcag2aa</code>, <code>wcag21a</code>, <code>wcag21aa</code> (<code>:22</code>): levels A
-          and AA across WCAG 2.0 and 2.1. axe&#39;s &quot;best-practice&quot; rules are deliberately outside the target
-          (<code>:12-15</code>), so the gate fails only on conformance violations, never on advisories.</li>
-          <li><strong>A violation is a thrown test failure, not a report.</strong>
-          <code>AssertNoAccessibilityViolationsAsync(AxeRunOptions?)</code>
-          (<code>.../Testing.E2E/Infrastructure/PageExtensions.cs:157</code>) runs axe and, on any violation, throws
-          <code>AccessibilityViolationException</code> (<code>:180</code>; the type is
-          <code>.../Testing.E2E/Infrastructure/AccessibilityViolationException.cs:7</code>) carrying each rule&#39;s impact,
-          id, help text, and the offending markup compacted to one line per node (<code>:170-178</code>), so a red gate
-          points at the element rather than at a dashboard.</li>
-          <li><strong>The package&#39;s Identity workflow bases assert it, so a consumer inherits the scan.</strong> A subclass
-          gets a login-page, register-page, and profile-page a11y test with no test code of its own:
-          <code>.../Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:83</code>,
-          <code>UserRegistrationTestsBase.cs:91</code>, and <code>ProfileManagementTestsBase.cs:180</code> each call the assert with
-          <code>AxeOptions.Wcag21Aa</code>.</li>
-          <li><strong>Consumer page scans go through two helpers that make strictness explicit.</strong> On
-          <code>.../Testing.E2E/Infrastructure/E2ETestBase.cs</code>, <code>ScanAsync()</code> (<code>:293</code>) waits for any loading bar to
-          clear and asserts the strict options (<code>:296</code>); <code>ScanGridAsync()</code> (<code>:283</code>) additionally waits for a
-          seeded data row before scanning and asserts with the one recorded exception (<code>:288</code>). Which helper a
-          page uses is the declaration of which rule set applies to it.</li>
-          <li><strong>Exactly one recorded exception exists, and it is a value, not a switch.</strong>
-          <code>AxeOptions.Wcag21AaExceptMudPagerCombobox</code> (<code>AxeOptions.cs:35</code>) carries the same four WCAG tags
-          (<code>:40</code>) and disables a single rule, <code>aria-input-field-name</code> (<code>:44</code>). It exists for pages whose only
-          combobox is MudBlazor&#39;s own <code>MudTablePager</code> &quot;rows per page&quot; select: MudBlazor 9.6.0 mirrored combobox
-          semantics onto the MudSelect presenter but gives the pager&#39;s select no accessible name, and
-          <code>MudTablePager</code> exposes no <code>Label</code>/<code>aria-label</code> parameter, so it is not fixable from app markup
-          (<code>:26-33</code>). Every other WCAG 2.1 AA rule still runs on those pages.</li>
-          <li><strong>Common gates it cross-browser as a required merge check.</strong> The <code>ui-e2e</code> job
-          (<code>MMCA.Common/.github/workflows/ci.yml:228</code>) builds the out-of-slnx gallery plus E2E project and runs
-          the axe scans across a <code>chromium, firefox, webkit</code> matrix (<code>:237</code>), one engine per leg via
-          <code>E2E_BROWSER</code> (<code>:298</code>), with <code>fail-fast: false</code> so each engine reports independently (<code>:235</code>). All
-          three contexts block merges (<code>MMCA.Common/CONTRIBUTING.md:63-64</code>, enumerated in the branch-protection
-          payload at <code>:174-176</code>).</li>
-          <li><strong>Both deployed apps gate the deploy on it.</strong> <code>MMCA.ADC/.github/workflows/deploy.yml:531</code> and
-          <code>MMCA.Store/.github/workflows/deploy.yml:537</code> call the reusable <code>e2e.yml</code> workflow chromium-only
-          (ADC <code>:541</code>, Store <code>:547</code>) against the full Aspire stack, and the <code>deploy</code> job waits on that gate
-          (ADC <code>:866</code>, Store <code>:862</code>).</li>
-          <li><strong>The gate already owns design-token decisions.</strong> Contrast values in the shared theme are set to
-          what the scan will accept, with the ratio recorded in place: light-palette <code>WarningContrastText</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:33</code>, rationale at <code>:29-32</code>,
-          caught by a gated admin-order-list scan on a chip), dark-palette <code>PrimaryContrastText</code> (<code>:58</code>,
-          rationale at <code>:55-57</code>, caught by the gated dark-mode scan), dark <code>WarningContrastText</code> (<code>:67</code>) and
-          <code>ErrorContrastText</code> (<code>:71</code>), and the brand secondary itself, moved to Teal 700 for a 5.3:1 light
-          surface ratio (<code>.../MMCA.Common.UI/Theme/BrandColors.cs:26</code>, rationale at <code>:22-24</code>).</li>
+          <li><strong>State that belongs to no aggregate.</strong> &quot;Step 2 of 4 completed, step 3 awaiting a reply, deadline at
+          14:05&quot; is workflow state, not order state. Choreography needs somewhere to put it, and today the
+          answer is a status column on the aggregate that happens to have one.</li>
+          <li><strong>A timeout that is not a poll.</strong> ADR-054&#39;s sweep is a fixed-interval scan for rows that have sat
+          too long (<code>PaymentReconciliationService</code>, a 10-minute interval and a 30-minute stuck age at the
+          shipped defaults). That is a perfectly good backstop for one known-shape wait. It is not a
+          per-instance scheduled deadline, and a workflow with several different waits would need a sweep per
+          wait.</li>
+          <li><strong>Compensation that must unwind in order.</strong> ADR-054&#39;s compensating handlers are independent: cancel
+          restores stock, payment failure notifies the customer, and neither depends on the other having run.
+          A four-step workflow that must undo steps 3, 2 and 1 in that order has an ordering requirement no
+          set of independent handlers expresses.</li>
           </ul>
-          <p>Adoption differs per repo and is uneven on purpose. <strong>MMCA.Common</strong> scans its own backend-less gallery:
-          eight assertions across five classes over <code>GalleryAxeTestBase</code>
-          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Infrastructure/GalleryAxeTestBase.cs:14</code>),
-          covering login (<code>LoginPageE2ETests.cs:34</code>), register (<code>RegisterPageE2ETests.cs:36</code>), the primitives
-          showcase (<code>ComponentsPageE2ETests.cs:80</code>), both dark-mode states (<code>DarkModeE2ETests.cs:30,:40</code>), and the
-          notification pages, one of which is the gallery&#39;s use of the pager exception
-          (<code>NotificationPagesE2ETests.cs:32</code>, alongside strict scans at <code>:44</code> and <code>:56</code>). <strong>MMCA.Store</strong> subclasses
-          all three Identity bases (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
-          <code>UserRegistrationTests.cs:5</code>, <code>ProfileManagementTests.cs:5</code>). <strong>MMCA.ADC</strong> subclasses two
-          (<code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
-          <code>UserRegistrationTests.cs:5</code>); its <code>ProfileManagementTests</code> derives <code>E2ETestBase</code> directly
-          (<code>ProfileManagementTests.cs:8</code>) because the ADC profile page supports only password change and account
-          deletion, so it does not inherit the base&#39;s profile scan. Beyond the Identity bases each app carries a
-          dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 31 page
-          scans (11 through <code>ScanGridAsync</code>, 20 strict) and Store&#39;s
-          <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 23 (6 grid, 17 strict).
-          <strong>MMCA.Helpdesk adopts none of it</strong>: it pins the package version
-          (<code>MMCA.Helpdesk/Directory.Packages.props:66</code>) but no project references it, and the repo has no E2E
-          test project at all (<code>Tests/</code> holds only <code>Architecture</code> and <code>Modules</code>), so the seed has no browser
-          accessibility gate today.</p>
+          <p>Nothing in the four repositories has these properties. A content sweep of the <code>Source</code> trees for
+          <code>MassTransitStateMachine</code>, <code>SagaStateMachineInstance</code>, <code>ISaga</code> and <code>InMemorySagaRepository</code> returns
+          <strong>no match in any repo</strong>, which is the verifiable form of &quot;no orchestrated workflow exists&quot;.
+          <code>PaymentReconciliationService</code> in MMCA.Store&#39;s Sales module is still the only reconciliation sweep,
+          and <code>PeriodicBackgroundService</code> still has exactly one production subclass.</p>
+          <p>Writing an orchestrator now would therefore be building the coordinator before the workflow. This
+          record exists because the alternative failure mode is worse: the first genuine multi-step
+          cross-service workflow arriving with no recorded design, and being answered with a fifth ad-hoc status
+          column.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Defer the process manager, and record its shape so the deferral is a design decision rather than an
+          omission.</p>
+          <h3 id="the-shape-it-would-take">The shape it would take</h3>
+          <p>A durable multi-step workflow coordinator in this workspace is a <strong>MassTransit v8 saga state
+          machine</strong>, not a hand-rolled orchestrator and not a third-party workflow engine:</p>
+          <ul>
+          <li><strong><code>MassTransitStateMachine&lt;TInstance&gt;</code> for the definition.</strong> The transport abstraction
+          (<a href="066-broker-transport-selection.html">ADR-066</a>) is already MassTransit across all three providers
+          (<code>InProcess</code>, RabbitMQ locally, Azure Service Bus in production), so the state machine rides the
+          bus that already exists. Introducing a second coordination technology beside it would mean two
+          retry models, two dead-letter destinations and two sets of transport configuration.</li>
+          <li><strong>Durable correlation state per workflow instance.</strong> One row per running workflow, keyed by a
+          <code>CorrelationId</code>, carrying the current state and whatever the workflow needs to remember between
+          steps. It belongs in the owning service&#39;s own database
+          (<a href="006-database-per-service.html">ADR-006</a>), the same placement the outbox and the inbox already take,
+          which keeps the coordinator inside one transactional boundary with the data it coordinates and adds
+          no shared store to race on.</li>
+          <li><strong>Timeouts as scheduled messages, not as a sweep.</strong> A state machine expresses a deadline per
+          instance rather than as a periodic scan for stale rows. That is the property ADR-054&#39;s sweep cannot
+          express and the main functional reason to reach for one.</li>
+          <li><strong>Compensation hooks folding into ADR-054&#39;s backstop, not replacing it.</strong> A state machine&#39;s
+          compensating transitions would call the same guarded, <code>Result</code>-returning domain transitions
+          ADR-054 already insists on (&quot;the sweep gets no private path into the aggregate&quot;). The
+          reconciliation sweep stays underneath as the backstop for the case the coordinator itself cannot
+          cover: an external system that never replies at all. Orchestration narrows what the sweep has to
+          catch; it does not make an external provider reliable.</li>
+          </ul>
+          <h3 id="the-constraint-that-shapes-the-technology-choice">The constraint that shapes the technology choice</h3>
+          <p>MassTransit is <strong>pinned to v8</strong> and the pin is a build gate
+          (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>): <code>MassTransit</code>, <code>MassTransit.RabbitMQ</code> and
+          <code>MassTransit.Azure.ServiceBus.Core</code> are all held at 8.5.10 in
+          <code>MMCA.Common/Directory.Packages.props:79-81</code>, because v9 requires a commercial license. The v8 saga
+          state machine and its EF Core saga repository are fully capable, so the pin does not block the design;
+          what it blocks is assuming a future v9 feature, and it means the coordinator inherits the pin&#39;s own
+          risk. If v8 stops receiving security fixes, a process manager built on it is inside the blast radius
+          of that migration rather than beside it. That is a reason to build the coordinator when a workflow
+          needs it, not in advance of one.</p>
+          <h3 id="the-trigger">The trigger</h3>
+          <p>Build it when <strong>the first real multi-step cross-service workflow appears</strong>: a workflow with at least
+          three steps spanning at least two services, whose state does not fit on a single aggregate, and which
+          needs at least one per-instance deadline. Until then ADR-054&#39;s compensating handlers plus the outbox&#39;s
+          bounded retries and dead-lettering (<a href="003-outbox-dual-dispatch.html">ADR-003</a>) are sufficient, and this
+          record is the design the implementing PR starts from.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>A named constant is the contract.</strong> Putting the rule set in a shipped, referenced symbol rather
-          than in each repo&#39;s test setup means &quot;what WCAG 2.1 AA means here&quot; has exactly one definition, it
-          versions with the package, and a change to it is a reviewable diff in one file instead of drift
-          discovered by comparing CI logs.</li>
-          <li><strong>Excluding best-practice rules is what makes the gate blockable.</strong> A gate that can red on advisory
-          findings gets demoted to advisory itself. Scoping to the four WCAG tags means every failure is a real
-          conformance violation, which is the precondition for making the check required rather than informational.</li>
-          <li><strong>Assert in the base, not in the consumer.</strong> The same push-left posture as ADR-058: shipping the
-          assertion inside <code>UserLoginTestsBase</code> / <code>UserRegistrationTestsBase</code> / <code>ProfileManagementTestsBase</code>
-          means an app that adopts the Identity workflow tests cannot accidentally adopt them without the a11y
-          scan. Opting out is visible (it means not subclassing the base), the way ADC&#39;s profile page is.</li>
-          <li><strong>A real engine, not reflection.</strong> Contrast, accessible names, and live-region announcement exist only
-          in a rendered accessibility tree. That is why this sits in the E2E package with Playwright and not in
-          the NetArchTest tier (ADR-015) or the booted-host conformance tier (ADR-058).</li>
-          <li><strong>Cross-browser where it is cheap, chromium where it is expensive.</strong> The gallery is backend-less, so
-          all three engines run there and catch the cross-engine class of defect at low cost. A full Aspire-stack
-          E2E leg costs roughly twenty minutes, so the deploy path runs chromium only and leans on the gallery
-          matrix for engine coverage.</li>
-          <li><strong>Exceptions as distinct option values, not as suppression flags.</strong> A second constant with a different
-          name forces the caller to say which contract it is scanning under, and it keeps the exception&#39;s
-          justification attached to the thing being excepted rather than buried in a config file.</li>
+          <li><strong>Choreography is genuinely correct for the workflow that exists.</strong> This is not a case of the
+          simpler option being tolerated. Checkout&#39;s saga state is two fields on <code>Order</code>, and an orchestrator
+          would introduce a state row that duplicates them, with the two able to disagree. ADR-054&#39;s argument
+          is sound and this record does not weaken it.</li>
+          <li><strong>The coordinator is cheap to add and expensive to have prematurely.</strong> A saga state machine is a
+          class, a migration and a repository registration on infrastructure that already exists. What is
+          expensive is the standing cost: a second persistence model, a second failure mode (a stuck instance
+          that is neither running nor complete), and a second place to look during an incident. Nothing today
+          earns that.</li>
+          <li><strong>The design is the deliverable, not the code.</strong> The failure this record prevents is a fifth status
+          column, not the absence of a state machine. Whoever meets the trigger inherits a technology choice,
+          a placement, a licensing constraint and a relationship to ADR-054, which is most of the design work.</li>
+          <li><strong>Naming the trigger keeps the deferral falsifiable.</strong> &quot;We do not need one yet&quot; is a claim that can
+          be checked against a workflow inventory. Without the three-part test above it is a preference.</li>
+          <li><strong>One coordination technology, chosen for the transport already in place.</strong> Reaching for a workflow
+          engine outside the bus would add an operational dependency to two production deployments to solve a
+          problem neither currently has.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Best-practice rules are out of scope, deliberately.</strong> Findings axe would classify as best practice
-          (and anything WCAG AAA) are not measured at all, so the gate can be green on a page a specialist would
-          still improve. This is the price of a blockable gate, and it is recorded on the constant itself
-          (<code>AxeOptions.cs:12-15</code>).</li>
-          <li><strong>One accepted exception, with real blast radius.</strong> <code>Wcag21AaExceptMudPagerCombobox</code> disables
-          <code>aria-input-field-name</code> for the whole page scan, not just for the pager node. A grid page that later
-          gains a genuinely unnamed combobox of its own would pass <code>ScanGridAsync</code> (<code>E2ETestBase.cs:288</code>). The
-          exception is documented as &quot;use only where the sole combobox is a pager&quot; (<code>AxeOptions.cs:33</code>), which is
-          a convention the compiler cannot enforce. It is upstream-owned: it stands until MudBlazor labels the
-          pager select.</li>
-          <li><strong>Automation covers only what axe can judge.</strong> Focus order, reading order, and announcement quality are
-          not machine-checkable and are covered by the manual screen-reader checklist in
-          <a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, which is a periodic human pass, not a gate.</li>
-          <li><strong>The deploy gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:538</code>, Store <code>deploy.yml:544</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
-          (ADC <code>:896</code>, Store <code>:893</code>), so a backend-only or infra-only deploy ships without a browser scan. That
-          is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
-          gate as backstop, but it does mean &quot;deployed&quot; does not always mean &quot;axe ran on this commit&quot;.</li>
-          <li><strong>Consumer breadth is hand-maintained.</strong> Nothing forces a new page into <code>AccessibilityTests</code>, so
-          coverage grows by discipline: 31 scans in ADC and 23 in Store today, against far larger page inventories.</li>
-          <li><strong>MMCA.Helpdesk has no accessibility gate.</strong> The reference app demonstrates the framework&#39;s layers but
-          not this contract, so a reader following the seed sees no worked example of adopting the scan.</li>
+          <li><strong>The first workflow to hit the trigger pays the full cost at once</strong>, under whatever deadline made
+          it appear. Deferral moves the work onto the critical path of the feature that needs it, which is
+          the standing cost of every deferral and is recorded rather than mitigated.</li>
+          <li><strong>The trigger relies on someone recognizing it.</strong> There is no inventory of workflow shapes and no
+          gate that fires when a third step is added to a two-step flow. In practice the third status column
+          is likelier to be noticed at review than at design time, and by then it exists.</li>
+          <li><strong>Nothing here is validated by running code.</strong> No saga state machine has ever been built in this
+          workspace, so the shape above is a design on paper: the EF saga repository has not been exercised
+          against <code>SQLServerDbContext</code>, and the interaction between a saga&#39;s own persistence and the
+          outbox interceptor (<a href="003-outbox-dual-dispatch.html">ADR-003</a>) is unexplored. Expect the implementing
+          PR to find something this record did not anticipate.</li>
+          <li><strong>The v8 pin is inherited, not resolved.</strong> A coordinator built on MassTransit v8 makes the pin
+          harder to leave, because a licensing or end-of-support forced move would then also be a workflow
+          migration rather than only a transport one.</li>
+          <li><strong>ADR-054&#39;s sweep does not go away.</strong> Even after a process manager exists, the reconciliation
+          backstop is still needed for external systems that never reply, so the eventual state is two
+          mechanisms rather than one replacing the other. This record&#39;s benefit is a narrower job for the
+          sweep, not its retirement.</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-015 (architecture fitness functions: the structural tier this parallels at the browser tier, and the
-          same invariant-over-discipline posture), ADR-058 (runtime conformance suites shipped as subclassable
-          bases in a package: the pattern this record applies to accessibility, one tier further out),
-          ADR-028 (dark theme: the dark palette&#39;s contrast tokens, <code>MMCATheme.cs:58,:67,:71</code>, exist in the form they
-          do because the gated dark-mode scan rejected the defaults), and the how-to companion
-          <a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a> (scanned-state inventory, manual
-          screen-reader checklist, and the tracked limitations).</p>
+          <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (the accepted mechanism this record defers an
+          alternative to: choreographed compensation, the persisted aggregate marker, and the reconciliation
+          sweep that would remain underneath a process manager),
+          <a href="003-outbox-dual-dispatch.html">ADR-003</a> (the at-least-once delivery, bounded retries and dead-lettering
+          that make choreography sufficient today, and that a saga would sit on top of rather than replace),
+          <a href="066-broker-transport-selection.html">ADR-066</a> (the MassTransit transport abstraction the state machine
+          would ride), <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the v8 pin, its licensing reason
+          and its build gate), <a href="006-database-per-service.html">ADR-006</a> (where the correlation state would live:
+          the owning service&#39;s own database, beside its outbox and inbox),
+          <a href="021-consumer-inbox-idempotency.html">ADR-021</a> (consume-edge dedup, which a saga needs exactly as much
+          as a handler does), <a href="052-background-job-execution.html">ADR-052</a> (the hosted-service family the
+          reconciliation sweep belongs to, and the in-process alternative a per-instance deadline is not),
+          <a href="084-stripe-webhook-ingress.html">ADR-084</a> (the third-party ingress whose unreliability is the specific
+          thing no coordinator can fix).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/063-accessibility-conformance-gate.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/086-process-manager-deferred.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">

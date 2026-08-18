@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-01). Revised 2026-08-14: refreshed the E2ETestBase helper line anchors (explanatory comments were added above ScanGridAsync), the two…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html">
+  <title>ADR-085: Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-18). Revisits ADR-048, which stays Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/085-identifier-type-aliases-revisited.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate">
-  <meta property="og:description" content="Accepted (2026-08-01). Revised 2026-08-14: refreshed the E2ETestBase helper line anchors (explanatory comments were added above ScanGridAsync), the two…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html">
+  <meta property="og:title" content="ADR-085: Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)">
+  <meta property="og:description" content="Accepted (2026-08-18). Revisits ADR-048, which stays Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/085-identifier-type-aliases-revisited.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate">
-  <meta name="twitter:description" content="Accepted (2026-08-01). Revised 2026-08-14: refreshed the E2ETestBase helper line anchors (explanatory comments were added above ScanGridAsync), the two…">
+  <meta name="twitter:title" content="ADR-085: Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)">
+  <meta name="twitter:description" content="Accepted (2026-08-18). Revisits ADR-048, which stays Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate","item":"https://ivanball.github.io/docs/adr/063-accessibility-conformance-gate.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)","item":"https://ivanball.github.io/docs/adr/085-identifier-type-aliases-revisited.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</span>
+        <span class="current">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -162,7 +162,7 @@
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
         <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
         <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
-        <li><a href="063-accessibility-conformance-gate.html" aria-current="page">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
         <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
@@ -184,7 +184,7 @@
         <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
         <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
         <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
-        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html" aria-current="page">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
         <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
         <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
           </ol>
@@ -193,160 +193,156 @@
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-063-wcag-21-aa-accessibility-as-a-shipped-test-contract-and-ci-gate">ADR-063: WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</h1>
+          <h1 id="adr-085-identifier-type-aliases-revisited-wrapper-structs-deferred-again-with-triggers">ADR-085: Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-01). Revised 2026-08-14: refreshed the <code>E2ETestBase</code> helper line anchors (explanatory
-          comments were added above <code>ScanGridAsync</code>), the two consumer suite scan counts (ADC now 31, Store now 23),
-          and the MMCA.Helpdesk pin location; no decision changed.</p>
+          <p>Accepted (2026-08-18). <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a></strong>, which stays
+          Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the
+          shape of the deferral. ADR-048 left the wrapper-struct alternative &quot;considered and left unbuilt&quot; with
+          no condition attached; this record measures what the deferral actually costs today, states the
+          migration price in numbers, and replaces an open-ended &quot;not now&quot; with named triggers that would
+          re-open it.</p>
           <h2 id="context">Context</h2>
-          <p>Accessibility was documented before it was enforced. The narrative guide
-          (<a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, rubric section 21) named WCAG 2.1 AA
-          as the target for the shared <code>MMCA.Common.UI</code> surface and listed the pages that had been checked, but
-          a guide cannot fail a build. That left three open problems.</p>
-          <p>First, the <strong>target itself was ambiguous</strong>. &quot;Run axe&quot; is not a contract: axe ships advisory
-          &quot;best-practice&quot; rules alongside the WCAG rule sets, so two repos running the same tool with different
-          options measure different things and disagree about whether a page passes.</p>
-          <p>Second, <strong>conformance is a property of rendered pixels and the accessibility tree</strong>, not of code
-          structure. ADR-015&#39;s fitness functions gate structure (layer references, purity) and ADR-058&#39;s
-          conformance bases gate a booted host&#39;s runtime contracts (ProblemDetails, OpenAPI, security headers).
-          Neither can see a contrast ratio or a missing accessible name. This tier needs a real browser engine,
-          which means it belongs in the E2E package rather than in either of those.</p>
-          <p>Third, <strong>the regressions are silent and come from shared values</strong>. A theme token changed for visual
-          reasons can drop a filled button&#39;s label under the 4.5:1 floor across every consuming app at once,
-          and nobody notices until a user reports it. Accessibility only stays true if the check runs on the
-          same schedule as the code that can break it.</p>
-          <h2 id="decision">Decision</h2>
-          <p>Ship WCAG 2.1 AA as a <strong>named, versioned test contract in <code>MMCA.Common.Testing.E2E</code></strong>, assert it from
-          the package&#39;s own workflow bases, and wire it as a required merge check and a deploy gate.</p>
+          <p><a href="048-primitive-identifier-type-aliases.html">ADR-048</a> decided that every entity identity is a primitive
+          named through a per-module <code>global using {Entity}IdentifierType = ...</code> alias, and recorded the cost in
+          one line of Trade-offs: no compile-time protection against swapping two same-typed identifiers. That
+          is an honest sentence, and it is also the entire treatment the risk has ever received. A deferral with
+          no revisit condition is indistinguishable from an oversight a year later, which is the gap this record
+          closes.</p>
+          <p>The Section A wave was the moment to ask, because it rewrote a large number of data-access signatures
+          at once (specification-first reads, keyset pagination, projection pushdown; see
+          <a href="055-repository-and-specification-contract.html">ADR-055</a>). If a wrapper-struct migration were ever
+          going to ride along with unrelated churn, that was the wave to fold it into. It did not, and this
+          record says why.</p>
+          <p>Three facts frame the decision, all counted in the four repositories&#39; <code>Source</code> trees on 2026-08-18:</p>
           <ul>
-          <li><strong>One named target, shipped in the package.</strong> <code>AxeOptions.Wcag21Aa</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Infrastructure/AxeOptions.cs:17</code>) pins every
-          scan to a <code>RunOnly</code> tag list of exactly <code>wcag2a</code>, <code>wcag2aa</code>, <code>wcag21a</code>, <code>wcag21aa</code> (<code>:22</code>): levels A
-          and AA across WCAG 2.0 and 2.1. axe&#39;s &quot;best-practice&quot; rules are deliberately outside the target
-          (<code>:12-15</code>), so the gate fails only on conformance violations, never on advisories.</li>
-          <li><strong>A violation is a thrown test failure, not a report.</strong>
-          <code>AssertNoAccessibilityViolationsAsync(AxeRunOptions?)</code>
-          (<code>.../Testing.E2E/Infrastructure/PageExtensions.cs:157</code>) runs axe and, on any violation, throws
-          <code>AccessibilityViolationException</code> (<code>:180</code>; the type is
-          <code>.../Testing.E2E/Infrastructure/AccessibilityViolationException.cs:7</code>) carrying each rule&#39;s impact,
-          id, help text, and the offending markup compacted to one line per node (<code>:170-178</code>), so a red gate
-          points at the element rather than at a dashboard.</li>
-          <li><strong>The package&#39;s Identity workflow bases assert it, so a consumer inherits the scan.</strong> A subclass
-          gets a login-page, register-page, and profile-page a11y test with no test code of its own:
-          <code>.../Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:83</code>,
-          <code>UserRegistrationTestsBase.cs:91</code>, and <code>ProfileManagementTestsBase.cs:180</code> each call the assert with
-          <code>AxeOptions.Wcag21Aa</code>.</li>
-          <li><strong>Consumer page scans go through two helpers that make strictness explicit.</strong> On
-          <code>.../Testing.E2E/Infrastructure/E2ETestBase.cs</code>, <code>ScanAsync()</code> (<code>:293</code>) waits for any loading bar to
-          clear and asserts the strict options (<code>:296</code>); <code>ScanGridAsync()</code> (<code>:283</code>) additionally waits for a
-          seeded data row before scanning and asserts with the one recorded exception (<code>:288</code>). Which helper a
-          page uses is the declaration of which rule set applies to it.</li>
-          <li><strong>Exactly one recorded exception exists, and it is a value, not a switch.</strong>
-          <code>AxeOptions.Wcag21AaExceptMudPagerCombobox</code> (<code>AxeOptions.cs:35</code>) carries the same four WCAG tags
-          (<code>:40</code>) and disables a single rule, <code>aria-input-field-name</code> (<code>:44</code>). It exists for pages whose only
-          combobox is MudBlazor&#39;s own <code>MudTablePager</code> &quot;rows per page&quot; select: MudBlazor 9.6.0 mirrored combobox
-          semantics onto the MudSelect presenter but gives the pager&#39;s select no accessible name, and
-          <code>MudTablePager</code> exposes no <code>Label</code>/<code>aria-label</code> parameter, so it is not fixable from app markup
-          (<code>:26-33</code>). Every other WCAG 2.1 AA rule still runs on those pages.</li>
-          <li><strong>Common gates it cross-browser as a required merge check.</strong> The <code>ui-e2e</code> job
-          (<code>MMCA.Common/.github/workflows/ci.yml:228</code>) builds the out-of-slnx gallery plus E2E project and runs
-          the axe scans across a <code>chromium, firefox, webkit</code> matrix (<code>:237</code>), one engine per leg via
-          <code>E2E_BROWSER</code> (<code>:298</code>), with <code>fail-fast: false</code> so each engine reports independently (<code>:235</code>). All
-          three contexts block merges (<code>MMCA.Common/CONTRIBUTING.md:63-64</code>, enumerated in the branch-protection
-          payload at <code>:174-176</code>).</li>
-          <li><strong>Both deployed apps gate the deploy on it.</strong> <code>MMCA.ADC/.github/workflows/deploy.yml:531</code> and
-          <code>MMCA.Store/.github/workflows/deploy.yml:537</code> call the reusable <code>e2e.yml</code> workflow chromium-only
-          (ADC <code>:541</code>, Store <code>:547</code>) against the full Aspire stack, and the <code>deploy</code> job waits on that gate
-          (ADC <code>:866</code>, Store <code>:862</code>).</li>
-          <li><strong>The gate already owns design-token decisions.</strong> Contrast values in the shared theme are set to
-          what the scan will accept, with the ratio recorded in place: light-palette <code>WarningContrastText</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:33</code>, rationale at <code>:29-32</code>,
-          caught by a gated admin-order-list scan on a chip), dark-palette <code>PrimaryContrastText</code> (<code>:58</code>,
-          rationale at <code>:55-57</code>, caught by the gated dark-mode scan), dark <code>WarningContrastText</code> (<code>:67</code>) and
-          <code>ErrorContrastText</code> (<code>:71</code>), and the brand secondary itself, moved to Teal 700 for a 5.3:1 light
-          surface ratio (<code>.../MMCA.Common.UI/Theme/BrandColors.cs:26</code>, rationale at <code>:22-24</code>).</li>
+          <li><strong>43 aliases live in 10 files across the four repos.</strong> MMCA.Common declares 3 (<code>UserIdentifierType</code>
+          in <code>Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs</code> plus the two push-notification
+          aliases in <code>Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs</code>); MMCA.ADC
+          declares 29 across Conference (16), Engagement (10), Identity (1) and Notification (2); MMCA.Store
+          declares 9 across Catalog (4), Sales (3) and Identity (2); MMCA.Helpdesk declares 2 in Tickets.</li>
+          <li><strong>42 of the 43 resolve to <code>int</code>.</strong> The single exception is ADC&#39;s
+          <code>SpeakerIdentifierType = System.Guid</code>, which Sessionize forces. So for every practical purpose the
+          whole workspace has <strong>one</strong> identifier CLR type, and the compiler sees 42 synonyms for it.</li>
+          <li><strong>No wrapper-struct identifier type and no generator package exists anywhere.</strong> A content sweep of
+          the four <code>Source</code> trees for <code>Vogen</code> and <code>StronglyTypedId</code> returns nothing: not a package reference,
+          not a project file entry, not a using. ADR-048&#39;s &quot;considered and left unbuilt&quot; is still literally
+          true.</li>
           </ul>
-          <p>Adoption differs per repo and is uneven on purpose. <strong>MMCA.Common</strong> scans its own backend-less gallery:
-          eight assertions across five classes over <code>GalleryAxeTestBase</code>
-          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Infrastructure/GalleryAxeTestBase.cs:14</code>),
-          covering login (<code>LoginPageE2ETests.cs:34</code>), register (<code>RegisterPageE2ETests.cs:36</code>), the primitives
-          showcase (<code>ComponentsPageE2ETests.cs:80</code>), both dark-mode states (<code>DarkModeE2ETests.cs:30,:40</code>), and the
-          notification pages, one of which is the gallery&#39;s use of the pager exception
-          (<code>NotificationPagesE2ETests.cs:32</code>, alongside strict scans at <code>:44</code> and <code>:56</code>). <strong>MMCA.Store</strong> subclasses
-          all three Identity bases (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
-          <code>UserRegistrationTests.cs:5</code>, <code>ProfileManagementTests.cs:5</code>). <strong>MMCA.ADC</strong> subclasses two
-          (<code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
-          <code>UserRegistrationTests.cs:5</code>); its <code>ProfileManagementTests</code> derives <code>E2ETestBase</code> directly
-          (<code>ProfileManagementTests.cs:8</code>) because the ADC profile page supports only password change and account
-          deletion, so it does not inherit the base&#39;s profile scan. Beyond the Identity bases each app carries a
-          dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 31 page
-          scans (11 through <code>ScanGridAsync</code>, 20 strict) and Store&#39;s
-          <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 23 (6 grid, 17 strict).
-          <strong>MMCA.Helpdesk adopts none of it</strong>: it pins the package version
-          (<code>MMCA.Helpdesk/Directory.Packages.props:66</code>) but no project references it, and the repo has no E2E
-          test project at all (<code>Tests/</code> holds only <code>Architecture</code> and <code>Modules</code>), so the seed has no browser
-          accessibility gate today.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>Keep the aliases.</strong> The wrapper-struct alternative is evaluated in this record, priced, and
+          deferred again, this time against explicit triggers.</p>
+          <h3 id="the-risk-is-real-and-it-is-concentrated-at-cross-module-scalar-references">The risk is real and it is concentrated at cross-module scalar references</h3>
+          <p>Inside a module an identifier is usually passed straight from a route value into one repository call,
+          where a transposition has nowhere to hide. The exposure concentrates where a module holds an
+          identifier it does not own, which is exactly the shape database-per-service
+          (<a href="006-database-per-service.html">ADR-006</a>) produces: cross-module references are scalar columns, never
+          foreign keys, so the type system is the only check there is and the type system is <code>int</code>.</p>
+          <p>The clearest live instance is ADC&#39;s <code>CheckIn</code> aggregate
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:57-64</code>), whose
+          constructor takes five identifiers in a row: <code>UserIdentifierType userId</code>, <code>EventIdentifierType eventId</code>, <code>SessionIdentifierType? sessionId</code>, <code>SponsorIdentifierType? sponsorId</code> and
+          <code>UserIdentifierType checkedInByUserId</code>, mirrored on the <code>Create</code> factory (<code>:89-91</code>). Four of the five
+          are <code>int</code> or <code>int?</code> at the CLR level, and two of them are the <em>same</em> alias holding two different
+          users (the attendee and the organizer who scanned the badge). Swapping those two arguments compiles
+          cleanly, passes every type check, and produces a check-in attributed to the wrong person. A wrapper
+          struct would have made that line a compiler error. This is the concrete cost, stated once with a real
+          example rather than as an abstraction.</p>
+          <h3 id="the-evaluated-alternative-source-generated-wrapper-structs">The evaluated alternative: source-generated wrapper structs</h3>
+          <p>The alternative priced here is the standard one: a <code>readonly record struct UserId(int Value)</code> per
+          identifier, emitted by a source generator (the pattern the StronglyTypedId and Vogen generators
+          implement) so the boilerplate is not hand-written, plus an EF Core <code>ValueConverter</code> per type, a
+          <code>JsonConverter</code> per type, and an OpenAPI schema mapping per type. Modern generators emit all three, so
+          the objection is not that the wrappers are laborious to author. The objection is the blast radius of
+          switching.</p>
+          <p>That radius is measurable. The alias token appears <strong>3,641 times across 1,016 files</strong> in the four
+          <code>Source</code> trees alone, tests excluded: 712 occurrences in 126 files in MMCA.Common, 1,996 in 582 files
+          in MMCA.ADC, 879 in 278 files in MMCA.Store, and 54 in 30 files in MMCA.Helpdesk. Every one of those
+          is a signature, a property, a generic argument, or a DTO field that a wrapper migration would have to
+          either change or prove it can leave alone. Because MMCA.Common is a published package family released
+          in lockstep (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>), the framework half of that count
+          is a breaking public-API change that all three consumers must absorb in a single sweep, and the
+          identifier type is a generic parameter on
+          <code>BaseEntity&lt;TIdentifierType&gt;</code>, <code>IBaseDTO&lt;TId&gt;</code>, <code>IEntityDTOMapper&lt;TEntity, TDTO, TId&gt;</code>
+          (<a href="001-manual-dto-mapping.html">ADR-001</a>), the repository handles
+          (<a href="055-repository-and-specification-contract.html">ADR-055</a>) and the generic entity query surface
+          (<a href="034-generic-entity-query-layer.html">ADR-034</a>), so the change is not confined to leaf code.</p>
+          <h3 id="the-revisit-triggers">The revisit triggers</h3>
+          <p>The deferral holds until one of these is observed, at which point this record is re-opened rather than
+          re-argued from scratch:</p>
+          <ol>
+          <li><strong>A production defect traced to an identifier transposition.</strong> One is enough. The argument for
+          keeping the aliases rests entirely on the claim that the risk has not materialized; a single
+          confirmed instance retires that claim, and the incident itself supplies the evidence the migration
+          business case needs.</li>
+          <li><strong>A greenfield fifth consumer.</strong> A new application built on the framework pays none of the
+          migration cost counted above, because it has no existing signatures. If one is started, it is the
+          right place to build wrapper structs first and let the framework&#39;s generic parameters carry them,
+          which would also produce the compatibility evidence the four existing repos would need.</li>
+          <li><strong>A cross-module identifier count that keeps climbing.</strong> The exposure scales with cross-module
+          scalar references, not with the alias count. If the reference graph grows materially past what
+          <code>CheckIn</code> and its peers represent today, the arithmetic changes even without an incident.</li>
+          </ol>
+          <p>Absent all three, this stays a recorded, priced deferral rather than an open question.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>A named constant is the contract.</strong> Putting the rule set in a shipped, referenced symbol rather
-          than in each repo&#39;s test setup means &quot;what WCAG 2.1 AA means here&quot; has exactly one definition, it
-          versions with the package, and a change to it is a reviewable diff in one file instead of drift
-          discovered by comparing CI logs.</li>
-          <li><strong>Excluding best-practice rules is what makes the gate blockable.</strong> A gate that can red on advisory
-          findings gets demoted to advisory itself. Scoping to the four WCAG tags means every failure is a real
-          conformance violation, which is the precondition for making the check required rather than informational.</li>
-          <li><strong>Assert in the base, not in the consumer.</strong> The same push-left posture as ADR-058: shipping the
-          assertion inside <code>UserLoginTestsBase</code> / <code>UserRegistrationTestsBase</code> / <code>ProfileManagementTestsBase</code>
-          means an app that adopts the Identity workflow tests cannot accidentally adopt them without the a11y
-          scan. Opting out is visible (it means not subclassing the base), the way ADC&#39;s profile page is.</li>
-          <li><strong>A real engine, not reflection.</strong> Contrast, accessible names, and live-region announcement exist only
-          in a rendered accessibility tree. That is why this sits in the E2E package with Playwright and not in
-          the NetArchTest tier (ADR-015) or the booted-host conformance tier (ADR-058).</li>
-          <li><strong>Cross-browser where it is cheap, chromium where it is expensive.</strong> The gallery is backend-less, so
-          all three engines run there and catch the cross-engine class of defect at low cost. A full Aspire-stack
-          E2E leg costs roughly twenty minutes, so the deploy path runs chromium only and leans on the gallery
-          matrix for engine coverage.</li>
-          <li><strong>Exceptions as distinct option values, not as suppression flags.</strong> A second constant with a different
-          name forces the caller to say which contract it is scanning under, and it keeps the exception&#39;s
-          justification attached to the thing being excepted rather than buried in a config file.</li>
+          <li><strong>The cost is paid once and the benefit accrues per defect avoided, and the defect count is
+          currently zero.</strong> No production incident in any of the four repos has been traced to a swapped
+          identifier. That is not proof of safety, and this record does not claim it is; it is the only
+          evidence available, and it does not support a 1,016-file change.</li>
+          <li><strong>A partial migration is worse than either endpoint.</strong> Wrapping some identifiers and not others
+          produces a codebase where the absence of a compiler error means nothing, because the reader cannot
+          tell whether a given call site is protected or merely un-migrated. The change is therefore
+          all-or-nothing across four repositories, which is precisely what makes it expensive.</li>
+          <li><strong>The friction ADR-048 avoided is still real, not merely historical.</strong> ADR-048&#39;s central claim was
+          that <code>int</code> and <code>Guid</code> need no converter at any boundary: EF Core, the SQL provider,
+          <code>System.Text.Json</code>, gRPC, and the OpenAPI generator all speak them natively. Nothing since has
+          changed that; the generators reduce the boilerplate but they do not remove the boundary code, they
+          generate it, and generated converters at six boundaries are still six places a subtle bug can live.</li>
+          <li><strong>The wave that would have carried it declined it deliberately.</strong> Section A rewrote the read
+          contract and could have absorbed a wrapper migration into churn the consumers were already going to
+          take. Recording that it was considered and rejected at that moment is more useful than recording
+          the abstract preference again.</li>
+          <li><strong>Naming the triggers is the actual deliverable.</strong> The alias decision is unchanged; what this
+          record adds is a condition under which it stops being the decision. That is the difference between
+          a deferral and a blind spot.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Best-practice rules are out of scope, deliberately.</strong> Findings axe would classify as best practice
-          (and anything WCAG AAA) are not measured at all, so the gate can be green on a page a specialist would
-          still improve. This is the price of a blockable gate, and it is recorded on the constant itself
-          (<code>AxeOptions.cs:12-15</code>).</li>
-          <li><strong>One accepted exception, with real blast radius.</strong> <code>Wcag21AaExceptMudPagerCombobox</code> disables
-          <code>aria-input-field-name</code> for the whole page scan, not just for the pager node. A grid page that later
-          gains a genuinely unnamed combobox of its own would pass <code>ScanGridAsync</code> (<code>E2ETestBase.cs:288</code>). The
-          exception is documented as &quot;use only where the sole combobox is a pager&quot; (<code>AxeOptions.cs:33</code>), which is
-          a convention the compiler cannot enforce. It is upstream-owned: it stands until MudBlazor labels the
-          pager select.</li>
-          <li><strong>Automation covers only what axe can judge.</strong> Focus order, reading order, and announcement quality are
-          not machine-checkable and are covered by the manual screen-reader checklist in
-          <a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, which is a periodic human pass, not a gate.</li>
-          <li><strong>The deploy gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:538</code>, Store <code>deploy.yml:544</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
-          (ADC <code>:896</code>, Store <code>:893</code>), so a backend-only or infra-only deploy ships without a browser scan. That
-          is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
-          gate as backstop, but it does mean &quot;deployed&quot; does not always mean &quot;axe ran on this commit&quot;.</li>
-          <li><strong>Consumer breadth is hand-maintained.</strong> Nothing forces a new page into <code>AccessibilityTests</code>, so
-          coverage grows by discipline: 31 scans in ADC and 23 in Store today, against far larger page inventories.</li>
-          <li><strong>MMCA.Helpdesk has no accessibility gate.</strong> The reference app demonstrates the framework&#39;s layers but
-          not this contract, so a reader following the seed sees no worked example of adopting the scan.</li>
+          <li><strong>The exposure is unmitigated, not reduced.</strong> This record buys no safety whatsoever. Every
+          transposition ADR-048 could not catch is still uncatchable today, and the <code>CheckIn</code> constructor
+          above is still a live example of a two-argument swap that compiles.</li>
+          <li><strong>No detection either.</strong> Nothing gates, lints, or tests for a suspicious identifier assignment.
+          There is no analyzer, no fitness rule (<a href="015-architecture-fitness-functions.html">ADR-015</a>), and no
+          naming convention that a reviewer could mechanically check. Trigger 1 therefore depends on a
+          production defect being <em>traced</em> to a transposition, and a wrong-user check-in is exactly the kind
+          of defect that gets written off as a scanning mistake instead.</li>
+          <li><strong>The migration price rises with the codebase.</strong> The 3,641 occurrences counted here are a snapshot
+          and the number only grows. Deferring on cost grounds means the cost argument gets stronger every
+          release, which is the classic shape of a decision that is never revisited on its merits.</li>
+          <li><strong>Trigger 3 is not measured.</strong> No count of cross-module scalar identifier references is maintained,
+          so &quot;keeps climbing&quot; has no baseline to climb from. It is a qualitative trigger and is recorded as
+          such.</li>
+          <li><strong>Ordering conventions carry weight the type system should.</strong> With four <code>int</code> parameters in a row,
+          the discipline that keeps <code>CheckIn.Create</code> correct is parameter naming and the doc comments at
+          <code>CheckIn.cs:81-87</code>. That is review-strength protection standing in for compile-time protection,
+          which is the same class of dependency ADR-048 already recorded for the alias convention itself.</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-015 (architecture fitness functions: the structural tier this parallels at the browser tier, and the
-          same invariant-over-discipline posture), ADR-058 (runtime conformance suites shipped as subclassable
-          bases in a package: the pattern this record applies to accessibility, one tier further out),
-          ADR-028 (dark theme: the dark palette&#39;s contrast tokens, <code>MMCATheme.cs:58,:67,:71</code>, exist in the form they
-          do because the gated dark-mode scan rejected the defaults), and the how-to companion
-          <a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a> (scanned-state inventory, manual
-          screen-reader checklist, and the tracked limitations).</p>
+          <p><a href="048-primitive-identifier-type-aliases.html">ADR-048</a> (the decision this record revisits and upholds;
+          its Status now points here), <a href="068-value-objects-as-validated-primitives.html">ADR-068</a> (the deliberate
+          opposite case: domain values carry invariants and therefore do get wrapper types, which is why
+          identifiers not getting them is a decision rather than an omission),
+          <a href="006-database-per-service.html">ADR-006</a> (cross-module references are scalar columns, never foreign
+          keys, which is what concentrates the exposure), <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>
+          (the lockstep release and one-pass consumer sweep any migration would have to run through),
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the enforcement machinery that covers neither the
+          alias convention nor identifier transposition),
+          <a href="055-repository-and-specification-contract.html">ADR-055</a> and
+          <a href="034-generic-entity-query-layer.html">ADR-034</a> (the generic surfaces parameterized by the identifier
+          type, and therefore in the migration&#39;s blast radius).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/063-accessibility-conformance-gate.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/085-identifier-type-aliases-revisited.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">

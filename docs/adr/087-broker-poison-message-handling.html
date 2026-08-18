@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-087: Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-18). Amends ADR-009: the outbox&#39;s broker publish gains a circuit breaker, which is the first resilience policy this workspace applies…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/087-broker-poison-message-handling.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-087: Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability">
+  <meta property="og:description" content="Accepted (2026-08-18). Amends ADR-009: the outbox&#39;s broker publish gains a circuit breaker, which is the first resilience policy this workspace applies…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/087-broker-poison-message-handling.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-087: Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability">
+  <meta name="twitter:description" content="Accepted (2026-08-18). Amends ADR-009: the outbox&#39;s broker publish gains a circuit breaker, which is the first resilience policy this workspace applies…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability","item":"https://ivanball.github.io/docs/adr/087-broker-poison-message-handling.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 87 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html" aria-current="page">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-087-broker-poison-message-handling-second-level-redelivery-and-fault-observability">ADR-087: Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-18). <strong>Amends <a href="009-resilience-and-recovery-objectives.html">ADR-009</a></strong>: the outbox&#39;s
+          broker publish gains a circuit breaker, which is the first resilience policy this workspace applies to
+          something other than an outbound HTTP or gRPC client. <a href="003-outbox-dual-dispatch.html">ADR-003</a>&#39;s retry,
+          backoff and dead-letter ladder is reused unchanged rather than amended, and
+          <a href="021-consumer-inbox-idempotency.html">ADR-021</a>&#39;s dedup contract is untouched. The database resilience
+          posture is also unchanged, recorded below as an explicit rejection rather than an omission.</p>
+          <h2 id="context">Context</h2>
+          <p>Delivery in this workspace has always been at-least-once with retries on both legs: the outbox
+          retries a failed publish with jittered exponential backoff and eventually dead-letters
+          (<a href="003-outbox-dual-dispatch.html">ADR-003</a>), and MassTransit applies its own configured retry on the
+          consume side (<a href="066-broker-transport-selection.html">ADR-066</a>). Retry answers the transient failure.
+          Neither leg answered the two failures that are not transient.</p>
+          <p><strong>A poison message exhausts its retries and then disappears from view.</strong> MassTransit moves a message
+          whose retries are spent to the transport&#39;s error queue and the consumer moves on. That is correct
+          behavior and it is also silent: nothing in this workspace observed it. The outbox&#39;s own dead-letter
+          path is loud by design (a metric, an Error log, <code>DeadLetterRetentionDays</code>), but that covers the
+          <em>publish</em> side only. A message that left the outbox successfully, reached the broker, and then failed
+          every consume attempt produced no counter and no log in any of our meters. It was visible only to
+          whoever thought to look in the error queue.</p>
+          <p><strong>A broker outage turns the outbox into a hot loop.</strong> The outbox processor leases a batch, publishes,
+          fails, re-leases with backoff and comes back. When the broker is unreachable rather than slow, every
+          message in every batch fails identically, and the processor spends the outage opening connections,
+          timing them out, and writing retry rows. The backoff bounds the damage per message but not the shape
+          of the failure: the process keeps paying full price for an answer it already knows.</p>
+          <p>The available fix for the first failure is MassTransit&#39;s <strong>second-level redelivery</strong>: after the
+          in-memory retries are spent, the message is scheduled for redelivery minutes or hours later rather
+          than retried immediately. It is the right tool for the failure that immediate retry cannot fix, which
+          is a dependency that will come back but not within seconds. It also carries a transport constraint
+          that is the reason this record exists rather than a one-line change: on RabbitMQ it requires the
+          <code>rabbitmq_delayed_message_exchange</code> plugin, and the Aspire dev container does not ship it. Enabling it
+          against a plugin-less broker fails at bus start
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:84-87</code>). Azure
+          Service Bus, the production transport, has native scheduled delivery and needs no plugin.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Three changes, each scoped to one failure: second-level redelivery configured per transport, a fault
+          consumer with its own meter, and a circuit breaker around the outbox&#39;s broker publish and nothing
+          else.</p>
+          <h3 id="second-level-redelivery-is-transport-aware-and-the-flag-exists-only-because-of-rabbitmq">Second-level redelivery is transport-aware, and the flag exists only because of RabbitMQ</h3>
+          <p><code>MessageBusSettings</code> gains two members. <code>EnableDelayedRedelivery</code>
+          (<code>MessageBusSettings.cs:95</code>) is a <code>bool</code> with no initializer, so it <strong>defaults to <code>false</code></strong>, and
+          <code>RedeliveryIntervalsSeconds</code> (<code>:111</code>) is an <code>IReadOnlyList&lt;int&gt;</code> defaulting to <code>[60, 600, 3600]</code>: one
+          minute, ten minutes, one hour. Both live in the <code>&quot;MessageBus&quot;</code> section (<code>:14</code>).</p>
+          <p>The two transports consume them differently, and the asymmetry is the decision:</p>
+          <ul>
+          <li><strong>RabbitMQ consults the flag.</strong> <code>ConfigureBrokerTransport</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:794</code>) calls
+          <code>cfg.UseDelayedRedelivery(r =&gt; r.Intervals(intervals))</code> inside <code>UsingRabbitMq</code> (<code>:802</code>) only under
+          <code>if (settings.EnableDelayedRedelivery)</code> (<code>:813</code>, the call at <code>:818</code>), with the plugin requirement
+          restated at the registration site (<code>:783-787</code>, <code>:809-812</code>). Default-off is not timidity: the local
+          Aspire broker cannot serve it, so a default-on setting would break every developer&#39;s first <code>F5</code>
+          with a bus-start failure, which is the worst possible place to learn about a broker plugin.</li>
+          <li><strong>Azure Service Bus does not consult it.</strong> <code>UsingAzureServiceBus</code> (<code>:832</code>) calls
+          <code>UseDelayedRedelivery</code> unconditionally (<code>:846</code>), with the reasoning recorded inline (<code>:839-842</code>).
+          Service Bus schedules natively, there is no plugin to be missing, and a production transport that
+          can express &quot;try again in an hour&quot; should always express it. Making the operator opt in would mean
+          the environment that most needs the behavior is the one most likely to be running without it.</li>
+          </ul>
+          <p>Two details are worth stating so the words above are not read as stronger than the code.
+          &quot;Unconditional&quot; means &quot;not gated on the flag&quot;: both call sites are still guarded by
+          <code>intervals.Length &gt; 0</code> (<code>:816</code>, <code>:844</code>), so an operator who configures an empty interval list turns
+          the feature off everywhere. And <code>RedeliveryIntervalsSeconds</code> carries <strong>no</strong> DataAnnotations attribute,
+          unlike its neighbours <code>RetryLimit</code> and the two retry-interval settings, so the ADR-070 fail-fast
+          chain does not validate it; non-positive entries are filtered at use time in <code>BuildRedeliveryIntervals</code>
+          (<code>:873-876</code>) instead. In both transports the redelivery filter is registered <strong>before</strong>
+          <code>UseMessageRetry</code> (<code>:822</code>, <code>:849</code>), which is what keeps immediate retry innermost and delayed
+          redelivery outside it.</p>
+          <h3 id="a-fault-consumer-makes-an-exhausted-message-visible">A fault consumer makes an exhausted message visible</h3>
+          <p><code>FaultIntegrationEventConsumer&lt;TEvent&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/FaultIntegrationEventConsumer.cs:28-30</code>)
+          implements <code>IConsumer&lt;Fault&lt;TEvent&gt;&gt;</code>, the message MassTransit publishes when a consumer&#39;s retries are
+          spent. It does exactly two things: writes one source-generated <strong>Error</strong>-level log line naming the
+          event type and the faulted message id (<code>:59</code>, emitted at <code>:50</code>, id resolved as
+          <code>fault.FaultedMessageId ?? fault.FaultId</code> at <code>:41</code>), and increments a counter (<code>:52-54</code>). It never
+          throws and never replays the failed message (<code>:19-24</code>). That restraint is the point: a fault consumer
+          that tried to recover would be a second, undocumented retry policy layered on the two that already
+          exist.</p>
+          <p>Registration is automatic. <code>RegisterIntegrationEventConsumer&lt;TEvent&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:39-40</code>)
+          takes <code>bool registerFaultConsumer = true</code> (<code>:38</code>) and adds the fault consumer under that guard
+          (<code>:43</code>), so a host that registers a consumer gets fault observability without asking. <strong>That parameter
+          is the only opt-out, and it is per event type</strong>: there is deliberately no host-wide configuration
+          switch, so turning fault observability off is a visible <code>false</code> at one call site rather than a setting
+          that silently disarms every consumer in a service.</p>
+          <h3 id="one-meter-mmcacommonbroker">One meter, <code>MMCA.Common.Broker</code></h3>
+          <p><code>BrokerMetrics</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMetrics.cs:18</code>)
+          is an <code>internal static</code> class holding a single meter named <code>MMCA.Common.Broker</code> (<code>:21</code>, <code>:23</code>) with
+          two <code>Counter&lt;long&gt;</code> instruments, both in units of <code>messages</code> and both tagged <code>event_type</code>:
+          <code>broker.fault.count</code> (<code>:30-33</code>) and <code>broker.circuit.open.count</code> (<code>:42-45</code>). It is a third meter beside
+          <code>MMCA.Common.Cqrs</code> and <code>MMCA.Common.Outbox</code> (<a href="041-observability-and-telemetry.html">ADR-041</a>), and the
+          name is duplicated as a literal in <code>MMCA.Common.Aspire</code> (<code>BrokerMetrics.cs:9-11</code>) so the Aspire
+          service defaults can subscribe to it without a package reference.</p>
+          <h3 id="a-circuit-breaker-around-the-outbox-broker-publish-and-nothing-else">A circuit breaker around the outbox broker publish, and nothing else</h3>
+          <p><code>OutboxProcessor</code> holds a per-instance Polly <code>ResiliencePipeline</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:99</code>, built
+          at <code>:639-650</code>) and wraps <strong>exactly one call</strong> in it: <code>state.Bus.PublishAsync(state.Event, ct)</code>
+          (<code>:516-520</code>). The in-process dispatch branch is deliberately outside it (<code>:512-515</code>, <code>:524</code>), no
+          database call is inside the delegate, and the intent is stated at the field (<code>:88-91</code>, &quot;never the
+          database calls&quot;).</p>
+          <p>Its parameters live in <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/BrokerResilienceDefaults.cs</code>
+          (<code>:24</code>) as static properties: <code>FailureRatio</code> 0.5 (<code>:32</code>), <code>MinimumThroughput</code> 10 (<code>:40</code>),
+          <code>SamplingDuration</code> 30 seconds (<code>:47</code>), <code>BreakDuration</code> 15 seconds (<code>:55</code>). The pipeline is a breaker
+          with <strong>no retry strategy paired with it</strong> (<code>BrokerResilienceDefaults.cs:17-22</code>,
+          <code>OutboxProcessor.cs:90-91</code>), because the outbox already is the retry: adding a Polly retry inside a
+          loop that re-leases and retries would multiply the attempt count without changing the outcome.
+          <code>ShouldHandle</code> excludes <code>OperationCanceledException</code> (<code>:647-648</code>) so a host shutdown never counts
+          toward opening the circuit.</p>
+          <p><strong><code>BrokenCircuitException</code> follows the ordinary failure path.</strong> It is caught by the same
+          <code>catch (Exception ex)</code> as any publish failure (<code>:551</code>), increments <code>RetryCount</code> (<code>:553</code>), records
+          <code>LastError</code> (<code>:554</code>) and re-leases the row with the usual backoff (<code>:562-563</code>); it dead-letters only
+          on <code>RetryCount &gt;= MaxRetries</code> like everything else (<code>:587</code>). Only observability differs: the run sets
+          <code>circuitOpen</code> (<code>:573</code>), increments <code>broker.circuit.open.count</code> (<code>:576-578</code>), writes one
+          <code>LogBrokerCircuitOpen</code> line <strong>per batch</strong> rather than per message (<code>:581-585</code>), and suppresses the
+          per-message retry log for those rows (<code>:598</code>). A short-circuited publish is a failed publish, not a
+          new category of one; what the breaker buys is that it fails in microseconds instead of a connection
+          timeout, and that the log volume during an outage is one line per batch instead of one per message.</p>
+          <h3 id="a-database-circuit-breaker-was-considered-and-rejected-in-this-wave">A database circuit breaker was considered and rejected in this wave</h3>
+          <p>The obvious symmetric move is a breaker on the query path, so a failing database sheds load instead of
+          queueing on it. It is <strong>not</strong> being made. A repository-wide search for <code>CircuitBreaker</code>,
+          <code>BrokenCircuitException</code> and <code>ResiliencePipeline</code> across <code>Source</code> finds the outbox breaker above and
+          otherwise only the HTTP and gRPC standard resilience handlers
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:99,107</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:16</code>,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:61</code>). There is no breaker in any
+          persistence path and none is added here.</p>
+          <p>The reason is that EF Core&#39;s connection resiliency and a Polly breaker do not compose: the
+          <code>EnableRetryOnFailure</code> execution strategy
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/SQLServerDbContext.cs:64-67</code>,
+          5 retries, 10-second maximum delay) owns retrying at the EF layer, and it constrains how a
+          user-initiated transaction may be written (<code>SQLServerDbContext.cs:61-63</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IUnitOfWork.cs:63</code>), which
+          is why <code>DbContextFactory</code> materializes the strategy explicitly
+          (<code>DbContextFactory.cs:526</code>). Wrapping a breaker around a call that is already being retried inside the
+          strategy would either count one logical failure many times or force the strategy to be replaced. That
+          is an EF execution-strategy rework, a much larger change than a breaker, and it is not what this wave
+          was for. <strong>The EF retry strategy plus <code>CommandTimeoutSeconds</code> (<code>SQLServerDbContext.cs:56</code>) remains the
+          database resilience posture</strong>, recorded here so the asymmetry is a decision rather than an oversight.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The transport asymmetry follows a real capability difference, not a preference.</strong> RabbitMQ needs a
+          plugin the dev container lacks; Service Bus does not. A single default would be wrong for one of
+          them either way, so the setting exists to express exactly that difference, and the flag lives on the
+          transport that needs it rather than becoming a knob the production transport has to be told to turn.</li>
+          <li><strong>Default-off protects the first-run experience, which is the one that has to work.</strong> A developer
+          cloning a repository and pressing <code>F5</code> is the worst audience for a bus-start failure explaining a
+          RabbitMQ plugin. The cost is that a RabbitMQ production deployment must opt in deliberately.</li>
+          <li><strong>A fault consumer that only observes is the correct scope.</strong> Retry policy already exists twice
+          (MassTransit&#39;s immediate retry, and now delayed redelivery). A third recovery mechanism hidden in a
+          fault handler would make the delivery guarantee unreadable. Making the exhausted message <em>visible</em>
+          is the missing capability; recovering it is a decision for a human with the log line in hand.</li>
+          <li><strong>Auto-registration is what makes the observability real.</strong> An opt-in fault consumer would be
+          registered on the consumers someone remembered, which is the audit-the-inventory failure this
+          workspace keeps recording against its opt-in capabilities. Defaulting the parameter to <code>true</code>
+          inverts it: a host has to argue its way out.</li>
+          <li><strong>A breaker on the publish is worth it precisely because the outbox already retries.</strong> The breaker
+          adds no delivery guarantee at all. It converts a broker outage from N connection timeouts per batch
+          into N microsecond short-circuits, and the log from one line per message into one per batch. That is
+          a cost and a noise fix, and it is honest to describe it as only that.</li>
+          <li><strong>Feeding <code>BrokenCircuitException</code> into the normal path keeps one retry ladder.</strong> A special case
+          would give short-circuited rows a different retry count, a different backoff, or a different
+          dead-letter threshold, and the outbox would then have two failure taxonomies to reason about during
+          an incident.</li>
+          <li><strong>Recording the database rejection is the point of recording it.</strong> An engineer who finds a breaker
+          on the broker and none on the database will otherwise conclude the second was forgotten and add it.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Delayed redelivery is off where the plugin problem lives.</strong> RabbitMQ is the local transport and
+          also a plausible self-hosted production transport; both get default-off, so the deployment shape most
+          likely to run without second-level redelivery is the one that is not Azure Service Bus. Nothing
+          warns a RabbitMQ host that the feature it never enabled is not running.</li>
+          <li><strong>The intervals are not validated at startup.</strong> <code>RedeliveryIntervalsSeconds</code> sits outside the
+          ADR-070 fail-fast chain, so a typo becomes a filtered-out entry at <code>:873-876</code> rather than a refusal
+          to boot. An operator who writes <code>[0, 0, 0]</code> silently gets no delayed redelivery at all.</li>
+          <li><strong>An hour-long redelivery window widens the duplicate window with it.</strong> A message redelivered at
+          <code>+3600s</code> runs its handlers an hour after the original attempt, so ADR-021&#39;s inbox and every
+          idempotent handler must stay correct across that span, not across a retry burst. Anything that was
+          implicitly time-bounded by &quot;retries finish in seconds&quot; no longer is.</li>
+          <li><strong>The fault consumer observes and stops there.</strong> <code>broker.fault.count</code> incrementing means a message
+          is in the error queue and will stay there until someone acts. No alert is wired to it in this
+          record, no runbook section exists for it (<a href="062-slo-alerting-as-code.html">ADR-062</a>), and no automated
+          replay path is provided. The gap moved from invisible to visible-and-unactioned.</li>
+          <li><strong>There is no host-wide way to turn fault consumers off.</strong> The opt-out is per event type at the
+          registration call, which is deliberate (see Rationale) and is also friction: a host that wanted to
+          silence fault logging across the board would have to edit every <code>RegisterIntegrationEventConsumer</code>
+          call rather than flip one setting.</li>
+          <li><strong><code>BrokerMetrics</code> is <code>internal</code> and its meter name is written twice.</strong> A consumer cannot reference
+          the class to add its own instruments to the meter, and the <code>MMCA.Common.Aspire</code> copy of the name
+          (<code>BrokerMetrics.cs:9-11</code>) can drift from the Infrastructure declaration with no compiler error and
+          no test: the symptom would be a meter that exports nothing.</li>
+          <li><strong>The breaker is per processor instance, so its state is not shared.</strong> The pipeline is a per-instance
+          field (<code>OutboxProcessor.cs:99</code>, rationale <code>:92-97</code>), so with N replicas the broker sees up to N
+          independent circuits and the effective failure threshold is N times the configured one, the same
+          per-replica caveat ADR-019 records for the rate limiter.</li>
+          <li><strong>Fifteen seconds of break can be worse than none for a slow broker.</strong> With a 0.5 failure ratio over
+          a 30-second window and a 10-request minimum, a broker that is degraded rather than down trips the
+          circuit repeatedly, and each open period defers work the processor would partly have completed. The
+          parameters are defaults chosen for an outage, not tuned against a brownout, and nothing measures the
+          brownout case today.</li>
+          <li><strong>The database keeps a different resilience model.</strong> Retry-inside-EF for the database, breaker plus
+          outbox retry for the broker. Both are defensible individually and together they mean there is no
+          single answer to &quot;what does this service do when a dependency fails&quot;.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox publish leg this breaker wraps, and the retry,
+          jittered backoff and dead-lettering that <code>BrokenCircuitException</code> reuses unchanged),
+          <a href="066-broker-transport-selection.html">ADR-066</a> (the transport selection that makes the asymmetry between
+          RabbitMQ and Azure Service Bus expressible in one place, and the per-transport retry configuration
+          these filters sit outside of),
+          <a href="021-consumer-inbox-idempotency.html">ADR-021</a> (the consume-edge dedup that must now hold across an
+          hour-long redelivery gap, not only across a retry burst),
+          <a href="009-resilience-and-recovery-objectives.html">ADR-009</a> (the resilience contract this extends from
+          outbound HTTP and gRPC clients to the broker publish, and whose database posture is explicitly
+          unchanged), <a href="041-observability-and-telemetry.html">ADR-041</a> (the meter family
+          <code>MMCA.Common.Broker</code> joins, beside <code>MMCA.Common.Cqrs</code> and <code>MMCA.Common.Outbox</code>),
+          <a href="062-slo-alerting-as-code.html">ADR-062</a> (the alert-and-runbook gate that neither new counter is wired
+          into yet), <a href="070-fail-fast-configuration-contract.html">ADR-070</a> (the validation chain
+          <code>RedeliveryIntervalsSeconds</code> sits outside of),
+          <a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (the reconciliation backstop for the work a
+          poison message never completed, which is what a fault log line ultimately points an operator at).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/087-broker-poison-message-handling.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

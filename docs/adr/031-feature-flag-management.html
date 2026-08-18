@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-031: Config-Driven Feature Flags with Dual-Surface Enforcement · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27).">
+  <meta name="description" content="Accepted (2026-06-27). Revised 2026-08-18 (a targeting-context accessor is now registered, so the built-in Targeting and Percentage filters give…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/031-feature-flag-management.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-031: Config-Driven Feature Flags with Dual-Surface Enforcement">
-  <meta property="og:description" content="Accepted (2026-06-27).">
+  <meta property="og:description" content="Accepted (2026-06-27). Revised 2026-08-18 (a targeting-context accessor is now registered, so the built-in Targeting and Percentage filters give…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/031-feature-flag-management.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-031: Config-Driven Feature Flags with Dual-Surface Enforcement">
-  <meta name="twitter:description" content="Accepted (2026-06-27).">
+  <meta name="twitter:description" content="Accepted (2026-06-27). Revised 2026-08-18 (a targeting-context accessor is now registered, so the built-in Targeting and Percentage filters give…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"031 · Config-Driven Feature Flags with Dual-Surface Enforcement","item":"https://ivanball.github.io/docs/adr/031-feature-flag-management.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 84 ADRs</summary>
+        <summary>All 87 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -184,6 +184,9 @@
         <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
         <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
         <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
           </ol>
         </nav>
       </details>
@@ -192,7 +195,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-031-config-driven-feature-flags-with-dual-surface-enforcement">ADR-031: Config-Driven Feature Flags with Dual-Surface Enforcement</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27).</p>
+          <p>Accepted (2026-06-27). Revised 2026-08-18 (a targeting-context accessor is now registered, so the
+          built-in Targeting and Percentage filters give consistent per-user bucketing across replicas; the
+          last Trade-offs entry is narrowed accordingly. See the Revision (2026-08-18) at the end).</p>
           <h2 id="context">Context</h2>
           <p>The apps need to decouple <em>release</em> from <em>deploy</em>: ship code dark, flip a kill switch, or roll a feature
           out to a percentage of users without a redeploy. A flag has to be enforceable at <strong>two</strong> different points
@@ -249,10 +254,39 @@
           evaluated locally, so consistent assignment across replicas/users needs a deliberate targeting context;
           out of the box the rollout is per-process.</li>
           </ul>
+          <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
+          <p><strong>Progressive rollout is now usable, because the targeting context exists.</strong> The Decision above listed
+          the Percentage / TimeWindow / Targeting filters as &quot;available&quot;, and the last Trade-offs entry recorded
+          the catch: without a targeting context wired, bucketing is evaluated per process, so a percentage
+          rollout assigns a user differently on each replica and a user can see a feature appear and disappear
+          between requests.</p>
+          <p><code>CurrentUserTargetingContextAccessor</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:51-52</code>)
+          implements <code>ITargetingContextAccessor</code> and is registered inside <code>AddAPI</code> as
+          <code>services.AddFeatureManagement().WithTargeting&lt;CurrentUserTargetingContextAccessor&gt;()</code>, preceded by
+          <code>AddHttpContextAccessor()</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:90-92</code>,
+          rationale at <code>:84-89</code>). It takes <code>IHttpContextAccessor</code> rather than the scoped <code>ICurrentUserService</code>
+          precisely because <code>WithTargeting</code> registers the accessor as a singleton. <code>UserId</code> resolves to the
+          <code>user_id</code> claim falling back to <code>Identity.Name</code> (<code>:86</code>, claim constant at <code>:55</code>), and <code>Groups</code> accepts
+          role claims under <code>ClaimTypes.Role</code>, <code>&quot;role&quot;</code> or <code>&quot;roles&quot;</code> (<code>:76-82</code>), so a rollout can target a role
+          as well as a user. An unauthenticated or absent principal yields an empty context rather than an
+          exception (<code>:67-74</code>), which keeps anonymous traffic evaluating to the flag&#39;s non-targeted result
+          instead of failing.</p>
+          <p><strong>No decorator changed.</strong> <code>FeatureGateCommandDecorator</code> still depends only on <code>IFeatureManager</code> and
+          still calls <code>IsEnabledAsync(featureGated.FeatureName)</code> with no targeting argument (<code>:20</code>, <code>:51</code>); the
+          targeting context is resolved inside the filter through the registered accessor. Both enforcement
+          surfaces therefore inherit consistent bucketing with no change at either call site, which is the
+          property that made this a registration-only change.</p>
+          <p>The Trade-offs entry above is <strong>narrowed, not removed</strong>: bucketing is now consistent across replicas
+          for any host that goes through <code>AddAPI</code>, but it is only as consistent as the <code>user_id</code> claim is
+          stable, and a flag whose filter is configured without a targeting audience still behaves exactly as
+          before.</p>
           <h2 id="related">Related</h2>
           <p>ADR-014 (the decorator pipeline whose outermost slot <code>FeatureGate</code> fills, and the ordering that puts it
-          first), ADR-013 (the <code>Result</code> / <code>Error</code> and ProblemDetails edge the disabled responses reuse),
-          ADR-019 / ADR-020 / ADR-021 / ADR-026 (the other opt-in, audit-the-inventory capabilities).</p>
+          first, now with Authorization registered directly inside it so a disabled feature does not leak which
+          permission guards it), ADR-013 (the <code>Result</code> / <code>Error</code> and ProblemDetails edge the disabled responses
+          reuse), ADR-019 / ADR-020 / ADR-021 / ADR-026 (the other opt-in, audit-the-inventory capabilities),
+          ADR-020 (the role vocabulary the targeting accessor reads as <code>Groups</code>).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -268,6 +302,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
