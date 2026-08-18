@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-088: Gateway Edge Responsibilities (and the Three It Declines) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-18). Extends ADR-019 with a fourth, edge-tier layer whose posture is the deliberate opposite of the service tier&#39;s authenticated-only…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-088: Gateway Edge Responsibilities (and the Three It Declines)">
+  <meta property="og:description" content="Accepted (2026-08-18). Extends ADR-019 with a fourth, edge-tier layer whose posture is the deliberate opposite of the service tier&#39;s authenticated-only…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-088: Gateway Edge Responsibilities (and the Three It Declines)">
+  <meta name="twitter:description" content="Accepted (2026-08-18). Extends ADR-019 with a fourth, edge-tier layer whose posture is the deliberate opposite of the service tier&#39;s authenticated-only…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"088 · Gateway Edge Responsibilities (and the Three It Declines)","item":"https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">088 · Gateway Edge Responsibilities (and the Three It Declines)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 89 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html" aria-current="page">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-088-gateway-edge-responsibilities-and-the-three-it-declines">ADR-088: Gateway Edge Responsibilities (and the Three It Declines)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-18). <strong>Extends <a href="019-rate-limiting.html">ADR-019</a></strong> with a fourth, edge-tier layer whose
+          posture is the deliberate opposite of the service tier&#39;s authenticated-only global limiter; nothing in
+          ADR-019&#39;s three service-tier layers changes. It also extends
+          <a href="041-observability-and-telemetry.html">ADR-041</a>&#39;s correlation id one hop outward, to the process that
+          sees a request first and its response last. <a href="004-authentication-dual-fetch.html">ADR-004</a>&#39;s validation
+          authority is <strong>unchanged on purpose</strong>: the gateway does not validate tokens, recorded below as a
+          rejection with a named trigger rather than as an omission. The framework half ships in v1.154.0
+          (<code>MMCA.Common/CHANGELOG.md</code>); consumer wiring follows in the same wave, so the adoption statements
+          below describe the decided direction and say where they are not yet true.</p>
+          <h2 id="context">Context</h2>
+          <p><a href="008-service-extraction-topology.html">ADR-008</a> made the Gateway the only client entry point and gave it
+          three jobs: the route-to-service map, CORS, and forwarding the caller&#39;s <code>Authorization</code> header. Nothing
+          was added to it since. Meanwhile the service tier accumulated a standardized cross-cutting pipeline
+          (correlation id, rate limiting, forwarded headers, tenant resolution, output cache) that
+          <a href="079-shared-http-middleware-pipeline.html">ADR-079</a> fixed into one ordered method, and that record
+          scopes the gateways <strong>out</strong> of it deliberately: a reverse proxy has no controllers, no localization and
+          no tenant context, so composing the service chain there would be wrong.</p>
+          <p>Scoping the gateways out was right, and it left a real gap, because three of those behaviors are not
+          service concerns at all. They are edge concerns the service tier had been performing one hop too late.
+          The gateway chains today are four calls long and contain none of them: ADC registers security headers,
+          default endpoints, CORS, static files and a privacy endpoint before its forwarders
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:50-63</code>), and Store registers security headers,
+          default endpoints and CORS (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:72-75</code>). Neither has
+          a rate limiter or a correlation id of any kind.</p>
+          <p><strong>A correlation id minted per service is not a correlation id.</strong> <code>CorrelationIdMiddleware</code> (ADR-041)
+          runs inside each service host and falls back to the W3C trace id when the client sends no
+          <code>X-Correlation-ID</code>. A browser call crossing the Gateway into two services therefore produced two
+          independent ids, neither present in the Gateway&#39;s own logs, and an operator holding the id from one
+          service could not find the request&#39;s first hop. The one process guaranteed to see every request
+          exactly once was the only one not stamping it.</p>
+          <p><strong>ADR-019&#39;s anonymous exemption is correct one hop in and wrong at the edge.</strong> That record exempts
+          anonymous traffic from the global limiter for two stated reasons: Blazor Server fronts public browsing
+          behind a single IP, so an anonymous IP cap would throttle real visitors, and public reads are served
+          from the output cache anyway, so the backend they reach is already cheap. Both are properties of a
+          service sitting <em>behind</em> the Gateway. At the edge neither holds. The output cache that made an
+          anonymous read cheap lives behind the proxy, so a flood is paid for in full by the Gateway (accept,
+          route, forward, copy the response) before anything can be served from cache, and the fleet&#39;s only
+          shared choke point had no cap at all on the traffic class that most needs one.</p>
+          <p><strong>A gateway that is &quot;healthy&quot; while every downstream is unreachable still receives traffic.</strong> The
+          Gateway&#39;s readiness endpoint reported only that the Gateway process was up. Azure Container Apps then
+          routed to it and it forwarded to services that were not answering, converting a downstream outage into
+          a wall of 502s from a replica the platform believed was ready.</p>
+          <p>One packaging constraint shapes where the fix can live. A YARP host references <code>MMCA.Common.Aspire</code> and
+          nothing else in the framework: it has no controllers, so it does not take <code>MMCA.Common.API</code>, where
+          <code>CorrelationIdMiddleware</code> and <code>AddCommonRateLimiting</code> live. Anything the edge owns has to be reachable
+          from the Aspire package alone.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Ship a <strong>gateway edge kit</strong> in a <code>Gateway</code> namespace inside <code>MMCA.Common.Aspire</code>, owning exactly three
+          responsibilities, and record three more as deliberately declined.</p>
+          <h3 id="what-the-edge-owns">What the edge owns</h3>
+          <p><strong>1. Correlation is ensured, not merely read.</strong> <code>GatewayCorrelationMiddleware</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayCorrelationMiddleware.cs</code>) declares
+          <code>X-Correlation-ID</code> as a constant (<code>:34</code>), and when the header is absent it mints one from
+          <code>Activity.Current?.TraceId</code>, falling back to <code>HttpContext.TraceIdentifier</code> (<code>:48-55</code>), the same
+          precedence ADR-041&#39;s service middleware uses. The mechanism that makes it <em>one</em> id is that the value is
+          written back onto the <strong>request</strong> headers before forwarding: the downstream service&#39;s own middleware
+          then finds a header already present and adopts it instead of minting its own. The response echo is
+          registered through <code>Response.OnStarting</code> (<code>:58-62</code>), and the registration extension is
+          <code>UseGatewayCorrelation()</code> (<code>:82</code>).</p>
+          <p>The middleware is <strong>context-free</strong>, and that is a constraint rather than an accident of scope. Its only
+          constructor dependency is the <code>RequestDelegate</code> (<code>:27</code>): no <code>HttpContext.Items</code>, no logger, no scoped
+          service. The service-tier version sets a scoped <code>ICorrelationContext</code> that the CQRS logging decorators
+          read, and the Aspire package cannot reference the Application layer that declares that abstraction. The
+          edge version is therefore a deliberately smaller thing than its namesake, not a copy of it, and it
+          composes with a host that has no DI graph beyond YARP.</p>
+          <p><strong>2. Rate limiting at the edge counts anonymous callers, and chains a global concurrency cap behind
+          it.</strong> <code>AddGatewayRateLimiting</code> installs a per-client-IP fixed window partitioned on
+          <code>Connection.RemoteIpAddress</code> with <strong>no authentication exemption of any kind</strong>
+          (<code>.../Gateway/GatewayRateLimitingExtensions.cs:90</code>, limiter at <code>:98</code>), chained through
+          <code>PartitionedRateLimiter.CreateChained</code> (<code>:181</code>) with a process-wide concurrency limiter (<code>:124-125</code>),
+          rejecting overage with 429 (<code>:176</code>). The two answer different failures: the window answers one noisy
+          source, and the concurrency cap answers total in-flight work regardless of how many sources produced
+          it, which is the failure a per-IP window structurally cannot see. Defaults live in
+          <code>GatewayRateLimitingSettings</code> (section <code>&quot;GatewayRateLimiting&quot;</code>,
+          <code>.../Gateway/GatewayRateLimitingSettings.cs:42</code>): <code>PermitLimit</code> 120 (<code>:51</code>) per <code>WindowSeconds</code> 60
+          (<code>:55</code>), <code>GlobalConcurrencyLimit</code> 200 (<code>:65</code>).</p>
+          <p><strong>The settings are validated twice, because there are two ways in.</strong> The configuration overload binds
+          through <code>AddOptions().Bind(section).ValidateDataAnnotations().ValidateOnStart()</code>
+          (<code>GatewayRateLimitingExtensions.cs:148-151</code>), so a host with an out-of-range value refuses to boot,
+          which is <a href="070-fail-fast-configuration-contract.html">ADR-070</a>&#39;s contract exactly. That alone would not be
+          enough here: the limiter closes over an eagerly-bound copy rather than resolving <code>IOptions</code> per
+          request, and a caller can hand settings straight to the object overload without passing through the
+          options pipeline at all. So the overload every path funnels into runs
+          <code>Validator.ValidateObject(settings, ..., validateAllProperties: true)</code> at registration (<code>:172</code>, with
+          the reasoning stated inline at <code>:169-171</code>). The <code>[Range]</code> bounds on the three numeric settings
+          (<code>GatewayRateLimitingSettings.cs:50</code>, <code>:54</code>, <code>:64</code>) are therefore load-bearing on both paths: an
+          invalid <code>PermitLimit</code> throws where it is configured, not at the first throttled request.</p>
+          <p>Bypasses are two-tier, and the tiers are different kinds of thing. <strong>Infrastructure bypasses are
+          unconditional</strong>: <code>/health</code>, <code>/alive</code> and <code>/.well-known</code> are hard-coded
+          (<code>GatewayRateLimitingExtensions.cs:47</code>, matched by path segment, case-insensitively, <code>:64</code>), because
+          throttling them takes down probes and token validation (ADR-004&#39;s JWKS discovery) as a side effect of
+          throttling traffic. <strong>Application bypasses are configuration</strong>, through <code>BypassPathPrefixes</code>
+          (<code>GatewayRateLimitingSettings.cs:74</code>, empty by default), and the two entries the consumers need are
+          recorded here so they are not rediscovered as incidents: Store&#39;s Stripe webhook route
+          (<code>/Payments/{**catch-all}</code>, <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:129</code>), because a 429
+          to Stripe is a retry and eventually a disabled endpoint, which silently stops every payment update
+          (<a href="084-stripe-webhook-ingress.html">ADR-084</a>); and ADC&#39;s SignalR hub route (<code>/hubs/{**catch-all}</code>,
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:161</code>), because a negotiate-plus-reconnect storm from
+          one office&#39;s shared address is exactly the pattern a per-IP window misreads as abuse
+          (<a href="039-live-channel-push.html">ADR-039</a>).</p>
+          <p><strong>A request with no attributable client IP is not limited.</strong> It gets
+          <code>RateLimitPartition.GetNoLimiter</code> (<code>GatewayRateLimitingExtensions.cs:90-95</code>) rather than sharing one
+          bucket with every other unattributable request, which is the same fail-open posture ADR-019 chose for
+          <code>auth-ip</code> and for the global limiter&#39;s fallback key, for the same reason: a shared &quot;unknown&quot; bucket is
+          a single tripwire that one misbehaving caller pulls for everyone behind it.</p>
+          <p><strong>3. Readiness reflects the downstreams; liveness does not.</strong>
+          <code>AddGatewayDownstreamHealthChecks(params string[] serviceNames)</code>
+          (<code>.../Gateway/GatewayHealthCheckExtensions.cs:75</code>) registers one check per named downstream with an
+          <code>HttpClient</code> whose <code>BaseAddress</code> is the Aspire service-discovery name <code>http://{name}</code> (<code>:93-100</code>),
+          deduplicated through a registry so a repeated name cannot double-probe (<code>:80-88</code>, <code>:124-171</code>). Each
+          check probes <code>/alive</code> (<code>DownstreamServiceHealthCheck.cs:31</code>) under a 2 second budget applied at both
+          the client and the registration (<code>:29</code>, <code>GatewayHealthCheckExtensions.cs:99</code>, <code>:110</code>), reports
+          <code>Unhealthy</code> on failure (<code>:108</code>) and carries the <code>Ready</code> tag (<code>:109</code>).</p>
+          <p>The tag is the whole design. The Aspire defaults map <code>/alive</code> to checks tagged <code>Live</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:342-345</code>) and <code>/health/ready</code> to
+          everything not tagged <code>Live</code> or <code>Optional</code> (<code>:358-361</code>), so a <code>Ready</code>-tagged downstream check reaches
+          readiness and never reaches liveness. Liveness must stay process-local, or a downstream outage restarts
+          a perfectly healthy Gateway and makes the outage worse. <code>/alive</code> answers &quot;is this process wedged&quot;,
+          <code>/health/ready</code> answers &quot;can this process do useful work&quot;, and only the second depends on anything
+          else. That is <a href="025-startup-warmup-readiness.html">ADR-025</a>&#39;s split, applied to a dependency rather than
+          to a startup task.</p>
+          <h3 id="what-the-edge-declines">What the edge declines</h3>
+          <p><strong>Edge JWT pre-validation is deferred, and the deferral is the decision.</strong> The obvious next move is to
+          validate the bearer token at the Gateway and reject an invalid one before it costs a forward. It is not
+          being made. <a href="004-authentication-dual-fetch.html">ADR-004</a> puts validation authority in the services, and
+          a second validator does not add a check, it adds a second truth: two processes reading two JWKS caches
+          can disagree across a key rotation, and the one that rejects is the one the caller sees. The Gateway
+          would also acquire issuer and JWKS configuration it does not have today, making an Identity outage a
+          Gateway outage, and it would have to decide what to do about ADR-022&#39;s cookie-carried browser sessions,
+          which are not bearer tokens at all. The saving is one forward of a request the service was going to
+          reject in microseconds anyway.</p>
+          <p>The trigger to revisit is measured rather than felt: when invalid-or-absent-token traffic becomes a
+          material share of forwarded volume (visible in the edge limiter and downstream signals this record
+          adds), pre-validation becomes a cost argument instead of a correctness argument and can be taken then,
+          with the services <strong>still</strong> validating.</p>
+          <p><strong>The limiter is in-memory, per replica.</strong> No Redis, no shared counter, and the type documents itself
+          that way (<code>GatewayRateLimitingSettings.cs:10-21</code>). With N Gateway replicas the effective ceiling is N
+          times <code>PermitLimit</code>, the same multiplication ADR-019 records for its own per-process limiters and only
+          partly retired there with its Redis option. It is accepted here rather than solved: the edge limiter
+          exists to bound a flood, not to meter a quota, and an approximate ceiling that needs no network call
+          and cannot fail is the right shape for the one process the whole fleet sits behind.</p>
+          <p><strong>The kit adds no authorization, no request rewriting and no response shaping.</strong> Everything that
+          depends on knowing who the caller is or what the payload means stays behind the proxy, which is what
+          keeps the Gateway a transport concern and keeps ADR-008&#39;s extraction reversible.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The edge is the only place that sees a request exactly once.</strong> That is what makes ensure-at-the-edge
+          correct and mint-per-service wrong: not that the service version is broken, but that it runs after
+          the point where uniqueness is free.</li>
+          <li><strong>The two rate-limit postures differ because the traffic differs, not because one is a mistake.</strong>
+          ADR-019 measured its exemption against a backend fronted by an output cache and a Blazor Server
+          circuit. The Gateway pays for anonymous traffic before either can help. Stating both postures
+          together is what keeps the second from reading as a contradiction of the first.</li>
+          <li><strong>A chained concurrency limiter answers the failure a window cannot.</strong> A per-IP window is blind to
+          ten thousand distinct addresses each behaving politely; a concurrency cap is blind to one address
+          being rude but never lets in-flight work exceed what the process can carry. Neither alone bounds the
+          Gateway&#39;s load.</li>
+          <li><strong>Bypasses are split by kind because they fail differently.</strong> A throttled health probe or JWKS fetch
+          is an immediate self-inflicted outage, so it is not a setting. A throttled webhook or hub is
+          application-specific and its correct list differs per app, so it is.</li>
+          <li><strong><code>Ready</code> and not <code>Live</code> keeps a dependency failure from becoming a restart loop.</strong> Wiring downstream
+          probes into liveness is the classic version of this mistake, and it turns a recoverable downstream
+          blip into a fleet-wide restart at the worst moment.</li>
+          <li><strong>Declining JWT validation is a real decision with a cost.</strong> It is recorded because the alternative
+          is that someone reads the edge kit, notices the obvious missing piece, and adds it without knowing
+          ADR-004 already placed the authority elsewhere.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The limiter closes over an eagerly-bound copy of the settings</strong>
+          (<code>GatewayRateLimitingExtensions.cs:154</code>, consumed at <code>:164-172</code>), so an <code>IOptionsMonitor</code> reload
+          never reaches it. Validation is not the gap (both paths validate, see the Decision), but liveness of
+          the value is: changing a limit is a restart, not a config push, which is the opposite of what &quot;it is
+          a configuration section&quot; usually implies. The double validation is itself a consequence of that
+          shape rather than belt-and-braces, so the two must stay in step: a future change that made the
+          limiter resolve <code>IOptions</code> per request would make the registration-time check redundant, and one
+          that added a third construction path would need to route through the same overload to keep it.</li>
+          <li><strong>Per-replica limits mean the configured number is not the enforced number.</strong> An operator reading
+          <code>PermitLimit</code> 120 sees a per-replica figure; the fleet ceiling depends on how many Gateway replicas
+          are running at that instant, so it rises exactly when the load that motivated it arrives.</li>
+          <li><strong>Fail-open on an unknown IP is a hole with a name.</strong> A caller who can arrive without an attributable
+          address is unlimited at the edge. The alternative (one shared bucket) is worse, and this is still a
+          hole.</li>
+          <li><strong><code>BypassPathPrefixes</code> is a prefix match, so it is only as precise as the value given.</strong> A broad
+          prefix exempts more than intended and nothing warns; the two entries named above are narrow, and a
+          third added carelessly is an unlimited path through the only choke point.</li>
+          <li><strong>Downstream health checks add fan-out and an all-or-nothing readiness.</strong> Every Gateway replica
+          probes every named downstream on the health interval, and a slow-but-alive service can exceed the 2
+          second budget and mark the Gateway not-ready while it is still perfectly able to serve every other
+          service&#39;s routes.</li>
+          <li><strong>Two correlation middlewares now exist with one header name written twice.</strong> The gateway type and
+          the API type are separate, in separate packages, each declaring the literal. A rename in one is a
+          silent break, the same duplicated-literal cost ADR-041 already records for the meter names in this
+          same Aspire package.</li>
+          <li><strong>Nothing gates adoption.</strong> A gateway that never calls the three registrations behaves exactly as
+          before, no fitness function names a gateway host, and as of this record neither consumer gateway
+          calls any of them. That is the audit-the-inventory caveat ADR-005 and ADR-017 both record, now
+          applied to the edge.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="008-service-extraction-topology.html">ADR-008</a> (the record that made the Gateway the only entry point
+          and gave it routing, CORS and auth forwarding; this is the first record to add cross-cutting behavior
+          to it), <a href="019-rate-limiting.html">ADR-019</a> (the three service-tier limiter layers this adds a fourth,
+          edge-tier layer beside, and whose anonymous exemption the edge deliberately inverts),
+          <a href="079-shared-http-middleware-pipeline.html">ADR-079</a> (the shared service pipeline the gateways sit outside
+          of, which is what left these three behaviors unowned),
+          <a href="041-observability-and-telemetry.html">ADR-041</a> (the correlation id extended one hop outward, and the
+          duplicated-literal cost the second header-name declaration repeats),
+          <a href="004-authentication-dual-fetch.html">ADR-004</a> (the validation authority the edge declines to duplicate,
+          and the JWKS discovery path the unconditional bypass protects),
+          <a href="025-startup-warmup-readiness.html">ADR-025</a> (the readiness model these downstream checks join, including
+          why liveness stays process-local),
+          <a href="070-fail-fast-configuration-contract.html">ADR-070</a> (the fail-fast contract this kit&#39;s settings honor on
+          both construction paths, the options pipeline and the registration-time check the closed-over copy
+          requires),
+          <a href="084-stripe-webhook-ingress.html">ADR-084</a> and <a href="039-live-channel-push.html">ADR-039</a> (the two traffic
+          shapes the configurable bypass list exists for),
+          <a href="089-gateway-topology-owned-by-configuration.html">ADR-089</a> (the other half of this wave: what the
+          Gateway routes, as opposed to what it does to a request on the way through).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/088-gateway-edge-responsibilities.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

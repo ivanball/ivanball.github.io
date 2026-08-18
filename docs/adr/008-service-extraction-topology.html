@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted.">
+  <meta name="description" content="Accepted. Amended by ADR-089 (2026-08-18): the Gateway keeps the route-to-service map this record gave it, but stops expressing it as MapForwarder…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway">
-  <meta property="og:description" content="Accepted.">
+  <meta property="og:description" content="Accepted. Amended by ADR-089 (2026-08-18): the Gateway keeps the route-to-service map this record gave it, but stops expressing it as MapForwarder…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway">
-  <meta name="twitter:description" content="Accepted.">
+  <meta name="twitter:description" content="Accepted. Amended by ADR-089 (2026-08-18): the Gateway keeps the route-to-service map this record gave it, but stops expressing it as MapForwarder…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"008 · Extraction of the Modular Monolith into Per-Module Services + Gateway","item":"https://ivanball.github.io/docs/adr/008-service-extraction-topology.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 87 ADRs</summary>
+        <summary>All 89 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -187,6 +187,8 @@
         <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
         <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
         <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
           </ol>
         </nav>
       </details>
@@ -195,7 +197,13 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-008-extraction-of-the-modular-monolith-into-per-module-services--gateway">ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted.</p>
+          <p>Accepted. <strong>Amended by <a href="089-gateway-topology-owned-by-configuration.html">ADR-089</a> (2026-08-18)</strong>: the
+          Gateway keeps the route-to-service map this record gave it, but stops expressing it as <code>MapForwarder</code>
+          calls in code. YARP <code>ReverseProxy</code> configuration becomes the single route source, the per-destination
+          HTTP version policy moves into cluster configuration, and a route-map test becomes the drift gate. The
+          topology decision itself is unchanged. See also
+          <a href="088-gateway-edge-responsibilities.html">ADR-088</a> (2026-08-18) for the cross-cutting behavior the Gateway
+          gains at the same time, which is the first added to it since this record.</p>
           <h2 id="context">Context</h2>
           <p>ADC began as a modular monolith: one <code>MMCA.ADC.WebAPI</code> host loaded every module (Identity, Conference,
           Engagement, Notification) in-process via the <code>ModuleLoader</code>, sharing one database and dispatching

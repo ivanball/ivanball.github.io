@@ -15,7 +15,10 @@ span-start site, and the correlation-id response-header citation onto their curr
 (2026-08-07) to record that the outbox meter and dead-letter counter now live in a dedicated
 `OutboxMetrics` type rather than in `OutboxProcessor`, to document the second dead-letter increment
 on the retries-exhausted path and the `reason` tag that separates the two, and to rebase the Aspire
-service-defaults, CQRS metric-literal, and outbox span citations onto their current lines.
+service-defaults, CQRS metric-literal, and outbox span citations onto their current lines. Amended
+(2026-08-18) to record two new meter families (`MMCA.Common.OutputCache`, `MMCA.Common.BestEffort`), to
+correct the meter inventory this record has been under-reporting, and to note that the correlation id
+now starts one hop earlier, at the Gateway; see the Revision (2026-08-18) at the end.
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -161,6 +164,42 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 - **Exporters and sampling are opt-in per host.** A host that sets neither exporter variable emits to
   nothing, and a misconfigured ratio fails toward sample-all (higher cost) rather than toward silence:
   the intended bias, but it means a cost surprise is possible where a data gap is not.
+
+## Revision (2026-08-18)
+Two meters and one hop.
+
+**Two new failure counters, each on its own meter.** `cache.eviction.failed`, tagged `cache_tag`, on
+`MMCA.Common.OutputCache`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheMetrics.cs:19`, instrument at
+`:29-37`) counts a cross-service output-cache eviction that failed for one tag
+([ADR-026](026-caching-strategy.md)'s Revision (2026-08-18)); and `besteffort.dispatch.failed`, tagged
+`operation`, on `MMCA.Common.BestEffort`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:102`, instrument at `:107-115`)
+counts a swallowed fire-and-forget side effect, the helper's whole purpose being that the caller does
+not see the failure. Both are subscribed in the Aspire defaults
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:169-170`).
+
+**The meter inventory in the Decision above is wrong and has been for a while.** This record names two
+meters, and [ADR-087](087-broker-poison-message-handling.md) called `MMCA.Common.Broker` "a third",
+which was already an undercount. The authoritative list is the subscription block itself
+(`Extensions.cs:164-170`), which now carries **seven**: `MMCA.Common.Outbox`, `MMCA.Common.Cqrs`,
+`MMCA.Common.Idempotency`, `MMCA.Common.Scheduler`, `MMCA.Common.Broker`, `MMCA.Common.OutputCache`,
+`MMCA.Common.BestEffort`. Two of them (`Idempotency`, `Scheduler`) were never recorded here at all.
+Read that block, not this prose, when the question is what the framework exports.
+
+**Correlation now starts at the edge.** [ADR-088](088-gateway-edge-responsibilities.md) adds a
+context-free `GatewayCorrelationMiddleware` that ensures `X-Correlation-ID` on the way in and echoes it
+on the way out, writing it onto the forwarded request so the service-tier `CorrelationIdMiddleware`
+adopts it rather than minting its own. The Decision's claim that one id stitches a request together
+becomes true across the gateway hop, where it previously began at the first service and left the
+Gateway's own logs unlinked. No meter, no span, one header, one hop earlier.
+
+Two costs come with it. **Both new counters are failure-only**, so a healthy system emits nothing on
+them and a zero is indistinguishable from a host that never wired the feature, which is exactly the
+shape of signal that goes unnoticed until an incident. And neither is wired to an alert or a runbook
+section, joining ADR-087's two counters in the gap [ADR-062](062-slo-alerting-as-code.md) describes.
+The duplicated-literal cost this record already records in Trade-offs now applies to seven names rather
+than two.
 
 ## Related
 ADR-003 (the outbox whose dead-letter counter and poll-span filtering this defines), ADR-014 (the

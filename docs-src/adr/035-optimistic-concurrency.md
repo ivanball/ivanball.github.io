@@ -2,6 +2,12 @@
 
 ## Status
 Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of `SetOriginalRowVersion` was added (see Decision).
+Revised 2026-08-18: the same token gains an **HTTP-native transport**. `GetByIdAsync` emits a weak
+`ETag` derived from the DTO's `RowVersion`, a `[SupportsIfMatch]` filter parses `If-Match` into the
+existing `IConcurrencyAware` contract (body value wins when both are present), and a conflict whose
+token arrived in the header is rewritten to **412 Precondition Failed** while a body-carried token
+keeps the 409 this record chose. No new concurrency mechanism: one token, a second way to carry it.
+See the Revision (2026-08-18) at the end.
 
 ## Context
 Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
@@ -102,10 +108,91 @@ update fails as a conflict.
   existing table; a new database, or a table added later, must carry the column for the token to
   exist there.
 
+## Revision (2026-08-18)
+This record chose a **body** round-trip: the client echoes `RowVersion` on the update request. HTTP has
+had a standard way to say the same thing since long before this framework, `ETag` plus `If-Match`, and
+a client that speaks it (a generic REST tool, a mobile HTTP stack, anything not generated from our
+DTOs) had no way to participate. The revision adds that transport. **It is the same token, the same
+`SetOriginalRowVersion` extension point and the same database comparison**: nothing about the mechanism
+in the Decision changes.
+
+### The read emits a weak ETag
+`EntityControllerBase.GetByIdAsync`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:383-404`) calls
+`SetConcurrencyETag(result.Value)` (`:402`), which emits `W/"<base64>"` over the DTO's `RowVersion`
+bytes (`:429-438`, formatted by `.../Concurrency/ConcurrencyETag.cs:39-44`). Weak is the honest
+strength: the tag identifies the row's version, not a byte-exact representation, and the same row can
+legitimately serialize differently under a `fields=` projection. Those shaped responses are handled
+rather than skipped, through a dictionary lookup for the token (`:446-455`).
+
+Emission is silent when there is nothing to emit: a DTO type with no `RowVersion` property leaves the
+cached property reflection null and the method no-ops (`:411-415`, `:431-432`), and a null or empty
+token does the same (`:434-435`).
+
+### `[SupportsIfMatch]` is the attribute and the filter
+`SupportsIfMatchAttribute` (`.../Concurrency/SupportsIfMatchAttribute.cs:47`) is a sealed
+`Attribute` that implements `IAsyncActionFilter` directly, so unlike `[Idempotent]` (a
+`ServiceFilterAttribute` resolving from DI, ADR-017) it is self-contained and takes no services. On an
+action carrying it, the `If-Match` header is parsed and written into **every** bound argument
+implementing `IConcurrencyAware` (`:120-128`), which is why no new contract was needed: the round-trip
+interface this record already defined (`MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IConcurrencyAware.cs:13`,
+`RowVersion` at `:20`, shipped 2026-06-14) is exactly the shape a header value needs to land in.
+
+Three parsing decisions are worth naming. **The body wins.** An argument that already carries a
+non-empty `RowVersion` is left alone (`:151-154`, documented at `:24-28`), so a client that populates
+the request model keeps this record's original behavior and its 409, and the header only fills a gap.
+**A malformed `If-Match` is a 400**, short-circuiting the action with ProblemDetails (`:114-118`,
+`:210-219`), because an unparseable precondition is a client error and executing the write would
+silently ignore a stated precondition. **`*` and blank are treated as no precondition** (`:103-112`),
+a deliberate simplification of RFC 9110's "if any current representation exists".
+
+### 412 for a header-sourced conflict, 409 for a body-sourced one
+The split is implemented in the filter itself, not in `DbUpdateExceptionHandler`:
+`RewriteConflictToPreconditionFailed` (`:178-207`) runs only when the filter actually applied a header
+token, tracked by a local `headerSourced` flag set when at least one argument took its value from the
+header (`:69`, `:78-81`, `:130-135`). It rewrites both a `DbUpdateConcurrencyException` (`:180-187`)
+and an already-produced 409 result (`:191-202`), and it publishes
+`HttpContext.Items["MMCA.Common.API.Concurrency.IfMatchApplied"]` (`:54`, `:132`) so anything
+downstream can tell which transport was used.
+
+The reason the two codes differ is that they answer different questions. A body-carried token is part
+of the request payload, and a stale one is a state conflict: 409, exactly as this record decided. A
+header-carried token is a **precondition** the client attached to the request, and HTTP has a status
+code that means "the precondition you stated did not hold": 412. Mapping both to 409 would have made
+`If-Match` a decorative alias for the body field.
+
+### What this revision costs
+- **The rewrite keys on the outcome, not on the cause.** Any 409 produced under an `If-Match` request
+  becomes a 412, including a unique-constraint or foreign-key violation, which `DbUpdateExceptionHandler`
+  funnels to the same 409 this record already noted as coarse. The source acknowledges it (`:33-38`).
+  So the coarse-409 trade-off below is not fixed, it is inherited, and one of its cases now wears a
+  status code that names a precondition the client did not actually violate.
+- **Body precedence is silent.** A client that sends both a header and a populated request field, with
+  different values, gets the body value and no warning. That is the right default (the payload is more
+  specific) and it is undiscoverable at runtime.
+- **The attribute cannot be configured.** Being its own filter with no DI means no host can adjust its
+  behavior, and a future need for a service (a policy, a logger, a metric) forces either a rewrite to
+  `ServiceFilterAttribute` or a static dependency.
+- **An absent ETag is ambiguous.** A DTO without a `RowVersion` property produces no header at all, so
+  a client cannot distinguish "this resource has no concurrency control" from "this deployment does not
+  support it". The no-op is the correct behavior and it carries no signal.
+- **Nothing here decides conditional GET.** The ETag exists to be echoed back on the next write; this
+  revision adds no `If-None-Match` handling and no 304 path, and the read-side caching answer remains
+  [ADR-040](040-authenticated-output-caching-for-public-reads.md)'s output cache. An ETag on a response
+  does invite a client to try, and it will simply be ignored.
+- **Opt-in per action, again.** `[SupportsIfMatch]` has to be applied, and no fitness rule requires it
+  anywhere, so the header transport exists exactly where someone remembered it. The
+  `UpdateRequestsAreConcurrencyAware` gate covers the request **type**, not the annotation.
+
 ## Related
 ADR-017 (HTTP request idempotency, which dedups retries of the **same** request, the mirror-image
-concern to two **distinct** edits racing here), ADR-021 (consumer-side inbox, which dedups broker
+concern to two **distinct** edits racing here, and whose own 2026-08-18 revision adds the
+declared-intent gate at this same edge), ADR-021 (consumer-side inbox, which dedups broker
 redeliveries of the **same** event, likewise distinct from concurrency), ADR-006 (the one-shared-
 context-per-engine model over which the `RowVersion` token is configured uniformly), ADR-015 (the
 fitness-function-over-discipline enforcement this reuses), ADR-005 (soft-delete and audit fields live
-on the same `AuditableBaseEntity` base that carries `RowVersion`).
+on the same `AuditableBaseEntity` base that carries `RowVersion`),
+[ADR-034](034-generic-entity-query-layer.md) (the generic entity controller whose `GetByIdAsync` now
+emits the ETag, and whose `fields=` shaping the emitter has to see through),
+[ADR-013](013-result-pattern.md) (the ProblemDetails edge the malformed-`If-Match` 400 and the rewritten
+412 both speak).

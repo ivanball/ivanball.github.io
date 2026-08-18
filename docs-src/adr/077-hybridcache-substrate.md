@@ -6,6 +6,13 @@ implementation beside `MemoryCacheService` and `DistributedCacheService`. It is 
 `AddCommonHybridCache(...)`; with no call the default path is byte-identical to today, so the release is
 non-breaking.
 
+**Scope note (2026-08-18).** This record is Tier 1 only, as its Decision and its Related entry for
+ADR-040 both state. The cross-service output-cache eviction shipped on 2026-08-18
+(`OutputCacheEvictionRequested` plus a per-tag handler on the `MMCA.Common.OutputCache` meter) is a
+**Tier 2** change and is recorded in [ADR-026](026-caching-strategy.md)'s Revision (2026-08-18). It
+touches neither the `hc:` keyspace, the L1/L2 split, nor anything else decided here: the hybrid
+substrate and the output-cache edge remain separate invalidation models.
+
 ## Context
 [ADR-026](026-caching-strategy.md) settled Tier 1 as one abstraction (`ICacheService`) over two
 implementations chosen at startup: in-process memory when no real `IDistributedCache` is present, Redis

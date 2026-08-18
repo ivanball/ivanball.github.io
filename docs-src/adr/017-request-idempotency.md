@@ -5,7 +5,12 @@ Accepted. Revised 2026-08-01: the guard around execute-and-store is now an `IDis
 from DI (Redis-backed wherever a connection multiplexer is registered, which is every deployed service
 host), with the striped semaphore kept only as the no-lock-registered fallback, and body-less 2xx
 results (204/`NoContent()`) are cached and replayed as well as `ObjectResult` bodies. See Decision and
-Trade-offs.
+Trade-offs. Revised 2026-08-18: the filter is still opt-in, but **the opt-in is no longer silent**. A
+`[NonIdempotent(justification)]` attribute joins `[Idempotent]`, and a fitness gate
+(`IdempotencyConventionTestsBase`) fails any `[HttpPost]` action that declares neither, so the last
+Trade-off below ("an action that should be idempotent but is missing `[Idempotent]` gets no
+protection") becomes a declared decision rather than an oversight. The shared auth controllers declare
+their intent both ways. See the Revision (2026-08-18) at the end.
 
 ## Context
 Write endpoints (POST / PUT / PATCH) are exposed to **client retries and double-submits**: a flaky
@@ -104,8 +109,81 @@ Provide opt-in, client-driven request idempotency as an MVC action filter in `MM
 - **Opt-in.** An action that should be idempotent but is missing `[Idempotent]` gets no protection: the
   same audit-the-inventory caveat as ADR-005's `IAnonymizable`.
 
+## Revision (2026-08-18)
+The last Trade-off above is the one this revision addresses, and it does so by changing what is
+required. **Nothing here makes an endpoint idempotent.** What it requires is that every `[HttpPost]`
+action *declare which it is*, so the absence of `[Idempotent]` stops being indistinguishable from
+having forgotten it.
+
+### `[NonIdempotent]` is the other half of the annotation
+`NonIdempotentAttribute`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/NonIdempotentAttribute.cs:23`,
+`[AttributeUsage(AttributeTargets.Method)]` at `:22`) takes a `justification` as its only constructor
+argument and exposes it as `Justification` (`:28`). It is inert at runtime: it changes no behavior,
+registers no filter, and exists only to be read by the gate below and by whoever is looking at the
+action. The justification is positionally required by the compiler and **not otherwise validated**, so
+`[NonIdempotent("")]` compiles and passes.
+
+### The gate: every POST declares an intent
+`ArchitectureRules.PostActionsDeclareIdempotencyIntent`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Idempotency.cs:44`)
+flags any action carrying `[HttpPost]` that has neither `[Idempotent]` nor `[NonIdempotent]`
+(`:67-74`). Consumers inherit it through `IdempotencyConventionTestsBase`
+(`.../Bases/IdempotencyConventionTestsBase.cs:10`), whose single `[Fact]`
+`PostActions_ShouldDeclare_IdempotencyIntent` (`:14-16`) is the whole body, in the ADR-015 pattern.
+
+Three scope facts matter for reading a green result correctly. The lookup is **inherit-aware**
+(`GetCustomAttributes(inherit: true)`, `:80-82`), so a consumer overriding a shared controller action
+inherits the base's declaration rather than silently losing it, which is the same question ADR-019 had
+to settle empirically for `[EnableRateLimiting]`. Only **concrete** classes are scanned (`:49`), so an
+abstract base's declaration is checked where it is used rather than twice. And both the HTTP verb and
+the two markers are matched by attribute **simple name** (`:39-41`), which keeps the rule free of a
+reference to `MMCA.Common.API` and means a differently-named lookalike attribute does not count.
+
+### The shared auth controllers declare both ways, and the split is the interesting part
+`AuthControllerBase` marks register `[Idempotent]`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:76-77`), which is
+the canonical double-submit: a user pressing the button twice should get one account and one response.
+Login (`:54-55`), refresh (`:98-99`) and revoke (`:117-118`) are `[NonIdempotent]`, as is the OAuth code
+exchange (`.../Controllers/OAuthControllerBase.cs:136-137`). Token issuance must never be replay-cached,
+and the sharpest case is refresh: [ADR-050](050-jwt-refresh-token-rotation.md) rotates the stored
+refresh token on every use, so a cached replay would hand a client a token pair that has already been
+rotated away and revoked, turning this filter's safety feature into an authentication failure. The
+OAuth `complete` action is a `[HttpGet]` (`OAuthControllerBase.cs:74`) and is therefore outside the
+gate's scope rather than unmarked.
+
+### The no-op-without-a-key contract is now pinned by tests
+The Decision has always said an absent or blank `Idempotency-Key` means the action runs normally. That
+is now asserted rather than asserted-about: the filter returns `next()` untouched at the action stage
+with no key (`.../Idempotency/IdempotencyFilter.cs:133-138`), only enables request buffering when a key
+is present (`:123-124`), and treats blank as absent (`:165-172`), with
+`Tests/Presentation/MMCA.Common.API.Tests/Idempotency/IdempotencyFilterPassthroughTests.cs:46`, `:68`
+and `:85` covering the missing-header, blank-header and unbuffered-body cases. That matters because it
+is the premise of adopting `[Idempotent]` widely: annotating an existing endpoint cannot change what an
+existing client sees, since a client that sends no key is guaranteed the old path.
+
+### What this revision costs
+- **The gate covers POST only.** The Context above names POST, PUT and PATCH as the verbs exposed to
+  client retries; the rule keys on `[HttpPost]` (`ArchitectureRules.Idempotency.cs:39-41`). A `PUT` or
+  `PATCH` that should be deduplicated still gets no prompting, so two thirds of the stated problem is
+  outside the gate.
+- **A justification is required to exist, not to be a reason.** `[NonIdempotent("")]` satisfies the
+  compiler and the rule. The gate raises the cost of not thinking from zero to one string.
+- **Declared intent is not verified intent.** An action marked `[NonIdempotent]` because someone did
+  not want to reason about caching is indistinguishable to the gate from one marked after analysis.
+  What is bought is a reviewable diff at the moment of the decision, which is the same trade
+  ADR-015's public-API baselines make.
+- **Adoption is per repo, like every other fitness base.** A consumer that never subclasses
+  `IdempotencyConventionTestsBase` gets exactly the previous posture.
+
 ## Related
 ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
 response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience
 pipeline that re-issues requests is the main source of the duplicates this filter absorbs), ADR-026 (the
-`ICacheService` substrate whose distributed-vs-memory backing determines cross-instance replay).
+`ICacheService` substrate whose distributed-vs-memory backing determines cross-instance replay),
+[ADR-015](015-architecture-fitness-functions.md) (the fitness-function suite the new convention gate
+joins, and whose invariant-over-discipline posture it applies to this record's opt-in trade-off),
+[ADR-050](050-jwt-refresh-token-rotation.md) (the refresh-token rotation that makes replay-caching a
+token response actively harmful, which is why the auth endpoints declare `[NonIdempotent]`),
+[ADR-035](035-optimistic-concurrency.md) (the mirror-image concern, two distinct edits racing, whose
+own 2026-08-18 revision adds the `If-Match` precondition surface at the same edge).
