@@ -224,27 +224,27 @@
           proves two live versions coexist.</p>
           <ul>
           <li><strong>One registration wires the whole policy.</strong> <code>AddCommonApiVersioning</code>
-          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:115</code>) deliberately
+          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:233</code>) deliberately
           does <strong>not</strong> set <code>DefaultApiVersion</code>: <code>1.0</code> is already the <code>Asp.Versioning</code> library default, and the
           API explorer inherits both it and <code>AssumeDefaultVersionWhenUnspecified</code> from the versioning options,
           so restating either one trips AV0011/AV0024. The code comment recording that omission is at
-          <code>WebApplicationBuilderExtensions.cs:117</code>. What the registration does set: it assumes the default
+          <code>WebApplicationBuilderExtensions.cs:235</code>-<code>WebApplicationBuilderExtensions.cs:237</code>. What the registration does set: it assumes the default
           version when a caller sends no header
-          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:122</code>), reports
+          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:240</code>), reports
           the supported/deprecated versions on every response (<code>ReportApiVersions = true</code>,
-          <code>WebApplicationBuilderExtensions.cs:123</code>), and selects the version from an <code>api-version</code> request
-          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:124</code>). The
+          <code>WebApplicationBuilderExtensions.cs:241</code>), and selects the version from an <code>api-version</code> request
+          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:242</code>). The
           reader is header-based deliberately: routes and query strings stay version-free, so a caller opts
           into a newer shape by adding one header rather than changing the URL.</li>
           <li><strong>The API explorer is wired for versioned OpenAPI.</strong> The same call chains <code>.AddMvc()</code> then
-          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:125</code>,
-          <code>WebApplicationBuilderExtensions.cs:126</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
-          (<code>WebApplicationBuilderExtensions.cs:128</code>) and substituting the version into the URL where a host
-          routes one (<code>SubstituteApiVersionInUrl = true</code>, <code>WebApplicationBuilderExtensions.cs:129</code>). The
+          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:243</code>,
+          <code>WebApplicationBuilderExtensions.cs:244</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
+          (<code>WebApplicationBuilderExtensions.cs:246</code>) and substituting the version into the URL where a host
+          routes one (<code>SubstituteApiVersionInUrl = true</code>, <code>WebApplicationBuilderExtensions.cs:247</code>). The
           explorer&#39;s default-version behavior is inherited rather than configured, exactly as the comment
-          above it records (<code>WebApplicationBuilderExtensions.cs:117</code>). That
+          above it records (<code>WebApplicationBuilderExtensions.cs:235</code>-<code>WebApplicationBuilderExtensions.cs:237</code>). That
           group format feeds the <code>v1</code> OpenAPI document <code>AddCommonOpenApi</code> registers
-          (<code>WebApplicationBuilderExtensions.cs:236</code>), which
+          (<code>WebApplicationBuilderExtensions.cs:392</code>), which
           <code>MapCommonOpenApi</code> serves at <code>/openapi/v1.json</code> outside Production only
           (<code>Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:28</code>,
           <code>OpenApiEndpointExtensions.cs:30</code>).</li>
@@ -346,7 +346,7 @@
           <code>[ApiVersion]</code> non-inheritance, handled there by ADC&#39;s sealed <code>OAuthController</code> subclass), ADR-034
           (the generic entity controller bases, which take the opposite shape: <code>[ApiController]</code> /
           <code>[Route(&quot;[controller]&quot;)]</code> / <code>[ApiVersion(&quot;1.0&quot;)]</code> sit on the generic base itself,
-          <code>EntityControllerBase.cs:31-33</code>).</p>
+          <code>EntityControllerBase.cs:32-34</code>).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

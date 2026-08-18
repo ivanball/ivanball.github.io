@@ -40,12 +40,13 @@ type through a read-only interface when it must be read above Infrastructure.**
   `LoginProtectionSettings` `:133-136`, `MessageBusSettings` `:139-142`, `JwksSettings` `:144-147`) and an
   eighth in the opt-in `AddPushNotifications` (`PushNotificationSettings` `:530-533`). Three more are bound
   by the Presentation packages: `IdempotencySettings`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:70-73`), `JwtSettings`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:346-349`),
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:70-73`), `JwtSettings`, bound
+  inside `AddCommonAuthentication`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:502-505`),
   and `ApiSettings` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:32-35`).
 - **Each service host adds exactly two of its own**, `ApplicationSettings` and `ModulesSettings`, and all
   eight hosts across the three application repos do it identically: ADC's four services (for example
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:170-173` and `:299-302`), Store's three
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:170-173` and `:313-316`), Store's three
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:123-126` and `:226-229`), and the
   Helpdesk monolith seed (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:17-20` and `:75-78`).
   Modules may add their own sections on the same chain, as Store's Sales module does for Stripe.
@@ -80,7 +81,7 @@ type through a read-only interface when it must be read above Infrastructure.**
 **Adoption of the facade half is partial, and this ADR settles the direction rather than claiming the
 state.** Only five of the framework's settings types have a facade; the rest are consumed as `IOptions<T>`
 inside Infrastructure and API, which is where they belong: `OutboxProcessor`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:53`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:57`),
 `BrokerEventBus` (`.../Services/BrokerEventBus.cs:34`), `LoginProtectionService`
 (`.../Auth/LoginProtectionService.cs:21`), `RsaJwksProvider` (`.../Auth/RsaJwksProvider.cs:15`),
 `SQLServerDbContext` (`.../Persistence/DbContexts/SQLServerDbContext.cs:37`), and `IdempotencyFilter`

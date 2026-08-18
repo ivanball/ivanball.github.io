@@ -63,19 +63,19 @@ unique indexes cover it, on `UserId` and on `Credential`
 `/check-in` (`.../Engagement.UI/Pages/CheckIn/CheckInScan.razor:1-2`) is `[Authorize(Roles = "Organizer")]`
 and its writes carry `[HasPermission(EngagementPermissions.CheckInManage)]`
 (`"engagement:checkin:manage"`, `.../Engagement.Shared/Authorization/EngagementPermissions.cs:23`,
-applied at `.../Engagement.API/Controllers/CheckInsController.cs:68`, `:88`, `:157`). The attendee's page
+applied at `.../Engagement.API/Controllers/CheckInsController.cs:75`, `:99`, `:179`). The attendee's page
 `/my-badge` is authenticated-only and displays, never writes. Every `CheckIn` row therefore records both
 parties: `UserId` (`.../Engagement.Domain/CheckIns/CheckIn.cs:31`) and `CheckedInByUserId` (`:49`).
 
 Two later endpoints on the same controller are the exception, and are deliberately built as one: they
 are attendee scans of a **printed** QR and carry no `[HasPermission]` at all.
-`POST /checkins/sponsor-visits` (`CheckInsController.cs:113-127`) records a booth visit behind
-`[FeatureGate(EngagementFeatures.SponsorVisits)]` (`:114`), and `POST /checkins/room-visits`
-(`:138-152`) checks the caller into whatever session a room is hosting behind
-`[FeatureGate(EngagementFeatures.RoomCheckIn)]` (`:139`). Neither takes an attendee from the request:
+`POST /checkins/sponsor-visits` (`CheckInsController.cs:128-143`) records a booth visit behind
+`[FeatureGate(EngagementFeatures.SponsorVisits)]` (`:130`), and `POST /checkins/room-visits`
+(`:159-174`) checks the caller into whatever session a room is hosting behind
+`[FeatureGate(EngagementFeatures.RoomCheckIn)]` (`:161`). Neither takes an attendee from the request:
 the identity comes from the token, as on `/my-badge`, and the room endpoint resolves the session
 server-side from the room plus a configured grace window rather than accepting a session id
-(`:129-137`; `CheckInSettings.RoomCheckInGraceMinutes`, 15 by default, read at
+(`:145-158`; `CheckInSettings.RoomCheckInGraceMinutes`, 15 by default, read at
 `.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:52`). For these rows the two
 parties are the same person, which the aggregate says outright (`CheckIn.cs:46-49`).
 
@@ -186,7 +186,7 @@ boundary (`Program.cs:283-285`). The row itself survives (anonymize-in-place, AD
 totals in memory, orders by total then display name, and assigns distinct sequential ranks.
 
 `Engagement.CheckIn` and `Engagement.Points` are feature flags enforced with `[FeatureGate]` at the
-controllers (`CheckInsController.cs:32`, `PointsController.cs:34`, ADR-031), and the two self-service
+controllers (`CheckInsController.cs:33`, `PointsController.cs:34`, ADR-031), and the two self-service
 surfaces added two more, gated per action rather than per controller so each printed artifact can be
 retired on its own: `Engagement.SponsorVisits` (`.../Engagement.Shared/EngagementFeatures.cs:37`) and
 `Engagement.RoomCheckIn` (`:44`). GDPR export is extended in the

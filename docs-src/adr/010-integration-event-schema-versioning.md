@@ -1,7 +1,7 @@
 # ADR-010: Integration-Event Schema Versioning & Upcaster Policy
 
 ## Status
-Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base).
+Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, `OutputCacheEvictionRequested`, so the framework's convention test is no longer vacuous: enforcement runs at five points, not four).
 
 ## Context
 Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
@@ -51,9 +51,18 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
   real reshape. The load-bearing half is the discipline (new type + upcaster); the framework does not
   yet ship an upcaster registration extension point: building one is follow-up work, and until then the policy is
   enforced by convention + review, not by an upcaster pipeline.
-- The convention test is **vacuous in MMCA.Common today** (the framework ships no concrete integration
-  event): `EventVersioningConventionTests` runs the shared base against `CommonArchitectureMap` but has
-  nothing to check. Real enforcement lives in the consumer trees: four now subclass
+- The convention test is **no longer vacuous in MMCA.Common**: the framework now ships one concrete
+  integration event, `OutputCacheEvictionRequested`
+  (`Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:23`), a sealed
+  record inheriting `BaseIntegrationEvent`, and `CommonArchitectureMap` registers the Domain assembly it
+  lives in (`Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:22`), so
+  `EventVersioningConventionTests` gates a real event in Common's own build. Enforcement therefore runs
+  at five points, not four. (Common's map declares no modules, so the namespace rule's Shared-layer half
+  is relaxed there: `ArchitectureRules.IntegrationEventsResideInSharedIntegrationEventsNamespace`
+  (`Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Events.cs:28-33`) applies the
+  `sharedAssemblies` check only when `map.ModuleNames.Count > 0`, which is why the framework's own
+  event may sit in a Domain-assembly `*.IntegrationEvents` namespace while every module-bearing consumer
+  is still held to Shared.) The other four are the consumer trees, which subclass
   `EventConventionTestsBase` and run the identical rules against their own event assemblies:
   `EventConventionTests` in `MMCA.ADC.Architecture.Tests` (ADC's seven events, spread across the
   Identity, Conference and Engagement Shared assemblies the map registers) and
@@ -63,7 +72,8 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
   (`Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ArchitectureTests.cs:38`, a local-only sample
   repo that is not published) gating its `ProductCreatedIntegrationEvent` and
   `OrderPlacedIntegrationEvent`. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
-  Store) is **closed**: every concrete integration event across all four trees is now enforced.
+  Store) is **closed**: every concrete integration event across the four consumer trees is enforced, and
+  so is the framework's own.
 - A get-only `SchemaVersion` is informational on the wire (it round-trips out, not back in): intentional
   (version is a property of the type, not per-instance data), but it means you read it off the concrete
   type/JSON, not by mutating it.

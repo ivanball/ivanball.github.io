@@ -31,8 +31,8 @@ Use a dual-dispatch strategy:
   dead-lettered immediately on first pickup (it can never succeed) and requires manual investigation.
   A message that **throws during dispatch** is retried up to `Outbox:MaxRetries` (default 5) times,
   then dropped from the eligible set (it stops being polled once `RetryCount >= MaxRetries`).
-- Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` seconds multiplied by a random jitter factor in `[0.8, 1.2]`, capped at `Outbox:LeaseSeconds` (`MMCA.Common/.../Outbox/OutboxProcessor.cs:500-507,539-553`). At the shipped defaults (base 10s, `MaxRetries` 5, lease 300s, batch 50: `MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,99`) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends **about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range**, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).
-- That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: `OutboxProcessor.cs:128-129,269`), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (`HasMoreEligibleWork` requires progress: `OutboxProcessor.cs:287-291`), so a batch of 50 that fails in full cannot hot-spin the processor.
+- Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` seconds multiplied by a random jitter factor in `[0.8, 1.2]`, capped at `Outbox:LeaseSeconds` (`MMCA.Common/.../Outbox/OutboxProcessor.cs:562-563,616-630`). At the shipped defaults (base 10s, `MaxRetries` 5, lease 300s, batch 50: `MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,99`) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends **about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range**, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).
+- That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: `OutboxProcessor.cs:150-173`), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (`HasMoreEligibleWork` requires progress: `OutboxProcessor.cs:329-334`), so a batch of 50 that fails in full cannot hot-spin the processor.
 - Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup.
 
 ## Revision (2026-07-19)
@@ -100,7 +100,7 @@ a cadence the processor no longer has.
    (`MMCA.Common/.../Settings/OutboxSettings.cs:89-96`). A failure now re-leases its row for
    `RetryBackoffBaseSeconds * 2^(n-1)` seconds, capped at the lease so a permanently failing message
    never holds a claim longer than a dead replica's rows would
-   (`MMCA.Common/.../Outbox/OutboxProcessor.cs:500-507,539-553`). At the shipped defaults that was
+   (`MMCA.Common/.../Outbox/OutboxProcessor.cs:562-563,616-630`). At the shipped defaults that was
    10s, 20s, 40s and 80s between the five attempts: 150 seconds of enforced backoff before
    dead-lettering, shortening the first retries while still throttling a message that will never
    succeed. Those four waits are no longer exact values; the jitter added on 2026-08-07 (see the
@@ -114,7 +114,7 @@ identical across a batch.
 1. **The retry backoff carries random jitter.** The exponential wait is multiplied by a random
    factor in `[0.8, 1.2]` before the lease cap is applied, so the four waits between the five
    attempts are about 8-12s, 16-24s, 32-48s and 64-96s at the shipped defaults instead of exactly
-   10s, 20s, 40s and 80s (`MMCA.Common/.../Outbox/OutboxProcessor.cs:539-553`). The reason is the
+   10s, 20s, 40s and 80s (`MMCA.Common/.../Outbox/OutboxProcessor.cs:624-629`). The reason is the
    failure mode the backoff alone does not cover: one dependency outage fails all 50 rows of a batch
    in the same instant, and a deterministic curve then retries all 50 on a single shared schedule,
    re-hammering that dependency in synchronized bursts. Jitter spreads the attempts apart. The

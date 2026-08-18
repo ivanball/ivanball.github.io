@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-037: Field-Level Encryption at Rest (AES-256-GCM EF Converter) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15).">
+  <meta name="description" content="Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15, 2026-08-18). Revised 2026-08-18: the versioned-envelope converter is no longer…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/037-field-level-encryption-at-rest.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-037: Field-Level Encryption at Rest (AES-256-GCM EF Converter)">
-  <meta property="og:description" content="Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15).">
+  <meta property="og:description" content="Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15, 2026-08-18). Revised 2026-08-18: the versioned-envelope converter is no longer…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/037-field-level-encryption-at-rest.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-037: Field-Level Encryption at Rest (AES-256-GCM EF Converter)">
-  <meta name="twitter:description" content="Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15).">
+  <meta name="twitter:description" content="Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15, 2026-08-18). Revised 2026-08-18: the versioned-envelope converter is no longer…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)","item":"https://ivanball.github.io/docs/adr/037-field-level-encryption-at-rest.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -197,7 +197,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-037-field-level-encryption-at-rest-aes-256-gcm-ef-converter">ADR-037: Field-Level Encryption at Rest (AES-256-GCM EF Converter)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15).</p>
+          <p>Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15, 2026-08-18). Revised 2026-08-18: the
+          versioned-envelope converter is no longer unpublished, it is included in v1.153.0; adoption stays zero.</p>
           <h2 id="context">Context</h2>
           <p>Transparent database encryption (TDE) protects the data files as a whole, but it decrypts
           transparently for anyone who can query the database, so a leaked backup restored on a compromised
@@ -469,8 +470,11 @@
           (<code>EncryptedStringConverterTests.cs:175</code>), the tampered-version-byte failure (<code>:226</code>), the unregistered
           version (<code>:205</code>), the four ring-validation guards (<code>:244</code>, <code>:250</code>, <code>:259</code>, <code>:268</code>), the defensive copy
           of the caller&#39;s dictionary (<code>:281</code>), and the version byte the single-key constructor stamps (<code>:145</code>).</p>
-          <p>This revision documents work that lands via MMCA.Common PR #247 and ships in the next framework
-          release; it is not in a published package as of this date.</p>
+          <p>The work this revision documents landed via MMCA.Common PR #247 and is included in v1.153.0 (tagged
+          2026-08-18), so the versioned envelope and key ring are now in published packages. It is included
+          rather than featured: the <code>[1.153.0]</code> changelog entry (<code>MMCA.Common/CHANGELOG.md:63-68</code>) does not name
+          the converter, which is in the release because it merged to <code>main</code> before the tag. Adoption is
+          unchanged at zero: no entity configuration in any of the four repositories wires the converter.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

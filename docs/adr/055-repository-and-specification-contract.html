@@ -215,14 +215,16 @@
           paging and tracking; composition drops <code>Expression.Invoke</code> for parameter substitution, retiring the
           provider-bet trade-off; <code>IEntityQuerier</code> gains specification-first reads and keyset pagination; an
           optional projector pushes DTO projection into SQL; and paginated reads become deterministically
-          ordered. Two Trade-offs entries below are superseded. See the Revision (2026-08-18) at the end).</p>
+          ordered. Two Trade-offs entries below are superseded. See the Revision (2026-08-18) at the end;
+          the Decision section&#39;s composition bullet and its <code>IRepository.cs</code> / <code>EFReadRepository.cs</code> anchors
+          were re-stated against that same revision).</p>
           <h2 id="context">Context</h2>
           <p>Every read an application handler performs has to come from somewhere, and the shape of that contract
           decides whether the module can still be lifted into its own service later (ADR-007, ADR-008). The
           framework already keeps persistence out of Application by reference: the interfaces live in
           <code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs</code> and the EF
           implementation in
-          <code>Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:15-17</code>, so no
+          <code>Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:19-21</code>, so no
           Application project references EF Core. That is not enough on its own. A repository that hands back
           an <code>IQueryable</code> re-couples the caller through the back door: the query is composed inside the
           handler, translated by whatever provider sits behind the <code>DbSet</code>, and there is no way to answer that
@@ -243,17 +245,17 @@
           keeps the raw <code>IQueryable</code> surfaces out of Application code.</p>
           <ul>
           <li><strong>The read contract is split by responsibility.</strong> <code>IEntityReader&lt;TEntity, TIdentifierType&gt;</code>
-          (<code>IRepository.cs:19</code>) carries single-entity lookups: <code>GetByIdAsync</code> (<code>IRepository.cs:24</code>, <code>:29</code>),
-          <code>GetByIdsAsync</code> (<code>:46</code>), and the two <code>ExistsAsync</code> overloads (<code>:54</code>, <code>:60</code>).
-          <code>IEntityQuerier&lt;TEntity, TIdentifierType&gt;</code> (<code>:78</code>) carries collection work: <code>GetAllAsync</code> (<code>:83</code>),
-          <code>GetProjectedAsync</code> (<code>:103</code>), <code>GetAllForLookupAsync</code> (<code>:111</code>), and <code>CountAsync</code> (<code>:118</code>, <code>:121</code>).
-          <code>IReadRepository</code> composes exactly those two (<code>:134-135</code>), and <code>IRepository</code> composes read plus
-          write (<code>:262</code>). The interface documentation directs new handlers at the focused sub-interfaces and
-          leaves existing code on the composite (<code>:129-130</code>).</li>
+          (<code>IRepository.cs:21</code>) carries single-entity lookups: <code>GetByIdAsync</code> (<code>IRepository.cs:26</code>, <code>:31</code>),
+          <code>GetByIdsAsync</code> (<code>:48</code>), and the two <code>ExistsAsync</code> overloads (<code>:56</code>, <code>:62</code>).
+          <code>IEntityQuerier&lt;TEntity, TIdentifierType&gt;</code> (<code>:80</code>) carries collection work: <code>GetAllAsync</code> (<code>:85</code>),
+          <code>GetProjectedAsync</code> (<code>:105</code>), <code>GetAllForLookupAsync</code> (<code>:113</code>), and <code>CountAsync</code> (<code>:120</code>, <code>:123</code>).
+          <code>IReadRepository</code> composes exactly those two (<code>:221-222</code>), and <code>IRepository</code> composes read plus
+          write (<code>:349</code>). The interface documentation directs new handlers at the focused sub-interfaces and
+          leaves existing code on the composite (<code>:216-217</code>).</li>
           <li><strong>The raw queryables live on the composite only.</strong> <code>Table</code>, <code>TableNoTracking</code>,
           <code>TableNoTrackingSingleQuery</code>, and <code>TableNoTrackingSplitQuery</code> are declared on <code>IReadRepository</code>
-          (<code>IRepository.cs:140</code>, <code>:143</code>, <code>:146</code>, <code>:149</code>) and implemented as EF <code>DbSet</code> expressions
-          (<code>EFReadRepository.cs:262</code>, <code>:265</code>, <code>:268</code>, <code>:271</code>). They are deliberately absent from
+          (<code>IRepository.cs:227</code>, <code>:230</code>, <code>:233</code>, <code>:236</code>) and implemented as EF <code>DbSet</code> expressions
+          (<code>EFReadRepository.cs:279</code>, <code>:282</code>, <code>:285</code>, <code>:288</code>). They are deliberately absent from
           <code>IEntityReader</code> and <code>IEntityQuerier</code>, so a handler that declares the narrow dependency cannot reach
           a queryable at all.</li>
           <li><strong>Application code must not touch those queryables, and a fitness rule fails the build.</strong>
@@ -281,17 +283,22 @@
           closed over the entity type at the call site, which is how ADC scopes an attendee to their own
           answers
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:66-67</code>).</li>
-          <li><strong>Specifications compose.</strong> <code>AndSpecification</code> (<code>Specification.cs:62</code>), <code>OrSpecification</code> (<code>:88</code>),
-          and <code>NotSpecification</code> (<code>:114</code>) build a new lambda over a fresh parameter with <code>Expression.Invoke</code>
-          so the result stays an expression tree EF can translate (<code>:74-78</code>, <code>:100-104</code>, <code>:125-128</code>);
-          <code>InlineSpecification</code> (<code>:45</code>) wraps a predicate that was assembled dynamically and has no
-          hand-written class. Composition is used in production: ADC&#39;s paged session read ANDs the
+          <li><strong>Specifications compose.</strong> <code>AndSpecification</code> (<code>Specification.cs:81</code>), <code>OrSpecification</code> (<code>:105</code>),
+          and <code>NotSpecification</code> (<code>:128</code>) each expose a <code>Criteria</code> that delegates to the internal
+          <code>SpecificationComposer</code> (<code>:146</code>). <code>Combine</code> (<code>:155</code>) rebinds the right operand&#39;s parameter onto the
+          left&#39;s with an <code>ExpressionVisitor</code>, <code>ParameterReplacer.Replace</code> (<code>ParameterReplacer.cs:34</code>), and
+          joins the two bodies with <code>AndAlso</code> or <code>OrElse</code> (<code>Specification.cs:169-173</code>); <code>Negate</code> (<code>:181</code>)
+          wraps the inner body in <code>Expression.Not</code> and keeps the inner lambda&#39;s own parameter (<code>:189-191</code>).
+          No <code>Expression.Invoke</code> is involved, so the composed result is a single expression tree any provider
+          can translate, and each combinator caches it in a per-instance lazy field (<code>:91-93</code>, <code>:115-117</code>,
+          <code>:137-138</code>). <code>InlineSpecification</code> (<code>:45</code>) wraps a predicate that was assembled dynamically and has
+          no hand-written class. Composition is used in production: ADC&#39;s paged session read ANDs the
           public-session specification with the speaker-scoped one rather than substituting, because dropping
           the public filter would leak non-accepted sessions to non-privileged callers
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:96</code>,
           <code>:118</code>, rationale at <code>:91-93</code>).</li>
           <li><strong>The specification enters the same query pipeline, not a parallel one.</strong> <code>IEntityQueryService</code>
-          takes an optional <code>Specification&lt;TEntity, TIdentifierType&gt;</code> on every DTO or entity read: the two
+          takes an optional <code>ISpecification&lt;TEntity, TIdentifierType&gt;</code> on every DTO or entity read: the two
           <code>GetAllAsync</code> overloads, <code>GetEntityByIdAsync</code>, and <code>GetByIdAsync</code>
           (<code>Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:40</code>, <code>:63</code>, <code>:110</code>,
           <code>:131</code>). The other two reads on the interface take a raw predicate rather than a specification,
@@ -329,14 +336,14 @@
           (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:107</code>). <code>IEntityReader</code> and
           <code>IEntityQuerier</code> have no reference in C# code outside their own declaration file across all four
           repositories: not a type, not a parameter, and not a doc comment. The only C# occurrences of either
-          name in the workspace are inside that file, the two declarations (<code>IRepository.cs:19</code>, <code>:78</code>) and
-          <code>IReadRepository</code> naming them in its own doc comment and base list (<code>:127-128</code>, <code>:135</code>). The only
+          name in the workspace are inside that file, the two declarations (<code>IRepository.cs:21</code>, <code>:80</code>) and
+          <code>IReadRepository</code> naming them in its own doc comment and base list (<code>:214-215</code>, <code>:222</code>). The only
           other occurrences in the workspace describe the contract rather than depend on it: two comments in
           MMCA.Helpdesk&#39;s template staging script
           (<code>MMCA.Helpdesk/build/templates/stage.ps1:250</code>, <code>:959</code>) noting that <code>IEntityReader.GetByIdAsync</code>
           declares <code>includes</code> as a required parameter, which is why the generated conditional passes an empty
           list instead of omitting the argument. So the ISP split is today the declared target that new
-          handlers are pointed at (<code>IRepository.cs:129-130</code>), not the dependency shape any handler currently
+          handlers are pointed at (<code>IRepository.cs:216-217</code>), not the dependency shape any handler currently
           has.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>

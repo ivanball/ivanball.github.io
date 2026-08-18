@@ -237,7 +237,7 @@
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:245</code>,
           <code>MMCA.Store.Identity.Service/Program.cs:223</code>, <code>MMCA.Store.Sales.Service/Program.cs:229</code>), ADC
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:264</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:318</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:232</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:332</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:232</code>,
           <code>MMCA.ADC.Notification.Service/Program.cs:207</code>) and Helpdesk
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:94</code>). Only the unit tests pass assemblies
           explicitly (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:41-48</code>).</li>
@@ -306,7 +306,7 @@
           invoked from startup database initialization
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:32-35,98</code>).
           <code>AddModuleHealthChecks</code> publishes one <code>module-{Name}</code> check per module, Healthy when enabled and
-          Degraded when disabled (<code>DependencyInjection.cs:179-198</code>).</li>
+          Degraded when disabled (<code>DependencyInjection.cs:179-207</code>).</li>
           <li><strong>A remote-dependency validator exists but is not wired.</strong> <code>ValidateRemoteDependencies</code> re-resolves
           every service type a disabled dependency&#39;s stub registered, throwing when it no longer resolves and
           warning when it still resolves to the stub type (<code>ModuleLoader.cs:216-261</code>). It is exercised only by
@@ -353,7 +353,7 @@
           Conference enables one module and declares nothing remote
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25</code>) even though it wires
           Engagement&#39;s <code>IBookmarkCountService</code> as a gRPC client
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:329</code>), because
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:343</code>), because
           <code>ConferenceModule</code> never declares Engagement in <code>Dependencies</code>.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>

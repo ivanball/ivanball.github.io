@@ -44,7 +44,7 @@ rather than by absence.
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:245`,
   `MMCA.Store.Identity.Service/Program.cs:223`, `MMCA.Store.Sales.Service/Program.cs:229`), ADC
   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:264`,
-  `MMCA.ADC.Conference.Service/Program.cs:318`, `MMCA.ADC.Engagement.Service/Program.cs:232`,
+  `MMCA.ADC.Conference.Service/Program.cs:332`, `MMCA.ADC.Engagement.Service/Program.cs:232`,
   `MMCA.ADC.Notification.Service/Program.cs:207`) and Helpdesk
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:94`). Only the unit tests pass assemblies
   explicitly (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:41-48`).
@@ -113,7 +113,7 @@ rather than by absence.
   invoked from startup database initialization
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:32-35,98`).
   `AddModuleHealthChecks` publishes one `module-{Name}` check per module, Healthy when enabled and
-  Degraded when disabled (`DependencyInjection.cs:179-198`).
+  Degraded when disabled (`DependencyInjection.cs:179-207`).
 - **A remote-dependency validator exists but is not wired.** `ValidateRemoteDependencies` re-resolves
   every service type a disabled dependency's stub registered, throwing when it no longer resolves and
   warning when it still resolves to the stub type (`ModuleLoader.cs:216-261`). It is exercised only by
@@ -161,7 +161,7 @@ and ADC Notification declares `["Identity"]` remote
 Conference enables one module and declares nothing remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25`) even though it wires
 Engagement's `IBookmarkCountService` as a gRPC client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:329`), because
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:343`), because
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale

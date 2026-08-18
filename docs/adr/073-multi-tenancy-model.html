@@ -203,7 +203,10 @@
           inert (<code>Tenancy:Enabled</code> false, no tenant resolved), so the framework release is non-breaking.
           Revised 2026-08-14: re-anchored the <code>ApplicationDbContext</code>, middleware, repository, and outbox citations to
           current source, and corrected the repository&#39;s named-filter exclusion (five call sites through one shared
-          field, not four inline arrays).</p>
+          field, not four inline arrays).
+          Revised 2026-08-18: that exclusion now runs at <strong>six</strong> call sites in <code>EFReadRepository</code>, and the field and
+          every call site were re-anchored again. The count has moved four to five to six across three revisions,
+          which is the point: the shared field is the invariant, the number of read paths using it is not.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
           <strong>source name</strong> (every entity resolves to a <code>DataSourceKey(Engine, Name)</code>, each module or service owning
@@ -296,11 +299,11 @@
           <h3 id="ignorequeryfilters-stops-meaning-ignore-everything"><code>ignoreQueryFilters</code> stops meaning &quot;ignore everything&quot;</h3>
           <p><code>EFReadRepository</code> names the one filter it means to drop instead of dropping every filter. A single shared
           field carries the name,
-          <code>private static readonly string[] SoftDeleteFilterOnly = [ApplicationDbContext.SoftDeleteFilterName]</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:29</code>), and
-          it is passed to <code>IgnoreQueryFilters</code> at all <strong>five</strong> call sites (<code>:48</code>, <code>:77</code>, <code>:157</code>, <code>:221</code>, <code>:235</code>): one
-          field rather than five inline arrays, so the set of filters a soft-delete-inclusive read drops cannot
-          diverge between two of them. The repository&#39;s <code>ignoreQueryFilters: true</code> parameter has always meant
+          <code>private static readonly string[] SoftDeleteFilterOnly = [DbContexts.ApplicationDbContext.SoftDeleteFilterName]</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:33</code>), and
+          it is passed to <code>IgnoreQueryFilters</code> at all <strong>six</strong> call sites (<code>:52</code>, <code>:81</code>, <code>:161</code>, <code>:238</code>, <code>:252</code>,
+          <code>:319</code>): one field rather than six inline arrays, so the set of filters a soft-delete-inclusive read
+          drops cannot diverge between two of them. The repository&#39;s <code>ignoreQueryFilters: true</code> parameter has always meant
           &quot;include soft-deleted rows&quot;, and naming the filter keeps that meaning exactly while making it impossible
           for a soft-delete-inclusive read to cross tenants.</p>
           <h3 id="background-work-drains-and-migrates-per-tenant">Background work drains and migrates per tenant</h3>

@@ -41,7 +41,7 @@ saga-timeout backstop for steps that depend on an external system.
   payment is `OrderPaymentFailedSagaHandler` (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:20-22`).
   A new compensating action is a new handler, not an edit to the command.
 - **Each handler runs in its own DI scope.** Domain-event handlers are registered as singletons
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:117-122`), so every one
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:135-140`), so every one
   opens its own scope through `IServiceScopeFactory` (`OrderCancelledSagaHandler.cs:41`,
   `OrderPaymentFailedSagaHandler.cs:29`,
   `.../Infrastructure/Services/PaymentReconciliationService.cs:89,132`), and the ones that persist
@@ -58,12 +58,12 @@ saga-timeout backstop for steps that depend on an external system.
   (`OrderCancelledSagaHandler.cs:56-62`), applies the increases through a pure domain service
   (`.../Domain/Services/InventoryRestorationDomainService.cs:14-27`), then one
   `SaveChangesAsync` commits the increases and the marker together
-  (`OrderCancelledSagaHandler.cs:77-85`). Same database, one transaction: the marker cannot exist
+  (`OrderCancelledSagaHandler.cs:94-102`). Same database, one transaction: the marker cannot exist
   without the writes it guards, and the writes cannot land unmarked.
 - **Redelivery is the retry mechanism.** A failing in-process handler leaves its outbox row
   unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:301-329`) and the
   `OutboxProcessor` re-dispatches the pure domain event on a later cycle
-  (`MMCA.Common/.../Outbox/OutboxProcessor.cs:419-426`), with the bounded retries, backoff and
+  (`MMCA.Common/.../Outbox/OutboxProcessor.cs:507-597`), with the bounded retries, backoff and
   dead-lettering ADR-003 already defines. The framework packages that failure mode and only that
   one: `SafeDomainEventHandler<TDomainEvent>` runs the subclass inside an exception filter whose
   `LogAndRethrow` writes one error line and always returns `false`, so the exception keeps

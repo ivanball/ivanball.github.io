@@ -8,6 +8,9 @@ inert (`Tenancy:Enabled` false, no tenant resolved), so the framework release is
 Revised 2026-08-14: re-anchored the `ApplicationDbContext`, middleware, repository, and outbox citations to
 current source, and corrected the repository's named-filter exclusion (five call sites through one shared
 field, not four inline arrays).
+Revised 2026-08-18: that exclusion now runs at **six** call sites in `EFReadRepository`, and the field and
+every call site were re-anchored again. The count has moved four to five to six across three revisions,
+which is the point: the shared field is the invariant, the number of read paths using it is not.
 
 ## Context
 MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
@@ -114,11 +117,11 @@ overridden context exists, restating the one-scope-one-tenant invariant where it
 ### `ignoreQueryFilters` stops meaning "ignore everything"
 `EFReadRepository` names the one filter it means to drop instead of dropping every filter. A single shared
 field carries the name,
-`private static readonly string[] SoftDeleteFilterOnly = [ApplicationDbContext.SoftDeleteFilterName]`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:29`), and
-it is passed to `IgnoreQueryFilters` at all **five** call sites (`:48`, `:77`, `:157`, `:221`, `:235`): one
-field rather than five inline arrays, so the set of filters a soft-delete-inclusive read drops cannot
-diverge between two of them. The repository's `ignoreQueryFilters: true` parameter has always meant
+`private static readonly string[] SoftDeleteFilterOnly = [DbContexts.ApplicationDbContext.SoftDeleteFilterName]`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:33`), and
+it is passed to `IgnoreQueryFilters` at all **six** call sites (`:52`, `:81`, `:161`, `:238`, `:252`,
+`:319`): one field rather than six inline arrays, so the set of filters a soft-delete-inclusive read
+drops cannot diverge between two of them. The repository's `ignoreQueryFilters: true` parameter has always meant
 "include soft-deleted rows", and naming the filter keeps that meaning exactly while making it impossible
 for a soft-delete-inclusive read to cross tenants.
 

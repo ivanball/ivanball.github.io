@@ -25,7 +25,7 @@ carry a dedicated test tier for the transport that only production uses.
 
 - **Three provider values, one abstraction.** `MessageBusProvider` has exactly `InProcess = 0`,
   `RabbitMq = 1`, `AzureServiceBus = 2`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:68-84`), bound
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:116-132`), bound
   from the `MessageBus` section (`:14`) and defaulting to `InProcess` (`:17`). `AddBrokerMessaging`
   returns the container untouched for `InProcess`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:656-659`); for either
@@ -54,8 +54,8 @@ carry a dedicated test tier for the transport that only production uses.
   selector stays separate from the credential.
 - **Retry policy is identical on both transports.** Each branch of `ConfigureBrokerTransport` calls
   `cfg.UseMessageRetry(r => r.Exponential(...))` with the same four arguments before
-  `ConfigureEndpoints`: RabbitMQ at `DependencyInjection.cs:794-799`, Azure Service Bus at
-  `:811-816`. The values come from one settings object: `RetryLimit` 5, `RetryMinIntervalSeconds` 1,
+  `ConfigureEndpoints`: RabbitMQ at `DependencyInjection.cs:822-826`, Azure Service Bus at
+  `:849-853`. The values come from one settings object: `RetryLimit` 5, `RetryMinIntervalSeconds` 1,
   `RetryMaxIntervalSeconds` 30 (`MessageBusSettings.cs:43,50,56`). Only in-process retry is
   configured, deliberately not `UseDelayedRedelivery`, because that needs the RabbitMQ
   delayed-message-exchange plugin the Aspire container does not ship

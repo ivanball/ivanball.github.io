@@ -63,7 +63,7 @@ Ship the application shell in the framework package and let each module plug int
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:69`).
 - **Blazor Web heads feed the same enumeration to the endpoint side.** `MapRazorComponents<App>()`
   takes the module assemblies from `GetServices<IUIModule>()` in addition to the shell assemblies
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:177-191`, which also de-duplicates, and
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:186-200`, which also de-duplicates, and
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:201-212`), so the router's view and the
   endpoint's view of the routable assemblies come from one source.
 
@@ -119,7 +119,7 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:11-29`).
 - **Blazor Web heads wire the assemblies twice.** The router's `AdditionalAssemblies` and the
   endpoint's `AddAdditionalAssemblies` are separate calls, so both hosts repeat the enumeration in
-  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:177-191`, `MMCA.Store.UI.Web/Program.cs:201-212`); they
+  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:186-200`, `MMCA.Store.UI.Web/Program.cs:201-212`); they
   derive it from the same `IUIModule` registrations, but the duplication is real.
 - **The reference seed does not demonstrate the pattern.** Helpdesk's hand-rolled shell means an
   adopter following it gets the framework's components but not this composition model.

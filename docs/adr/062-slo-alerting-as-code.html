@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-062: SLO Alerting as Code with an Alert-to-Runbook Build Gate · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-01).">
+  <meta name="description" content="Accepted (2026-08-01). Revised 2026-08-18: Store&#39;s two operational extras (the outbox-dead-letter scheduled query rule and the outside-in Gateway…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-062: SLO Alerting as Code with an Alert-to-Runbook Build Gate">
-  <meta property="og:description" content="Accepted (2026-08-01).">
+  <meta property="og:description" content="Accepted (2026-08-01). Revised 2026-08-18: Store&#39;s two operational extras (the outbox-dead-letter scheduled query rule and the outside-in Gateway…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-062: SLO Alerting as Code with an Alert-to-Runbook Build Gate">
-  <meta name="twitter:description" content="Accepted (2026-08-01).">
+  <meta name="twitter:description" content="Accepted (2026-08-01). Revised 2026-08-18: Store&#39;s two operational extras (the outbox-dead-letter scheduled query rule and the outside-in Gateway…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate","item":"https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -197,7 +197,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-062-slo-alerting-as-code-with-an-alert-to-runbook-build-gate">ADR-062: SLO Alerting as Code with an Alert-to-Runbook Build Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-01).</p>
+          <p>Accepted (2026-08-01). Revised 2026-08-18: Store&#39;s two operational extras (the <code>outbox-dead-letter</code>
+          scheduled query rule and the outside-in Gateway availability web test with its severity 1 metric
+          alert) merged to <code>main</code> on 2026-08-13 and are recorded here as shipped rather than as in flight.</p>
           <h2 id="context">Context</h2>
           <p>ADR-041 standardized what the fleet <strong>emits</strong>: RED histograms off the CQRS pipeline, an outbox
           dead-letter counter, correlation ids, exporters, and the cost knobs that keep ingestion affordable.
@@ -336,9 +338,13 @@
           (<code>MMCA.ADC/infra/main.bicep:463</code>, <code>:496</code>). All three sit outside the <code>sloAlertSpecs</code> window, so the
           pairing gate neither requires nor forbids runbook sections for them, and <code>OPERATIONS.md</code> carries none
           today (its only <code>-alert-</code> headings are the three SLO sections). Store provisions both of the families
-          that apply to it (2026-08-13, landing in a pull request in flight as this record is updated): the
-          <code>outbox-dead-letter</code> scheduled query rule and the outside-in Gateway availability web test with its
-          severity 1 metric alert, alongside the three SLO rules and the budget notifications. It deliberately
+          that apply to it, merged on 2026-08-13: the <code>outbox-dead-letter</code> scheduled query rule
+          (<code>MMCA.Store/infra/main.bicep:379</code>) and the outside-in Gateway availability web test (<code>:420</code>) with its
+          severity 1 metric alert (<code>:453</code>, severity at <code>:459</code>), alongside the three SLO rules and the budget
+          notifications. Both sit after <code>resource sloAlerts</code> (<code>MMCA.Store/infra/main.bicep:334</code>) and therefore
+          outside the parse window, so Store&#39;s two extras are ungated exactly as ADC&#39;s three are, and Store&#39;s
+          <code>OPERATIONS.md</code> likewise carries only the three SLO sections (<code>MMCA.Store/infra/OPERATIONS.md:16</code>,
+          <code>:31</code>, <code>:44</code>). It deliberately
           does not port <code>sql-dependency-failures</code>: Store&#39;s own <code>dependency-failures</code> SLO rule already spans
           SQL, gRPC and HTTP, so a narrower SQL-scoped twin would page twice for one fault.</p>
           <h2 id="rationale">Rationale</h2>
@@ -376,8 +382,9 @@
           right threshold, whether the query measures what it claims, and whether the triage steps are correct
           all remain review concerns. Severity is the only value cross-checked between the two files.</li>
           <li><strong>Only the spec-window alerts are covered.</strong> ADC&#39;s outbox dead-letter, SQL dependency and
-          gateway-availability alerts are provisioned but ungated, so those three can be added, renamed or
-          re-tiered with no runbook consequence.</li>
+          gateway-availability alerts and Store&#39;s outbox dead-letter and gateway-availability alerts are
+          provisioned but ungated, so all five can be added, renamed or re-tiered with no runbook
+          consequence.</li>
           <li><strong>Disabled-but-declared alerts are carried debt.</strong> Three superseded <code>metricAlerts</code> remain in each
           template and in each resource group until a follow-up deletes them, and the templates say so
           (<code>MMCA.ADC/infra/main.bicep:350-356</code>, <code>MMCA.Store/infra/main.bicep:322-327</code>).</li>

@@ -306,9 +306,9 @@
           <p><strong>No consumer has adopted the base yet.</strong> Neither ADC&#39;s nor Store&#39;s <code>UsersController</code> references
           <code>DataExportControllerBase</code>: each still owns a standalone action that reimplements the dispatch. ADC&#39;s
           <code>GET /Users/{userId}/export</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:149</code>) builds
-          the query inline and ends in <code>Ok(result.Value)</code> (<code>:167</code>), returning the document as a negotiated body
-          with no <code>Content-Disposition</code>, and it is covered only by the class-level <code>[Authorize]</code> (<code>:30</code>) with no
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:157</code>) builds
+          the query inline and ends in <code>Ok(result.Value)</code> (<code>:175</code>), returning the document as a negotiated body
+          with no <code>Content-Disposition</code>, and it is covered only by the class-level <code>[Authorize]</code> (<code>:31</code>) with no
           <code>[FeatureGate]</code>. Store&#39;s is the same shape
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs:35</code>). So
           the handler hoist landed in both apps while the controller hoist did not: the framework base is shipped

@@ -7,9 +7,9 @@ ADR-019's three service-tier layers changes. It also extends
 [ADR-041](041-observability-and-telemetry.md)'s correlation id one hop outward, to the process that
 sees a request first and its response last. [ADR-004](004-authentication-dual-fetch.md)'s validation
 authority is **unchanged on purpose**: the gateway does not validate tokens, recorded below as a
-rejection with a named trigger rather than as an omission. The framework half ships in v1.154.0
-(`MMCA.Common/CHANGELOG.md`); consumer wiring follows in the same wave, so the adoption statements
-below describe the decided direction and say where they are not yet true.
+rejection with a named trigger rather than as an omission. The framework half shipped in v1.154.0
+(`MMCA.Common/CHANGELOG.md`) and both consumer gateways were wired to it in the same wave, so the
+adoption statements below describe what each gateway does today.
 
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
@@ -22,11 +22,12 @@ no tenant context, so composing the service chain there would be wrong.
 
 Scoping the gateways out was right, and it left a real gap, because three of those behaviors are not
 service concerns at all. They are edge concerns the service tier had been performing one hop too late.
-The gateway chains today are four calls long and contain none of them: ADC registers security headers,
-default endpoints, CORS, static files and a privacy endpoint before its forwarders
-(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:50-63`), and Store registers security headers,
-default endpoints and CORS (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:72-75`). Neither has
-a rate limiter or a correlation id of any kind.
+Before this record the gateway chains were four calls long and contained none of them: ADC registered
+security headers, default endpoints, CORS, static files and a privacy endpoint around its forwarders
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:77`, `:117`, `:119`, `:120`, `:129`, `:134-135`),
+and Store registered security headers, default endpoints and CORS
+(`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:58`, `:64`, `:140`, `:142`, `:143`). Neither
+had a rate limiter or a correlation id of any kind.
 
 **A correlation id minted per service is not a correlation id.** `CorrelationIdMiddleware` (ADR-041)
 runs inside each service host and falls back to the W3C trace id when the client sends no
@@ -106,14 +107,18 @@ unconditional**: `/health`, `/alive` and `/.well-known` are hard-coded
 (`GatewayRateLimitingExtensions.cs:47`, matched by path segment, case-insensitively, `:64`), because
 throttling them takes down probes and token validation (ADR-004's JWKS discovery) as a side effect of
 throttling traffic. **Application bypasses are configuration**, through `BypassPathPrefixes`
-(`GatewayRateLimitingSettings.cs:74`, empty by default), and the two entries the consumers need are
-recorded here so they are not rediscovered as incidents: Store's Stripe webhook route
-(`/Payments/{**catch-all}`, `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:129`), because a 429
+(`GatewayRateLimitingSettings.cs:74`, empty by default), and each consumer sets its own list in the
+gateway's `appsettings.json` beside the `ReverseProxy` route table that same file now declares
+([ADR-089](089-gateway-topology-owned-by-configuration.md)). The two entries are recorded here so they
+are not rediscovered as incidents: Store's Stripe webhook route (`/Payments/{**catch-all}`, bypassed
+by the `"/Payments"` prefix at
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:17`, route at `:57-60`), because a 429
 to Stripe is a retry and eventually a disabled endpoint, which silently stops every payment update
 ([ADR-084](084-stripe-webhook-ingress.md)); and ADC's SignalR hub route (`/hubs/{**catch-all}`,
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:161`), because a negotiate-plus-reconnect storm from
-one office's shared address is exactly the pattern a per-IP window misreads as abuse
-([ADR-039](039-live-channel-push.md)).
+bypassed by the `"/hubs"` prefix at
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:18`, route at `:122-125`), because a
+negotiate-plus-reconnect storm from one office's shared address is exactly the pattern a per-IP window
+misreads as abuse ([ADR-039](039-live-channel-push.md)).
 
 **A request with no attributable client IP is not limited.** It gets
 `RateLimitPartition.GetNoLimiter` (`GatewayRateLimitingExtensions.cs:90-95`) rather than sharing one
@@ -216,9 +221,10 @@ keeps the Gateway a transport concern and keeps ADR-008's extraction reversible.
   silent break, the same duplicated-literal cost ADR-041 already records for the meter names in this
   same Aspire package.
 - **Nothing gates adoption.** A gateway that never calls the three registrations behaves exactly as
-  before, no fitness function names a gateway host, and as of this record neither consumer gateway
-  calls any of them. That is the audit-the-inventory caveat ADR-005 and ADR-017 both record, now
-  applied to the edge.
+  before, and no fitness function names a gateway host. Both consumer gateways do call all three
+  today (ADC `Program.cs:65`, `:71`, `:112`; Store `Program.cs:74`, `:79`, `:136`), but that is a
+  wiring habit rather than an enforced invariant, which is the audit-the-inventory caveat ADR-005 and
+  ADR-017 both record, now applied to the edge.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (the record that made the Gateway the only entry point

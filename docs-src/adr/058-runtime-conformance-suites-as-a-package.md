@@ -1,7 +1,7 @@
 # ADR-058: Runtime Conformance Suites Shipped as a Package
 
 ## Status
-Accepted (2026-07-28; revised 2026-08-14).
+Accepted (2026-07-28; revised 2026-08-14 and 2026-08-18).
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
@@ -42,7 +42,7 @@ booted.
   (`GracefulShutdownTestsBase.cs:24`) calls a real `IHost.StopAsync` under a bounded token and asserts
   `ApplicationStopping` then `ApplicationStopped` fired (`GracefulShutdownTestsBase.cs:56`, `:58`,
   `:60`). `DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>`
-  (`DecoratorPipelineOrderTestsBase.cs:36`) asserts the ADR-014 nesting.
+  (`DecoratorPipelineOrderTestsBase.cs:38`) asserts the ADR-014 nesting.
 - **The host is really booted; nothing is inferred from registrations.** The five HTTP-facing suites
   reach the host through `IIntegrationTestFixture` (`IIntegrationTestFixture.cs:8`) and
   `IntegrationTestBase<TFixture>` (`IntegrationTestBase.cs:13`), whose `Client` comes from the
@@ -65,7 +65,7 @@ booted.
   (`ProblemDetailsContractTestsBase.cs:54`, `:60`), a route-count floor and a pinned resource list for
   OpenAPI (`OpenApiContractTestsBase.cs:37`, `:50`), a client factory for security headers
   (`SecurityHeadersTestsBase.cs:42`), a service-collection configurator for the decorator pipeline
-  (`DecoratorPipelineOrderTestsBase.cs:44`), and for versioning and graceful shutdown nothing at all
+  (`DecoratorPipelineOrderTestsBase.cs:46`), and for versioning and graceful shutdown nothing at all
   beyond the fixture or entry point. The two shutdown subclasses are one-line declarations with no body
   (`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GracefulShutdownTests.cs:9`,
   `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GracefulShutdownTests.cs:9`), and so is the ADC
@@ -74,8 +74,8 @@ booted.
   the registration list.** It builds a `ServiceCollection`, runs the repo's own real registration
   sequence through the subclass, resolves the closed handler interface from the built provider, then
   walks outermost to innermost by reading each decorator's private inner-handler field
-  (`DecoratorPipelineOrderTestsBase.cs:98`) and compares the names against the ADR-014 order
-  (`DecoratorPipelineOrderTestsBase.cs:47`, `:57`). That is what makes it a runtime check: Scrutor
+  (`DecoratorPipelineOrderTestsBase.cs:104`) and compares the names against the ADR-014 order
+  (`DecoratorPipelineOrderTestsBase.cs:49`, `:61`). That is what makes it a runtime check: Scrutor
   `TryDecorate` applies decorators in reverse registration order, so a reordered
   `AddApplicationDecorators()` or a module scan that ran after it changes the constructed pipeline
   while every registration still exists.
@@ -85,7 +85,7 @@ booted.
   exact casing) of the pinned resources (`OpenApiContractTestsBase.cs:79`).
 - **Hosts extend the base where they have more to prove.** ADC Conference adds a 409
   stale-`RowVersion` conflict test on top of the inherited 400/404 facts, reusing the inherited shape
-  assertion (`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:39`,
+  assertion (`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:40`,
   `:67`).
 
 Adoption today is real but **partial, and uneven per suite**. The OpenAPI guard is the only one with
@@ -115,20 +115,31 @@ security-headers and graceful-shutdown suites are subclassed **only on the two G
 (`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:11`,
 `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:11`, plus the two
 `GracefulShutdownTests` above); no service host asserts either today. The decorator suite is
-subclassed once per consumer, both against the Identity module's `ChangePreferencesCommand` /
-`GetUserPreferencesQuery` pair (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:25`,
-`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:25`).
+subclassed once per consumer repo and is the one base all three of them run: ADC and Store both
+against the Identity module's `ChangePreferencesCommand` / `GetUserPreferencesQuery` pair
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:27`,
+`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:26`),
+and MMCA.Helpdesk against a real Tickets pair, described below.
 MMCA.Common dogfoods the only base it can, since it ships no host of its own: a synthetic
 `PingCommand`/`PingQuery` pair driven through the framework's own registration sequence
-(`Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:20`).
+(`Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21`).
 
-**MMCA.Helpdesk adopts none of them.** It carries a `MMCA.Common.Testing` package reference in its
-domain-test project (`MMCA.Helpdesk/Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain.Tests/MMCA.Helpdesk.Tickets.Domain.Tests.csproj:8`),
-but no file in the repo imports the namespace and no conformance base is subclassed: its three test
-projects are the Tickets domain and application suites plus the ADR-015 architecture suite, which does
-subclass the structural bases from the separate `MMCA.Common.Testing.Architecture` package
-(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/GlobalUsings.cs:3`). The reference
-app therefore demonstrates the structural tier and not the runtime tier.
+**MMCA.Helpdesk adopts exactly one of them, the decorator suite**, having adopted none of them when
+this record was written. Its architecture-test project now references `MMCA.Common.Testing` alongside the
+structural package
+(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MMCA.Helpdesk.Architecture.Tests.csproj:26`)
+and subclasses `DecoratorPipelineOrderTestsBase` against the real Tickets pair `UpdateTicketCommand` /
+`GetTicketByIdQuery`
+(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:30-31`),
+whose `ConfigureServices` runs the seed's own registration sequence: `AddApplication()`, the Tickets
+module scan, then `AddApplicationDecorators()` last (`:50-52`). That file is the only one in the repo
+importing the `MMCA.Common.Testing` namespace (`:10`); the package reference its domain-test project
+carries (`MMCA.Helpdesk/Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain.Tests/MMCA.Helpdesk.Tickets.Domain.Tests.csproj:8`)
+is still unused. The five HTTP-facing bases have no Helpdesk subclass, so the seed's three test
+projects remain the Tickets domain and application suites plus the architecture suite, which now
+carries both tiers: the ADR-015 structural bases from the separate `MMCA.Common.Testing.Architecture`
+package (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/GlobalUsings.cs:3`) and
+this one runtime conformance base.
 
 ## Rationale
 - **Runtime conformance is the half ADR-015 excluded.** Structural rules answer "is the code shaped
@@ -155,7 +166,7 @@ app therefore demonstrates the structural tier and not the runtime tier.
   once someone writes the subclass. That is the same audit-the-inventory caveat, and the adoption
   inventory above is the current answer to it, not a claim of completeness.
 - **Coverage is uneven by suite.** Security headers and graceful shutdown are Gateway-only, versioning
-  is one host per repo, and Helpdesk has none of it. Problem details is the one suite now subclassed
+  is one host per repo, and Helpdesk has only the decorator suite. Problem details is the one suite now subclassed
   on every REST host in both consumers (ADC Notification closed the last gap on 2026-08-13). Every
   remaining hole is an unguarded host for that contract, not a decision that the contract does not
   apply.
@@ -169,7 +180,7 @@ app therefore demonstrates the structural tier and not the runtime tier.
   ones.
 - **The decorator check reads private fields.** Unwrapping the chain depends on each decorator holding
   its inner handler in a field that implements the same closed interface
-  (`DecoratorPipelineOrderTestsBase.cs:105-108`); a decorator that stored it differently would silently
+  (`DecoratorPipelineOrderTestsBase.cs:111-114`); a decorator that stored it differently would silently
   end the walk early rather than fail loudly.
 - **A new contract base only reaches consumers at the next lockstep bump.** The suites ship inside the
   package set, so adding one is a framework release plus a consumer sweep (ADR-016), not a local edit

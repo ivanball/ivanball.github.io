@@ -44,14 +44,14 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:121`) wires OpenTelemetry logging with formatted
   messages and scopes (`Extensions.cs:125`), metrics from ASP.NET Core (unconditional,
   `Extensions.cs:132`) plus `HttpClient` and the runtime (each gated behind a cost knob, see below),
-  and tracing from ASP.NET Core and `HttpClient` (`Extensions.cs:169`-`Extensions.cs:170`). It is
+  and tracing from ASP.NET Core and `HttpClient` (`Extensions.cs:176`-`Extensions.cs:177`). It is
   called from `AddServiceDefaults` (`Extensions.cs:41`), so a host opts in once and every project in
   the Aspire model inherits the same pipeline.
 
 - **Custom RED metrics from the CQRS pipeline.** A single meter `MMCA.Common.Cqrs`
-  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/CqrsMetrics.cs:19`) publishes two duration
-  histograms: `cqrs.command.duration` (`CqrsMetrics.cs:25`) and `cqrs.query.duration`
-  (`CqrsMetrics.cs:31`), both in milliseconds. Every path is measured without a `finally`: each
+  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/CqrsMetrics.cs:24`) publishes two duration
+  histograms: `cqrs.command.duration` (`CqrsMetrics.cs:30`) and `cqrs.query.duration`
+  (`CqrsMetrics.cs:36`), both in milliseconds. Every path is measured without a `finally`: each
   logging decorator routes all three of its exits through a private `RecordDuration` helper, so the
   measurement cannot be skipped. The command helper calls `CqrsMetrics.CommandDuration.Record(...)`
   tagged by `command` and `outcome`
@@ -62,18 +62,18 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   path (`LoggingCommandDecorator.cs:47`, `:42`, `:56`; the query equivalents at
   `LoggingQueryDecorator.cs:44`, `:39`, `:53`), so count gives rate, the tag gives errors, and the
   histogram gives duration. The Aspire host subscribes the meter by literal name
-  (`Extensions.cs:161`).
+  (`Extensions.cs:165`).
 
 - **An outbox dead-letter counter.** The outbox instruments live in their own static type
   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMetrics.cs:15`), which owns the
   meter `MMCA.Common.Outbox` (`OutboxMetrics.cs:18`) and the counter `outbox.dead_letter.count`
   (`OutboxMetrics.cs:32`-`OutboxMetrics.cs:33`). `OutboxProcessor` increments it on both dead-letter
   paths, tagged by `event_type` and by a `reason` that tells them apart: `type_unresolvable` when a
-  message's event type cannot be resolved (`OutboxProcessor.cs:475`-`OutboxProcessor.cs:478`), and
+  message's event type cannot be resolved (`OutboxProcessor.cs:499`-`OutboxProcessor.cs:502`), and
   `retries_exhausted` when a failing message reaches `MaxRetries` and drops out of the poll
-  (`OutboxProcessor.cs:540`-`OutboxProcessor.cs:543`). The processor's activity source publishes outbox
-  spans under the same name (`OutboxProcessor.cs:81`); both the meter and the trace source are
-  registered by literal name in the Aspire defaults (`Extensions.cs:160`, `Extensions.cs:168`).
+  (`OutboxProcessor.cs:592`-`OutboxProcessor.cs:595`). The processor's activity source publishes outbox
+  spans under the same name (`OutboxProcessor.cs:85`); both the meter and the trace source are
+  registered by literal name in the Aspire defaults (`Extensions.cs:164`, `Extensions.cs:175`).
 
 - **Correlation-ID middleware ties the request together.** `CorrelationIdMiddleware`
   (`Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:15`) uses the
@@ -93,38 +93,38 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   instrumentation at `Extensions.cs:143`), and .NET runtime metrics (`dotnet.gc.*`, `jit.*`,
   `thread_pool.*`) only when `Telemetry:DisableRuntimeMetrics` is unset or false (`Extensions.cs:150`,
   adding at `Extensions.cs:152`). Both keys are read by `IsInstrumentationDisabled`
-  (`Extensions.cs:389`), which drops the family only when the value parses as boolean `true`; absent,
+  (`Extensions.cs:396`-`Extensions.cs:397`), which drops the family only when the value parses as boolean `true`; absent,
   blank, or unparseable falls back to keeping the instrumentation, so a typo cannot silently blind a
   whole metric family. A deployed host sets one or both to `true` to cut ingestion cost; outbound
   dependency latency is still captured as traces when `HttpClient` metrics are dropped.
 
 - **Head-based sampling as a cost knob, off by default.** `Telemetry:TracesSampleRatio`
-  (`Extensions.cs:181`, parsed by `TryGetTraceSampleRatio` at `Extensions.cs:366`, which reads the
-  key at `Extensions.cs:369`) is unset by default, so a host samples everything and behavior does not
+  (`Extensions.cs:188`, parsed by `TryGetTraceSampleRatio` at `Extensions.cs:373`, which reads the
+  key at `Extensions.cs:376`) is unset by default, so a host samples everything and behavior does not
   change. A deployed host sets a ratio in
   the open interval (0,1) to keep that fraction of traces; the value wraps a `TraceIdRatioBasedSampler`
-  in a `ParentBasedSampler` (`Extensions.cs:185`) so a sampled-in request keeps its whole trace across
+  in a `ParentBasedSampler` (`Extensions.cs:192`) so a sampled-in request keeps its whole trace across
   service boundaries. A key that is absent, unparseable, or outside (0,1) falls back to sample-all
-  (`Extensions.cs:368`-`Extensions.cs:372`), so a typo can never silently drop all telemetry.
+  (`Extensions.cs:377`-`Extensions.cs:382`), so a typo can never silently drop all telemetry.
 
 - **Outbox poll spans are filtered out of export.** `OutboxPollFilterProcessor`
   (`Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15`), registered before
-  the exporters (`Extensions.cs:177`), clears the `Recorded` flag on the recurring `OutboxPoll` span
+  the exporters (`Extensions.cs:184`), clears the `Recorded` flag on the recurring `OutboxPoll` span
   and its children (`OutboxPollFilterProcessor.cs:45`). The poll query runs inside that span, opened at
-  the top of `FetchCandidatesAsync` (`OutboxProcessor.cs:387`, span started at `OutboxProcessor.cs:393`,
-  named at `OutboxProcessor.cs:69`), so steady-state polling does not flood Application Insights. Real
+  the top of `FetchCandidatesAsync` (`OutboxProcessor.cs:405`, span started at `OutboxProcessor.cs:411`,
+  named at `OutboxProcessor.cs:73`), so steady-state polling does not flood Application Insights. Real
   outbox work is untouched: each per-message `OutboxProcess` span is started by `StartOutboxActivity`
-  (called once per message at `OutboxProcessor.cs:466`, declared at `OutboxProcessor.cs:584`) under an
+  (called once per message at `OutboxProcessor.cs:490`, declared at `OutboxProcessor.cs:657`) under an
   explicit parent context restored from the message's stored trace and span ids
-  (`OutboxProcessor.cs:591`-`OutboxProcessor.cs:594`), span started at
-  `OutboxProcessor.cs:596`-`OutboxProcessor.cs:599`, so it is never a child of the poll span.
+  (`OutboxProcessor.cs:664`-`OutboxProcessor.cs:667`), span started at
+  `OutboxProcessor.cs:669`-`OutboxProcessor.cs:672`, so it is never a child of the poll span.
 
 - **Dual exporters, either or both.** `AddOpenTelemetryExporters` enables OTLP when
-  `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.cs:282`, the Aspire dashboard sets it, exporter
-  wired at `Extensions.cs:286`) and Azure Monitor via `UseAzureMonitor` (`Extensions.cs:294`) when
-  `APPLICATIONINSIGHTS_CONNECTION_STRING` is present (read at `Extensions.cs:290`, checked at
-  `Extensions.cs:292`, and set by the cloud deployment). Both can be active at once
-  (`Extensions.cs:277`), so local development ships to the
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.cs:288`-`Extensions.cs:289`, the Aspire dashboard sets it, exporter
+  wired at `Extensions.cs:293`) and Azure Monitor via `UseAzureMonitor` (`Extensions.cs:301`) when
+  `APPLICATIONINSIGHTS_CONNECTION_STRING` is present (read at `Extensions.cs:296`-`Extensions.cs:297`, checked at
+  `Extensions.cs:299`, and set by the cloud deployment). Both can be active at once
+  (`Extensions.cs:284`), so local development ships to the
   Aspire dashboard and production ships to workspace-based Application Insights with no code change.
 
 ## Rationale
@@ -148,8 +148,8 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 ## Trade-offs
 - **Custom instrumentation carries a maintenance cost.** The Aspire package has no reference to
   Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-  literals (the meter subscriptions at `Extensions.cs:160`-`Extensions.cs:163` and the trace source at
-  `Extensions.cs:168`, and the sync notes at `CqrsMetrics.cs:8`, `OutboxMetrics.cs:8` and
+  literals (the meter subscriptions at `Extensions.cs:164`-`Extensions.cs:170` and the trace source at
+  `Extensions.cs:175`, and the sync notes at `CqrsMetrics.cs:8`, `OutboxMetrics.cs:8` and
   `OutboxPollFilterProcessor.cs:17`). A rename on one side silently stops export until the literal is
   updated. That is the price of the decoupled package graph.
 - **Sampling trades trace completeness for cost.** A sampled-out trace is simply gone; deep debugging

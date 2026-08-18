@@ -90,7 +90,7 @@ trade-off it carries.
    built only for enabled modules at `:133-136`). Nothing on that path consults the hosting
    environment, and the service hosts call the extension method straight after `builder.Build()`
    (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:319`,
-   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:370`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:389`,
    `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:325`,
    `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:255`;
    `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:254`,
@@ -103,7 +103,7 @@ trade-off it carries.
    owns the guard: `ConferenceModuleDbSeeder` opens each step with an `ExistsAsync` probe and returns
    early when the row is present, matching the pre-rename event name too so a database seeded before
    the rename stays idempotent
-   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:52-57`).
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:63-69`).
 3. **Deterministic seed identifiers are what make that guard cheap.** The `DbSeeder` base converts an
    integer seed id to the module's identifier type: `int` passes through, and a `Guid` alias is
    manufactured by writing the int into a zeroed 16-byte span, so the same seed integer yields the

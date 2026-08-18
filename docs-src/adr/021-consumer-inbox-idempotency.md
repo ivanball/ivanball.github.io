@@ -64,7 +64,7 @@ because that per-service project postdates the frozen combined-archive lineage t
 migration. Adoption inventory as of 2026-08-13: **three ADC services consume from the broker** and
 so use their inbox for real, plus Store Sales. ADC Identity consumes `SpeakerLinkedToUser` and
 `SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:299-300`),
-ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:347`), and ADC
+ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:365`), and ADC
 Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
 `EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:299-302`), the
 first of which is ADC's first **self-consumption** over the broker: Engagement publishes
@@ -136,8 +136,8 @@ What changed is that the default is now loud.
    framework behavior rather than a public extension point.
 2. **`MessageBus:EnableInbox=true` is now the stated recommendation, not a neutral option.** The
    setting is still `bool` with no initializer, so the default is still `false`
-   (`.../Settings/MessageBusSettings.cs:75`), but its own documentation now says "RECOMMENDED true for
-   any broker-connected host" (`:62-72`). The Trade-offs entry above ("a broker-consuming service that
+   (`.../Settings/MessageBusSettings.cs:76`), but its own documentation now says "RECOMMENDED true for
+   any broker-connected host" (`:65-73`). The Trade-offs entry above ("a broker-consuming service that
    forgets `EnableInbox` gets no dedup") therefore keeps its substance and loses its silence: the
    inventory audit it asks for is now performed by the host at every boot.
 3. **The `InboxMessages` table is part of the relational model unconditionally.**

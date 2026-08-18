@@ -6,8 +6,9 @@ implementation beside `MemoryCacheService` and `DistributedCacheService`. It is 
 `AddCommonHybridCache(...)`; with no call the default path is byte-identical to today, so the release is
 non-breaking.
 
-**Scope note (2026-08-18).** This record is Tier 1 only, as its Decision and its Related entry for
-ADR-040 both state. The cross-service output-cache eviction shipped on 2026-08-18
+**Scope note (2026-08-18).** This record is Tier 1 only: the Status and Context sections above scope it to
+ADR-026's Tier 1 substrate, and the Related entry for ADR-040 leaves the Tier 2 output-cache edge untouched.
+The cross-service output-cache eviction shipped on 2026-08-18
 (`OutputCacheEvictionRequested` plus a per-tag handler on the `MMCA.Common.OutputCache` meter) is a
 **Tier 2** change and is recorded in [ADR-026](026-caching-strategy.md)'s Revision (2026-08-18). It
 touches neither the `hc:` keyspace, the L1/L2 split, nor anything else decided here: the hybrid
@@ -72,9 +73,13 @@ process-local stampede protection the query decorator already has, and `HybridCa
 the member with its native two-level primitive.
 
 ### `HybridCacheService`
-A new `internal sealed HybridCacheService : ICacheService`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs`) implements the
-interface over `HybridCache`.
+A new `internal sealed partial class HybridCacheService : ICacheService`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:37`) implements the
+interface over `HybridCache`. It takes its dependencies through a primary constructor,
+`(HybridCache hybrid, ILogger<HybridCacheService> logger, IConnectionMultiplexer? connectionMultiplexer = null, CacheKeyNamespace? keyNamespace = null)`,
+the last two optional because a host without Redis still resolves the service and prefix eviction is the only
+operation that needs the multiplexer. It is `partial` for the `LoggerMessage` source generator (`:327-340`),
+not because the type is split across hand-written files.
 
 - **`GetAsync` is a read that never writes.** It calls `HybridCache.GetOrCreateAsync` with
   `HybridCacheEntryFlags.DisableUnderlyingData` (a shipped 9.0 GA API), which suppresses the factory and
@@ -107,11 +112,15 @@ exactly like the stripe the decorator holds. The decorators keep their read/exec
 the L1 benefit for free, because their reads go through `GetAsync`.
 
 ### Registration is one opt-in call
-`AddCommonHybridCache(Action<HybridCacheOptions>? configure = null)` (Infrastructure `DependencyInjection`)
-calls `AddHybridCache` with defaults matching `CacheOptions` (`LocalCacheExpiration` 30 seconds), then
-`RemoveAll<ICacheService>()` and `AddSingleton<ICacheService, HybridCacheService>`. Remove-then-add makes
-the call order-independent against `AddInfrastructure`, whose `AddCaching` registers its substrate with
-`TryAddSingleton`: the opt-in wins either way.
+`AddCommonHybridCache(Action<HybridCacheOptions>? configure = null)`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:248`) calls `AddHybridCache` with
+defaults matching `CacheOptions` (`LocalCacheExpiration` 30 seconds), then `RemoveAll<ICacheService>()`
+(`:266`) and an `AddSingleton<ICacheService>` **factory** (`:267`), not the two-generic-argument
+`AddSingleton<ICacheService, HybridCacheService>` form: the lambda resolves the logger (falling back to
+`NullLogger` when none is registered), the optional `IConnectionMultiplexer` and the `CacheKeyNamespace`
+itself and hands them to the constructor, rather than leaving the optional parameters to the container.
+Remove-then-add makes the call order-independent against `AddInfrastructure`, whose `AddCaching` registers
+its substrate with `TryAddSingleton` (`:175`): the opt-in wins either way.
 
 ### Tags are deferred
 `HybridCache.RemoveByTagAsync` would eventually retire prefix invalidation and its SCAN cost, and it is not

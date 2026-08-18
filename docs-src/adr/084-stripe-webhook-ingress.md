@@ -12,7 +12,7 @@ supposed to arrive never does (a reconciliation sweep). None of them decides the
 actually runs in production: **an inbound call from a third party we do not control**.
 
 Stripe is that caller, and it fits none of the existing shapes. It cannot authenticate as an
-application user (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/PaymentsController.cs:15-16`),
+application user (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/PaymentsController.cs:16-17`),
 so the endpoint has to be anonymous. It does not send an `Idempotency-Key`, so ADR-017 does not apply.
 It does not go through the broker, so ADR-021's inbox never sees it. And it treats the HTTP status
 code as a **delivery protocol**, not as an application result: a non-2xx response makes Stripe retry
@@ -21,7 +21,7 @@ status update for the whole store.
 
 Two production incidents shaped this, and both are recorded in the source. Rejections were logged at
 `Warning` for weeks while the configured signing secret did not match the live endpoint, so 100% of
-deliveries returned 400 and nothing surfaced it (`PaymentsController.cs:76-81`). Separately, between
+deliveries returned 400 and nothing surfaced it (`PaymentsController.cs:85-90`). Separately, between
 2026-06-12 and 2026-07-30 a disabled-but-still-present endpoint caused a second endpoint to be created
 at the same URL with a brand-new signing secret, invalidating the configured one; 507 deliveries failed
 in the final week alone (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/StripeWebhookRegistrationService.cs:124-131`).
@@ -32,18 +32,23 @@ Treat third-party webhook ingress as its own contract with two halves: **an acce
 and **a self-registering, self-provisioning endpoint registration at startup**.
 
 - **One anonymous, raw-body endpoint.** `POST /Payments/webhook` is `[AllowAnonymous]`
-  (`PaymentsController.cs:46-47`). The body is read straight off `HttpContext.Request.Body` with S6932
+  (`PaymentsController.cs:47,56`). The body is read straight off `HttpContext.Request.Body` with S6932
   suppressed, because signature verification needs the unmodified payload and model binding would
-  destroy it (`PaymentsController.cs:52-58`); the `Stripe-Signature` header is read alongside it
-  (`:57`). The Gateway forwards `/Payments/{**catch-all}` to Sales over plain HTTP/1.1
-  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:129`), which is why Sales keeps the ADR-012
+  destroy it (`PaymentsController.cs:61-67`); the `Stripe-Signature` header is read alongside it
+  (`:66`). The Gateway forwards `/Payments/{**catch-all}` to Sales over plain HTTP/1.1: the route is
+  declared in the Gateway's `ReverseProxy` configuration rather than in code
+  ([ADR-089](089-gateway-topology-owned-by-configuration.md)), as the `sales-payments` route
+  (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:57-60`) on a `sales` cluster that
+  deliberately leaves `Version` and `VersionPolicy` unset, unlike `catalog` and `identity` which pin
+  `Version` 2 (`appsettings.json:83-90`, reasoning at
+  `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:85-89`). That is why Sales keeps the ADR-012
   mixed-endpoint profile (`MMCA.Store/infra/main.bicep:1207`).
 - **The status code encodes ACCEPTED, not PROCESSED.** Exactly three error codes return 400, held in a
   `FrozenSet` named `RejectionCodes`: `SignatureVerificationFailed`, `ParseFailed` and `SecretMissing`
-  (`PaymentsController.cs:30-35`, defined at
+  (`PaymentsController.cs:31-36`, defined at
   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Interfaces/IPaymentService.cs:37,40,43`).
   Everything past acceptance returns 200, **including an order that cannot be found**, because
-  retrying those would fail identically forever (`PaymentsController.cs:38-42,70,86,89`).
+  retrying those would fail identically forever (`PaymentsController.cs:38-44,79,95,98`).
 - **Verification and parsing are separate steps, so the three reasons stay distinguishable.**
   `EventUtility.ValidateSignature` runs first
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/StripePaymentService.cs:329`),
@@ -53,9 +58,9 @@ and **a self-registering, self-provisioning endpoint registration at startup**.
   (`:314-325`). One combined call previously reported all three as a signature failure (`:298-307`).
 - **A rejection logs at `Critical`, everything else at `Warning`.** `LogWebhookRejected` is a
   source-generated `Critical` message that names the code, the message, and the operational
-  consequence (`PaymentsController.cs:82,93-97`). `Critical` is deliberate: it clears the production
+  consequence (`PaymentsController.cs:91,102-106`). `Critical` is deliberate: it clears the production
   Azure Monitor log floor (`Logging__OpenTelemetry__LogLevel__Default=Warning`) with room to spare
-  (`:80-81`). A post-acceptance failure logs `Warning` and still returns 200 (`:86,89`).
+  (`:89-90`). A post-acceptance failure logs `Warning` and still returns 200 (`:95,98`).
 - **Processing idempotency lives in the handler, not in the transport.** Exactly two event types move
   an order: `checkout.session.completed` pays it and `checkout.session.expired` fails it, while
   `payment_intent.payment_failed` is recorded and nothing else
@@ -114,7 +119,7 @@ and the deletion predicate in five, including the operator-created endpoint that
   signing secret need three different responses from a human, and the collapsed version sent on-call
   after the wrong thing (`StripePaymentService.cs:298-307`).
 - **`Critical` is the level this environment can see.** The production log floor is `Warning`
-  (`PaymentsController.cs:80-81`), and a total payment-status outage that logs at `Warning` is
+  (`PaymentsController.cs:89-90`), and a total payment-status outage that logs at `Warning` is
   indistinguishable from noise: that is exactly how it went unnoticed for weeks.
 - **Self-registration removes a manual step the platform keeps invalidating.** The public URL is a
   Container Apps default domain, so it changes on a region move; a hand-registered endpoint drifts and
@@ -139,7 +144,7 @@ and the deletion predicate in five, including the operator-created endpoint that
   exposure.
 - **200 hides processing failures from Stripe by design.** A post-acceptance failure is invisible in
   the Stripe dashboard's delivery view, so it has to surface through our own telemetry: the `Warning`
-  log (`PaymentsController.cs:86`) and, for an order left stuck because no webhook ever completed the
+  log (`PaymentsController.cs:95`) and, for an order left stuck because no webhook ever completed the
   work, the ADR-054 reconciliation sweep (`PaymentReconciliationService`,
   `DependencyInjection.cs:34-36`).
 - **A configured secret is trusted, never validated.** A stale `Stripe:WebhookSecret` cannot be

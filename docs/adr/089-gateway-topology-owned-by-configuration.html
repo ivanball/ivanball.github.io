@@ -199,39 +199,40 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-18). <strong>Amends <a href="008-service-extraction-topology.html">ADR-008</a></strong>: that record gave the
           Gateway the route-to-service map and expressed it as code (a list of <code>MapForwarder</code> calls). The map
-          itself is unchanged; what changes is where it is written. YARP <code>ReverseProxy</code> <strong>configuration</strong> becomes
-          the single source of the route table, the per-route HTTP version policy moves into cluster
-          configuration, and a route-map test becomes the drift gate in both consumer repositories. This is a
-          consumer-side decision (the framework ships no gateway), and the implementation follows in this wave:
-          every &quot;today&quot; statement below describes the state as of 2026-08-18, before the change.</p>
+          itself is unchanged; what changed is where it is written. YARP <code>ReverseProxy</code> <strong>configuration</strong> is now
+          the single source of the route table, the per-route HTTP version policy lives in cluster
+          configuration, and a route-map test is the drift gate in both consumer repositories. This is a
+          consumer-side decision (the framework ships no gateway), and both consumers landed it on 2026-08-18.
+          The Context below records the prior state that motivated the change; the Decision describes what each
+          gateway does today.</p>
           <h2 id="context">Context</h2>
-          <p>Both gateways build their route table by hand, in code. ADC makes 26 <code>MapForwarder</code> calls
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:121-161</code>) and Store makes 10
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:106-129</code>). Neither host calls
-          <code>AddReverseProxy</code> or <code>LoadFromConfig</code>, and neither <code>appsettings.json</code> has a <code>ReverseProxy</code> section at
-          all: YARP is present only as its forwarder primitive. Destinations are Aspire service-discovery names
-          (<code>http://identity</code>, <code>http://conference</code>, <code>http://catalog</code> and so on) resolved through
-          <code>AddHttpForwarderWithServiceDiscovery</code> (<code>MMCA.ADC.Gateway/Program.cs:44</code>,
-          <code>MMCA.Store.Gateway/Program.cs:66</code>), which is the part of the arrangement that is right and stays.</p>
-          <p><strong>The problem is not that the table is duplicated across deployment artifacts. It is that one table is
-          described three times inside one repository, and the three already disagree.</strong> ADC is the worked
+          <p>Before this record, both gateways built their route table by hand, in code. ADC made 26
+          <code>MapForwarder</code> calls and Store made 10. Neither host called <code>AddReverseProxy</code> or <code>LoadFromConfig</code>, and neither <code>appsettings.json</code> had
+          a <code>ReverseProxy</code> section at all: YARP was present only as its forwarder primitive. Destinations were
+          Aspire service-discovery names (<code>http://identity</code>, <code>http://conference</code>, <code>http://catalog</code> and so on)
+          resolved through <code>AddHttpForwarderWithServiceDiscovery</code>, which is the part of the arrangement that was
+          right and stays, now as <code>AddServiceDiscoveryDestinationResolver</code>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:93</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:117</code>).</p>
+          <p><strong>The problem was not that the table was duplicated across deployment artifacts. It was that one table
+          was described three times inside one repository, and the three already disagreed.</strong> ADC was the worked
           example:</p>
           <ol>
-          <li><strong>The code</strong> registers 15 conference forwarders (<code>Program.cs:130-144</code>).</li>
-          <li><strong>The comment above them</strong> says 16 (<code>Program.cs:129</code>).</li>
-          <li><strong>The test</strong> pins 23 of the 26 routes (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:57</code>),
-          leaving <code>/Sponsors</code> (<code>Program.cs:144</code>), <code>/CheckIns</code> (<code>:148</code>) and <code>/Points</code> (<code>:150</code>) unpinned, and its
-          own doc comment describes the set as &quot;14 REST controllers + SessionSelection&quot;
-          (<code>RouteMapTests.cs:65</code>).</li>
+          <li><strong>The code</strong> registered 15 conference forwarders.</li>
+          <li><strong>The comment above them</strong> said 16.</li>
+          <li><strong>The test</strong> pinned 23 of the 26 routes, leaving <code>/Sponsors</code>, <code>/CheckIns</code> and <code>/Points</code> unpinned,
+          and its own doc comment described the set as &quot;14 REST controllers + SessionSelection&quot;. The
+          replacement test still names those three routes as the gap it exists to close
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:28-31</code>).</li>
           </ol>
-          <p>Three routes are live and ungated, a comment is off by one, and the test&#39;s description matches neither.
-          None of that was caught, because nothing enumerates the table from a single place: a hand-written list
-          of calls, a hand-written comment, and a hand-written test theory are three independent transcriptions
-          of the same fact.</p>
-          <p>Store has the same shape with less coverage: <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/</code>
-          contains only graceful-shutdown and security-header suites, and a repository-wide search for
-          <code>MapForwarder</code>, <code>IHttpForwarder</code> or <code>RouteMap</code> in its test tree returns nothing. Store&#39;s route table is
-          pinned by no test at all.</p>
+          <p>Three routes were live and ungated, a comment was off by one, and the test&#39;s description matched
+          neither. None of that was caught, because nothing enumerated the table from a single place: a
+          hand-written list of calls, a hand-written comment, and a hand-written test theory are three
+          independent transcriptions of the same fact.</p>
+          <p>Store had the same shape with less coverage: <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/</code>
+          contained only graceful-shutdown and security-header suites, and a repository-wide search for
+          <code>MapForwarder</code>, <code>IHttpForwarder</code> or <code>RouteMap</code> in its test tree returned nothing. Store&#39;s route table
+          was pinned by no test at all.</p>
           <p><strong>What is genuinely elsewhere is not the route table, and that distinction is worth recording</strong>,
           because it is the duplication a reader assumes exists. The Aspire AppHost holds references and
           start-ordering (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:252-262</code>,
@@ -241,35 +242,38 @@
           books</strong>: service name to URL, with no path prefix anywhere in them. They answer &quot;where does
           <code>conference</code> resolve&quot; and never &quot;what reaches conference&quot;, so neither is a second route table and
           neither should become one.</p>
-          <p>Per-route behavior is hand-written too, and that is where the two repositories have silently diverged.
-          ADC sets <code>ForwarderRequestConfig.ActivityTimeout</code> from <code>Gateway:ForwarderActivityTimeoutSeconds</code>,
+          <p>Per-route behavior was hand-written too, and that is where the two repositories had silently diverged.
+          ADC set <code>ForwarderRequestConfig.ActivityTimeout</code> from <code>Gateway:ForwarderActivityTimeoutSeconds</code>,
           defaulted to <code>HttpResilienceDefaults.TotalRequestTimeout</code> plus 10 seconds, so 100 seconds against the
-          90-second client budget (<code>MMCA.ADC.Gateway/Program.cs:81-83</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19</code>), plus a
-          one-hour <code>Gateway:HubActivityTimeoutSeconds</code> for the SignalR route (<code>Program.cs:88-90</code>), applied at
-          <code>:95</code>, <code>:103</code>, <code>:108</code> and <code>:110</code>. <strong>Store sets no activity timeout anywhere.</strong> Both of its
-          <code>ForwarderRequestConfig</code> constructions (<code>MMCA.Store.Gateway/Program.cs:88</code>, <code>:97</code>) omit it, so every
-          Store route, the Stripe webhook forward at <code>:129</code> included, runs on YARP&#39;s implicit default with no
-          relationship to the resilience budget the rest of the stack is tuned to. The gap is total rather than
-          partial, and it exists because a per-route setting written as a constructor argument in one repository
-          is invisible from the other.</p>
-          <p>The HTTP version policy has the same shape. ADC gates HTTP/2 on a <code>ForwardHttp2</code> switch
-          (<code>Program.cs:73</code>, set in <code>appsettings.json:13</code>) and sends <code>HttpVersion.Version20</code> with
-          <code>RequestVersionExact</code> (<code>:96</code>, <code>:101</code>), h2c prior knowledge, while deliberately leaving both unset on
-          Notification&#39;s two routes (<code>:108</code>, <code>:110</code>) because that host runs <a href="012-grpc-host-transport.html">ADR-012</a>&#39;s
-          mixed-endpoint profile. Store has the same switch in code only, with no <code>appsettings.json</code> key
-          (<code>Program.cs:86</code>), applies <code>Version20</code> plus <code>RequestVersionExact</code> to Catalog, Identity and
-          <code>.well-known</code> (<code>:90</code>, <code>:95</code>), and leaves its Sales routes on YARP&#39;s HTTP/1.1 defaults (<code>:126-129</code>). The
-          policy is real, per-destination and correct; it is just expressed as positional arguments at call
-          sites rather than as a property of the destination it describes.</p>
+          90-second client budget
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19</code>), plus a
+          one-hour <code>Gateway:HubActivityTimeoutSeconds</code> for the SignalR route. <strong>Store set no activity timeout
+          anywhere.</strong> Both of its <code>ForwarderRequestConfig</code> constructions omitted it, so every Store route, the
+          Stripe webhook forward included, ran on YARP&#39;s implicit default with no relationship to the resilience
+          budget the rest of the stack is tuned to. The gap was total rather than partial, and it existed
+          because a per-route setting written as a constructor argument in one repository is invisible from the
+          other.</p>
+          <p>The HTTP version policy had the same shape. ADC gated HTTP/2 on a <code>ForwardHttp2</code> switch (set in
+          <code>appsettings.json:13</code>) and sent <code>HttpVersion.Version20</code> with <code>RequestVersionExact</code>, h2c prior
+          knowledge, while deliberately leaving both unset on Notification&#39;s two routes because that host runs
+          <a href="012-grpc-host-transport.html">ADR-012</a>&#39;s mixed-endpoint profile. Store had the same switch in code
+          only, with no <code>appsettings.json</code> key, applied <code>Version20</code> plus <code>RequestVersionExact</code> to Catalog,
+          Identity and <code>.well-known</code>, and left its Sales routes on YARP&#39;s HTTP/1.1 defaults. The policy was
+          real, per-destination and correct; it was just expressed as positional arguments at call sites rather
+          than as a property of the destination it describes.</p>
           <h2 id="decision">Decision</h2>
           <p>Make configuration the single source of the gateway route table, and pin it with a test.</p>
           <h3 id="1-reverseproxy-configuration-is-the-route-table">1. <code>ReverseProxy</code> configuration is the route table</h3>
           <p>Each gateway calls <code>AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection(&quot;ReverseProxy&quot;))</code>
-          and <code>MapReverseProxy()</code>, and the <code>MapForwarder</code> lists are deleted. Routes and clusters live in the
-          gateway&#39;s own <code>appsettings.json</code>. Destinations stay Aspire service-discovery names, so nothing about
-          ADR-008&#39;s transport-at-the-edge posture, the AppHost wiring or the bicep address book changes: what
-          changes is that the path-prefix-to-cluster mapping is data rather than a sequence of calls.</p>
+          and <code>MapReverseProxy()</code>, and the <code>MapForwarder</code> lists are deleted. ADC wires it at
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:90-93</code> and maps it at <code>:138</code>; Store at
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115-117</code> and <code>:150</code>. Routes and clusters live
+          in the gateway&#39;s own <code>appsettings.json</code>: 26 routes over five clusters for ADC
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:20-175</code>) and 10 routes over three clusters
+          for Store (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:19-92</code>). Destinations stay
+          Aspire service-discovery names, so nothing about ADR-008&#39;s transport-at-the-edge posture, the AppHost
+          wiring or the bicep address book changes: what changed is that the path-prefix-to-cluster mapping is
+          data rather than a sequence of calls.</p>
           <p>Adding a controller to a service then means adding a route entry, not editing and rebuilding a separate
           deployable.</p>
           <h3 id="2-what-stays-where-stated-so-it-stops-being-rediscovered">2. What stays where, stated so it stops being rediscovered</h3>
@@ -283,31 +287,53 @@
           <p>The rule is that a path prefix belongs to exactly one file per gateway. An address book is not a route
           table, and the two must not converge.</p>
           <h3 id="3-routemaptests-is-the-drift-gate-in-both-repositories">3. <code>RouteMapTests</code> is the drift gate, in both repositories</h3>
-          <p>ADC&#39;s <code>RouteMapTests</code> becomes the enumeration of the configured table rather than a hand-typed parallel
-          list, and it must cover every route rather than 23 of 26. Store gains an equivalent suite where it has
-          none today. The test reads the host&#39;s loaded proxy configuration, so a route added to <code>appsettings.json</code>
-          without a corresponding expectation fails, and an expectation with no route fails as well. That
-          two-way check is what the current one-way theory could not do, and it is the reason a configuration
-          table is safe to adopt: configuration is not compile-checked, so the check has to be a test.</p>
+          <p>ADC&#39;s <code>RouteMapTests</code> is the enumeration of the configured table rather than a hand-typed parallel
+          list, and it covers every route rather than 23 of 26. A behavioral theory drives each pinned route
+          through the real proxy pipeline with a recording fake substituted for <code>IHttpForwarder</code>
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:135</code>), and two completeness facts read
+          the host&#39;s loaded <code>IProxyConfig</code> and compare it against the same pinned table, so a route or cluster
+          added to <code>appsettings.json</code> without a corresponding expectation fails, and an expectation with no
+          route fails as well (<code>:168</code>, <code>:190</code>). That two-way check is what the previous one-way theory could not
+          do, and it is the reason a configuration table is safe to adopt: configuration is not compile-checked,
+          so the check has to be a test. <code>/Sponsors</code>, <code>/CheckIns</code> and <code>/Points</code> are pinned by it now.</p>
+          <p>Store gained the equivalent suite it had none of
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:41</code>): all ten route prefixes are
+          pinned to their owning cluster and destination (<code>:79-96</code>, driven at <code>:163</code>), with the forwarder budget
+          and the per-cluster version settings asserted separately (<code>:198</code>, <code>:218</code>, <code>:239</code>). Store&#39;s half is
+          one-way so far: a removed or repointed route fails, but the loaded <code>IProxyConfig</code> is not compared back
+          against the pinned list, so a route ADDED to Store&#39;s <code>appsettings.json</code> without an expectation still
+          passes. Porting ADC&#39;s two completeness facts is what closes the remaining gap.</p>
           <h3 id="4-the-http-version-policy-is-expressed-in-cluster-configuration">4. The HTTP version policy is expressed in cluster configuration</h3>
           <p>Each cluster declares its own <code>HttpRequest</code> version and version policy beside the destination it
           applies to, which is where <a href="012-grpc-host-transport.html">ADR-012</a>&#39;s per-host profile actually belongs:
           the h2c-only hosts declare HTTP/2 with an exact version policy, and the mixed-endpoint hosts (ADC&#39;s
-          Notification, Store&#39;s Sales) declare the HTTP/1.1-capable profile their websocket traffic needs. The
-          <code>ForwardHttp2</code> switch keeps its meaning as the environment-level override, and ADC&#39;s habit of writing
-          it into <code>appsettings.json</code> becomes both repositories&#39; habit, so the effective policy is readable
-          without opening <code>Program.cs</code>.</p>
+          Notification, Store&#39;s Sales) declare the HTTP/1.1-capable profile their websocket traffic needs. ADC&#39;s
+          <code>identity</code>, <code>conference</code> and <code>engagement</code> clusters carry <code>Version</code> with <code>RequestVersionExact</code>
+          (<code>appsettings.json:132-136</code>, <code>:142-146</code>, <code>:152-156</code>) and its two Notification clusters leave both
+          unset (<code>:162-164</code>, <code>:170-172</code>); Store&#39;s <code>catalog</code> and <code>identity</code> clusters carry them
+          (<code>appsettings.json:64-68</code>, <code>:74-78</code>) and its <code>sales</code> cluster leaves both unset (<code>:84-86</code>). The
+          <code>ForwardHttp2</code> switch keeps its meaning as the environment-level override, applied to the loaded
+          configuration rather than to a call site: ADC runs it through <code>Http2ForwardingConfigFilter</code>
+          (<code>Program.cs:92</code>), and Store overlays HTTP/1.1 version settings onto its two h2c clusters as a last
+          configuration source (<code>Program.cs:96-106</code>). Making the switch itself an <code>appsettings.json</code> key stayed
+          an ADC habit (<code>MMCA.ADC.Gateway/appsettings.json:13</code>); Store&#39;s gateway <code>appsettings.json</code> still has no
+          <code>ForwardHttp2</code> key and relies on the <code>true</code> default read in code (<code>Program.cs:96</code>). The effective
+          per-cluster policy is readable without opening <code>Program.cs</code> in both.</p>
           <h3 id="5-stores-timeout-parity-is-fixed-in-the-same-move">5. Store&#39;s timeout parity is fixed in the same move</h3>
           <p>Store&#39;s routes gain the activity timeout ADC already has, tied to the same
           <code>HttpResilienceDefaults.TotalRequestTimeout</code> budget, expressed as configuration rather than as a
-          constructor argument. This is folded into this record rather than filed separately because the reason
+          constructor argument. All three Store clusters now carry <code>&quot;ActivityTimeout&quot;: &quot;00:01:40&quot;</code>
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:65</code>, <code>:75</code>, <code>:85</code>), the same 100 seconds
+          ADC&#39;s four REST clusters carry, and the route-map test pins the value
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:72</code>, asserted at <code>:198</code>). This is
+          folded into this record rather than filed separately because the reason
           Store never got it is exactly the reason this record exists: a per-route setting buried in a call site
           in one repository is not visible as a missing setting in the other. Moving both tables into the same
           declarative shape makes the difference a diff instead of an archaeology exercise.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>The drift already happened, in the repository that has the most gateway tests.</strong> ADC is the careful
-          consumer, and it still carries three unpinned routes, an off-by-one comment and a test description
+          consumer, and it still carried three unpinned routes, an off-by-one comment and a test description
           matching neither. The argument for configuration is not aesthetic: a hand-maintained list of calls
           produces exactly this, and adding discipline has already been tried.</li>
           <li><strong>A route table is data, and data belongs in configuration.</strong> Nothing in a forwarder registration is
@@ -317,8 +343,8 @@
           &quot;the route table is duplicated&quot; is to unify the AppHost, bicep and the gateway. That would put path
           prefixes into deployment templates, which is the actual multiple-descriptions problem this record is
           trying not to create.</li>
-          <li><strong>Configuration without a test would be worse than code.</strong> A typo in a cluster name is a compile
-          error today and a runtime 502 after this change. The gate is what makes the trade net-positive, which
+          <li><strong>Configuration without a test would be worse than code.</strong> A typo in a cluster name was a compile
+          error before and is a runtime 502 now. The gate is what makes the trade net-positive, which
           is why it is part of the decision and not a follow-up.</li>
           <li><strong>Per-destination policy belongs beside the destination.</strong> An HTTP version policy that lives in the
           argument list of one of 26 calls is invisible; the same policy on the cluster is one line under the
@@ -329,15 +355,15 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>The compiler stops helping.</strong> A misspelled cluster reference, a malformed path pattern or a route
-          that shadows another is a runtime failure, discovered as a 404 or a 502, where the current code would
+          <li><strong>The compiler stopped helping.</strong> A misspelled cluster reference, a malformed path pattern or a route
+          that shadows another is a runtime failure, discovered as a 404 or a 502, where the previous code would
           not have built. The route-map test is the only thing standing in that gap, so its coverage is now
           load-bearing in a way it never was.</li>
           <li><strong>Configuration in <code>appsettings.json</code> still ships with the image.</strong> Route changes remain a deploy;
           what disappears is the C# edit and the rebuild reasoning, not the release. Calling the table
           &quot;configuration&quot; invites the assumption that it can be changed live, and it cannot unless a future
           change moves it to an external configuration source.</li>
-          <li><strong>Ordering and matching semantics change.</strong> <code>MapForwarder</code> routes are ASP.NET Core endpoints matched
+          <li><strong>Ordering and matching semantics changed.</strong> <code>MapForwarder</code> routes were ASP.NET Core endpoints matched
           by the routing table&#39;s own precedence; YARP config routes are matched by YARP&#39;s rules, with explicit
           <code>Order</code> available. Catch-all routes (<code>/hubs/{**catch-all}</code>, <code>/Payments/{**catch-all}</code>) are the ones
           most likely to behave subtly differently, and they are also the two routes whose failure is least
@@ -347,9 +373,11 @@
           edge behavior <a href="088-gateway-edge-responsibilities.html">ADR-088</a> declines to own. Nothing prevents one
           from appearing in a route entry.</li>
           <li><strong>Two repositories must land the same shape or the divergence simply moves.</strong> The Store timeout gap
-          is the proof that a per-gateway habit does not propagate. Configuration makes divergence easier to
-          see and does not make it impossible, and no shared framework code enforces the shape, since the
-          gateways are consumer-owned hosts by design.</li>
+          was the proof that a per-gateway habit does not propagate. Both landed the shape, and two smaller
+          differences survived it: Store&#39;s route-map suite has no <code>IProxyConfig</code> completeness check, and its
+          <code>appsettings.json</code> has no <code>ForwardHttp2</code> key. Configuration makes divergence easier to see and does
+          not make it impossible, and no shared framework code enforces the shape, since the gateways are
+          consumer-owned hosts by design.</li>
           <li><strong>A JSON table reviews less well than a code diff.</strong> A reviewer reading 26 routes in
           <code>appsettings.json</code> has no types, no navigation and no compiler; the gain in editability is partly a
           loss in review signal, offset only by the test.</li>

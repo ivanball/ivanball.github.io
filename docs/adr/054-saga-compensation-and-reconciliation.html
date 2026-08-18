@@ -235,7 +235,7 @@
           payment is <code>OrderPaymentFailedSagaHandler</code> (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:20-22</code>).
           A new compensating action is a new handler, not an edit to the command.</li>
           <li><strong>Each handler runs in its own DI scope.</strong> Domain-event handlers are registered as singletons
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:117-122</code>), so every one
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:135-140</code>), so every one
           opens its own scope through <code>IServiceScopeFactory</code> (<code>OrderCancelledSagaHandler.cs:41</code>,
           <code>OrderPaymentFailedSagaHandler.cs:29</code>,
           <code>.../Infrastructure/Services/PaymentReconciliationService.cs:89,132</code>), and the ones that persist
@@ -252,12 +252,12 @@
           (<code>OrderCancelledSagaHandler.cs:56-62</code>), applies the increases through a pure domain service
           (<code>.../Domain/Services/InventoryRestorationDomainService.cs:14-27</code>), then one
           <code>SaveChangesAsync</code> commits the increases and the marker together
-          (<code>OrderCancelledSagaHandler.cs:77-85</code>). Same database, one transaction: the marker cannot exist
+          (<code>OrderCancelledSagaHandler.cs:94-102</code>). Same database, one transaction: the marker cannot exist
           without the writes it guards, and the writes cannot land unmarked.</li>
           <li><strong>Redelivery is the retry mechanism.</strong> A failing in-process handler leaves its outbox row
           unprocessed (<code>MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:301-329</code>) and the
           <code>OutboxProcessor</code> re-dispatches the pure domain event on a later cycle
-          (<code>MMCA.Common/.../Outbox/OutboxProcessor.cs:419-426</code>), with the bounded retries, backoff and
+          (<code>MMCA.Common/.../Outbox/OutboxProcessor.cs:507-597</code>), with the bounded retries, backoff and
           dead-lettering ADR-003 already defines. The framework packages that failure mode and only that
           one: <code>SafeDomainEventHandler&lt;TDomainEvent&gt;</code> runs the subclass inside an exception filter whose
           <code>LogAndRethrow</code> writes one error line and always returns <code>false</code>, so the exception keeps

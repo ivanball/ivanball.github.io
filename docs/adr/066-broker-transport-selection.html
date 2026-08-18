@@ -218,7 +218,7 @@
           <ul>
           <li><strong>Three provider values, one abstraction.</strong> <code>MessageBusProvider</code> has exactly <code>InProcess = 0</code>,
           <code>RabbitMq = 1</code>, <code>AzureServiceBus = 2</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:68-84</code>), bound
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:116-132</code>), bound
           from the <code>MessageBus</code> section (<code>:14</code>) and defaulting to <code>InProcess</code> (<code>:17</code>). <code>AddBrokerMessaging</code>
           returns the container untouched for <code>InProcess</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:656-659</code>); for either
@@ -247,8 +247,8 @@
           selector stays separate from the credential.</li>
           <li><strong>Retry policy is identical on both transports.</strong> Each branch of <code>ConfigureBrokerTransport</code> calls
           <code>cfg.UseMessageRetry(r =&gt; r.Exponential(...))</code> with the same four arguments before
-          <code>ConfigureEndpoints</code>: RabbitMQ at <code>DependencyInjection.cs:794-799</code>, Azure Service Bus at
-          <code>:811-816</code>. The values come from one settings object: <code>RetryLimit</code> 5, <code>RetryMinIntervalSeconds</code> 1,
+          <code>ConfigureEndpoints</code>: RabbitMQ at <code>DependencyInjection.cs:822-826</code>, Azure Service Bus at
+          <code>:849-853</code>. The values come from one settings object: <code>RetryLimit</code> 5, <code>RetryMinIntervalSeconds</code> 1,
           <code>RetryMaxIntervalSeconds</code> 30 (<code>MessageBusSettings.cs:43,50,56</code>). Only in-process retry is
           configured, deliberately not <code>UseDelayedRedelivery</code>, because that needs the RabbitMQ
           delayed-message-exchange plugin the Aspire container does not ship

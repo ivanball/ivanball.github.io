@@ -60,7 +60,7 @@ not as a wrapper struct.
 - **Aliases are linked solution-wide via `Directory.Build.props`.** Each `GlobalUsings.*.cs` file is
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
-  (`MMCA.Common/Directory.Build.props:86-96`), ADC
+  (`MMCA.Common/Directory.Build.props:110-120`), ADC
   (`MMCA.ADC/Directory.Build.props:79-92`), Store (`MMCA.Store/Directory.Build.props:79-90`). Adding a
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain

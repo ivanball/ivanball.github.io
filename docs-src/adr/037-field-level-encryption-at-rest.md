@@ -1,7 +1,8 @@
 # ADR-037: Field-Level Encryption at Rest (AES-256-GCM EF Converter)
 
 ## Status
-Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15).
+Accepted (2026-07-06; revised 2026-07-24, 2026-07-25, 2026-08-15, 2026-08-18). Revised 2026-08-18: the
+versioned-envelope converter is no longer unpublished, it is included in v1.153.0; adoption stays zero.
 
 ## Context
 Transparent database encryption (TDE) protects the data files as a whole, but it decrypts
@@ -284,5 +285,8 @@ Test coverage grew from 11 cases to 21, adding the rotation round trip
 version (`:205`), the four ring-validation guards (`:244`, `:250`, `:259`, `:268`), the defensive copy
 of the caller's dictionary (`:281`), and the version byte the single-key constructor stamps (`:145`).
 
-This revision documents work that lands via MMCA.Common PR #247 and ships in the next framework
-release; it is not in a published package as of this date.
+The work this revision documents landed via MMCA.Common PR #247 and is included in v1.153.0 (tagged
+2026-08-18), so the versioned envelope and key ring are now in published packages. It is included
+rather than featured: the `[1.153.0]` changelog entry (`MMCA.Common/CHANGELOG.md:63-68`) does not name
+the converter, which is in the release because it merged to `main` before the tag. Adoption is
+unchanged at zero: no entity configuration in any of the four repositories wires the converter.
