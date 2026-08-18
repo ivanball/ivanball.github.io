@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-035: Optimistic Concurrency via RowVersion Round-Trip · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision).">
+  <meta name="description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision). Revised 2026-08-18: the same…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-035: Optimistic Concurrency via RowVersion Round-Trip">
-  <meta property="og:description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision).">
+  <meta property="og:description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision). Revised 2026-08-18: the same…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-035: Optimistic Concurrency via RowVersion Round-Trip">
-  <meta name="twitter:description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision).">
+  <meta name="twitter:description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision). Revised 2026-08-18: the same…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"035 · Optimistic Concurrency via RowVersion Round-Trip","item":"https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 87 ADRs</summary>
+        <summary>All 89 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -187,6 +187,8 @@
         <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
         <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
         <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
           </ol>
         </nav>
       </details>
@@ -195,7 +197,13 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-035-optimistic-concurrency-via-rowversion-round-trip">ADR-035: Optimistic Concurrency via RowVersion Round-Trip</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of <code>SetOriginalRowVersion</code> was added (see Decision).</p>
+          <p>Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of <code>SetOriginalRowVersion</code> was added (see Decision).
+          Revised 2026-08-18: the same token gains an <strong>HTTP-native transport</strong>. <code>GetByIdAsync</code> emits a weak
+          <code>ETag</code> derived from the DTO&#39;s <code>RowVersion</code>, a <code>[SupportsIfMatch]</code> filter parses <code>If-Match</code> into the
+          existing <code>IConcurrencyAware</code> contract (body value wins when both are present), and a conflict whose
+          token arrived in the header is rewritten to <strong>412 Precondition Failed</strong> while a body-carried token
+          keeps the 409 this record chose. No new concurrency mechanism: one token, a second way to carry it.
+          See the Revision (2026-08-18) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
           case fetches the tracked entity, applies the request, and calls <code>SaveChangesAsync</code>. With one shared
@@ -295,13 +303,88 @@
           existing table; a new database, or a table added later, must carry the column for the token to
           exist there.</li>
           </ul>
+          <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
+          <p>This record chose a <strong>body</strong> round-trip: the client echoes <code>RowVersion</code> on the update request. HTTP has
+          had a standard way to say the same thing since long before this framework, <code>ETag</code> plus <code>If-Match</code>, and
+          a client that speaks it (a generic REST tool, a mobile HTTP stack, anything not generated from our
+          DTOs) had no way to participate. The revision adds that transport. <strong>It is the same token, the same
+          <code>SetOriginalRowVersion</code> extension point and the same database comparison</strong>: nothing about the mechanism
+          in the Decision changes.</p>
+          <h3 id="the-read-emits-a-weak-etag">The read emits a weak ETag</h3>
+          <p><code>EntityControllerBase.GetByIdAsync</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:383-404</code>) calls
+          <code>SetConcurrencyETag(result.Value)</code> (<code>:402</code>), which emits <code>W/&quot;&lt;base64&gt;&quot;</code> over the DTO&#39;s <code>RowVersion</code>
+          bytes (<code>:429-438</code>, formatted by <code>.../Concurrency/ConcurrencyETag.cs:39-44</code>). Weak is the honest
+          strength: the tag identifies the row&#39;s version, not a byte-exact representation, and the same row can
+          legitimately serialize differently under a <code>fields=</code> projection. Those shaped responses are handled
+          rather than skipped, through a dictionary lookup for the token (<code>:446-455</code>).</p>
+          <p>Emission is silent when there is nothing to emit: a DTO type with no <code>RowVersion</code> property leaves the
+          cached property reflection null and the method no-ops (<code>:411-415</code>, <code>:431-432</code>), and a null or empty
+          token does the same (<code>:434-435</code>).</p>
+          <h3 id="supportsifmatch-is-the-attribute-and-the-filter"><code>[SupportsIfMatch]</code> is the attribute and the filter</h3>
+          <p><code>SupportsIfMatchAttribute</code> (<code>.../Concurrency/SupportsIfMatchAttribute.cs:47</code>) is a sealed
+          <code>Attribute</code> that implements <code>IAsyncActionFilter</code> directly, so unlike <code>[Idempotent]</code> (a
+          <code>ServiceFilterAttribute</code> resolving from DI, ADR-017) it is self-contained and takes no services. On an
+          action carrying it, the <code>If-Match</code> header is parsed and written into <strong>every</strong> bound argument
+          implementing <code>IConcurrencyAware</code> (<code>:120-128</code>), which is why no new contract was needed: the round-trip
+          interface this record already defined (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IConcurrencyAware.cs:13</code>,
+          <code>RowVersion</code> at <code>:20</code>, shipped 2026-06-14) is exactly the shape a header value needs to land in.</p>
+          <p>Three parsing decisions are worth naming. <strong>The body wins.</strong> An argument that already carries a
+          non-empty <code>RowVersion</code> is left alone (<code>:151-154</code>, documented at <code>:24-28</code>), so a client that populates
+          the request model keeps this record&#39;s original behavior and its 409, and the header only fills a gap.
+          <strong>A malformed <code>If-Match</code> is a 400</strong>, short-circuiting the action with ProblemDetails (<code>:114-118</code>,
+          <code>:210-219</code>), because an unparseable precondition is a client error and executing the write would
+          silently ignore a stated precondition. <strong><code>*</code> and blank are treated as no precondition</strong> (<code>:103-112</code>),
+          a deliberate simplification of RFC 9110&#39;s &quot;if any current representation exists&quot;.</p>
+          <h3 id="412-for-a-header-sourced-conflict-409-for-a-body-sourced-one">412 for a header-sourced conflict, 409 for a body-sourced one</h3>
+          <p>The split is implemented in the filter itself, not in <code>DbUpdateExceptionHandler</code>:
+          <code>RewriteConflictToPreconditionFailed</code> (<code>:178-207</code>) runs only when the filter actually applied a header
+          token, tracked by a local <code>headerSourced</code> flag set when at least one argument took its value from the
+          header (<code>:69</code>, <code>:78-81</code>, <code>:130-135</code>). It rewrites both a <code>DbUpdateConcurrencyException</code> (<code>:180-187</code>)
+          and an already-produced 409 result (<code>:191-202</code>), and it publishes
+          <code>HttpContext.Items[&quot;MMCA.Common.API.Concurrency.IfMatchApplied&quot;]</code> (<code>:54</code>, <code>:132</code>) so anything
+          downstream can tell which transport was used.</p>
+          <p>The reason the two codes differ is that they answer different questions. A body-carried token is part
+          of the request payload, and a stale one is a state conflict: 409, exactly as this record decided. A
+          header-carried token is a <strong>precondition</strong> the client attached to the request, and HTTP has a status
+          code that means &quot;the precondition you stated did not hold&quot;: 412. Mapping both to 409 would have made
+          <code>If-Match</code> a decorative alias for the body field.</p>
+          <h3 id="what-this-revision-costs">What this revision costs</h3>
+          <ul>
+          <li><strong>The rewrite keys on the outcome, not on the cause.</strong> Any 409 produced under an <code>If-Match</code> request
+          becomes a 412, including a unique-constraint or foreign-key violation, which <code>DbUpdateExceptionHandler</code>
+          funnels to the same 409 this record already noted as coarse. The source acknowledges it (<code>:33-38</code>).
+          So the coarse-409 trade-off below is not fixed, it is inherited, and one of its cases now wears a
+          status code that names a precondition the client did not actually violate.</li>
+          <li><strong>Body precedence is silent.</strong> A client that sends both a header and a populated request field, with
+          different values, gets the body value and no warning. That is the right default (the payload is more
+          specific) and it is undiscoverable at runtime.</li>
+          <li><strong>The attribute cannot be configured.</strong> Being its own filter with no DI means no host can adjust its
+          behavior, and a future need for a service (a policy, a logger, a metric) forces either a rewrite to
+          <code>ServiceFilterAttribute</code> or a static dependency.</li>
+          <li><strong>An absent ETag is ambiguous.</strong> A DTO without a <code>RowVersion</code> property produces no header at all, so
+          a client cannot distinguish &quot;this resource has no concurrency control&quot; from &quot;this deployment does not
+          support it&quot;. The no-op is the correct behavior and it carries no signal.</li>
+          <li><strong>Nothing here decides conditional GET.</strong> The ETag exists to be echoed back on the next write; this
+          revision adds no <code>If-None-Match</code> handling and no 304 path, and the read-side caching answer remains
+          <a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a>&#39;s output cache. An ETag on a response
+          does invite a client to try, and it will simply be ignored.</li>
+          <li><strong>Opt-in per action, again.</strong> <code>[SupportsIfMatch]</code> has to be applied, and no fitness rule requires it
+          anywhere, so the header transport exists exactly where someone remembered it. The
+          <code>UpdateRequestsAreConcurrencyAware</code> gate covers the request <strong>type</strong>, not the annotation.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-017 (HTTP request idempotency, which dedups retries of the <strong>same</strong> request, the mirror-image
-          concern to two <strong>distinct</strong> edits racing here), ADR-021 (consumer-side inbox, which dedups broker
+          concern to two <strong>distinct</strong> edits racing here, and whose own 2026-08-18 revision adds the
+          declared-intent gate at this same edge), ADR-021 (consumer-side inbox, which dedups broker
           redeliveries of the <strong>same</strong> event, likewise distinct from concurrency), ADR-006 (the one-shared-
           context-per-engine model over which the <code>RowVersion</code> token is configured uniformly), ADR-015 (the
           fitness-function-over-discipline enforcement this reuses), ADR-005 (soft-delete and audit fields live
-          on the same <code>AuditableBaseEntity</code> base that carries <code>RowVersion</code>).</p>
+          on the same <code>AuditableBaseEntity</code> base that carries <code>RowVersion</code>),
+          <a href="034-generic-entity-query-layer.html">ADR-034</a> (the generic entity controller whose <code>GetByIdAsync</code> now
+          emits the ETag, and whose <code>fields=</code> shaping the emitter has to see through),
+          <a href="013-result-pattern.html">ADR-013</a> (the ProblemDetails edge the malformed-<code>If-Match</code> 400 and the rewritten
+          412 both speak).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -317,6 +400,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

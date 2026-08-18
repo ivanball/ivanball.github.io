@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 87 ADRs</summary>
+        <summary>All 89 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -187,6 +187,8 @@
         <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
         <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
         <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
           </ol>
         </nav>
       </details>
@@ -199,6 +201,12 @@
           implementation beside <code>MemoryCacheService</code> and <code>DistributedCacheService</code>. It is opt-in through
           <code>AddCommonHybridCache(...)</code>; with no call the default path is byte-identical to today, so the release is
           non-breaking.</p>
+          <p><strong>Scope note (2026-08-18).</strong> This record is Tier 1 only, as its Decision and its Related entry for
+          ADR-040 both state. The cross-service output-cache eviction shipped on 2026-08-18
+          (<code>OutputCacheEvictionRequested</code> plus a per-tag handler on the <code>MMCA.Common.OutputCache</code> meter) is a
+          <strong>Tier 2</strong> change and is recorded in <a href="026-caching-strategy.html">ADR-026</a>&#39;s Revision (2026-08-18). It
+          touches neither the <code>hc:</code> keyspace, the L1/L2 split, nor anything else decided here: the hybrid
+          substrate and the output-cache edge remain separate invalidation models.</p>
           <h2 id="context">Context</h2>
           <p><a href="026-caching-strategy.html">ADR-026</a> settled Tier 1 as one abstraction (<code>ICacheService</code>) over two
           implementations chosen at startup: in-process memory when no real <code>IDistributedCache</code> is present, Redis

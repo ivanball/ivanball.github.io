@@ -4,7 +4,11 @@
 Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25, 2026-08-14). **Amended by
 [ADR-077](077-hybridcache-substrate.md) (2026-08-13)**: Tier 1's substrate gains a third, opt-in
 implementation (`HybridCacheService`, L1 plus L2) writing under a disjoint `hc:` keyspace. The default
-path is unchanged; see the Revision (2026-08-13) below.
+path is unchanged; see the Revision (2026-08-13) below. Revised 2026-08-18: **Tier 2 stops being
+per-process**. An `OutputCacheEvictionRequested` integration event lets a mutation in one service evict
+another service's output cache over the existing outbox, broker and inbox path, per tag and
+best-effort, on a new `MMCA.Common.OutputCache` meter. Tier 1 is untouched by that change, which is the
+mirror image of ADR-077's Tier-1-only amendment; see the Revision (2026-08-18) at the end.
 
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
@@ -331,3 +335,83 @@ One substrate correction plus a line-anchor re-verification. No decision and no 
 7. **The 2026-08-07 anchor claim is annotated rather than removed**, consistent with how every
    preceding revision treated its predecessor: the anchors it recorded were correct on 2026-08-07 and
    have since drifted again.
+
+## Revision (2026-08-18)
+Every previous revision moved Tier 1. This one moves **Tier 2**, and it is the first change to the
+output-cache edge since [ADR-040](040-authenticated-output-caching-for-public-reads.md).
+
+Tier 2 as decided here is per-process by construction: each host calls `UseOutputCache`, owns its own
+policies, and evicts by tag through its own `IOutputCacheStore`. In a database-per-service deployment
+(ADR-006/008) the thing that invalidates a cached read frequently happens somewhere else: a mutation in
+one service makes another service's cached public read wrong, and that service has no way to hear about
+it. The eviction call and the write that requires it were in different processes, so the only
+invalidation that crossed a boundary was the expiry clock.
+
+### An integration event carries the eviction
+`OutputCacheEvictionRequested`
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:23`) is
+a sealed record over `BaseIntegrationEvent` whose only own member is
+`IReadOnlyList<string> Tags { get; init; } = []` (`:31`), inheriting `SchemaVersion => 1`
+(`.../DomainEvents/BaseIntegrationEvent.cs:22`) and therefore ADR-010's versioning contract. It is the
+**first concrete integration event the framework itself ships**: a repository-wide search of `Source/`
+finds no other, every prior hit being the interface, the abstract base or generic plumbing. Until now
+the framework provided the delivery machinery and consumers provided all the messages.
+
+**`Tags` defaulting to empty is a safety decision, not a formality.** An empty list means evict
+nothing, so a message that arrives malformed, from an older producer, or with a property the consumer
+cannot bind, degrades to a no-op instead of to a cache-wide flush. The failure mode of the default is a
+stale response, which the TTL already bounds; the alternative default would have made a deserialization
+accident indistinguishable from an intentional purge.
+
+Delivery reuses the whole existing path rather than adding a channel: the producing service raises the
+event, ADR-003's outbox persists and publishes it, ADR-066's broker carries it, and ADR-021's inbox
+dedups the redelivery. Nothing about eviction is transactional or exactly-once, and it does not need to
+be: evicting twice is free, and evicting late is what a TTL is for.
+
+### The consumer side is two registrations in two packages
+`RegisterOutputCacheEvictionConsumer(bool registerFaultConsumer = true)`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:68-70`)
+is the MassTransit-side shorthand for `RegisterIntegrationEventConsumer<OutputCacheEvictionRequested>()`,
+so it inherits ADR-087's fault consumer by default. `AddOutputCacheEvictionHandler()`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:32`)
+registers the handler itself, through `TryAddEnumerable` (`:36-38`). They are in different packages
+because the two halves are genuinely different concerns (broker registration is Infrastructure, output
+caching is API), and **a host that calls only one gets silence**: the consumer without the handler
+receives and discards, the handler without the consumer is never invoked.
+
+`OutputCacheEvictionHandler`
+(`.../MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:32`) loops the tags, skips blank ones, and
+catches per tag so one failing tag cannot abandon the rest (`:44-63`), rethrowing only
+`OperationCanceledException` so a stopping host is not counted as a cache failure. Failures increment
+`cache.eviction.failed`, tagged `cache_tag`, on a new meter `MMCA.Common.OutputCache`
+(`.../Caching/OutputCacheMetrics.cs:19`, instrument at `:29-37`), subscribed by the Aspire defaults
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:169`).
+
+One deliberate non-reuse: the handler does **not** route through the `BestEffort.ExecuteAsync` helper
+that shipped in the same release. `BestEffort` lives in the Application layer and counts on its own
+`MMCA.Common.BestEffort` meter, which the API package cannot reach without either a layer-crossing
+reference or a duplicated meter name; the handler therefore hand-rolls the same swallow-log-count shape
+against its own instrument. That is a small duplication chosen over a worse coupling, and it is the
+reason two "best effort" counters exist in one release.
+
+### What this revision costs
+- **Cross-service eviction is asynchronous and unordered relative to the write.** The stale window is
+  at least an outbox poll plus broker delivery plus the consumer's own scheduling, so a reader can
+  observe the old response after the writer's transaction has committed. Tier 2 was always
+  eventually-consistent; this makes the eventual explicit and measurable rather than bounded by the TTL
+  alone.
+- **The tag vocabulary is a shared string contract nothing validates.** The producer names a tag the
+  consumer's policies must also name. A typo evicts nothing and **counts nothing**, because evicting an
+  unknown tag succeeds: the failure counter sees only faults, never misses, so the most likely error is
+  the one with no signal.
+- **`cache.eviction.failed` has no alert and no runbook section.** It joins the counters ADR-087 also
+  left unwired ([ADR-062](062-slo-alerting-as-code.md)), so a service quietly failing every eviction is
+  visible only to someone already looking at the meter.
+- **The two-call registration is an inventory item.** Nothing fails a build, a test or a startup when a
+  host wires one half, and both halves are opt-in per host on top of that.
+- **The framework now owns a wire contract.** `OutputCacheEvictionRequested` is a published shape that
+  ADR-010's rules apply to, so a future field is an additive change with an upcaster or a new type,
+  never a reshape, and that obligation now sits on the framework rather than only on consumers.
+- **Tier 1 and Tier 2 remain separate invalidation models.** A single mutation may need a Tier 1 prefix
+  invalidation and a Tier 2 tag eviction, and nothing coordinates them; ADR-077 moved one, this
+  revision moves the other, and they still do not meet.

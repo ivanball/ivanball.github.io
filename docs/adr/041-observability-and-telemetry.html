@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 87 ADRs</summary>
+        <summary>All 89 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -187,6 +187,8 @@
         <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
         <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
         <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
           </ol>
         </nav>
       </details>
@@ -209,7 +211,10 @@
           (2026-08-07) to record that the outbox meter and dead-letter counter now live in a dedicated
           <code>OutboxMetrics</code> type rather than in <code>OutboxProcessor</code>, to document the second dead-letter increment
           on the retries-exhausted path and the <code>reason</code> tag that separates the two, and to rebase the Aspire
-          service-defaults, CQRS metric-literal, and outbox span citations onto their current lines.</p>
+          service-defaults, CQRS metric-literal, and outbox span citations onto their current lines. Amended
+          (2026-08-18) to record two new meter families (<code>MMCA.Common.OutputCache</code>, <code>MMCA.Common.BestEffort</code>), to
+          correct the meter inventory this record has been under-reporting, and to note that the correlation id
+          now starts one hop earlier, at the Gateway; see the Revision (2026-08-18) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -356,6 +361,37 @@
           nothing, and a misconfigured ratio fails toward sample-all (higher cost) rather than toward silence:
           the intended bias, but it means a cost surprise is possible where a data gap is not.</li>
           </ul>
+          <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
+          <p>Two meters and one hop.</p>
+          <p><strong>Two new failure counters, each on its own meter.</strong> <code>cache.eviction.failed</code>, tagged <code>cache_tag</code>, on
+          <code>MMCA.Common.OutputCache</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheMetrics.cs:19</code>, instrument at
+          <code>:29-37</code>) counts a cross-service output-cache eviction that failed for one tag
+          (<a href="026-caching-strategy.html">ADR-026</a>&#39;s Revision (2026-08-18)); and <code>besteffort.dispatch.failed</code>, tagged
+          <code>operation</code>, on <code>MMCA.Common.BestEffort</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:102</code>, instrument at <code>:107-115</code>)
+          counts a swallowed fire-and-forget side effect, the helper&#39;s whole purpose being that the caller does
+          not see the failure. Both are subscribed in the Aspire defaults
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:169-170</code>).</p>
+          <p><strong>The meter inventory in the Decision above is wrong and has been for a while.</strong> This record names two
+          meters, and <a href="087-broker-poison-message-handling.html">ADR-087</a> called <code>MMCA.Common.Broker</code> &quot;a third&quot;,
+          which was already an undercount. The authoritative list is the subscription block itself
+          (<code>Extensions.cs:164-170</code>), which now carries <strong>seven</strong>: <code>MMCA.Common.Outbox</code>, <code>MMCA.Common.Cqrs</code>,
+          <code>MMCA.Common.Idempotency</code>, <code>MMCA.Common.Scheduler</code>, <code>MMCA.Common.Broker</code>, <code>MMCA.Common.OutputCache</code>,
+          <code>MMCA.Common.BestEffort</code>. Two of them (<code>Idempotency</code>, <code>Scheduler</code>) were never recorded here at all.
+          Read that block, not this prose, when the question is what the framework exports.</p>
+          <p><strong>Correlation now starts at the edge.</strong> <a href="088-gateway-edge-responsibilities.html">ADR-088</a> adds a
+          context-free <code>GatewayCorrelationMiddleware</code> that ensures <code>X-Correlation-ID</code> on the way in and echoes it
+          on the way out, writing it onto the forwarded request so the service-tier <code>CorrelationIdMiddleware</code>
+          adopts it rather than minting its own. The Decision&#39;s claim that one id stitches a request together
+          becomes true across the gateway hop, where it previously began at the first service and left the
+          Gateway&#39;s own logs unlinked. No meter, no span, one header, one hop earlier.</p>
+          <p>Two costs come with it. <strong>Both new counters are failure-only</strong>, so a healthy system emits nothing on
+          them and a zero is indistinguishable from a host that never wired the feature, which is exactly the
+          shape of signal that goes unnoticed until an incident. And neither is wired to an alert or a runbook
+          section, joining ADR-087&#39;s two counters in the gap <a href="062-slo-alerting-as-code.html">ADR-062</a> describes.
+          The duplicated-literal cost this record already records in Trade-offs now applies to seven names rather
+          than two.</p>
           <h2 id="related">Related</h2>
           <p>ADR-003 (the outbox whose dead-letter counter and poll-span filtering this defines), ADR-014 (the
           CQRS decorator pipeline that emits the RED histograms as a byproduct of its logging decorators),
@@ -379,6 +415,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

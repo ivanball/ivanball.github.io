@@ -1,7 +1,13 @@
 # ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway
 
 ## Status
-Accepted.
+Accepted. **Amended by [ADR-089](089-gateway-topology-owned-by-configuration.md) (2026-08-18)**: the
+Gateway keeps the route-to-service map this record gave it, but stops expressing it as `MapForwarder`
+calls in code. YARP `ReverseProxy` configuration becomes the single route source, the per-destination
+HTTP version policy moves into cluster configuration, and a route-map test becomes the drift gate. The
+topology decision itself is unchanged. See also
+[ADR-088](088-gateway-edge-responsibilities.md) (2026-08-18) for the cross-cutting behavior the Gateway
+gains at the same time, which is the first added to it since this record.
 
 ## Context
 ADC began as a modular monolith: one `MMCA.ADC.WebAPI` host loaded every module (Identity, Conference,
