@@ -25,7 +25,7 @@ and every Store Catalog policy uses it
 (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:153-158`), but it is a default,
 not a rule: ADC runs two 60-second policies whose payload cannot wait five minutes (`NowNextCache`,
 a clock-dependent now-and-next snapshot, and `BookmarkCountsCache`, written by another service;
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:246,254`).
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:251,263`).
 
 That design was silently inert for the traffic that matters. The shared UI HttpClient pipeline
 attaches the stored Bearer token to every outgoing API request via `AuthDelegatingHandler`,
@@ -83,11 +83,11 @@ and the API-layer visibility check reads the same list
 Two lists naming different roles would put a privileged payload in the shared public entries and
 serve it to everyone, so the single declaration is the guard, not a convention. Nor is the bypass a
 narrow exception in practice: nine of ADC's ten public policies pass it
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:231-254`), the exception being
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:236-263`), the exception being
 `NowNextCache`, whose published-data payload is identical for every role. Breadth has a second
 driver that role-shaped variance does not cover: the admin surfaces read back right after mutating
 and not every write path evicts tags, so a cached stale row version makes the next save throw
-`DbUpdateConcurrencyException` (`Program.cs:220-226`).
+`DbUpdateConcurrencyException` (`Program.cs:227-228`).
 
 ## Rationale
 
@@ -145,9 +145,9 @@ and not every write path evicts tags, so a cached stale row version makes the ne
   DIFFERENT service cannot evict this one's entries at all, and no store choice fixes that: ADC's
   bookmark counts are written by Engagement and read through Conference, so they carry a short TTL
   instead of relying on eviction (`BookmarkCountsCache`, 60 seconds,
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:254`). A payload that changes on
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:263`). A payload that changes on
   the clock is the same shape of problem with the same answer, since no mutation exists to evict on
-  (`NowNextCache`, 60 seconds, `Program.cs:246`). When adding a cached endpoint, check which
+  (`NowNextCache`, 60 seconds, `Program.cs:251`). When adding a cached endpoint, check which
   process owns every write that can change its payload, and whether time alone changes it.
 - Cache hit rate becomes meaningful for authenticated load tests; k6 scripts that log in now
   exercise the same cache path as anonymous ones.

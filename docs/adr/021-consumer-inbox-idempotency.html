@@ -256,7 +256,7 @@
           migration. Adoption inventory as of 2026-08-13: <strong>three ADC services consume from the broker</strong> and
           so use their inbox for real, plus Store Sales. ADC Identity consumes <code>SpeakerLinkedToUser</code> and
           <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:299-300</code>),
-          ADC Conference consumes <code>UserRegistered</code> (<code>MMCA.ADC.Conference.Service/Program.cs:347</code>), and ADC
+          ADC Conference consumes <code>UserRegistered</code> (<code>MMCA.ADC.Conference.Service/Program.cs:365</code>), and ADC
           Engagement consumes four events, <code>AttendeeCheckedIn</code>, <code>SessionFeedbackSubmitted</code>,
           <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:299-302</code>), the
           first of which is ADC&#39;s first <strong>self-consumption</strong> over the broker: Engagement publishes
@@ -328,8 +328,8 @@
           framework behavior rather than a public extension point.</li>
           <li><strong><code>MessageBus:EnableInbox=true</code> is now the stated recommendation, not a neutral option.</strong> The
           setting is still <code>bool</code> with no initializer, so the default is still <code>false</code>
-          (<code>.../Settings/MessageBusSettings.cs:75</code>), but its own documentation now says &quot;RECOMMENDED true for
-          any broker-connected host&quot; (<code>:62-72</code>). The Trade-offs entry above (&quot;a broker-consuming service that
+          (<code>.../Settings/MessageBusSettings.cs:76</code>), but its own documentation now says &quot;RECOMMENDED true for
+          any broker-connected host&quot; (<code>:65-73</code>). The Trade-offs entry above (&quot;a broker-consuming service that
           forgets <code>EnableInbox</code> gets no dedup&quot;) therefore keeps its substance and loses its silence: the
           inventory audit it asks for is now performed by the host at every boot.</li>
           <li><strong>The <code>InboxMessages</code> table is part of the relational model unconditionally.</strong>

@@ -220,9 +220,9 @@
           <li><strong>A readiness gate that starts closed.</strong> <code>WarmupReadinessGate</code> (singleton) begins not-ready;
           <code>WarmupReadinessHealthCheck</code> is registered tagged <code>ready</code> and reports <code>Unhealthy</code> until the gate opens.
           <code>MapDefaultEndpoints()</code> maps <code>/health/ready</code> to every check tagged neither <code>live</code> nor <code>optional</code>
-          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:351</code>), so while warm-up is running the replica&#39;s
+          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:358-360</code>), so while warm-up is running the replica&#39;s
           readiness endpoint reports not-ready and the platform keeps traffic off it. (<code>/alive</code> maps only the
-          <code>live</code>-tagged self check, <code>Extensions.cs:335</code>, so liveness is unaffected and the container is not
+          <code>live</code>-tagged self check, <code>Extensions.cs:342-345</code>, so liveness is unaffected and the container is not
           restarted.) The second exclusion, <code>optional</code> (<code>HealthCheckTags.cs:32</code>), covers a dependency the app
           degrades gracefully without: a distributed cache sitting behind an in-memory fallback, a broker behind
           a retrying outbox. Those checks are still reported on <code>/health</code>, so the degradation stays visible, but

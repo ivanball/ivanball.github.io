@@ -8,8 +8,8 @@ ADR-020 added a permission (capability) layer over RBAC: it answers "what may th
 resolving a role to a permission so an endpoint can require a capability instead of a role name. It
 explicitly scoped out the orthogonal question, "is this **my** order", recording that "per-resource
 ownership (a customer may read only their own data) stays a separate concern (`OwnerOrAdminFilter`),
-and a route needing both composes the two" (`ADRs/020-permission-based-authorization.md:74`,
-`020-permission-based-authorization.md:75`).
+and a route needing both composes the two" (`ADRs/020-permission-based-authorization.md:78`,
+`020-permission-based-authorization.md:79`).
 
 That carve-out names a mechanism that already ships in framework code but had no decision record of
 its own. RBAC and permissions are principal-scoped: a customer with the Customer role may read orders,
@@ -52,7 +52,7 @@ bypass role (`Admin` by default).
   `[ServiceFilter(typeof(OwnerOrAdminFilter))]`.
 - **Collection ownership specification.** `OwnershipHelper`
   (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10`) is a static helper.
-  `GetOwnershipSpecification<TSpec, TId>` returns `null` for the bypass role (`OwnershipHelper.cs:45`),
+  `GetOwnershipSpecification<TSpec, TId>` returns `null` for the bypass role (`OwnershipHelper.cs:47`),
   and otherwise reads the caller's id claim (`GetClaimValue<TId>(claimType)`, `OwnershipHelper.cs:50`)
   and builds a `Specification` via the supplied factory (`OwnershipHelper.cs:51`); a convenience
   overload defaults the claim to `"customer_id"` (`OwnershipHelper.cs:63`, `OwnershipHelper.cs:67`). The
@@ -99,18 +99,18 @@ and `OrdersController` builds an `OrdersByCustomerSpecification` through a priva
 (`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:63-65`,
 `MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13`, filtering
 by `CustomerId`, `OrdersByCustomerSpecification.cs:18`), passed as `specification:
-GetOwnershipSpecification()` into each query (`OrdersController.cs:104`, `OrdersController.cs:142`,
-`OrdersController.cs:176`). `OrdersController` does not use the class-level filter for its mutating
+GetOwnershipSpecification()` into each query (`OrdersController.cs:105`, `OrdersController.cs:143`,
+`OrdersController.cs:177`). `OrdersController` does not use the class-level filter for its mutating
 routes; it runs an explicit per-mutation ownership check, `ValidateOwnershipAsync`
-(`OrdersController.cs:396`), that reuses `OwnershipHelper.IsAdmin` through its `IsAdmin` property
-(`OrdersController.cs:61`) to let the bypass role through. Its two denial branches return different
+(`OrdersController.cs:431`), that reuses `OwnershipHelper.IsAdmin` through its `IsAdmin` property
+(`OrdersController.cs:62`) to let the bypass role through. Its two denial branches return different
 statuses on purpose:
 
 - **Missing owner claim** (the caller carries no `customer_id`): `Error.Forbidden`, a 403
-  (`OrdersController.cs:404`, `OrdersController.cs:406-410`). Nothing was looked up, so there is no
+  (`OrdersController.cs:439`, `OrdersController.cs:441-446`). Nothing was looked up, so there is no
   resource whose existence a 403 could leak; this matches the filter's own missing-claim `ForbidResult`.
 - **Owner mismatch** (the claim is present but the order is someone else's): `Error.NotFound`, a 404
-  rather than a 403 (`OrdersController.cs:417`, `OrdersController.cs:419-421`), so the response does not
+  rather than a 403 (`OrdersController.cs:454`, `OrdersController.cs:454-456`), so the response does not
   reveal that another customer's order exists.
 
 MMCA.ADC's Engagement module is the first host to configure the filter's vocabulary rather than take
@@ -178,7 +178,7 @@ that is its only caller. ADC's `BookmarksController` needs no annotation: both f
 
 ## Related
 ADR-020 (the role/permission RBAC layer this complements, and whose explicit
-`020-permission-based-authorization.md:74` scope-out this fills), ADR-034 (the generic entity query
+`020-permission-based-authorization.md:78` scope-out this fills), ADR-034 (the generic entity query
 pipeline / `IEntityQueryService` the collection-scoping `Specification` slots into), ADR-013 (failures
 surface as `Result`/HTTP at the edge, the filter as a 403 `ForbidResult`), ADR-004 (the validated
 principal and owner claim both enforcement points trust).
@@ -199,9 +199,9 @@ An audit against the code. No behavior changed; the ADR text did.
 Anchor-only correction. No behavior changed; `OrdersController` was refactored (a constructor
 parameter added, `GetOwnershipSpecification()` and the `IsAdmin` property extracted,
 `ValidateOwnershipAsync` moved) since the 2026-07-25 pass, which shifted every line anchor pointing
-into it. Refreshed: `GetOwnershipSpecification()` (now `OrdersController.cs:63-65`), its three call
-sites (`OrdersController.cs:104`, `:142`, `:176`), `ValidateOwnershipAsync` (now
-`OrdersController.cs:396`) and the `IsAdmin` property it reads (`OrdersController.cs:61`), the
-missing-owner-claim `Error.Forbidden` branch (`OrdersController.cs:404`, `:406-410`), and the
-owner-mismatch `Error.NotFound` branch (`OrdersController.cs:417`, `:419-421`).
+into it. Refreshed: `GetOwnershipSpecification()` (now `OrdersController.cs:64-66`), its three call
+sites (`OrdersController.cs:105`, `:143`, `:177`), `ValidateOwnershipAsync` (now
+`OrdersController.cs:431`) and the `IsAdmin` property it reads (`OrdersController.cs:62`), the
+missing-owner-claim `Error.Forbidden` branch (`OrdersController.cs:439`, `:441-446`), and the
+owner-mismatch `Error.NotFound` branch (`OrdersController.cs:454`, `:454-456`).
 `OrdersByCustomerSpecification.cs:13` and `:18` were re-checked and are unchanged.

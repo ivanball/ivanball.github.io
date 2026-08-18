@@ -46,8 +46,8 @@ else.
 
 ### Second-level redelivery is transport-aware, and the flag exists only because of RabbitMQ
 `MessageBusSettings` gains two members. `EnableDelayedRedelivery`
-(`MessageBusSettings.cs:95`) is a `bool` with no initializer, so it **defaults to `false`**, and
-`RedeliveryIntervalsSeconds` (`:111`) is an `IReadOnlyList<int>` defaulting to `[60, 600, 3600]`: one
+(`MessageBusSettings.cs:96`) is a `bool` with no initializer, so it **defaults to `false`**, and
+`RedeliveryIntervalsSeconds` (`:112`) is an `IReadOnlyList<int>` defaulting to `[60, 600, 3600]`: one
 minute, ten minutes, one hour. Both live in the `"MessageBus"` section (`:14`).
 
 The two transports consume them differently, and the asymmetry is the decision:
@@ -80,16 +80,16 @@ redelivery outside it.
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/FaultIntegrationEventConsumer.cs:28-30`)
 implements `IConsumer<Fault<TEvent>>`, the message MassTransit publishes when a consumer's retries are
 spent. It does exactly two things: writes one source-generated **Error**-level log line naming the
-event type and the faulted message id (`:59`, emitted at `:50`, id resolved as
-`fault.FaultedMessageId ?? fault.FaultId` at `:41`), and increments a counter (`:52-54`). It never
+event type and the faulted message id (`:59`, emitted at `:49`, id resolved as
+`fault.FaultedMessageId ?? fault.FaultId` at `:40`), and increments a counter (`:51-53`). It never
 throws and never replays the failed message (`:19-24`). That restraint is the point: a fault consumer
 that tried to recover would be a second, undocumented retry policy layered on the two that already
 exist.
 
 Registration is automatic. `RegisterIntegrationEventConsumer<TEvent>`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:39-40`)
-takes `bool registerFaultConsumer = true` (`:38`) and adds the fault consumer under that guard
-(`:43`), so a host that registers a consumer gets fault observability without asking. **That parameter
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:38`)
+takes `bool registerFaultConsumer = true` (`:39`) and adds the fault consumer under that guard
+(`:46`), so a host that registers a consumer gets fault observability without asking. **That parameter
 is the only opt-out, and it is per event type**: there is deliberately no host-wide configuration
 switch, so turning fault observability off is a visible `false` at one call site rather than a setting
 that silently disarms every consumer in a service.

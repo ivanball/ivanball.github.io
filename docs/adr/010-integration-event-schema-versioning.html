@@ -197,7 +197,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-010-integration-event-schema-versioning--upcaster-policy">ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base).</p>
+          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, <code>OutputCacheEvictionRequested</code>, so the framework&#39;s convention test is no longer vacuous: enforcement runs at five points, not four).</p>
           <h2 id="context">Context</h2>
           <p>Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
           are resolved by consumers solely by their type string: the outbox serializes the event to JSON keyed
@@ -248,9 +248,18 @@
           real reshape. The load-bearing half is the discipline (new type + upcaster); the framework does not
           yet ship an upcaster registration extension point: building one is follow-up work, and until then the policy is
           enforced by convention + review, not by an upcaster pipeline.</li>
-          <li>The convention test is <strong>vacuous in MMCA.Common today</strong> (the framework ships no concrete integration
-          event): <code>EventVersioningConventionTests</code> runs the shared base against <code>CommonArchitectureMap</code> but has
-          nothing to check. Real enforcement lives in the consumer trees: four now subclass
+          <li>The convention test is <strong>no longer vacuous in MMCA.Common</strong>: the framework now ships one concrete
+          integration event, <code>OutputCacheEvictionRequested</code>
+          (<code>Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:23</code>), a sealed
+          record inheriting <code>BaseIntegrationEvent</code>, and <code>CommonArchitectureMap</code> registers the Domain assembly it
+          lives in (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:22</code>), so
+          <code>EventVersioningConventionTests</code> gates a real event in Common&#39;s own build. Enforcement therefore runs
+          at five points, not four. (Common&#39;s map declares no modules, so the namespace rule&#39;s Shared-layer half
+          is relaxed there: <code>ArchitectureRules.IntegrationEventsResideInSharedIntegrationEventsNamespace</code>
+          (<code>Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Events.cs:28-33</code>) applies the
+          <code>sharedAssemblies</code> check only when <code>map.ModuleNames.Count &gt; 0</code>, which is why the framework&#39;s own
+          event may sit in a Domain-assembly <code>*.IntegrationEvents</code> namespace while every module-bearing consumer
+          is still held to Shared.) The other four are the consumer trees, which subclass
           <code>EventConventionTestsBase</code> and run the identical rules against their own event assemblies:
           <code>EventConventionTests</code> in <code>MMCA.ADC.Architecture.Tests</code> (ADC&#39;s seven events, spread across the
           Identity, Conference and Engagement Shared assemblies the map registers) and
@@ -260,7 +269,8 @@
           (<code>Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ArchitectureTests.cs:38</code>, a local-only sample
           repo that is not published) gating its <code>ProductCreatedIntegrationEvent</code> and
           <code>OrderPlacedIntegrationEvent</code>. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
-          Store) is <strong>closed</strong>: every concrete integration event across all four trees is now enforced.</li>
+          Store) is <strong>closed</strong>: every concrete integration event across the four consumer trees is enforced, and
+          so is the framework&#39;s own.</li>
           <li>A get-only <code>SchemaVersion</code> is informational on the wire (it round-trips out, not back in): intentional
           (version is a property of the type, not per-instance data), but it means you read it off the concrete
           type/JSON, not by mutating it.</li>

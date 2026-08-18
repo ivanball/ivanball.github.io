@@ -19,7 +19,9 @@ Revised 2026-08-18 (**substantive**: `QuerySpecification` gives a specification 
 paging and tracking; composition drops `Expression.Invoke` for parameter substitution, retiring the
 provider-bet trade-off; `IEntityQuerier` gains specification-first reads and keyset pagination; an
 optional projector pushes DTO projection into SQL; and paginated reads become deterministically
-ordered. Two Trade-offs entries below are superseded. See the Revision (2026-08-18) at the end).
+ordered. Two Trade-offs entries below are superseded. See the Revision (2026-08-18) at the end;
+the Decision section's composition bullet and its `IRepository.cs` / `EFReadRepository.cs` anchors
+were re-stated against that same revision).
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -27,7 +29,7 @@ decides whether the module can still be lifted into its own service later (ADR-0
 framework already keeps persistence out of Application by reference: the interfaces live in
 `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs` and the EF
 implementation in
-`Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:15-17`, so no
+`Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:19-21`, so no
 Application project references EF Core. That is not enough on its own. A repository that hands back
 an `IQueryable` re-couples the caller through the back door: the query is composed inside the
 handler, translated by whatever provider sits behind the `DbSet`, and there is no way to answer that
@@ -51,17 +53,17 @@ operations, expression-tree specifications for the predicates, and a build-faili
 keeps the raw `IQueryable` surfaces out of Application code.
 
 - **The read contract is split by responsibility.** `IEntityReader<TEntity, TIdentifierType>`
-  (`IRepository.cs:19`) carries single-entity lookups: `GetByIdAsync` (`IRepository.cs:24`, `:29`),
-  `GetByIdsAsync` (`:46`), and the two `ExistsAsync` overloads (`:54`, `:60`).
-  `IEntityQuerier<TEntity, TIdentifierType>` (`:78`) carries collection work: `GetAllAsync` (`:83`),
-  `GetProjectedAsync` (`:103`), `GetAllForLookupAsync` (`:111`), and `CountAsync` (`:118`, `:121`).
-  `IReadRepository` composes exactly those two (`:134-135`), and `IRepository` composes read plus
-  write (`:262`). The interface documentation directs new handlers at the focused sub-interfaces and
-  leaves existing code on the composite (`:129-130`).
+  (`IRepository.cs:21`) carries single-entity lookups: `GetByIdAsync` (`IRepository.cs:26`, `:31`),
+  `GetByIdsAsync` (`:48`), and the two `ExistsAsync` overloads (`:56`, `:62`).
+  `IEntityQuerier<TEntity, TIdentifierType>` (`:80`) carries collection work: `GetAllAsync` (`:85`),
+  `GetProjectedAsync` (`:105`), `GetAllForLookupAsync` (`:113`), and `CountAsync` (`:120`, `:123`).
+  `IReadRepository` composes exactly those two (`:221-222`), and `IRepository` composes read plus
+  write (`:349`). The interface documentation directs new handlers at the focused sub-interfaces and
+  leaves existing code on the composite (`:216-217`).
 - **The raw queryables live on the composite only.** `Table`, `TableNoTracking`,
   `TableNoTrackingSingleQuery`, and `TableNoTrackingSplitQuery` are declared on `IReadRepository`
-  (`IRepository.cs:140`, `:143`, `:146`, `:149`) and implemented as EF `DbSet` expressions
-  (`EFReadRepository.cs:262`, `:265`, `:268`, `:271`). They are deliberately absent from
+  (`IRepository.cs:227`, `:230`, `:233`, `:236`) and implemented as EF `DbSet` expressions
+  (`EFReadRepository.cs:279`, `:282`, `:285`, `:288`). They are deliberately absent from
   `IEntityReader` and `IEntityQuerier`, so a handler that declares the narrow dependency cannot reach
   a queryable at all.
 - **Application code must not touch those queryables, and a fitness rule fails the build.**
@@ -89,17 +91,22 @@ keeps the raw `IQueryable` surfaces out of Application code.
   closed over the entity type at the call site, which is how ADC scopes an attendee to their own
   answers
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:66-67`).
-- **Specifications compose.** `AndSpecification` (`Specification.cs:62`), `OrSpecification` (`:88`),
-  and `NotSpecification` (`:114`) build a new lambda over a fresh parameter with `Expression.Invoke`
-  so the result stays an expression tree EF can translate (`:74-78`, `:100-104`, `:125-128`);
-  `InlineSpecification` (`:45`) wraps a predicate that was assembled dynamically and has no
-  hand-written class. Composition is used in production: ADC's paged session read ANDs the
+- **Specifications compose.** `AndSpecification` (`Specification.cs:81`), `OrSpecification` (`:105`),
+  and `NotSpecification` (`:128`) each expose a `Criteria` that delegates to the internal
+  `SpecificationComposer` (`:146`). `Combine` (`:155`) rebinds the right operand's parameter onto the
+  left's with an `ExpressionVisitor`, `ParameterReplacer.Replace` (`ParameterReplacer.cs:34`), and
+  joins the two bodies with `AndAlso` or `OrElse` (`Specification.cs:169-173`); `Negate` (`:181`)
+  wraps the inner body in `Expression.Not` and keeps the inner lambda's own parameter (`:189-191`).
+  No `Expression.Invoke` is involved, so the composed result is a single expression tree any provider
+  can translate, and each combinator caches it in a per-instance lazy field (`:91-93`, `:115-117`,
+  `:137-138`). `InlineSpecification` (`:45`) wraps a predicate that was assembled dynamically and has
+  no hand-written class. Composition is used in production: ADC's paged session read ANDs the
   public-session specification with the speaker-scoped one rather than substituting, because dropping
   the public filter would leak non-accepted sessions to non-privileged callers
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:96`,
   `:118`, rationale at `:91-93`).
 - **The specification enters the same query pipeline, not a parallel one.** `IEntityQueryService`
-  takes an optional `Specification<TEntity, TIdentifierType>` on every DTO or entity read: the two
+  takes an optional `ISpecification<TEntity, TIdentifierType>` on every DTO or entity read: the two
   `GetAllAsync` overloads, `GetEntityByIdAsync`, and `GetByIdAsync`
   (`Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:40`, `:63`, `:110`,
   `:131`). The other two reads on the interface take a raw predicate rather than a specification,
@@ -138,14 +145,14 @@ at `:29`), and the container registers only the open generic `IRepository<,>`
 (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:107`). `IEntityReader` and
 `IEntityQuerier` have no reference in C# code outside their own declaration file across all four
 repositories: not a type, not a parameter, and not a doc comment. The only C# occurrences of either
-name in the workspace are inside that file, the two declarations (`IRepository.cs:19`, `:78`) and
-`IReadRepository` naming them in its own doc comment and base list (`:127-128`, `:135`). The only
+name in the workspace are inside that file, the two declarations (`IRepository.cs:21`, `:80`) and
+`IReadRepository` naming them in its own doc comment and base list (`:214-215`, `:222`). The only
 other occurrences in the workspace describe the contract rather than depend on it: two comments in
 MMCA.Helpdesk's template staging script
 (`MMCA.Helpdesk/build/templates/stage.ps1:250`, `:959`) noting that `IEntityReader.GetByIdAsync`
 declares `includes` as a required parameter, which is why the generated conditional passes an empty
 list instead of omitting the argument. So the ISP split is today the declared target that new
-handlers are pointed at (`IRepository.cs:129-130`), not the dependency shape any handler currently
+handlers are pointed at (`IRepository.cs:216-217`), not the dependency shape any handler currently
 has.
 
 ## Rationale

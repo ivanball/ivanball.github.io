@@ -254,7 +254,7 @@
           <li><strong>Aliases are linked solution-wide via <code>Directory.Build.props</code>.</strong> Each <code>GlobalUsings.*.cs</code> file is
           pulled into every project with a <code>&lt;Compile Include ... Link=... /&gt;</code> block, so the alias is visible
           everywhere without a project reference: Common
-          (<code>MMCA.Common/Directory.Build.props:86-96</code>), ADC
+          (<code>MMCA.Common/Directory.Build.props:110-120</code>), ADC
           (<code>MMCA.ADC/Directory.Build.props:79-92</code>), Store (<code>MMCA.Store/Directory.Build.props:79-90</code>). Adding a
           solution-wide alias is a new <code>GlobalUsings.*.cs</code> plus a matching <code>&lt;Compile Include&gt;</code> line, nothing more.</li>
           <li><strong>The alias flows unchanged through every layer.</strong> Tracing the ADC <code>User</code> aggregate: the domain

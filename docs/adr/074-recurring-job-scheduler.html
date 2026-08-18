@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-13; revised 2026-08-14). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
+  <meta name="description" content="Accepted (2026-08-13; revised 2026-08-14, 2026-08-18). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in:…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)">
-  <meta property="og:description" content="Accepted (2026-08-13; revised 2026-08-14). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
+  <meta property="og:description" content="Accepted (2026-08-13; revised 2026-08-14, 2026-08-18). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in:…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)">
-  <meta name="twitter:description" content="Accepted (2026-08-13; revised 2026-08-14). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in: a host calls…">
+  <meta name="twitter:description" content="Accepted (2026-08-13; revised 2026-08-14, 2026-08-18). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release and is opt-in:…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)","item":"https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -197,7 +197,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-074-recurring-job-scheduler-persistent-cron-jobs-on-the-outbox-claim-lease-pattern">ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-13; revised 2026-08-14). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
+          <p>Accepted (2026-08-13; revised 2026-08-14, 2026-08-18). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
           and is opt-in: a host calls <code>AddScheduledJobs(configuration)</code> and sets <code>Scheduler:Enabled</code>. Until it does,
           the framework creates no table and starts no runner.</p>
           <h2 id="context">Context</h2>
@@ -220,9 +220,9 @@
           <h3 id="the-scheduler-is-the-outbox-claim-lease-pattern-applied-to-cron-not-hangfire-and-not-quartznet">The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET</h3>
           <p>A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
           outbox claims a batch with an <code>ExecuteUpdateAsync</code> that sets <code>LockedUntil</code> and <code>LockToken</code> in one statement
-          (<code>.../Persistence/Outbox/OutboxProcessor.cs:429-430</code>, inside <code>ClaimEligibleAsync</code>) over a <code>Where</code> that
-          admits only rows whose <code>LockedUntil</code> is null or already in the past (<code>:426-428</code>), then re-reads the claimed
-          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:441-442</code>). A due job is claimed the same way, so two replicas can
+          (<code>.../Persistence/Outbox/OutboxProcessor.cs:447-448</code>, inside <code>ClaimEligibleAsync</code>, <code>:432</code>) over a <code>Where</code> that
+          admits only rows whose <code>LockedUntil</code> is null or already in the past (<code>:444-446</code>), then re-reads the claimed
+          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:459-461</code>). A due job is claimed the same way, so two replicas can
           never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.</p>
           <p>Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
           and host, and a licensing posture that varies by storage provider. Quartz.NET would have brought a large
@@ -289,12 +289,19 @@
           scheduler has no counterpart for, because backlog depth is a question about a queue and a schedule has no
           queue.</p>
           <p>Registration is two calls. <code>AddScheduledJobs(configuration)</code> binds the settings and registers the runner;
-          <code>AddScheduledJob&lt;TJob&gt;(cron?)</code> adds one job from any module, using the accumulate-across-modules idiom that
+          <code>AddScheduledJob&lt;TJob&gt;()</code> adds one job from any module, using the accumulate-across-modules idiom that
           <code>AddPermissions</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:54</code>)
-          and its <code>EnsurePermissionRegistry</code> helper (<code>:68</code>) already establish. The table is created only when the
-          settings flag is on, the same gating <a href="075-audit-trail.html">ADR-075</a> uses. At startup the registered jobs are
-          <strong>upserted by <code>JobName</code></strong>, and a cron supplied through configuration overrides the code default, so an
-          operator can retime a shipped job without a release.</p>
+          and its <code>EnsurePermissionRegistry</code> helper (<code>:68</code>) already establish. That registration takes <strong>no schedule
+          argument</strong> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:339</code>): the schedule is
+          the job&#39;s own <code>CronExpression</code> property, and the one way to retime a shipped job without a release is
+          configuration, the <code>Scheduler:Jobs:{Name}:Cron</code> section bound by <code>SchedulerSettings.Jobs</code>
+          (<code>.../Infrastructure/Settings/SchedulerSettings.cs:54-60</code>) into <code>ScheduledJobOverrideSettings.Cron</code> (<code>:74</code>).
+          The runner resolves the two per job on every cycle, the override when it is present and non-blank and the
+          compiled-in default otherwise (<code>ResolveCronExpression</code>, <code>.../Infrastructure/Scheduling/ScheduledJobRunner.cs:162</code>).
+          The table is created only when the settings flag is on, the same gating <a href="075-audit-trail.html">ADR-075</a> uses.
+          Every cycle the registered jobs are <strong>upserted by <code>JobName</code></strong> (<code>SyncRegistrationsAsync</code>, <code>:259</code>), which is why
+          an override edited on a running host takes effect on the next cycle: the stored expression is rewritten and
+          the next occurrence recomputed from the current instant, with a row whose expression is unchanged left alone.</p>
           <h3 id="design-time-gets-the-same-flag">Design-time gets the same flag</h3>
           <p><code>DesignTimeDbContextOptions.EnableScheduler</code>
           (<code>.../Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:41</code>) is the design-time mirror of

@@ -18,7 +18,7 @@ filters. This ADR records those.
 Standardize on **`Microsoft.FeatureManagement`**, configured from the `"FeatureManagement"` configuration
 section and registered once in `AddAPI`
 (`services.AddFeatureManagement()` + `services.AddSingleton<IDisabledFeaturesHandler,
-DisabledFeatureHandler>()`, `MMCA.Common.API/DependencyInjection.cs:83-84`), with the built-in
+DisabledFeatureHandler>()`, `MMCA.Common.API/DependencyInjection.cs:91-93`), with the built-in
 **Percentage / TimeWindow / Targeting** filters available for progressive rollout. The same flag *name*
 is enforced at two independent surfaces:
 

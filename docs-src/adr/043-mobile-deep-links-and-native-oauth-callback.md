@@ -161,7 +161,7 @@ Android leg backwards and the Decision section attributed the token exchange to 
    the 2026-08-01 and 2026-08-07 entries). The Context statement about
    `CompleteAsync` redirecting only to `OAuth:UIBaseUrl` is now past tense, since the decision
    shipped: `BuildSuccessRedirectUrl` targets the allow-listed native URL whenever one is in play
-   (`Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:123-126`).
+   (`Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:124-127`).
 
 ## Revision (2026-08-01)
 Status pass from an ADR audit. No decision and no behavior changed; the one item the previous

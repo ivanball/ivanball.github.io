@@ -35,8 +35,8 @@ not exceptions.
   (which stamps a `requestId` extension from the request's trace identifier), then registers the handlers
   in a load-bearing order; ASP.NET Core runs them in registration order and stops at the first handler
   that reports the exception handled, so most-specific-first placement is the mechanism, not a comment
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:126-138`, registrations at
-  lines 131-135):
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:135-147`, registrations at
+  lines 140-144):
   - `OperationCanceledExceptionHandler` (registered first) maps a client-disconnect
     `OperationCanceledException` to the non-standard HTTP 499 Client Closed Request, so monitoring can
     tell an abandoned request apart from a server fault
@@ -80,7 +80,7 @@ not exceptions.
   handler that reports the exception handled, a mis-ordered registration (for example the catch-all
   `GlobalExceptionHandler` ahead of a specific handler) would swallow the more precise status;
   `GlobalExceptionHandler` must stay registered last
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:131-135`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:140-144`).
 
 ## Related
 ADR-007 (Result over the wire via gRPC), ADR-014 (the decorator pipeline returns `Result.Failure` to

@@ -203,8 +203,8 @@
           resolving a role to a permission so an endpoint can require a capability instead of a role name. It
           explicitly scoped out the orthogonal question, &quot;is this <strong>my</strong> order&quot;, recording that &quot;per-resource
           ownership (a customer may read only their own data) stays a separate concern (<code>OwnerOrAdminFilter</code>),
-          and a route needing both composes the two&quot; (<code>ADRs/020-permission-based-authorization.md:74</code>,
-          <code>020-permission-based-authorization.md:75</code>).</p>
+          and a route needing both composes the two&quot; (<code>ADRs/020-permission-based-authorization.md:78</code>,
+          <code>020-permission-based-authorization.md:79</code>).</p>
           <p>That carve-out names a mechanism that already ships in framework code but had no decision record of
           its own. RBAC and permissions are principal-scoped: a customer with the Customer role may read orders,
           but that role says nothing about <em>which</em> orders. Two endpoint shapes need a different, resource-scoped
@@ -245,7 +245,7 @@
           <code>[ServiceFilter(typeof(OwnerOrAdminFilter))]</code>.</li>
           <li><strong>Collection ownership specification.</strong> <code>OwnershipHelper</code>
           (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10</code>) is a static helper.
-          <code>GetOwnershipSpecification&lt;TSpec, TId&gt;</code> returns <code>null</code> for the bypass role (<code>OwnershipHelper.cs:45</code>),
+          <code>GetOwnershipSpecification&lt;TSpec, TId&gt;</code> returns <code>null</code> for the bypass role (<code>OwnershipHelper.cs:47</code>),
           and otherwise reads the caller&#39;s id claim (<code>GetClaimValue&lt;TId&gt;(claimType)</code>, <code>OwnershipHelper.cs:50</code>)
           and builds a <code>Specification</code> via the supplied factory (<code>OwnershipHelper.cs:51</code>); a convenience
           overload defaults the claim to <code>&quot;customer_id&quot;</code> (<code>OwnershipHelper.cs:63</code>, <code>OwnershipHelper.cs:67</code>). The
@@ -290,18 +290,18 @@
           <code>GetOwnershipSpecification()</code> method
           (<code>MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:63-65</code>,
           <code>MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13</code>, filtering
-          by <code>CustomerId</code>, <code>OrdersByCustomerSpecification.cs:18</code>), passed as <code>specification: GetOwnershipSpecification()</code> into each query (<code>OrdersController.cs:104</code>, <code>OrdersController.cs:142</code>,
-          <code>OrdersController.cs:176</code>). <code>OrdersController</code> does not use the class-level filter for its mutating
+          by <code>CustomerId</code>, <code>OrdersByCustomerSpecification.cs:18</code>), passed as <code>specification: GetOwnershipSpecification()</code> into each query (<code>OrdersController.cs:105</code>, <code>OrdersController.cs:143</code>,
+          <code>OrdersController.cs:177</code>). <code>OrdersController</code> does not use the class-level filter for its mutating
           routes; it runs an explicit per-mutation ownership check, <code>ValidateOwnershipAsync</code>
-          (<code>OrdersController.cs:396</code>), that reuses <code>OwnershipHelper.IsAdmin</code> through its <code>IsAdmin</code> property
-          (<code>OrdersController.cs:61</code>) to let the bypass role through. Its two denial branches return different
+          (<code>OrdersController.cs:431</code>), that reuses <code>OwnershipHelper.IsAdmin</code> through its <code>IsAdmin</code> property
+          (<code>OrdersController.cs:62</code>) to let the bypass role through. Its two denial branches return different
           statuses on purpose:</p>
           <ul>
           <li><strong>Missing owner claim</strong> (the caller carries no <code>customer_id</code>): <code>Error.Forbidden</code>, a 403
-          (<code>OrdersController.cs:404</code>, <code>OrdersController.cs:406-410</code>). Nothing was looked up, so there is no
+          (<code>OrdersController.cs:439</code>, <code>OrdersController.cs:441-446</code>). Nothing was looked up, so there is no
           resource whose existence a 403 could leak; this matches the filter&#39;s own missing-claim <code>ForbidResult</code>.</li>
           <li><strong>Owner mismatch</strong> (the claim is present but the order is someone else&#39;s): <code>Error.NotFound</code>, a 404
-          rather than a 403 (<code>OrdersController.cs:417</code>, <code>OrdersController.cs:419-421</code>), so the response does not
+          rather than a 403 (<code>OrdersController.cs:454</code>, <code>OrdersController.cs:454-456</code>), so the response does not
           reveal that another customer&#39;s order exists.</li>
           </ul>
           <p>MMCA.ADC&#39;s Engagement module is the first host to configure the filter&#39;s vocabulary rather than take
@@ -382,7 +382,7 @@
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-020 (the role/permission RBAC layer this complements, and whose explicit
-          <code>020-permission-based-authorization.md:74</code> scope-out this fills), ADR-034 (the generic entity query
+          <code>020-permission-based-authorization.md:78</code> scope-out this fills), ADR-034 (the generic entity query
           pipeline / <code>IEntityQueryService</code> the collection-scoping <code>Specification</code> slots into), ADR-013 (failures
           surface as <code>Result</code>/HTTP at the edge, the filter as a 403 <code>ForbidResult</code>), ADR-004 (the validated
           principal and owner claim both enforcement points trust).</p>
@@ -402,11 +402,11 @@
           <p>Anchor-only correction. No behavior changed; <code>OrdersController</code> was refactored (a constructor
           parameter added, <code>GetOwnershipSpecification()</code> and the <code>IsAdmin</code> property extracted,
           <code>ValidateOwnershipAsync</code> moved) since the 2026-07-25 pass, which shifted every line anchor pointing
-          into it. Refreshed: <code>GetOwnershipSpecification()</code> (now <code>OrdersController.cs:63-65</code>), its three call
-          sites (<code>OrdersController.cs:104</code>, <code>:142</code>, <code>:176</code>), <code>ValidateOwnershipAsync</code> (now
-          <code>OrdersController.cs:396</code>) and the <code>IsAdmin</code> property it reads (<code>OrdersController.cs:61</code>), the
-          missing-owner-claim <code>Error.Forbidden</code> branch (<code>OrdersController.cs:404</code>, <code>:406-410</code>), and the
-          owner-mismatch <code>Error.NotFound</code> branch (<code>OrdersController.cs:417</code>, <code>:419-421</code>).
+          into it. Refreshed: <code>GetOwnershipSpecification()</code> (now <code>OrdersController.cs:64-66</code>), its three call
+          sites (<code>OrdersController.cs:105</code>, <code>:143</code>, <code>:177</code>), <code>ValidateOwnershipAsync</code> (now
+          <code>OrdersController.cs:431</code>) and the <code>IsAdmin</code> property it reads (<code>OrdersController.cs:62</code>), the
+          missing-owner-claim <code>Error.Forbidden</code> branch (<code>OrdersController.cs:439</code>, <code>:441-446</code>), and the
+          owner-mismatch <code>Error.NotFound</code> branch (<code>OrdersController.cs:454</code>, <code>:454-456</code>).
           <code>OrdersByCustomerSpecification.cs:13</code> and <code>:18</code> were re-checked and are unchanged.</p>
           
         <div class="doc-foot btn-row">

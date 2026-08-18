@@ -1,7 +1,9 @@
 # ADR-062: SLO Alerting as Code with an Alert-to-Runbook Build Gate
 
 ## Status
-Accepted (2026-08-01).
+Accepted (2026-08-01). Revised 2026-08-18: Store's two operational extras (the `outbox-dead-letter`
+scheduled query rule and the outside-in Gateway availability web test with its severity 1 metric
+alert) merged to `main` on 2026-08-13 and are recorded here as shipped rather than as in flight.
 
 ## Context
 ADR-041 standardized what the fleet **emits**: RED histograms off the CQRS pipeline, an outbox
@@ -140,9 +142,13 @@ parse anchors. ADC additionally provisions two operational scheduled query rules
 (`MMCA.ADC/infra/main.bicep:463`, `:496`). All three sit outside the `sloAlertSpecs` window, so the
 pairing gate neither requires nor forbids runbook sections for them, and `OPERATIONS.md` carries none
 today (its only `-alert-` headings are the three SLO sections). Store provisions both of the families
-that apply to it (2026-08-13, landing in a pull request in flight as this record is updated): the
-`outbox-dead-letter` scheduled query rule and the outside-in Gateway availability web test with its
-severity 1 metric alert, alongside the three SLO rules and the budget notifications. It deliberately
+that apply to it, merged on 2026-08-13: the `outbox-dead-letter` scheduled query rule
+(`MMCA.Store/infra/main.bicep:379`) and the outside-in Gateway availability web test (`:420`) with its
+severity 1 metric alert (`:453`, severity at `:459`), alongside the three SLO rules and the budget
+notifications. Both sit after `resource sloAlerts` (`MMCA.Store/infra/main.bicep:334`) and therefore
+outside the parse window, so Store's two extras are ungated exactly as ADC's three are, and Store's
+`OPERATIONS.md` likewise carries only the three SLO sections (`MMCA.Store/infra/OPERATIONS.md:16`,
+`:31`, `:44`). It deliberately
 does not port `sql-dependency-failures`: Store's own `dependency-failures` SLO rule already spans
 SQL, gRPC and HTTP, so a narrower SQL-scoped twin would page twice for one fault.
 
@@ -179,8 +185,9 @@ SQL, gRPC and HTTP, so a narrower SQL-scoped twin would page twice for one fault
   right threshold, whether the query measures what it claims, and whether the triage steps are correct
   all remain review concerns. Severity is the only value cross-checked between the two files.
 - **Only the spec-window alerts are covered.** ADC's outbox dead-letter, SQL dependency and
-  gateway-availability alerts are provisioned but ungated, so those three can be added, renamed or
-  re-tiered with no runbook consequence.
+  gateway-availability alerts and Store's outbox dead-letter and gateway-availability alerts are
+  provisioned but ungated, so all five can be added, renamed or re-tiered with no runbook
+  consequence.
 - **Disabled-but-declared alerts are carried debt.** Three superseded `metricAlerts` remain in each
   template and in each resource group until a follow-up deletes them, and the templates say so
   (`MMCA.ADC/infra/main.bicep:350-356`, `MMCA.Store/infra/main.bicep:322-327`).

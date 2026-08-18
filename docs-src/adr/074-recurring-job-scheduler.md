@@ -1,7 +1,7 @@
 # ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)
 
 ## Status
-Accepted (2026-08-13; revised 2026-08-14). The implementation lands in the MMCA.Common "enterprise capability wave" release
+Accepted (2026-08-13; revised 2026-08-14, 2026-08-18). The implementation lands in the MMCA.Common "enterprise capability wave" release
 and is opt-in: a host calls `AddScheduledJobs(configuration)` and sets `Scheduler:Enabled`. Until it does,
 the framework creates no table and starts no runner.
 
@@ -29,9 +29,9 @@ scheduling product (Hangfire or Quartz.NET) or to extend the durable polling loo
 ### The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET
 A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
 outbox claims a batch with an `ExecuteUpdateAsync` that sets `LockedUntil` and `LockToken` in one statement
-(`.../Persistence/Outbox/OutboxProcessor.cs:429-430`, inside `ClaimEligibleAsync`) over a `Where` that
-admits only rows whose `LockedUntil` is null or already in the past (`:426-428`), then re-reads the claimed
-set by `LockToken` so a partial claim processes only its own rows (`:441-442`). A due job is claimed the same way, so two replicas can
+(`.../Persistence/Outbox/OutboxProcessor.cs:447-448`, inside `ClaimEligibleAsync`, `:432`) over a `Where` that
+admits only rows whose `LockedUntil` is null or already in the past (`:444-446`), then re-reads the claimed
+set by `LockToken` so a partial claim processes only its own rows (`:459-461`). A due job is claimed the same way, so two replicas can
 never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.
 
 Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
@@ -108,12 +108,19 @@ scheduler has no counterpart for, because backlog depth is a question about a qu
 queue.
 
 Registration is two calls. `AddScheduledJobs(configuration)` binds the settings and registers the runner;
-`AddScheduledJob<TJob>(cron?)` adds one job from any module, using the accumulate-across-modules idiom that
+`AddScheduledJob<TJob>()` adds one job from any module, using the accumulate-across-modules idiom that
 `AddPermissions` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:54`)
-and its `EnsurePermissionRegistry` helper (`:68`) already establish. The table is created only when the
-settings flag is on, the same gating [ADR-075](075-audit-trail.md) uses. At startup the registered jobs are
-**upserted by `JobName`**, and a cron supplied through configuration overrides the code default, so an
-operator can retime a shipped job without a release.
+and its `EnsurePermissionRegistry` helper (`:68`) already establish. That registration takes **no schedule
+argument** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:339`): the schedule is
+the job's own `CronExpression` property, and the one way to retime a shipped job without a release is
+configuration, the `Scheduler:Jobs:{Name}:Cron` section bound by `SchedulerSettings.Jobs`
+(`.../Infrastructure/Settings/SchedulerSettings.cs:54-60`) into `ScheduledJobOverrideSettings.Cron` (`:74`).
+The runner resolves the two per job on every cycle, the override when it is present and non-blank and the
+compiled-in default otherwise (`ResolveCronExpression`, `.../Infrastructure/Scheduling/ScheduledJobRunner.cs:162`).
+The table is created only when the settings flag is on, the same gating [ADR-075](075-audit-trail.md) uses.
+Every cycle the registered jobs are **upserted by `JobName`** (`SyncRegistrationsAsync`, `:259`), which is why
+an override edited on a running host takes effect on the next cycle: the stored expression is rewritten and
+the next occurrence recomputed from the current instant, with a row whose expression is unchanged left alone.
 
 ### Design-time gets the same flag
 `DesignTimeDbContextOptions.EnableScheduler`

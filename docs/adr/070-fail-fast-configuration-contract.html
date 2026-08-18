@@ -232,12 +232,13 @@
           <code>LoginProtectionSettings</code> <code>:133-136</code>, <code>MessageBusSettings</code> <code>:139-142</code>, <code>JwksSettings</code> <code>:144-147</code>) and an
           eighth in the opt-in <code>AddPushNotifications</code> (<code>PushNotificationSettings</code> <code>:530-533</code>). Three more are bound
           by the Presentation packages: <code>IdempotencySettings</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:70-73</code>), <code>JwtSettings</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:346-349</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:70-73</code>), <code>JwtSettings</code>, bound
+          inside <code>AddCommonAuthentication</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:502-505</code>),
           and <code>ApiSettings</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:32-35</code>).</li>
           <li><strong>Each service host adds exactly two of its own</strong>, <code>ApplicationSettings</code> and <code>ModulesSettings</code>, and all
           eight hosts across the three application repos do it identically: ADC&#39;s four services (for example
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:170-173</code> and <code>:299-302</code>), Store&#39;s three
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:170-173</code> and <code>:313-316</code>), Store&#39;s three
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:123-126</code> and <code>:226-229</code>), and the
           Helpdesk monolith seed (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:17-20</code> and <code>:75-78</code>).
           Modules may add their own sections on the same chain, as Store&#39;s Sales module does for Stripe.</li>
@@ -272,7 +273,7 @@
           <p><strong>Adoption of the facade half is partial, and this ADR settles the direction rather than claiming the
           state.</strong> Only five of the framework&#39;s settings types have a facade; the rest are consumed as <code>IOptions&lt;T&gt;</code>
           inside Infrastructure and API, which is where they belong: <code>OutboxProcessor</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:53</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:57</code>),
           <code>BrokerEventBus</code> (<code>.../Services/BrokerEventBus.cs:34</code>), <code>LoginProtectionService</code>
           (<code>.../Auth/LoginProtectionService.cs:21</code>), <code>RsaJwksProvider</code> (<code>.../Auth/RsaJwksProvider.cs:15</code>),
           <code>SQLServerDbContext</code> (<code>.../Persistence/DbContexts/SQLServerDbContext.cs:37</code>), and <code>IdempotencyFilter</code>

@@ -260,7 +260,7 @@
           per-host permutation.</li>
           <li><strong>Every REST/gRPC host calls it.</strong> All seven extracted services in the two production apps: ADC
           Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:322</code>), ADC Conference
-          (<code>MMCA.ADC.Conference.Service/Program.cs:373</code>), ADC Engagement
+          (<code>MMCA.ADC.Conference.Service/Program.cs:392</code>), ADC Engagement
           (<code>MMCA.ADC.Engagement.Service/Program.cs:328</code>), ADC Notification
           (<code>MMCA.ADC.Notification.Service/Program.cs:258</code>), Store Catalog
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:266</code>), Store Identity
@@ -276,8 +276,8 @@
           <code>UseCommonMiddlewarePipeline</code>&quot;), and gRPC services (<code>:277-279</code>).</li>
           </ul>
           <p>Scope is REST and gRPC service hosts. The Blazor UI hosts and the YARP gateways deliberately do not
-          call it: the gateways compose a much thinner chain (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:50</code>,
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:72</code>), and the UI hosts hand-compose their own,
+          call it: the gateways compose a much thinner chain (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:95</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:119</code>), and the UI hosts hand-compose their own,
           reusing only the localization half via <code>UseCommonRequestLocalization()</code>
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:124</code>,
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:164</code>), which is the public method the pipeline
@@ -323,7 +323,7 @@
           partitions are spoofable by anything that can reach a service directly. This is safe only because the
           services are not publicly routable and sit behind the gateway; ADR-019 records the same caveat.</li>
           <li><strong>Security-response headers are not in this pipeline.</strong> ADR-023&#39;s <code>UseCommonSecurityHeaders</code> is applied
-          by the gateways and UI hosts only (<code>MMCA.ADC.Gateway/Program.cs:50</code>, <code>MMCA.Store.Gateway/Program.cs:72</code>,
+          by the gateways and UI hosts only (<code>MMCA.ADC.Gateway/Program.cs:117</code>, <code>MMCA.Store.Gateway/Program.cs:140</code>,
           <code>MMCA.ADC.UI.Web/Program.cs:105</code>, <code>MMCA.Store.UI.Web/Program.cs:145</code>). A service host exposed directly,
           without a gateway in front, would serve responses without them.</li>
           <li><strong>One step in the fixed order is currently dead weight.</strong> The pre-forwarded scheme/host capture

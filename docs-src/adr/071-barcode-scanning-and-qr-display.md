@@ -80,7 +80,7 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
 
 Packaging follows ADR-042 exactly: `QRCoder` 1.8.0 (MIT) is a `MMCA.Common.UI` dependency and
 `ZXing.Net.Maui.Controls` 0.10.3 (MIT) a `MMCA.Common.UI.Maui` one, both pinned in
-`MMCA.Common/Directory.Packages.props` (`:128`, `:151`), and the MAUI package keeps its
+`MMCA.Common/Directory.Packages.props` (`:134`, `:157`), and the MAUI package keeps its
 windows-job build and pack.
 
 ## Rationale

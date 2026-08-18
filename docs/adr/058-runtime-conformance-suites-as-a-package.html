@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-058: Runtime Conformance Suites Shipped as a Package · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-28; revised 2026-08-14).">
+  <meta name="description" content="Accepted (2026-07-28; revised 2026-08-14 and 2026-08-18).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-058: Runtime Conformance Suites Shipped as a Package">
-  <meta property="og:description" content="Accepted (2026-07-28; revised 2026-08-14).">
+  <meta property="og:description" content="Accepted (2026-07-28; revised 2026-08-14 and 2026-08-18).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-058: Runtime Conformance Suites Shipped as a Package">
-  <meta name="twitter:description" content="Accepted (2026-07-28; revised 2026-08-14).">
+  <meta name="twitter:description" content="Accepted (2026-07-28; revised 2026-08-14 and 2026-08-18).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"058 · Runtime Conformance Suites Shipped as a Package","item":"https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -197,7 +197,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-058-runtime-conformance-suites-shipped-as-a-package">ADR-058: Runtime Conformance Suites Shipped as a Package</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-28; revised 2026-08-14).</p>
+          <p>Accepted (2026-07-28; revised 2026-08-14 and 2026-08-18).</p>
           <h2 id="context">Context</h2>
           <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
           explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
@@ -235,7 +235,7 @@
           (<code>GracefulShutdownTestsBase.cs:24</code>) calls a real <code>IHost.StopAsync</code> under a bounded token and asserts
           <code>ApplicationStopping</code> then <code>ApplicationStopped</code> fired (<code>GracefulShutdownTestsBase.cs:56</code>, <code>:58</code>,
           <code>:60</code>). <code>DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;</code>
-          (<code>DecoratorPipelineOrderTestsBase.cs:36</code>) asserts the ADR-014 nesting.</li>
+          (<code>DecoratorPipelineOrderTestsBase.cs:38</code>) asserts the ADR-014 nesting.</li>
           <li><strong>The host is really booted; nothing is inferred from registrations.</strong> The five HTTP-facing suites
           reach the host through <code>IIntegrationTestFixture</code> (<code>IIntegrationTestFixture.cs:8</code>) and
           <code>IntegrationTestBase&lt;TFixture&gt;</code> (<code>IntegrationTestBase.cs:13</code>), whose <code>Client</code> comes from the
@@ -258,7 +258,7 @@
           (<code>ProblemDetailsContractTestsBase.cs:54</code>, <code>:60</code>), a route-count floor and a pinned resource list for
           OpenAPI (<code>OpenApiContractTestsBase.cs:37</code>, <code>:50</code>), a client factory for security headers
           (<code>SecurityHeadersTestsBase.cs:42</code>), a service-collection configurator for the decorator pipeline
-          (<code>DecoratorPipelineOrderTestsBase.cs:44</code>), and for versioning and graceful shutdown nothing at all
+          (<code>DecoratorPipelineOrderTestsBase.cs:46</code>), and for versioning and graceful shutdown nothing at all
           beyond the fixture or entry point. The two shutdown subclasses are one-line declarations with no body
           (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GracefulShutdownTests.cs:9</code>,
           <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GracefulShutdownTests.cs:9</code>), and so is the ADC
@@ -267,8 +267,8 @@
           the registration list.</strong> It builds a <code>ServiceCollection</code>, runs the repo&#39;s own real registration
           sequence through the subclass, resolves the closed handler interface from the built provider, then
           walks outermost to innermost by reading each decorator&#39;s private inner-handler field
-          (<code>DecoratorPipelineOrderTestsBase.cs:98</code>) and compares the names against the ADR-014 order
-          (<code>DecoratorPipelineOrderTestsBase.cs:47</code>, <code>:57</code>). That is what makes it a runtime check: Scrutor
+          (<code>DecoratorPipelineOrderTestsBase.cs:104</code>) and compares the names against the ADR-014 order
+          (<code>DecoratorPipelineOrderTestsBase.cs:49</code>, <code>:61</code>). That is what makes it a runtime check: Scrutor
           <code>TryDecorate</code> applies decorators in reverse registration order, so a reordered
           <code>AddApplicationDecorators()</code> or a module scan that ran after it changes the constructed pipeline
           while every registration still exists.</li>
@@ -278,7 +278,7 @@
           exact casing) of the pinned resources (<code>OpenApiContractTestsBase.cs:79</code>).</li>
           <li><strong>Hosts extend the base where they have more to prove.</strong> ADC Conference adds a 409
           stale-<code>RowVersion</code> conflict test on top of the inherited 400/404 facts, reusing the inherited shape
-          assertion (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:39</code>,
+          assertion (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:40</code>,
           <code>:67</code>).</li>
           </ul>
           <p>Adoption today is real but <strong>partial, and uneven per suite</strong>. The OpenAPI guard is the only one with
@@ -308,19 +308,30 @@
           (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:11</code>,
           <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:11</code>, plus the two
           <code>GracefulShutdownTests</code> above); no service host asserts either today. The decorator suite is
-          subclassed once per consumer, both against the Identity module&#39;s <code>ChangePreferencesCommand</code> /
-          <code>GetUserPreferencesQuery</code> pair (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:25</code>,
-          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:25</code>).
+          subclassed once per consumer repo and is the one base all three of them run: ADC and Store both
+          against the Identity module&#39;s <code>ChangePreferencesCommand</code> / <code>GetUserPreferencesQuery</code> pair
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:27</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:26</code>),
+          and MMCA.Helpdesk against a real Tickets pair, described below.
           MMCA.Common dogfoods the only base it can, since it ships no host of its own: a synthetic
           <code>PingCommand</code>/<code>PingQuery</code> pair driven through the framework&#39;s own registration sequence
-          (<code>Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:20</code>).</p>
-          <p><strong>MMCA.Helpdesk adopts none of them.</strong> It carries a <code>MMCA.Common.Testing</code> package reference in its
-          domain-test project (<code>MMCA.Helpdesk/Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain.Tests/MMCA.Helpdesk.Tickets.Domain.Tests.csproj:8</code>),
-          but no file in the repo imports the namespace and no conformance base is subclassed: its three test
-          projects are the Tickets domain and application suites plus the ADR-015 architecture suite, which does
-          subclass the structural bases from the separate <code>MMCA.Common.Testing.Architecture</code> package
-          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/GlobalUsings.cs:3</code>). The reference
-          app therefore demonstrates the structural tier and not the runtime tier.</p>
+          (<code>Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21</code>).</p>
+          <p><strong>MMCA.Helpdesk adopts exactly one of them, the decorator suite</strong>, having adopted none of them when
+          this record was written. Its architecture-test project now references <code>MMCA.Common.Testing</code> alongside the
+          structural package
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MMCA.Helpdesk.Architecture.Tests.csproj:26</code>)
+          and subclasses <code>DecoratorPipelineOrderTestsBase</code> against the real Tickets pair <code>UpdateTicketCommand</code> /
+          <code>GetTicketByIdQuery</code>
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:30-31</code>),
+          whose <code>ConfigureServices</code> runs the seed&#39;s own registration sequence: <code>AddApplication()</code>, the Tickets
+          module scan, then <code>AddApplicationDecorators()</code> last (<code>:50-52</code>). That file is the only one in the repo
+          importing the <code>MMCA.Common.Testing</code> namespace (<code>:10</code>); the package reference its domain-test project
+          carries (<code>MMCA.Helpdesk/Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain.Tests/MMCA.Helpdesk.Tickets.Domain.Tests.csproj:8</code>)
+          is still unused. The five HTTP-facing bases have no Helpdesk subclass, so the seed&#39;s three test
+          projects remain the Tickets domain and application suites plus the architecture suite, which now
+          carries both tiers: the ADR-015 structural bases from the separate <code>MMCA.Common.Testing.Architecture</code>
+          package (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/GlobalUsings.cs:3</code>) and
+          this one runtime conformance base.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Runtime conformance is the half ADR-015 excluded.</strong> Structural rules answer &quot;is the code shaped
@@ -348,7 +359,7 @@
           once someone writes the subclass. That is the same audit-the-inventory caveat, and the adoption
           inventory above is the current answer to it, not a claim of completeness.</li>
           <li><strong>Coverage is uneven by suite.</strong> Security headers and graceful shutdown are Gateway-only, versioning
-          is one host per repo, and Helpdesk has none of it. Problem details is the one suite now subclassed
+          is one host per repo, and Helpdesk has only the decorator suite. Problem details is the one suite now subclassed
           on every REST host in both consumers (ADC Notification closed the last gap on 2026-08-13). Every
           remaining hole is an unguarded host for that contract, not a decision that the contract does not
           apply.</li>
@@ -362,7 +373,7 @@
           ones.</li>
           <li><strong>The decorator check reads private fields.</strong> Unwrapping the chain depends on each decorator holding
           its inner handler in a field that implements the same closed interface
-          (<code>DecoratorPipelineOrderTestsBase.cs:105-108</code>); a decorator that stored it differently would silently
+          (<code>DecoratorPipelineOrderTestsBase.cs:111-114</code>); a decorator that stored it differently would silently
           end the walk early rather than fail loudly.</li>
           <li><strong>A new contract base only reaches consumers at the next lockstep bump.</strong> The suites ship inside the
           package set, so adding one is a framework release plus a consumer sweep (ADR-016), not a local edit

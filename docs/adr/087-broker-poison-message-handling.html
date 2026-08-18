@@ -236,8 +236,8 @@
           else.</p>
           <h3 id="second-level-redelivery-is-transport-aware-and-the-flag-exists-only-because-of-rabbitmq">Second-level redelivery is transport-aware, and the flag exists only because of RabbitMQ</h3>
           <p><code>MessageBusSettings</code> gains two members. <code>EnableDelayedRedelivery</code>
-          (<code>MessageBusSettings.cs:95</code>) is a <code>bool</code> with no initializer, so it <strong>defaults to <code>false</code></strong>, and
-          <code>RedeliveryIntervalsSeconds</code> (<code>:111</code>) is an <code>IReadOnlyList&lt;int&gt;</code> defaulting to <code>[60, 600, 3600]</code>: one
+          (<code>MessageBusSettings.cs:96</code>) is a <code>bool</code> with no initializer, so it <strong>defaults to <code>false</code></strong>, and
+          <code>RedeliveryIntervalsSeconds</code> (<code>:112</code>) is an <code>IReadOnlyList&lt;int&gt;</code> defaulting to <code>[60, 600, 3600]</code>: one
           minute, ten minutes, one hour. Both live in the <code>&quot;MessageBus&quot;</code> section (<code>:14</code>).</p>
           <p>The two transports consume them differently, and the asymmetry is the decision:</p>
           <ul>
@@ -268,15 +268,15 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/FaultIntegrationEventConsumer.cs:28-30</code>)
           implements <code>IConsumer&lt;Fault&lt;TEvent&gt;&gt;</code>, the message MassTransit publishes when a consumer&#39;s retries are
           spent. It does exactly two things: writes one source-generated <strong>Error</strong>-level log line naming the
-          event type and the faulted message id (<code>:59</code>, emitted at <code>:50</code>, id resolved as
-          <code>fault.FaultedMessageId ?? fault.FaultId</code> at <code>:41</code>), and increments a counter (<code>:52-54</code>). It never
+          event type and the faulted message id (<code>:59</code>, emitted at <code>:49</code>, id resolved as
+          <code>fault.FaultedMessageId ?? fault.FaultId</code> at <code>:40</code>), and increments a counter (<code>:51-53</code>). It never
           throws and never replays the failed message (<code>:19-24</code>). That restraint is the point: a fault consumer
           that tried to recover would be a second, undocumented retry policy layered on the two that already
           exist.</p>
           <p>Registration is automatic. <code>RegisterIntegrationEventConsumer&lt;TEvent&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:39-40</code>)
-          takes <code>bool registerFaultConsumer = true</code> (<code>:38</code>) and adds the fault consumer under that guard
-          (<code>:43</code>), so a host that registers a consumer gets fault observability without asking. <strong>That parameter
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:38</code>)
+          takes <code>bool registerFaultConsumer = true</code> (<code>:39</code>) and adds the fault consumer under that guard
+          (<code>:46</code>), so a host that registers a consumer gets fault observability without asking. <strong>That parameter
           is the only opt-out, and it is per event type</strong>: there is deliberately no host-wide configuration
           switch, so turning fault observability off is a visible <code>false</code> at one call site rather than a setting
           that silently disarms every consumer in a service.</p>

@@ -1,7 +1,7 @@
 # ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation
 
 ## Status
-Accepted (2026-08-13). The implementation lands in the MMCA.Common "enterprise capability wave" release.
+Accepted (2026-08-13; revised 2026-08-18). The implementation lands in the MMCA.Common "enterprise capability wave" release.
 Unlike the wave's other features this one is NOT opt-in: every controller deriving from
 `EntityControllerBase` gains the endpoint automatically, under that controller's own authorization
 posture, so consumers re-baseline their OpenAPI contract snapshots in the sweep.
@@ -9,11 +9,11 @@ posture, so consumers re-baseline their OpenAPI contract snapshots in the sweep.
 ## Context
 The request is "export what you filtered". The generic entity surface of
 [ADR-034](034-generic-entity-query-layer.md) already accepts a full query vocabulary on the paged route
-(`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:139`): sparse fieldsets through
-`fields`, dynamic per-type filtering bound by `QueryFilterModelBinder` (`EntityControllerBase.cs:151`),
+(`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:140`): sparse fieldsets through
+`fields`, dynamic per-type filtering bound by `QueryFilterModelBinder` (`EntityControllerBase.cs:152`),
 `sortColumn` / `sortDirection`, and pagination reported in `X-Pagination`. A user who has narrowed a grid
 to the rows they care about wants those exact rows as a file. The framework produced no file at all: the
-four generic reads (`EntityControllerBase.cs:100`, `:139`, `:347`, `:377`) return JSON and nothing else.
+four generic reads (`EntityControllerBase.cs:101`, `:140`, `:348`, `:378`) return JSON and nothing else.
 
 The obvious implementation is content negotiation: keep the same URL, have the client send
 `Accept: text/csv`, and register an `OutputFormatter`. Exploration of the real source found two behaviors
@@ -38,7 +38,7 @@ cache entries on the read-scaling path for a format almost nobody requests. A se
 answer either: how many rows an export returns. The query pipeline caps any
 unpaginated read at `EntityQueryPipeline.MaxUnboundedResultLimit = 1000`
 (`Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:23`, applied by `Take(...)` at
-`:102` and `:148`), and there is no `IAsyncEnumerable` path through it. A naive "read it all, write CSV"
+`:98`, `:193` and `:247`), and there is no `IAsyncEnumerable` path through it. A naive "read it all, write CSV"
 export therefore returns 1000 rows and says nothing about the rest.
 
 ## Decision
@@ -49,7 +49,10 @@ export therefore returns 1000 rows and says nothing about the rest.
 surface as the paged route: `sortColumn`, `sortDirection`, `fields`, `includeFKs`, and `filters` bound by
 `[ModelBinder(typeof(QueryFilterModelBinder))]`, so a grid that produced a `paged` URL produces an
 `export` URL by changing one path segment. It returns a streamed `text/csv` response with a
-`Content-Disposition` attachment filename of `{controller}-{yyyyMMdd-HHmmss}.csv`.
+`Content-Disposition` attachment filename of `{controller}-{yyyyMMddTHHmmssZ}.csv`: the routed controller
+name as the stem (`ExportFileNamePrefix`, `EntityControllerBase.cs:505`) and a UTC timestamp in basic-format
+ISO 8601, a literal `T` separator and a trailing `Z` with no other separators, so the name is legal on every
+file system and sorts chronologically in any locale (`BuildExportFileName`, `:640-643`).
 
 A distinct path avoids both findings without touching either global setting: the route is not the cached
 route, and a client cannot ask for CSV and silently receive JSON, because asking for CSV means calling a
@@ -70,17 +73,29 @@ query, one open reader, no repeated `Skip`. It is deliberately deferred out of t
 shared read path that every entity in every consumer uses, and this record buys the capability without
 touching it.
 
-### The row ceiling is a setting, and hitting it is visible
-`ApplicationSettings` gains `MaxExportRows`, default 100,000. At the ceiling the export stops, emits a
-final CSV comment row recording that the file is partial, and sets an `X-Export-Truncated: true` response
-header. Truncation is a normal outcome with a signal, not an error: the response has already begun
-streaming by the time the cap is reached, so a status code is no longer available to carry it.
+### The row ceiling is a setting, and hitting it is visible in the body
+`ApplicationSettings` gains `MaxExportRows`, default 100,000
+(`Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:29`). The ceiling is advertised in a
+header and the truncation is not, and the split is forced by streaming. `BeginExportResponse` sets the
+content type, the `Content-Disposition` filename and one export header, `X-Export-Row-Limit`, carrying the
+configured cap (`ExportRowLimitHeaderName`, `EntityControllerBase.cs:493`, sent at `:624-631`) before the
+first body byte goes out. Whether the cap was actually reached is known only after the last page is read, by
+which time the headers are frozen, and buffering the whole file to learn the answer first would defeat the
+streaming the endpoint exists for. So at the ceiling the export stops and writes a final CSV comment row into
+the body, `# export truncated at N rows` (`TruncationMarker`, `:753`, written at `:331-334`), where it is
+still writable. There is no `X-Export-Truncated` header. Truncation is a normal outcome with a signal, not an
+error: the response has already begun streaming by the time the cap is reached, so a status code is no longer
+available to carry it either.
 
 ### The CSV writer is in-house
-`CsvWriter` (internal static, `Source/Presentation/MMCA.Common.API/Export/`) implements RFC 4180: quote a
-field when it contains the separator, a quote, or a line break; escape an embedded quote by doubling it;
-terminate rows with CRLF; optionally lead with a UTF-8 BOM, controlled by a setting because the BOM is
-what makes Excel open a UTF-8 file correctly and what makes some parsers see a junk first column.
+`CsvWriter` (internal static, `Source/Presentation/MMCA.Common.API/Export/CsvWriter.cs:34`) implements
+RFC 4180: quote a field when it contains the separator, a quote, or a line break; escape an embedded quote by
+doubling it; terminate rows with CRLF; lead with a UTF-8 BOM. The BOM is **unconditional**, not a setting
+(`CsvWriter.cs:36-45`, written once from `ExportAsync` at `EntityControllerBase.cs:299` through a writer whose
+encoding emits no preamble of its own, so the file gets exactly one). Without it Excel reads a UTF-8 file in
+the machine's ANSI code page and every accented character becomes mojibake on the desktops these exports are
+opened on; three bytes is a cheaper price than a flag nobody would find in time, and the parsers that show a
+junk first column are the minority that pays for it.
 
 No CsvHelper dependency is taken. The framework's export input is already a rectangle of stringified
 shaped values, the escaping rules are a page of code, and a published framework that takes a dependency
@@ -129,7 +144,8 @@ the OpenAPI contract snapshots asserted by `OpenApiContractTestsBase`
   disagree with the grid it was launched from, and no new code touches the query pipeline in this wave.
 - **A hard ceiling with a signal beats an unbounded stream.** 100,000 rows is a number an operator can
   reason about; an unbounded export is a way to hold a connection and a database read open for as long as
-  the data allows. The truncation header names the boundary rather than hiding it.
+  the data allows. `X-Export-Row-Limit` names the boundary up front rather than hiding it, and the trailing
+  marker row says when the export ran into it.
 - **A framework declines dependencies its consumers cannot decline.** Every pin MMCA.Common takes is one
   its packages carry into three applications under lockstep versioning (ADR-016), and RFC 4180 quoting is
   small, stable, and fully testable in-repo.
@@ -158,17 +174,21 @@ the OpenAPI contract snapshots asserted by `OpenApiContractTestsBase`
   (`MaxExportRows` 100,000 over `MaxPageSize` 500), each with its own `Skip`/`Take`, and it holds a
   response open for their combined duration. There is no export-specific timeout budget in v1; the limits
   are the row cap and whatever the host and client already enforce.
-- **Truncation is signalled where spreadsheets do not look.** A response header and a trailing comment row
-  are both invisible to a user who double-clicks the downloaded file. A partial export can therefore be
-  read as a complete one.
+- **Truncation is signalled where spreadsheets do not look.** The one export header, `X-Export-Row-Limit`,
+  names the ceiling and never says whether the export hit it, and the trailing comment row that does say so
+  is invisible to a user who double-clicks the downloaded file: it opens as one more row at the bottom of a
+  sheet. A partial export can therefore be read as a complete one.
 - **No `Accept: text/csv` support at all.** A client that negotiates instead of routing gets JSON. That is
   the behavior this record chose, and it is still surprising to anyone who expects a modern API to answer
   a media type request.
 - **The framework now owns a CSV implementation.** Embedded quotes, embedded newlines, a leading
   separator, and encoding all become framework correctness obligations covered by framework tests. The
-  spreadsheet formula-injection question (a cell whose value begins with `=`, `+`, `-`, or `@`) is one the
-  in-house writer must answer explicitly at implementation, and this record does not pre-decide the answer:
-  neutralizing changes the exported value, and not neutralizing ships a known spreadsheet risk.
+  spreadsheet formula-injection question (a cell whose value begins with `=`, `+`, `-`, or `@`) is answered
+  by the shipped writer, and answered in the exposed direction: it does **not** prefix or otherwise
+  neutralize such values (`Export/CsvWriter.cs:27-32`), because CSV is treated here as a data-faithful
+  format and mangling a field that opens with a minus sign would corrupt legitimate negative numbers. The
+  price is a known spreadsheet risk carried by every consumer: a host that opens untrusted exports has to
+  import them as text rather than double-click them.
 - **CSV flattens, and the query surface does not.** A shaped field that is nested or collection-valued has
   no natural cell. Whatever the writer renders for such a field is a framework convention, not a standard,
   and it will not round-trip back into the JSON shape it came from.

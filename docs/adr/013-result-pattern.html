@@ -229,8 +229,8 @@
           (which stamps a <code>requestId</code> extension from the request&#39;s trace identifier), then registers the handlers
           in a load-bearing order; ASP.NET Core runs them in registration order and stops at the first handler
           that reports the exception handled, so most-specific-first placement is the mechanism, not a comment
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:126-138</code>, registrations at
-          lines 131-135):<ul>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:135-147</code>, registrations at
+          lines 140-144):<ul>
           <li><code>OperationCanceledExceptionHandler</code> (registered first) maps a client-disconnect
           <code>OperationCanceledException</code> to the non-standard HTTP 499 Client Closed Request, so monitoring can
           tell an abandoned request apart from a server fault
@@ -278,7 +278,7 @@
           handler that reports the exception handled, a mis-ordered registration (for example the catch-all
           <code>GlobalExceptionHandler</code> ahead of a specific handler) would swallow the more precise status;
           <code>GlobalExceptionHandler</code> must stay registered last
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:131-135</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:140-144</code>).</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-007 (Result over the wire via gRPC), ADR-014 (the decorator pipeline returns <code>Result.Failure</code> to

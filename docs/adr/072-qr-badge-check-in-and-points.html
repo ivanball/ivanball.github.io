@@ -254,18 +254,18 @@
           <p><code>/check-in</code> (<code>.../Engagement.UI/Pages/CheckIn/CheckInScan.razor:1-2</code>) is <code>[Authorize(Roles = &quot;Organizer&quot;)]</code>
           and its writes carry <code>[HasPermission(EngagementPermissions.CheckInManage)]</code>
           (<code>&quot;engagement:checkin:manage&quot;</code>, <code>.../Engagement.Shared/Authorization/EngagementPermissions.cs:23</code>,
-          applied at <code>.../Engagement.API/Controllers/CheckInsController.cs:68</code>, <code>:88</code>, <code>:157</code>). The attendee&#39;s page
+          applied at <code>.../Engagement.API/Controllers/CheckInsController.cs:75</code>, <code>:99</code>, <code>:179</code>). The attendee&#39;s page
           <code>/my-badge</code> is authenticated-only and displays, never writes. Every <code>CheckIn</code> row therefore records both
           parties: <code>UserId</code> (<code>.../Engagement.Domain/CheckIns/CheckIn.cs:31</code>) and <code>CheckedInByUserId</code> (<code>:49</code>).</p>
           <p>Two later endpoints on the same controller are the exception, and are deliberately built as one: they
           are attendee scans of a <strong>printed</strong> QR and carry no <code>[HasPermission]</code> at all.
-          <code>POST /checkins/sponsor-visits</code> (<code>CheckInsController.cs:113-127</code>) records a booth visit behind
-          <code>[FeatureGate(EngagementFeatures.SponsorVisits)]</code> (<code>:114</code>), and <code>POST /checkins/room-visits</code>
-          (<code>:138-152</code>) checks the caller into whatever session a room is hosting behind
-          <code>[FeatureGate(EngagementFeatures.RoomCheckIn)]</code> (<code>:139</code>). Neither takes an attendee from the request:
+          <code>POST /checkins/sponsor-visits</code> (<code>CheckInsController.cs:128-143</code>) records a booth visit behind
+          <code>[FeatureGate(EngagementFeatures.SponsorVisits)]</code> (<code>:130</code>), and <code>POST /checkins/room-visits</code>
+          (<code>:159-174</code>) checks the caller into whatever session a room is hosting behind
+          <code>[FeatureGate(EngagementFeatures.RoomCheckIn)]</code> (<code>:161</code>). Neither takes an attendee from the request:
           the identity comes from the token, as on <code>/my-badge</code>, and the room endpoint resolves the session
           server-side from the room plus a configured grace window rather than accepting a session id
-          (<code>:129-137</code>; <code>CheckInSettings.RoomCheckInGraceMinutes</code>, 15 by default, read at
+          (<code>:145-158</code>; <code>CheckInSettings.RoomCheckInGraceMinutes</code>, 15 by default, read at
           <code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:52</code>). For these rows the two
           parties are the same person, which the aggregate says outright (<code>CheckIn.cs:46-49</code>).</p>
           <p>The scan surface adapts to the head rather than branching on platform, per ADR-071:
@@ -402,7 +402,7 @@
           (<code>.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs</code>) reads only opted-in users&#39; entries, folds
           totals in memory, orders by total then display name, and assigns distinct sequential ranks.</p>
           <p><code>Engagement.CheckIn</code> and <code>Engagement.Points</code> are feature flags enforced with <code>[FeatureGate]</code> at the
-          controllers (<code>CheckInsController.cs:32</code>, <code>PointsController.cs:34</code>, ADR-031), and the two self-service
+          controllers (<code>CheckInsController.cs:33</code>, <code>PointsController.cs:34</code>, ADR-031), and the two self-service
           surfaces added two more, gated per action rather than per controller so each printed artifact can be
           retired on its own: <code>Engagement.SponsorVisits</code> (<code>.../Engagement.Shared/EngagementFeatures.cs:37</code>) and
           <code>Engagement.RoomCheckIn</code> (<code>:44</code>). GDPR export is extended in the

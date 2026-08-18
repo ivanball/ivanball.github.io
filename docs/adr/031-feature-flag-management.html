@@ -211,7 +211,7 @@
           <h2 id="decision">Decision</h2>
           <p>Standardize on <strong><code>Microsoft.FeatureManagement</code></strong>, configured from the <code>&quot;FeatureManagement&quot;</code> configuration
           section and registered once in <code>AddAPI</code>
-          (<code>services.AddFeatureManagement()</code> + <code>services.AddSingleton&lt;IDisabledFeaturesHandler, DisabledFeatureHandler&gt;()</code>, <code>MMCA.Common.API/DependencyInjection.cs:83-84</code>), with the built-in
+          (<code>services.AddFeatureManagement()</code> + <code>services.AddSingleton&lt;IDisabledFeaturesHandler, DisabledFeatureHandler&gt;()</code>, <code>MMCA.Common.API/DependencyInjection.cs:91-93</code>), with the built-in
           <strong>Percentage / TimeWindow / Targeting</strong> filters available for progressive rollout. The same flag <em>name</em>
           is enforced at two independent surfaces:</p>
           <ul>

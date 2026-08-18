@@ -68,7 +68,7 @@ every REST/gRPC host call it instead of composing its own.
   per-host permutation.
 - **Every REST/gRPC host calls it.** All seven extracted services in the two production apps: ADC
   Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:322`), ADC Conference
-  (`MMCA.ADC.Conference.Service/Program.cs:373`), ADC Engagement
+  (`MMCA.ADC.Conference.Service/Program.cs:392`), ADC Engagement
   (`MMCA.ADC.Engagement.Service/Program.cs:328`), ADC Notification
   (`MMCA.ADC.Notification.Service/Program.cs:258`), Store Catalog
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:266`), Store Identity
@@ -84,8 +84,8 @@ every REST/gRPC host call it instead of composing its own.
   `UseCommonMiddlewarePipeline`"), and gRPC services (`:277-279`).
 
 Scope is REST and gRPC service hosts. The Blazor UI hosts and the YARP gateways deliberately do not
-call it: the gateways compose a much thinner chain (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:50`,
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:72`), and the UI hosts hand-compose their own,
+call it: the gateways compose a much thinner chain (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:95`,
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:119`), and the UI hosts hand-compose their own,
 reusing only the localization half via `UseCommonRequestLocalization()`
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:124`,
 `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:164`), which is the public method the pipeline
@@ -130,7 +130,7 @@ itself calls at `:53` (`WebApplicationExtensions.cs:133`).
   partitions are spoofable by anything that can reach a service directly. This is safe only because the
   services are not publicly routable and sit behind the gateway; ADR-019 records the same caveat.
 - **Security-response headers are not in this pipeline.** ADR-023's `UseCommonSecurityHeaders` is applied
-  by the gateways and UI hosts only (`MMCA.ADC.Gateway/Program.cs:50`, `MMCA.Store.Gateway/Program.cs:72`,
+  by the gateways and UI hosts only (`MMCA.ADC.Gateway/Program.cs:117`, `MMCA.Store.Gateway/Program.cs:140`,
   `MMCA.ADC.UI.Web/Program.cs:105`, `MMCA.Store.UI.Web/Program.cs:145`). A service host exposed directly,
   without a gateway in front, would serve responses without them.
 - **One step in the fixed order is currently dead weight.** The pre-forwarded scheme/host capture
