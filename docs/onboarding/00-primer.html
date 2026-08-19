@@ -782,6 +782,31 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>Stripe webhook ingress contract (Store Sales): an anonymous raw-body POST verified by <code>Stripe-Signature</code> whose status code encodes ACCEPTED-vs-PROCESSED, not success/failure; 400 only when the event cannot be accepted at all, because rejections make Stripe retry and eventually disable the endpoint; post-acceptance failures log and return 200 with ADR-054&#39;s reconciliation as backstop</td>
           <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
           </tr>
+          <tr>
+          <td>085</td>
+          <td>Identifier type aliases revisited (revisits 048): the wrapper-struct alternative is re-evaluated, priced (43 aliases, 42 of them <code>int</code>; 3,641 occurrences across 1,016 files to migrate) and deferred again, now behind three named revisit triggers instead of an open-ended &quot;not now&quot;</td>
+          <td><a href="group-02-domain-building-blocks.html">g02</a>/<a href="group-14-module-system-composition.html">g14</a></td>
+          </tr>
+          <tr>
+          <td>086</td>
+          <td>Process manager deferred (relates to 054): a documented deferral shipping no code; records the shape a durable coordinator would take (MassTransit v8 saga state machine, per-instance state + deadlines) and the build trigger (3+ steps across 2+ services, state that fits no aggregate, a per-instance deadline); ADR-054&#39;s compensation + sweep suffice until then</td>
+          <td><a href="group-04-events-outbox.html">g04</a></td>
+          </tr>
+          <tr>
+          <td>087</td>
+          <td>Broker poison-message handling (amends 009): transport-aware second-level redelivery (opt-in on RabbitMQ, native on Azure Service Bus), an auto-registered <code>FaultIntegrationEventConsumer&lt;TEvent&gt;</code> that makes an exhausted message visible but never replays it (meter <code>MMCA.Common.Broker</code>), and a circuit breaker on the outbox broker publish only; a per-query DB breaker is rejected (does not compose with EF&#39;s execution strategy)</td>
+          <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-07-persistence-ef-core.html">g07</a></td>
+          </tr>
+          <tr>
+          <td>088</td>
+          <td>Gateway edge responsibilities (extends 019): the edge owns three cross-cutting behaviors via <code>MMCA.Common.Aspire</code>: <code>GatewayCorrelationMiddleware</code> ensures + forwards <code>X-Correlation-ID</code>, per-client-IP rate limiting that deliberately includes anonymous callers (inverting ADR-019&#39;s exemption), and downstream health probes on the <code>Ready</code> tag only; edge JWT pre-validation is declined with a trigger</td>
+          <td><a href="group-16-aspire-orchestration.html">g16</a></td>
+          </tr>
+          <tr>
+          <td>089</td>
+          <td>Gateway topology owned by configuration (amends 008): the route table moves out of <code>MapForwarder</code> code into YARP <code>ReverseProxy</code> configuration as the single route source, with <code>RouteMapTests</code> as a drift gate in both consumers and the per-destination HTTP version policy (ADR-012 profiles) in cluster config; the AppHost/bicep keep address books, not route tables</td>
+          <td><a href="group-16-aspire-orchestration.html">g16</a></td>
+          </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>
           <hr>
