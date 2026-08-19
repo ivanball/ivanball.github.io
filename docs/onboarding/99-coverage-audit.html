@@ -161,12 +161,12 @@
           </thead>
           <tbody><tr>
           <td><code>.cs</code> files scanned</td>
-          <td align="right">2,699</td>
+          <td align="right">2,810</td>
           <td><code>00-inventory.md</code></td>
           </tr>
           <tr>
           <td>, in-scope</td>
-          <td align="right">2,581</td>
+          <td align="right">2,692</td>
           <td></td>
           </tr>
           <tr>
@@ -176,33 +176,33 @@
           </tr>
           <tr>
           <td>Type declaration rows (incl. partial-class fragments)</td>
-          <td align="right">3,377</td>
+          <td align="right">3,586</td>
           <td><code>00-inventory.md</code></td>
           </tr>
           <tr>
           <td><strong>Distinct type nodes (partials collapsed)</strong></td>
-          <td align="right"><strong>3,264</strong></td>
+          <td align="right"><strong>3,465</strong></td>
           <td>the master checklist</td>
           </tr>
           <tr>
           <td>→ mapped to a functional group</td>
-          <td align="right">3,264</td>
+          <td align="right">3,465</td>
           <td><code>classify.ps1</code> (0 unmapped)</td>
           </tr>
           <tr>
           <td>→ individually sectioned (named in a chapter)</td>
-          <td align="right">1,804</td>
+          <td align="right">1,890</td>
           <td><code>verify.ps1</code></td>
           </tr>
           <tr>
           <td>→ rolled up by project (G25 test classes)</td>
-          <td align="right">1,460</td>
+          <td align="right">1,575</td>
           <td>logged exception §2.2</td>
           </tr>
           <tr>
           <td>Distinct <code>###</code> sections written across 27 chapters</td>
-          <td align="right">1,740</td>
-          <td>covering the 1,804 (sibling families share a section, §2.3)</td>
+          <td align="right">1,834</td>
+          <td>covering the 1,890 (sibling families share a section, §2.3)</td>
           </tr>
           <tr>
           <td>Chapter overviews written</td>
@@ -210,9 +210,9 @@
           <td>one per group</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 1,804 individually-sectioned types are
+          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 1,890 individually-sectioned types are
           missing from their group chapter, every one appears as a <code>###</code> heading or in a sibling-family
-          <code>File:Line</code> table. 3,264 = 1,804 individually-sectioned + 1,460 rolled-up. Nothing dropped, nothing
+          <code>File:Line</code> table. 3,465 = 1,890 individually-sectioned + 1,575 rolled-up. Nothing dropped, nothing
           double-counted (each type maps to exactly one group).</p>
           <blockquote>
           <p><strong>Caveat on what <code>verify.ps1</code> proves.</strong> Its check is name presence: a type counts as covered when
@@ -1081,6 +1081,66 @@
           covered; the shipped-package roll-up is now 95 (was 89).</li>
           </ul>
           </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, 2026-08-18 full drift sweep).</strong> Regenerated
+          with MMCA.Common at <code>0b19b56</code> and MMCA.ADC at <code>018ccc50</code> (both clean; <code>FACTS.md</code> stays the source of
+          truth for version and package figures). Net change since the v1.152.0 pass: <strong>+201</strong> distinct nodes
+          (3,264 to <strong>3,465</strong>), 0 removed, individually-sectioned 1,804 to <strong>1,890</strong>, rolled-up 1,460 to
+          <strong>1,575</strong>, <code>###</code> sections 1,740 to <strong>1,834</strong>, cycles 26 to <strong>30</strong> (four new deliberate
+          fitness-test/map pairs: <code>CancellationTokenFitnessTests</code>+<code>CancellationTestMap</code>,
+          <code>IdempotencyFitnessTests</code>+<code>IdempotencyTestMap</code>, <code>NamespaceCycleFitnessTests</code>+<code>CycleTestMap</code>,
+          <code>EventScopeFitnessTests</code>+<code>FakeConsumerMap</code>; the three name-collision artifact pairs are unchanged).
+          Edge resolution moved to <strong>12,293</strong> namespace-visible (~96%), <strong>493</strong> globally-unique fallback, <strong>29</strong>
+          dropped ambiguous. <code>classify.ps1</code>: <strong>0 unmapped</strong>; <code>verify.ps1</code>: <strong>0 missing, rubric 34/34</strong>.</p>
+          <ul>
+          <li><strong>Governance event, two classifier rules approved 2026-08-18 (no new group needed).</strong>
+          <code>MMCA.Common.Domain.IntegrationEvents</code> maps to G04, created for the first framework-shipped
+          concrete integration event, <code>OutputCacheEvictionRequested</code>
+          (<code>MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:23</code>, a frozen-contract
+          candidate per its ADR-010 versioning remarks); and <code>MMCA.ADC.Gateway</code> maps to G16, created for the
+          first first-party type in the Gateway host, <code>Http2ForwardingConfigFilter</code>
+          (<code>MMCA.ADC.Gateway/Http2ForwardingConfigFilter.cs:23</code>, the <code>ForwardHttp2</code> h2c rollback switch),
+          placed with the gateway edge teaching in group-16. Both were unmapped refusals; neither is a
+          cohesive new subsystem, so the chapter count stays at 27.</li>
+          <li><strong>Framework edge hardening dominates the Common delta (G12 +11, G16 +9).</strong> Optimistic HTTP
+          concurrency (<code>ConcurrencyETag</code>, <code>SupportsIfMatchAttribute</code>), Redis fixed-window rate limiting
+          (<code>RedisFixedWindowRateLimiter</code> and settings/lease/algorithm), event-driven output-cache eviction
+          (the <code>OutputCacheEviction*</code> handler/extensions/metrics in <code>MMCA.Common.API/Caching/</code>), the
+          idempotency opt-out <code>NonIdempotentAttribute</code>, and the gateway hardening family
+          (<code>DownstreamServiceHealthCheck</code>, <code>GatewayCorrelationExtensions</code>/<code>Middleware</code>,
+          <code>GatewayDownstreamRegistry</code>, <code>GatewayHealthCheckExtensions</code>, <code>GatewayRateLimitingExtensions</code>/
+          <code>Settings</code> in <code>MMCA.Common.Aspire/Gateway/</code>).</li>
+          <li><strong>The CQRS pipeline grew two decorator families (G05 +7):</strong> <code>AuthorizationCommandDecorator</code>/
+          <code>AuthorizationQueryDecorator</code> (with <code>IRequiresPermission</code>), <code>TimeoutCommandDecorator</code>/
+          <code>TimeoutQueryDecorator</code> (with <code>IHasTimeout</code>), and the <code>CqrsMetrics</code> meter they record into.</li>
+          <li><strong>The specification stack relocated Application to Domain (G03 +7, G07 +3, G01 +3).</strong>
+          <code>QuerySpecification&lt;T,TId&gt;</code>, <code>OrderExpression</code>, <code>SpecificationComposer</code>, <code>SpecificationExtensions</code>
+          and <code>ParameterReplacer</code> now sit in <code>MMCA.Common.Domain/Specifications/</code> as their own files
+          (<code>ParameterReplacer</code> moved out of <code>CrossSourceSpecification.cs</code>), <code>SpecificationEvaluator</code> has its
+          own file under Infrastructure, and keyset pagination arrived end to end: <code>KeysetPageRequest</code>/
+          <code>KeysetCollectionResult&lt;T&gt;</code>/<code>KeysetCursor</code> (<code>MMCA.Common.Shared/Abstractions/KeysetPagination.cs</code>)
+          plus <code>KeysetQueryBuilder</code> (Infrastructure).</li>
+          <li><strong>Messaging resilience (G04 +2, G14 +1, G07 +1):</strong> <code>FaultIntegrationEventConsumer&lt;TEvent&gt;</code>,
+          <code>InboxDisabledWarningService</code>, <code>BrokerMetrics</code> and <code>BrokerResilienceDefaults</code>.</li>
+          <li><strong>ADC additions:</strong> the <code>SessionScoringSweepJob</code> background job with <code>SessionScoreStamp</code>/
+          <code>SessionScoringCandidate</code> (G19 +3), <code>UserSessionBookmarkCacheEvictionHandler</code> (G22 +1), and
+          notification DTO projection (<code>PushNotificationDTOProjection</code>/<code>Projector</code>, G10 +2).</li>
+          <li><strong>The device-capability chapter flipped its adoption story:</strong> 13 <code>Maui*</code> capability services in
+          <code>MMCA.Common.UI.Maui</code> are now fully implemented (they were inert fallbacks at the last pass), with
+          <code>ServerTokenStorageService</code>/<code>WebFormFactor</code> web counterparts; the chapter overview and four
+          section parts were re-authored to the implemented reality.</li>
+          <li><strong>Testing growth (G25 +152 nodes):</strong> roughly 250 new per-<code>[Fact]</code> classes net across ten test
+          assemblies, rolled up per the standing exception, plus four new individually-sectioned reusable
+          bases (<code>CancellationTokenConventionTestsBase</code>, <code>IdempotencyConventionTestsBase</code>,
+          <code>NamespaceCycleTestsBase</code>, <code>ProtoContractTestsBase</code>) and the <code>ProtoScope</code>/<code>ProtoScopeKind</code> model.</li>
+          <li><strong>Authoring pass and verification:</strong> 24 units re-authored across 12 chapters. Adversarial
+          spot-checks returned CONFIRMED on all sampled units after one repair: the G16 overview claimed
+          every <code>GatewayRateLimitingSettings</code> property carries <code>[Range]</code>, but <code>BypassPathPrefixes</code>
+          (<code>MMCA.Common.Aspire/Gateway/GatewayRateLimitingSettings.cs:74</code>) does not; the prose now says the
+          three numeric properties. The v1.135.0 backlog of sections with corrected citations but unverified
+          bodies remains open outside the parts re-authored here.</li>
+          </ul>
+          </blockquote>
           <hr>
           <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
           <h3 id="21-generated--scaffolded-code-not-sectioned-118-files">2.1 Generated / scaffolded code, not sectioned (118 files)</h3>
@@ -1122,9 +1182,9 @@
           <hr>
           <h2 id="3-grouping--ordering-verification">3. Grouping &amp; ordering verification</h2>
           <ul>
-          <li><strong>Every type in exactly one group.</strong> <code>classify.ps1</code> assigns all 3,264 nodes via name-level overrides
+          <li><strong>Every type in exactly one group.</strong> <code>classify.ps1</code> assigns all 3,465 nodes via name-level overrides
           (for the grab-bag <code>MMCA.Common.*Interfaces*/Services</code> namespaces) + ordered namespace-prefix rules;
-          it reports <strong>0 unmapped</strong> and the per-group counts sum to 3,264. See
+          it reports <strong>0 unmapped</strong> and the per-group counts sum to 3,465. See
           <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a>.</li>
           <li><strong>Within-group ascending Level.</strong> Each chapter&#39;s sections were authored from a pre-sorted, Level-
           ascending unit table, so no section precedes a same-group type it depends on (ties broken by name).</li>
@@ -1371,8 +1431,8 @@
           <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a> and group-07), not yet as
           live production options.</li>
           <li><strong>Edge-resolution approximation.</strong> The dependency graph is a <em>syntactic</em> (namespace-aware) resolve,
-          not a full semantic compiler bind: ~96% of edges bind by namespace visibility (9,543), the rest by a
-          globally-unique-name fallback (348 edges), and 28 references are dropped as ambiguous. This is accurate enough
+          not a full semantic compiler bind: ~96% of edges bind by namespace visibility (12,293), the rest by a
+          globally-unique-name fallback (493 edges), and 29 references are dropped as ambiguous. This is accurate enough
           for the leveling spine but is a documented approximation
           (<a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest accuracy note</a>).</li>
           <li><strong>64 cross-linked types have no section of their own</strong> (measured at the v1.135.0 pass by the

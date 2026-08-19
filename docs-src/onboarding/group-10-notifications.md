@@ -1955,7 +1955,8 @@ four ever taking the others down, and without a retried request doing it twice.
 > MMCA.Common.Application · `MMCA.Common.Application.Notifications.PushNotifications.DTOs` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/DTOs/PushNotificationDTOMapper.cs:12` · Level 8 · class (sealed, partial)
 
 - **What it is**: the Mapperly-generated mapper that projects the [PushNotification](#pushnotification)
-  domain entity onto its [PushNotificationDTO](#pushnotificationdto) response shape. It implements
+  domain entity onto its [PushNotificationDTO](#pushnotificationdto) response shape, one instance at a
+  time. It implements
   [`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype)
   closed over `PushNotification` / `PushNotificationDTO` / `PushNotificationIdentifierType`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/DTOs/PushNotificationDTOMapper.cs:13`).
@@ -1977,6 +1978,9 @@ four ever taking the others down, and without a retried request doing it twice.
     The single override is
     `[MapProperty(nameof(PushNotification.Status), nameof(PushNotificationDTO.Status), Use = nameof(MapStatusToString))]`
     (line 16), which routes the status through the custom converter instead of a straight assignment.
+    The override is needed because the entity's `Status` is a `PushNotificationStatus` enum while the
+    DTO's is a `required string`
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Notifications/PushNotifications/PushNotificationDTO.cs:26`).
   - `MapToDTOs(IReadOnlyCollection<PushNotification> entityCollection)` (line 20) is hand-written: it
     null-guards with `ArgumentNullException.ThrowIfNull` (line 22) and then projects with a collection
     expression over `Select(MapToDTO)` (line 23).
@@ -1991,7 +1995,63 @@ four ever taking the others down, and without a retried request doing it twice.
   `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:43-45`), and
   consumed through it by [SendPushNotificationHandler](#sendpushnotificationhandler) and
   [GetNotificationHistoryHandler](#getnotificationhistoryhandler) to shape what
-  [NotificationsController](#notificationscontroller) returns.
+  [NotificationsController](#notificationscontroller) returns. Since the projector below was registered,
+  the mapper is no longer the only path: it still serves by-id reads and the non-projectable fallback,
+  while qualifying list reads are served by [PushNotificationDTOProjection](#pushnotificationdtoprojection)
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:66`).
+
+---
+
+### PushNotificationDTOProjection
+> MMCA.Common.Application · `MMCA.Common.Application.Notifications.PushNotifications.DTOs` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/DTOs/PushNotificationDTOProjector.cs:22` · Level 8 · class (internal, static, partial)
+
+- **What it is**: the Mapperly-generated **projection** from [PushNotification](#pushnotification) to
+  [PushNotificationDTO](#pushnotificationdto). Where the mapper above converts an already-materialized
+  entity, this converts an `IQueryable<PushNotification>` into an `IQueryable<PushNotificationDTO>`, so
+  the database returns only the DTO's columns instead of whole notification rows that are mapped
+  afterwards (documented at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/DTOs/PushNotificationDTOProjector.cs:8-12`).
+- **Depends on**: [PushNotification](#pushnotification), [PushNotificationDTO](#pushnotificationdto);
+  externals `Riok.Mapperly.Abstractions` (`[Mapper]`, line 21) and `System.Linq` (`IQueryable<T>`).
+  It depends on no service: it is a static class with one generated member.
+- **Concept introduced, mapping an expression tree instead of an object.** A normal mapper is compiled
+  code that runs after rows arrive. A projection has to be an **expression tree** the database provider
+  can translate into SQL, which means every step of the mapping must be expressible in that tree. That
+  single constraint explains the whole design of this file. The instance mapper renders `Status` with a
+  custom method (`Use = nameof(MapStatusToString)`), and a projection cannot call a method the provider
+  has never heard of. Mapperly's enum-to-string mapping *is* expressible, so it is inlined here as a
+  conditional over the known members, which the provider emits as a SQL `CASE`, producing exactly the
+  strings `PushNotificationStatus.ToString()` would (explained at lines 13-20).
+  `[Rubric §12, Performance & Scalability]` assesses whether reads move only the data they need: a
+  projected list read transfers the seven DTO columns rather than every mapped and unmapped column of
+  the notification row, and it skips change-tracker materialization entirely.
+  `[Rubric §8, Data Architecture]` assesses how the query layer shapes data at the source: pushing the
+  shape into SQL is the difference between filtering at the database and filtering in the process.
+- **Walkthrough**
+  - `[Mapper]` (line 21) marks the class for the source generator; `internal static partial class`
+    (line 22) keeps it out of the public package surface, because it is an implementation detail of the
+    public wrapper below.
+  - `ProjectToDTO(IQueryable<PushNotification> source)` (line 27) is the one member, declared
+    `internal static partial` and returning `IQueryable<PushNotificationDTO>`. Mapperly writes the body:
+    a `source.Select(x => new PushNotificationDTO { ... })` whose initializer includes the inlined
+    status conditional. Nothing is enumerated here; the caller still composes paging and ordering on top
+    of the returned queryable.
+- **Why it's built this way**: a second generated artifact rather than an attribute on the existing
+  mapper, because the two have genuinely different capability sets (one may call arbitrary C#, the other
+  may not) and because keeping them separate is what makes the equivalence testable. See
+  [ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html), which
+  defines projection pushdown as an optional capability of the read contract.
+- **Where it's used**: called only from
+  [PushNotificationDTOProjector.ProjectTo](#pushnotificationdtoprojector)
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/DTOs/PushNotificationDTOProjector.cs:43`).
+  Its output is pinned equal to the mapper's by
+  `PushNotificationDTOProjectorTests` (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Notifications/PushNotificationDTOProjectorTests.cs:51-62`,
+  a `[Theory]` over every `PushNotificationStatus` member), and its SQL translatability is covered by
+  `PushNotificationProjectionTranslationTests`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/PushNotificationProjectionTranslationTests.cs:19`).
+- **Caveats / not-in-source**: the generated body is not in the repository (it is emitted at build
+  time), so the exact SQL `CASE` shape is not readable from these files; the tests above assert the
+  observable result rather than the generated text.
 
 ---
 
@@ -2021,7 +2081,7 @@ four ever taking the others down, and without a retried request doing it twice.
   Second, the delete is deliberately indistinguishable between "no such installation" and "not yours":
   [IPushDeviceRegistrar](group-07-persistence-ef-core.md#ipushdeviceregistrar) verifies the owner tag and
   reports both cases as success
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IPushDeviceRegistrar.cs:40-48`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IPushDeviceRegistrar.cs:40-47`),
   so the endpoint cannot be used as an existence oracle for other users' installation ids
   (`DevicesController.cs:47-53`).
   `[Rubric §11, Security]` assesses whether authorization and ownership are enforced at the boundary:
@@ -2200,6 +2260,67 @@ four ever taking the others down, and without a retried request doing it twice.
 
 ---
 
+### PushNotificationDTOProjector
+> MMCA.Common.Application · `MMCA.Common.Application.Notifications.PushNotifications.DTOs` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/DTOs/PushNotificationDTOProjector.cs:35` · Level 9 · class (sealed)
+
+- **What it is**: the injectable wrapper that adapts the static, generated
+  [PushNotificationDTOProjection](#pushnotificationdtoprojection) to the framework's projection contract
+  [`IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`](group-05-cqrs-pipeline.md#ientitydtoprojectortentity-tentitydto-tidentifiertype),
+  closed over `PushNotification` / `PushNotificationDTO` / `PushNotificationIdentifierType` (line 36).
+  Registering it is what switches notification list reads onto the server-side projection path.
+- **Depends on**: [`IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`](group-05-cqrs-pipeline.md#ientitydtoprojectortentity-tentitydto-tidentifiertype),
+  [PushNotificationDTOProjection](#pushnotificationdtoprojection), [PushNotification](#pushnotification),
+  [PushNotificationDTO](#pushnotificationdto); BCL `ArgumentNullException` and `IQueryable<T>`. It has no
+  constructor and no state, so it is trivially safe to resolve at any lifetime.
+- **Concept introduced, opting a single aggregate into projection pushdown.**
+  [`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype)
+  declares two constructors: a five-argument one and a six-argument one that additionally takes an
+  `IEntityDTOProjector<...>`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:69-77`). The container
+  picks the longer constructor when a projector is registered and the shorter one when it is not, because
+  one parameter set is a strict superset of the other; that is the documented reason it is a second
+  constructor rather than an optional parameter, since
+  `Microsoft.Extensions.DependencyInjection` has no notion of an optional dependency
+  (`EntityQueryService.cs:51-59`). So registering **this** class in
+  [DependencyInjection](#dependencyinjection) below is the entire opt-in gesture: no query handler
+  changes.
+  The projection path is not taken unconditionally. `CanProject` requires three things
+  (`EntityQueryService.cs:489-492`): a projector is registered, the caller did not ask for tracking
+  (a projection yields DTOs, which the change tracker has nothing to do with), and there are no
+  unsupported cross-source includes (those are loaded row by row after materialization by the navigation
+  populator, which a projection has no rows to hand it). Field shaping deliberately does not disqualify,
+  because shaping runs after materialization over whatever object the pipeline produced
+  (`EntityQueryService.cs:484-486`).
+  `[Rubric §1, SOLID]` assesses dependency inversion and interface segregation: the contract has exactly
+  one member, and the query service depends on that interface rather than on Mapperly or on this class.
+  `[Rubric §12, Performance & Scalability]` assesses whether the read path scales with result shape: for
+  notification history and inbox-style list reads, the row width sent over the wire drops to the DTO's
+  columns.
+- **Walkthrough**
+  - `ProjectTo(IQueryable<PushNotification> source)` (line 39) is the whole class. It null-guards with
+    `ArgumentNullException.ThrowIfNull(source)` (line 41), then returns
+    `PushNotificationDTOProjection.ProjectToDTO(source)` (line 43). It composes, it does not execute:
+    the returned queryable is still open for the pipeline's `Where`, `OrderBy`, `Skip`, and `Take`.
+- **Why it's built this way**: the generated projection is a static method, and DI cannot resolve a
+  static method. This four-line adapter is the minimum needed to make a generated artifact injectable
+  and, in the same move, overridable: because the Application-layer registration uses `TryAddScoped`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:50-52`), a
+  consuming app can register its own projector first and keep it. See
+  [ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html), which
+  also records the trade-off: nothing tells a caller which path ran, so a projector that stops being
+  registered loses the optimization with no signal beyond query latency.
+- **Where it's used**: registered twice by the Application-layer [DependencyInjection](#dependencyinjection)
+  below (as itself and as the interface, lines 50-52), then resolved by
+  [`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype)
+  closed over the notification triple, which serves
+  [GetNotificationHistoryHandler](#getnotificationhistoryhandler)'s paged reads. Directly exercised by
+  `PushNotificationDTOProjectorTests`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Notifications/PushNotificationDTOProjectorTests.cs:19`),
+  which asserts among other things that `ProjectTo` returns a queryable rather than a materialized list
+  (lines 100-107).
+
+---
+
 ### DependencyInjection
 > MMCA.Common.API · `MMCA.Common.API.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:9` · Level 10 · class (static)
 
@@ -2215,10 +2336,10 @@ both keep the raw type name as their heading.)*
 - **Concept introduced, application parts for controllers that ship in a NuGet package.** ASP.NET Core
   discovers controllers by scanning the host's own assembly (and its application parts). The notification
   controllers live in `MMCA.Common.API`, a referenced package, so without an explicit application part
-  they exist but are never routed. `AddNotificationControllers` is written as an `extension(IMvcBuilder
-  builder)` member (line 11) that calls
-  `builder.AddApplicationPart(typeof(NotificationsController).Assembly)` (line 21), which registers all
-  three controllers in one call because they share an assembly.
+  they exist but are never routed (stated in the member's own documentation, lines 13-17).
+  `AddNotificationControllers` is written as an `extension(IMvcBuilder builder)` member (line 11) that
+  calls `builder.AddApplicationPart(typeof(NotificationsController).Assembly)` (line 21), which registers
+  all three controllers in one call because they share an assembly.
   `[Rubric §7, Microservices Readiness]` assesses whether a capability packages cleanly for reuse across
   hosts: shipping the controllers together with their own one-line registration means the whole
   notification HTTP surface moves into an extracted service without editing the controllers.
@@ -2245,14 +2366,16 @@ both keep the raw type name as their heading.)*
 
 - **What it is**: the Application-layer composition helper for the notification subsystem. Its single
   `extension(IServiceCollection)` member, `AddNotificationApplicationServices`, registers every
-  notification command and query handler, the DTO mapper, the entity query service, the validators, and
-  the default recipient provider.
+  notification command and query handler, the DTO mapper, the DTO projector, the entity query service,
+  the validators, and the default recipient provider.
 - **Depends on**: [PushNotification](#pushnotification) and
   [`NullNavigationPopulator<TEntity>`](group-11-navigation-populators.md#nullnavigationpopulatortentity);
   [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
   and [`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype);
   [`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype)
-  and [PushNotificationDTOMapper](#pushnotificationdtomapper); the handler contracts
+  and [PushNotificationDTOMapper](#pushnotificationdtomapper);
+  [`IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`](group-05-cqrs-pipeline.md#ientitydtoprojectortentity-tentitydto-tidentifiertype)
+  and [PushNotificationDTOProjector](#pushnotificationdtoprojector); the handler contracts
   [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
   and [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)
   with the six concrete handlers named below;
@@ -2267,13 +2390,14 @@ both keep the raw type name as their heading.)*
   assembly.** Application modules are normally auto-registered by
   `ScanModuleApplicationServices<TAssemblyMarker>()`, which scans a module's own assembly. The
   notification types have no module assembly of their own: they live in `MMCA.Common.Application`, so
-  they are wired explicitly here (line 35). Every registration uses `TryAddScoped` (lines 38-67), which
-  is the override contract: a consuming app that registers its own handler, mapper, or recipient
-  provider **before** calling this helper keeps its own registration, because `TryAdd` never replaces an
-  existing service descriptor.
+  they are wired explicitly here (line 35). Every registration except the validator scan uses
+  `TryAddScoped` (lines 38-74), which is the override contract: a consuming app that registers its own
+  handler, mapper, projector, or recipient provider **before** calling this helper keeps its own
+  registration, because `TryAdd` never replaces an existing service descriptor. The class documentation
+  states the same rule at lines 22-25.
   `[Rubric §1, SOLID]` assesses dependency inversion: the notification send path depends on
   [INotificationRecipientProvider](#inotificationrecipientprovider), and the default binding is the
-  no-op [NullNotificationRecipientProvider](#nullnotificationrecipientprovider) (line 67), so the
+  no-op [NullNotificationRecipientProvider](#nullnotificationrecipientprovider) (line 74), so the
   framework ships a working default while an app supplies its real audience.
   `[Rubric §3, Clean Architecture]` assesses whether wiring stays out of the domain: all of it is one
   static class in the Application layer, and nothing below Application knows these types exist.
@@ -2284,22 +2408,27 @@ both keep the raw type name as their heading.)*
     [`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype)
     closed over `PushNotification` / `PushNotificationDTO` / `PushNotificationIdentifierType`
     (lines 39-40). The null populator is the explicit statement that this aggregate has no navigations
-    to batch-load.
+    to batch-load, which is also what keeps `CanProject` satisfiable (no unsupported includes).
   - The [PushNotificationDTOMapper](#pushnotificationdtomapper) twice, as the concrete type and as the
     `IEntityDTOMapper<...>` interface (lines 43-45), so both the query service (which resolves the
     interface) and any direct consumer get the same scoped instance shape.
-  - Three command handlers: [SendPushNotificationHandler](#sendpushnotificationhandler) (lines 48-49),
-    [MarkNotificationReadHandler](#marknotificationreadhandler) (lines 50-51), and
-    [MarkAllNotificationsReadHandler](#markallnotificationsreadhandler) (lines 52-53).
-  - Three query handlers: [GetNotificationHistoryHandler](#getnotificationhistoryhandler) (lines 56-57),
-    [GetMyNotificationsHandler](#getmynotificationshandler) (lines 58-59), and
-    [GetUnreadNotificationCountHandler](#getunreadnotificationcounthandler) (lines 60-61). These six
+  - The [PushNotificationDTOProjector](#pushnotificationdtoprojector) twice, as the concrete type
+    (line 50) and as the `IEntityDTOProjector<...>` interface (lines 51-52). The comment at lines 47-49
+    records why this pair matters: registering it is what switches notification list reads onto the
+    server-side projection path, because the query service resolves it through its longer constructor,
+    and the projected values are pinned equal to the mapper's by test.
+  - Three command handlers: [SendPushNotificationHandler](#sendpushnotificationhandler) (lines 55-56),
+    [MarkNotificationReadHandler](#marknotificationreadhandler) (lines 57-58), and
+    [MarkAllNotificationsReadHandler](#markallnotificationsreadhandler) (lines 59-60).
+  - Three query handlers: [GetNotificationHistoryHandler](#getnotificationhistoryhandler) (lines 63-64),
+    [GetMyNotificationsHandler](#getmynotificationshandler) (lines 65-66), and
+    [GetUnreadNotificationCountHandler](#getunreadnotificationcounthandler) (lines 67-68). These six
     registrations are exactly the closures the two controllers above inject.
   - The FluentValidation validators discovered from the
     [SendPushNotificationRequestValidator](#sendpushnotificationrequestvalidator) assembly with
-    `includeInternalTypes: true` (line 64). Note this one is a plain `AddValidatorsFromAssemblyContaining`,
+    `includeInternalTypes: true` (line 71). Note this one is a plain `AddValidatorsFromAssemblyContaining`,
     not a `TryAdd`.
-  - The default recipient provider (line 67), then `return services` for chaining (line 69).
+  - The default recipient provider (line 74), then `return services` for chaining (line 76).
 - **Why it's built this way**: hand-registration keeps the notification subsystem self-contained inside
   the framework package while still honoring the framework-wide override contract, and the
   `extension(IServiceCollection)` preview syntax lets it read as a first-class
