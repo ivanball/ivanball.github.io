@@ -237,7 +237,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html</loc>
-    <lastmod>2026-08-18</lastmod>
+    <lastmod>2026-08-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -312,7 +312,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html</loc>
-    <lastmod>2026-08-18</lastmod>
+    <lastmod>2026-08-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -432,7 +432,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html</loc>
-    <lastmod>2026-08-18</lastmod>
+    <lastmod>2026-08-19</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

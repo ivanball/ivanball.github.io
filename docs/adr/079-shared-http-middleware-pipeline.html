@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-079: One Shared, Ordered HTTP Middleware Pipeline for Every Service Host · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-14).">
+  <meta name="description" content="Accepted (2026-08-14). Revised 2026-08-19 (refreshed the WebApplicationBuilderExtensions.cs cross-reference anchor, which moved to :555).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-079: One Shared, Ordered HTTP Middleware Pipeline for Every Service Host">
-  <meta property="og:description" content="Accepted (2026-08-14).">
+  <meta property="og:description" content="Accepted (2026-08-14). Revised 2026-08-19 (refreshed the WebApplicationBuilderExtensions.cs cross-reference anchor, which moved to :555).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-079: One Shared, Ordered HTTP Middleware Pipeline for Every Service Host">
-  <meta name="twitter:description" content="Accepted (2026-08-14).">
+  <meta name="twitter:description" content="Accepted (2026-08-14). Revised 2026-08-19 (refreshed the WebApplicationBuilderExtensions.cs cross-reference anchor, which moved to :555).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host","item":"https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -197,7 +197,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-079-one-shared-ordered-http-middleware-pipeline-for-every-service-host">ADR-079: One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-14).</p>
+          <p>Accepted (2026-08-14). Revised 2026-08-19 (refreshed the <code>WebApplicationBuilderExtensions.cs</code>
+          cross-reference anchor, which moved to <code>:555</code>).</p>
           <h2 id="context">Context</h2>
           <p>In ASP.NET Core, middleware order is behavior, not style: a rate limiter placed before authentication
           partitions every request as anonymous, an HTTPS redirect placed in front of a gRPC call breaks the
@@ -305,7 +306,7 @@
           <ul>
           <li><strong>Nothing freezes the order.</strong> A workspace-wide search finds no test referencing
           <code>UseCommonMiddlewarePipeline</code>: the only non-host references are the method itself, a cross-reference
-          in <code>WebApplicationBuilderExtensions.cs:399</code> and one in <code>SignalRExtensions.cs:19</code>. Reordering two lines
+          in <code>WebApplicationBuilderExtensions.cs:555</code> and one in <code>SignalRExtensions.cs:19</code>. Reordering two lines
           compiles, passes every analyzer, and passes the unit tiers. The load-bearing adjacencies are protected
           by comments and review, not by a fitness test. That is the weakest point of this decision.</li>
           <li><strong>There is no extension point for a host that needs a deviation.</strong> The method takes no parameters and

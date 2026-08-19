@@ -172,8 +172,8 @@ rows (`:435-441`); and the column itself is declared required, 64 characters, no
 (`:411-422`, width constant at `:366`). Because the two filters are named, EF composes them with AND,
 and a caller asking for soft-deleted rows drops exactly the `SoftDelete` filter while the tenant filter
 stays in force: the repository contract says so in as many words
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:14-18`,
-`:39-43`).
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:16-20`,
+`:41-45`).
 
 The **write** half is [`TenantSaveChangesInterceptor`](#tenantsavechangesinterceptor)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/TenantSaveChangesInterceptor.cs:36`).
@@ -243,19 +243,19 @@ The repository contract is deliberately interface-segregated
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs`, the contract
 [ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html) states): a
 handler that only needs a lookup can depend on the narrow
-[`IEntityReader<TEntity, TIdentifierType>`](#ientityreadertentity-tidentifiertype) (`IRepository.cs:19`)
-or [`IEntityQuerier<TEntity, TIdentifierType>`](#ientityqueriertentity-tidentifiertype) (`:78`);
-[`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype) (`:134`) combines
-both plus four `IQueryable` surfaces (tracking, no-tracking, single-query, split-query, `:140-149`),
-[`IWriteRepository<TEntity, TIdentifierType>`](#iwriterepositorytentity-tidentifiertype) (`:157`) adds
-mutation, and [`IRepository<TEntity, TIdentifierType>`](#irepositorytentity-tidentifiertype) (`:262`) is
+[`IEntityReader<TEntity, TIdentifierType>`](#ientityreadertentity-tidentifiertype) (`IRepository.cs:21`)
+or [`IEntityQuerier<TEntity, TIdentifierType>`](#ientityqueriertentity-tidentifiertype) (`:80`);
+[`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype) (`:221`) combines
+both plus four `IQueryable` surfaces (tracking, no-tracking, single-query, split-query, `:226-236`),
+[`IWriteRepository<TEntity, TIdentifierType>`](#iwriterepositorytentity-tidentifiertype) (`:244`) adds
+mutation, and [`IRepository<TEntity, TIdentifierType>`](#irepositorytentity-tidentifiertype) (`:349`) is
 the union. That layering is the group's clearest [Rubric §1, SOLID] (interface-segregation) statement,
 and [`ReadRepositoryExtensions`](#readrepositoryextensions)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Extensions/ReadRepositoryExtensions.cs:10`) adds the
 `GetByIdOrFailAsync` convenience that turns a miss into a
 [`Result`](group-01-result-error-handling.md#result) failure (`:27-48`). The concrete
 [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype)
-(`.../Repositories/EFReadRepository.cs:15`) and
+(`.../Repositories/EFReadRepository.cs:19`) and
 [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:23`) wrap
 an EF `DbSet`. The write side patches already-tracked entities in place through an O(1)
@@ -264,8 +264,8 @@ original values for optimistic concurrency on both the aggregate and any child i
 [`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned) (`:75-96`,
 [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)). Two set-based escape
 hatches sit beside the tracked path: `ExecuteDeleteAsync`, which the interface itself documents as
-bypassing domain events, audit stamps, and soft-delete (`IRepository.cs:211-221`), and
-`ExecuteUpdateAsync` (`:223-245`), the contention-proof conditional update whose guard predicate lets
+bypassing domain events, audit stamps, and soft-delete (`IRepository.cs:298-308`), and
+`ExecuteUpdateAsync` (`:310-332`), the contention-proof conditional update whose guard predicate lets
 the database arbitrate two racing callers with no rowversion retry loop. The latter is described
 through the persistence-agnostic
 [`IUpdatePropertySetter<TEntity>`](#iupdatepropertysettertentity) surface and replayed onto EF's setters
@@ -495,12 +495,17 @@ only engine backing production entities today.
 ## Encryption, seeding, design time, and the shared helpers
 
 A handful of supporting pieces round out the EF side. [`EncryptedStringConverter`](#encryptedstringconverter)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:42`)
-is a value converter that transparently encrypts a string column with authenticated AES-256-GCM (a random
-12-byte nonce, a 16-byte tag, stored Base64 as nonce plus ciphertext plus tag), rejecting any key that is
-not exactly 32 bytes (`:44-48`, `:59-65`). Its own doc comment states the constraint that governs where it
-may be used: the ciphertext is non-deterministic, so the column cannot back equality predicates, unique
-indexes, or server-side sorting (`:18-31`). It is the [Rubric §11, Security] control that
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:72`)
+is a value converter that transparently encrypts a string column with authenticated AES-256-GCM. The stored
+value is a versioned Base64 envelope, a one-byte key version, a random 12-byte nonce, the ciphertext, then a
+16-byte tag, with the version byte passed to AES-GCM as associated data so it is covered by the
+authentication tag and a rewritten version byte fails decryption instead of silently selecting a different
+key (`:38-44`, envelope assembled at `:203-210`). A converter is built over either a single key, registered
+as version 1 (`:94-97`), or a whole key ring plus a current version so reads resolve their key from the
+version byte stored with each value and rotation needs no downtime (`:99-112`), and it rejects any key that
+is not exactly 32 bytes on both paths (`:130-135`, `:166-171`). Its own doc comment states the constraint
+that governs where it may be used: the ciphertext is non-deterministic, so the column cannot back equality
+predicates, unique indexes, or server-side sorting (`:19-32`). It is the [Rubric §11, Security] control that
 [`IAnonymizable`](group-02-domain-building-blocks.md#ianonymizable) points at for fields that must remain
 retrievable after erasure. Its current reality matches
 [ADR-037](https://ivanball.github.io/docs/adr/037-field-level-encryption-at-rest.html): it is shipped and
@@ -675,7 +680,7 @@ survives a module being pulled out into its own service.
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IUpdatePropertySetter.cs:13` · Level 0 · interface
 
 - **What it is**: a persistence-agnostic builder for the SET clause of a bulk update. A handler describes *which* properties change and *to what*, and Infrastructure translates the description into the provider's set-based `UPDATE`.
-- **Depends on**: `System.Linq.Expressions` (BCL, `IUpdatePropertySetter.cs:1`) only. It is the parameter type of [`IWriteRepository.ExecuteUpdateAsync`](#iwriterepositorytentity-tidentifiertype) (`IRepository.cs:244`), which the doc comment cross-references (`IUpdatePropertySetter.cs:7`).
+- **Depends on**: `System.Linq.Expressions` (BCL, `IUpdatePropertySetter.cs:1`) only. It is the parameter type of [`IWriteRepository.ExecuteUpdateAsync`](#iwriterepositorytentity-tidentifiertype) (`IRepository.cs:329-332`), which the doc comment cross-references (`IUpdatePropertySetter.cs:7`).
 - **Concept introduced, describing a SET clause without leaking EF Core.** `[Rubric §3, Clean Architecture]` assesses whether the technology choice stays outside the inner layers; `[Rubric §12, Performance & Scalability]` assesses whether hot write paths avoid needless round trips, and a single set-based statement replaces the load, mutate, save cycle. The doc comment (`IUpdatePropertySetter.cs:5-11`) is explicit that the shape *mirrors* EF Core's `SetPropertyCalls` without referencing it, which is what keeps `MMCA.Common.Application` EF-free while still offering EF's most useful bulk primitive.
 - **Walkthrough**: two `Set` overloads, both generic in `TProperty` and both returning `IUpdatePropertySetter<TEntity>` so calls chain.
   - `Set<TProperty>(Expression<Func<TEntity, TProperty>> property, TProperty value)` (`IUpdatePropertySetter.cs:20-22`): assigns a fixed value, for example a status or a timestamp.
@@ -754,79 +759,84 @@ survives a module being pulled out into its own service.
 
 ### IEntityQuerier<TEntity, TIdentifierType>
 
-> MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:78` · Level 4 · interface
+> MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:80` · Level 4 · interface
 
-- **What it is**: the collection and projection half of the repository split: `GetAllAsync`, `GetProjectedAsync<TResult>`, `GetAllForLookupAsync`, and two `CountAsync` overloads.
-- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (the `TEntity` constraint, `IRepository.cs:79`), [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype) (the lookup projection, from `MMCA.Common.Shared.DTOs`, `IRepository.cs:3` and `:111`), and `System.Linq.Expressions` (`IRepository.cs:1`).
-- **Concept introduced, the ISP-split repository ladder.** `[Rubric §1, SOLID]` assesses whether clients depend only on the members they use. `IRepository.cs` defines a deliberate ladder of ever-wider interfaces so a handler declares exactly the surface it needs: `IEntityQuerier` (collections and projection, this type, `IRepository.cs:78`), [`IEntityReader`](#ientityreadertentity-tidentifiertype) (by-id lookups, `:19`), [`IWriteRepository`](#iwriterepositorytentity-tidentifiertype) (mutations, `:157`), [`IReadRepository`](#ireadrepositorytentity-tidentifiertype) (reader plus querier plus raw `IQueryable`, `:134`), and [`IRepository`](#irepositorytentity-tidentifiertype) (read plus write, `:262`). The doc comment says it outright (`IRepository.cs:66-69`): prefer this over `IReadRepository` when a handler needs `GetAllAsync`, `GetProjectedAsync`, or `CountAsync`. `[Rubric §12, Performance & Scalability]` also applies: `GetProjectedAsync<TResult>` takes an `Expression<Func<TEntity, TResult>>` that is translated to SQL, so a read-heavy handler fetches only the columns it needs.
-- **Concept introduced, `ignoreQueryFilters` means soft-deleted rows and nothing else.** `[Rubric §11, Security]` assesses whether a convenience flag can widen a security boundary. An interface-level `<remarks>` block (`IRepository.cs:73-77`) pins the contract: every `ignoreQueryFilters` parameter here drops the named `SoftDelete` filter and **leaves the named `Tenant` filter applied**. That is enforced downstream, where [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) passes a one-element filter-name array to EF 10's named `IgnoreQueryFilters` overload (`EFReadRepository.cs:29`, used at `:221` and `:235`) rather than EF's parameterless form; its own comment (`EFReadRepository.cs:23-28`) spells out that dropping both would let a caller asking to see deleted rows silently read every tenant's data. The two named filters come from [`ApplicationDbContext`](#applicationdbcontext) (`ApplicationDbContext.cs:348` and `:441`, with `TenantFilterName` at `:360`).
+- **What it is**: the collection and projection half of the repository split: `GetAllAsync`, `GetProjectedAsync<TResult>`, `GetAllForLookupAsync`, two predicate-style `CountAsync` overloads, and a specification-first block (a third `CountAsync`, two `ListAsync` overloads, `AnyAsync`, and `GetPageByCursorAsync`) added by the Revision (2026-08-18) of [ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html).
+- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (the `TEntity` constraint, `IRepository.cs:81`), [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype) (the lookup projection, from `MMCA.Common.Shared.DTOs`, `IRepository.cs:5` and `:113`), [`ISpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#ispecificationtentity-tidentifiertype) (from `MMCA.Common.Domain.Interfaces`, `IRepository.cs:3`, first used at `:135`), [`Result`](group-01-result-error-handling.md#result) with [`KeysetPageRequest`](group-01-result-error-handling.md#keysetpagerequest) and [`KeysetCollectionResult<T>`](group-01-result-error-handling.md#keysetcollectionresultt) (from `MMCA.Common.Shared.Abstractions`, `IRepository.cs:4`, used at `:207-208`), and `System.Linq.Expressions` (`IRepository.cs:1`).
+- **Concept introduced, the ISP-split repository ladder.** `[Rubric §1, SOLID]` assesses whether clients depend only on the members they use. `IRepository.cs` defines a deliberate ladder of ever-wider interfaces so a handler declares exactly the surface it needs: `IEntityQuerier` (collections and projection, this type, `IRepository.cs:80`), [`IEntityReader`](#ientityreadertentity-tidentifiertype) (by-id lookups, `:21`), [`IWriteRepository`](#iwriterepositorytentity-tidentifiertype) (mutations, `:244`), [`IReadRepository`](#ireadrepositorytentity-tidentifiertype) (reader plus querier plus raw `IQueryable`, `:221`), and [`IRepository`](#irepositorytentity-tidentifiertype) (read plus write, `:349`). The doc comment says it outright (`IRepository.cs:68-71`): prefer this over `IReadRepository` when a handler needs `GetAllAsync`, `GetProjectedAsync`, or `CountAsync`. `[Rubric §12, Performance & Scalability]` also applies: `GetProjectedAsync<TResult>` takes an `Expression<Func<TEntity, TResult>>` that is translated to SQL, so a read-heavy handler fetches only the columns it needs. The querier is the one rung of the ladder that has grown: the five specification-first members put it at ten members while [`IEntityReader`](#ientityreadertentity-tidentifiertype) stays at five, so "focused" here now means *reads that return sets*, not *a small interface*.
+- **Concept introduced, `ignoreQueryFilters` means soft-deleted rows and nothing else.** `[Rubric §11, Security]` assesses whether a convenience flag can widen a security boundary. An interface-level `<remarks>` block (`IRepository.cs:75-79`) pins the contract: every `ignoreQueryFilters` parameter here drops the named `SoftDelete` filter and **leaves the named `Tenant` filter applied**. That is enforced downstream, where [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) passes a one-element filter-name array to EF 10's named `IgnoreQueryFilters` overload (`EFReadRepository.cs:33`, used at `:52`, `:81`, `:161`, `:238`, `:252`, and `:319`) rather than EF's parameterless form; its own comment (`EFReadRepository.cs:27-32`) spells out that dropping both would let a caller asking to see deleted rows silently read every tenant's data. The two named filters come from [`ApplicationDbContext`](#applicationdbcontext) (`ApplicationDbContext.cs:348` and `:441`, with `TenantFilterName` at `:360`).
 - **Walkthrough**
-  - `GetAllAsync(IEnumerable<string> includes, where?, orderBy?, select?, asTracking, ignoreQueryFilters, CancellationToken)` (`IRepository.cs:83-90`): the general collection read with optional includes, filter, ordering, and same-type projection. Note `includes` is the one non-optional parameter, so a caller must state its eager-loading intent explicitly (pass `[]` for none).
-  - `GetProjectedAsync<TResult>(select, where?, asTracking, ignoreQueryFilters, CancellationToken)` (`IRepository.cs:103-108`): SQL-side projection to an arbitrary result type.
-  - `GetAllForLookupAsync(string nameProperty, where?, asTracking, CancellationToken)` (`IRepository.cs:111-115`): returns lightweight [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype) id/name pairs for dropdowns without materializing full entities. It has no `ignoreQueryFilters` parameter: a lookup list never offers deleted rows.
-  - `CountAsync(CancellationToken)` (`IRepository.cs:118`) and `CountAsync(Expression<Func<TEntity, bool>> where, CancellationToken)` (`IRepository.cs:121-123`): total and predicated counts.
-- **Why it's built this way**: splitting reads into a focused querier lets a handler signal its access pattern through its constructor dependency, keeps projection and counting off the by-id interface, and makes the unit-test double for a query handler a two-method mock instead of a fifteen-member one.
-- **Where it's used**: query handlers needing collections or counts; folded into [`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype) (`IRepository.cs:135`) and implemented concretely by [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype), with [`EFReadRepositoryDecorator<TEntity, TIdentifierType>`](#efreadrepositorydecoratortentity-tidentifiertype) wrapping every call in a MiniProfiler step (`EFReadRepositoryDecorator.cs:32` and `:41`).
-- **Caveats / not-in-source**: `GetProjectedAsync` carries `ignoreQueryFilters` **before** the cancellation token (`IRepository.cs:107-108`), so any caller or test double that passes arguments positionally has to account for it; the compiler catches positional callers, but a mock configured with a fixed argument count does not fail until run time.
+  - `GetAllAsync(IEnumerable<string> includes, where?, orderBy?, select?, asTracking, ignoreQueryFilters, CancellationToken)` (`IRepository.cs:85-92`): the general collection read with optional includes, filter, ordering, and same-type projection. Note `includes` is the one non-optional parameter, so a caller must state its eager-loading intent explicitly (pass `[]` for none).
+  - `GetProjectedAsync<TResult>(select, where?, asTracking, ignoreQueryFilters, CancellationToken)` (`IRepository.cs:105-110`): SQL-side projection to an arbitrary result type.
+  - `GetAllForLookupAsync(string nameProperty, where?, asTracking, CancellationToken)` (`IRepository.cs:113-117`): returns lightweight [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype) id/name pairs for dropdowns without materializing full entities. It has no `ignoreQueryFilters` parameter: a lookup list never offers deleted rows.
+  - `CountAsync(CancellationToken)` (`IRepository.cs:120`) and `CountAsync(Expression<Func<TEntity, bool>> where, CancellationToken)` (`IRepository.cs:123-125`): total and predicated counts.
+  - `CountAsync(ISpecification<TEntity, TIdentifierType> specification, CancellationToken)` (`IRepository.cs:134-136`): the specification-shaped count. The doc comment (`IRepository.cs:127-130`) states that ordering and paging on the specification are ignored deliberately, since a count of "page 3 of the matches" is never what a caller means.
+  - `ListAsync(ISpecification<TEntity, TIdentifierType> specification, CancellationToken)` (`IRepository.cs:151-153`): runs a specification and returns the matching entities. The remarks (`IRepository.cs:141-147`) draw the line between the two specification shapes: a plain `ISpecification` contributes its `Criteria` only, while a [`QuerySpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#queryspecificationtentity-tidentifiertype) also contributes includes, ordering, paging, tracking, and soft-delete scope, so one object describes the whole read instead of five loose arguments.
+  - `ListAsync<TResult>(specification, Expression<Func<TEntity, TResult>> select, CancellationToken)` (`IRepository.cs:170-173`): the projecting overload, so only the selected columns leave the database. The remarks (`IRepository.cs:159-164`) pin the ordering rule: the projection is applied **after** the specification's ordering and paging, so a paged specification still pages over entity rows and projects only that page.
+  - `AnyAsync(ISpecification<TEntity, TIdentifierType> specification, CancellationToken)` (`IRepository.cs:182-184`): existence by specification, with ordering and paging ignored for the same reason as the specification `CountAsync` (`IRepository.cs:176-177`).
+  - `GetPageByCursorAsync(KeysetPageRequest request, ISpecification<TEntity, TIdentifierType>? specification = null, CancellationToken)` (`IRepository.cs:207-210`): one keyset ("seek") page plus the cursor for the next one, and the only member here that returns a [`Result`](group-01-result-error-handling.md#result), because an unknown sort column and a malformed cursor are caller errors rather than exceptions (`IRepository.cs:198-200`). The remarks (`IRepository.cs:190-202`) state the trade in full: one index seek regardless of scroll depth and no skipped or repeated rows, against no random page access and no total count, with exactly one sort key supported and `Id` as the tie-break.
+- **Why it's built this way**: splitting reads into a focused querier lets a handler signal its access pattern through its constructor dependency, keeps projection and counting off the by-id interface, and makes the unit-test double for a query handler a two-method mock instead of a nineteen-member one (the five reader members, these ten, and the four queryable properties of [`IReadRepository`](#ireadrepositorytentity-tidentifiertype)). Declaring the specification-first members here rather than on a separate interface is what keeps a handler that already depends on the querier from needing a second dependency to run a specification.
+- **Where it's used**: query handlers needing collections, counts, specifications, or a keyset page; folded into [`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype) (`IRepository.cs:222`) and implemented concretely by [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype), with [`EFReadRepositoryDecorator<TEntity, TIdentifierType>`](#efreadrepositorydecoratortentity-tidentifiertype) wrapping every call in a MiniProfiler step (`EFReadRepositoryDecorator.cs:33` and `:42`). The mechanics behind the specification-first block are walked through later in this chapter rather than repeated here: [`SpecificationEvaluator`](#specificationevaluator) turns a specification into an `IQueryable`, [`KeysetQueryBuilder`](#keysetquerybuilder) builds the ordering, the seek predicate, and the cursor encoding, and [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) owns the tracking and filter-scope policy those two are handed.
+- **Caveats / not-in-source**: `GetProjectedAsync` carries `ignoreQueryFilters` **before** the cancellation token (`IRepository.cs:109-110`), so any caller or test double that passes arguments positionally has to account for it; the compiler catches positional callers, but a mock configured with a fixed argument count does not fail until run time.
 
 ### IEntityReader<TEntity, TIdentifierType>
 
-> MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:19` · Level 4 · interface
+> MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:21` · Level 4 · interface
 
 - **What it is**: the by-id half of the repository split: `GetByIdAsync` (two overloads), `GetByIdsAsync`, and `ExistsAsync` (two overloads), for handlers whose data access is a point lookup.
-- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (the `TEntity` constraint, `IRepository.cs:20`) and `System.Linq.Expressions` for the predicate overload (`IRepository.cs:1`).
-- **Concept, minimal data access as a declared dependency.** `[Rubric §1, SOLID]` (Interface Segregation, introduced on [`IEntityQuerier`](#ientityqueriertentity-tidentifiertype)) and `[Rubric §8, Data Architecture]` (deliberate, minimal access patterns). The doc comment is explicit (`IRepository.cs:7-11`): prefer this over `IReadRepository<>` when a handler only needs `GetByIdAsync` or `ExistsAsync`, because that signals minimal data access. This interface carries the same `<remarks>` contract as the querier (`IRepository.cs:14-18`): `ignoreQueryFilters` means "include soft-deleted rows" and nothing more, with the `Tenant` filter left in force.
+- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (the `TEntity` constraint, `IRepository.cs:22`) and `System.Linq.Expressions` for the predicate overload (`IRepository.cs:1`).
+- **Concept, minimal data access as a declared dependency.** `[Rubric §1, SOLID]` (Interface Segregation, introduced on [`IEntityQuerier`](#ientityqueriertentity-tidentifiertype)) and `[Rubric §8, Data Architecture]` (deliberate, minimal access patterns). The doc comment is explicit (`IRepository.cs:9-13`): prefer this over `IReadRepository<>` when a handler only needs `GetByIdAsync` or `ExistsAsync`, because that signals minimal data access. This interface carries the same `<remarks>` contract as the querier (`IRepository.cs:16-20`): `ignoreQueryFilters` means "include soft-deleted rows" and nothing more, with the `Tenant` filter left in force. It is also the rung that did not move: the specification-first growth landed entirely on the querier, so the reader is still five members.
 - **Walkthrough**
-  - `GetByIdAsync(TIdentifierType id, CancellationToken)` (`IRepository.cs:24-26`): plain fetch, returns `null` when missing.
-  - `GetByIdAsync(TIdentifierType id, IEnumerable<string> includes, bool asTracking = false, CancellationToken)` (`IRepository.cs:29-33`): the eager-load overload; include paths are navigation-property names.
-  - `GetByIdsAsync(ids, includes?, asTracking, ignoreQueryFilters, CancellationToken)` (`IRepository.cs:46-51`): a single-query bulk fetch that replaces an N+1 loop of point lookups. The doc comment warns it may return **fewer** entities than requested when some ids do not exist (`IRepository.cs:45`), so the caller must reconcile, and the `ignoreQueryFilters` parameter is documented in full (`IRepository.cs:39-43`) rather than by reference.
-  - `ExistsAsync(TIdentifierType id, bool ignoreQueryFilters = false, CancellationToken)` (`IRepository.cs:54-57`) and `ExistsAsync(Expression<Func<TEntity, bool>> where, bool ignoreQueryFilters = false, CancellationToken)` (`IRepository.cs:60-63`): existence checks by key or by predicate. The flag is what lets a handler ask whether a *soft-deleted* row exists, for example to detect a conflict when re-creating a record that was deleted earlier.
+  - `GetByIdAsync(TIdentifierType id, CancellationToken)` (`IRepository.cs:25-28`): plain fetch, returns `null` when missing.
+  - `GetByIdAsync(TIdentifierType id, IEnumerable<string> includes, bool asTracking = false, CancellationToken)` (`IRepository.cs:30-35`): the eager-load overload; include paths are navigation-property names.
+  - `GetByIdsAsync(ids, includes?, asTracking, ignoreQueryFilters, CancellationToken)` (`IRepository.cs:48-53`): a single-query bulk fetch that replaces an N+1 loop of point lookups. The doc comment warns it may return **fewer** entities than requested when some ids do not exist (`IRepository.cs:47`), so the caller must reconcile, and the `ignoreQueryFilters` parameter is documented in full (`IRepository.cs:41-45`) rather than by reference.
+  - `ExistsAsync(TIdentifierType id, bool ignoreQueryFilters = false, CancellationToken)` (`IRepository.cs:55-59`) and `ExistsAsync(Expression<Func<TEntity, bool>> where, bool ignoreQueryFilters = false, CancellationToken)` (`IRepository.cs:61-65`): existence checks by key or by predicate. The flag is what lets a handler ask whether a *soft-deleted* row exists, for example to detect a conflict when re-creating a record that was deleted earlier.
 - **Why it's built this way**: a handler that only needs a point lookup takes the narrowest interface, which reads clearly at the constructor and mocks in two lines in a test.
-- **Where it's used**: command handlers that load an aggregate before mutating it; folded into [`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype) (`IRepository.cs:135`). Note that the `GetByIdOrFailAsync` extension on [`ReadRepositoryExtensions`](#readrepositoryextensions), which turns a miss into a [`Result`](group-01-result-error-handling.md#result) failure carrying `Error.NotFound`, hangs off `IReadRepository` rather than this interface and is implemented over `GetAllAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Extensions/ReadRepositoryExtensions.cs:27` and `:34`), so a handler that wants it must take the wider read interface.
+- **Where it's used**: command handlers that load an aggregate before mutating it; folded into [`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype) (`IRepository.cs:222`). Note that the `GetByIdOrFailAsync` extension on [`ReadRepositoryExtensions`](#readrepositoryextensions), which turns a miss into a [`Result`](group-01-result-error-handling.md#result) failure carrying `Error.NotFound`, hangs off `IReadRepository` rather than this interface and is implemented over `GetAllAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Extensions/ReadRepositoryExtensions.cs:27` and `:34`), so a handler that wants it must take the wider read interface.
 
 ### IWriteRepository<TEntity, TIdentifierType>
 
-> MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:157` · Level 4 · interface
+> MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:244` · Level 4 · interface
 
 - **What it is**: the write half of the repository abstraction: `AddAsync`, `AddRangeAsync`, `UpdateAsync`, `UpdateRange`, two `SetOriginalRowVersion` overloads, `ExecuteDeleteAsync`, `ExecuteUpdateAsync`, `Save`, and `SaveChangesAsync`.
-- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (the `TEntity` constraint, `IRepository.cs:158`), [`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned) (the child-concurrency overload, referenced by its fully qualified `Domain.Interfaces.IRowVersioned` name at `IRepository.cs:209`), and [`IUpdatePropertySetter<TEntity>`](#iupdatepropertysettertentity) (`IRepository.cs:244`).
+- **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (the `TEntity` constraint, `IRepository.cs:245`), [`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned) (the child-concurrency overload, referenced by its fully qualified `Domain.Interfaces.IRowVersioned` name at `IRepository.cs:296`), and [`IUpdatePropertySetter<TEntity>`](#iupdatepropertysettertentity) (`IRepository.cs:331`).
 - **Concept introduced, optimistic-concurrency wiring and change-tracking-bypass writes.** `[Rubric §8, Data Architecture]` assesses whether concurrency control is deliberate rather than accidental last-write-wins. Four members carry the weight:
-  - `SetOriginalRowVersion(TEntity entity, byte[]? rowVersion)` (`IRepository.cs:197`): plants the client's last-observed `RowVersion` as the tracked entity's *original* concurrency token, so the next save emits `WHERE RowVersion = @original` and raises `DbUpdateConcurrencyException` (mapped to `409 Conflict`) if the row changed since the client read it. The doc comment (`IRepository.cs:189-196`) notes it is a no-op when `rowVersion` is null or empty, covering legacy clients and first writes.
-  - `SetOriginalRowVersion(Domain.Interfaces.IRowVersioned childEntity, byte[]? rowVersion)` (`IRepository.cs:209`): the same protection for a tracked **child** of the aggregate, for example a `ProductVariant` under a `Product`. The doc comment (`IRepository.cs:199-208`) explains why a second overload exists at all: the repository's `TEntity` is the aggregate root, so the typed overload cannot reach children; this one accepts any [`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned) entity instead ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)).
-  - `ExecuteDeleteAsync(Expression<Func<TEntity, bool>> where, CancellationToken)` (`IRepository.cs:219-221`): a set-based delete run directly in the database. The doc comment warns in capitals that it does **not** trigger domain events, audit stamps, or soft-delete, and is for maintenance scenarios only (`IRepository.cs:211-218`).
-  - `ExecuteUpdateAsync(where, Action<IUpdatePropertySetter<TEntity>> setProperties, CancellationToken)` (`IRepository.cs:242-245`): a set-based `UPDATE ... SET ... WHERE ...` as one atomic statement. The long doc comment (`IRepository.cs:223-241`) is the teaching text for contention-proof conditional updates: guard the update in `where` (for example `AvailableQuantity >= @qty`), and zero rows affected means the guard did not hold, so two racing callers can never both win and no rowversion retry loop is needed because the database itself arbitrates. It also draws the exact boundaries: domain events are bypassed, global query filters (soft delete) DO apply to `where`, audit fields are NOT bypassed (`LastModifiedOn` and `LastModifiedBy` are stamped automatically unless the caller sets them explicitly), and it runs on the ambient transaction when one is active, so a decrement rolls back with its caller.
+  - `SetOriginalRowVersion(TEntity entity, byte[]? rowVersion)` (`IRepository.cs:284`): plants the client's last-observed `RowVersion` as the tracked entity's *original* concurrency token, so the next save emits `WHERE RowVersion = @original` and raises `DbUpdateConcurrencyException` (mapped to `409 Conflict`) if the row changed since the client read it. The doc comment (`IRepository.cs:276-283`) notes it is a no-op when `rowVersion` is null or empty, covering legacy clients and first writes.
+  - `SetOriginalRowVersion(Domain.Interfaces.IRowVersioned childEntity, byte[]? rowVersion)` (`IRepository.cs:296`): the same protection for a tracked **child** of the aggregate, for example a `ProductVariant` under a `Product`. The doc comment (`IRepository.cs:286-295`) explains why a second overload exists at all: the repository's `TEntity` is the aggregate root, so the typed overload cannot reach children; this one accepts any [`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned) entity instead ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)).
+  - `ExecuteDeleteAsync(Expression<Func<TEntity, bool>> where, CancellationToken)` (`IRepository.cs:306-308`): a set-based delete run directly in the database. The doc comment warns in capitals that it does **not** trigger domain events, audit stamps, or soft-delete, and is for maintenance scenarios only (`IRepository.cs:298-305`).
+  - `ExecuteUpdateAsync(where, Action<IUpdatePropertySetter<TEntity>> setProperties, CancellationToken)` (`IRepository.cs:329-332`): a set-based `UPDATE ... SET ... WHERE ...` as one atomic statement. The long doc comment (`IRepository.cs:310-328`) is the teaching text for contention-proof conditional updates: guard the update in `where` (for example `AvailableQuantity >= @qty`), and zero rows affected means the guard did not hold, so two racing callers can never both win and no rowversion retry loop is needed because the database itself arbitrates. It also draws the exact boundaries: domain events are bypassed, global query filters (soft delete) DO apply to `where`, audit fields are NOT bypassed (`LastModifiedOn` and `LastModifiedBy` are stamped automatically unless the caller sets them explicitly), and it runs on the ambient transaction when one is active, so a decrement rolls back with its caller.
 - **Walkthrough**
-  - `AddAsync` (`IRepository.cs:165-167`) and `AddRangeAsync` (`IRepository.cs:173-175`): single and batch inserts.
-  - `UpdateAsync` (`IRepository.cs:181-183`) and `UpdateRange` (`IRepository.cs:187`): mark tracked entities modified. `UpdateRange` is the one `void` member of the pair, since batch marking needs no await.
-  - The two `SetOriginalRowVersion` overloads and the two set-based operations described above (`IRepository.cs:197`, `:209`, `:219`, `:242`).
-  - `Save()` (`IRepository.cs:249`) and `SaveChangesAsync(CancellationToken)` (`IRepository.cs:254`): the synchronous and async persist, each returning the number of state entries written; the doc comment prefers the async form in async code paths (`IRepository.cs:247`).
+  - `AddAsync` (`IRepository.cs:252-254`) and `AddRangeAsync` (`IRepository.cs:260-262`): single and batch inserts.
+  - `UpdateAsync` (`IRepository.cs:268-270`) and `UpdateRange` (`IRepository.cs:274`): mark tracked entities modified. `UpdateRange` is the one `void` member of the pair, since batch marking needs no await.
+  - The two `SetOriginalRowVersion` overloads and the two set-based operations described above (`IRepository.cs:284`, `:296`, `:306`, `:329`).
+  - `Save()` (`IRepository.cs:336`) and `SaveChangesAsync(CancellationToken)` (`IRepository.cs:341`): the synchronous and async persist, each returning the number of state entries written; the doc comment prefers the async form in async code paths (`IRepository.cs:334`).
 - **Why it's built this way**: keeping writes in a focused interface means a query handler cannot accidentally acquire mutation methods, and the concurrency and set-based escape hatches are declared where they are visible with their warnings attached rather than buried in a concrete class.
-- **Where it's used**: command handlers that mutate entities; folded into [`IRepository<TEntity, TIdentifierType>`](#irepositorytentity-tidentifiertype) (`IRepository.cs:262`). Handed out by [`IUnitOfWork.GetRepository<TEntity, TIdentifierType>()`](#iunitofwork) (`IUnitOfWork.cs:19`) and implemented by [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype), which is where the audit-stamping compensation for `ExecuteUpdateAsync` lives (`EFRepository.cs:121-132`, using the injected `TimeProvider` and `ICurrentUserService`, `EFRepository.cs:23-27`).
+- **Where it's used**: command handlers that mutate entities; folded into [`IRepository<TEntity, TIdentifierType>`](#irepositorytentity-tidentifiertype) (`IRepository.cs:349`). Handed out by [`IUnitOfWork.GetRepository<TEntity, TIdentifierType>()`](#iunitofwork) (`IUnitOfWork.cs:19`) and implemented by [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype), which is where the audit-stamping compensation for `ExecuteUpdateAsync` lives (`EFRepository.cs:121-132`, using the injected `TimeProvider` and `ICurrentUserService`, `EFRepository.cs:23-27`).
 
 ### IReadRepository<TEntity, TIdentifierType>
 
-> MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:134` · Level 5 · interface
+> MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:221` · Level 5 · interface
 
-- **What it is**: the full read surface, combining [`IEntityReader`](#ientityreadertentity-tidentifiertype) (by-id) and [`IEntityQuerier`](#ientityqueriertentity-tidentifiertype) (collections), plus four `IQueryable<TEntity>` properties for handlers that need raw LINQ.
-- **Depends on**: [`IEntityReader<TEntity, TIdentifierType>`](#ientityreadertentity-tidentifiertype) and [`IEntityQuerier<TEntity, TIdentifierType>`](#ientityqueriertentity-tidentifiertype) (both same file, `IRepository.cs:135`); [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (constraint, `IRepository.cs:136`).
-- **Concept, composing the focused reads and exposing controlled `IQueryable`.** `[Rubric §1, SOLID]` (this is the composition point of the ISP ladder) and `[Rubric §12, Performance & Scalability]` (the query properties make EF's tracking and split-query modes an explicit choice at the call site). The doc comment (`IRepository.cs:126-131`) records the migration stance: existing code should continue using this interface, while new handlers can depend on the focused sub-interfaces for better ISP compliance.
+- **What it is**: the full read surface, combining [`IEntityReader`](#ientityreadertentity-tidentifiertype) (by-id) and [`IEntityQuerier`](#ientityqueriertentity-tidentifiertype) (collections, projections, specifications, and keyset pages), plus four `IQueryable<TEntity>` properties for handlers that need raw LINQ.
+- **Depends on**: [`IEntityReader<TEntity, TIdentifierType>`](#ientityreadertentity-tidentifiertype) and [`IEntityQuerier<TEntity, TIdentifierType>`](#ientityqueriertentity-tidentifiertype) (both same file, `IRepository.cs:222`); [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (constraint, `IRepository.cs:223`).
+- **Concept, composing the focused reads and exposing controlled `IQueryable`.** `[Rubric §1, SOLID]` (this is the composition point of the ISP ladder) and `[Rubric §12, Performance & Scalability]` (the query properties make EF's tracking and split-query modes an explicit choice at the call site). The doc comment (`IRepository.cs:213-218`) records the migration stance: existing code should continue using this interface, while new handlers can depend on the focused sub-interfaces for better ISP compliance.
 - **Walkthrough**: four `IQueryable<TEntity>` get-only properties, adding nothing else beyond the two inherited surfaces.
-  - `Table` (`IRepository.cs:140`): change tracking enabled.
-  - `TableNoTracking` (`IRepository.cs:143`): no-tracking, documented as best for queries.
-  - `TableNoTrackingSingleQuery` (`IRepository.cs:146`): no-tracking, forced to a single SQL statement.
-  - `TableNoTrackingSplitQuery` (`IRepository.cs:149`): no-tracking in split-query mode, avoiding the cartesian explosion that collection includes cause, the same concern [`IQueryableExecutor.AsSplitQuery`](#iqueryableexecutor) addresses.
+  - `Table` (`IRepository.cs:227`): change tracking enabled.
+  - `TableNoTracking` (`IRepository.cs:230`): no-tracking, documented as best for queries.
+  - `TableNoTrackingSingleQuery` (`IRepository.cs:233`): no-tracking, forced to a single SQL statement.
+  - `TableNoTrackingSplitQuery` (`IRepository.cs:236`): no-tracking in split-query mode, avoiding the cartesian explosion that collection includes cause, the same concern [`IQueryableExecutor.AsSplitQuery`](#iqueryableexecutor) addresses.
 - **Why it's built this way**: naming the tracking and query-shape choices as distinct properties turns an expensive default (tracking, single-query with collection includes) into an explicit opt-in rather than an accident, and it gives the profiling decorator a single surface to wrap.
-- **Where it's used**: query handlers wanting the whole read surface; resolved via [`IUnitOfWork.GetReadRepository<TEntity, TIdentifierType>()`](#iunitofwork) (`IUnitOfWork.cs:29`); implemented by [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) (`EFReadRepository.cs:15-17`) and wrapped by [`EFReadRepositoryDecorator<TEntity, TIdentifierType>`](#efreadrepositorydecoratortentity-tidentifiertype) (`EFReadRepositoryDecorator.cs:15-16`); extended by [`ReadRepositoryExtensions`](#readrepositoryextensions) with `GetByIdOrFailAsync` (`ReadRepositoryExtensions.cs:12` and `:27`); combined with [`IWriteRepository`](#iwriterepositorytentity-tidentifiertype) into [`IRepository`](#irepositorytentity-tidentifiertype).
+- **Where it's used**: query handlers wanting the whole read surface; resolved via [`IUnitOfWork.GetReadRepository<TEntity, TIdentifierType>()`](#iunitofwork) (`IUnitOfWork.cs:29`); implemented by [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) (`EFReadRepository.cs:19-21`) and wrapped by [`EFReadRepositoryDecorator<TEntity, TIdentifierType>`](#efreadrepositorydecoratortentity-tidentifiertype) (`EFReadRepositoryDecorator.cs:17-18`); extended by [`ReadRepositoryExtensions`](#readrepositoryextensions) with `GetByIdOrFailAsync` (`ReadRepositoryExtensions.cs:12` and `:27`); combined with [`IWriteRepository`](#iwriterepositorytentity-tidentifiertype) into [`IRepository`](#irepositorytentity-tidentifiertype).
 - **Caveats / not-in-source**: mutation handlers must not compose a query off `TableNoTracking` and then expect saves to persist, because a single no-tracking source makes the whole composed query untracked. That constraint is not stated in this file; it follows from EF's tracking semantics.
 
 ### IRepository<TEntity, TIdentifierType>
 
-> MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:262` · Level 6 · interface
+> MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:349` · Level 6 · interface
 
 - **What it is**: the combined read-write repository, extending both [`IReadRepository`](#ireadrepositorytentity-tidentifiertype) and [`IWriteRepository`](#iwriterepositorytentity-tidentifiertype), so a command handler that reads and mutates takes a single dependency.
-- **Depends on**: [`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype) and [`IWriteRepository<TEntity, TIdentifierType>`](#iwriterepositorytentity-tidentifiertype) (both on `IRepository.cs:262`), and [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (constraint, `IRepository.cs:263`).
-- **Concept, the top of the ISP ladder.** `[Rubric §1, SOLID]`. The interface is purely compositional: it adds no members of its own, only the two constraints `where TEntity : AuditableBaseEntity<TIdentifierType>` and `where TIdentifierType : notnull` (`IRepository.cs:263-264`). Command handlers that both query and mutate take `IRepository`; query handlers take [`IReadRepository`](#ireadrepositorytentity-tidentifiertype); handlers needing only point lookups take [`IEntityReader`](#ientityreadertentity-tidentifiertype). Each dependency is explicit and minimal, and the widest one is a deliberate choice rather than a default.
-- **Walkthrough**: no members. The declaration is a semicolon-terminated interface with two bases and two generic constraints (`IRepository.cs:262-264`), the C# shorthand for an empty body.
+- **Depends on**: [`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype) and [`IWriteRepository<TEntity, TIdentifierType>`](#iwriterepositorytentity-tidentifiertype) (both on `IRepository.cs:349`), and [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (constraint, `IRepository.cs:350`).
+- **Concept, the top of the ISP ladder.** `[Rubric §1, SOLID]`. The interface is purely compositional: it adds no members of its own, only the two constraints `where TEntity : AuditableBaseEntity<TIdentifierType>` and `where TIdentifierType : notnull` (`IRepository.cs:350-351`). Command handlers that both query and mutate take `IRepository`; query handlers take [`IReadRepository`](#ireadrepositorytentity-tidentifiertype); handlers needing only point lookups take [`IEntityReader`](#ientityreadertentity-tidentifiertype). Each dependency is explicit and minimal, and the widest one is a deliberate choice rather than a default.
+- **Walkthrough**: no members. The declaration is a semicolon-terminated interface with two bases and two generic constraints (`IRepository.cs:349-351`), the C# shorthand for an empty body.
 - **Why it's built this way**: keeping the combined interface empty means the read and write surfaces each stay independently usable and independently mockable, while a handler that genuinely needs both still gets one constructor parameter.
 - **Where it's used**: resolved through [`IUnitOfWork.GetRepository<TEntity, TIdentifierType>()`](#iunitofwork) (`IUnitOfWork.cs:19`), which is the sanctioned way to obtain one; implemented by [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype) (`EFRepository.cs:23-27`, deriving from [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) and adding the write surface) and wrapped for profiling by [`EFRepositoryDecorator<TEntity, TIdentifierType>`](#efrepositorydecoratortentity-tidentifiertype).
 
@@ -1989,73 +1999,124 @@ survives a module being pulled out into its own service.
   `has-pending-model-changes` gate the comment recommends is Not determinable from this file.
 
 ### EncryptedStringConverter
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Encryption` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:42` · Level 0 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Encryption` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:72` · Level 0 · class (sealed)
 
 - **What it is**: an EF Core `ValueConverter<string, string>` that encrypts a string property with
   AES-256-GCM on the way to the database and decrypts it on the way back, transparently to the entity
-  (`EncryptedStringConverter.cs:7-10`). It is applied per property in an entity configuration, not
-  globally.
+  (`EncryptedStringConverter.cs:8-11`). It is applied per property in an entity configuration, not
+  globally (`:12-18`), and the value it stores is a **versioned envelope**: the key it decrypts with is
+  named by a byte inside the stored value itself, not by whatever key the converter was built with.
 - **Depends on**: `System.Security.Cryptography` (`AesGcm`, `RandomNumberGenerator`,
-  `CryptographicException`), `System.Text.Encoding`, and EF Core's `ValueConverter<TModel, TProvider>`.
-  No first-party type.
+  `CryptographicException`), `System.Collections.Frozen` (`FrozenDictionary`, `:1`),
+  `System.Text.Encoding`, and EF Core's `ValueConverter<TModel, TProvider>`. No first-party type.
 - **Concept introduced, authenticated encryption at rest, and what it costs you.** `[Rubric §11,
   Security]` (assesses whether sensitive data is protected in transit and at rest with sound primitives)
   and `[Rubric §30, Compliance, Privacy & Data Governance]` (assesses whether personal data is
   classified and handled deliberately). AES-GCM is an *authenticated* mode: it gives confidentiality
   and integrity in one pass, so tampering with a stored value makes decryption throw instead of
   silently yielding garbage, and no separate HMAC step is needed. The price is stated at length in the
-  class comment (`:18-31`) and is the part worth internalizing: every write draws a fresh random nonce,
-  so the same plaintext produces a different column value each time. A non-deterministic column cannot
-  carry an equality or range predicate (the comparison is against a ciphertext that never matches, and
-  the query returns no rows rather than failing), cannot carry a unique index, and cannot be sorted or
-  grouped server side. Anything that must stay searchable needs a second, deterministic surface such as
-  a keyed hash beside the encrypted column. This is the counterpart to the erasure story taught by
-  [`IAnonymizable`](group-02-domain-building-blocks.md#ianonymizable) and
+  class comment (`:19-32`) and is the part worth internalizing: every write draws a fresh random nonce
+  (`:193`), so the same plaintext produces a different column value each time. A non-deterministic
+  column cannot carry an equality or range predicate (the comparison is against a ciphertext that never
+  matches, and the query returns no rows rather than failing), cannot carry a unique index, and cannot
+  be sorted or grouped server side. Anything that must stay searchable needs a second, deterministic
+  surface such as a keyed hash beside the encrypted column. This is the counterpart to the erasure
+  story taught by [`IAnonymizable`](group-02-domain-building-blocks.md#ianonymizable) and
   [`PiiAttribute`](group-02-domain-building-blocks.md#piiattribute)
   ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)): erasure overwrites
   a field you never need again, encryption protects one you still have to read back.
+- **Concept introduced, a self-describing envelope is what makes key rotation possible.** `[Rubric §8,
+  Data Architecture]` (assesses whether persistence mechanics are deliberate) and again `[Rubric §11,
+  Security]`. A stored value is Base64 of `[key version (1)] [nonce (12)] [ciphertext (N)] [tag (16)]`
+  (`:38-44`, laid out at `:203-208`), so the row carries everything needed to read it back except the
+  key material: 29 bytes of overhead before Base64 inflation (`:75`, `:78`, `:81`). Two properties fall
+  out of that one byte. First, a converter can hold a whole **key ring** keyed by version with one
+  version nominated as current (`:109`): writes stamp the current version (`:116`, `:205`), reads take
+  their key from the version byte in the data (`:223-224`), so a rotation is add the new key as current,
+  deploy, re-encrypt rows in the background, then retire the old version, with no maintenance window and
+  no rows left unreadable in between (`:45-61`). Second, the version byte is **authenticated, not merely
+  stored**: it is passed to AES-GCM as associated data on both sides (`:198`, `:231`), so rewriting it
+  fails the tag check rather than silently selecting another key, and it fails even when the substituted
+  version happens to map to the same key. That last property is the one a "just prefix the version"
+  design usually misses.
 - **Walkthrough**:
-  - **Sizes** (`EncryptedStringConverter.cs:45`, `:48`): `NonceSize = 12` bytes (96 bits, the NIST
-    recommendation for GCM) and `TagSize = 16` bytes (128 bits).
-  - **Constructor** (`:54-66`): passes the two lambdas up to `ValueConverter`, `Encrypt` as the
-    to-provider direction and `Decrypt` as the from-provider direction (`:56-57`), then null-guards the
-    key and rejects anything that is not exactly 32 bytes with a message naming the length it got
-    (`:59-65`). The key is captured by the lambdas, so one converter instance is bound to one key.
-  - **`GenerateKey()`** (`:72`): `RandomNumberGenerator.GetBytes(32)`, the convenience path for
+  - **Sizes and the default version** (`EncryptedStringConverter.cs:75`, `:78`, `:81`, `:84`, `:87`):
+    `VersionSize = 1`, `NonceSize = 12` bytes (96 bits, the NIST recommendation for GCM),
+    `TagSize = 16` bytes (128 bits), `KeySize = 32` bytes, and `DefaultKeyVersion = 1`, the version the
+    single-key constructor stamps.
+  - **Two public constructors over one private one** (`:94-97`, `:109-112`, `:114-119`): the `byte[]`
+    constructor is sugar for a one-entry ring at version 1, built by `CreateSingleKeyRing` (`:95`,
+    `:127-138`), which null-guards the key (`:129`) and rejects anything that is not exactly 32 bytes
+    with a message naming the length it got (`:130-135`). The ring constructor takes an
+    `IReadOnlyDictionary<byte, byte[]>` plus the version to write with. Both funnel into the private
+    constructor, which passes the two lambdas up to `ValueConverter`, `Encrypt` as the to-provider
+    direction bound to the current version and `Decrypt` as the from-provider direction (`:116-117`).
+    The frozen ring is captured by those lambdas.
+  - **`ValidateAndFreeze`** (`:146-182`): the ring is validated once, at construction. Not null
+    (`:150`), not empty (`:152-155`), no null entry (`:159-164`), every key exactly 32 bytes
+    (`:166-171`), and the nominated current version actually present (`:174-179`), which is what lets
+    `Encrypt` index the ring without a lookup guard (`:189-190`). Then `ToFrozenDictionary()` (`:181`)
+    takes a defensive copy, so mutating the dictionary the caller passed in afterwards cannot change
+    which keys the converter uses (`:140-145`).
+  - **`GenerateKey()`** (`:125`): `RandomNumberGenerator.GetBytes(32)`, the convenience path for
     producing a valid key during setup.
-  - **`Encrypt`** (`:74-94`): empty and null pass through unchanged (`:76-77`), otherwise UTF-8 encode,
-    draw a 12-byte nonce, encrypt into a same-length ciphertext buffer with a 16-byte tag
-    (`:79-85`), and concatenate `nonce + ciphertext + tag` into one Base64 string (`:87-93`). Storing
-    the nonce alongside the ciphertext is what makes each row self-describing: no side table of nonces
-    is needed.
-  - **`Decrypt`** (`:96-117`): Base64 decode, reject anything shorter than nonce plus tag with a
-    `CryptographicException` (`:103-104`), then slice the three regions by fixed offsets and decrypt
-    (`:106-116`). A wrong key or a tampered byte fails inside `AesGcm.Decrypt`, which is the integrity
-    guarantee doing its job.
+  - **`Encrypt`** (`:184-211`): empty and null pass through unchanged (`:186-187`), otherwise resolve
+    the current key (`:190`), UTF-8 encode (`:192`), draw a 12-byte nonce (`:193`), and encrypt into a
+    same-length ciphertext buffer with a 16-byte tag, handing the single version byte over as associated
+    data (`:194-201`). The four regions are then laid into one buffer in envelope order (`:203-208`) and
+    Base64-encoded (`:210`). Storing the version and nonce alongside the ciphertext is what makes each
+    row self-describing: no side table of nonces and no out-of-band record of which key wrote which row.
+  - **`Decrypt`** (`:213-239`): Base64 decode (`:218`), reject anything shorter than version plus nonce
+    plus tag with a `CryptographicException` (`:220-221`), read the version from position 0 and fail
+    with a message naming only the version number (never key material) when the ring has no key for it
+    (`:223-225`), then slice nonce, ciphertext, tag, and the associated-data byte by fixed offsets and
+    decrypt (`:227-236`). A wrong key, a tampered ciphertext byte, and a rewritten version byte all fail
+    inside `AesGcm.Decrypt`, which is the integrity guarantee doing its job.
 - **Why it's built this way**: GCM over CBC removes the "encrypt then MAC" bookkeeping that is easy to
   get wrong, and putting the whole scheme behind a `ValueConverter` means an entity property stays a
   plain `string` in the domain model.
   [ADR-037](https://ivanball.github.io/docs/adr/037-field-level-encryption-at-rest.html) records the
   decision and is explicit that this is a second layer above transparent database encryption: TDE
   decrypts for anyone who can query, this converter keeps the value ciphertext the moment it leaves the
-  application. The key never lives in the converter's own configuration: the comment (`:32-36`) points
-  at Key Vault, user-secrets, or environment variables.
+  application. The key never lives in the converter's own configuration: the comment (`:33-37`) points
+  at Key Vault, user-secrets, or environment variables. The converter is also deliberately stateless and
+  context-free (`:62-70`): version resolution is data-driven from the envelope and nothing consults the
+  `DbContext`, the current user, or any ambient scope, because a value converter is a pair of compiled
+  expressions running in the provider's materialization path and cannot reach them. Per-tenant or
+  per-request key selection is therefore out of scope here by design and needs a `SaveChanges`
+  interceptor or application-layer encryption above EF Core.
 - **Where it's used**: nowhere in application code today. A workspace-wide search of `*.cs` for the
-  type finds only its own file, its unit tests
+  type finds only its own file, its 21 unit tests
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EncryptedStringConverterTests.cs:6`,
-  covering round trip, nonce randomness, key length at `:75`, the null-key guard at `:124`, empty
-  input, short ciphertext, and Unicode), and one prose mention in the
+  covering the plaintext round trip at `:10`, non-determinism at `:24` and `:38`, key generation at
+  `:52` and `:61`, the invalid-length and null-key guards at `:71` and `:123`, the empty-string
+  passthrough at `:82` and `:95`, the too-short value at `:108`, Unicode at `:129`, the version byte the
+  single-key constructor stamps at `:145`, a key-ring round trip at `:157`, a full rotation in which
+  pre-rotation ciphertext stays readable while new writes carry the new version at `:175`, an
+  unregistered version at `:205`, the tampered-version-byte failure at `:226`, the four ring-validation
+  guards at `:244`, `:250`, `:259`, and `:268`, and the defensive copy of the caller's dictionary at
+  `:281`), and one prose mention in the
   [`IAnonymizable`](group-02-domain-building-blocks.md#ianonymizable) doc comment
   (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAnonymizable.cs:18`) recommending it for
   personal fields that must survive erasure in readable form. No entity configuration calls
   `HasConversion(new EncryptedStringConverter(...))` in any of the repos, and no DI registration
-  supplies a key.
+  supplies a key or a ring.
 - **Caveats / not-in-source**: this is therefore a shipped but unadopted extension point, a posture
   [ADR-037](https://ivanball.github.io/docs/adr/037-field-level-encryption-at-rest.html) states
-  outright. Read the searchability constraint before adopting it: the Identity `User` stores `Email` as
-  a queried column (see [`IdentityModuleDbSeederBase<TUser>`](#identitymoduledbseederbasetuser), whose
-  existence check is an EF predicate on that column), so encrypting it with this converter would
-  silently break that lookup rather than fail loudly.
+  outright and still records as zero adoption after the versioned envelope shipped in MMCA.Common
+  v1.153.0. Zero adoption is also what made the format change affordable: there is **no legacy decode
+  path**, so a value written in the earlier un-versioned `[nonce] [ciphertext] [tag]` layout does not
+  read back under the current converter (its first byte is a nonce byte, not a version), and the window
+  in which the envelope is free to change closes at the first adopted column. Three further limits are
+  worth knowing before adopting it. The version space is a single byte (`:75`), ample for annual or
+  quarterly rotation but wrapping rather than growing, and a reused version number is exactly the
+  ambiguity the byte exists to prevent. The suite covers the short-value, unregistered-version, and
+  rewritten-version failures but never flips a bit inside the ciphertext body or decrypts under a wrong
+  key at the same version, so integrity over the ciphertext rests on the primitive rather than on a
+  test. And the searchability constraint stands: the Identity `User` stores `Email` as a queried column
+  (see [`IdentityModuleDbSeederBase<TUser>`](#identitymoduledbseederbasetuser), whose existence check is
+  an EF predicate on that column), so encrypting it with this converter would silently break that lookup
+  rather than fail loudly.
 
 ### IDbSeeder
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IDbSeeder.cs:7` · Level 0 · interface

@@ -14,7 +14,11 @@ list), and it now backs almost every public policy rather than a lone exception;
 the usual TTL, not the rule, since a clock-dependent or cross-service payload takes a shorter one
 (see Decision and Trade-offs). Amended (2026-08-14): ADC's public-policy set grew to ten with
 `SponsorsCache`, and nine of the ten now pass the bypass audience; `NowNextCache` remains the only
-policy without it.
+policy without it. Amended (2026-08-19): the cross-service eviction limit in
+Trade-offs is narrowed by [ADR-026](026-caching-strategy.md)'s Revision (2026-08-18): a mutation in
+another service can now request this host's tag eviction over the outbox, broker and inbox path via
+`OutputCacheEvictionRequested`, best-effort and per tag, and ADC's bookmark counts now pair that
+event with their short TTL rather than relying on the TTL alone (see Trade-offs).
 
 ## Context
 
@@ -141,13 +145,19 @@ and not every write path evicts tags, so a cached stale row version makes the ne
   A single-replica service may still use the in-memory store: with one replica there is no
   propagation problem to solve. The rule is about replica count, not about environment.
 
-- Tag eviction only reaches caches the mutating process can address. A mutation owned by a
-  DIFFERENT service cannot evict this one's entries at all, and no store choice fixes that: ADC's
-  bookmark counts are written by Engagement and read through Conference, so they carry a short TTL
-  instead of relying on eviction (`BookmarkCountsCache`, 60 seconds,
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:263`). A payload that changes on
-  the clock is the same shape of problem with the same answer, since no mutation exists to evict on
-  (`NowNextCache`, 60 seconds, `Program.cs:251`). When adding a cached endpoint, check which
-  process owns every write that can change its payload, and whether time alone changes it.
+- Tag eviction reaches directly only the caches the mutating process can address; crossing a
+  service boundary takes an explicit eviction event. Since [ADR-026](026-caching-strategy.md)'s
+  Revision (2026-08-18), a mutation owned by a DIFFERENT service can request eviction through
+  `OutputCacheEvictionRequested` over the existing outbox, broker and inbox path, best-effort and
+  per tag. ADC's bookmark counts, written by Engagement and read through Conference, now use
+  exactly that: `UserSessionBookmarkCacheEvictionHandler`
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:43`,
+  raising the event at `:77`) with the Conference host consuming it (`AddOutputCacheEvictionHandler()`
+  at `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269`,
+  `RegisterOutputCacheEvictionConsumer()` at `:366`), keeping the short TTL as the backstop for a lost
+  or late event rather than the only defense (`BookmarkCountsCache`, 60 seconds, `Program.cs:263`).
+  A payload that changes on the clock still has no mutation to evict on, so a short TTL remains its
+  whole answer (`NowNextCache`, 60 seconds, `Program.cs:251`). When adding a cached endpoint, check
+  which process owns every write that can change its payload, and whether time alone changes it.
 - Cache hit rate becomes meaningful for authenticated load tests; k6 scripts that log in now
   exercise the same cache path as anonymous ones.
