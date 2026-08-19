@@ -1,7 +1,8 @@
 # ADR-079: One Shared, Ordered HTTP Middleware Pipeline for Every Service Host
 
 ## Status
-Accepted (2026-08-14).
+Accepted (2026-08-14). Revised 2026-08-19 (refreshed the `WebApplicationBuilderExtensions.cs`
+cross-reference anchor, which moved to `:555`).
 
 ## Context
 In ASP.NET Core, middleware order is behavior, not style: a rate limiter placed before authentication
@@ -112,7 +113,7 @@ itself calls at `:53` (`WebApplicationExtensions.cs:133`).
 ## Trade-offs
 - **Nothing freezes the order.** A workspace-wide search finds no test referencing
   `UseCommonMiddlewarePipeline`: the only non-host references are the method itself, a cross-reference
-  in `WebApplicationBuilderExtensions.cs:399` and one in `SignalRExtensions.cs:19`. Reordering two lines
+  in `WebApplicationBuilderExtensions.cs:555` and one in `SignalRExtensions.cs:19`. Reordering two lines
   compiles, passes every analyzer, and passes the unit tiers. The load-bearing adjacencies are protected
   by comments and review, not by a fitness test. That is the weakest point of this decision.
 - **There is no extension point for a host that needs a deviation.** The method takes no parameters and

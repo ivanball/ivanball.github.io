@@ -21,7 +21,9 @@ provider-bet trade-off; `IEntityQuerier` gains specification-first reads and key
 optional projector pushes DTO projection into SQL; and paginated reads become deterministically
 ordered. Two Trade-offs entries below are superseded. See the Revision (2026-08-18) at the end;
 the Decision section's composition bullet and its `IRepository.cs` / `EFReadRepository.cs` anchors
-were re-stated against that same revision).
+were re-stated against that same revision). Revised 2026-08-19 (marked the two superseded
+Trade-offs entries in place, matching how ADR-014 marks its superseded order block, and refreshed
+the second `stage.ps1` anchor, which moved to `:983`).
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -149,7 +151,7 @@ name in the workspace are inside that file, the two declarations (`IRepository.c
 `IReadRepository` naming them in its own doc comment and base list (`:214-215`, `:222`). The only
 other occurrences in the workspace describe the contract rather than depend on it: two comments in
 MMCA.Helpdesk's template staging script
-(`MMCA.Helpdesk/build/templates/stage.ps1:250`, `:959`) noting that `IEntityReader.GetByIdAsync`
+(`MMCA.Helpdesk/build/templates/stage.ps1:250`, `:983`) noting that `IEntityReader.GetByIdAsync`
 declares `includes` as a required parameter, which is why the generated conditional passes an empty
 list instead of omitting the argument. So the ISP split is today the declared target that new
 handlers are pointed at (`IRepository.cs:216-217`), not the dependency shape any handler currently
@@ -192,13 +194,18 @@ has.
   MMCA.Common and MMCA.ADC are EF-coupled on purpose (aggregations and projections the focused
   surface cannot express); each is intra-module or framework-owned, but every one of them would need
   rework if its module moved behind a transport boundary.
-- **`Expression.Invoke` composition is a provider bet.** The And/Or/Not combinators embed each
+- **`Expression.Invoke` composition is a provider bet.** *(Superseded by the Revision (2026-08-18)
+  below: the combinators now rebind parameters via `ParameterReplacer` and `Expression.Invoke` no
+  longer appears in `Specification.cs`; kept as the record of the trade-off as originally
+  accepted.)* The And/Or/Not combinators embed each
   operand with `Expression.Invoke` (`Specification.cs:75-77`), which the SQL Server provider
   translates; the cross-source helper deliberately avoids it and rebinds parameters instead so the
   combined predicate stays translatable on every provider
   (`CrossSourceSpecification.cs:83-87`). Composed specifications are therefore not automatically
   portable to every engine.
-- **A specification carries only a predicate.** `ISpecification` exposes `Criteria` and nothing else
+- **A specification carries only a predicate.** *(Superseded by the Revision (2026-08-18) below:
+  `QuerySpecification` now also carries ordering, includes, paging and tracking; `ISpecification`
+  itself is unchanged.)* `ISpecification` exposes `Criteria` and nothing else
   (`ISpecification.cs:17`), so includes, ordering, paging, and projection stay parameters of the
   repository and query-service methods. This is a smaller specification pattern than the variants
   that also own eager-load and sort state.
