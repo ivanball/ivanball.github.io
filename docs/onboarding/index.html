@@ -189,10 +189,10 @@
 Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pre>
           <p>When a type must reference a first-party type whose home group appears <strong>later</strong>, that forward
           reference is allowed (functional cohesion can outrank strict progressive disclosure) and is
-          cross-linked. Twenty-six dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
+          cross-linked. Thirty dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
           its child entity with bidirectional EF navigations); each is kept whole within a single group and
           called out where it occurs. They are listed in the
-          <a href="00-dependency-manifest.html#cycles-scc-size--1-26">dependency manifest</a>. Three of the twenty-six are
+          <a href="00-dependency-manifest.html#cycles-scc-size--1-30">dependency manifest</a>. Three of the thirty are
           name-collision artifacts rather than real dependencies: the identically-named pairs
           <code>SelfHttpWarmupTask</code> (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code> and
           <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23</code>), <code>Priority</code>
@@ -205,9 +205,9 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <p>The type inventory and dependency graph are produced <strong>mechanically</strong> by a small Roslyn syntactic
           parser (<code>Tools/invtool/</code>), so the type list, namespaces, and <code>file:line</code> are exact and reproducible. Edges
           are resolved by <strong>namespace-aware name matching</strong>; ~96% bind by namespace visibility, the rest by a
-          globally-unique-name fallback (481 edges), and 28 references are dropped as ambiguous. The functional grouping is
+          globally-unique-name fallback (493 edges), and 29 references are dropped as ambiguous. The functional grouping is
           then applied mechanically (<code>Tools/invtool/classify.ps1</code> → <code>00-group-taxonomy.md</code>), so every one of the
-          <strong>3,264</strong> distinct type nodes maps to exactly one group with no silent drops. See the
+          <strong>3,465</strong> distinct type nodes maps to exactly one group with no silent drops. See the
           <a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest&#39;s accuracy note</a> for residual caveats.</p>
           <hr>
           <h2 id="chapters">Chapters</h2>
@@ -225,11 +225,11 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           </tr>
           <tr>
           <td><a href="00-inventory.html"><code>00-inventory.md</code></a></td>
-          <td>Phase 0, every in-scope type (3,264 distinct), mechanically extracted, with <code>file:line</code></td>
+          <td>Phase 0, every in-scope type (3,465 distinct), mechanically extracted, with <code>file:line</code></td>
           </tr>
           <tr>
           <td><a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a></td>
-          <td>Phase 1a, per-type first-party deps + computed Level; the 26 cycles</td>
+          <td>Phase 1a, per-type first-party deps + computed Level; the 30 cycles</td>
           </tr>
           <tr>
           <td><a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a></td>
@@ -249,7 +249,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tbody><tr>
           <td>1</td>
           <td><a href="group-01-result-error-handling.html">Result &amp; Error Handling</a></td>
-          <td>11</td>
+          <td>14</td>
           <td>The <code>Result</code>/<code>Error</code> railway returned instead of throwing, incl. its own JSON round-trip converter</td>
           </tr>
           <tr>
@@ -261,19 +261,19 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>3</td>
           <td><a href="group-03-querying-specifications.html">Querying: Specifications, Filtering &amp; the Entity Query Service</a></td>
-          <td>30</td>
+          <td>37</td>
           <td>Specification pattern (incl. cross-source), dynamic filter/sort/page (incl. IN-list value parsing), the generic query pipeline</td>
           </tr>
           <tr>
           <td>4</td>
           <td><a href="group-04-events-outbox.html">Domain &amp; Integration Events + Outbox Dual-Dispatch</a></td>
-          <td>30</td>
+          <td>32</td>
           <td>Event contracts, dispatcher, transactional outbox/inbox (incl. the async <code>OutboxFinalizer</code>), message buses</td>
           </tr>
           <tr>
           <td>5</td>
           <td><a href="group-05-cqrs-pipeline.html">CQRS: Commands, Queries &amp; the Decorator Pipeline</a></td>
-          <td>29</td>
+          <td>36</td>
           <td>Handler abstraction + the logging/transaction/caching/feature-gate/idempotency decorators (incl. the cache-stampede lock)</td>
           </tr>
           <tr>
@@ -285,7 +285,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>7</td>
           <td><a href="group-07-persistence-ef-core.html">Persistence &amp; EF Core</a></td>
-          <td>113</td>
+          <td>116</td>
           <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors (incl. the deferred-dispatch record), repositories, engine-aware entity config, data-source routing, conventions (incl. the soft-delete unique-index convention), factories, managed file storage + image processing (<a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a>), native-push device registrar (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>)</td>
           </tr>
           <tr>
@@ -303,7 +303,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>10</td>
           <td><a href="group-10-notifications.html">Notifications (Push + In-App Inbox + Email)</a></td>
-          <td>53</td>
+          <td>55</td>
           <td>Push (SignalR), in-app inbox, email, recipient providers, the <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a> hub-channel live publisher, <a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a> native OS-level push (Azure Notification Hubs, shipped inert), ADC Notification module + its cross-service gRPC live-channel plumbing + extractable-host Kestrel config</td>
           </tr>
           <tr>
@@ -315,7 +315,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>12</td>
           <td><a href="group-12-api-hosting-mapping.html">API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></td>
-          <td>63</td>
+          <td>74</td>
           <td>Controller bases (incl. OAuth + service-info + API versioning, <a href="https://ivanball.github.io/docs/adr/046-http-api-versioning.html" target="_blank" rel="noopener">ADR-046</a>), middleware (incl. soft-deleted-user revocation, <a href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html" target="_blank" rel="noopener">ADR-047</a>), startup, model binders, JSON converters, feature mgmt, idempotency, mapping, edge error localization (i18n), authenticated output caching (<a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>), app-association/deep-link endpoints (<a href="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html" target="_blank" rel="noopener">ADR-043</a>)</td>
           </tr>
           <tr>
@@ -327,7 +327,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>14</td>
           <td><a href="group-14-module-system-composition.html">Module System, Composition &amp; Configuration</a></td>
-          <td>67</td>
+          <td>68</td>
           <td><code>IModule</code> + Kahn-ordered loader, DI composition roots, data-source attributes, options binding</td>
           </tr>
           <tr>
@@ -339,7 +339,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>16</td>
           <td><a href="group-16-aspire-orchestration.html">Aspire Orchestration &amp; Service Defaults</a></td>
-          <td>22</td>
+          <td>31</td>
           <td>AppHost wiring, ServiceDefaults, warmup, telemetry, security helpers, the shared <code>HttpResilienceDefaults</code> Polly source of truth, the shared <code>HealthCheckTags</code> liveness/readiness vocabulary</td>
           </tr>
           <tr>
@@ -357,7 +357,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>19</td>
           <td><a href="group-19-conference-infrastructure.html">ADC Conference, Infrastructure &amp; Persistence</a></td>
-          <td>29</td>
+          <td>32</td>
           <td>Conference DbContext registration, EF configs, seeding, infra services</td>
           </tr>
           <tr>
@@ -375,7 +375,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>22</td>
           <td><a href="group-22-engagement-module.html">ADC Engagement Module (Session Bookmarks)</a></td>
-          <td>178</td>
+          <td>179</td>
           <td>The attendee-activity slice of the Engagement bounded context, four capability families: the session-bookmark aggregate, the QR badge check-in surface (organizer scanning, manual fallback, attendee self-service, attendance rollup), the points economy (append-only ledger + opt-in public leaderboard), and the feedback UI; plus use cases, persistence, API/contracts/service, the durable live-channel publish queue (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>), the cross-service user-engagement export slice (gRPC)</td>
           </tr>
           <tr>
@@ -405,7 +405,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>27</td>
           <td><a href="group-27-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
-          <td>1628</td>
+          <td>1780</td>
           <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases, the shared production-host/graceful-shutdown bases, the observability-convention fitness base, and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
           </tr>
           </tbody></table></div>
