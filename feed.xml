@@ -6,8 +6,16 @@
     <atom:link href="https://ivanball.github.io/feed.xml" rel="self" type="application/rss+xml"/>
     <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 19 Aug 2026 12:56:23 GMT</lastBuildDate>
+    <lastBuildDate>Thu, 20 Aug 2026 12:18:00 GMT</lastBuildDate>
     <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
+    <item>
+      <title>The series index</title>
+      <link>https://medium.com/@ivanball76/the-mmca-series-every-pattern-one-place-28cf2cee7be8</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/the-mmca-series-every-pattern-one-place-28cf2cee7be8</guid>
+      <pubDate>Thu, 20 Aug 2026 12:18:00 GMT</pubDate>
+      <description>The full series index and recommended reading order.</description>
+      <category>Proof &amp; getting started</category>
+    </item>
     <item>
       <title>Saga compensation and the reconciliation backstop</title>
       <link>https://medium.com/@ivanball76/undo-is-a-feature-saga-compensation-and-the-reconciliation-backstop-fa017f9591b8</link>
