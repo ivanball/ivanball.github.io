@@ -6,8 +6,150 @@
     <atom:link href="https://ivanball.github.io/feed.xml" rel="self" type="application/rss+xml"/>
     <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
     <language>en-us</language>
-    <lastBuildDate>Sun, 02 Aug 2026 14:19:18 GMT</lastBuildDate>
+    <lastBuildDate>Wed, 19 Aug 2026 12:56:23 GMT</lastBuildDate>
     <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
+    <item>
+      <title>Saga compensation and the reconciliation backstop</title>
+      <link>https://medium.com/@ivanball76/undo-is-a-feature-saga-compensation-and-the-reconciliation-backstop-fa017f9591b8</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/undo-is-a-feature-saga-compensation-and-the-reconciliation-backstop-fa017f9591b8</guid>
+      <pubDate>Wed, 19 Aug 2026 12:56:23 GMT</pubDate>
+      <description>Undo as a first-class event handler: give back stock a committed transaction already took, with a periodic sweep as the saga-timeout backstop.</description>
+      <category>Core patterns</category>
+      <category>ADR 054</category>
+    </item>
+    <item>
+      <title>Observability by default</title>
+      <link>https://medium.com/@ivanball76/observability-by-default-opentelemetry-and-azure-monitor-in-mmca-673c1886e9e0</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/observability-by-default-opentelemetry-and-azure-monitor-in-mmca-673c1886e9e0</guid>
+      <pubDate>Tue, 18 Aug 2026 11:47:53 GMT</pubDate>
+      <description>A shared OpenTelemetry baseline with CQRS duration metrics, correlation IDs, and outbox-poll span filtering, exported to Azure Monitor.</description>
+      <category>Run &amp; extract</category>
+      <category>ADR 041</category>
+    </item>
+    <item>
+      <title>Security headers and CSP for Blazor</title>
+      <link>https://medium.com/@ivanball76/security-headers-and-csp-for-blazor-one-middleware-every-host-af82df95236e</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/security-headers-and-csp-for-blazor-one-middleware-every-host-af82df95236e</guid>
+      <pubDate>Mon, 17 Aug 2026 11:44:16 GMT</pubDate>
+      <description>One middleware stamps hardened response headers on every host, with the Blazor CSP resolved through a pluggable provider.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 023</category>
+    </item>
+    <item>
+      <title>Field-level encryption in EF Core</title>
+      <link>https://medium.com/@ivanball76/field-level-encryption-in-ef-core-aes-gcm-for-pii-columns-06ece340ea25</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/field-level-encryption-in-ef-core-aes-gcm-for-pii-columns-06ece340ea25</guid>
+      <pubDate>Sat, 15 Aug 2026 13:18:07 GMT</pubDate>
+      <description>An AES-256-GCM value converter that keeps a PII column ciphertext even for someone who can query the database.</description>
+      <category>Data &amp; persistence</category>
+      <category>ADR 037</category>
+    </item>
+    <item>
+      <title>Feature flags in the CQRS pipeline</title>
+      <link>https://medium.com/@ivanball76/feature-flags-in-the-cqrs-pipeline-gate-commands-not-code-e58b9ea8d098</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/feature-flags-in-the-cqrs-pipeline-gate-commands-not-code-e58b9ea8d098</guid>
+      <pubDate>Fri, 14 Aug 2026 12:11:19 GMT</pubDate>
+      <description>Gate commands and queries at the outermost decorator, so a handler never checks a flag and a disabled feature is rejected before any work runs.</description>
+      <category>Core patterns</category>
+      <category>ADR 031</category>
+    </item>
+    <item>
+      <title>HTTP API versioning, proven not just claimed</title>
+      <link>https://medium.com/@ivanball76/http-api-versioning-proven-not-just-claimed-2b0381e4b533</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/http-api-versioning-proven-not-just-claimed-2b0381e4b533</guid>
+      <pubDate>Thu, 13 Aug 2026 11:53:04 GMT</pubDate>
+      <description>Header-based versioning introduced without breaking a single caller, plus a fitness contract that proves two live versions coexist.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 046</category>
+    </item>
+    <item>
+      <title>Managed file storage: uploads you don&#39;t have to trust</title>
+      <link>https://medium.com/@ivanball76/managed-file-storage-uploads-you-dont-have-to-trust-8dfe8bf016bc</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/managed-file-storage-uploads-you-dont-have-to-trust-8dfe8bf016bc</guid>
+      <pubDate>Wed, 12 Aug 2026 14:02:48 GMT</pubDate>
+      <description>Attacker-controlled bytes become safe avatars: content sniffing, metadata stripping, re-encoding, and pluggable blob storage.</description>
+      <category>Data &amp; persistence</category>
+      <category>ADR 045</category>
+    </item>
+    <item>
+      <title>One Blazor UI, two hosts</title>
+      <link>https://medium.com/@ivanball76/one-blazor-ui-two-hosts-a-device-capability-layer-that-stays-resolvable-everywhere-b85444693161</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/one-blazor-ui-two-hosts-a-device-capability-layer-that-stays-resolvable-everywhere-b85444693161</guid>
+      <pubDate>Tue, 11 Aug 2026 11:54:26 GMT</pubDate>
+      <description>The same Blazor components run in a browser and inside a MAUI hybrid app; small per-capability contracts reach native hardware without ever asking &#39;am I on mobile?&#39;.</description>
+      <category>Proof &amp; getting started</category>
+      <category>ADR 042</category>
+      <category>ADR 043</category>
+    </item>
+    <item>
+      <title>Two real apps on one framework</title>
+      <link>https://medium.com/@ivanball76/two-real-apps-on-one-framework-a-conference-platform-and-a-store-12f694d2a361</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/two-real-apps-on-one-framework-a-conference-platform-and-a-store-12f694d2a361</guid>
+      <pubDate>Mon, 10 Aug 2026 11:12:03 GMT</pubDate>
+      <description>A case study: a conference platform and an e-commerce store built on the same kernel.</description>
+      <category>Proof &amp; getting started</category>
+    </item>
+    <item>
+      <title>Write your first fitness test</title>
+      <link>https://medium.com/@ivanball76/write-your-first-architecture-fitness-test-d4e25e6a4741</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/write-your-first-architecture-fitness-test-d4e25e6a4741</guid>
+      <pubDate>Sun, 09 Aug 2026 12:34:49 GMT</pubDate>
+      <description>Author your first architecture fitness test and watch it fail the build on a violation.</description>
+      <category>Proof &amp; getting started</category>
+      <category>ADR 015</category>
+    </item>
+    <item>
+      <title>Build your first module</title>
+      <link>https://medium.com/@ivanball76/scaffold-a-net-modular-monolith-in-one-command-then-build-your-first-module-b10aacd16d33</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/scaffold-a-net-modular-monolith-in-one-command-then-build-your-first-module-b10aacd16d33</guid>
+      <pubDate>Sat, 08 Aug 2026 12:04:28 GMT</pubDate>
+      <description>A hands-on walkthrough of building a new module across all five layers.</description>
+      <category>Proof &amp; getting started</category>
+    </item>
+    <item>
+      <title>i18n and theming on one preference pipeline</title>
+      <link>https://medium.com/@ivanball76/one-preference-two-switches-shipping-i18n-and-dark-mode-on-a-single-cookie-and-profile-pipeline-f97186038909</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/one-preference-two-switches-shipping-i18n-and-dark-mode-on-a-single-cookie-and-profile-pipeline-f97186038909</guid>
+      <pubDate>Fri, 07 Aug 2026 12:18:10 GMT</pubDate>
+      <description>A culture choice and a theme choice ride the same cookie, profile column, and login reconciliation: one persistence path, two switches.</description>
+      <category>Proof &amp; getting started</category>
+      <category>ADR 027</category>
+      <category>ADR 028</category>
+    </item>
+    <item>
+      <title>A reusable Blazor UI framework</title>
+      <link>https://medium.com/@ivanball76/a-list-page-in-a-few-lines-a-reusable-blazor-ui-framework-with-the-same-discipline-as-the-backend-c66fa16cd561</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/a-list-page-in-a-few-lines-a-reusable-blazor-ui-framework-with-the-same-discipline-as-the-backend-c66fa16cd561</guid>
+      <pubDate>Thu, 06 Aug 2026 11:47:02 GMT</pubDate>
+      <description>A shared Blazor and MudBlazor UI layer with accessibility enforced by axe in CI.</description>
+      <category>Proof &amp; getting started</category>
+    </item>
+    <item>
+      <title>Soft-delete vs the right to erasure</title>
+      <link>https://medium.com/@ivanball76/soft-delete-vs-the-right-to-erasure-the-gdpr-conflict-and-the-erasure-pathway-e1d350007509</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/soft-delete-vs-the-right-to-erasure-the-gdpr-conflict-and-the-erasure-pathway-e1d350007509</guid>
+      <pubDate>Wed, 05 Aug 2026 10:22:23 GMT</pubDate>
+      <description>Soft-delete for lifecycle, anonymization plus outbox purge for GDPR/CCPA erasure, and why both exist.</description>
+      <category>Proof &amp; getting started</category>
+      <category>ADR 005</category>
+    </item>
+    <item>
+      <title>The test pyramid</title>
+      <link>https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9</guid>
+      <pubDate>Tue, 04 Aug 2026 11:46:55 GMT</pubDate>
+      <description>How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.</description>
+      <category>Proof &amp; getting started</category>
+    </item>
+    <item>
+      <title>Architecture fitness functions</title>
+      <link>https://medium.com/@ivanball76/architecture-fitness-functions-rules-that-fail-the-build-not-a-wiki-page-6562940deceb</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/architecture-fitness-functions-rules-that-fail-the-build-not-a-wiki-page-6562940deceb</guid>
+      <pubDate>Mon, 03 Aug 2026 12:57:39 GMT</pubDate>
+      <description>Architecture rules that fail the build: a compile-time layer guard plus a shared NetArchTest rule library.</description>
+      <category>Proof &amp; getting started</category>
+      <category>ADR 015</category>
+    </item>
     <item>
       <title>Resilience and recovery objectives</title>
       <link>https://medium.com/@ivanball76/retries-are-not-a-recovery-plan-resilience-handlers-rto-rpo-and-a-restore-you-actually-drilled-3c7474814123</link>
