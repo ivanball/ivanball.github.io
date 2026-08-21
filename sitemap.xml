@@ -37,7 +37,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-08-18</lastmod>
+    <lastmod>2026-08-21</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -432,7 +432,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html</loc>
-    <lastmod>2026-08-19</lastmod>
+    <lastmod>2026-08-21</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
