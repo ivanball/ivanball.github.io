@@ -23,7 +23,13 @@ ordered. Two Trade-offs entries below are superseded. See the Revision (2026-08-
 the Decision section's composition bullet and its `IRepository.cs` / `EFReadRepository.cs` anchors
 were re-stated against that same revision). Revised 2026-08-19 (marked the two superseded
 Trade-offs entries in place, matching how ADR-014 marks its superseded order block, and refreshed
-the second `stage.ps1` anchor, which moved to `:983`).
+the second `stage.ps1` anchor, which moved to `:983`). Revised 2026-08-21 (**substantive in
+consequence, not in decision**: the narrow interfaces and the composition surface gained their first
+real consumers. MMCA.ADC shipped fluent `.And()` composition, specification-first `ListAsync` reads,
+and twelve `IEntityReader` / `IEntityQuerier` declarations to production; MMCA.Store has the same
+narrowing staged on an open pull request. The Decision's consumption paragraph is restated, the "ISP
+split is guidance" Trade-offs entry is marked superseded in place, and two sentences of the
+Revision (2026-08-18) carry pointer notes. See the Revision (2026-08-21) at the end).
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -106,7 +112,9 @@ keeps the raw `IQueryable` surfaces out of Application code.
   public-session specification with the speaker-scoped one rather than substituting, because dropping
   the public filter would leak non-accepted sessions to non-privileged callers
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:96`,
-  `:118`, rationale at `:91-93`).
+  `:118`, rationale at `:91-93`). Since 2026-08-21 all three composing call sites write the fluent
+  form, `publicSpecification.And(...)` (`SessionsController.cs:118`), and the hand-built
+  `new AndSpecification<...>(a, b)` construction no longer appears in any consumer.
 - **The specification enters the same query pipeline, not a parallel one.** `IEntityQueryService`
   takes an optional `ISpecification<TEntity, TIdentifierType>` on every DTO or entity read: the two
   `GetAllAsync` overloads, `GetEntityByIdAsync`, and `GetByIdAsync`
@@ -140,22 +148,35 @@ handlers (`RawQueryableConventionTests.cs:26-36`), and MMCA.ADC exempts eight, t
 layer and bookmark aggregations, the Identity user-list projection, and the Notification GDPR export
 (`MMCA.ADC/.../RawQueryableConventionTests.cs:34-52`).
 
-The interface split is shipped, but nothing depends on the narrow interfaces yet. `IUnitOfWork` hands
-out only the composites (`IRepository` at
+The interface split is shipped and, since 2026-08-21, consumed. MMCA.ADC declares the narrow
+interfaces at twelve read-only sites across eight Application files: helper parameters narrowed to
+`IEntityReader` where the helper only looks up or checks existence (for example
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionRoomScheduling.cs:45`)
+or to `IEntityQuerier` where it projects or counts (for example
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:131`),
+and locals typed to the querier where a visibility helper reads through the unit of work
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:40`,
+`:75`, `:126`, `:151`). MMCA.Store has the same narrowing staged on an open pull request (three
+holders; a fourth, `ProductVariantService`, deliberately stays on `IReadRepository` because it calls
+members of both halves). MMCA.Helpdesk still narrows nothing; the only mention of either name there
+remains a pair of comments in its template staging script
+(`MMCA.Helpdesk/build/templates/stage.ps1:250`, `:983`) describing the contract rather than
+depending on it.
+
+What has not changed is the wiring, and that is deliberate. `IUnitOfWork` hands out only the
+composites (`IRepository` at
 `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IUnitOfWork.cs:19`, `IReadRepository`
 at `:29`), and the container registers only the open generic `IRepository<,>`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:107`). `IEntityReader` and
-`IEntityQuerier` have no reference in C# code outside their own declaration file across all four
-repositories: not a type, not a parameter, and not a doc comment. The only C# occurrences of either
-name in the workspace are inside that file, the two declarations (`IRepository.cs:21`, `:80`) and
-`IReadRepository` naming them in its own doc comment and base list (`:214-215`, `:222`). The only
-other occurrences in the workspace describe the contract rather than depend on it: two comments in
-MMCA.Helpdesk's template staging script
-(`MMCA.Helpdesk/build/templates/stage.ps1:250`, `:983`) noting that `IEntityReader.GetByIdAsync`
-declares `includes` as a required parameter, which is why the generated conditional passes an empty
-list instead of omitting the argument. So the ISP split is today the declared target that new
-handlers are pointed at (`IRepository.cs:216-217`), not the dependency shape any handler currently
-has.
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:107`). Every narrowed holder is
+assigned from `IUnitOfWork.GetReadRepository<,>()` (or `GetRepository<,>()` where the same handler
+also writes) and narrows by an implicit reference conversion at the assignment, because
+`IReadRepository` derives from both narrow interfaces (`IRepository.cs:221-222`). Nothing
+constructor-injects `IEntityReader` or `IEntityQuerier`, and nothing should: the unit of work is
+where an entity's physical data source resolves to the right context and where the repository
+instance is cached for the scope, so a narrow interface resolved straight from the container would
+bypass both. The ISP split is therefore the declared dependency shape at read-only call sites in two
+applications, one shipped and one in review, sitting on an unchanged registration surface
+(`IRepository.cs:216-217`).
 
 ## Rationale
 - **A narrow interface is the enforcement, not a style preference.** A handler that asks for
@@ -180,7 +201,11 @@ has.
   posture used elsewhere in the fitness suite (ADR-015).
 
 ## Trade-offs
-- **The ISP split is guidance, not yet a wired dependency.** Because the only accessors return the
+- **The ISP split is guidance, not yet a wired dependency.** *(Superseded by the Revision
+  (2026-08-21) below: the split now has real dependents in ADC (shipped) and Store (staged), obtained
+  from the unchanged `IUnitOfWork` accessors by implicit conversion, so no change to how the
+  repository is obtained was needed after all; kept as the record of the trade-off as originally
+  accepted.)* Because the only accessors return the
   composites (`IUnitOfWork.cs:19`, `:29`), depending on `IEntityReader` today means changing how the
   repository is obtained. Until that happens, the split buys documentation and future optionality
   rather than a compiler-enforced narrowing.
@@ -273,6 +298,8 @@ C# extension block (`extension<TEntity, TIdentifierType>(ISpecification<...> spe
 `:32`), not as instance methods on `Specification`. `spec.And(other).Not()` therefore reads as a
 chain while the abstract base stays untouched, and the existing explicit
 `new AndSpecification<...>(a, b)` construction the Decision above cites keeps working unchanged.
+*(As of the Revision (2026-08-21) below, the three consumer call sites all use the fluent form; the
+explicit construction remains supported but has no caller.)*
 
 ### 3. The querier answers specification-first reads
 `IEntityQuerier` (`IRepository.cs:80`) gains four members that take an `ISpecification` rather than a
@@ -289,7 +316,8 @@ The narrow-interface observation in the Trade-offs is unchanged in kind and shar
 `IUnitOfWork` still hands out only the composites, so these members arrive on an interface nothing
 depends on by name. What changed is that `IEntityQuerier` is now the only place several of these
 reads exist, so the ISP split has moved from documentation toward being the shape a handler would
-actually want.
+actually want. *(That prediction landed: the Revision (2026-08-21) below records the first
+dependents by name, and the projecting `ListAsync` is among the members they call.)*
 
 ### 4. Projection can be pushed into SQL
 An optional `IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`
@@ -380,3 +408,48 @@ there is no sort key (`KeysetQueryBuilder.cs:59`, `:70`, `:74`).
 - **Keyset paging stops at the repository.** With no `IEntityQueryService` or controller surface, the
   generic HTTP query contract cannot offer it, so a caller wanting stable deep paging today writes a
   bespoke endpoint, which is the shape ADR-034 exists to avoid.
+
+## Revision (2026-08-21)
+Nothing in the contract changed; its consumers did. This revision records the first real adoption of
+the two surfaces this record had honestly flagged as unconsumed: the narrow read interfaces and the
+composition members.
+
+**MMCA.ADC shipped the adoption to production** (merged and deployed 2026-08-21). Three kinds of
+change, none of them behavioral:
+
+- **Fluent composition replaced hand-built combinators.** The workspace's three composing call sites
+  now write `a.And(b)`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:118`,
+  `.../SpeakersController.cs:174`, and
+  `.../MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:148-149`), so the
+  `SpecificationExtensions` members from the Revision (2026-08-18) have production callers and
+  `new AndSpecification<...>(a, b)` no longer appears in any consumer.
+- **Two reads pass the specification instead of unwrapping it.** `PublicConferenceVisibility`
+  previously handed `specification.Criteria` to `GetProjectedAsync`; both sites now call the
+  projecting specification-first `ListAsync(specification, select, ...)`
+  (`PublicConferenceVisibility.cs:78`, `:154`). For a plain specification the two are equivalent
+  reads (untracked, soft-delete-filtered), which is what made the substitution safe.
+- **Twelve read-only declarations across eight files narrowed** from `IRepository<,>` to
+  `IEntityReader<,>` (by-id and existence helpers) or `IEntityQuerier<,>` (projection and count
+  helpers, and the visibility helper's locals), each still assigned from the unit of work. Helpers
+  that also write kept the composite, correctly.
+
+**MMCA.Store has the counterpart staged** on an open pull request (CI green, held unmerged for
+operational reasons unrelated to the change): three read-only holders narrowed, and
+`ProductVariantService` deliberately left on `IReadRepository` because it calls `ExistsAsync` (a
+reader member) and `GetProjectedAsync` (a querier member) from the same field. That refusal is the
+split working as designed: a holder that genuinely needs both halves says so by keeping the
+composite. Both applications also state the convention in their CLAUDE.md files, so new read-only
+code is pointed at the narrow interfaces by guidance as well as by example.
+
+### What this revision does not claim
+- **The registration surface is untouched, deliberately.** No DI registration was added for the
+  narrow interfaces and none should be: a container-resolved `IEntityQuerier` would bypass the unit
+  of work's data-source resolution and its per-scope repository cache
+  (`Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:23`, `:53-66`). The implicit
+  conversion from `GetReadRepository<,>()` is the supported acquisition path.
+- **Half the composition surface still has no caller.** `Or` and `Not`, the specification-taking
+  `CountAsync` and `AnyAsync`, and `GetPageByCursorAsync` have zero application callers in any of
+  the four repositories, and MMCA.Helpdesk consumes none of this. The adoption sample is one
+  application shipped and one staged; the "untested by usage" caution above still applies to the
+  members nothing calls.
