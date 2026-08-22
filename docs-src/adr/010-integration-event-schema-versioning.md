@@ -1,7 +1,7 @@
 # ADR-010: Integration-Event Schema Versioning & Upcaster Policy
 
 ## Status
-Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, `OutputCacheEvictionRequested`, so the framework's convention test is no longer vacuous: enforcement runs at five points, not four).
+Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, `OutputCacheEvictionRequested`, so the framework's convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see [ADR-090](090-event-upcaster-registration.md).
 
 ## Context
 Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
@@ -48,9 +48,12 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
 
 ## Trade-offs
 - `SchemaVersion` is a **signal, not a mechanism**: by itself it does not stop a consumer breaking on a
-  real reshape. The load-bearing half is the discipline (new type + upcaster); the framework does not
-  yet ship an upcaster registration extension point: building one is follow-up work, and until then the policy is
-  enforced by convention + review, not by an upcaster pipeline.
+  real reshape. The load-bearing half is the discipline (new type + upcaster). At the time this record
+  was accepted the framework shipped no upcaster registration extension point and the policy was
+  enforced by convention + review; that follow-up closed on 2026-08-21 with
+  [ADR-090](090-event-upcaster-registration.md): `IEventUpcaster<TSource, TTarget>` +
+  `AddEventUpcaster<...>()` + `RegisterUpcastedIntegrationEventConsumer<TOld>()`, applied on both
+  delivery paths, with two new fitness functions on `EventConventionTestsBase` gating upcaster shape.
 - The convention test is **no longer vacuous in MMCA.Common**: the framework now ships one concrete
   integration event, `OutputCacheEvictionRequested`
   (`Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:23`), a sealed
