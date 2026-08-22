@@ -64,7 +64,7 @@ Implemented in MMCA.Common, ✅ **verified 2026-06-09**: `dotnet build -c Releas
 ✅ **Verified**: `dotnet build -c Release` clean (0/0) and all 9 test projects pass (1,511 tests, 0 failures).
 
 - ✅ **#32 / #16: supply-chain.** NuGet **lock files** (`RestorePackagesWithLockFile`, 20 committed), `nuget.config` **packageSourceMapping** (`*`→nuget.org), **CycloneDX SBOM** step in `release.yml`, **CHANGELOG.md** + **VERSIONING.md** (SemVer + breaking-change + consumer-sweep policy). With the Wave-1 fitness test, #32 and #16 reach 4.
-- ✅ **#11: security.** CI **vuln-audit gate** (`dotnet list package --vulnerable` + `NuGetAudit=all`) and **SECURITY.md** (security model, OWASP note, consumer responsibilities). *Item 13 (NetArchTest security invariants) deferred to consumer suites: infeasible as NetArchTest, and the framework's CORS / anonymous-endpoints are already correct.*
+- ✅ **#11: security.** CI **vuln-audit gate** (`dotnet list package --vulnerable` + `NuGetAudit=all`) and **SECURITY.md** (security model, OWASP note, consumer responsibilities). *Item 13 (NetArchTest security invariants) deferred to consumer suites: infeasible as NetArchTest, and the framework's CORS / anonymous-endpoints are already correct.* **(2026-08-22 addendum: the deferral is superseded. The verdict was correct only for NetArchTest's fluent API; the rules landed as a full-name-reflection fitness base plus executable invariant tests over the real registration code. See the security invariants wave below.)**
 - ✅ **#13: observability.** `AddMeter("MMCA.Common.Outbox")` (dead-letter counter now exported) + **CQRS RED histograms** (`cqrs.command/query.duration`, tagged by name + outcome) via `CqrsMetrics`, registered in Aspire `WithMetrics`.
 - ✅ **#17: DevOps.** `.github/dependabot.yml` (nuget + actions, MassTransit-major ignored); symbols switched to **embedded** (orphan `snupkg` removed: verified via `dotnet pack`).
 - ✅ **#34: governance.** Refreshed the stale DB-per-service passages in `Docs/Architecture/ArchitecturalAnalysis.md`; added **ADR-006** (database-per-service) + **ADR-007** (gRPC extraction) + **ADRs/README.md** index.
@@ -1049,6 +1049,37 @@ package: `Microsoft.Extensions.TimeProvider.Testing` 10.7.0.
 
 ---
 
+## Progress - security invariants wave (§11 hardening, 2026-08-22)
+
+Closes the two §11 gaps surfaced by the Article 16 (JWKS dual-fetch) review: the insecure dev
+defaults that no two-axis entry named as scheduled work, and the absent security fitness tests.
+Landed via MMCA.Common PR #269 (merged 2026-08-22); consumer adoption PRs (ADC #135, Store #93,
+Helpdesk #71) are open and merge with the next release's pin-bump sweep.
+
+- ✅ **Secure-by-default `RequireHttpsMetadata`.** `AddForwardedJwtBearer` no longer ships a bare
+  `false` default: it resolves explicit argument, then the new
+  `Authentication:JwtBearer:RequireHttpsMetadata` config key, then `true` everywhere except
+  Development. A resolved `false` outside Development stays legal (the ACA internal-ingress h2c
+  authorities need it) and logs one startup warning naming the key; ADC and Store bicep now carry
+  the explicit opt-out with the justification recorded beside each authority entry, converting a
+  silent insecure default into an auditable decision. A transitional old-signature overload keeps
+  consumer `main` branches compiling until the sweep lands, then gets deleted.
+- ✅ **Security fitness tests exist.** The second-wave "infeasible as NetArchTest" deferral (see
+  the 2026-08-22 addendum there) is superseded on both halves. `[AllowAnonymous]` posture:
+  `AnonymousEndpointTestsBase` (Testing.Architecture, full-name reflection, zero ASP.NET
+  references) fails the build on any occurrence missing from an explicit allow-list, on stale
+  allow-list entries, and on an empty scan; subclassed in Common (20 types, 4 allow-listed
+  framework credential-exchange actions) and in all three consumers. CORS and token validation:
+  executable invariant tests run the real registration code and assert the produced options
+  (RS256 stays pinned, the permissive policy never supports credentials, the credentialed policy
+  never widens to any origin and fails closed on empty origins, gateway variant included, and
+  `RsaJwksProvider` exports only public RSA parameters even when handed a private-key PEM).
+  Known limitation, documented in the base: minimal-API `.AllowAnonymous()` metadata is not
+  attribute-based and stays out of static reach; the framework's intentional anonymous surface
+  (JWKS, OIDC discovery, health) lives there.
+- 📎 **Not re-scored here.** §11 (Security, Maturity 4 / Implementation 8) is left for the next
+  `/update-scorecard` cycle to re-adjudicate with this evidence.
+
 ## Deferred - 2026-07-19 full review (recorded, not scheduled)
 
 > The 2026-07-19 full framework review shipped its accepted fixes on the review branch (rollback on
@@ -1220,7 +1251,7 @@ Soft-delete is the only deletion model: no lawful erasure path. *(All three fix 
 
 **Fix**
 - [ ] Add a `dotnet list package --vulnerable` (or restore `--audit`) **CI gate**.
-- [ ] Add **NetArchTest security invariants** (no stray `[AllowAnonymous]`; no `AllowAnyOrigin` + `AllowCredentials`).
+- [x] Add **NetArchTest security invariants** (no stray `[AllowAnonymous]`; no `AllowAnyOrigin` + `AllowCredentials`). → landed 2026-08-22, not as NetArchTest fluent rules (genuinely infeasible there) but as `AnonymousEndpointTestsBase` (full-name reflection, subclassed in Common and every consumer) plus executable CORS/JWT invariant tests running the real registrations; see the security invariants wave section.
 - [ ] Commit a **SECURITY.md** with an OWASP Top-10 review note.
 
 ### [x] #4 · Domain-Driven Design (3 to 4; now Maturity 4, no confirmed red flags)
