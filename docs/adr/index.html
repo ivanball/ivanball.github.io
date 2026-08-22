@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 89 ADRs</summary>
+        <summary>All 90 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -188,6 +188,7 @@
         <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
         <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +254,7 @@
           <tr>
           <td><a href="010-integration-event-schema-versioning.html">010</a></td>
           <td>Integration-event schema versioning</td>
-          <td>Every integration event carries a <code>SchemaVersion</code> (default 1, fitness-enforced); breaking changes use a new event type + upcaster, never a silent reshape.</td>
+          <td>Every integration event carries a <code>SchemaVersion</code> (default 1, fitness-enforced); breaking changes use a new event type + upcaster, never a silent reshape. <strong>Completed by <a href="090-event-upcaster-registration.html">ADR-090</a></strong> (2026-08-21): the upcaster registration extension point this record named as follow-up work now ships in the framework.</td>
           </tr>
           <tr>
           <td><a href="011-single-locale-i18n.html">011</a></td>
@@ -649,6 +650,11 @@
           <td><a href="089-gateway-topology-owned-by-configuration.html">089</a></td>
           <td>Gateway topology owned by configuration (amends 008)</td>
           <td>The route table is data. Both gateways previously built it by hand in code (26 <code>MapForwarder</code> calls in ADC, 10 in Store), and the argument for moving was that <strong>one table was described three times in one repository and the three already disagreed</strong>: ADC registered 15 conference forwarders, its comment said 16, and its <code>RouteMapTests</code> pinned 23 of 26, leaving <code>/Sponsors</code>, <code>/CheckIns</code> and <code>/Points</code> ungated; Store had no route test at all. What is genuinely elsewhere is <strong>not</strong> a route table and must not become one: the AppHost and bicep hold service address books (name to URL, no path prefixes). Decision: <code>ReverseProxy</code> configuration is the single route source, the AppHost keeps dev orchestration and bicep keeps deployment topology, <code>RouteMapTests</code> becomes a drift gate in both repos, the per-destination HTTP version policy (ADR-012 profiles) moves into cluster config, and Store&#39;s missing total activity timeout is fixed in the same move. <strong>Shipped 2026-08-18 in both consumers</strong>, with two recorded residuals: Store&#39;s suite is one-way (an added route that nobody pins still passes) and <code>ForwardHttp2</code> is an ADC configuration key while Store reads the code default. Trade-offs: the compiler stops helping (a bad cluster name becomes a runtime 502, which is why the test is part of the decision), catch-all matching semantics shift, and a JSON table reviews less well than a code diff.</td>
+          </tr>
+          <tr>
+          <td><a href="090-event-upcaster-registration.html">090</a></td>
+          <td>Event upcaster registration extension point (completes 010)</td>
+          <td>The consumer-side half of ADR-010 becomes a mechanism: <code>IEventUpcaster&lt;TSource, TTarget&gt;</code> (a pure payload mapping from a retired contract to its successor) registered per module via <code>AddEventUpcaster&lt;...&gt;()</code> (TryAddEnumerable idiom), assembled into a chaining <code>EventUpcasterRegistry</code> that walks V1 -&gt; V2 -&gt; V3 by declared target type, preserves <code>MessageId</code>/<code>DateOccurred</code> across every hop (inbox dedup keys survive by construction), and fails startup, naming the offenders, on duplicate sources, self-maps or cycles. Both delivery paths consult it: <code>DomainEventDispatcher</code> upcasts before selecting integration handlers (covers monolith mode and pre-upgrade outbox rows), and broker hosts drain a retired type via the dedicated <code>RegisterUpcastedIntegrationEventConsumer&lt;TOld&gt;()</code>, so handlers are written once against the newest contract. Two new fitness functions on <code>EventConventionTestsBase</code> (unique source types; target <code>SchemaVersion</code> strictly higher) are inherited by every consumer tree with no edit. Deferred and recorded: outbox type-name aliasing for prematurely deleted types, and producer-side rewriting of old rows.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>
