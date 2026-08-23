@@ -1397,7 +1397,7 @@
           <hr>
           <h2 id="4-use-cases--business-processes">4. Use Cases / Business Processes</h2>
           <h3 id="uc-1-user-registration--login">UC-1: User Registration &amp; Login</h3>
-          <p>See <strong>UC-30</strong> (Registration) and <strong>UC-31</strong> (Login) in Section 12.2 for the current email + password authentication flows.</p>
+          <p>See <strong>UC-30</strong> (Registration) and <strong>UC-31</strong> (Login) in Section 12.2 for the current email + password authentication flows. <strong>UC-34</strong> (Request password reset) and <strong>UC-35</strong> (Reset password) in the same section cover the self-service recovery path.</p>
           <hr>
           <h3 id="uc-2-browse-events">UC-2: Browse Events</h3>
           <p><strong>Actors:</strong> Attendee, API consumer
@@ -1707,7 +1707,7 @@
           <p><strong>Postconditions:</strong> Sessions carry AI scores that inform the accept/decline decision.</p>
           <blockquote>
           <p><strong>Use-case numbering.</strong> UC-12 to UC-18, UC-20, and UC-28/UC-29 are unused; the numbers were retired
-          as the specification was reorganized and are deliberately not recycled. UC-30 to UC-33 are the
+          as the specification was reorganized and are deliberately not recycled. UC-30 to UC-35 are the
           authentication flows and live in Section 12.2.</p>
           </blockquote>
           <hr>
@@ -1902,6 +1902,18 @@
           <td>Change password</td>
           <td>UC-33</td>
           <td><code>PUT /auth/password</code></td>
+          </tr>
+          <tr>
+          <td>15d</td>
+          <td>Request a password reset link</td>
+          <td>UC-34, BR-217, BR-219</td>
+          <td><code>POST /auth/forgot-password</code></td>
+          </tr>
+          <tr>
+          <td>15e</td>
+          <td>Reset the password with the emailed token</td>
+          <td>UC-35, BR-218</td>
+          <td><code>POST /auth/reset-password</code></td>
           </tr>
           <tr>
           <td>16</td>
@@ -2478,9 +2490,9 @@
           </tr>
           <tr>
           <td><strong>Attendee</strong></td>
-          <td>UC-30, UC-31, UC-32, UC-33, UC-4, UC-5, UC-10, UC-11, UC-21</td>
-          <td>+ API Consumer actions + feedback update/delete + account deletion + password change</td>
-          <td>30</td>
+          <td>UC-30, UC-31, UC-32, UC-33, UC-34, UC-35, UC-4, UC-5, UC-10, UC-11, UC-21</td>
+          <td>+ API Consumer actions + feedback update/delete + account deletion + password change + password reset</td>
+          <td>32</td>
           </tr>
           <tr>
           <td><strong>Speaker</strong></td>
@@ -4626,6 +4638,76 @@
           </ul>
           <p><strong>Postconditions:</strong> User&#39;s password is updated. Existing JWT remains valid until expiry. Refresh token is not invalidated: the user stays logged in.</p>
           <hr>
+          <h4 id="uc-34-request-password-reset">UC-34: Request Password Reset</h4>
+          <p><strong>Actors:</strong> Unauthenticated user who cannot sign in (any platform)
+          <strong>Preconditions:</strong> None. The caller has lost the credential, so the endpoint is anonymous by necessity.</p>
+          <p><strong>Endpoint:</strong> <code>POST /auth/forgot-password</code></p>
+          <p><strong>Request body:</strong></p>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;email&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;attendee@example.com&quot;</span>
+<span class="hljs-punctuation">}</span></code></pre>
+          <p><strong>Required fields:</strong> <code>email</code></p>
+          <p><strong>Main Flow:</strong></p>
+          <ol>
+          <li>System validates the shape of the address (non-empty, valid email format). Whether the address belongs to an account is deliberately not validated (BR-217)</li>
+          <li>System looks up the account behind the address without tracking it</li>
+          <li>System increments the per-address request counter and checks it against the rolling-hour throttle (BR-219)</li>
+          <li>System mints a 256-bit single-use token, stores only its SHA-256 hash against the address with the configured TTL, and returns the raw token to the handler (BR-218)</li>
+          <li>System sends an email containing the reset link (<code>{PasswordReset:ResetUrl}?email=...&amp;token=...</code>) and the raw token, so a client that cannot follow a deep link can have the token entered by hand</li>
+          <li>Returns HTTP 202 Accepted</li>
+          </ol>
+          <p><strong>Response body:</strong> None.</p>
+          <p><strong>Response codes:</strong></p>
+          <ul>
+          <li>HTTP 202: request accepted (returned for every well-formed address, registered or not)</li>
+          <li>HTTP 400: malformed or missing email address</li>
+          <li>HTTP 429: <code>auth-ip</code> per-IP rate limit exceeded</li>
+          </ul>
+          <p><strong>Alternate Flows:</strong></p>
+          <ul>
+          <li>No account for the address → steps 3-5 are skipped, the reason is logged server-side, and the response is still HTTP 202 (BR-217)</li>
+          <li>Address over the throttle → no token is minted and no email is sent; the response is still HTTP 202 (BR-219)</li>
+          <li>Email delivery fails → the failure is logged with the user id; the token stays live so the user can retry, and the response is still HTTP 202</li>
+          <li>An earlier token exists for the address → it is overwritten, so only the newest link works (BR-218)</li>
+          </ul>
+          <p><strong>Postconditions:</strong> At most one active reset token exists for the address. No account state changed: nothing is written to the database, and the response carries no signal about whether the address is registered.</p>
+          <hr>
+          <h4 id="uc-35-reset-password">UC-35: Reset Password</h4>
+          <p><strong>Actors:</strong> Unauthenticated user holding a reset token (any platform)
+          <strong>Preconditions:</strong> The user has an unexpired, unused reset token issued by UC-34 for the same address.</p>
+          <p><strong>Endpoint:</strong> <code>POST /auth/reset-password</code></p>
+          <p><strong>Request body:</strong></p>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;email&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;attendee@example.com&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;token&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;3Yb1t...43-character Base64Url token&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;newPassword&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;NewSecureP@ss2&quot;</span>
+<span class="hljs-punctuation">}</span></code></pre>
+          <p><strong>Required fields:</strong> <code>email</code>, <code>token</code>, <code>newPassword</code></p>
+          <p><strong>Main Flow:</strong></p>
+          <ol>
+          <li>System validates the request (address shape, token present, new password meets BR-203 through the same strength rules registration uses)</li>
+          <li>System validates the presented token against the stored hash in constant time and <strong>consumes</strong> it, before any write, so it cannot be redeemed twice (BR-218)</li>
+          <li>System loads the account the token redeems to</li>
+          <li>System hashes the new password (BR-204) and applies it through the aggregate, which enforces its own invariants</li>
+          <li>System persists the change</li>
+          <li>System clears the account&#39;s login brute-force counters so a user who was locked out can sign in immediately (BR-219)</li>
+          <li>Returns HTTP 204 No Content</li>
+          </ol>
+          <p><strong>Response body:</strong> None.</p>
+          <p><strong>Response codes:</strong></p>
+          <ul>
+          <li>HTTP 204: password reset successfully</li>
+          <li>HTTP 400: malformed request (missing token, invalid address shape, new password fails BR-203)</li>
+          <li>HTTP 401: token invalid, expired, already used, issued for a different address, attempt-capped, or the account is no longer resolvable</li>
+          <li>HTTP 429: <code>auth-ip</code> per-IP rate limit exceeded</li>
+          </ul>
+          <p><strong>Alternate Flows:</strong></p>
+          <ul>
+          <li>Wrong token presented → the failed-attempt count on the record increases and the record is rewritten with its <em>remaining</em> lifetime; at 5 failures the record is discarded and the user must request a new link (BR-218). Every one of these returns the same generic <code>Auth.InvalidResetToken</code> 401</li>
+          <li>Token valid but a later invariant rejects the password change → the token is already consumed, so the user requests a new link. This is the deliberate cost of closing the replay window</li>
+          </ul>
+          <p><strong>Postconditions:</strong> The account has the new password hash and salt, the reset token and the address&#39;s request counter are gone, and the login lockout counters are cleared. Existing access tokens are not revoked: they remain valid until their 1-hour TTL expires (BR-216).</p>
+          <hr>
           <h3 id="123-token-architecture">12.3 Token Architecture</h3>
           <h4 id="access-token-jwt">Access Token (JWT)</h4>
           <div class="table-wrap"><table>
@@ -4934,17 +5016,34 @@
           <td>BR-216</td>
           <td><strong>Logout</strong> invalidates the user&#39;s current refresh token (web) or clears stored credentials (MAUI). Access tokens cannot be server-side invalidated before expiry: they remain valid until their 1-hour TTL expires. For immediate revocation needs (e.g., account deletion, role change), a token blacklist or short-lived tokens would be needed (out of scope).</td>
           </tr>
+          <tr>
+          <td>BR-217</td>
+          <td><strong>Password reset anti-enumeration:</strong> <code>POST /auth/forgot-password</code> returns <strong>HTTP 202</strong> for every well-formed request. An address with no account, an address over the BR-219 throttle, and a failed email send are all reported as accepted and recorded only in the server log, so neither the status code nor the response body discloses which addresses hold accounts. The rule holds on the other endpoint too: <code>POST /auth/reset-password</code> collapses every rejection into one generic 401 (BR-218), and the reset page renders the same confirmation whatever the API answered. Only the request validator can return HTTP 400, and it inspects the shape of the address, never whether it is registered.</td>
+          </tr>
+          <tr>
+          <td>BR-218</td>
+          <td><strong>Reset tokens</strong> are <strong>256 bits</strong> of cryptographic randomness (Base64Url-encoded), <strong>single-use</strong>, and held <strong>SHA-256 hashed</strong> rather than in clear, compared in constant time. A token expires after the configured TTL (<code>PasswordReset:TokenLifetimeMinutes</code>, <strong>default 30 minutes</strong>) and the record is discarded after <strong>5 failed validation attempts</strong> (<code>PasswordReset:MaxValidationAttempts</code>); a wrong guess rewrites the record with the token&#39;s <em>remaining</em> lifetime, never a fresh one, so guessing cannot extend the window. Issuing a new token overwrites the previous one, so only the newest link works. The token is consumed before the password is written, which closes the replay window at the cost of burning a token when a later invariant fails. Every invalid, expired, mismatched, attempt-capped or orphaned token returns the single error <code>Auth.InvalidResetToken</code> with <strong>HTTP 401</strong>.</td>
+          </tr>
+          <tr>
+          <td>BR-219</td>
+          <td><strong>Reset request throttle:</strong> at most <strong>3 reset requests per email address per rolling hour</strong> (<code>PasswordReset:MaxRequestsPerEmail</code> / <code>PasswordReset:RequestWindowMinutes</code>). An over-limit request still answers 202 and simply sends no email (BR-217). Both reset endpoints additionally carry the same <code>auth-ip</code> per-IP endpoint limit as login and register (30 requests per minute per client IP), which is the only path to an HTTP 429 here. A <strong>successful</strong> reset clears the account&#39;s login brute-force counters (BR-212) and its own request counter, so a user who reset precisely because they were locked out can sign in immediately and is not throttled out of a later legitimate request.</td>
+          </tr>
           </tbody></table></div>
           <hr>
           <h3 id="127-password-management">12.7 Password Management</h3>
           <p><strong>Password change</strong> (UC-33) is supported via <code>PUT /auth/password</code>, authenticated users can change their own password by providing the current password and a new password.</p>
-          <p><strong>Password reset via email</strong> is <strong>out of scope for the initial implementation</strong>. If an attendee forgets their password during the conference, they must contact an organizer to have their account deleted (UC-21) so they can re-register.</p>
-          <p><strong>Rationale:</strong> The conference engagement window is 1-2 days. Re-registration is low-cost (bookmarks can be recreated in minutes). Adding password reset requires email sending infrastructure (SMTP/SendGrid) and a secure token flow, which is disproportionate to the benefit for v1.</p>
-          <p><strong>Planned flow (when implemented):</strong></p>
+          <p><strong>Password reset via email</strong> is <strong>implemented</strong> (UC-34, UC-35). An attendee who forgets their password recovers the account themselves; deleting the account (UC-21) and re-registering is no longer the recovery path.</p>
+          <p><strong>Flow:</strong></p>
           <ol>
-          <li><code>POST /auth/forgot-password</code> with <code>{ &quot;email&quot;: &quot;...&quot; }</code> → sends a reset code to the email (always returns HTTP 202 to prevent email enumeration)</li>
-          <li><code>POST /auth/reset-password</code> with <code>{ &quot;email&quot;: &quot;...&quot;, &quot;code&quot;: &quot;...&quot;, &quot;newPassword&quot;: &quot;...&quot; }</code> → validates code, updates password</li>
+          <li><code>POST /auth/forgot-password</code> with <code>{ &quot;email&quot;: &quot;...&quot; }</code> → <strong>HTTP 202</strong> for every well-formed request, whether or not the address belongs to an account (BR-217). A malformed address returns HTTP 400 from the request validator, which inspects the shape of the address only.</li>
+          <li>The system emails a reset link (<code>{PasswordReset:ResetUrl}?email=...&amp;token=...</code>) <strong>and</strong> the raw token in the body, so a client that cannot follow a deep link (the MAUI head) can have the token typed into the reset page by hand. With no <code>ResetUrl</code> configured the email degrades to the token alone rather than carrying a broken link.</li>
+          <li><code>POST /auth/reset-password</code> with <code>{ &quot;email&quot;: &quot;...&quot;, &quot;token&quot;: &quot;...&quot;, &quot;newPassword&quot;: &quot;...&quot; }</code> → <strong>HTTP 204</strong> on success. Every rejection collapses to the single generic <code>Auth.InvalidResetToken</code> HTTP 401 (BR-218). A new password that fails BR-203 returns HTTP 400 from the same strength rules that guard registration, so a reset is not a way around the complexity policy.</li>
           </ol>
+          <p>Both endpoints are <code>AllowAnonymous</code> (the caller has lost the credential, so requiring one would be circular), carry the same <code>auth-ip</code> per-IP rate limit as login and register, and are <code>[Idempotent]</code>. They are served by a dedicated <code>PasswordResetController</code> routed to the same <code>Auth</code> prefix as the other auth actions, so the Gateway forwards them on its existing <code>/Auth</code> route with no gateway change.</p>
+          <p><strong>Token storage:</strong> reset tokens live in the cache, not the database, so the feature adds <strong>no schema change and no migration</strong>: expired tokens are reaped by cache TTL rather than by a sweeper. The trade-off is that a cache eviction or flush invalidates every outstanding token; requesting a new link is cheap, so the failure mode is a repeated request rather than a locked-out account.</p>
+          <p><strong>UI:</strong> the framework UI package ships <code>/forgot-password</code> and <code>/reset-password</code> as anonymous pages, plus the &quot;Forgot password?&quot; link on <code>/login</code>. The reset page prefills <code>email</code> and <code>token</code> from the query string and keeps the token field visible and editable, so the manual-entry path works when the link cannot be followed. Email copy is English only in this version; the subject, body, and link composition are overridable hooks on the handler for a later localization pass.</p>
+          <p><strong>Configuration:</strong> section <code>PasswordReset</code> (<code>ResetUrl</code>, <code>TokenLifetimeMinutes</code>, <code>MaxValidationAttempts</code>, <code>MaxRequestsPerEmail</code>, <code>RequestWindowMinutes</code>), bound with data-annotation validation at startup. <code>ResetUrl</code> is deliberately optional so a host without a UI base still boots; production sets it through the <code>PasswordReset__ResetUrl</code> container-app environment variable, and the Aspire AppHost sets it for local runs.</p>
+          <p>See <a href="../adr/091-cache-backed-password-reset.html">ADR-091</a> for the decision record behind the token substrate, the anti-enumeration contract, and the email-delivery posture.</p>
           <hr>
           <h3 id="128-design-rationale">12.8 Design Rationale</h3>
           <p><strong>Why email + password instead of device-based identity:</strong></p>

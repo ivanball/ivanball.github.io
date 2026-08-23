@@ -16,13 +16,15 @@ This document maps the site navigation flow for each actor in the MMCA.Store app
 
 ## 1. Anonymous User
 
-Pages accessible without authentication: home, login, register, and the public catalog.
+Pages accessible without authentication: home, login, register, the two password-reset pages, and the public catalog.
 
 ```mermaid
 flowchart TD
     subgraph Auth["Authentication"]
         Login["/login<br/>Login"]
         Register["/register<br/>Register"]
+        ForgotPassword["/forgot-password<br/>Request Reset Link"]
+        ResetPassword["/reset-password<br/>Set New Password"]
     end
 
     subgraph Catalog["Public Catalog"]
@@ -39,12 +41,19 @@ flowchart TD
     Login -->|on success| Home
     Register -->|on success| Home
 
+    Login -->|Forgot password link| ForgotPassword
+    ForgotPassword -->|back to sign in| Login
+    ForgotPassword -.->|reset link in the email| ResetPassword
+    ResetPassword -->|on success| Login
+
     Browse -->|card click| ProductDetail
     ProductDetail -->|back| Browse
     ProductDetail -->|add to cart| Login
 ```
 
 > Add-to-cart on the product detail page sits inside an `AuthorizeView`; an anonymous visitor is prompted to log in instead.
+
+> `/forgot-password` and `/reset-password` are shipped by the framework UI package and carry no `[Authorize]` attribute. The dashed edge is the reset email: the link carries the email and the token in the query string, and both fields stay editable so a recipient can paste the token by hand.
 
 ---
 

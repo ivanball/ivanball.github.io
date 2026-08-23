@@ -467,6 +467,36 @@ owner or an Admin, enforced in the handlers rather than by a controller-wide pol
 
 ---
 
+### 3.12 Password Reset
+
+**Trigger:** A customer who cannot sign in asks for a reset link from `/forgot-password`, then sets a new password on `/reset-password`.
+
+**Steps (request):**
+1. `POST /Auth/forgot-password` with `{ "email": "..." }`. The request validator checks the shape of the address only
+2. Look up the account behind the address without tracking it
+3. Increment the per-address request counter and check it against the rolling-hour throttle
+4. Mint a 256-bit single-use token, store only its SHA-256 hash under the address with the configured TTL, and hand the raw token back
+5. Email the reset link (`{PasswordReset:ResetUrl}?email=...&token=...`) plus the raw token, so a client that cannot follow a deep link can have the token entered by hand
+6. Return **HTTP 202 Accepted**, which is also what an unknown address, a throttled address and a failed email send return: the response never discloses whether an address holds an account
+
+**Steps (reset):**
+1. `POST /Auth/reset-password` with `{ "email": "...", "token": "...", "newPassword": "..." }`. The new password goes through the same strength rules registration uses
+2. Validate the presented token against the stored hash in constant time and **consume** it before any write, so it cannot be redeemed twice
+3. Load the account, hash the new password (PBKDF2-HMAC-SHA512), and apply it through the aggregate
+4. Persist, then clear the account's login brute-force counters so a customer who was locked out can sign in immediately
+5. Return **HTTP 204 No Content**. Every rejection (unknown, expired, replayed, mismatched or attempt-capped token, or an unresolvable account) collapses to one generic `Auth.InvalidResetToken` **HTTP 401**
+
+Both endpoints are anonymous by necessity (the caller has lost the credential), carry the `auth-ip` per-IP rate limit that login and register carry, and are idempotent. They live on their own controller routed to the same `Auth` prefix, which the Gateway's `/Auth/{**catch-all}` route already forwards.
+
+**No schema change:** the token lifecycle lives entirely in the cache, so expired tokens are reaped by cache TTL rather than by a sweeper and the feature ships without a migration. A cache eviction invalidates outstanding tokens, which costs the user one more request. See [ADR-091](../adr/091-cache-backed-password-reset.md).
+
+**Implemented in:**
+- `Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/PasswordResetController.cs`
+- `Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs`
+- `Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordHandler.cs`
+
+---
+
 ## 4. Order Status State Machine
 
 ```
@@ -570,6 +600,13 @@ owner or an Admin, enforced in the handlers rather than by a controller-wide pol
 | Name required | Customer first name and last name cannot be empty or whitespace | `CustomerInvariants.cs` |
 | Email required | Customer email cannot be empty or whitespace | `CustomerInvariants.cs` |
 | Address line 1 required | If address is provided, AddressLine1 is required | `AddressInvariants.cs` |
+| Reset request anti-enumeration | `POST /Auth/forgot-password` answers 202 for every well-formed address: unknown address, throttled address and failed email send are logged server-side and reported as accepted. Only a malformed address returns 400 | `ForgotPasswordHandler.cs`, `ForgotPasswordRequestValidator` |
+| Reset token strength | 256-bit Base64Url token, single-use, SHA-256 hashed at rest, compared in constant time, one active token per address (a new request overwrites the old) | `PasswordResetTokenService` |
+| Reset token expiry | Tokens expire after `PasswordReset:TokenLifetimeMinutes` (default 30) | `PasswordResetSettings` |
+| Reset attempt cap | The token record is discarded after `PasswordReset:MaxValidationAttempts` wrong guesses (default 5); a wrong guess is rewritten with the remaining lifetime, never a fresh one | `PasswordResetTokenService` |
+| Reset request throttle | Maximum `PasswordReset:MaxRequestsPerEmail` requests per address per `RequestWindowMinutes` (default 3 per hour); over-limit still answers 202 and sends nothing | `PasswordResetTokenService` |
+| Reset clears lockout | A successful reset clears the account's login brute-force counters and its reset-request counter | `ResetPasswordHandler.cs` |
+| Reset password strength | The new password goes through the same strength rules as registration, so a reset cannot bypass the complexity policy | `ResetPasswordRequestValidator` |
 
 ---
 
@@ -583,6 +620,8 @@ owner or an Admin, enforced in the handlers rather than by a controller-wide pol
 | Login | Anonymous | Authenticate with email and password to receive JWT tokens |
 | Refresh session | Any authenticated | Obtain new tokens using a valid refresh token |
 | Revoke session | Any authenticated | Invalidate refresh token to end session |
+| Request password reset | Anonymous | Ask for a reset link by email; always accepted for a well-formed address |
+| Reset password | Anonymous | Set a new password by redeeming the single-use token from the reset email |
 | Browse catalog | Anonymous | View categories, products, and product variants with pricing |
 | View product detail | Anonymous | See product details, variants, pricing, and add to cart |
 | Add item to cart | Customer | Add a product variant with quantity to shopping cart (via drawer) |
@@ -697,7 +736,7 @@ owner or an Admin, enforced in the handlers rather than by a controller-wide pol
 
 **Source:** `Source/Common/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs`
 
-**Note:** While the email service infrastructure is fully implemented, no domain event handlers currently trigger email sending. This may be planned functionality.
+**Consumers:** the forgot-password handler (Section 3.12) sends the reset email through `IEmailSender`, alongside the Sales domain-event handlers `OrderPaidHandler` and `OrderPaymentFailedSagaHandler`. On the reset path delivery is awaited but never fatal: a send failure is logged and the request still answers 202, because reporting it would be an enumeration oracle, and the token stays live so the customer can retry.
 
 ---
 
@@ -705,7 +744,7 @@ owner or an Admin, enforced in the handlers rather than by a controller-wide pol
 
 | Policy | Access Level | Description |
 |--------|-------------|-------------|
-| Anonymous | No auth required | Catalog browsing (GET categories, products), login, registration, payment webhooks |
+| Anonymous | No auth required | Catalog browsing (GET categories, products), login, registration, password reset (`POST /Auth/forgot-password`, `POST /Auth/reset-password`), payment webhooks |
 | RequireAuthenticated | Any logged-in user | Shopping cart operations, order viewing (own), profile management |
 | RequireCustomer | Customer role | Customer-specific operations |
 | RequireAdmin | Admin role | Catalog management, inventory management, manual payment, delivery confirmation |
