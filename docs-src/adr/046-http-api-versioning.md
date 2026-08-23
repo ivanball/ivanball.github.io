@@ -31,30 +31,30 @@ host through a single registration call, and keep it exercised by a shared fitne
 proves two live versions coexist.
 
 - **One registration wires the whole policy.** `AddCommonApiVersioning`
-  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:233`) deliberately
+  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:243`) deliberately
   does **not** set `DefaultApiVersion`: `1.0` is already the `Asp.Versioning` library default, and the
   API explorer inherits both it and `AssumeDefaultVersionWhenUnspecified` from the versioning options,
   so restating either one trips AV0011/AV0024. The code comment recording that omission is at
-  `WebApplicationBuilderExtensions.cs:235`-`WebApplicationBuilderExtensions.cs:237`. What the registration does set: it assumes the default
+  `WebApplicationBuilderExtensions.cs:245`-`WebApplicationBuilderExtensions.cs:247`. What the registration does set: it assumes the default
   version when a caller sends no header
-  (`AssumeDefaultVersionWhenUnspecified = true`, `WebApplicationBuilderExtensions.cs:240`), reports
+  (`AssumeDefaultVersionWhenUnspecified = true`, `WebApplicationBuilderExtensions.cs:250`), reports
   the supported/deprecated versions on every response (`ReportApiVersions = true`,
-  `WebApplicationBuilderExtensions.cs:241`), and selects the version from an `api-version` request
-  header (`new HeaderApiVersionReader("api-version")`, `WebApplicationBuilderExtensions.cs:242`). The
+  `WebApplicationBuilderExtensions.cs:251`), and selects the version from an `api-version` request
+  header (`new HeaderApiVersionReader("api-version")`, `WebApplicationBuilderExtensions.cs:252`). The
   reader is header-based deliberately: routes and query strings stay version-free, so a caller opts
   into a newer shape by adding one header rather than changing the URL.
 - **The API explorer is wired for versioned OpenAPI.** The same call chains `.AddMvc()` then
-  `.AddApiExplorer` (`WebApplicationBuilderExtensions.cs:243`,
-  `WebApplicationBuilderExtensions.cs:244`), formatting version groups as `'v'VVV`
-  (`WebApplicationBuilderExtensions.cs:246`) and substituting the version into the URL where a host
-  routes one (`SubstituteApiVersionInUrl = true`, `WebApplicationBuilderExtensions.cs:247`). The
+  `.AddApiExplorer` (`WebApplicationBuilderExtensions.cs:253`,
+  `WebApplicationBuilderExtensions.cs:254`), formatting version groups as `'v'VVV`
+  (`WebApplicationBuilderExtensions.cs:256`) and substituting the version into the URL where a host
+  routes one (`SubstituteApiVersionInUrl = true`, `WebApplicationBuilderExtensions.cs:257`). The
   explorer's default-version behavior is inherited rather than configured, exactly as the comment
-  above it records (`WebApplicationBuilderExtensions.cs:235`-`WebApplicationBuilderExtensions.cs:237`). That
+  above it records (`WebApplicationBuilderExtensions.cs:245`-`WebApplicationBuilderExtensions.cs:247`). That
   group format feeds the `v1` OpenAPI document `AddCommonOpenApi` registers
-  (`WebApplicationBuilderExtensions.cs:392`), which
+  (`WebApplicationBuilderExtensions.cs:402`), which
   `MapCommonOpenApi` serves at `/openapi/v1.json` outside Production only
-  (`Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:28`,
-  `OpenApiEndpointExtensions.cs:30`).
+  (`Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:34`, guarded at
+  `OpenApiEndpointExtensions.cs:36` and mapped at `OpenApiEndpointExtensions.cs:38`).
 - **A shipped exemplar proves two versions coexist.** `ServiceInfoControllerBase`
   (`Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30`) serves the same
   `/ServiceInfo` route under two versions selected by the header: `GetV1` is mapped to `1.0`
@@ -140,7 +140,7 @@ resource has yet needed to evolve its shape.
   show up in a copied URL or a browser address bar, so the version in play is only visible to a
   caller that reads request/response headers.
 - **The OpenAPI document is single-version and dev/CI only.** `MapCommonOpenApi` serves one `v1`
-  document and is a no-op in Production (`OpenApiEndpointExtensions.cs:30`), so the machine-readable
+  document and is a no-op in Production (`OpenApiEndpointExtensions.cs:36`), so the machine-readable
   contract does not yet enumerate the `2.0` discovery shape and is not a public production surface.
 
 ## Related

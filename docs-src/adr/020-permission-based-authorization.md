@@ -1,7 +1,7 @@
 # ADR-020: Permission-Based Authorization Layered over Roles
 
 ## Status
-Accepted (2026-06-25, amended 2026-07-10).
+Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23).
 
 ## Context
 Authorization started as pure role-based access control (RBAC). Endpoints declared the role they
@@ -49,9 +49,10 @@ Add a **permission (capability) layer over RBAC**, opt-in and backward-compatibl
   free, but it grants nothing beyond explicit claims until a host calls `AddPermissions(...)`. The
   existing role policies keep working unchanged.
 
-Adoption is asymmetric and that is intentional: ADC's Conference module defines eight capabilities
-(`ConferencePermissions.cs:12-33`, enumerated in `All` at `:36-46`), including a curation subset
-granted to a new `RoleNames.ContentEditor`; its Engagement module defines three
+Adoption is asymmetric and that is intentional: ADC's Conference module defines nine capabilities
+(`ConferencePermissions.cs:12-36`, enumerated in `All` at `:39-50`), including a curation subset
+(`ContentManagement` at `:57-64`: sessions, speakers, categories, sponsors, activities) granted to a
+new `RoleNames.ContentEditor`; its Engagement module defines three
 (`engagement:live:manage` gating the conference-day live-poll management endpoints,
 `engagement:checkin:manage` gating QR badge check-in and the attendance rollup, and
 `engagement:points:view-overview` gating the organizer points rollup, at

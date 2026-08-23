@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -242,11 +247,11 @@
           <li><strong>The nav menu is assembled from the registrations, trimmed per user.</strong> <code>NavMenu</code> injects the same
           enumeration (<code>MMCA.Common.UI/Layout/NavMenu.razor:8</code>), flattens every module&#39;s <code>NavItems</code>, drops
           items whose <code>RequiredRole</code> or <code>RequiredClaim</code> the current principal does not carry, and splits the
-          remainder into the General, My Account and Administration sections (<code>:185-195</code>).</li>
+          remainder into the General, My Account and Administration sections (<code>:196-204</code>).</li>
           <li><strong>Two component extension points render module-supplied types.</strong> <code>MainLayout</code> reads
           <code>AppBarComponentTypes</code> and <code>LayoutComponentTypes</code> off the registrations
           (<code>MMCA.Common.UI/Layout/MainLayout.razor:98-99</code>) and renders them through <code>DynamicComponent</code> in the
-          top app bar (<code>:41-44</code>, mirrored on the mobile top row at <code>NavMenu.razor:32-35</code>) and at the root of
+          top app bar (<code>:41-44</code>, mirrored on the mobile top row at <code>NavMenu.razor:41-43</code>) and at the root of
           the layout (<code>:80-83</code>), so a module can add an icon with a badge or a drawer without touching the
           layout.</li>
           <li><strong>Registration is one call.</strong> <code>AddUIModule&lt;TModule&gt;()</code> runs the Scrutor scan for the module&#39;s entity

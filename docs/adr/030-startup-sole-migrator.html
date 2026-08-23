@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -220,8 +225,8 @@
           at startup, before the new revision serves traffic. There is deliberately <strong>no</strong> separate deploy-step
           migration (no <code>sqlcmd</code> / <code>dotnet ef database update</code> apply in <code>deploy.yml</code>).</p>
           <ul>
-          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:1031,1160,1279</code> (Identity/Catalog/Sales)
-          and <code>MMCA.ADC/infra/main.bicep:1106,1285,1404,1547</code> (Identity/Conference/Engagement/Notification) all set
+          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:1043,1184,1309</code> (Identity/Catalog/Sales)
+          and <code>MMCA.ADC/infra/main.bicep:1118,1307,1431,1579</code> (Identity/Conference/Engagement/Notification) all set
           <code>DatabaseInitStrategy = &#39;Migrate&#39;</code>.</li>
           <li><strong>One applier per revision.</strong> Each service runs <code>minReplicas: 1</code>, so the startup <code>MigrateAsync</code> is not
           racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
@@ -229,7 +234,7 @@
           is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)</li>
           <li><strong>No deploy-step backstop, on purpose.</strong> Both <code>deploy.yml</code> files carry an explicit comment that there
           is <em>no external <code>sqlcmd</code> migration backstop</em> and that each service is the <strong>sole migrator</strong>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1037-1045</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1079-1087</code>). The
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1043-1051</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1079-1088</code>). The
           <code>sqlcmd</code> that <em>is</em> installed in the pipeline is a connectivity/readiness probe, not a migration apply.</li>
           <li><strong>Build-time drift gate, not a runtime apply.</strong> CI runs
           <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:226</code>, ADC <code>deploy.yml:272</code>) so a
@@ -287,12 +292,12 @@
           built only for enabled modules at <code>:133-136</code>). Nothing on that path consults the hosting
           environment, and the service hosts call the extension method straight after <code>builder.Build()</code>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:319</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:389</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:325</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:255</code>;
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:396</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:331</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:261</code>;
           <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:254</code>,
-          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:263</code>,
-          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:272</code>), so production re-seeds on
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:265</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:274</code>), so production re-seeds on
           every revision.</li>
           <li><strong>Idempotency is delegated entirely to each seeder.</strong> There is no framework-side ledger for seed
           data: no <code>__EFMigrationsHistory</code> equivalent, no marker row, no &quot;already seeded&quot; flag. The loop

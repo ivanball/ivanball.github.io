@@ -96,7 +96,7 @@ ownership specification scopes list/get queries:
 which filters by `Id` because a cart is keyed by customer, `ShoppingCartByCustomerSpecification.cs:24`)
 and `OrdersController` builds an `OrdersByCustomerSpecification` through a private
 `GetOwnershipSpecification()` method
-(`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:63-65`,
+(`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:64-66`,
 `MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13`, filtering
 by `CustomerId`, `OrdersByCustomerSpecification.cs:18`), passed as `specification:
 GetOwnershipSpecification()` into each query (`OrdersController.cs:105`, `OrdersController.cs:143`,

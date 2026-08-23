@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -205,7 +210,7 @@
           extracted into services without rewriting business logic. ADR-008 states the extracted shape in one
           sentence, &quot;Each service is the monolith with one module enabled&quot;, and it treats <code>ModuleLoader</code> and
           the <code>Disabled*</code> stubs as <strong>pre-existing context</strong> before deciding the extraction topology
-          (<code>Website/docs-src/adr/008-service-extraction-topology.md:29-31</code>). ADR-006 decides the database axis
+          (<code>Website/docs-src/adr/008-service-extraction-topology.md:35-37</code>). ADR-006 decides the database axis
           of the same split. Neither records the composition model itself: how a module declares itself, how a
           host finds it, in what order registrations run, what &quot;disabled&quot; does to the container, and what a
           dependent resolves when its peer is not in the process. That mechanism is what makes the ADR-008
@@ -235,13 +240,14 @@
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModuleSeeder.cs:8-19</code>). An assembly that
           throws from <code>GetTypes()</code> is logged and skipped, not fatal (<code>ModuleLoader.cs:89-98,353-354</code>). An
           overload taking the assemblies explicitly exists and its own documentation calls it the preferred
-          host call (<code>ModuleLoader.cs:61-79</code>), but <strong>every host today uses the AppDomain overload</strong>: Store
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:245</code>,
-          <code>MMCA.Store.Identity.Service/Program.cs:223</code>, <code>MMCA.Store.Sales.Service/Program.cs:229</code>), ADC
+          host call (<code>ModuleLoader.cs:61-79</code>), but <strong>every host in the three application repos uses the
+          AppDomain overload today</strong>: Store
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:247</code>,
+          <code>MMCA.Store.Identity.Service/Program.cs:223</code>, <code>MMCA.Store.Sales.Service/Program.cs:231</code>), ADC
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:264</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:332</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:232</code>,
-          <code>MMCA.ADC.Notification.Service/Program.cs:207</code>) and Helpdesk
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:94</code>). Only the unit tests pass assemblies
+          <code>MMCA.ADC.Conference.Service/Program.cs:339</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:238</code>,
+          <code>MMCA.ADC.Notification.Service/Program.cs:213</code>) and Helpdesk
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:100</code>). Only the unit tests pass assemblies
           explicitly (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:41-48</code>).</li>
           <li><strong>Registration order is a Kahn topological sort over the declared names.</strong> The loader sorts before
           it registers anything (<code>ModuleLoader.cs:112</code>); the sort builds an in-degree map plus a reverse
@@ -348,14 +354,14 @@
           <code>Sales</code> and declares <code>[&quot;Catalog&quot;, &quot;Identity&quot;]</code> as <code>RemoteDependencies</code>
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34</code>), then replaces the two
           stubs with typed gRPC clients after the loader returns
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:238-239</code>). ADC Engagement declares
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:240-241</code>). ADC Engagement declares
           <code>[&quot;Conference&quot;]</code> remote (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46</code>)
           and ADC Notification declares <code>[&quot;Identity&quot;]</code> remote
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:27-35</code>), while ADC
           Conference enables one module and declares nothing remote
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25</code>) even though it wires
           Engagement&#39;s <code>IBookmarkCountService</code> as a gRPC client
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:343</code>), because
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350</code>), because
           <code>ConferenceModule</code> never declares Engagement in <code>Dependencies</code>.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -370,7 +376,7 @@
           puts its contract type in the container, the dependent module&#39;s Application and Domain code has no
           branch for &quot;peer not present&quot;, which is precisely why a module&#39;s non-hosting layers are identical
           in-process and extracted (<code>ModuleLoader.cs:123</code>, <code>CatalogModule.cs:24-25</code>). The host then
-          overwrites the stub with a real cross-process adapter (<code>Sales.Service/Program.cs:238-239</code>).</li>
+          overwrites the stub with a real cross-process adapter (<code>Sales.Service/Program.cs:240-241</code>).</li>
           <li><strong>Two strictness levels, chosen per module.</strong> A module that genuinely cannot function without a
           peer opts into <code>RequiresDependencies = true</code> and fails fast (<code>SalesModule.cs:32</code>,
           <code>EngagementModule.cs:23</code>, <code>NotificationModule.cs:24</code>); everything else tolerates a missing peer and
@@ -406,10 +412,10 @@
           so a data-subject export assembled while a module is disabled reads as a complete document.
           A wrongly disabled module therefore produces plausible wrong answers rather than an error, and the
           only startup signal is a Degraded <code>module-{Name}</code> health check plus a log line
-          (<code>DependencyInjection.cs:191-198</code>, <code>ModuleLoader.cs:338-339,347-348</code>).</li>
+          (<code>DependencyInjection.cs:200-207</code>, <code>ModuleLoader.cs:338-339,347-348</code>).</li>
           <li><strong>The dependency graph is a hand-written declaration, not a derived fact.</strong> ADC Conference consumes
           Engagement&#39;s <code>IBookmarkCountService</code> over gRPC without listing Engagement in <code>Dependencies</code>
-          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:329</code>), so neither the
+          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:350</code>), so neither the
           topological sort nor the <code>RequiresDependencies</code> check knows about that edge. Nothing derives
           <code>Dependencies</code> from the interfaces a module actually resolves. What is pinned is the declaration
           against a written expectation: <code>ModuleConformanceTestsBase&lt;TModule&gt;</code> asserts <code>Name</code>, <code>Dependencies</code>,

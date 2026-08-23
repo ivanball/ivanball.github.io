@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -206,8 +211,11 @@
           families join the library, a <code>.proto</code> wire-contract gate and an idempotency-intent gate, and the counts
           move to <strong>104 test methods across 36 bases</strong>, superseding the 102/34 figure the first revision
           recorded. See the second section, Revision (2026-08-18): Section B rule families. Revised 2026-08-18
-          against the released framework v1.154.0: MMCA.Common&#39;s own build now executes <strong>99</strong> of the 104 methods
-          (<code>FACTS.md:47</code>) and the public-API baselines hold <strong>5,150 declarations</strong>.</p>
+          against the released framework v1.154.0: MMCA.Common&#39;s own build then executed <strong>99</strong> of the 104 methods
+          and the public-API baselines hold <strong>5,150 declarations</strong>. Revised 2026-08-23: the method and base counts
+          moved again and are no longer restated in this record&#39;s live text, since <code>MMCA.Common/FACTS.md</code> owns them
+          (<code>:44</code>, <code>:47</code>) and is drift-gated in CI; the Decision&#39;s <code>--minimum-expected-tests</code> figure is corrected to
+          the floor CI actually applies. See Revision (2026-08-23) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -236,8 +244,9 @@
           identically everywhere via NetArchTest over the compiled assemblies.</li>
           </ol>
           <p>These tests run inside the normal <code>dotnet test</code> / CI tier, so a violated invariant fails CI like any
-          other test (CI additionally guards with <code>--minimum-expected-tests 1</code> so an empty suite cannot pass
-          silently). Centralizing the rules in a package, rather than copying them per repo, means a new
+          other test (the whole-solution run that carries them is additionally floored at
+          <code>--minimum-expected-tests 2000</code>, <code>.github/workflows/ci.yml:144</code>, so a discovery or filter regression
+          that silently drops the suite fails the job instead of passing green on a handful of tests). Centralizing the rules in a package, rather than copying them per repo, means a new
           invariant is written once and inherited by every consumer.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -361,12 +370,14 @@
           instead of something a consumer discovers after the release.</p>
           <p>The baselines hold <strong>5,150 declarations</strong> across the fourteen files (5,164 non-empty lines, each file
           opening with a <code>#nullable enable</code> header), and every <code>PublicAPI.Unshipped.txt</code> contains that header and
-          nothing else. <strong>What is baselined is the surface as of this branch</strong>, which is now the released
-          framework v1.154.0 (<code>MMCA.Common/FACTS.md:14</code>), so the figures above cover the Section A additions this
+          nothing else. <strong>What is baselined is the surface as of this branch</strong>, which is whichever release
+          <code>MMCA.Common/FACTS.md:14</code> currently names (v1.154.0 when this revision was written, v1.160.0 as of
+          2026-08-23), so the figures above cover the Section A additions this
           revision described plus the Section B ones that followed, not a frozen picture of one release. The
           start version is no longer uncited: the gate shipped in v1.153.0, whose changelog entry names
           <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> on every in-slnx Source project with committed baselines as
-          one of three new build gates (<code>MMCA.Common/CHANGELOG.md:118-124</code>). The discipline therefore begins with
+          one of three new build gates (<code>MMCA.Common/CHANGELOG.md:297-303</code>, under the v1.153.0 heading at
+          <code>:242</code>). The discipline therefore begins with
           v1.153.0 rather than applying retroactively.</p>
           <p>Three rules from the same analyzer are off, each with the reason recorded rather than silently
           suppressed (<code>.editorconfig:886-895</code>): <strong>RS0026 / RS0027</strong> (no multiple public overloads with optional
@@ -412,9 +423,10 @@
           with a different wave and changes a number that revision states. Two rule families join the shared
           library, and both are <strong>consumer-facing</strong>: the framework ships the rule and exercises it, but the thing
           being pinned lives in a consumer repository.</p>
-          <p><strong>The counts in the preceding revision are superseded.</strong> <code>MMCA.Common/FACTS.md:44</code> now reads 104 test
-          methods across 36 abstract <code>*TestsBase</code> classes, of which MMCA.Common&#39;s own build executes 99
-          (<code>FACTS.md:47</code>), where the entry above recorded 102 across 34 with 87 executed. Those figures were
+          <p><strong>The counts in the preceding revision are superseded.</strong> <code>MMCA.Common/FACTS.md:44</code> read, on the date of
+          this entry, 104 test methods across 36 abstract <code>*TestsBase</code> classes, of which MMCA.Common&#39;s own build
+          executed 99 (<code>FACTS.md:47</code>), where the entry above recorded 102 across 34 with 87 executed (both are
+          themselves superseded: see Revision (2026-08-23)). Those figures were
           correct when written and are left in place, consistent with how this library treats a superseded count.
           Cite <code>FACTS.md</code> rather than either number: it is generated by <code>FactsGenerator</code> and gated against drift
           in CI, so it cannot quietly disagree with the code the way a transcribed figure can.</p>
@@ -470,6 +482,40 @@
           hole, which is what keeps them adoptable and also what makes &quot;the suite is green&quot; a weaker statement
           than it sounds.</li>
           </ul>
+          <h2 id="revision-2026-08-23-superseded-counts-a-re-anchored-citation-and-the-real-test-floor">Revision (2026-08-23): superseded counts, a re-anchored citation, and the real test floor</h2>
+          <p>No rule family joined or left the library in this entry. It corrects three things the two 2026-08-18
+          revisions above state, and it is kept as its own entry rather than edited into them because those
+          entries were correct when written.</p>
+          <p><strong>The counts are superseded a second time, and this record stops restating them.</strong>
+          <code>MMCA.Common/FACTS.md</code> is generated by <code>FactsGenerator</code> and gated against drift in CI, so it is the
+          only place either figure can be read without a transcription risk. As of 2026-08-23 (framework
+          v1.160.0, <code>FACTS.md:4</code>, <code>:14</code>) it reads <strong>110 test methods across 38 abstract <code>*TestsBase</code> classes</strong>
+          (<code>FACTS.md:44</code>), of which MMCA.Common&#39;s own build executes <strong>129</strong> (<code>FACTS.md:47</code>), where the first
+          revision recorded 102 across 34 with 87 executed and the Section B entry recorded 104 across 36 with 99
+          executed. Read <code>FACTS.md</code>, not this paragraph, for the current values.</p>
+          <p><strong>The &quot;N of M executed&quot; framing in the Section B cost list no longer parses, and that is the honest
+          correction, not a rounding.</strong> The executed figure now exceeds the shipped method count because it
+          counts the methods of the bases MMCA.Common subclasses <strong>plus</strong> its Common-only direct tests
+          (<code>FrameworkSanityTests</code>, <code>SpecificationFitnessTests</code>), which <code>FACTS.md:47</code> says in its own parenthetical.
+          So &quot;the framework executes 99 of 104&quot; cannot be restated as &quot;129 of 110&quot;: the two numbers are no longer
+          a subset and its container. The gap that bullet was pointing at, consumer-facing families whose subject
+          lives in another repository, is unchanged and still real (the proto rule runs against fixtures, the
+          idempotency rule needs a consumer&#39;s controllers); it simply cannot be measured by subtracting one
+          <code>FACTS.md</code> line from the other any more.</p>
+          <p><strong>The Decision&#39;s test-count floor was wrong and is corrected in place.</strong> The architecture tests have no
+          floor of their own: they run inside the whole-solution step of <code>build-and-test</code>, which is floored at
+          <code>--minimum-expected-tests 2000</code> against a suite of roughly 2,254 (<code>.github/workflows/ci.yml:141-144</code>).
+          The value 1 belongs to a different job entirely, the <code>ui-e2e</code> matrix, which runs the out-of-slnx
+          <code>MMCA.Common.UI.E2E.Tests</code> project by path (<code>ci.yml:301</code>). The correction makes the guard weaker than
+          the Decision claimed in one specific way worth naming: a floor of 2,000 over a 2,254-test suite would
+          not notice the architecture suite disappearing on its own, only a collapse of the whole run. A
+          per-project floor is only available to a job that runs one project by path, which is what the <code>ui-e2e</code>
+          job does and the solution-wide run cannot.</p>
+          <p><strong>One citation was re-anchored, not rewritten.</strong> The v1.153.0 changelog bullet naming
+          <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> is verbatim unchanged but has moved to
+          <code>MMCA.Common/CHANGELOG.md:297-303</code> (its release heading at <code>:242</code>) as newer releases were prepended
+          above it. Line-anchored citations into an append-at-top file are a known cost of citing this precisely;
+          the alternative, citing nothing, is worse.</p>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -497,6 +543,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-08-18-section-b-rule-families">Revision (2026-08-18): Section B rule families</a></li>
+            <li><a href="#revision-2026-08-23-superseded-counts-a-re-anchored-citation-and-the-real-test-floor">Revision (2026-08-23): superseded counts, a re-anchored citation, and the real test floor</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -8,7 +8,7 @@ The framework's headline claim is that an application is built as a modular mono
 extracted into services without rewriting business logic. ADR-008 states the extracted shape in one
 sentence, "Each service is the monolith with one module enabled", and it treats `ModuleLoader` and
 the `Disabled*` stubs as **pre-existing context** before deciding the extraction topology
-(`Website/docs-src/adr/008-service-extraction-topology.md:29-31`). ADR-006 decides the database axis
+(`Website/docs-src/adr/008-service-extraction-topology.md:35-37`). ADR-006 decides the database axis
 of the same split. Neither records the composition model itself: how a module declares itself, how a
 host finds it, in what order registrations run, what "disabled" does to the container, and what a
 dependent resolves when its peer is not in the process. That mechanism is what makes the ADR-008
@@ -40,13 +40,14 @@ rather than by absence.
   `MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModuleSeeder.cs:8-19`). An assembly that
   throws from `GetTypes()` is logged and skipped, not fatal (`ModuleLoader.cs:89-98,353-354`). An
   overload taking the assemblies explicitly exists and its own documentation calls it the preferred
-  host call (`ModuleLoader.cs:61-79`), but **every host today uses the AppDomain overload**: Store
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:245`,
-  `MMCA.Store.Identity.Service/Program.cs:223`, `MMCA.Store.Sales.Service/Program.cs:229`), ADC
+  host call (`ModuleLoader.cs:61-79`), but **every host in the three application repos uses the
+  AppDomain overload today**: Store
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:247`,
+  `MMCA.Store.Identity.Service/Program.cs:223`, `MMCA.Store.Sales.Service/Program.cs:231`), ADC
   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:264`,
-  `MMCA.ADC.Conference.Service/Program.cs:332`, `MMCA.ADC.Engagement.Service/Program.cs:232`,
-  `MMCA.ADC.Notification.Service/Program.cs:207`) and Helpdesk
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:94`). Only the unit tests pass assemblies
+  `MMCA.ADC.Conference.Service/Program.cs:339`, `MMCA.ADC.Engagement.Service/Program.cs:238`,
+  `MMCA.ADC.Notification.Service/Program.cs:213`) and Helpdesk
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:100`). Only the unit tests pass assemblies
   explicitly (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:41-48`).
 - **Registration order is a Kahn topological sort over the declared names.** The loader sorts before
   it registers anything (`ModuleLoader.cs:112`); the sort builds an in-degree map plus a reverse
@@ -154,14 +155,14 @@ Catalog enables `Catalog` and disables both peers with no remote declarations
 `Sales` and declares `["Catalog", "Identity"]` as `RemoteDependencies`
 (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34`), then replaces the two
 stubs with typed gRPC clients after the loader returns
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:238-239`). ADC Engagement declares
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:240-241`). ADC Engagement declares
 `["Conference"]` remote (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46`)
 and ADC Notification declares `["Identity"]` remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:27-35`), while ADC
 Conference enables one module and declares nothing remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25`) even though it wires
 Engagement's `IBookmarkCountService` as a gRPC client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:343`), because
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350`), because
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale
@@ -176,7 +177,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   puts its contract type in the container, the dependent module's Application and Domain code has no
   branch for "peer not present", which is precisely why a module's non-hosting layers are identical
   in-process and extracted (`ModuleLoader.cs:123`, `CatalogModule.cs:24-25`). The host then
-  overwrites the stub with a real cross-process adapter (`Sales.Service/Program.cs:238-239`).
+  overwrites the stub with a real cross-process adapter (`Sales.Service/Program.cs:240-241`).
 - **Two strictness levels, chosen per module.** A module that genuinely cannot function without a
   peer opts into `RequiresDependencies = true` and fails fast (`SalesModule.cs:32`,
   `EngagementModule.cs:23`, `NotificationModule.cs:24`); everything else tolerates a missing peer and
@@ -211,10 +212,10 @@ Engagement's `IBookmarkCountService` as a gRPC client
   so a data-subject export assembled while a module is disabled reads as a complete document.
   A wrongly disabled module therefore produces plausible wrong answers rather than an error, and the
   only startup signal is a Degraded `module-{Name}` health check plus a log line
-  (`DependencyInjection.cs:191-198`, `ModuleLoader.cs:338-339,347-348`).
+  (`DependencyInjection.cs:200-207`, `ModuleLoader.cs:338-339,347-348`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** ADC Conference consumes
   Engagement's `IBookmarkCountService` over gRPC without listing Engagement in `Dependencies`
-  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:329`), so neither the
+  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:350`), so neither the
   topological sort nor the `RequiresDependencies` check knows about that edge. Nothing derives
   `Dependencies` from the interfaces a module actually resolves. What is pinned is the declaration
   against a written expectation: `ModuleConformanceTestsBase<TModule>` asserts `Name`, `Dependencies`,

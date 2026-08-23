@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -205,7 +210,10 @@
           against MMCA.Helpdesk with the counting method now stated inline (<code>Directory.Packages.props</code> has
           since been pruned to 72 lines and 58 pins, and the file and line totals moved with the tree), the
           staged analyzer delta and the wire-contract removal were re-anchored, and the seed&#39;s fitness map
-          declares 20 sealed subclasses rather than 19.</p>
+          declares 20 sealed subclasses rather than 19. Revised 2026-08-23: the seed measurements were re-taken
+          at HEAD (three standalone fitness-test files landed in the architecture-test project since the
+          previous re-measure, moving the file and line totals), and the generated-app test figure is now
+          sourced to the seed&#39;s own documented run rather than to an undated absolute pair.</p>
           <h2 id="context">Context</h2>
           <p><a href="../guides/common-BUILD-BY-HAND.html">Build by hand</a> is accurate and complete, and phases 1 through 6
           of it are transcription work (<code>common-BUILD-BY-HAND.md:96</code> through <code>:1049</code>). Its own instruction for
@@ -216,10 +224,10 @@
           is now the six-step <code>dotnet new install MMCA.Templates</code> path
           (<code>common-GETTING-STARTED.md:10-22</code>) and the by-hand transcription moved to its own guide.</p>
           <p>Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
-          starts by hand-creating <strong>12 projects, 111 files, and 7,671 lines</strong> before a line of its own
-          business logic. The method, re-run on 2026-08-18 and stated here so the figures can be reproduced
+          starts by hand-creating <strong>12 projects, 114 files, and 7,740 lines</strong> before a line of its own
+          business logic. The method, re-run on 2026-08-23 and stated here so the figures can be reproduced
           rather than trusted: every file under <code>Source/</code> and <code>Tests/</code> excluding <code>bin/</code>, <code>obj/</code> and
-          <code>TestResults/</code> (104 files, 6,569 lines), plus the seven root build files below (1,102 lines). Those
+          <code>TestResults/</code> (107 files, 6,638 lines), plus the seven root build files below (1,102 lines). Those
           seven are an 823-line <code>.editorconfig</code>, a 72-line <code>Directory.Packages.props</code> carrying 58 pins,
           a 75-line <code>Directory.Build.props</code>, the 74-line local-source swap in <code>Directory.Build.targets</code>,
           <code>global.json</code>, <code>nuget.config</code>, and the solution file. Under <code>Source/</code> and <code>Tests/</code> sit the module
@@ -363,9 +371,9 @@
           contract. The delta is exactly one because <code>IntegrationEventContractTestsBase</code> declares a single
           <code>[Fact]</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/IntegrationEventContractTestsBase.cs:18-19</code>).
-          The absolute figure was 90 against 91 as of 2026-08-02 and is not pinned by any gate (both
-          <code>smoke.ps1:318</code> and <code>ci.yml:45</code> pass <code>--minimum-expected-tests 1</code>); a generated app that turns off
-          shape axes runs fewer still.</li>
+          The seed&#39;s own documented run is 100 tests (<code>MMCA.Helpdesk/CLAUDE.md:109</code>), one of which the
+          generated app does not carry. No gate pins either figure (both <code>smoke.ps1:318</code> and <code>ci.yml:45</code>
+          pass <code>--minimum-expected-tests 1</code>); a generated app that turns off shape axes runs fewer still.</li>
           </ul>
           
         <div class="doc-foot btn-row">

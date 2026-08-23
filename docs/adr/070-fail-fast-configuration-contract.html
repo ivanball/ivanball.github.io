@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -200,7 +205,11 @@
           <h1 id="adr-070-fail-fast-configuration-contract">ADR-070: Fail-Fast Configuration Contract</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-07). Revised 2026-08-14 (source citations re-anchored; the consumer-repo facade
-          claim narrowed to production code, with the controller-test exception recorded).</p>
+          claim narrowed to production code, with the controller-test exception recorded). Revised 2026-08-23
+          (inventory re-counted after the password-reset vertical and the opt-in feature waves: twelve validated
+          chains in the Infrastructure package and sixteen framework registrations in all, six framework
+          bindings deliberately off the chain, a custom <code>IValidateOptions&lt;T&gt;</code> now in use, and the
+          Application-layer &quot;no <code>IOptions</code>&quot; invariant recorded as no longer holding).</p>
           <h2 id="context">Context</h2>
           <p>Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
           JWT key material, outbox tuning, message-bus provider, module enablement, page-size limits. A settings
@@ -225,24 +234,31 @@
           is the required form (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:67-70</code>).
           <code>.BindConfiguration(T.SectionName)</code> is the accepted shorthand for the <code>Bind(GetSection(...))</code> step and
           is what Store&#39;s Sales module uses
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:47-50</code>, <code>:52-55</code>).
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:47-50</code>, <code>:52-55</code>, <code>:57-60</code>).
           <code>ValidateOnStart()</code> is the load-bearing link: without it the annotations are evaluated lazily on first
           resolution, which is exactly the first-use failure the contract exists to prevent.</li>
-          <li><strong>The framework owns the base set.</strong> Eight sections are bound this way in the Infrastructure package&#39;s
-          <code>DependencyInjection.cs</code> alone: seven inside <code>AddInfrastructure</code> (<code>ConnectionStringSettings</code> <code>:67-70</code>,
-          <code>SmtpSettings</code> <code>:81-84</code>, <code>PersistenceSettings</code> <code>:123-126</code>, <code>OutboxSettings</code> <code>:128-131</code>,
-          <code>LoginProtectionSettings</code> <code>:133-136</code>, <code>MessageBusSettings</code> <code>:139-142</code>, <code>JwksSettings</code> <code>:144-147</code>) and an
-          eighth in the opt-in <code>AddPushNotifications</code> (<code>PushNotificationSettings</code> <code>:530-533</code>). Three more are bound
-          by the Presentation packages: <code>IdempotencySettings</code>
+          <li><strong>The framework owns the base set.</strong> Twelve sections are bound this way in the Infrastructure package&#39;s
+          <code>DependencyInjection.cs</code> alone. Eight are inside <code>AddInfrastructure</code> (<code>ConnectionStringSettings</code>
+          <code>:67-70</code>, <code>SmtpSettings</code> <code>:81-84</code>, <code>PersistenceSettings</code> <code>:123-126</code>, <code>OutboxSettings</code> <code>:128-131</code>,
+          <code>LoginProtectionSettings</code> <code>:133-136</code>, <code>PasswordResetSettings</code> <code>:139-142</code>, <code>MessageBusSettings</code>
+          <code>:145-148</code>, <code>JwksSettings</code> <code>:150-153</code>), so every host gets them by registering the package. The other
+          four sit in opt-in registration methods a host calls only when it wants the feature: <code>SchedulerSettings</code>
+          in <code>AddScheduledJobs</code> (<code>:319-322</code>), <code>AuditTrailSettings</code> in <code>AddAuditTrail</code> (<code>:390-393</code>),
+          <code>TenancySettings</code> in <code>AddMultiTenancy</code> (<code>:439-442</code>), and <code>PushNotificationSettings</code> in
+          <code>AddPushNotifications</code> (<code>:543-546</code>). Four more are bound outside that file: <code>IdempotencySettings</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:70-73</code>), <code>JwtSettings</code>, bound
           inside <code>AddCommonAuthentication</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:502-505</code>),
-          and <code>ApiSettings</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:32-35</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:538-541</code>,
+          the method starting at <code>:536</code>), <code>ApiSettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:32-35</code>), and
+          <code>GatewayRateLimitingSettings</code>, bound by the Aspire hosting package&#39;s <code>AddGatewayRateLimiting</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:148-151</code>).
+          Sixteen framework registrations in all.</li>
           <li><strong>Each service host adds exactly two of its own</strong>, <code>ApplicationSettings</code> and <code>ModulesSettings</code>, and all
           eight hosts across the three application repos do it identically: ADC&#39;s four services (for example
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:170-173</code> and <code>:313-316</code>), Store&#39;s three
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:123-126</code> and <code>:226-229</code>), and the
-          Helpdesk monolith seed (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:17-20</code> and <code>:75-78</code>).
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:170-173</code> and <code>:320-323</code>), Store&#39;s three
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:123-126</code> and <code>:228-231</code>), and the
+          Helpdesk monolith seed (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:17-20</code> and <code>:81-84</code>).
           Modules may add their own sections on the same chain, as Store&#39;s Sales module does for Stripe.</li>
           <li><strong>Validation is data annotations, extended by <code>IValidatableObject</code> where a rule spans fields.</strong>
           <code>JwtSettings</code> marks <code>Issuer</code> and <code>Audience</code> <code>[Required]</code>
@@ -253,28 +269,45 @@
           fails to boot rather than failing to sign its first token.</li>
           <li><strong>Read-only interface facades over <code>IOptions</code>.</strong> Five settings types are additionally registered as
           singletons that resolve <code>IOptions&lt;T&gt;.Value</code> and hand back an interface: <code>IApplicationSettings</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:31</code>), <code>IJwtSettings</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:32</code>), <code>IJwtSettings</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:65</code>),
-          <code>IConnectionStringSettings</code> (<code>:71</code>), <code>ISmtpSettings</code> (<code>:85</code>), and <code>IPushNotificationSettings</code> (<code>:534-535</code>).
+          <code>IConnectionStringSettings</code> (<code>:71</code>), <code>ISmtpSettings</code> (<code>:85</code>), and <code>IPushNotificationSettings</code> (<code>:547-548</code>).
           The interfaces declare <code>get</code>/<code>init</code> members only
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ISmtpSettings.cs:6-28</code>), so a consumer can
           read a setting and cannot rebind it. The interface for <code>IJwtSettings</code> lives in a file named
           <code>IJwSettings.cs</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/IJwSettings.cs:10</code>); the
           type name, not the filename, is the contract.</li>
-          <li><strong>Three recorded exceptions to the chain, all in the framework.</strong> <code>CacheKeyPrefixOptions</code> is bound with
-          a bare <code>services.Configure</code> and no validation, because an absent section must leave cache keys exactly
-          as callers write them (a single call inside <code>AddCaching</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:172</code>, the method starting
-          at <code>:164</code>).
-          <code>LayoutSettings</code> is bound without validation for the same reason: it is optional footer copy
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:38-39</code>). <code>DataSourcesSettings</code> is
+          <li><strong>Six recorded exceptions in the framework, on one shared reason: an absent section is a working
+          default, not a misconfiguration.</strong> <code>CacheKeyPrefixOptions</code> is bound with a bare <code>services.Configure</code>
+          and no validation, because an absent section must leave cache keys exactly as callers write them (a
+          single call inside <code>AddCaching</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:185</code>, the method starting
+          at <code>:177</code>).
+          <code>LayoutSettings</code> binds with <code>AddOptions().Bind()</code> and nothing after it for the same reason: it is
+          optional footer copy (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:38-39</code>).
+          <code>NativePushSettings</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:578-579</code>)
+          and <code>FileStorageSettings</code> (<code>:610-611</code>) bind the same way inside their opt-in registration methods,
+          both of which read the section back and turn themselves into a no-op when it is absent or incomplete,
+          so a host registers them unconditionally and switches the feature on by configuration alone.
+          <code>SecurityHeadersSettings</code> binds through an options builder that calls <code>.Bind</code> only when configuration
+          was supplied at all, because the same call accepts a code-only <code>Action&lt;SecurityHeadersSettings&gt;</code>
+          instead (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:170-174</code>).
+          <code>DataSourcesSettings</code> is the one exception with a mechanical rather than a policy reason: it is
           constructed directly from the section rather than through <code>AddOptions</code>, because a root-level dictionary
           section does not bind through the options pipeline
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:75-77</code>).</li>
+          <li><strong>Consumer hosts take the same escape twice, and write the reason at the call site.</strong> ADC&#39;s Engagement
+          service binds <code>PointsSettings</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:146-147</code>) and <code>CheckInSettings</code>
+          (<code>:153-154</code>) without <code>ValidateOnStart</code>: the defaults are working values and an explicit zero is the
+          documented per-rule kill switch, so no value an organizer could set should stop that host from booting
+          mid-conference. Both follow the rule the framework&#39;s six follow: an exception is legitimate when the
+          section has no invalid value, and the reason belongs in a comment beside the binding rather than left
+          to be inferred from its absence.</li>
           </ul>
           <p><strong>Adoption of the facade half is partial, and this ADR settles the direction rather than claiming the
           state.</strong> Only five of the framework&#39;s settings types have a facade; the rest are consumed as <code>IOptions&lt;T&gt;</code>
-          inside Infrastructure and API, which is where they belong: <code>OutboxProcessor</code>
+          at the point of use, which inside Infrastructure and API is where they belong: <code>OutboxProcessor</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:57</code>),
           <code>BrokerEventBus</code> (<code>.../Services/BrokerEventBus.cs:34</code>), <code>LoginProtectionService</code>
           (<code>.../Auth/LoginProtectionService.cs:21</code>), <code>RsaJwksProvider</code> (<code>.../Auth/RsaJwksProvider.cs:15</code>),
@@ -282,7 +315,7 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:432</code>). The facades are
           consumed only inside the framework: <code>EntityControllerBase</code> resolves <code>IApplicationSettings</code> per request at
           two sites, its <code>MaxPageSize</code> and <code>MaxExportRows</code> accessors
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:60</code> and <code>:80</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:61</code> and <code>:81</code>),
           <code>RepositoryFactory</code> takes it in its constructor
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:14</code>),
           <code>TokenService</code> takes <code>IJwtSettings</code> (<code>.../Services/TokenService.cs:47</code>), and <code>SmtpEmailSender</code> takes
@@ -292,7 +325,7 @@
           because of <code>EntityControllerBase</code>: Store registers a stand-in <code>IApplicationSettings</code> in six API test
           fixtures so <code>MaxPageSize</code> resolves (for example
           <code>MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.API.Tests/Controllers/ShoppingCartsControllerTests.cs:44</code>),
-          and six ADC Conference controller tests name it only in a comment recording that an empty provider yields
+          and eight ADC Conference controller tests name it only in a comment recording that an empty provider yields
           the default (for example
           <code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Controllers/SponsorsControllerTests.cs:41</code>);
           Helpdesk has no reference of either kind.
@@ -301,13 +334,34 @@
           <code>PaymentReconciliationService.cs:35-36</code>; ADC&#39;s web host in its <code>/client-config</code> minimal-API handler,
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:145</code>, and its calendar component in
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Components/AddToCalendarButton.razor:7</code>).</p>
-          <p>The Application-layer invariant nevertheless holds today: no Application-layer file in any of the four
-          repos takes an <code>IOptions</code> dependency, because settings are read at the Infrastructure, API, and host
-          edges. The settled direction is therefore narrower than &quot;never use <code>IOptions</code>&quot;: the <strong>fail-fast chain is
-          mandatory for every section</strong> other than the three recorded exceptions, and the <strong>facade is the required
+          <p>The Application layer no longer keeps clear of the options pipeline. Seven Application-layer files take
+          an <code>IOptions&lt;T&gt;</code> constructor dependency today, and the framework itself supplies the first: the shared
+          <code>ForgotPasswordHandlerBase</code> takes <code>IOptions&lt;PasswordResetSettings&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:39</code>).
+          ADC adds four: its Identity <code>ForgotPasswordHandler</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24</code>),
+          and in Engagement <code>PointsAwarder</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/Services/PointsAwarder.cs:31</code>),
+          <code>GetLeaderboardHandler</code> (<code>.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs:30</code>) and
+          <code>RecordRoomCheckInHandler</code> (<code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:28</code>).
+          Store adds two: <code>CreateCheckoutSessionCommandValidator</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionCommandValidator.cs:23</code>)
+          and its Identity <code>ForgotPasswordHandler</code>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:25</code>).
+          Only Helpdesk&#39;s Application layer names no <code>IOptions</code> at all.</p>
+          <p>The settled direction is therefore narrower than &quot;never use <code>IOptions</code>&quot;: the <strong>fail-fast chain is
+          mandatory for every section</strong> other than the exceptions recorded above, and the <strong>facade is the required
           form only when a settings type must be read above Infrastructure</strong>. Below that boundary <code>IOptions&lt;T&gt;</code> at
-          the point of consumption stays correct, and the direct injections listed above are conformant, not debt,
-          with the exception that new framework settings crossing into Application or controller code get a facade.</p>
+          the point of consumption stays correct, and the direct injections in Infrastructure, API and the hosts
+          listed above are conformant, not debt. The seven Application-layer injections are the part that is not:
+          each reads a settings section above Infrastructure without a facade, so by this ADR&#39;s own rule each is
+          owed one. <code>PasswordResetSettings</code> is the load-bearing case, because the framework&#39;s own base class takes
+          it and both consumer handlers forward their <code>IOptions&lt;PasswordResetSettings&gt;</code> straight into that base
+          constructor (ADC at <code>.../MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:26</code>,
+          Store at <code>.../MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:27</code>):
+          a facade there removes three of the seven at once. The remaining four injections read three
+          consumer-owned sections (<code>PointsSettings</code> twice, <code>CheckInSettings</code>, <code>CheckoutRedirectSettings</code>), so those
+          facades are the consumers&#39; to add.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>A boot failure is cheaper than a first-use failure.</strong> A host that will not start is caught by the
@@ -324,7 +378,7 @@
           and <code>RepositoryFactory</code> need one number each; taking <code>IApplicationSettings</code> rather than
           <code>IOptions&lt;ApplicationSettings&gt;</code> keeps <code>Microsoft.Extensions.Options</code> out of their signatures, and the
           <code>init</code>-only members make the setting unwritable at the point of use.</li>
-          <li><strong>One shape makes the contract auditable.</strong> Because the chain is textually identical in all eleven
+          <li><strong>One shape makes the contract auditable.</strong> Because the chain is textually identical in all sixteen
           framework registrations and all sixteen host registrations, a grep for <code>ValidateOnStart</code> is a complete
           inventory of what a host validates at boot.</li>
           </ul>
@@ -333,7 +387,9 @@
           <li><strong>Nothing enforces it.</strong> There is no architecture fitness test asserting that a new <code>AddOptions&lt;T&gt;</code> call
           carries <code>ValidateDataAnnotations().ValidateOnStart()</code>. The uniformity above is convention held by review,
           not a gate, which is weaker than the invariant-over-discipline posture ADR-015 applies elsewhere. A
-          section added without the chain fails silently, which is to say it fails later.</li>
+          section added without the chain fails silently, which is to say it fails later. Six framework bindings
+          and two consumer-host bindings sit off the chain by choice, and nothing in the build distinguishes
+          those from a section whose author simply forgot: only the comment beside each one does.</li>
           <li><strong>Bad configuration becomes a crash loop, not a degraded start.</strong> A deployed replica with a missing
           required value never reaches the warm-up and readiness machinery of ADR-025: it terminates at host build.
           That is the intended trade (no half-configured replica serves traffic), but it means a configuration
@@ -342,7 +398,17 @@
           repo&#39;s production code uses a facade at all, so a reader encounters both forms. The boundary above sets which is correct
           where, but it does not make the codebase look uniform today.</li>
           <li><strong>Data annotations are the vocabulary.</strong> Anything richer needs <code>IValidatableObject</code> or a custom
-          <code>IValidateOptions&lt;T&gt;</code>, and only <code>JwtSettings</code> reaches for the former today.</li>
+          <code>IValidateOptions&lt;T&gt;</code>, and both escape hatches are in use once each. <code>JwtSettings</code> is the only settings
+          type implementing the former
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:16</code>). <code>TenancySettings</code> is
+          the only one with the latter: <code>TenancySettingsValidator</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/TenancySettingsValidator.cs:23-24</code>) is
+          registered as an <code>IValidateOptions&lt;TenancySettings&gt;</code> beside the chain that binds it
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:445-446</code>), because
+          confirming that a tenant&#39;s data-source override names a real physical source needs
+          <code>IDataSourceResolver</code>, which no annotation can reach. The cost of the second form is that the rule
+          leaves the settings type and has to be registered separately, so a host that binds the section without
+          also registering the validator validates less than it appears to.</li>
           <li><strong>A facade is a snapshot.</strong> Each facade is a singleton resolved from <code>IOptions&lt;T&gt;.Value</code>, so it captures
           the bound instance once and never observes a configuration reload. <code>IOptions&lt;T&gt;</code> itself has the same
           property; a section that genuinely needs reload would have to move to <code>IOptionsMonitor&lt;T&gt;</code>, and none

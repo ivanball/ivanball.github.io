@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -236,7 +241,9 @@
           deliberately leaves <code>Version</code> and <code>VersionPolicy</code> unset, unlike <code>catalog</code> and <code>identity</code> which pin
           <code>Version</code> 2 (<code>appsettings.json:83-90</code>, reasoning at
           <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:85-89</code>). That is why Sales keeps the ADR-012
-          mixed-endpoint profile (<code>MMCA.Store/infra/main.bicep:1207</code>).</li>
+          mixed-endpoint profile: its container app&#39;s ingress stays <code>transport: &#39;http&#39;</code> for REST plus this
+          webhook, with a TCP-passthrough <code>additionalPortMappings</code> entry carrying the h2c gRPC port alongside
+          it (<code>MMCA.Store/infra/main.bicep:1231-1246</code>).</li>
           <li><strong>The status code encodes ACCEPTED, not PROCESSED.</strong> Exactly three error codes return 400, held in a
           <code>FrozenSet</code> named <code>RejectionCodes</code>: <code>SignatureVerificationFailed</code>, <code>ParseFailed</code> and <code>SecretMissing</code>
           (<code>PaymentsController.cs:31-36</code>, defined at
@@ -270,7 +277,7 @@
           skips entirely when <code>WebhookBaseUrl</code> is empty, which is the local-development path where the Stripe
           CLI forwards instead (<code>:54-58</code>), and skips with a <code>Warning</code> when <code>SecretKey</code> is empty (<code>:60-64</code>).
           The expected URL is <code>WebhookBaseUrl</code> plus the constant <code>/Payments/webhook</code> (<code>:33,84</code>); production
-          injects <code>Stripe__WebhookBaseUrl</code> as the Gateway FQDN (<code>main.bicep:1296</code>), so the registered endpoint
+          injects <code>Stripe__WebhookBaseUrl</code> as the Gateway FQDN (<code>main.bicep:1326</code>), so the registered endpoint
           is the Gateway route above. It subscribes exactly three event types (<code>:42-47</code>), and warns when an
           existing endpoint is missing any of them (<code>:224-234</code>).</li>
           <li><strong>It deletes only endpoints it created itself.</strong> Every auto-created endpoint carries the description

@@ -34,15 +34,15 @@ verification fails.
 
 - **Single-revision rollout.** Every container app runs `activeRevisionsMode: 'Single'`, so a deploy
   replaces the serving revision rather than splitting traffic across two: Store's identity, catalog,
-  sales, gateway and ui apps (`MMCA.Store/infra/main.bicep:952,1104,1203,1334,1419`) and ADC's
+  sales, gateway and ui apps (`MMCA.Store/infra/main.bicep:963,1122,1227,1364,1450`) and ADC's
   identity, conference, engagement, notification, gateway and ui apps
-  (`MMCA.ADC/infra/main.bicep:1031,1232,1356,1480,1641,1743`). There is no canary or blue/green stage
+  (`MMCA.ADC/infra/main.bicep:1042,1249,1378,1507,1673,1776`). There is no canary or blue/green stage
   and no traffic-splitting step.
 - **Readiness gating is the first line of defence.** Every app carries startup, liveness and
   readiness probes, with readiness on `/health/ready`, so ACA holds user traffic on the old revision
-  until the new one is warm (`MMCA.Store/infra/main.bicep:1300-1305`, five apps at
-  `:1079,1178,1305,1378,1475`; `MMCA.ADC/infra/main.bicep:1578-1582`, six apps at
-  `:1200,1324,1448,1600,1695,1813`). This is the ADR-025 warm-up gate doing rollout duty.
+  until the new one is warm (`MMCA.Store/infra/main.bicep:1332-1336`, five apps at
+  `:1097,1202,1335,1409,1507`; `MMCA.ADC/infra/main.bicep:1631-1639`, six apps at
+  `:1218,1347,1476,1633,1729,1848`). This is the ADR-025 warm-up gate doing rollout duty.
 - **A post-deploy smoke gate is the last step of the deploy job.** `Smoke test (rollback on failure)`
   probes the freshly deployed fleet from outside Azure
   (`MMCA.Store/.github/workflows/deploy.yml:1059`, `MMCA.ADC/.github/workflows/deploy.yml:1099`). The

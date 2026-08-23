@@ -64,13 +64,13 @@ because that per-service project postdates the frozen combined-archive lineage t
 migration. Adoption inventory as of 2026-08-13: **three ADC services consume from the broker** and
 so use their inbox for real, plus Store Sales. ADC Identity consumes `SpeakerLinkedToUser` and
 `SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:299-300`),
-ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:365`), and ADC
+ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:372`), and ADC
 Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
-`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:299-302`), the
+`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:305-308`), the
 first of which is ADC's first **self-consumption** over the broker: Engagement publishes
 `AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
 so the inbox is load-bearing there rather than decorative. Store Sales consumes `ProductVariantChanged`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:251`). Only **ADC Notification**
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:253`). Only **ADC Notification**
 now carries `EnableInbox: true` and the table while registering no consumer, so its inbox alone is
 provisioned and unused (functionally harmless). The mirror image is equally harmless and worth stating
 because it looks like the opposite mistake: Store Catalog and Store Identity carry the `InboxMessages`
@@ -123,12 +123,12 @@ What changed is that the default is now loud.
 
 1. **A broker-connected host with no inbox says so at startup.** `AddBrokerMessaging` returns early
    for `MessageBusProvider.InProcess`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:656-659`), which is
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:669-672`), which is
    what scopes this to hosts that actually talk to a broker: in-process dispatch never redelivers, so
    there is nothing to warn about. Past that early return, the `EnableInbox` branch
-   (`:686-698`) registers `EfInboxStore` as scoped (`:688`) when the flag is set, and on the `else`
-   branch registers `NoOpInboxStore` as a singleton (`:692`) **plus** an `IHostedService` whose only
-   job is to emit one `Warning` line naming the consequence and the fix (`:697`). The service is
+   (`:699-711`) registers `EfInboxStore` as scoped (`:701`) when the flag is set, and on the `else`
+   branch registers `NoOpInboxStore` as a singleton (`:705`) **plus** an `IHostedService` whose only
+   job is to emit one `Warning` line naming the consequence and the fix (`:710`). The service is
    `InboxDisabledWarningService`
    (`.../Persistence/Inbox/InboxDisabledWarningService.cs:18-19`), and it evaluates nothing at
    runtime: `StartAsync` logs unconditionally (`:22-26`), because the condition was already decided by

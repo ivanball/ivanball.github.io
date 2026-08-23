@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -244,26 +249,26 @@
           <p>The two transports consume them differently, and the asymmetry is the decision:</p>
           <ul>
           <li><strong>RabbitMQ consults the flag.</strong> <code>ConfigureBrokerTransport</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:794</code>) calls
-          <code>cfg.UseDelayedRedelivery(r =&gt; r.Intervals(intervals))</code> inside <code>UsingRabbitMq</code> (<code>:802</code>) only under
-          <code>if (settings.EnableDelayedRedelivery)</code> (<code>:813</code>, the call at <code>:818</code>), with the plugin requirement
-          restated at the registration site (<code>:783-787</code>, <code>:809-812</code>). Default-off is not timidity: the local
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:807</code>) calls
+          <code>cfg.UseDelayedRedelivery(r =&gt; r.Intervals(intervals))</code> inside <code>UsingRabbitMq</code> (<code>:815</code>) only under
+          <code>if (settings.EnableDelayedRedelivery)</code> (<code>:826</code>, the call at <code>:831</code>), with the plugin requirement
+          restated at the registration site (<code>:794-801</code>, <code>:822-825</code>). Default-off is not timidity: the local
           Aspire broker cannot serve it, so a default-on setting would break every developer&#39;s first <code>F5</code>
           with a bus-start failure, which is the worst possible place to learn about a broker plugin.</li>
-          <li><strong>Azure Service Bus does not consult it.</strong> <code>UsingAzureServiceBus</code> (<code>:832</code>) calls
-          <code>UseDelayedRedelivery</code> unconditionally (<code>:846</code>), with the reasoning recorded inline (<code>:839-842</code>).
+          <li><strong>Azure Service Bus does not consult it.</strong> <code>UsingAzureServiceBus</code> (<code>:845</code>) calls
+          <code>UseDelayedRedelivery</code> unconditionally (<code>:859</code>), with the reasoning recorded inline (<code>:852-856</code>).
           Service Bus schedules natively, there is no plugin to be missing, and a production transport that
           can express &quot;try again in an hour&quot; should always express it. Making the operator opt in would mean
           the environment that most needs the behavior is the one most likely to be running without it.</li>
           </ul>
           <p>Two details are worth stating so the words above are not read as stronger than the code.
           &quot;Unconditional&quot; means &quot;not gated on the flag&quot;: both call sites are still guarded by
-          <code>intervals.Length &gt; 0</code> (<code>:816</code>, <code>:844</code>), so an operator who configures an empty interval list turns
+          <code>intervals.Length &gt; 0</code> (<code>:829</code>, <code>:857</code>), so an operator who configures an empty interval list turns
           the feature off everywhere. And <code>RedeliveryIntervalsSeconds</code> carries <strong>no</strong> DataAnnotations attribute,
           unlike its neighbours <code>RetryLimit</code> and the two retry-interval settings, so the ADR-070 fail-fast
           chain does not validate it; non-positive entries are filtered at use time in <code>BuildRedeliveryIntervals</code>
-          (<code>:873-876</code>) instead. In both transports the redelivery filter is registered <strong>before</strong>
-          <code>UseMessageRetry</code> (<code>:822</code>, <code>:849</code>), which is what keeps immediate retry innermost and delayed
+          (<code>:886-889</code>) instead. In both transports the redelivery filter is registered <strong>before</strong>
+          <code>UseMessageRetry</code> (<code>:835</code>, <code>:862</code>), which is what keeps immediate retry innermost and delayed
           redelivery outside it.</p>
           <h3 id="a-fault-consumer-makes-an-exhausted-message-visible">A fault consumer makes an exhausted message visible</h3>
           <p><code>FaultIntegrationEventConsumer&lt;TEvent&gt;</code>
@@ -370,7 +375,7 @@
           likely to run without second-level redelivery is the one that is not Azure Service Bus. Nothing
           warns a RabbitMQ host that the feature it never enabled is not running.</li>
           <li><strong>The intervals are not validated at startup.</strong> <code>RedeliveryIntervalsSeconds</code> sits outside the
-          ADR-070 fail-fast chain, so a typo becomes a filtered-out entry at <code>:873-876</code> rather than a refusal
+          ADR-070 fail-fast chain, so a typo becomes a filtered-out entry at <code>:886-889</code> rather than a refusal
           to boot. An operator who writes <code>[0, 0, 0]</code> silently gets no delayed redelivery at all.</li>
           <li><strong>An hour-long redelivery window widens the duplicate window with it.</strong> A message redelivered at
           <code>+3600s</code> runs its handlers an hour after the original attempt, so ADR-021&#39;s inbox and every

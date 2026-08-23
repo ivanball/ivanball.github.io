@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-047: Runtime Revocation of Soft-Deleted Users&#39; Active Sessions · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-15).">
+  <meta name="description" content="Accepted (2026-07-15). Revised 2026-08-07 (validator hoisted into a shared generic, the 30-second constant moved, the two apps revoke at different…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-047: Runtime Revocation of Soft-Deleted Users&#39; Active Sessions">
-  <meta property="og:description" content="Accepted (2026-07-15).">
+  <meta property="og:description" content="Accepted (2026-07-15). Revised 2026-08-07 (validator hoisted into a shared generic, the 30-second constant moved, the two apps revoke at different…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-047: Runtime Revocation of Soft-Deleted Users&#39; Active Sessions">
-  <meta name="twitter:description" content="Accepted (2026-07-15).">
+  <meta name="twitter:description" content="Accepted (2026-07-15). Revised 2026-08-07 (validator hoisted into a shared generic, the 30-second constant moved, the two apps revoke at different…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"047 · Runtime Revocation of Soft-Deleted Users' Active Sessions","item":"https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -199,7 +204,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-047-runtime-revocation-of-soft-deleted-users-active-sessions">ADR-047: Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-15).</p>
+          <p>Accepted (2026-07-15). Revised 2026-08-07 (validator hoisted into a shared generic, the 30-second
+          constant moved, the two apps revoke at different speeds). Revised 2026-08-23: the pipeline
+          registration moved out of <code>WebApplicationExtensions</code> into the named-step <code>MiddlewarePipelineBuilder</code>
+          (ADR-079), and a tenant-resolution step (ADR-073) now sits between authentication and rate limiting.</p>
           <h2 id="context">Context</h2>
           <p>Soft-delete is the framework&#39;s default deletion model (ADR-005): <code>AuditableBaseEntity.Delete()</code> sets
           <code>IsDeleted = true</code> and EF global query filters hide the row, but the record survives for audit,
@@ -224,12 +232,26 @@
           rejects an authenticated caller with HTTP 401 once the caller&#39;s account has been soft-deleted, backed
           by a short cache so the account-status lookup is not paid on every request.</p>
           <ul>
-          <li><strong>It runs after authentication, before authorization.</strong> <code>UseCommonMiddlewarePipeline</code> registers it
-          at <code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:109</code>, immediately after
-          <code>UseAuthentication</code> / <code>UseRateLimiter</code>
-          (<code>WebApplicationExtensions.cs:96,108</code>) and before <code>UseAuthorization</code>
-          (<code>WebApplicationExtensions.cs:110</code>), so <code>HttpContext.User</code> is already populated and the check gates
-          every downstream endpoint.</li>
+          <li><strong>It runs after authentication, before authorization.</strong> That position is data in a named-step
+          pipeline builder (ADR-079), not a hand-ordered sequence of <code>Use*</code> calls:
+          <code>UseCommonMiddlewarePipeline</code>
+          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:46</code>) delegates to the
+          private <code>ApplyPipeline</code> helper (<code>WebApplicationExtensions.cs:138</code>), which seeds the framework steps
+          from <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>WebApplicationExtensions.cs:140</code>;
+          <code>Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:31-156</code>). This middleware
+          is the <code>SoftDeletedUserFilter</code> step (<code>MiddlewarePipelineStepNames.cs:59</code>), applied as
+          <code>app.UseMiddleware&lt;SoftDeletedUserMiddleware&gt;()</code> at <code>MiddlewarePipelineBuilder.cs:130</code>. Four
+          consecutive steps fix its place: <code>UseAuthentication</code> (<code>:110</code>), then <code>TenantResolutionMiddleware</code>
+          (<code>:118</code>, ADR-073, which has to sit immediately after authentication because its claim strategy
+          reads <code>HttpContext.User</code>), then <code>UseRateLimiter</code> (<code>:126</code>, ADR-019), then this middleware (<code>:130</code>),
+          and only after it <code>UseAuthorization</code> (<code>:134</code>). So <code>HttpContext.User</code> is already populated when the
+          check runs, and the check still gates every downstream endpoint. The order is frozen by a fitness
+          function rather than by a comment: <code>MiddlewarePipelineOrderTestsBase.ExpectedStepNames</code> asserts
+          <code>SoftDeletedUserFilter</code> between <code>RateLimiting</code> and <code>Authorization</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:51-53</code>).
+          <code>MiddlewarePipelineBuilder.Build()</code>&#39;s startup-validated invariants (<code>MiddlewarePipelineBuilder.cs:257-280</code>)
+          do not name this step, so a host that moves it through the configure overload is caught by that
+          fitness function, not at startup.</li>
           <li><strong>Anonymous requests pass straight through.</strong> When <code>ICurrentUserService.UserId</code> is null the
           middleware calls the next delegate and returns without any lookup
           (<code>SoftDeletedUserMiddleware.cs:65-73</code>), so unauthenticated traffic pays nothing.</li>
@@ -277,7 +299,7 @@
           (<code>SoftDeletedUserMiddleware.cs:76-83</code>): Identity is the source of truth and already validated the
           token upstream. Resolving it as a constructor/parameter dependency would instead 500 every request
           in those services. MMCA.Helpdesk wires the same pipeline
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111</code>) but hosts only a Tickets module and
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:117</code>) but hosts only a Tickets module and
           registers no validator, so it takes the same no-op path.</li>
           </ul>
           <p><code>SoftDeletedUserMiddlewareTests</code>
@@ -355,7 +377,11 @@
           <p>ADR-005 (soft-delete is the deletion model whose still-authenticated tokens this middleware revokes;
           deleting a user is a soft-delete, not a row removal), ADR-004 (the stateless RS256/JWKS validation
           that has no built-in revocation, which this bounds without a per-request store lookup), ADR-022 (the
-          SSR session cookie carries the same JWT into the prerender path this middleware also gates).</p>
+          SSR session cookie carries the same JWT into the prerender path this middleware also gates), ADR-079
+          (the shared named-step HTTP pipeline that now owns this middleware&#39;s registration and its order),
+          ADR-073 (multi-tenancy, whose <code>TenantResolutionMiddleware</code> step sits between authentication and the
+          rate limiter, ahead of this one), ADR-019 (the rate limiter that runs immediately before it, for its
+          own authentication-dependent reason).</p>
           <h2 id="revision-2026-08-07">Revision (2026-08-07)</h2>
           <p>Re-verified against current source. The decision is unchanged, but three things it described have
           moved: the validator implementation, the home of the 30-second constant, and the claim that both apps
@@ -398,9 +424,54 @@
           cache read at <code>:91</code> (from <code>:63-66</code>), the cached-<code>true</code> 401 at <code>:102-106</code> (from <code>:66-71</code>), the
           cache-miss validator call at <code>:114-116</code> with the cache write at <code>:131-133</code> and the deleted-401 at
           <code>:143-147</code> (from <code>:73-84</code>), and the fall-through at <code>:150</code> (from <code>:86</code>). Unchanged and re-checked:
-          the pipeline registration (<code>WebApplicationExtensions.cs:109</code>, with <code>:96,108</code> and <code>:110</code> around it),
-          <code>ISoftDeletedUserValidator.cs:7,15</code>, the Helpdesk no-op path
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111</code>), and
+          the pipeline registration (<code>WebApplicationExtensions.cs:109</code>, with <code>:96,108</code> and <code>:110</code> around it,
+          both superseded on 2026-08-23, see below), <code>ISoftDeletedUserValidator.cs:7,15</code>, the Helpdesk no-op
+          path (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111</code>, superseded below), and
+          <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Middleware/SoftDeletedUserMiddlewareTests.cs</code>.</li>
+          </ol>
+          <h2 id="revision-2026-08-23">Revision (2026-08-23)</h2>
+          <p>Re-verified against current source. The decision, the cache design, the fail-open policy and the
+          per-app asymmetry are all unchanged; what moved is where the middleware&#39;s position is expressed, and
+          one new neighbour now sits ahead of it.</p>
+          <ol>
+          <li><strong>The registration left <code>WebApplicationExtensions.cs</code> entirely.</strong> That file no longer calls
+          <code>UseAuthentication</code>, <code>UseRateLimiter</code>, <code>UseMiddleware&lt;SoftDeletedUserMiddleware&gt;</code> or
+          <code>UseAuthorization</code> at all: <code>UseCommonMiddlewarePipeline</code> (<code>WebApplicationExtensions.cs:46</code>, and the
+          configure overload at <code>:58</code>) only routes into the private <code>ApplyPipeline</code> helper (<code>:138</code>), which
+          seeds <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>:140</code>). Every <code>:96</code>, <code>:108</code>, <code>:109</code> and <code>:110</code>
+          anchor the Decision and the 2026-08-07 revision carried is therefore dead. The step registrations
+          now live in <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs</code>:
+          <code>UseAuthentication</code> at <code>:110</code>, <code>UseRateLimiter</code> at <code>:126</code>,
+          <code>UseMiddleware&lt;SoftDeletedUserMiddleware&gt;()</code> at <code>:130</code>, <code>UseAuthorization</code> at <code>:134</code>. The behavior
+          is what it was; the order became data in a named-step builder (ADR-079).</li>
+          <li><strong>A tenant-resolution step now runs between authentication and rate limiting.</strong>
+          <code>TenantResolutionMiddleware</code> is applied at <code>MiddlewarePipelineBuilder.cs:118</code> under the
+          <code>TenantResolution</code> step name (ADR-073), so the current run of steps is Authentication (<code>:110</code>),
+          TenantResolution (<code>:118</code>), RateLimiting (<code>:126</code>), SoftDeletedUserFilter (<code>:130</code>), Authorization
+          (<code>:134</code>). The ADR&#39;s own claim, that the check runs after authentication and before authorization,
+          still holds exactly; it is simply no longer adjacent to <code>UseAuthentication</code>. That new step follows
+          the same opt-in, inert-unless-configured posture this middleware established, and its own comment
+          names this middleware as the precedent (<code>MiddlewarePipelineBuilder.cs:114-117</code>).</li>
+          <li><strong>The order is now held by a fitness function.</strong>
+          <code>MiddlewarePipelineOrderTestsBase.ExpectedStepNames</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:38-58</code>) lists
+          <code>SoftDeletedUserFilter</code> between <code>RateLimiting</code> and <code>Authorization</code> (<code>:51-53</code>), so a reorder fails a
+          test. Note the limit: <code>MiddlewarePipelineBuilder.Build()</code> validates four load-bearing adjacencies at
+          startup (<code>MiddlewarePipelineBuilder.cs:257-280</code>) and none of them names this step, so a host that
+          moves it with the configure overload gets no startup error, only the fitness-function failure.</li>
+          <li><strong>Helpdesk anchor corrected.</strong> <code>app.UseCommonMiddlewarePipeline()</code> is at
+          <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:117</code> (the previously cited <code>:111</code> is now
+          <code>var app = builder.Build();</code>). The substance is unchanged: Helpdesk wires the shared pipeline,
+          registers no <code>ISoftDeletedUserValidator</code>, and takes the no-op path.</li>
+          <li><strong>Re-checked and unchanged</strong>: <code>SoftDeletedUserMiddleware.cs:31</code> (class declaration), <code>:65-73</code>
+          (anonymous pass-through), <code>:75</code> and <code>:76-83</code> (lazy resolution, no-validator pass-through), <code>:85</code>,
+          <code>:91</code>, <code>:102-106</code>, <code>:114-116</code>, <code>:131-133</code>, <code>:143-147</code>, <code>:150</code> (the cache/validator path), <code>:93-100</code>,
+          <code>:118-125</code>, <code>:135-140</code> (fail-open handlers), <code>ISoftDeletedUserValidator.cs:7,15</code>,
+          <code>SoftDeletedUserValidator.cs:19-34</code> with its constraint at <code>:20</code> and query at <code>:30-33</code>,
+          <code>SoftDeletedUserCache.cs:29,42-43,53-61</code>, the two registrations
+          (<code>MMCA.ADC.Identity.Application/DependencyInjection.cs:35</code>,
+          <code>MMCA.Store.Identity.Application/DependencyInjection.cs:41</code>), the two delete handlers
+          (ADC <code>DeleteUserHandler.cs:68-80</code>, Store <code>DeleteUserHandler.cs:35-60</code>), and
           <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Middleware/SoftDeletedUserMiddlewareTests.cs</code>.</li>
           </ol>
           
@@ -420,6 +491,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
+            <li><a href="#revision-2026-08-23">Revision (2026-08-23)</a></li>
             </ul>
           </nav>
         </aside>

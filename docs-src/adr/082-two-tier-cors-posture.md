@@ -29,23 +29,26 @@ Ship **two** cross-origin policies from the framework: an allow-listed one for s
 deliberately broader one for gateways.
 
 - **Service hosts register two named policies from one call.** `AddCommonCors(IConfiguration)`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:543`)
-  adds `_allowSpecificOrigins` (`:32`, `:547`) and `_allowAll` (`:35`, `:556`). Neither is the
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:579`)
+  adds `_allowSpecificOrigins` (`:34`, `:583`) and `_allowAll` (`:37`, `:592`). Neither is the
   default policy, so nothing applies until the pipeline names one.
 - **The service policy allow-lists origins, headers and methods, and allows credentials.** Origins
-  come from `Cors:AllowedOrigins` (`:549`), headers are the four the APIs actually use
-  (`Content-Type`, `Authorization`, `x-signalr-user-agent`, `x-requested-with`, `:551`), methods are
-  five explicit verbs (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `:552`), and `AllowCredentials()`
-  (`:553`) is what lets cookie and bearer traffic cross. The `x-signalr-user-agent` entry is
+  come from `Cors:AllowedOrigins` (`:585`), headers are the four the APIs actually use
+  (`Content-Type`, `Authorization`, `x-signalr-user-agent`, `x-requested-with`, `:587`), methods are
+  five explicit verbs (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `:588`), and `AllowCredentials()`
+  (`:589`) is what lets cookie and bearer traffic cross. The `x-signalr-user-agent` entry is
   load-bearing rather than decorative: it plus credentials is what allows the SignalR hub to
   negotiate cross-origin with a bearer token
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:150-154`).
 - **The environment picks between the two policies in the shared middleware pipeline, not at
-  registration.** `UseCommonMiddlewarePipeline` calls `app.UseCors(...)` with `CorsPolicyAllowAll`
-  when `app.Environment.IsDevelopment()` and `CorsPolicyAllowSpecificOrigins` otherwise
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:93-95`),
-  positioned after `UseRouting()` (`:92`) and before `UseAuthentication()` (`:96`). Registration
-  stays environment-agnostic; one line decides the posture.
+  registration.** The selection is one named step of the ADR-079 pipeline: the `Cors` step calls
+  `app.UseCors(...)` with `CorsPolicyAllowAll` when `app.Environment.IsDevelopment()` and
+  `CorsPolicyAllowSpecificOrigins` otherwise
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:102-106`),
+  seeded by `CreateDefault()` (`:31`) after the `Routing` step (`:98-100`) and before
+  `Authentication` (`:108-110`). Hosts reach it through `UseCommonMiddlewarePipeline()`
+  (`WebApplicationExtensions.cs:46`, `:58`), which delegates to that builder (`:138`, `:140`).
+  Registration stays environment-agnostic; one step decides the posture.
 - **The gateway gets a different policy, and it is the default policy.**
   `AddCommonGatewayCors(IConfiguration, IHostEnvironment)`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/GatewayCorsExtensions.cs:24`) lives in the Aspire
@@ -59,7 +62,7 @@ deliberately broader one for gateways.
 - **Both tiers carry a Development-only allow-any-origin branch behind an S5122 suppression.** The
   service `_allowAll` policy is `AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()` under
   `#pragma warning disable S5122` whose comment names the pipeline line that gates it
-  (`WebApplicationBuilderExtensions.cs:555-560`); the gateway's Development branch is the same shape
+  (`WebApplicationBuilderExtensions.cs:591-596`); the gateway's Development branch is the same shape
   under the same suppression (`GatewayCorsExtensions.cs:34-41`), selected by `environment
   .IsDevelopment()` at registration time because the gateway has only one policy slot.
 - **Allowed origins are configuration, empty by default, filled at deploy time.** Every host ships
@@ -70,7 +73,7 @@ deliberately broader one for gateways.
   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:22`), and Bicep injects the
   real value into the gateway container of both applications as
   `Cors__AllowedOrigins__0`, pointing at the UI container app's FQDN
-  (`MMCA.ADC/infra/main.bicep:1665`, `MMCA.Store/infra/main.bicep:1363`). On Store the same key can
+  (`MMCA.ADC/infra/main.bicep:1698`, `MMCA.Store/infra/main.bicep:1394`). On Store the same key can
   also arrive from Key Vault as `Cors--AllowedOrigins--0`, which is why the vault provider is
   registered before anything reads configuration: the allow-list binds eagerly
   (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:41-49`, `:50`).
@@ -81,10 +84,10 @@ deliberately broader one for gateways.
   `MMCA.Store.Sales.Service/Program.cs:147`), as does the Helpdesk reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:32`), and every one of the eight then
   runs `UseCommonMiddlewarePipeline()` so the selection above applies
-  (`MMCA.ADC.Identity.Service/Program.cs:322`, `MMCA.ADC.Conference.Service/Program.cs:392`,
-  `MMCA.ADC.Engagement.Service/Program.cs:328`, `MMCA.ADC.Notification.Service/Program.cs:258`,
-  `MMCA.Store.Catalog.Service/Program.cs:266`, `MMCA.Store.Identity.Service/Program.cs:257`,
-  `MMCA.Store.Sales.Service/Program.cs:275`, `MMCA.Helpdesk.Web/Program.cs:111`). Both gateways call
+  (`MMCA.ADC.Identity.Service/Program.cs:322`, `MMCA.ADC.Conference.Service/Program.cs:399`,
+  `MMCA.ADC.Engagement.Service/Program.cs:334`, `MMCA.ADC.Notification.Service/Program.cs:264`,
+  `MMCA.Store.Catalog.Service/Program.cs:268`, `MMCA.Store.Identity.Service/Program.cs:257`,
+  `MMCA.Store.Sales.Service/Program.cs:277`, `MMCA.Helpdesk.Web/Program.cs:117`). Both gateways call
   `AddCommonGatewayCors` and the bare `app.UseCors()`
   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:82`, `:120`;
   `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:64`, `:143`).
@@ -118,17 +121,17 @@ surface, so there is no third tier.
   allows every origin and gate it solely on `IHostEnvironment.IsDevelopment()`. Anything that boots
   one of these hosts with `ASPNETCORE_ENVIRONMENT=Development` on a reachable network gets the open
   policy, and the S5122 suppressions
-  (`WebApplicationBuilderExtensions.cs:555`, `GatewayCorsExtensions.cs:36`) mean the analyzer will
+  (`WebApplicationBuilderExtensions.cs:591`, `GatewayCorsExtensions.cs:36`) mean the analyzer will
   not say so again. The compensating control is ADR-058's `ProductionHostApplicationFactory`, which
   pins `UseEnvironment("Production")` so conformance runs exercise the restrictive branch.
 - **The service allow-list is a framework edit, not a host setting.** Headers and methods are
-  hardcoded in `AddCommonCors` (`:551-552`), so a service that needs a sixth verb or a fifth header
+  hardcoded in `AddCommonCors` (`:587-588`), so a service that needs a sixth verb or a fifth header
   needs an MMCA.Common change and a lockstep version bump (ADR-016), not an appsettings entry. That
   is the deliberate direction of the trade (precision over per-host configurability), but it does
   make the cheap change the expensive one.
 - **Origins are a deploy-time responsibility with no startup validation.** `Cors:AllowedOrigins` is
   read with a raw `configuration.GetSection(...).Get<string[]>() ?? []` in both registrations
-  (`WebApplicationBuilderExtensions.cs:549`, `GatewayCorsExtensions.cs:45-47`); there is no options
+  (`WebApplicationBuilderExtensions.cs:585`, `GatewayCorsExtensions.cs:45-47`); there is no options
   class, no `ValidateOnStart`, and no entry in the fail-fast configuration contract (ADR-070). A
   host deployed without the value starts happily and fails closed at the first cross-origin request,
   which is the safe direction but shows up as a browser console error rather than a boot failure.

@@ -116,7 +116,7 @@ by the `"/Payments"` prefix at
 to Stripe is a retry and eventually a disabled endpoint, which silently stops every payment update
 ([ADR-084](084-stripe-webhook-ingress.md)); and ADC's SignalR hub route (`/hubs/{**catch-all}`,
 bypassed by the `"/hubs"` prefix at
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:18`, route at `:122-125`), because a
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:18`, route at `:126-129`), because a
 negotiate-plus-reconnect storm from one office's shared address is exactly the pattern a per-IP window
 misreads as abuse ([ADR-039](039-live-channel-push.md)).
 

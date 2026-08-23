@@ -42,7 +42,9 @@ and **a self-registering, self-provisioning endpoint registration at startup**.
   deliberately leaves `Version` and `VersionPolicy` unset, unlike `catalog` and `identity` which pin
   `Version` 2 (`appsettings.json:83-90`, reasoning at
   `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:85-89`). That is why Sales keeps the ADR-012
-  mixed-endpoint profile (`MMCA.Store/infra/main.bicep:1207`).
+  mixed-endpoint profile: its container app's ingress stays `transport: 'http'` for REST plus this
+  webhook, with a TCP-passthrough `additionalPortMappings` entry carrying the h2c gRPC port alongside
+  it (`MMCA.Store/infra/main.bicep:1231-1246`).
 - **The status code encodes ACCEPTED, not PROCESSED.** Exactly three error codes return 400, held in a
   `FrozenSet` named `RejectionCodes`: `SignatureVerificationFailed`, `ParseFailed` and `SecretMissing`
   (`PaymentsController.cs:31-36`, defined at
@@ -76,7 +78,7 @@ and **a self-registering, self-provisioning endpoint registration at startup**.
   skips entirely when `WebhookBaseUrl` is empty, which is the local-development path where the Stripe
   CLI forwards instead (`:54-58`), and skips with a `Warning` when `SecretKey` is empty (`:60-64`).
   The expected URL is `WebhookBaseUrl` plus the constant `/Payments/webhook` (`:33,84`); production
-  injects `Stripe__WebhookBaseUrl` as the Gateway FQDN (`main.bicep:1296`), so the registered endpoint
+  injects `Stripe__WebhookBaseUrl` as the Gateway FQDN (`main.bicep:1326`), so the registered endpoint
   is the Gateway route above. It subscribes exactly three event types (`:42-47`), and warns when an
   existing endpoint is missing any of them (`:224-234`).
 - **It deletes only endpoints it created itself.** Every auto-created endpoint carries the description

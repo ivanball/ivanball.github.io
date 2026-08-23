@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -214,7 +219,7 @@
           Neither covers the case of a field that must stay <strong>retrievable in plaintext to the application</strong> yet
           be <strong>unreadable in the database itself</strong>: an at-rest, reversible, column-level confidentiality control.
           ADR-005 already names this converter as the mechanism for erasure fields &quot;that must remain retrievable&quot;
-          (<code>ADRs/005-soft-delete-vs-erasure.md:17</code>), and <code>SECURITY.md:26</code> lists it in the security model, so the
+          (<code>ADRs/005-soft-delete-vs-erasure.md:17</code>), and <code>SECURITY.md:35</code> lists it in the security model, so the
           capability is referenced across the docs but was never recorded as a decision.</p>
           <p>The framework ships the plumbing for this, an EF Core value converter that encrypts and decrypts string
           columns transparently, and it is covered by unit tests. It is <strong>not yet adopted</strong>: no entity
@@ -417,7 +422,7 @@
           (password hashing: the one-way credential counterpart in the same Infrastructure layer, which already calls
           this converter &quot;the at-rest counterpart to hashing credentials&quot;), ADR-018 (polyglot persistence: the
           shipped, tested, but unadopted precedent this record mirrors). This ADR backs the one-line &quot;Field encryption&quot;
-          entry in the security model (<code>SECURITY.md:26</code>), which stays as the reader-facing pointer.</p>
+          entry in the security model (<code>SECURITY.md:35</code>), which stays as the reader-facing pointer.</p>
           <h2 id="revision-2026-07-24">Revision (2026-07-24)</h2>
           <p>Documented a constraint the converter always had but did not state: <strong>the ciphertext is
           non-deterministic</strong>. Every write uses a fresh random nonce, which is the correct property for
@@ -474,7 +479,7 @@
           of the caller&#39;s dictionary (<code>:281</code>), and the version byte the single-key constructor stamps (<code>:145</code>).</p>
           <p>The work this revision documents landed via MMCA.Common PR #247 and is included in v1.153.0 (tagged
           2026-08-18), so the versioned envelope and key ring are now in published packages. It is included
-          rather than featured: the <code>[1.153.0]</code> changelog entry (<code>MMCA.Common/CHANGELOG.md:63-68</code>) does not name
+          rather than featured: the <code>[1.153.0]</code> changelog entry (<code>MMCA.Common/CHANGELOG.md:242</code>) does not name
           the converter, which is in the release because it merged to <code>main</code> before the tag. Adoption is
           unchanged at zero: no entity configuration in any of the four repositories wires the converter.</p>
           

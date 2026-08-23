@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-092: Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-23).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/092-web-vitals-budget-gate.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-092: Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate">
+  <meta property="og:description" content="Accepted (2026-08-23).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/092-web-vitals-budget-gate.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-092: Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate">
+  <meta name="twitter:description" content="Accepted (2026-08-23).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate","item":"https://ivanball.github.io/docs/adr/092-web-vitals-budget-gate.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 96 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html" aria-current="page">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-092-core-web-vitals-budget-as-a-shipped-test-contract-and-deploy-gate">ADR-092: Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-23).</p>
+          <h2 id="context">Context</h2>
+          <p>Rubric section 23 asks for client-side performance that is measured rather than assumed, naming Core
+          Web Vitals (LCP, INP, CLS) or an equivalent as the evidence
+          (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:606</code>, category at <code>:596</code>). It is the
+          client-side complement of section 12 (<code>:349</code>), which the backend already answers two ways: ADR-060
+          gates MMCA.Common&#39;s hot paths on a committed BenchmarkDotNet baseline, and the deployed apps run a k6
+          load test against read endpoints on a schedule.</p>
+          <p>Neither reaches the browser. A benchmark measures managed allocations and a ratio between two methods
+          in one process; k6 measures what the server returns, not when a page paints, whether it shifts under
+          the reader, or how long the first interaction takes to be handled. A Blazor render-mode change, a
+          heavier prerender payload, an unsized image, or a chrome change that reflows after hydration are all
+          invisible to both, and all of them are what the reader experiences as &quot;slow&quot;.</p>
+          <p>The measurement problem is the mirror image of ADR-060&#39;s. There, absolute wall-clock latency on a
+          shared runner was too noisy to assert. Here the numbers are noisy too (a two-core hosted runner
+          carrying SQL Server, Redis, RabbitMQ, every service, the UI and Playwright at once), but the metric
+          has something a microbenchmark does not: an externally defined &quot;good&quot; band that is orders of
+          magnitude above the measured values on this hardware. That gap is what makes an absolute client-side
+          ceiling assertable where an absolute nanosecond count is not.</p>
+          <p>The third problem is placement. A number captured in a report nobody reads is not a budget. To be one
+          it has to fail something, and the only place a real engine already runs against a real stack is the
+          Playwright suite that ADR-063 made a deploy gate for accessibility.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Ship the measurement infrastructure and the assert mechanics in <code>MMCA.Common.Testing.E2E</code>, default
+          the budget to the Core Web Vitals good band, and let the assertions ride the existing deploy-gating
+          E2E suite.</p>
+          <ul>
+          <li><strong>The collector is a shipped, dependency-free measurement type.</strong> <code>WebVitalsCollector</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Infrastructure/WebVitalsCollector.cs:20</code>, in
+          the published package <code>MMCA.Common.Testing.E2E</code>, <code>MMCA.Common/FACTS.md:35</code>) installs
+          <code>PerformanceObserver</code> hooks as a Playwright init script so they exist before first paint
+          (<code>InstallAsync</code>, <code>:40</code>, script at <code>:26-35</code>), accumulating LCP, CLS, FCP and an event-timing INP
+          sample into <code>window.__vitals</code>. <code>CollectAsync</code> (<code>:47</code>) reads them back and stamps TTFB from
+          Navigation Timing (<code>:52-54</code>). No third-party JS and no network egress: every observer is wrapped in
+          <code>try/catch</code> so an engine lacking the entry type leaves that metric at 0 rather than throwing
+          (<code>:22-25</code>).</li>
+          <li><strong>The budget is a record whose defaults are the good band.</strong> <code>WebVitalsBudget</code> (<code>:103</code>) defaults to
+          <code>Lcp = 2500</code>, <code>Fcp = 1800</code>, <code>Ttfb = 800</code>, <code>Cls = 0.1</code> and <code>Inp = 500</code> (<code>:104-108</code>): the Core Web
+          Vitals good thresholds for LCP, FCP and CLS, plus a TTFB ceiling and a single-interaction INP
+          sample ceiling. The parameters are defaulted, not constants, so a consumer whose measured maxima
+          justify tighter numbers passes its own (<code>:92-96</code>).</li>
+          <li><strong>A breach is a thrown test failure naming the page.</strong> <code>AssertWithinBudget</code> (<code>:137</code>) asserts each
+          metric with <code>Should().BeLessThanOrEqualTo</code> (<code>:143-146</code>) and formats every failure as
+          <code>{metric} {measured} exceeded budget {budget} on {path}</code> (<code>:154-157</code>), so a red gate points at the
+          page rather than at a dashboard.</li>
+          <li><strong>A zero INP is skipped, not read as a pass.</strong> The INP assertion runs only when a sample was
+          actually recorded (<code>:148-151</code>): no interaction clearing the observer&#39;s 16 ms <code>durationThreshold</code>
+          (<code>:35</code>) leaves the field at 0, which must mean neither pass-by-absence nor failure.</li>
+          <li><strong>Every run leaves a citable artifact and a citable line.</strong> <code>WriteArtifactAsync</code> (<code>:63</code>) writes
+          <code>web-vitals-{label}.json</code> (<code>:70</code>) as a <code>WebVitalsArtifact</code> envelope (<code>:90</code>) wrapping the measured
+          <code>WebVitalsSample</code> (<code>:76</code>), under <code>WEB_VITALS_OUTPUT_DIR</code> or <code>artifacts/</code> beneath the working
+          directory (<code>:65-66</code>); <code>Describe</code> (<code>:118</code>) renders the same sample as one invariant-culture line
+          (<code>:122-124</code>) that <code>AssertWithinBudget</code> writes to test output.</li>
+          <li><strong>Both deployed apps assert the shipped defaults.</strong> ADC&#39;s <code>WebVitalsTests</code>
+          (<code>MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:23</code>) holds one shared
+          <code>WebVitalsBudget</code> constructed with no arguments (<code>:27</code>, stated at <code>:25-26</code>) and measures four
+          surfaces: home (<code>:36</code>), the public events entry point including its redirect (<code>:47</code>), the session
+          list (<code>:56</code>) and login (<code>:60</code>). Store&#39;s
+          (<code>MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs:25</code>) constructs the same
+          defaults inline (<code>:68</code>, <code>:94</code>) over home (<code>:34</code>), the
+          catalog browse page (<code>:38</code>), login (<code>:42</code>) and product detail reached by navigation rather than a
+          hard-coded id (<code>:53</code>). Both drive one scripted search interaction on the grid page so the
+          event-timing observer records an INP sample (ADC <code>:70-81</code>, Store <code>:78-89</code>).</li>
+          <li><strong>The numbers are calibrated against measured maxima, not picked to be safe.</strong> ADC&#39;s remarks record
+          LCP 624 / FCP 444 / TTFB 27 ms / CLS 0.005 / INP 32 on run 29146540154, roughly 4x to 30x headroom
+          (<code>MMCA.ADC/.../WebVitalsTests.cs:14-17</code>); Store&#39;s record LCP 172 / FCP 172 / TTFB 26 ms / CLS 0 /
+          INP 24 on run 29146556386, roughly 10x to 30x
+          (<code>MMCA.Store/.../WebVitalsTests.cs:14-19</code>). Both were calibrated 2026-07-11.</li>
+          <li><strong>The assertions ride the deploy gate because the workflow runs the whole project.</strong> <code>e2e.yml</code> runs
+          <code>dotnet test --project ...E2E.Tests.csproj</code> with no filter (ADC <code>.github/workflows/e2e.yml:326-329</code>,
+          Store <code>:369-372</code>) and points <code>WEB_VITALS_OUTPUT_DIR</code> at the uploaded diagnostics directory (ADC
+          <code>:304</code>, Store <code>:364</code>). <code>deploy.yml</code> calls that workflow chromium-only as <code>e2e-gate</code> (ADC
+          <code>deploy.yml:531-542</code>, Store <code>:537-548</code>), and the <code>deploy</code> job both lists it in <code>needs</code> (ADC <code>:866</code>,
+          Store <code>:862</code>) and requires it to be <code>success</code> or <code>skipped</code> (ADC <code>:896</code>, Store <code>:893</code>). A front-end
+          performance budget is therefore a production precondition on the same footing as the SBOM, the
+          cost guard and the freshness gates, and <code>deploy.yml</code> says so where the k6 gate is defined (ADC
+          <code>:604-605</code>, Store <code>:611-612</code>).</li>
+          <li><strong>The framework measures its own UI, under its own looser numbers.</strong> <code>WebVitalsE2ETests</code>
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitalsE2ETests.cs:16</code>) uses the same
+          collector against the backend-less in-process gallery for the login and components pages
+          (<code>:28</code>, <code>:32</code>) but asserts three local constants, LCP 8000 ms, TTFB 4000 ms and CLS 0.25
+          (<code>:18-20</code>, asserted at <code>:43-45</code>), rather than <code>WebVitalsBudget</code>: the gallery is a backstop against
+          catastrophic regression in the shared chrome (a render loop, a giant synchronous asset, a
+          layout-shifting theme change), not a calibrated app budget (<code>:8-14</code>).</li>
+          <li><strong>The regression behaviour is pinned by unit tests, not by the browser runs.</strong>
+          <code>WebVitalsBudgetTests</code> (<code>.../MMCA.Common.UI.E2E.Tests/WebVitalsBudgetTests.cs:12</code>) starts no
+          browser and covers exactly what only ever fires on a regression: that the defaults are the good
+          band (<code>:17-26</code>), that each of the five metrics fails when it exceeds its ceiling (<code>:45-56</code>), that a
+          0 INP is skipped (<code>:58-64</code>), that a caller-supplied budget is honoured in both directions
+          (<code>:66-73</code>), and the exact text of the sample line (<code>:32-43</code>).</li>
+          </ul>
+          <p>Adoption is the two deployed apps plus the framework gallery. <strong>MMCA.Helpdesk has neither</strong>: it pins
+          the package (<code>MMCA.Helpdesk/Directory.Packages.props:66</code>) but has no E2E test project at all, so the
+          seed carries no worked example of a client-side budget, the same gap ADR-063 records for
+          accessibility.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The good band is an external contract, which is what makes an absolute ceiling defensible here.</strong>
+          ADR-060 refused absolute latency because a nanosecond count is a property of the runner. LCP 2500 ms
+          is not a claim about this runner: it is the published threshold the metric is defined against, and
+          the measured values sit 4x to 30x below it. The noise floor of a two-core hosted runner fits inside
+          that gap with room to spare, so the assertion survives a noisy neighbour and still fires on a real
+          regression.</li>
+          <li><strong>Calibrating against observed maxima is what separates a budget from a backstop.</strong> Numbers chosen
+          by feel end up either flaky or vacuous. Recording the run id and the measured maximum next to the
+          ceiling (ADC <code>WebVitalsTests.cs:14-17</code>) makes the headroom a reviewable fact and makes a future
+          tightening an evidence-based edit rather than a guess.</li>
+          <li><strong>Ship the mechanics, keep the numbers with the consumer.</strong> The assert body, the message format,
+          the artifact shape and the INP-zero carve-out are subtle and identical everywhere, so they belong in
+          the package (<code>WebVitalsCollector.cs:16-18</code>). The ceilings depend on hosting and runner, so they
+          belong to the app. Defaulted record parameters express exactly that split: both apps happen to take
+          the defaults today, and either can tighten without a framework change.</li>
+          <li><strong>Reuse the gate that already exists.</strong> A separate performance workflow would be another
+          twenty-minute Aspire boot and another thing to keep green. Because the suite runs the whole project,
+          adding a test class added a deploy-gating budget at zero marginal CI cost, the same lever ADR-063
+          used for accessibility.</li>
+          <li><strong>A single-interaction sample is honest about what it is.</strong> Field INP is a p75 over real sessions
+          and cannot be produced by one scripted click. Naming the metric <code>INP-sample</code> in the output line
+          (<code>WebVitalsCollector.cs:124</code>) and in the parameter documentation (<code>:102</code>) keeps the assertion from
+          claiming more than it measured.</li>
+          <li><strong>Artifacts make a red gate diagnosable and a green one auditable.</strong> The JSON envelope plus the
+          one-line record mean a reviewer can compare today&#39;s numbers against the calibration run instead of
+          re-running the suite to find out what happened.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
+          filter (ADC <code>deploy.yml:538</code>, Store <code>:544</code>) and <code>deploy</code> accepts <code>skipped</code> for it (ADC <code>:896</code>,
+          Store <code>:893</code>), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
+          commit. Same intended cost trade as the accessibility gate, and the same caveat: &quot;deployed&quot; does not
+          always mean &quot;the budget ran on this commit&quot;.</li>
+          <li><strong>It never runs on a pull request.</strong> The E2E project is in neither solution filter and the gate is
+          push/dispatch only (ADC <code>deploy.yml:538</code>, Store <code>:544</code>), so a regression is caught between merge and
+          rollout, not before merge.</li>
+          <li><strong>The measured configuration is not the production one.</strong> CI pins the UI to <code>InteractiveServer</code>
+          (ADC <code>e2e.yml:218</code>, Store <code>:210</code>), so the numbers describe Server-mode prerender-then-hydrate under
+          runner contention, not production&#39;s <code>InteractiveAuto</code> on real hardware (ADC
+          <code>WebVitalsTests.cs:10-13</code>, the caveat ADR-056 also records).</li>
+          <li><strong>A marginal breach can be retried away.</strong> The suite runs with <code>--retry-failed-tests 2</code> (ADC
+          <code>e2e.yml:329</code>, Store <code>:372</code>), which is what absorbs a contention spike but also means a budget that
+          fails once and passes twice reports green.</li>
+          <li><strong>LCP and CLS are Chromium-only.</strong> On Firefox and WebKit those observers fail silently and the
+          fields stay 0, so the assertions pass vacuously (<code>WebVitalsCollector.cs:14-16</code>). The deploy gate is
+          chromium-only, so this is real only for MMCA.Common&#39;s three-engine <code>ui-e2e</code> matrix
+          (<code>MMCA.Common/.github/workflows/ci.yml:237</code>), where two of the three legs assert LCP and CLS against
+          nothing.</li>
+          <li><strong>Coverage is a hand-picked page list.</strong> Four pages in ADC and four in Store, against far larger
+          inventories. Nothing forces a new page to acquire a budget, so breadth grows by discipline, the same
+          caveat as the accessibility suites.</li>
+          <li><strong>Only pages with a search box get an INP sample.</strong> The interaction is best-effort and page-specific
+          (ADC <code>WebVitalsTests.cs:73-78</code>, Store <code>:81-86</code>); on every other measured page INP stays 0 and its
+          assertion is skipped, so interaction latency is asserted on one page per app.</li>
+          <li><strong>The green-run artifact is written but not kept.</strong> Both workflows upload the diagnostics bundle
+          only on failure (ADC <code>e2e.yml:355-359</code>, Store <code>:398-404</code>), and MMCA.Common&#39;s <code>ui-e2e</code> job sets no
+          <code>WEB_VITALS_OUTPUT_DIR</code> at all and uploads only Playwright traces (<code>ci.yml:316-322</code>), so the JSON
+          lands beside the test binaries and is discarded with the runner. There is no time series: the
+          sample line in the run log is the only surviving record of a green run.</li>
+          <li><strong>Nothing stops a ceiling being raised to silence a red gate.</strong> As with ADR-060&#39;s baseline, the
+          defaults are a value in source and widening them is a reviewable diff, not a tool-enforced one.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="063-accessibility-conformance-gate.html">ADR-063</a> (the structural sibling: the same package, the same
+          Playwright suite and the same deploy gate, applied to WCAG 2.1 AA instead of load performance),
+          <a href="060-performance-regression-gate.html">ADR-060</a> (the backend half of rubric section 12: a committed
+          BenchmarkDotNet baseline gating MMCA.Common pull requests, where this gates the two consumer apps&#39;
+          deploys at the browser),
+          <a href="056-blazor-render-mode-strategy.html">ADR-056</a> (the render-mode decision these numbers measure, and
+          which already cites this suite for the Server-mode-in-CI caveat),
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the invariant-over-discipline posture applied to
+          structure, of which this is the client-side runtime-cost instance),
+          <a href="041-observability-and-telemetry.html">ADR-041</a> (production telemetry, which observes server-side cost after
+          deploy where this fails a client-side budget before rollout).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/092-web-vitals-budget-gate.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

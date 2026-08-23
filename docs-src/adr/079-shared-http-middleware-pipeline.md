@@ -89,27 +89,31 @@ every REST/gRPC host call it instead of composing its own.
   `WebApplication` is built, so it runs in the fast unit tier. The framework subclasses it in its own
   test pass (`Tests/Hosting/MMCA.Common.Testing.Tests/MiddlewarePipelineOrderTests.cs`); consumer
   repos subclass it next to their decorator-order tests.
-- **Conditional middleware is registered unconditionally and made inert by configuration.** Both
-  `TenantResolutionMiddleware` (`:102`) and `SoftDeletedUserMiddleware` (`:109`) are always in the chain
-  and gated by their own settings, so the pipeline is literally one shape on every host rather than a
-  per-host permutation.
+- **Conditional middleware is registered unconditionally and made inert at runtime.** Both
+  `TenantResolutionMiddleware` (the `TenantResolution` step, `MiddlewarePipelineBuilder.cs:112-118`) and
+  `SoftDeletedUserMiddleware` (the `SoftDeletedUserFilter` step, `:128-130`) are always in the chain:
+  the first passes the request straight through unless `Tenancy:Enabled` is set
+  (`Middleware/TenantResolutionMiddleware.cs:62`), the second resolves `ISoftDeletedUserValidator`
+  lazily and no-ops where no implementation is registered
+  (`Middleware/SoftDeletedUserMiddleware.cs:43-50`), so the pipeline is literally one shape on every
+  host rather than a per-host permutation.
 - **Every REST/gRPC host calls it.** All seven extracted services in the two production apps: ADC
   Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:322`), ADC Conference
-  (`MMCA.ADC.Conference.Service/Program.cs:392`), ADC Engagement
-  (`MMCA.ADC.Engagement.Service/Program.cs:328`), ADC Notification
-  (`MMCA.ADC.Notification.Service/Program.cs:258`), Store Catalog
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:266`), Store Identity
+  (`MMCA.ADC.Conference.Service/Program.cs:399`), ADC Engagement
+  (`MMCA.ADC.Engagement.Service/Program.cs:334`), ADC Notification
+  (`MMCA.ADC.Notification.Service/Program.cs:264`), Store Catalog
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:268`), Store Identity
   (`MMCA.Store.Identity.Service/Program.cs:257`) and Store Sales
-  (`MMCA.Store.Sales.Service/Program.cs:275`). The reference app calls it too
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111`), and because that tree **is** the
+  (`MMCA.Store.Sales.Service/Program.cs:277`). The reference app calls it too
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:117`), and because that tree **is** the
   `mmca-app` template (`MMCA.Helpdesk/.template.config/template.json:5,7`, ADR-065), a scaffolded app
   gets the same line: the generated `MMCA.ECommerce` sample has it at
   `MMCA.ECommerce/Source/Hosts/MMCA.ECommerce.Web/Program.cs:100`.
 - **Hosts extend it by appending, after the call, or through the builder.** Service hosts map their
   extra endpoints below the one line: OpenAPI outside Production
-  (`MMCA.ADC.Notification.Service/Program.cs:265-268`), the SignalR hub (`:275`, which
+  (`MMCA.ADC.Notification.Service/Program.cs:271-274`), the SignalR hub (`:281`, which
   `SignalRExtensions.cs:18-19` documents as "call after `UseCommonMiddlewarePipeline`"), and gRPC
-  services (`:277-279`). A host that needs a change inside the edge uses the configure overload
+  services (`:286` and `:294`). A host that needs a change inside the edge uses the configure overload
   instead; no host does today, and every one of the eight production and reference hosts calls the
   zero-argument overload.
 
@@ -189,7 +193,7 @@ and queries), [ADR-019](019-rate-limiting.md) (depends on forwarded headers befo
 limiter after authentication), [ADR-047](047-soft-deleted-user-session-revocation.md) (depends on the slot
 between authentication and authorization), [ADR-073](073-multi-tenancy-model.md) (depends on the slot
 immediately after authentication), [ADR-027](027-multi-locale-i18n.md) (the request localization this
-pipeline wires at `:53`), [ADR-012](012-grpc-host-transport.md) (the h2c transport the HTTPS-redirect
+pipeline wires at `:47`), [ADR-012](012-grpc-host-transport.md) (the h2c transport the HTTPS-redirect
 exemption exists for), [ADR-040](040-authenticated-output-caching-for-public-reads.md) (the output cache
-at `:111`), [ADR-023](023-security-response-headers.md) (the edge middleware deliberately NOT in this
+at `:136-138`), [ADR-023](023-security-response-headers.md) (the edge middleware deliberately NOT in this
 pipeline), [ADR-008](008-service-extraction-topology.md) (the extraction path this shared edge preserves).

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -283,27 +288,31 @@
           <code>WebApplication</code> is built, so it runs in the fast unit tier. The framework subclasses it in its own
           test pass (<code>Tests/Hosting/MMCA.Common.Testing.Tests/MiddlewarePipelineOrderTests.cs</code>); consumer
           repos subclass it next to their decorator-order tests.</li>
-          <li><strong>Conditional middleware is registered unconditionally and made inert by configuration.</strong> Both
-          <code>TenantResolutionMiddleware</code> (<code>:102</code>) and <code>SoftDeletedUserMiddleware</code> (<code>:109</code>) are always in the chain
-          and gated by their own settings, so the pipeline is literally one shape on every host rather than a
-          per-host permutation.</li>
+          <li><strong>Conditional middleware is registered unconditionally and made inert at runtime.</strong> Both
+          <code>TenantResolutionMiddleware</code> (the <code>TenantResolution</code> step, <code>MiddlewarePipelineBuilder.cs:112-118</code>) and
+          <code>SoftDeletedUserMiddleware</code> (the <code>SoftDeletedUserFilter</code> step, <code>:128-130</code>) are always in the chain:
+          the first passes the request straight through unless <code>Tenancy:Enabled</code> is set
+          (<code>Middleware/TenantResolutionMiddleware.cs:62</code>), the second resolves <code>ISoftDeletedUserValidator</code>
+          lazily and no-ops where no implementation is registered
+          (<code>Middleware/SoftDeletedUserMiddleware.cs:43-50</code>), so the pipeline is literally one shape on every
+          host rather than a per-host permutation.</li>
           <li><strong>Every REST/gRPC host calls it.</strong> All seven extracted services in the two production apps: ADC
           Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:322</code>), ADC Conference
-          (<code>MMCA.ADC.Conference.Service/Program.cs:392</code>), ADC Engagement
-          (<code>MMCA.ADC.Engagement.Service/Program.cs:328</code>), ADC Notification
-          (<code>MMCA.ADC.Notification.Service/Program.cs:258</code>), Store Catalog
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:266</code>), Store Identity
+          (<code>MMCA.ADC.Conference.Service/Program.cs:399</code>), ADC Engagement
+          (<code>MMCA.ADC.Engagement.Service/Program.cs:334</code>), ADC Notification
+          (<code>MMCA.ADC.Notification.Service/Program.cs:264</code>), Store Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:268</code>), Store Identity
           (<code>MMCA.Store.Identity.Service/Program.cs:257</code>) and Store Sales
-          (<code>MMCA.Store.Sales.Service/Program.cs:275</code>). The reference app calls it too
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111</code>), and because that tree <strong>is</strong> the
+          (<code>MMCA.Store.Sales.Service/Program.cs:277</code>). The reference app calls it too
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:117</code>), and because that tree <strong>is</strong> the
           <code>mmca-app</code> template (<code>MMCA.Helpdesk/.template.config/template.json:5,7</code>, ADR-065), a scaffolded app
           gets the same line: the generated <code>MMCA.ECommerce</code> sample has it at
           <code>MMCA.ECommerce/Source/Hosts/MMCA.ECommerce.Web/Program.cs:100</code>.</li>
           <li><strong>Hosts extend it by appending, after the call, or through the builder.</strong> Service hosts map their
           extra endpoints below the one line: OpenAPI outside Production
-          (<code>MMCA.ADC.Notification.Service/Program.cs:265-268</code>), the SignalR hub (<code>:275</code>, which
+          (<code>MMCA.ADC.Notification.Service/Program.cs:271-274</code>), the SignalR hub (<code>:281</code>, which
           <code>SignalRExtensions.cs:18-19</code> documents as &quot;call after <code>UseCommonMiddlewarePipeline</code>&quot;), and gRPC
-          services (<code>:277-279</code>). A host that needs a change inside the edge uses the configure overload
+          services (<code>:286</code> and <code>:294</code>). A host that needs a change inside the edge uses the configure overload
           instead; no host does today, and every one of the eight production and reference hosts calls the
           zero-argument overload.</li>
           </ul>
@@ -384,9 +393,9 @@
           limiter after authentication), <a href="047-soft-deleted-user-session-revocation.html">ADR-047</a> (depends on the slot
           between authentication and authorization), <a href="073-multi-tenancy-model.html">ADR-073</a> (depends on the slot
           immediately after authentication), <a href="027-multi-locale-i18n.html">ADR-027</a> (the request localization this
-          pipeline wires at <code>:53</code>), <a href="012-grpc-host-transport.html">ADR-012</a> (the h2c transport the HTTPS-redirect
+          pipeline wires at <code>:47</code>), <a href="012-grpc-host-transport.html">ADR-012</a> (the h2c transport the HTTPS-redirect
           exemption exists for), <a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a> (the output cache
-          at <code>:111</code>), <a href="023-security-response-headers.html">ADR-023</a> (the edge middleware deliberately NOT in this
+          at <code>:136-138</code>), <a href="023-security-response-headers.html">ADR-023</a> (the edge middleware deliberately NOT in this
           pipeline), <a href="008-service-extraction-topology.html">ADR-008</a> (the extraction path this shared edge preserves).</p>
           
         <div class="doc-foot btn-row">

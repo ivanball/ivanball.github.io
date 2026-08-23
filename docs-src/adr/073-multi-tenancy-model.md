@@ -11,6 +11,14 @@ field, not four inline arrays).
 Revised 2026-08-18: that exclusion now runs at **six** call sites in `EFReadRepository`, and the field and
 every call site were re-anchored again. The count has moved four to five to six across three revisions,
 which is the point: the shared field is the invariant, the number of read paths using it is not.
+Revised 2026-08-23: re-anchored the middleware citations after the edge pipeline moved into a named-step
+registry (`MiddlewarePipelineBuilder` plus `MiddlewarePipelineStepNames`, the order frozen by the
+`MiddlewarePipelineOrderTestsBase` fitness function rather than by inline calls); corrected the write-side
+guard, which is **not** a no-op when no tenant is resolved (an insert of an untenanted `ITenantEntity` from
+an untenanted scope throws); restated why `DesignTimeDbContextHelper` registers that interceptor, since
+`OnConfiguring` now resolves it with `GetService` and its absence no longer breaks `dotnet ef`; and
+replaced the claimed adoption-sweep grep with what is verifiable, namely zero parameterless
+`IgnoreQueryFilters()` call sites in `MMCA.Common/Source` today and no automated gate against a future one.
 
 ## Context
 MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
@@ -75,22 +83,42 @@ per-tenant connection strings. Host-based resolution (tenant from subdomain) is 
 hostname-to-tenant map and certificate handling that no consumer needs today.
 
 `TenantResolutionMiddleware` (`Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs`)
-mirrors `CorrelationIdMiddleware`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48`) and is wired
-into `UseCommonMiddlewarePipeline` (`:45`) immediately **after** `app.UseAuthentication()` (`:96`),
-because a claim-first resolution order requires that `HttpContext.User` already be populated. Like
-`SoftDeletedUserMiddleware` (`:109`) it is registered unconditionally and inert by default, keeping the
-pipeline one shape across every host. When `RequireTenant` is true and nothing resolves on a non-excluded
-path, it returns 400 with a ProblemDetails body.
+mirrors `CorrelationIdMiddleware`, which is a named step of the same edge pipeline
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:40`, its name a
+constant at `MiddlewarePipelineStepNames.cs:20`). Tenant resolution is its own step
+(`MiddlewarePipelineBuilder.cs:112-118`), placed immediately **after** the `Authentication` step
+(`:108-110`), because a claim-first resolution order requires that `HttpContext.User` already be populated.
+`UseCommonMiddlewarePipeline`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:46`, with a
+`configure` overload at `:58`) applies the steps through `ApplyPipeline` (`:138`), which seeds
+`MiddlewarePipelineBuilder.CreateDefault()` (`MiddlewarePipelineBuilder.cs:31`): the order is data,
+frozen by the `MiddlewarePipelineOrderTestsBase` fitness function rather than by a sequence of inline
+`Use*` calls. Like the `SoftDeletedUserFilter` step (`MiddlewarePipelineBuilder.cs:130`, its name at
+`MiddlewarePipelineStepNames.cs:59`) the tenant step is registered unconditionally and inert by default,
+keeping the pipeline one shape across every host. When `RequireTenant` is true and nothing resolves on a
+non-excluded path, it returns 400 with a ProblemDetails body.
 
 ### Writes are guarded by their own interceptor
 `TenantSaveChangesInterceptor` is a **separate** interceptor from the audit one (one concern per
 interceptor, matching how audit stamping and domain-event capture are already split at `:236-251`, where
 it is registered between the two). It stamps `TenantId` on Added entries and throws
 `CrossTenantWriteException` on any Added, Modified, or Deleted entry whose tenant differs from the
-resolved one. It is always registered and is a no-op when no
-tenant is resolved. `DesignTimeDbContextHelper` must register it too, or `dotnet ef` breaks for every
-consumer the moment it is resolved as a required service.
+resolved one. It is always registered
+(`TryAddSingleton<TenantSaveChangesInterceptor>`,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:63`), and with no tenant
+resolved it is inert for updates, deletes, and every entity that does not carry `ITenantEntity`: the
+system context is unrestricted on the write side exactly as it is on the read side. Inserts are the one
+exception. `StampOrVerifyInsert` throws `CrossTenantWriteException.ForUnresolvedTenant` when an Added
+`ITenantEntity` declares no tenant of its own and the scope resolved none
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/TenantSaveChangesInterceptor.cs:107-110`),
+because a row that no tenant can ever read is a worse outcome than a failed save; a system scope that
+names the tenant explicitly (a seeder, a per-tenant job) still writes.
+`DesignTimeDbContextHelper` registers it too
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:77`),
+so `dotnet ef` scaffolds against exactly the runtime interceptor pipeline for consumers with and without
+tenancy. Its absence is survivable rather than fatal: `OnConfiguring` resolves the tenant interceptor with
+`GetService` and falls back to the two-interceptor chain (`ApplicationDbContext.cs:244`), so a
+directly-constructed test or design-time context that never registered it still builds.
 
 ### The tenant is read live, not copied at context creation
 `ApplicationDbContext` gains `internal Func<string?>? TenantIdAccessor` and
@@ -183,8 +211,11 @@ per-tenant database override, so the runnable seed exercises both halves of this
 ## Trade-offs
 - **Reads are on discipline where writes are on an invariant.** A consumer calling EF's own parameterless
   `IgnoreQueryFilters()` on a raw `Table` surface drops the tenant filter along with soft-delete. Writes
-  remain guarded by `TenantSaveChangesInterceptor` and the adoption sweep includes a grep for the
-  parameterless form, but nothing prevents a future call site. ADR-055's
+  remain guarded by `TenantSaveChangesInterceptor`, and `MMCA.Common/Source` carries **zero** parameterless
+  `IgnoreQueryFilters()` call sites today (the only mentions are the doc comments at
+  `EFReadRepository.cs:30` and `TenantSaveChangesInterceptor.cs:32` explaining why the named form is used),
+  but no automated gate holds that count: no architecture rule, fitness test, or CI step checks for the
+  parameterless form, so nothing fails a build if a future call site appears. ADR-055's
   `ApplicationLayer_DoesNotUseRawQueryableSurfaces` is partial cover only: it does not reach Infrastructure.
 - **The EF-style singleton adapter factories are tenant-unaware by design.**
   `DefaultSqlServerDbContextFactory` and its siblings exist for tooling and adapter scenarios that have no

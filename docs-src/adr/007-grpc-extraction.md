@@ -1,7 +1,9 @@
 # ADR-007: Synchronous Cross-Service Calls via gRPC Contracts
 
 ## Status
-Accepted.
+Accepted. Revised 2026-08-23 (the `[ServiceContract]` marker now has a dedicated fitness rule behind
+it, `ServiceContractPurityTestsBase`, subclassed in all four repos; it is a ratchet that no marked
+type triggers yet).
 
 ## Context
 Once modules became separate service processes, the in-process interface calls between them (e.g.
@@ -41,15 +43,22 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   Application/Domain/Shared, so the choice is reversible and the core stays clean.
 - **Strong contracts**: the `.proto` definitions plus the in-process interface the adapter
   implements are the wire surface. A `[ServiceContract(version)]` attribute (MMCA.Common.Shared) is
-  provided to mark and version contract types explicitly, but it is an **available extension point, not yet
-  applied**: no contract type carries it today, and no fitness rule enforces it; the wire surface is
-  currently defined by the `.proto` files alone.
+  provided to mark and version contract types explicitly, and a fitness rule stands behind it:
+  `ServiceContractPurityTestsBase.ServiceContracts_ShouldNotDependOn_ServiceInternals`
+  (MMCA.Common.Testing.Architecture, rule body
+  `ArchitectureRules.ServiceContractsDoNotDependOnServiceInternals`) scans every assembly the repo's
+  architecture map registers and fails any marked type that depends on the producing service's
+  Domain, Application or Infrastructure. All four repos subclass it. The rule is a **ratchet, not yet
+  triggered**: no contract type carries the attribute today, so the test passes without asserting
+  anything, and the wire surface is currently defined by the `.proto` files alone. It bites in a repo
+  the moment its first contract type is marked.
 
 ## Trade-offs
 - **Bidirectional pairs need care.** Conference ↔ Engagement is a mutual gRPC pair; the AppHost
   deliberately omits a reciprocal `WaitFor` to avoid a startup deadlock: transient "peer not ready"
   errors self-heal via the resilience pipeline.
 - **h2c assumptions.** Target services must serve HTTP/2 on cleartext; the Notification service runs
-  `Http1AndHttp2` for its SignalR WebSocket upgrade, unlike the `Http2`-only REST services.
+  `Http1AndHttp2` on its default endpoint for its SignalR WebSocket upgrade, unlike the `Http2`-only
+  REST services, and carries a second, `Http2`-only `grpc` endpoint for its gRPC ingress (ADR-012).
 - **Operational surface.** gRPC adds proto tooling, service discovery, and resilience tuning to the
   deployment.

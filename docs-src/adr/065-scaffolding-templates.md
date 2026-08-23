@@ -7,7 +7,10 @@ guide reference were refreshed against HEAD. Revised 2026-08-18: the seed measur
 against MMCA.Helpdesk with the counting method now stated inline (`Directory.Packages.props` has
 since been pruned to 72 lines and 58 pins, and the file and line totals moved with the tree), the
 staged analyzer delta and the wire-contract removal were re-anchored, and the seed's fitness map
-declares 20 sealed subclasses rather than 19.
+declares 20 sealed subclasses rather than 19. Revised 2026-08-23: the seed measurements were re-taken
+at HEAD (three standalone fitness-test files landed in the architecture-test project since the
+previous re-measure, moving the file and line totals), and the generated-app test figure is now
+sourced to the seed's own documented run rather than to an undated absolute pair.
 
 ## Context
 
@@ -21,10 +24,10 @@ is now the six-step `dotnet new install MMCA.Templates` path
 (`common-GETTING-STARTED.md:10-22`) and the by-hand transcription moved to its own guide.
 
 Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
-starts by hand-creating **12 projects, 111 files, and 7,671 lines** before a line of its own
-business logic. The method, re-run on 2026-08-18 and stated here so the figures can be reproduced
+starts by hand-creating **12 projects, 114 files, and 7,740 lines** before a line of its own
+business logic. The method, re-run on 2026-08-23 and stated here so the figures can be reproduced
 rather than trusted: every file under `Source/` and `Tests/` excluding `bin/`, `obj/` and
-`TestResults/` (104 files, 6,569 lines), plus the seven root build files below (1,102 lines). Those
+`TestResults/` (107 files, 6,638 lines), plus the seven root build files below (1,102 lines). Those
 seven are an 823-line `.editorconfig`, a 72-line `Directory.Packages.props` carrying 58 pins,
 a 75-line `Directory.Build.props`, the 74-line local-source swap in `Directory.Build.targets`,
 `global.json`, `nuget.config`, and the solution file. Under `Source/` and `Tests/` sit the module
@@ -165,6 +168,6 @@ silently: the output still compiles, it just carries someone else's domain vocab
   contract. The delta is exactly one because `IntegrationEventContractTestsBase` declares a single
   `[Fact]`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/IntegrationEventContractTestsBase.cs:18-19`).
-  The absolute figure was 90 against 91 as of 2026-08-02 and is not pinned by any gate (both
-  `smoke.ps1:318` and `ci.yml:45` pass `--minimum-expected-tests 1`); a generated app that turns off
-  shape axes runs fewer still.
+  The seed's own documented run is 100 tests (`MMCA.Helpdesk/CLAUDE.md:109`), one of which the
+  generated app does not carry. No gate pins either figure (both `smoke.ps1:318` and `ci.yml:45`
+  pass `--minimum-expected-tests 1`); a generated app that turns off shape axes runs fewer still.

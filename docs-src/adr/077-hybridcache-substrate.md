@@ -62,8 +62,8 @@ window, and a single-pattern eviction would leave them unreachable until the nex
 
 ### `ICacheService` gains a default `GetOrCreateAsync`
 `ICacheService`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs`, `GetAsync` at `:15`,
-`SetAsync` at `:24`, `RemoveAsync` at `:34`, `RemoveByPrefixAsync` at `:40`) gains
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs`, `GetAsync` at `:17`,
+`SetAsync` at `:26`, `RemoveAsync` at `:36`, `RemoveByPrefixAsync` at `:42`) gains
 `GetOrCreateAsync<T>(key, factory, expiration?, cancellationToken)` as a **default interface member**,
 following the `IncrementAsync` precedent at `:57` precisely because that precedent proved the shape is
 non-breaking: no existing implementer, in the framework or in a consumer, has to change. The default
@@ -113,14 +113,14 @@ the L1 benefit for free, because their reads go through `GetAsync`.
 
 ### Registration is one opt-in call
 `AddCommonHybridCache(Action<HybridCacheOptions>? configure = null)`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:248`) calls `AddHybridCache` with
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:261`) calls `AddHybridCache` with
 defaults matching `CacheOptions` (`LocalCacheExpiration` 30 seconds), then `RemoveAll<ICacheService>()`
-(`:266`) and an `AddSingleton<ICacheService>` **factory** (`:267`), not the two-generic-argument
+(`:279`) and an `AddSingleton<ICacheService>` **factory** (`:280`), not the two-generic-argument
 `AddSingleton<ICacheService, HybridCacheService>` form: the lambda resolves the logger (falling back to
 `NullLogger` when none is registered), the optional `IConnectionMultiplexer` and the `CacheKeyNamespace`
 itself and hands them to the constructor, rather than leaving the optional parameters to the container.
 Remove-then-add makes the call order-independent against `AddInfrastructure`, whose `AddCaching` registers
-its substrate with `TryAddSingleton` (`:175`): the opt-in wins either way.
+its substrate with `TryAddSingleton` (`:188`): the opt-in wins either way.
 
 ### Tags are deferred
 `HybridCache.RemoveByTagAsync` would eventually retire prefix invalidation and its SCAN cost, and it is not

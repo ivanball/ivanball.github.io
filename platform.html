@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">15</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">91</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">96</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">104</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -408,7 +408,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>91 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>96 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -497,13 +497,18 @@
           <a class="adr" href="docs/adr/082-two-tier-cors-posture.html"><span class="adr-num">082</span><span><span class="adr-title">Two-tier cross-origin posture</span><span class="adr-sum">Service hosts run named allow-listed CORS policies selected per environment inside the shared pipeline; the gateways run a default policy that restricts only origins, because a reverse proxy has to pass arbitrary client headers through.</span></span></a>
           <a class="adr" href="docs/adr/083-crud-lifecycle-event-taxonomy.html"><span class="adr-num">083</span><span><span class="adr-title">CRUD lifecycle event taxonomy</span><span class="adr-sum">One entity-changed event with a state discriminator replaces per-entity Created/Updated/Deleted triples, and handlers filter on the state; business state-machine transitions keep their own event types, and the discriminator rides integration events as a frozen wire field.</span></span></a>
           <a class="adr" href="docs/adr/084-stripe-webhook-ingress.html"><span class="adr-num">084</span><span><span class="adr-title">Stripe webhook ingress contract</span><span class="adr-sum">An anonymous signature-verified endpoint whose status code means accepted-not-processed, because rejections make the provider disable the endpoint; a startup service self-registers the webhook and logs its freshly minted signing secret loudly for an operator to persist.</span></span></a>
-          <a class="adr" href="docs/adr/085-identifier-type-aliases-revisited.html"><span class="adr-num">085</span><span><span class="adr-title">Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</span><span class="adr-sum">Accepted (2026-08-18). Revisits ADR-048, which stays Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the…</span></span></a>
+          <a class="adr" href="docs/adr/085-identifier-type-aliases-revisited.html"><span class="adr-num">085</span><span><span class="adr-title">Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</span><span class="adr-sum">Accepted (2026-08-18). Revised 2026-08-23 (the alias count and the migration-surface census were recounted, the census gained a stated methodology, and…</span></span></a>
           <a class="adr" href="docs/adr/086-process-manager-deferred.html"><span class="adr-num">086</span><span><span class="adr-title">A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</span><span class="adr-sum">Accepted (2026-08-18) as a documented deferral. Nothing ships with this record: no state machine, no correlation store, no new package. What ships is…</span></span></a>
           <a class="adr" href="docs/adr/087-broker-poison-message-handling.html"><span class="adr-num">087</span><span><span class="adr-title">Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</span><span class="adr-sum">Accepted (2026-08-18). Amends ADR-009: the outbox&#39;s broker publish gains a circuit breaker, which is the first resilience policy this workspace applies…</span></span></a>
           <a class="adr" href="docs/adr/088-gateway-edge-responsibilities.html"><span class="adr-num">088</span><span><span class="adr-title">Gateway Edge Responsibilities (and the Three It Declines)</span><span class="adr-sum">Accepted (2026-08-18). Extends ADR-019 with a fourth, edge-tier layer whose posture is the deliberate opposite of the service tier&#39;s authenticated-only…</span></span></a>
-          <a class="adr" href="docs/adr/089-gateway-topology-owned-by-configuration.html"><span class="adr-num">089</span><span><span class="adr-title">Gateway Topology Owned by Configuration</span><span class="adr-sum">Accepted (2026-08-18). Amends ADR-008: that record gave the Gateway the route-to-service map and expressed it as code (a list of MapForwarder calls).…</span></span></a>
+          <a class="adr" href="docs/adr/089-gateway-topology-owned-by-configuration.html"><span class="adr-num">089</span><span><span class="adr-title">Gateway Topology Owned by Configuration</span><span class="adr-sum">Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected).…</span></span></a>
           <a class="adr" href="docs/adr/090-event-upcaster-registration.html"><span class="adr-num">090</span><span><span class="adr-title">Event Upcaster Registration Extension Point</span><span class="adr-sum">Accepted (2026-08-21). Completes the follow-up named in ADR-010: that record established the versioning policy (a SchemaVersion signal plus a…</span></span></a>
           <a class="adr" href="docs/adr/091-cache-backed-password-reset.html"><span class="adr-num">091</span><span><span class="adr-title">Cache-Backed Password Reset</span><span class="adr-sum">Accepted (2026-08-22). Extends ADR-029 (the cache-backed login-protection idiom this record reuses) and ADR-032 (which decided how a password is…</span></span></a>
+          <a class="adr" href="docs/adr/092-web-vitals-budget-gate.html"><span class="adr-num">092</span><span><span class="adr-title">Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</span><span class="adr-sum">Accepted (2026-08-23).</span></span></a>
+          <a class="adr" href="docs/adr/093-container-image-posture.html"><span class="adr-num">093</span><span><span class="adr-title">Container Image Build and Runtime Posture</span><span class="adr-sum">Accepted (2026-08-23) for the three build decisions below. The two runtime postures in &quot;Open postures&quot; are recorded as undecided: they describe what…</span></span></a>
+          <a class="adr" href="docs/adr/094-client-entity-data-access.html"><span class="adr-num">094</span><span><span class="adr-title">Client-Side Entity Data-Access Contract</span><span class="adr-sum">Accepted (2026-08-23).</span></span></a>
+          <a class="adr" href="docs/adr/095-soft-delete-unique-indexes.html"><span class="adr-num">095</span><span><span class="adr-title">Uniqueness Under Soft Delete (Filtered Unique Indexes)</span><span class="adr-sum">Accepted (2026-08-23).</span></span></a>
+          <a class="adr" href="docs/adr/096-best-effort-side-effects.html"><span class="adr-num">096</span><span><span class="adr-title">Best-Effort Side-Effect Contract</span><span class="adr-sum">Accepted (2026-08-23).</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -529,9 +534,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">153 documents</span>
+            <span class="kicker kicker--accent">158 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 91 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
+            <p>Every collection indexed in one place: 96 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->

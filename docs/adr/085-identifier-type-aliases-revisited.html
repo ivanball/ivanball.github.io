@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-085: Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-18). Revisits ADR-048, which stays Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the…">
+  <meta name="description" content="Accepted (2026-08-18). Revised 2026-08-23 (the alias count and the migration-surface census were recounted, the census gained a stated methodology, and…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/085-identifier-type-aliases-revisited.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-085: Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)">
-  <meta property="og:description" content="Accepted (2026-08-18). Revisits ADR-048, which stays Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the…">
+  <meta property="og:description" content="Accepted (2026-08-18). Revised 2026-08-23 (the alias count and the migration-surface census were recounted, the census gained a stated methodology, and…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/085-identifier-type-aliases-revisited.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-085: Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)">
-  <meta name="twitter:description" content="Accepted (2026-08-18). Revisits ADR-048, which stays Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the…">
+  <meta name="twitter:description" content="Accepted (2026-08-18). Revised 2026-08-23 (the alias count and the migration-surface census were recounted, the census gained a stated methodology, and…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)","item":"https://ivanball.github.io/docs/adr/085-identifier-type-aliases-revisited.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -199,7 +204,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-085-identifier-type-aliases-revisited-wrapper-structs-deferred-again-with-triggers">ADR-085: Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-18). <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a></strong>, which stays
+          <p>Accepted (2026-08-18). Revised 2026-08-23 (the alias count and the migration-surface census were
+          recounted, the census gained a stated methodology, and the <code>CheckIn</code> and generic-parameter citations
+          were corrected; see the Revision (2026-08-23) at the end).
+          <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a></strong>, which stays
           Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the
           shape of the deferral. ADR-048 left the wrapper-struct alternative &quot;considered and left unbuilt&quot; with
           no condition attached; this record measures what the deferral actually costs today, states the
@@ -217,16 +225,19 @@
           <a href="055-repository-and-specification-contract.html">ADR-055</a>). If a wrapper-struct migration were ever
           going to ride along with unrelated churn, that was the wave to fold it into. It did not, and this
           record says why.</p>
-          <p>Three facts frame the decision, all counted in the four repositories&#39; <code>Source</code> trees on 2026-08-18:</p>
+          <p>Three facts frame the decision, all counted in the four repositories&#39; <code>Source</code> trees on 2026-08-23:</p>
           <ul>
-          <li><strong>43 aliases live in 10 files across the four repos.</strong> MMCA.Common declares 3 (<code>UserIdentifierType</code>
-          in <code>Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs</code> plus the two push-notification
-          aliases in <code>Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs</code>); MMCA.ADC
-          declares 29 across Conference (16), Engagement (10), Identity (1) and Notification (2); MMCA.Store
-          declares 9 across Catalog (4), Sales (3) and Identity (2); MMCA.Helpdesk declares 2 in Tickets.</li>
-          <li><strong>42 of the 43 resolve to <code>int</code>.</strong> The single exception is ADC&#39;s
-          <code>SpeakerIdentifierType = System.Guid</code>, which Sessionize forces. So for every practical purpose the
-          whole workspace has <strong>one</strong> identifier CLR type, and the compiler sees 42 synonyms for it.</li>
+          <li><strong>44 aliases live in 10 files across the four repos.</strong> MMCA.Common declares 3 (<code>UserIdentifierType</code>
+          in <code>Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1</code> plus the two push-notification
+          aliases in <code>Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2</code>);
+          MMCA.ADC declares 30 across Conference (17, alias file <code>:5-21</code>), Engagement (10, <code>:4-13</code>),
+          Identity (1, <code>:2</code>) and Notification (2, <code>:1-2</code>); MMCA.Store declares 9 across Catalog (4), Sales (3)
+          and Identity (2); MMCA.Helpdesk declares 2 in Tickets.</li>
+          <li><strong>43 of the 44 resolve to <code>int</code>.</strong> The single exception is ADC&#39;s
+          <code>SpeakerIdentifierType = System.Guid</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:19</code>),
+          which Sessionize forces. So for every practical purpose the whole workspace has <strong>one</strong> identifier
+          CLR type, and the compiler sees 43 synonyms for it.</li>
           <li><strong>No wrapper-struct identifier type and no generator package exists anywhere.</strong> A content sweep of
           the four <code>Source</code> trees for <code>Vogen</code> and <code>StronglyTypedId</code> returns nothing: not a package reference,
           not a project file entry, not a using. ADR-048&#39;s &quot;considered and left unbuilt&quot; is still literally
@@ -243,10 +254,15 @@
           foreign keys, so the type system is the only check there is and the type system is <code>int</code>.</p>
           <p>The clearest live instance is ADC&#39;s <code>CheckIn</code> aggregate
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:57-64</code>), whose
-          constructor takes five identifiers in a row: <code>UserIdentifierType userId</code>, <code>EventIdentifierType eventId</code>, <code>SessionIdentifierType? sessionId</code>, <code>SponsorIdentifierType? sponsorId</code> and
-          <code>UserIdentifierType checkedInByUserId</code>, mirrored on the <code>Create</code> factory (<code>:89-91</code>). Four of the five
-          are <code>int</code> or <code>int?</code> at the CLR level, and two of them are the <em>same</em> alias holding two different
-          users (the attendee and the organizer who scanned the badge). Swapping those two arguments compiles
+          constructor takes five identifiers, four of them consecutive: <code>UserIdentifierType userId</code> (<code>:58</code>) is
+          held apart from the run by the <code>CheckInScope scope</code> parameter (<code>:59</code>), and then <code>EventIdentifierType eventId</code>, <code>SessionIdentifierType? sessionId</code>, <code>SponsorIdentifierType? sponsorId</code> and
+          <code>UserIdentifierType checkedInByUserId</code> follow one another (<code>:60-63</code>). The <code>Create</code> factory carries the
+          same five identifiers across a wider signature (<code>:89-96</code>) rather than mirroring the order: <code>sponsorId</code>
+          moves to last and optional (<code>:96</code>) so the scan and manual paths, which can never carry one, stay
+          unchanged. All five are <code>int</code> or <code>int?</code> at the CLR level, since the four aliases they draw on
+          (<code>UserIdentifierType</code>, <code>EventIdentifierType</code>, <code>SessionIdentifierType</code>, <code>SponsorIdentifierType</code>) are
+          every one of them <code>int</code>, and two of the five are the <em>same</em> alias holding two different users (the
+          attendee and the organizer who scanned the badge). Swapping those two arguments compiles
           cleanly, passes every type check, and produces a check-in attributed to the wrong person. A wrapper
           struct would have made that line a compiler error. This is the concrete cost, stated once with a real
           example rather than as an abstraction.</p>
@@ -257,15 +273,24 @@
           <code>JsonConverter</code> per type, and an OpenAPI schema mapping per type. Modern generators emit all three, so
           the objection is not that the wrappers are laborious to author. The objection is the blast radius of
           switching.</p>
-          <p>That radius is measurable. The alias token appears <strong>3,641 times across 1,016 files</strong> in the four
-          <code>Source</code> trees alone, tests excluded: 712 occurrences in 126 files in MMCA.Common, 1,996 in 582 files
-          in MMCA.ADC, 879 in 278 files in MMCA.Store, and 54 in 30 files in MMCA.Helpdesk. Every one of those
-          is a signature, a property, a generic argument, or a DTO field that a wrapper migration would have to
-          either change or prove it can leave alone. Because MMCA.Common is a published package family released
-          in lockstep (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>), the framework half of that count
+          <p>That radius is measurable, and the measurement only means something with its counting rule stated.
+          An <strong>alias token</strong> here is any <code>*IdentifierType</code> token other than the framework&#39;s own generic
+          parameter <code>TIdentifierType</code>, counted in the <code>.cs</code> and <code>.razor</code> files of the four <code>Source</code> trees on
+          2026-08-23, with tests, <code>bin</code> and <code>obj</code> excluded. On that rule the aliases appear <strong>3,192 times across
+          1,001 files</strong>: 187 occurrences in 80 files in MMCA.Common, 2,077 in 613 files in MMCA.ADC, 873 in 277
+          files in MMCA.Store, and 55 in 31 files in MMCA.Helpdesk. Excluding <code>TIdentifierType</code> is what makes
+          the framework figure honest: 538 of MMCA.Common&#39;s 725 <code>IdentifierType</code> hits are that generic
+          parameter, which a wrapper migration re-satisfies with a new type argument rather than rewrites call
+          site by call site. Every one of the 3,192 is a signature, a property, a generic argument, or a DTO
+          field that a wrapper migration would have to either change or prove it can leave alone. Because
+          MMCA.Common is a published package family released in lockstep
+          (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>), the framework share of that count
           is a breaking public-API change that all three consumers must absorb in a single sweep, and the
-          identifier type is a generic parameter on
-          <code>BaseEntity&lt;TIdentifierType&gt;</code>, <code>IBaseDTO&lt;TId&gt;</code>, <code>IEntityDTOMapper&lt;TEntity, TDTO, TId&gt;</code>
+          identifier type is a generic parameter on <code>BaseEntity&lt;TIdentifierType&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:14</code>), <code>IBaseDTO&lt;TIdentifierType&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IBaseDTO.cs:9</code>) and
+          <code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOMapper.cs:14</code>)
           (<a href="001-manual-dto-mapping.html">ADR-001</a>), the repository handles
           (<a href="055-repository-and-specification-contract.html">ADR-055</a>) and the generic entity query surface
           (<a href="034-generic-entity-query-layer.html">ADR-034</a>), so the change is not confined to leaf code.</p>
@@ -291,7 +316,7 @@
           <li><strong>The cost is paid once and the benefit accrues per defect avoided, and the defect count is
           currently zero.</strong> No production incident in any of the four repos has been traced to a swapped
           identifier. That is not proof of safety, and this record does not claim it is; it is the only
-          evidence available, and it does not support a 1,016-file change.</li>
+          evidence available, and it does not support a 1,001-file change.</li>
           <li><strong>A partial migration is worse than either endpoint.</strong> Wrapping some identifiers and not others
           produces a codebase where the absence of a compiler error means nothing, because the reader cannot
           tell whether a given call site is protected or merely un-migrated. The change is therefore
@@ -319,14 +344,15 @@
           naming convention that a reviewer could mechanically check. Trigger 1 therefore depends on a
           production defect being <em>traced</em> to a transposition, and a wrong-user check-in is exactly the kind
           of defect that gets written off as a scanning mistake instead.</li>
-          <li><strong>The migration price rises with the codebase.</strong> The 3,641 occurrences counted here are a snapshot
+          <li><strong>The migration price rises with the codebase.</strong> The 3,192 occurrences counted here are a snapshot
           and the number only grows. Deferring on cost grounds means the cost argument gets stronger every
           release, which is the classic shape of a decision that is never revisited on its merits.</li>
           <li><strong>Trigger 3 is not measured.</strong> No count of cross-module scalar identifier references is maintained,
           so &quot;keeps climbing&quot; has no baseline to climb from. It is a qualitative trigger and is recorded as
           such.</li>
-          <li><strong>Ordering conventions carry weight the type system should.</strong> With four <code>int</code> parameters in a row,
-          the discipline that keeps <code>CheckIn.Create</code> correct is parameter naming and the doc comments at
+          <li><strong>Ordering conventions carry weight the type system should.</strong> With three <code>int</code> parameters in a row
+          in <code>Create</code> (<code>CheckIn.cs:92-94</code>) and four in the constructor (<code>:60-63</code>), the discipline that keeps
+          <code>CheckIn.Create</code> correct is parameter naming and the seven parameter doc lines at
           <code>CheckIn.cs:81-87</code>. That is review-strength protection standing in for compile-time protection,
           which is the same class of dependency ADR-048 already recorded for the alias convention itself.</li>
           </ul>
@@ -343,6 +369,39 @@
           <a href="055-repository-and-specification-contract.html">ADR-055</a> and
           <a href="034-generic-entity-query-layer.html">ADR-034</a> (the generic surfaces parameterized by the identifier
           type, and therefore in the migration&#39;s blast radius).</p>
+          <h2 id="revision-2026-08-23">Revision (2026-08-23)</h2>
+          <p>The decision, the priced alternative, the three triggers and the trade-offs are unchanged. What
+          changed is arithmetic and three citations.</p>
+          <p><strong>The alias count is 44 across 10 files, 43 of them <code>int</code>.</strong> ADC&#39;s Conference module gained
+          <code>ActivityIdentifierType = int</code> at the head of its alias file
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21</code>),
+          taking Conference to seventeen and ADC to thirty. <code>SpeakerIdentifierType = System.Guid</code> (<code>:19</code> in the
+          same file) is still the only non-<code>int</code> alias in any of the four repositories.
+          <a href="048-primitive-identifier-type-aliases.html">ADR-048</a> carries the same pair.</p>
+          <p><strong>The migration-surface census is restated with its counting rule and re-measured.</strong> The previous
+          figure (3,641 occurrences across 1,016 files) counted the framework&#39;s generic parameter
+          <code>TIdentifierType</code> as if it were an alias, which inflated MMCA.Common&#39;s share roughly fourfold: of the
+          725 <code>IdentifierType</code> hits in <code>MMCA.Common/Source</code>, 538 are the generic parameter and only 187 are
+          alias tokens. Counting alias tokens only, in <code>.cs</code> and <code>.razor</code> under the four <code>Source</code> trees with
+          tests, <code>bin</code> and <code>obj</code> excluded, gives <strong>3,192 occurrences across 1,001 files</strong> (Common 187/80,
+          ADC 2,077/613, Store 873/277, Helpdesk 55/31). The conclusion is unmoved: the blast radius is still
+          a four-repository, thousand-file change, and MMCA.Common&#39;s generic parameters are still in it, since
+          re-satisfying a type parameter with a wrapper struct is a breaking public-API change even where no
+          call site is edited.</p>
+          <p><strong>Three citations corrected.</strong> ADC&#39;s <code>CheckIn</code> constructor takes five identifiers but not five in a
+          row: <code>CheckInScope scope</code> (<code>CheckIn.cs:59</code>) sits between <code>userId</code> (<code>:58</code>) and the consecutive run of
+          four (<code>:60-63</code>). The <code>Create</code> factory is not a mirror of the constructor: its signature spans
+          <code>:89-96</code> and moves <code>sponsorId</code> to last and optional (<code>:96</code>). And all five of those identifier
+          parameters are <code>int</code> or <code>int?</code> at the CLR level, not four of the five, which sharpens rather than
+          softens this record&#39;s point: nothing in the CLR distinguishes any one of them from the others.
+          Finally, the two framework generic surfaces are spelled <code>IBaseDTO&lt;TIdentifierType&gt;</code>
+          (<code>IBaseDTO.cs:9</code>) and <code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code>
+          (<code>IEntityDTOMapper.cs:14</code>); this record previously named parameters (<code>TId</code>, <code>TDTO</code>) that do not
+          exist.</p>
+          <p>The Rationale&#39;s &quot;no production incident traced to a swapped identifier&quot; stands as written and stays
+          unverified by design: the four repositories keep no incident register, postmortem folder or issue
+          label that would record such a defect, which is exactly why the record already refuses to call it
+          proof of safety.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -359,6 +418,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-08-23">Revision (2026-08-23)</a></li>
             </ul>
           </nav>
         </aside>

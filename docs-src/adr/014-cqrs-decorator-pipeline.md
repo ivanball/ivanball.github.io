@@ -85,10 +85,10 @@ The pipeline order and the "cache invalidation outside the transaction" rule are
 ## Revision (2026-08-18)
 **Two decorators were added to both chains, so the order recorded in the Decision above is no longer
 the shipped one.** The registration site is unchanged in kind: `AddApplicationDecorators()`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:102`) still uses Scrutor
-`TryDecorate` and still documents the reverse-registration rule inline (`:49-51`), now with ASCII
-nesting diagrams of both chains beside it (`:53-74`). The literal registration sequence is
-`:107-113` for commands and `:116-120` for queries, so the execution order (outermost to innermost) is
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:110`) still uses Scrutor
+`TryDecorate` and still documents the reverse-registration rule inline (`:56-59`), now with ASCII
+nesting diagrams of both chains beside it (`:60-83`). The literal registration sequence is
+`:115-121` for commands and `:124-128` for queries, so the execution order (outermost to innermost) is
 now:
 
 - **Commands:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout ->
@@ -137,10 +137,10 @@ now:
 **Two placements are load-bearing and are argued in code, not only here.** Authorization sits
 **outside** caching deliberately: a cache lookup ahead of the permission check would serve another
 caller's rows to a principal not allowed to run the query, so a denied request must neither read nor
-populate the cache (`DependencyInjection.cs:83-85`, restated at
+populate the cache (`DependencyInjection.cs:91-93`, restated at
 `AuthorizationCommandDecorator.cs:13-16`, which also notes that a denied command never starts a
 transaction and never runs validation). FeatureGate stays outside Authorization so that a disabled
-feature does not leak which permission guards it (`DependencyInjection.cs:79-82`), which preserves
+feature does not leak which permission guards it (`DependencyInjection.cs:87-90`), which preserves
 ADR-031's "disabled is indistinguishable from nonexistent" property. Timeout sits **inside**
 validation and **outside** the transaction, so an invalid command never consumes budget and an expired
 budget still unwinds through the transactional decorator's rollback path.
@@ -153,9 +153,15 @@ the innermost element is not itself a decorator (`:95-96`). Both expected sequen
 `protected virtual`, so a consumer with a different chain can override them. MMCA.Common subclasses it
 against its own registration sequence
 (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21-39`) without
-overriding either list, so the base order is pinned in Common's default test pass. Whether ADC, Store
-or Helpdesk subclass it was not verified for this revision; treat cross-repo coverage as unconfirmed.
-This closes the "one place to read the pipeline" claim in the Rationale, which until now rested
+overriding either list, so the base order is pinned in Common's default test pass. ADC, Store and
+Helpdesk each subclass the same base
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:28`,
+`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:27`,
+`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:31`),
+and none of the three overrides either list: the only definitions of `ExpectedCommandDecorators` and
+`ExpectedQueryDecorators` workspace-wide are the base's own
+(`DecoratorPipelineOrderTestsBase.cs:49,61`). All four repos therefore pin the same chain against
+their own genuine registration sequence. This closes the "one place to read the pipeline" claim in the Rationale, which until now rested
 entirely on the inline comments the Trade-offs cite as the mitigation for the Scrutor foot-gun.
 
 The trade-off list above gains one entry by construction: the chain is now seven decorators deep for a

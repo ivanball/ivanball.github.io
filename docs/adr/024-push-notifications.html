@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -256,7 +261,7 @@
           (<code>SendPushNotificationHandler.cs:134-152</code>), an OS-level native-push channel that reaches devices the
           SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
           push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:478</code>), so it
+          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:491</code>), so it
           stays inert until a native hub is configured. The design of that channel is ADR-044&#39;s scope; this ADR
           keeps its own on the inbox and SignalR channels, so the &quot;Two-Channel&quot; title names the durable and
           transient channels this record governs, not a hard cap on the number of delivery legs.</li>
@@ -267,7 +272,7 @@
           <code>MapNotificationHub()</code> maps <code>NotificationHub</code> at the configured <code>HubPath</code> just when it is true
           (<code>SignalRExtensions.cs:25</code>). <code>AddPushNotifications</code> binds the section but registers SignalR,
           <code>SignalRPushNotificationSender</code> and <code>SignalRLiveChannelPublisher</code> unconditionally
-          (<code>DependencyInjection.cs:528-551</code>), so the opt-in registration, not the flag, is what decides whether
+          (<code>DependencyInjection.cs:541-564</code>), so the opt-in registration, not the flag, is what decides whether
           a send goes through SignalR; with <code>Enabled: false</code> the sender is still wired and simply has no hub
           endpoint for clients to connect to.</li>
           </ul>
@@ -321,10 +326,10 @@
           single implementation, <code>SmtpEmailSender</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:12</code>), and it is
           TryAdd-registered in the same block as the push-sender defaults
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:472</code>, beside
-          <code>IPushNotificationSender</code> at <code>:473</code>, <code>ILiveChannelPublisher</code> at <code>:474</code>, <code>INativePushSender</code> at <code>:478</code>
-          and <code>IPushDeviceRegistrar</code> at <code>:479</code>). That block is <code>AddServices()</code> (<code>:442</code>), which
-          <code>AddInfrastructure</code> (<code>:50</code>) always calls (<code>:154</code>), so every host gets it. Unlike the two push
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:485</code>, beside
+          <code>IPushNotificationSender</code> at <code>:486</code>, <code>ILiveChannelPublisher</code> at <code>:487</code>, <code>INativePushSender</code> at <code>:491</code>
+          and <code>IPushDeviceRegistrar</code> at <code>:492</code>). That block is <code>AddServices()</code> (<code>:455</code>), which
+          <code>AddInfrastructure</code> (<code>:50</code>) always calls (<code>:167</code>), so every host gets it. Unlike the two push
           abstractions it has no null default and no opt-in <code>Add*</code> counterpart: the real SMTP sender is always
           the registration, inert only because nothing resolves it.</li>
           <li><strong>It sits outside the inbox / SignalR / native model.</strong> An email creates no <code>PushNotification</code> audit

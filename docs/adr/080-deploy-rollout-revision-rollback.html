@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -228,15 +233,15 @@
           <ul>
           <li><strong>Single-revision rollout.</strong> Every container app runs <code>activeRevisionsMode: &#39;Single&#39;</code>, so a deploy
           replaces the serving revision rather than splitting traffic across two: Store&#39;s identity, catalog,
-          sales, gateway and ui apps (<code>MMCA.Store/infra/main.bicep:952,1104,1203,1334,1419</code>) and ADC&#39;s
+          sales, gateway and ui apps (<code>MMCA.Store/infra/main.bicep:963,1122,1227,1364,1450</code>) and ADC&#39;s
           identity, conference, engagement, notification, gateway and ui apps
-          (<code>MMCA.ADC/infra/main.bicep:1031,1232,1356,1480,1641,1743</code>). There is no canary or blue/green stage
+          (<code>MMCA.ADC/infra/main.bicep:1042,1249,1378,1507,1673,1776</code>). There is no canary or blue/green stage
           and no traffic-splitting step.</li>
           <li><strong>Readiness gating is the first line of defence.</strong> Every app carries startup, liveness and
           readiness probes, with readiness on <code>/health/ready</code>, so ACA holds user traffic on the old revision
-          until the new one is warm (<code>MMCA.Store/infra/main.bicep:1300-1305</code>, five apps at
-          <code>:1079,1178,1305,1378,1475</code>; <code>MMCA.ADC/infra/main.bicep:1578-1582</code>, six apps at
-          <code>:1200,1324,1448,1600,1695,1813</code>). This is the ADR-025 warm-up gate doing rollout duty.</li>
+          until the new one is warm (<code>MMCA.Store/infra/main.bicep:1332-1336</code>, five apps at
+          <code>:1097,1202,1335,1409,1507</code>; <code>MMCA.ADC/infra/main.bicep:1631-1639</code>, six apps at
+          <code>:1218,1347,1476,1633,1729,1848</code>). This is the ADR-025 warm-up gate doing rollout duty.</li>
           <li><strong>A post-deploy smoke gate is the last step of the deploy job.</strong> <code>Smoke test (rollback on failure)</code>
           probes the freshly deployed fleet from outside Azure
           (<code>MMCA.Store/.github/workflows/deploy.yml:1059</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1099</code>). The

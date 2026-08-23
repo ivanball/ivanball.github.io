@@ -96,9 +96,11 @@ and Shared and sits deliberately outside `MMCA.Common.slnx` so the unit-test loo
 
 **This gate is MMCA.Common only.** The harness, the baseline and the verifier exist in that repo and
 nowhere else. MMCA.ADC and MMCA.Store have no benchmark suite and no perfgate; their performance
-artifact is a k6 load test against deployed read endpoints, which runs monthly on a schedule and on
-demand, not on a pull request (`MMCA.ADC/.github/workflows/load-test.yml:1-18`,
-`MMCA.Store/.github/workflows/load-test.yml:8-18`). MMCA.Helpdesk has neither.
+artifact for backend hot paths is a k6 load test against deployed read endpoints, which runs monthly
+on a schedule and on demand, not on a pull request (`MMCA.ADC/.github/workflows/load-test.yml:1-18`,
+`MMCA.Store/.github/workflows/load-test.yml:8-18`). MMCA.Helpdesk has neither. The client-side
+counterpart, a Core Web Vitals budget asserted per deploy inside the chromium e2e-gate, is
+[ADR-092](092-web-vitals-budget-gate.md)'s decision, not this gate's.
 
 ## Rationale
 - **A ratio is a property of the code; an absolute nanosecond count is a property of the runner.**
