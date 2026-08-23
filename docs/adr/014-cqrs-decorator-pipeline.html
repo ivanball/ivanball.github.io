@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -284,10 +289,10 @@
           <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
           <p><strong>Two decorators were added to both chains, so the order recorded in the Decision above is no longer
           the shipped one.</strong> The registration site is unchanged in kind: <code>AddApplicationDecorators()</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:102</code>) still uses Scrutor
-          <code>TryDecorate</code> and still documents the reverse-registration rule inline (<code>:49-51</code>), now with ASCII
-          nesting diagrams of both chains beside it (<code>:53-74</code>). The literal registration sequence is
-          <code>:107-113</code> for commands and <code>:116-120</code> for queries, so the execution order (outermost to innermost) is
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:110</code>) still uses Scrutor
+          <code>TryDecorate</code> and still documents the reverse-registration rule inline (<code>:56-59</code>), now with ASCII
+          nesting diagrams of both chains beside it (<code>:60-83</code>). The literal registration sequence is
+          <code>:115-121</code> for commands and <code>:124-128</code> for queries, so the execution order (outermost to innermost) is
           now:</p>
           <ul>
           <li><strong>Commands:</strong> FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt;
@@ -336,10 +341,10 @@
           <p><strong>Two placements are load-bearing and are argued in code, not only here.</strong> Authorization sits
           <strong>outside</strong> caching deliberately: a cache lookup ahead of the permission check would serve another
           caller&#39;s rows to a principal not allowed to run the query, so a denied request must neither read nor
-          populate the cache (<code>DependencyInjection.cs:83-85</code>, restated at
+          populate the cache (<code>DependencyInjection.cs:91-93</code>, restated at
           <code>AuthorizationCommandDecorator.cs:13-16</code>, which also notes that a denied command never starts a
           transaction and never runs validation). FeatureGate stays outside Authorization so that a disabled
-          feature does not leak which permission guards it (<code>DependencyInjection.cs:79-82</code>), which preserves
+          feature does not leak which permission guards it (<code>DependencyInjection.cs:87-90</code>), which preserves
           ADR-031&#39;s &quot;disabled is indistinguishable from nonexistent&quot; property. Timeout sits <strong>inside</strong>
           validation and <strong>outside</strong> the transaction, so an invalid command never consumes budget and an expired
           budget still unwinds through the transactional decorator&#39;s rollback path.</p>
@@ -351,9 +356,15 @@
           <code>protected virtual</code>, so a consumer with a different chain can override them. MMCA.Common subclasses it
           against its own registration sequence
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21-39</code>) without
-          overriding either list, so the base order is pinned in Common&#39;s default test pass. Whether ADC, Store
-          or Helpdesk subclass it was not verified for this revision; treat cross-repo coverage as unconfirmed.
-          This closes the &quot;one place to read the pipeline&quot; claim in the Rationale, which until now rested
+          overriding either list, so the base order is pinned in Common&#39;s default test pass. ADC, Store and
+          Helpdesk each subclass the same base
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:28</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:27</code>,
+          <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:31</code>),
+          and none of the three overrides either list: the only definitions of <code>ExpectedCommandDecorators</code> and
+          <code>ExpectedQueryDecorators</code> workspace-wide are the base&#39;s own
+          (<code>DecoratorPipelineOrderTestsBase.cs:49,61</code>). All four repos therefore pin the same chain against
+          their own genuine registration sequence. This closes the &quot;one place to read the pipeline&quot; claim in the Rationale, which until now rested
           entirely on the inline comments the Trade-offs cite as the mitigation for the Scrutor foot-gun.</p>
           <p>The trade-off list above gains one entry by construction: the chain is now seven decorators deep for a
           command that declares every marker, and two of the seven were inserted between existing neighbours, so

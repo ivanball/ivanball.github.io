@@ -21,7 +21,7 @@ intended end state but is not yet wired for theme (see Decision 3).
    Day/Dark lifecycle in one place. Inside that component `MudThemeProvider` is bound with
    `@bind-IsDarkMode` against the already-complete `MMCATheme.Instance`
    (`MMCA.Common.UI/Components/MmcaThemeProviders.razor:11`), a two-way binding to that component's own
-   `_isDarkMode` field (`MmcaThemeProviders.razor:17`); no `@ref` is used. The layout no longer holds the
+   `_isDarkMode` field (`MmcaThemeProviders.razor:24`); no `@ref` is used. The layout no longer holds the
    provider markup or the `_isDarkMode` field itself. No new palette work.
 
 2. **A `ThemeService` (`MMCA.Common.UI`) owns the preference**, registered in `AddUIShared`. It holds the
@@ -74,4 +74,3 @@ intended end state but is not yet wired for theme (see Decision 3).
 and is the model for the theme no-flash SSR bootstrap that is not yet wired),
 [ADR-022](022-browser-session-cookie-auth.md) (the SSR cookie-read pattern),
 [ADR-015](015-architecture-fitness-functions.md) (the host-wiring fitness assertion).
-```

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -280,10 +285,11 @@
           <li><strong>gRPC is mapped by hand, not inferred.</strong> <code>Money</code> crosses a service boundary as a purpose-built
           <code>MoneyV1</code> message with a <strong>string</strong> amount (proto has no decimal) and a currency code
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:70,73</code>),
-          translated by <code>MoneyToWire</code>/<code>MoneyFromWire</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:126</code>),
-          which honors the empty-code sentinel only when the amount is also zero and returns null for a
-          malformed entry rather than failing the whole batch (<code>:135-140</code>).</li>
+          translated by <code>MoneyFromWire</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:126</code>)
+          and <code>MoneyToWire</code> (<code>:157</code>).
+          <code>MoneyFromWire</code> honors the empty-code sentinel only when the amount is also zero and returns null
+          for a malformed entry rather than failing the whole batch (<code>:135-140</code>).</li>
           <li><strong>Adoption is real but partial.</strong> Store maps <code>ProductVariant.Price</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:21</code>) with
           <code>OwnsMoney</code> (<code>.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:31</code>),
@@ -293,7 +299,8 @@
           (<code>OrderLineConfiguration.cs:28</code>). Store Identity maps <code>Customer.Email</code> through <code>EmailValueConverter</code>
           and <code>Customer.Address</code> through a hand-rolled <code>OwnsOne</code> block (<code>CustomerConfiguration.cs:36,43</code>), and
           <code>User.Email</code> the same way (<code>UserConfiguration.cs:24</code>). ADC types <code>User.Email</code> as <code>Email</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38</code>, built at <code>:164</code>) with
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38</code>, validated through
+          <code>Email.Create</code> at <code>:171</code> and passed to the constructor at <code>:185</code>) with
           the same converter (<code>.../Identity.Infrastructure/.../UserConfiguration.cs:21</code>) and a speaker&#39;s
           optional email through <code>NullableEmailValueConverter</code>
           (<code>.../Conference.Infrastructure/.../SpeakerConfiguration.cs:43</code>). <code>Money</code> and <code>Email</code> are the two

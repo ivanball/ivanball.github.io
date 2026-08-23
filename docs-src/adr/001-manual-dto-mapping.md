@@ -1,7 +1,7 @@
 # ADR-001: Manual DTO Mapping over AutoMapper
 
 ## Status
-Accepted. _Mechanism clarified 2026-06-26: the per-entity mappers are Riok.Mapperly source-generated (compile-time), not hand-written line by line. The decision to avoid runtime convention/reflection mapping (AutoMapper, Mapster) is unchanged._ _Mapper count refreshed 2026-08-14: 30 DTO mappers across Store + ADC._
+Accepted. _Mechanism clarified 2026-06-26: the per-entity mappers are Riok.Mapperly source-generated (compile-time), not hand-written line by line. The decision to avoid runtime convention/reflection mapping (AutoMapper, Mapster) is unchanged._ _Mapper count refreshed 2026-08-23: 31 DTO mappers across Store + ADC._
 
 ## Context
 Domain entities must be mapped to DTOs for API responses. The two common approaches are:
@@ -19,5 +19,5 @@ Use explicit, per-entity DTO mappers (each a Riok.Mapperly `[Mapper] partial cla
 - **Performance**: No reflection or expression compilation at mapping time.
 
 ## Trade-offs
-- More files (30 DTO mappers across Store + ADC: 19 in ADC, 11 in Store, plus the parallel `IEntityRequestMapper` classes). The interface's default `MapToDTOs` implementation is available to remove the batch-mapping boilerplate, though in practice each concrete mapper re-declares the identical one-line projection rather than relying on the default.
+- More files (31 DTO mappers across Store + ADC: 20 in ADC, 11 in Store, plus the parallel `IEntityRequestMapper` classes). The interface's default `MapToDTOs` implementation is available to remove the batch-mapping boilerplate, though in practice each concrete mapper re-declares the identical one-line projection rather than relying on the default.
 - Adding a new entity requires creating a mapper class. This is consistent with the project's explicit-over-implicit philosophy.

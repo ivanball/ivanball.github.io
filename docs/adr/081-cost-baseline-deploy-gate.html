@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -203,9 +208,9 @@
           <h2 id="context">Context</h2>
           <p>Both deployed apps run a deliberately small production footprint: every Container App is declared with
           <code>maxReplicas: 2</code> and every SQL database with the <code>Basic</code> tier
-          (<code>MMCA.Store/infra/main.bicep:1083,1182,1309,1384,1481</code> and <code>:594-598,624-628</code>;
-          <code>MMCA.ADC/infra/main.bicep:1211,1335,1459,1708,1826</code> and <code>:634-638,667-671</code>, with ADC&#39;s Notification
-          app deliberately right-sized at <code>maxReplicas: 1</code>, <code>MMCA.ADC/infra/main.bicep:1614-1616</code>). That
+          (<code>MMCA.Store/infra/main.bicep:1101,1206,1339,1415,1513</code> and <code>:594-598,624-628</code>;
+          <code>MMCA.ADC/infra/main.bicep:1228,1357,1486,1741,1860</code> and <code>:634-638,667-671</code>, with ADC&#39;s Notification
+          app deliberately right-sized at <code>maxReplicas: 1</code>, <code>MMCA.ADC/infra/main.bicep:1646-1648</code>). That
           footprint is the cost baseline, and it is what the monthly bill is planned against.</p>
           <p>The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
           real traffic: an operator scales the replica ceiling or the SQL tier up by hand and is supposed to
@@ -213,10 +218,10 @@
           it is silent: nothing breaks, no alert fires on a healthy oversized system, and the app keeps serving
           traffic perfectly while costing several times its baseline.</p>
           <p>The existing control against that was the monthly Azure budget declared in both Bicep templates
-          (<code>MMCA.Store/infra/main.bicep:508-534</code>, <code>MMCA.ADC/infra/main.bicep:551</code>), which notifies at 80% of
+          (<code>MMCA.Store/infra/main.bicep:519-547</code>, <code>MMCA.ADC/infra/main.bicep:562</code>), which notifies at 80% of
           actual spend and 100% of forecast spend. The Store template names the exact case it is meant to catch
           in its own comment, &quot;a scale-up (manual SQL-tier / replica) silently running for weeks&quot;
-          (<code>MMCA.Store/infra/main.bicep:505-507</code>). A spend threshold is a lagging indicator: by the time it
+          (<code>MMCA.Store/infra/main.bicep:517</code>). A spend threshold is a lagging indicator: by the time it
           trips, weeks of the overspend have already happened, and the notification says a number, not which
           resource is wrong. What was missing was a check on the <strong>configuration</strong> itself, and a moment at which
           someone would have to look at it.</p>
@@ -256,7 +261,7 @@
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:82</code>), because its retained legacy <code>MMCAStore</code> archive
           was downgraded from S0 to Basic and the bump back to S0 is the documented rollback path, so a
           rollback must not read as drift (<code>MMCA.Store/.github/workflows/cost-guard.yml:9-12</code>, and the same
-          reasoning beside the resource at <code>MMCA.Store/infra/main.bicep:586-588</code>).</p>
+          reasoning beside the resource at <code>MMCA.Store/infra/main.bicep:596-599</code>).</p>
           </li>
           <li><p><strong>It never mutates anything.</strong> Every call is an <code>az ... list</code> or <code>az ... show</code>; the job&#39;s stated
           contract is that on drift it fails the run and prints what to reset

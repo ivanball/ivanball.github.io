@@ -30,6 +30,12 @@ and twelve `IEntityReader` / `IEntityQuerier` declarations to production; MMCA.S
 narrowing staged on an open pull request. The Decision's consumption paragraph is restated, the "ISP
 split is guidance" Trade-offs entry is marked superseded in place, and two sentences of the
 Revision (2026-08-18) carry pointer notes. See the Revision (2026-08-21) at the end).
+Revised 2026-08-23 (**substantive in consequence, not in decision**: the MMCA.Store counterpart the
+Revision (2026-08-21) recorded as staged on an open pull request merged to `main` on 2026-08-22, so
+the narrow read interfaces now have shipped dependents in both consumer applications. The Decision's
+consumption paragraph, the superseded "ISP split is guidance" Trade-offs note, and the Store
+paragraph plus the adoption-sample caution in the Revision (2026-08-21) are restated to that
+reality, with the Store holders anchored by file and line for the first time).
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -156,9 +162,17 @@ or to `IEntityQuerier` where it projects or counts (for example
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:131`),
 and locals typed to the querier where a visibility helper reads through the unit of work
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:40`,
-`:75`, `:126`, `:151`). MMCA.Store has the same narrowing staged on an open pull request (three
-holders; a fourth, `ProductVariantService`, deliberately stays on `IReadRepository` because it calls
-members of both halves). MMCA.Helpdesk still narrows nothing; the only mention of either name there
+`:75`, `:126`, `:151`). MMCA.Store ships the same narrowing at three read-only holders: a
+by-id/existence service field
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Customers/CustomerService.cs:14`),
+a handler parameter narrowed to `IEntityReader`
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/UseCases/AssignParentCategory/AssignParentCategoryHandler.cs:68`),
+and a querier parameter on the customer-provisioning handler
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:98`);
+a fourth, `ProductVariantService`
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductVariantService.cs:15`),
+deliberately stays on `IReadRepository` because it calls members of both halves. MMCA.Helpdesk still
+narrows nothing; the only mention of either name there
 remains a pair of comments in its template staging script
 (`MMCA.Helpdesk/build/templates/stage.ps1:250`, `:983`) describing the contract rather than
 depending on it.
@@ -175,7 +189,7 @@ constructor-injects `IEntityReader` or `IEntityQuerier`, and nothing should: the
 where an entity's physical data source resolves to the right context and where the repository
 instance is cached for the scope, so a narrow interface resolved straight from the container would
 bypass both. The ISP split is therefore the declared dependency shape at read-only call sites in two
-applications, one shipped and one in review, sitting on an unchanged registration surface
+shipped applications, sitting on an unchanged registration surface
 (`IRepository.cs:216-217`).
 
 ## Rationale
@@ -202,7 +216,7 @@ applications, one shipped and one in review, sitting on an unchanged registratio
 
 ## Trade-offs
 - **The ISP split is guidance, not yet a wired dependency.** *(Superseded by the Revision
-  (2026-08-21) below: the split now has real dependents in ADC (shipped) and Store (staged), obtained
+  (2026-08-21) below: the split has real dependents shipped in both MMCA.ADC and MMCA.Store, obtained
   from the unchanged `IUnitOfWork` accessors by implicit conversion, so no change to how the
   repository is obtained was needed after all; kept as the record of the trade-off as originally
   accepted.)* Because the only accessors return the
@@ -434,10 +448,12 @@ change, none of them behavioral:
   helpers, and the visibility helper's locals), each still assigned from the unit of work. Helpers
   that also write kept the composite, correctly.
 
-**MMCA.Store has the counterpart staged** on an open pull request (CI green, held unmerged for
-operational reasons unrelated to the change): three read-only holders narrowed, and
-`ProductVariantService` deliberately left on `IReadRepository` because it calls `ExistsAsync` (a
-reader member) and `GetProjectedAsync` (a querier member) from the same field. That refusal is the
+**MMCA.Store ships the counterpart** *(merged to `main` on 2026-08-22, after this revision was
+written; restated here as of 2026-08-23)*: three read-only holders narrowed
+(`CustomerService.cs:14`, `AssignParentCategoryHandler.cs:68`, `UserRegisteredHandler.cs:98`), and
+`ProductVariantService` deliberately left on `IReadRepository`
+(`ProductVariantService.cs:15`) because it calls `ExistsAsync` (a reader member, `:20`, `:26`) and
+`GetProjectedAsync` (a querier member, `:38`, `:55`) from the same field. That refusal is the
 split working as designed: a holder that genuinely needs both halves says so by keeping the
 composite. Both applications also state the convention in their CLAUDE.md files, so new read-only
 code is pointed at the narrow interfaces by guidance as well as by example.
@@ -450,6 +466,6 @@ code is pointed at the narrow interfaces by guidance as well as by example.
   conversion from `GetReadRepository<,>()` is the supported acquisition path.
 - **Half the composition surface still has no caller.** `Or` and `Not`, the specification-taking
   `CountAsync` and `AnyAsync`, and `GetPageByCursorAsync` have zero application callers in any of
-  the four repositories, and MMCA.Helpdesk consumes none of this. The adoption sample is one
-  application shipped and one staged; the "untested by usage" caution above still applies to the
-  members nothing calls.
+  the four repositories, and MMCA.Helpdesk consumes none of this. The adoption sample is two
+  applications, both shipped; the "untested by usage" caution above still applies to the members
+  nothing calls.

@@ -1,7 +1,9 @@
 # ADR-089: Gateway Topology Owned by Configuration
 
 ## Status
-Accepted (2026-08-18). **Amends [ADR-008](008-service-extraction-topology.md)**: that record gave the
+Accepted (2026-08-18; revised 2026-08-23: ADC's table gained a 27th route, `/Activities`, on
+2026-08-19, and the bicep anchors below are corrected). **Amends
+[ADR-008](008-service-extraction-topology.md)**: that record gave the
 Gateway the route-to-service map and expressed it as code (a list of `MapForwarder` calls). The map
 itself is unchanged; what changed is where it is written. YARP `ReverseProxy` **configuration** is now
 the single source of the route table, the per-route HTTP version policy lives in cluster
@@ -46,7 +48,7 @@ because it is the duplication a reader assumes exists. The Aspire AppHost holds 
 start-ordering (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:252-262`,
 `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:218-226`) and the bicep templates hold
 `services__<name>__http__0` environment variables on the gateway container app
-(`MMCA.ADC/infra/main.bicep:1671-1674`, `MMCA.Store/infra/main.bicep:1369-1371`). Both are **address
+(`MMCA.ADC/infra/main.bicep:1704-1707`, `MMCA.Store/infra/main.bicep:1400-1402`). Both are **address
 books**: service name to URL, with no path prefix anywhere in them. They answer "where does
 `conference` resolve" and never "what reaches conference", so neither is a second route table and
 neither should become one.
@@ -80,8 +82,9 @@ Each gateway calls `AddReverseProxy().LoadFromConfig(builder.Configuration.GetSe
 and `MapReverseProxy()`, and the `MapForwarder` lists are deleted. ADC wires it at
 `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:90-93` and maps it at `:138`; Store at
 `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115-117` and `:150`. Routes and clusters live
-in the gateway's own `appsettings.json`: 26 routes over five clusters for ADC
-(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:20-175`) and 10 routes over three clusters
+in the gateway's own `appsettings.json`: 27 routes over five clusters for ADC (4 identity, 16
+conference, 5 engagement, 2 notification, at
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:20-179`) and 10 routes over three clusters
 for Store (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:19-92`). Destinations stay
 Aspire service-discovery names, so nothing about ADR-008's transport-at-the-edge posture, the AppHost
 wiring or the bicep address book changes: what changed is that the path-prefix-to-cluster mapping is
@@ -194,7 +197,7 @@ declarative shape makes the difference a diff instead of an archaeology exercise
   `appsettings.json` has no `ForwardHttp2` key. Configuration makes divergence easier to see and does
   not make it impossible, and no shared framework code enforces the shape, since the gateways are
   consumer-owned hosts by design.
-- **A JSON table reviews less well than a code diff.** A reviewer reading 26 routes in
+- **A JSON table reviews less well than a code diff.** A reviewer reading 27 routes in
   `appsettings.json` has no types, no navigation and no compiler; the gain in editability is partly a
   loss in review signal, offset only by the test.
 

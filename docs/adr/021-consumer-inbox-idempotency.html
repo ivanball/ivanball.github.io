@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -258,13 +263,13 @@
           migration. Adoption inventory as of 2026-08-13: <strong>three ADC services consume from the broker</strong> and
           so use their inbox for real, plus Store Sales. ADC Identity consumes <code>SpeakerLinkedToUser</code> and
           <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:299-300</code>),
-          ADC Conference consumes <code>UserRegistered</code> (<code>MMCA.ADC.Conference.Service/Program.cs:365</code>), and ADC
+          ADC Conference consumes <code>UserRegistered</code> (<code>MMCA.ADC.Conference.Service/Program.cs:372</code>), and ADC
           Engagement consumes four events, <code>AttendeeCheckedIn</code>, <code>SessionFeedbackSubmitted</code>,
-          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:299-302</code>), the
+          <code>EventFeedbackSubmitted</code> and <code>UserDeleted</code> (<code>MMCA.ADC.Engagement.Service/Program.cs:305-308</code>), the
           first of which is ADC&#39;s first <strong>self-consumption</strong> over the broker: Engagement publishes
           <code>AttendeeCheckedIn</code> and consumes it back, which is precisely the shape a redelivery would double-count,
           so the inbox is load-bearing there rather than decorative. Store Sales consumes <code>ProductVariantChanged</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:251</code>). Only <strong>ADC Notification</strong>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:253</code>). Only <strong>ADC Notification</strong>
           now carries <code>EnableInbox: true</code> and the table while registering no consumer, so its inbox alone is
           provisioned and unused (functionally harmless). The mirror image is equally harmless and worth stating
           because it looks like the opposite mistake: Store Catalog and Store Identity carry the <code>InboxMessages</code>
@@ -317,12 +322,12 @@
           <ol>
           <li><strong>A broker-connected host with no inbox says so at startup.</strong> <code>AddBrokerMessaging</code> returns early
           for <code>MessageBusProvider.InProcess</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:656-659</code>), which is
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:669-672</code>), which is
           what scopes this to hosts that actually talk to a broker: in-process dispatch never redelivers, so
           there is nothing to warn about. Past that early return, the <code>EnableInbox</code> branch
-          (<code>:686-698</code>) registers <code>EfInboxStore</code> as scoped (<code>:688</code>) when the flag is set, and on the <code>else</code>
-          branch registers <code>NoOpInboxStore</code> as a singleton (<code>:692</code>) <strong>plus</strong> an <code>IHostedService</code> whose only
-          job is to emit one <code>Warning</code> line naming the consequence and the fix (<code>:697</code>). The service is
+          (<code>:699-711</code>) registers <code>EfInboxStore</code> as scoped (<code>:701</code>) when the flag is set, and on the <code>else</code>
+          branch registers <code>NoOpInboxStore</code> as a singleton (<code>:705</code>) <strong>plus</strong> an <code>IHostedService</code> whose only
+          job is to emit one <code>Warning</code> line naming the consequence and the fix (<code>:710</code>). The service is
           <code>InboxDisabledWarningService</code>
           (<code>.../Persistence/Inbox/InboxDisabledWarningService.cs:18-19</code>), and it evaluates nothing at
           runtime: <code>StartAsync</code> logs unconditionally (<code>:22-26</code>), because the condition was already decided by

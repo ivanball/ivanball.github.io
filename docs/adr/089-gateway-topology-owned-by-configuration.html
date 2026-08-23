@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-089: Gateway Topology Owned by Configuration · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-18). Amends ADR-008: that record gave the Gateway the route-to-service map and expressed it as code (a list of MapForwarder calls).…">
+  <meta name="description" content="Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected).…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/089-gateway-topology-owned-by-configuration.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-089: Gateway Topology Owned by Configuration">
-  <meta property="og:description" content="Accepted (2026-08-18). Amends ADR-008: that record gave the Gateway the route-to-service map and expressed it as code (a list of MapForwarder calls).…">
+  <meta property="og:description" content="Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected).…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/089-gateway-topology-owned-by-configuration.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-089: Gateway Topology Owned by Configuration">
-  <meta name="twitter:description" content="Accepted (2026-08-18). Amends ADR-008: that record gave the Gateway the route-to-service map and expressed it as code (a list of MapForwarder calls).…">
+  <meta name="twitter:description" content="Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected).…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"089 · Gateway Topology Owned by Configuration","item":"https://ivanball.github.io/docs/adr/089-gateway-topology-owned-by-configuration.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html" aria-current="page">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -199,7 +204,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-089-gateway-topology-owned-by-configuration">ADR-089: Gateway Topology Owned by Configuration</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-18). <strong>Amends <a href="008-service-extraction-topology.html">ADR-008</a></strong>: that record gave the
+          <p>Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, <code>/Activities</code>, on
+          2026-08-19, and the bicep anchors below are corrected). <strong>Amends
+          <a href="008-service-extraction-topology.html">ADR-008</a></strong>: that record gave the
           Gateway the route-to-service map and expressed it as code (a list of <code>MapForwarder</code> calls). The map
           itself is unchanged; what changed is where it is written. YARP <code>ReverseProxy</code> <strong>configuration</strong> is now
           the single source of the route table, the per-route HTTP version policy lives in cluster
@@ -240,7 +247,7 @@
           start-ordering (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:252-262</code>,
           <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:218-226</code>) and the bicep templates hold
           <code>services__&lt;name&gt;__http__0</code> environment variables on the gateway container app
-          (<code>MMCA.ADC/infra/main.bicep:1671-1674</code>, <code>MMCA.Store/infra/main.bicep:1369-1371</code>). Both are <strong>address
+          (<code>MMCA.ADC/infra/main.bicep:1704-1707</code>, <code>MMCA.Store/infra/main.bicep:1400-1402</code>). Both are <strong>address
           books</strong>: service name to URL, with no path prefix anywhere in them. They answer &quot;where does
           <code>conference</code> resolve&quot; and never &quot;what reaches conference&quot;, so neither is a second route table and
           neither should become one.</p>
@@ -270,8 +277,9 @@
           and <code>MapReverseProxy()</code>, and the <code>MapForwarder</code> lists are deleted. ADC wires it at
           <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:90-93</code> and maps it at <code>:138</code>; Store at
           <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115-117</code> and <code>:150</code>. Routes and clusters live
-          in the gateway&#39;s own <code>appsettings.json</code>: 26 routes over five clusters for ADC
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:20-175</code>) and 10 routes over three clusters
+          in the gateway&#39;s own <code>appsettings.json</code>: 27 routes over five clusters for ADC (4 identity, 16
+          conference, 5 engagement, 2 notification, at
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:20-179</code>) and 10 routes over three clusters
           for Store (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:19-92</code>). Destinations stay
           Aspire service-discovery names, so nothing about ADR-008&#39;s transport-at-the-edge posture, the AppHost
           wiring or the bicep address book changes: what changed is that the path-prefix-to-cluster mapping is
@@ -380,7 +388,7 @@
           <code>appsettings.json</code> has no <code>ForwardHttp2</code> key. Configuration makes divergence easier to see and does
           not make it impossible, and no shared framework code enforces the shape, since the gateways are
           consumer-owned hosts by design.</li>
-          <li><strong>A JSON table reviews less well than a code diff.</strong> A reviewer reading 26 routes in
+          <li><strong>A JSON table reviews less well than a code diff.</strong> A reviewer reading 27 routes in
           <code>appsettings.json</code> has no types, no navigation and no compiler; the gain in editability is partly a
           loss in review signal, offset only by the test.</li>
           </ul>

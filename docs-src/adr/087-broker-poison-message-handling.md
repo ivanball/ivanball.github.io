@@ -53,26 +53,26 @@ minute, ten minutes, one hour. Both live in the `"MessageBus"` section (`:14`).
 The two transports consume them differently, and the asymmetry is the decision:
 
 - **RabbitMQ consults the flag.** `ConfigureBrokerTransport`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:794`) calls
-  `cfg.UseDelayedRedelivery(r => r.Intervals(intervals))` inside `UsingRabbitMq` (`:802`) only under
-  `if (settings.EnableDelayedRedelivery)` (`:813`, the call at `:818`), with the plugin requirement
-  restated at the registration site (`:783-787`, `:809-812`). Default-off is not timidity: the local
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:807`) calls
+  `cfg.UseDelayedRedelivery(r => r.Intervals(intervals))` inside `UsingRabbitMq` (`:815`) only under
+  `if (settings.EnableDelayedRedelivery)` (`:826`, the call at `:831`), with the plugin requirement
+  restated at the registration site (`:794-801`, `:822-825`). Default-off is not timidity: the local
   Aspire broker cannot serve it, so a default-on setting would break every developer's first `F5`
   with a bus-start failure, which is the worst possible place to learn about a broker plugin.
-- **Azure Service Bus does not consult it.** `UsingAzureServiceBus` (`:832`) calls
-  `UseDelayedRedelivery` unconditionally (`:846`), with the reasoning recorded inline (`:839-842`).
+- **Azure Service Bus does not consult it.** `UsingAzureServiceBus` (`:845`) calls
+  `UseDelayedRedelivery` unconditionally (`:859`), with the reasoning recorded inline (`:852-856`).
   Service Bus schedules natively, there is no plugin to be missing, and a production transport that
   can express "try again in an hour" should always express it. Making the operator opt in would mean
   the environment that most needs the behavior is the one most likely to be running without it.
 
 Two details are worth stating so the words above are not read as stronger than the code.
 "Unconditional" means "not gated on the flag": both call sites are still guarded by
-`intervals.Length > 0` (`:816`, `:844`), so an operator who configures an empty interval list turns
+`intervals.Length > 0` (`:829`, `:857`), so an operator who configures an empty interval list turns
 the feature off everywhere. And `RedeliveryIntervalsSeconds` carries **no** DataAnnotations attribute,
 unlike its neighbours `RetryLimit` and the two retry-interval settings, so the ADR-070 fail-fast
 chain does not validate it; non-positive entries are filtered at use time in `BuildRedeliveryIntervals`
-(`:873-876`) instead. In both transports the redelivery filter is registered **before**
-`UseMessageRetry` (`:822`, `:849`), which is what keeps immediate retry innermost and delayed
+(`:886-889`) instead. In both transports the redelivery filter is registered **before**
+`UseMessageRetry` (`:835`, `:862`), which is what keeps immediate retry innermost and delayed
 redelivery outside it.
 
 ### A fault consumer makes an exhausted message visible
@@ -186,7 +186,7 @@ database resilience posture**, recorded here so the asymmetry is a decision rath
   likely to run without second-level redelivery is the one that is not Azure Service Bus. Nothing
   warns a RabbitMQ host that the feature it never enabled is not running.
 - **The intervals are not validated at startup.** `RedeliveryIntervalsSeconds` sits outside the
-  ADR-070 fail-fast chain, so a typo becomes a filtered-out entry at `:873-876` rather than a refusal
+  ADR-070 fail-fast chain, so a typo becomes a filtered-out entry at `:886-889` rather than a refusal
   to boot. An operator who writes `[0, 0, 0]` silently gets no delayed redelivery at all.
 - **An hour-long redelivery window widens the duplicate window with it.** A message redelivered at
   `+3600s` runs its handlers an hour after the original attempt, so ADR-021's inbox and every

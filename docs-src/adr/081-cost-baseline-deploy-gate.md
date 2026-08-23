@@ -6,9 +6,9 @@ Accepted (2026-08-14).
 ## Context
 Both deployed apps run a deliberately small production footprint: every Container App is declared with
 `maxReplicas: 2` and every SQL database with the `Basic` tier
-(`MMCA.Store/infra/main.bicep:1083,1182,1309,1384,1481` and `:594-598,624-628`;
-`MMCA.ADC/infra/main.bicep:1211,1335,1459,1708,1826` and `:634-638,667-671`, with ADC's Notification
-app deliberately right-sized at `maxReplicas: 1`, `MMCA.ADC/infra/main.bicep:1614-1616`). That
+(`MMCA.Store/infra/main.bicep:1101,1206,1339,1415,1513` and `:594-598,624-628`;
+`MMCA.ADC/infra/main.bicep:1228,1357,1486,1741,1860` and `:634-638,667-671`, with ADC's Notification
+app deliberately right-sized at `maxReplicas: 1`, `MMCA.ADC/infra/main.bicep:1646-1648`). That
 footprint is the cost baseline, and it is what the monthly bill is planned against.
 
 The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
@@ -18,10 +18,10 @@ it is silent: nothing breaks, no alert fires on a healthy oversized system, and 
 traffic perfectly while costing several times its baseline.
 
 The existing control against that was the monthly Azure budget declared in both Bicep templates
-(`MMCA.Store/infra/main.bicep:508-534`, `MMCA.ADC/infra/main.bicep:551`), which notifies at 80% of
+(`MMCA.Store/infra/main.bicep:519-547`, `MMCA.ADC/infra/main.bicep:562`), which notifies at 80% of
 actual spend and 100% of forecast spend. The Store template names the exact case it is meant to catch
 in its own comment, "a scale-up (manual SQL-tier / replica) silently running for weeks"
-(`MMCA.Store/infra/main.bicep:505-507`). A spend threshold is a lagging indicator: by the time it
+(`MMCA.Store/infra/main.bicep:517`). A spend threshold is a lagging indicator: by the time it
 trips, weeks of the overspend have already happened, and the notification says a number, not which
 resource is wrong. What was missing was a check on the **configuration** itself, and a moment at which
 someone would have to look at it.
@@ -63,7 +63,7 @@ The cost baseline is asserted by a **read-only reusable workflow** that both run
   (`MMCA.Store/.github/workflows/cost-guard.yml:82`), because its retained legacy `MMCAStore` archive
   was downgraded from S0 to Basic and the bump back to S0 is the documented rollback path, so a
   rollback must not read as drift (`MMCA.Store/.github/workflows/cost-guard.yml:9-12`, and the same
-  reasoning beside the resource at `MMCA.Store/infra/main.bicep:586-588`).
+  reasoning beside the resource at `MMCA.Store/infra/main.bicep:596-599`).
 
 - **It never mutates anything.** Every call is an `az ... list` or `az ... show`; the job's stated
   contract is that on drift it fails the run and prints what to reset

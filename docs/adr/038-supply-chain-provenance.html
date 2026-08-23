@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -214,7 +219,7 @@
           establish provenance and integrity, an SBOM release gate, committed lock files, a CI vulnerability
           audit, and package source mapping, already live in the release and CI workflows,
           <code>Directory.Build.props</code>, and <code>nuget.config</code>, and are summarized for consumers in SECURITY.md
-          (SECURITY.md:33-42). No ADR owned them as a single coherent posture. This record does, and it exceeds
+          (SECURITY.md:42-51). No ADR owned them as a single coherent posture. This record does, and it exceeds
           ADR-016&#39;s scope: ADR-016 gestures at lock files as sweep mechanics, this ADR owns supply-chain
           integrity as the decision.</p>
           <h2 id="decision">Decision</h2>
@@ -303,7 +308,7 @@
           (architecture invariants enforced as build-gating fitness functions; the same gate-the-build posture
           applied here to dependencies), ADR-010 (integration-event schema versioning; another release-discipline
           control that turns a contract into an enforced signal). See SECURITY.md (&quot;Dependency &amp; supply-chain
-          security&quot;, SECURITY.md:33-42) for the consumer-facing summary and rubric §32
+          security&quot;, SECURITY.md:42-51) for the consumer-facing summary and rubric §32
           (ArchitectureEvaluationCriteria.md:799-817) for the evaluation criteria.</p>
           
         <div class="doc-foot btn-row">

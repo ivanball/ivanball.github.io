@@ -8,7 +8,10 @@ path is unchanged; see the Revision (2026-08-13) below. Revised 2026-08-18: **Ti
 per-process**. An `OutputCacheEvictionRequested` integration event lets a mutation in one service evict
 another service's output cache over the existing outbox, broker and inbox path, per tag and
 best-effort, on a new `MMCA.Common.OutputCache` meter. Tier 1 is untouched by that change, which is the
-mirror image of ADR-077's Tier-1-only amendment; see the Revision (2026-08-18) at the end.
+mirror image of ADR-077's Tier-1-only amendment; see the Revision (2026-08-18) at the end. Revised
+2026-08-23: the counter trade-off now records that `ICacheService`'s own `<remarks>` still anticipates a
+Redis `INCR` override that no implementation provides, so a reader who starts at the interface is not
+left with the opposite conclusion; anchors re-verified throughout.
 
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
@@ -36,7 +39,7 @@ Cache in two tiers, each with its own substrate.
   Caching decorators, `LoginProtectionService`) depends only on this interface, never on a concrete
   cache or on Redis.
 - **The backing store is chosen at startup, not in code (amended by ADR-077).** `AddCaching()`
-  (`MMCA.Common.Infrastructure/DependencyInjection.cs:164`, called from `AddInfrastructure`) registers
+  (`MMCA.Common.Infrastructure/DependencyInjection.cs:177`, called from `AddInfrastructure`) registers
   `DistributedCacheService` when a real `IDistributedCache` is present (one that is not the in-memory
   `MemoryDistributedCache`, i.e. Aspire registered Redis), and otherwise `MemoryCacheService`. The
   monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
@@ -65,8 +68,11 @@ Cache in two tiers, each with its own substrate.
 
 ### Tier 2: an HTTP output-cache edge
 - **The pipeline always enables it; policies are opt-in per host.** `MMCA.Common.API` calls
-  `app.UseOutputCache()` in the shared middleware pipeline
-  (`MMCA.Common.API/Startup/WebApplicationExtensions.cs:111`), but ships no policies. Each service
+  `app.UseOutputCache()` in the shared middleware pipeline, which is a builder of named steps rather
+  than a run of inline calls: the step is registered at
+  `MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:138` under the name
+  `MiddlewarePipelineStepNames.OutputCache` (`MMCA.Common.API/Startup/MiddlewarePipelineStepNames.cs:64`).
+  The pipeline ships no policies. Each service
   registers its own `AddOutputCache(...)`: most declare a `NoCache` base policy (Identity, Sales,
   Engagement, Notification), while the read-heavy public services declare real cacheable policies. ADC
   Conference and Store Catalog are the adopters today, with named policies and `[OutputCache]` on their
@@ -138,7 +144,7 @@ Cache in two tiers, each with its own substrate.
   hot objects cost more than the in-process path.
 - **Counter increments are not atomic, and that is the accepted position.**
   `ICacheService.IncrementAsync` is a default interface member implemented as a read-modify-write
-  (`MMCA.Common.Application/Interfaces/ICacheService.cs:57`), and `DistributedCacheService` overrides it
+  (`MMCA.Common.Application/Interfaces/ICacheService.cs:59`), and `DistributedCacheService` overrides it
   with the same read-modify-write shape rather than Redis `INCR`
   (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:127-133`). The reason is a storage
   format mismatch, documented at the implementation
@@ -149,7 +155,12 @@ Cache in two tiers, each with its own substrate.
   login, in the ADR-029 case). A counter has to live in the same storage format as the reads that
   consult it, so readability wins over atomicity here: the ADR-029 brute-force and rate-limit counters
   can undercount under genuinely concurrent increments, and an occasional lost increment is the accepted
-  cost of a counter that is always readable.
+  cost of a counter that is always readable. One caveat for a reader who goes to the interface first:
+  its `<remarks>` still anticipates the opposite outcome (backing stores that can do better with Redis
+  `INCR` override it, `MMCA.Common.Application/Interfaces/ICacheService.cs:54-57`). No implementation
+  does, and the one that could deliberately does not, for the storage-format reason above. Read that
+  comment as an option the framework declined, not as a description of a shipped override; the
+  implementation's own `<remarks>` is the accurate one.
 - **Output caching is opt-in per service.** A read-heavy service that forgets to register a real
   `AddOutputCache` policy gets no edge caching (the `NoCache` base is the safe default), the same
   audit-the-inventory caveat as other opt-in capabilities (ADR-019/020/021). Adopting a policy is only
@@ -165,7 +176,10 @@ substrate follows), ADR-040 (amends this ADR's Tier 2: the adopters' public-read
 authenticated, bearer-carrying requests too, not only anonymous traffic),
 [ADR-077](077-hybridcache-substrate.md) (amends this ADR's Tier 1: the opt-in `HybridCacheService`
 substrate, the disjoint `hc:` keyspace that generalizes the `WRONGTYPE` lesson recorded in the counter
-trade-off above, and the L1 bypass that keeps `IncrementAsync` semantics unchanged).
+trade-off above, and the L1 bypass that keeps `IncrementAsync` semantics unchanged),
+[ADR-090](090-event-upcaster-registration.md) (the upcaster registration and the
+`RegisterUpcastedIntegrationEventConsumer<TEvent>` sibling that a future reshape of this ADR's
+`OutputCacheEvictionRequested` contract would go through).
 
 ## Revision (2026-07-24)
 Three substrate corrections from a code review.
@@ -336,6 +350,10 @@ One substrate correction plus a line-anchor re-verification. No decision and no 
    preceding revision treated its predecessor: the anchors it recorded were correct on 2026-08-07 and
    have since drifted again.
 
+Items 3, 4 and 6 of this entry were correct on 2026-08-14 and have since drifted, and item 4's
+`WebApplicationExtensions.cs` home no longer exists at all: read the entry as the state on that date,
+and the 2026-08-23 entry below for the current anchors.
+
 ## Revision (2026-08-18)
 Every previous revision moved Tier 1. This one moves **Tier 2**, and it is the first change to the
 output-cache edge since [ADR-040](040-authenticated-output-caching-for-public-reads.md).
@@ -349,10 +367,10 @@ invalidation that crossed a boundary was the expiry clock.
 
 ### An integration event carries the eviction
 `OutputCacheEvictionRequested`
-(`MMCA.Common/Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:23`) is
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:27`) is
 a sealed record over `BaseIntegrationEvent` whose only own member is
-`IReadOnlyList<string> Tags { get; init; } = []` (`:31`), inheriting `SchemaVersion => 1`
-(`.../DomainEvents/BaseIntegrationEvent.cs:22`) and therefore ADR-010's versioning contract. It is the
+`IReadOnlyList<string> Tags { get; init; } = []` (`:35`), inheriting `SchemaVersion => 1`
+(`.../DomainEvents/BaseIntegrationEvent.cs:32`) and therefore ADR-010's versioning contract. It is the
 **first concrete integration event the framework itself ships**: a repository-wide search of `Source/`
 finds no other, every prior hit being the interface, the abstract base or generic plumbing. Until now
 the framework provided the delivery machinery and consumers provided all the messages.
@@ -370,9 +388,13 @@ be: evicting twice is free, and evicting late is what a TTL is for.
 
 ### The consumer side is two registrations in two packages
 `RegisterOutputCacheEvictionConsumer(bool registerFaultConsumer = true)`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:68-70`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:108-110`)
 is the MassTransit-side shorthand for `RegisterIntegrationEventConsumer<OutputCacheEvictionRequested>()`,
-so it inherits ADR-087's fault consumer by default. `AddOutputCacheEvictionHandler()`
+so it inherits ADR-087's fault consumer by default. It now sits below a sibling in that same file,
+`RegisterUpcastedIntegrationEventConsumer<TEvent>` (`:78-90`), the
+[ADR-090](090-event-upcaster-registration.md) registration a host adds while a retired contract still
+drains from a queue. The two are alternatives on one event, never both: registering a plain and an
+upcasting consumer for the same type puts two consumers on one queue. `AddOutputCacheEvictionHandler()`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:32`)
 registers the handler itself, through `TryAddEnumerable` (`:36-38`). They are in different packages
 because the two halves are genuinely different concerns (broker registration is Infrastructure, output
@@ -415,3 +437,46 @@ reason two "best effort" counters exist in one release.
 - **Tier 1 and Tier 2 remain separate invalidation models.** A single mutation may need a Tier 1 prefix
   invalidation and a Tier 2 tag eviction, and nothing coordinates them; ADR-077 moved one, this
   revision moves the other, and they still do not meet.
+
+## Revision (2026-08-23)
+One correction of substance plus a line-anchor re-verification. No decision and no behavior changed.
+
+1. **The counter trade-off now names the contradiction a reader will hit.** `ICacheService`'s
+   `<remarks>` on `IncrementAsync` says that backing stores which can do better with Redis `INCR`
+   override it (`MMCA.Common.Application/Interfaces/ICacheService.cs:54-57`). Nothing does. The only
+   store that could, `DistributedCacheService`, deliberately keeps the read-modify-write and documents
+   why at its own implementation (`DistributedCacheService.cs:107-133`). The Revision (2026-07-25)
+   already recorded that no `INCR` override exists or is intended, but this ADR never said that the
+   interface comment still points the other way, so a reader starting from the interface reached the
+   opposite conclusion. Trade-offs now says which of the two comments describes shipped behavior. The
+   source comment is unchanged by this entry; only the ADR is.
+2. **Tier 2's `UseOutputCache` call has a new home, and a different shape of home.**
+   `app.UseOutputCache()` is no longer an inline call in
+   `MMCA.Common.API/Startup/WebApplicationExtensions.cs` (it is not in that file at all). The shared
+   middleware pipeline is now assembled from named steps: the output-cache step is at
+   `MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:138`, named by
+   `MiddlewarePipelineStepNames.OutputCache`
+   (`MMCA.Common.API/Startup/MiddlewarePipelineStepNames.cs:64`). The decision is untouched, the
+   pipeline still always enables output caching and still ships no policies, but the citation now
+   points at a builder rather than at a sequence of calls.
+3. **The eviction event's method surface gained an ADR-090 sibling.**
+   `RegisterOutputCacheEvictionConsumer` moved to
+   `IntegrationEventConsumerExtensions.cs:108-110` (from `:68-70`) because
+   `RegisterUpcastedIntegrationEventConsumer<TEvent>` (`:78-90`) was added above it, the registration
+   [ADR-090](090-event-upcaster-registration.md) defines for draining a retired contract. The
+   2026-08-18 revision predates it and did not mention it; the consumer paragraph now does, including
+   that the two are alternatives on one event rather than a pair. ADR-090 is added to Related.
+4. **Remaining anchors.** `AddCaching` is now at
+   `MMCA.Common.Infrastructure/DependencyInjection.cs:177` (from `:164`).
+   `OutputCacheEvictionRequested`'s declaration is at `:27` and `Tags` at `:35` (from `:23` and `:31`),
+   both pushed down four lines by a Frozen-contract-candidate paragraph added to the doc comment.
+   `BaseIntegrationEvent.SchemaVersion` is at `:32` (from `:22`), likewise behind added doc text.
+   `ICacheService`'s `IncrementAsync` declaration is at `:59` (from `:57`; `:57` is now the last line of
+   the `<remarks>` discussed in item 1). Re-checked and unchanged: `CacheOptions.cs:17` and `:22-25`,
+   both adopters' `AddStackExchangeRedisOutputCache` calls and all seven paired Redis registrations,
+   `DistributedCacheService.cs:108-126` and `:127-133`, the Tier 2 policy anchors
+   (`OutputCacheOptionsExtensions.cs:20`, `PublicEndpointOutputCachePolicy.cs:35`, `:71-75`,
+   `:109-113`), `OutputCacheEvictionExtensions.cs:32` and `:36-38`, `OutputCacheEvictionHandler.cs:32`
+   and `:44-63`, `OutputCacheMetrics.cs:19` and `:29-37`, and `MMCA.Common.Aspire/Extensions.cs:169`.
+5. **The 2026-08-14 anchor claim is annotated rather than removed**, consistent with how every
+   preceding revision treated its predecessor.

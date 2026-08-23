@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -252,8 +257,8 @@
           window, and a single-pattern eviction would leave them unreachable until the next day.</p>
           <h3 id="icacheservice-gains-a-default-getorcreateasync"><code>ICacheService</code> gains a default <code>GetOrCreateAsync</code></h3>
           <p><code>ICacheService</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs</code>, <code>GetAsync</code> at <code>:15</code>,
-          <code>SetAsync</code> at <code>:24</code>, <code>RemoveAsync</code> at <code>:34</code>, <code>RemoveByPrefixAsync</code> at <code>:40</code>) gains
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs</code>, <code>GetAsync</code> at <code>:17</code>,
+          <code>SetAsync</code> at <code>:26</code>, <code>RemoveAsync</code> at <code>:36</code>, <code>RemoveByPrefixAsync</code> at <code>:42</code>) gains
           <code>GetOrCreateAsync&lt;T&gt;(key, factory, expiration?, cancellationToken)</code> as a <strong>default interface member</strong>,
           following the <code>IncrementAsync</code> precedent at <code>:57</code> precisely because that precedent proved the shape is
           non-breaking: no existing implementer, in the framework or in a consumer, has to change. The default
@@ -301,14 +306,14 @@
           the L1 benefit for free, because their reads go through <code>GetAsync</code>.</p>
           <h3 id="registration-is-one-opt-in-call">Registration is one opt-in call</h3>
           <p><code>AddCommonHybridCache(Action&lt;HybridCacheOptions&gt;? configure = null)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:248</code>) calls <code>AddHybridCache</code> with
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:261</code>) calls <code>AddHybridCache</code> with
           defaults matching <code>CacheOptions</code> (<code>LocalCacheExpiration</code> 30 seconds), then <code>RemoveAll&lt;ICacheService&gt;()</code>
-          (<code>:266</code>) and an <code>AddSingleton&lt;ICacheService&gt;</code> <strong>factory</strong> (<code>:267</code>), not the two-generic-argument
+          (<code>:279</code>) and an <code>AddSingleton&lt;ICacheService&gt;</code> <strong>factory</strong> (<code>:280</code>), not the two-generic-argument
           <code>AddSingleton&lt;ICacheService, HybridCacheService&gt;</code> form: the lambda resolves the logger (falling back to
           <code>NullLogger</code> when none is registered), the optional <code>IConnectionMultiplexer</code> and the <code>CacheKeyNamespace</code>
           itself and hands them to the constructor, rather than leaving the optional parameters to the container.
           Remove-then-add makes the call order-independent against <code>AddInfrastructure</code>, whose <code>AddCaching</code> registers
-          its substrate with <code>TryAddSingleton</code> (<code>:175</code>): the opt-in wins either way.</p>
+          its substrate with <code>TryAddSingleton</code> (<code>:188</code>): the opt-in wins either way.</p>
           <h3 id="tags-are-deferred">Tags are deferred</h3>
           <p><code>HybridCache.RemoveByTagAsync</code> would eventually retire prefix invalidation and its SCAN cost, and it is not
           in this release: adopting tags means every cache-writing call site declares its tags, a public-contract

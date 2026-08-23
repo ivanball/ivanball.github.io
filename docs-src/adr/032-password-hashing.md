@@ -1,7 +1,8 @@
 # ADR-032: Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility
 
 ## Status
-Accepted (2026-06-29, adoption note revised 2026-07-06, registration note revised 2026-08-01).
+Accepted (2026-06-29, adoption note revised 2026-07-06, registration note revised 2026-08-01,
+call-site hoist recorded 2026-08-23).
 
 ## Context
 Identity stores a credential as a (salt, hash) pair, never plaintext. The framework needs one
@@ -21,8 +22,8 @@ factor, and comparison are decided once and not re-implemented per app. Two forc
 Provide a single `IPasswordHasher` (`MMCA.Common.Application.Interfaces.Infrastructure`,
 `IPasswordHasher.cs:6`) with one implementation `PasswordHasher`
 (`Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12`), registered as a singleton via
-`TryAddSingleton` (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:462`, in the
-`AddServices` helper that `AddInfrastructure` calls at `DependencyInjection.cs:154`). The call site
+`TryAddSingleton` (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:475`, in the
+`AddServices` helper that `AddInfrastructure` calls at `DependencyInjection.cs:167`). The call site
 always runs, but `TryAdd` semantics mean a host that has already registered its own `IPasswordHasher`
 keeps it: the framework supplies the default hasher rather than forcing it. The type is stateless (only
 `const` parameters), so
@@ -50,7 +51,7 @@ the singleton lifetime is safe.
 - **Comparison is constant time.** Both paths compare the recomputed bytes to the stored hash with
   `CryptographicOperations.FixedTimeEquals` (`PasswordHasher.cs:58`), which always reads the full length
   so the verify time does not leak how many leading bytes matched.
-- **Adopted by both apps' Identity flow, through a shared base.** Each app's `AuthenticationService` is now a
+- **Adopted by both apps' Identity flow, through shared bases.** Each app's `AuthenticationService` is now a
   sealed subclass of `AuthenticationServiceBase<TUser>`
   (`Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34`) that passes `IPasswordHasher`
   into the base constructor rather than calling the hasher itself. The login-time `VerifyPassword`
@@ -59,13 +60,21 @@ the singleton lifetime is safe.
   declares the `IPasswordHasher` parameter and forwards it to the base
   (`MMCA.ADC/.../Identity.Application/Users/AuthenticationService.cs:38`, forwarded at `AuthenticationService.cs:43`);
   Store's subclass does the same (`MMCA.Store/.../Identity.Application/Users/AuthenticationService.cs:23`,
-  forwarded at `AuthenticationService.cs:30`). A handful of use cases still inject `IPasswordHasher` directly
-  rather than through the base: both apps' `ChangePasswordHandler`
-  (`MMCA.ADC` `.../UseCases/ChangePassword/ChangePasswordHandler.cs:19`, `MMCA.Store`
-  `.../UseCases/ChangePassword/ChangePasswordHandler.cs:18`) verify the current
-  password before hashing the new one, and both apps' `IdentityModuleDbSeeder`
-  (`MMCA.ADC` `.../Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:29`, `MMCA.Store`
-  `.../Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:24`) hash the seeded accounts' passwords.
+  forwarded at `AuthenticationService.cs:30`). The other two hasher call sites are hoisted the same way, each
+  into its own shared base. The change-password workflow lives in
+  `ChangePasswordHandlerBase<TUser, TCommand>` (`MMCA.Common.Application.Users.UseCases.ChangePassword`,
+  `ChangePasswordHandlerBase.cs:24`), which verifies the current password (`ChangePasswordHandlerBase.cs:55`)
+  before hashing the new one (`ChangePasswordHandlerBase.cs:61`); each app's `ChangePasswordHandler` is a sealed
+  subclass that only declares the `IPasswordHasher` parameter and forwards it (`MMCA.ADC`
+  `.../UseCases/ChangePassword/ChangePasswordHandler.cs:19`, `MMCA.Store`
+  `.../UseCases/ChangePassword/ChangePasswordHandler.cs:18`). Seeding lives in
+  `IdentityModuleDbSeederBase<TUser>` (`MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding`,
+  `IdentityModuleDbSeederBase.cs:38`), which hashes each seeded account's password
+  (`IdentityModuleDbSeederBase.cs:103`); each app's `IdentityModuleDbSeeder` supplies only the account list and
+  forwards `IPasswordHasher` to the base (`MMCA.ADC`
+  `.../Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:29`, `MMCA.Store`
+  `.../Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:24`). Every hasher invocation both apps depend
+  on therefore sits in framework code; the app code only injects the dependency and passes it down.
 
 ## Rationale
 - **One framework-owned primitive, not per-app crypto.** Putting the algorithm, work factor, salt size,
@@ -106,5 +115,31 @@ ADR-005 (soft-delete vs erasure: the same Infrastructure layer's `EncryptedStrin
 sensitive columns, the at-rest counterpart to hashing credentials),
 ADR-029 (authentication brute-force protection: lockout and throttling wrap the same login path whose
 final credential check is this hasher).
-This ADR supersedes the one-line "Password hashing" note in `SECURITY.md:25` with a governance record;
+This ADR supersedes the one-line "Password hashing" note in `SECURITY.md:29` with a governance record;
 the security model summary there stays as the reader-facing pointer.
+
+## Revision (2026-08-23)
+**The decision is unchanged: one framework-owned `IPasswordHasher`, PBKDF2-HMAC-SHA512 for new passwords,
+salt-length dispatch on verification.** What changed is where the last two call sites live. The two use cases
+this record used to list as exceptions to the base-hoisting pattern (`ChangePasswordHandler` and
+`IdentityModuleDbSeeder`) have since been hoisted the same way `AuthenticationService` was, into their own
+shared Common bases.
+
+1. **Change-password.** The verify-then-hash workflow lives once in `ChangePasswordHandlerBase<TUser, TCommand>`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:24`):
+   `VerifyPassword` against the stored hash and salt at `:55`, `HashPassword` for the new credential at `:61`,
+   and the aggregate's own `ChangePassword` invariant at `:62`. The per-app classes remain as sealed subclasses
+   with no body of their own (ADC `ChangePasswordHandler.cs:17-23`, Store `ChangePasswordHandler.cs:16-20`),
+   deliberately keeping their names: `HandlerName` defaults to the runtime type name
+   (`ChangePasswordHandlerBase.cs:39`), so the `source` reported on every error stays the
+   `ChangePasswordHandler` string clients already match on.
+2. **Seeding.** The seed hash call lives once in `IdentityModuleDbSeederBase<TUser>`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:38`,
+   hashing at `:103`). The per-app seeders now supply data rather than behavior: an `Accounts` list plus a
+   `CreateUser` factory (abstract at `IdentityModuleDbSeederBase.cs:90`), forwarding `IPasswordHasher` to the base
+   constructor (ADC `IdentityModuleDbSeeder.cs:27-30`, Store `IdentityModuleDbSeeder.cs:22-25`).
+
+The effect on this ADR's guarantees: the "one framework-owned primitive" rationale now holds for the whole
+Identity credential surface, not just login and registration. No file under either app's `Source/` invokes
+`IPasswordHasher` at all; both apps only inject it and pass it to a Common base, so a future hardening (a
+higher work factor, a third format) reaches every credential path in both apps through the framework alone.

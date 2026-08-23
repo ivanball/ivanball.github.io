@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -224,7 +229,7 @@
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:153-158</code>), but it is a default,
           not a rule: ADC runs two 60-second policies whose payload cannot wait five minutes (<code>NowNextCache</code>,
           a clock-dependent now-and-next snapshot, and <code>BookmarkCountsCache</code>, written by another service;
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:251,263</code>).</p>
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:252,264</code>).</p>
           <p>That design was silently inert for the traffic that matters. The shared UI HttpClient pipeline
           attaches the stored Bearer token to every outgoing API request via <code>AuthDelegatingHandler</code>,
           including reads of public endpoints whose payload is identical for every caller. ASP.NET Core&#39;s
@@ -333,11 +338,11 @@
           exactly that: <code>UserSessionBookmarkCacheEvictionHandler</code>
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:43</code>,
           raising the event at <code>:77</code>) with the Conference host consuming it (<code>AddOutputCacheEvictionHandler()</code>
-          at <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269</code>,
-          <code>RegisterOutputCacheEvictionConsumer()</code> at <code>:366</code>), keeping the short TTL as the backstop for a lost
-          or late event rather than the only defense (<code>BookmarkCountsCache</code>, 60 seconds, <code>Program.cs:263</code>).
+          at <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:270</code>,
+          <code>RegisterOutputCacheEvictionConsumer()</code> at <code>:373</code>), keeping the short TTL as the backstop for a lost
+          or late event rather than the only defense (<code>BookmarkCountsCache</code>, 60 seconds, <code>Program.cs:264</code>).
           A payload that changes on the clock still has no mutation to evict on, so a short TTL remains its
-          whole answer (<code>NowNextCache</code>, 60 seconds, <code>Program.cs:251</code>). When adding a cached endpoint, check
+          whole answer (<code>NowNextCache</code>, 60 seconds, <code>Program.cs:252</code>). When adding a cached endpoint, check
           which process owns every write that can change its payload, and whether time alone changes it.</p>
           </li>
           <li><p>Cache hit rate becomes meaningful for authenticated load tests; k6 scripts that log in now

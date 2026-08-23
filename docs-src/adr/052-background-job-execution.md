@@ -1,7 +1,8 @@
 # ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)
 
 ## Status
-Accepted (2026-07-24).
+Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one:
+see the revision at the end).
 
 ## Context
 Some requests trigger work that cannot run inside the request: an AI scoring pass over an event's
@@ -57,10 +58,16 @@ starts an untracked `Task` from a request.
 - **One failure posture per drain, stated once.** The drain catches per item so one failed run cannot
   kill the loop, and handles shutdown cancellation separately from failure so a graceful restart is
   not recorded as an error.
-- **Post-commit work attaches to a domain event, not to the command handler.** A handler that
-  enqueues inline runs while the ADR-014 transaction is still open, so a rollback leaves the queued
-  work describing state that never persisted. Raising a domain event and enqueuing from its handler
-  gets post-commit delivery from the existing deferral (ADR-003), with no extra sequencing code.
+- **Post-commit work is enqueued after the write is durable, never beside it.** The failure this
+  rules out is enqueuing while the write can still be undone, which leaves the queued work
+  describing state that never persisted. Two shapes satisfy it and both are in use:
+  - *From a domain event handler*, which gets post-commit delivery from the existing deferral
+    (ADR-003) with no sequencing code in the command handler: domain-event dispatch inside a
+    transactional command is deferred until after the commit succeeds and dropped on rollback.
+  - *From the command handler itself, after `await unitOfWork.SaveChangesAsync(...)` returns*, for
+    commands that do not opt into the ADR-014 transaction decorator (which wraps only commands
+    implementing `ITransactional`, so for the rest `SaveChangesAsync` **is** the commit). The
+    ordering here is manual and load-bearing: the enqueue call has to stay below the save.
 
 Two implementations exist: `LiveChannelPublishQueue` / `LiveChannelPublishProcessor` (ephemeral,
 DropOldest, ADR-039) and `SessionScoringQueue` / `SessionScoringProcessor` (expensive, Wait, dedup
@@ -100,3 +107,42 @@ ADR-008 (the broker, for cross-service work),
 ADR-014 (the transactional decorator whose commit boundary post-commit work attaches to),
 ADR-039 (live channel push, the ephemeral instance of this pattern),
 ADR-025 (startup warm-up, the other hosted-service use in the framework).
+
+## Revision (2026-08-23)
+**The decision is unchanged: post-commit work is still enqueued only once the write is durable.**
+What changed is the record of *how*. This ADR stated the domain-event handler as the mechanism; the
+live-channel enqueue call sites split two-to-four the other way, so the decision bullet now names
+both shapes.
+
+1. **Two call sites enqueue from an `IDomainEventHandler`.**
+   `LivePollVoteChangedHandler` implements `IDomainEventHandler<LivePollVoteChanged>`
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:41`)
+   and enqueues the `poll.results-changed` broadcast at `:79`;
+   `SessionQuestionUpvoteChangedHandler` implements
+   `IDomainEventHandler<SessionQuestionUpvoteChanged>`
+   (`.../SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:42`) and
+   enqueues the upvote-count broadcast at `:80`. Both are singletons that open their own scope
+   (`:53` and `:54` respectively) and wrap the work in `BestEffort.ExecuteAsync` (`:51`, `:52`).
+2. **Four call sites enqueue from the command handler, on the line after the save.** There is no
+   domain event in between:
+   - `CloseLivePollHandler` awaits `unitOfWork.SaveChangesAsync` at
+     `.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:70`, logs at `:72` and calls
+     `EnqueueClosed(poll)` at `:74`; the queue write itself is at `:95`.
+   - `OpenLivePollHandler` saves at `.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:85` and
+     calls `EnqueueOpened(poll)` at `:89`, queue write at `:110`.
+   - `SubmitQuestionHandler` saves at
+     `.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:103` and awaits
+     `EnqueueSubmittedAsync(question)` at `:107`; that helper is a `BestEffort.ExecuteAsync` body
+     (`:130-131`) with one queue write per branch (`:142` approved, `:157` pending-count).
+   - `ModerateQuestionHandler` saves at
+     `.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:80` and awaits
+     `EnqueueModeratedAsync(...)` at `:84`, queue writes at `:138` and `:152`.
+3. **The safety property still holds for those four, because they are not transactional commands.**
+   `TransactionalCommandDecorator` wraps only commands implementing the `ITransactional` marker and
+   passes everything else straight through
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:25-26`,
+   marker at `.../UseCases/ITransactional.cs:6`). No Engagement command implements it, so for these
+   handlers `SaveChangesAsync` is the commit and an enqueue below it is genuinely post-commit. The
+   difference from shape 1 is where the ordering lives: in the command handler's statement order
+   rather than in the ADR-003 deferral, so it is a rule a future edit to those handlers has to keep
+   rather than one the pipeline keeps for them.

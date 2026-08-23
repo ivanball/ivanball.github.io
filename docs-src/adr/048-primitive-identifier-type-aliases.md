@@ -9,6 +9,8 @@ evidence and deleted the folders themselves: being empty, they were untracked by
 every fresh clone, so the deferral now rests on the verifiable absence of any wrapper-struct type).
 Revised 2026-08-14 (Conference's alias file now declares sixteen aliases, `SponsorIdentifierType` having
 been added, and the ADC `User` source citations were re-anchored after an expanded doc comment).
+Revised 2026-08-23 (Conference's alias file now declares seventeen aliases, `ActivityIdentifierType`
+having been added, and the workspace alias count was recounted; see the Revision (2026-08-23) at the end).
 **Revisited by [ADR-085](085-identifier-type-aliases-revisited.md) (2026-08-18)**: the wrapper-struct
 alternative this record deferred was re-evaluated, priced, and deferred again, now against named
 revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
@@ -48,13 +50,13 @@ not as a wrapper struct.
   app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
-  ADC Conference with sixteen aliases
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-20`),
+  ADC Conference with seventeen aliases
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21`),
   and Store Catalog
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-6`).
 - **The alias is the type; there is no wrapping struct.** The right-hand side is a bare primitive.
   Most resolve to `int`; the one deviation in Conference is
-  `SpeakerIdentifierType = System.Guid` (line 18), because Sessionize assigns speakers GUIDs while its
+  `SpeakerIdentifierType = System.Guid` (line 19), because Sessionize assigns speakers GUIDs while its
   other imported entities carry integer IDs (the file header comment records this,
   `MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:1-4`).
 - **Aliases are linked solution-wide via `Directory.Build.props`.** Each `GlobalUsings.*.cs` file is
@@ -124,9 +126,10 @@ deferral it records.
 The last Trade-offs entry above ("Revisiting the trade would be a broad change") described the
 wrapper-struct migration as expensive without ever measuring it, and the Decision's last bullet left
 the alternative "deliberately deferred, not planned" with no condition that would re-open it.
-[ADR-085](085-identifier-type-aliases-revisited.md) closes both gaps: it counts the aliases (43 across
-10 files in the four repositories, 42 of them resolving to `int`), counts the migration surface
-(3,641 occurrences of the alias token across 1,016 files in the four `Source` trees, tests excluded),
+[ADR-085](085-identifier-type-aliases-revisited.md) closes both gaps: it counts the aliases (44 across
+10 files in the four repositories, 43 of them resolving to `int`), counts the migration surface
+(3,192 occurrences of the alias token across 1,001 `.cs`/`.razor` files in the four `Source` trees,
+tests excluded, `TIdentifierType` generic parameters not counted),
 names the concrete failure the deferral leaves open with a live example (ADC's `CheckIn` constructor,
 which takes two different `UserIdentifierType` arguments that can be transposed silently), and records
 three triggers that would re-open the question: a production defect traced to an identifier
@@ -135,3 +138,32 @@ graph.
 
 Read the two records together as one position: this record is the decision and its evidence, ADR-085
 is its price and its expiry condition.
+
+## Revision (2026-08-23)
+No decision and no rationale changed. Two counts did, both because Conference gained an alias.
+
+Conference's alias file declares **seventeen** aliases, `ActivityIdentifierType = int` having been
+added at the head of the list
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21`),
+which also moved `SpeakerIdentifierType = System.Guid` down to line 19 (same file). The Decision
+section above is re-anchored to both.
+
+Recounting the alias files across the four repositories gives **44 aliases across 10 files**: Common
+Domain 1 (`MMCA.Common/Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1`) and Common
+Shared 2 (`MMCA.Common/Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2`);
+ADC Notification 2
+(`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.GlobalUsings.IdentifierType.cs:1-2`),
+Identity 1
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
+Engagement 10
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:4-13`)
+and Conference 17; Store Catalog 4
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-6`),
+Identity 2
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/MMCA.Store.Identity.GlobalUsings.IdentifierType.cs:3-4`)
+and Sales 3
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/MMCA.Store.Sales.GlobalUsings.IdentifierType.cs:5-7`);
+and Helpdesk Tickets 2
+(`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:6,8`).
+43 of the 44 resolve to `int`; `SpeakerIdentifierType` remains the single `Guid`. The count in the
+Revision (2026-08-18) above is refreshed to those numbers, and ADR-085 carries the same pair.

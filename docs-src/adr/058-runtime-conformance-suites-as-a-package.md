@@ -1,7 +1,7 @@
 # ADR-058: Runtime Conformance Suites Shipped as a Package
 
 ## Status
-Accepted (2026-07-28; revised 2026-08-14 and 2026-08-18).
+Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, and 2026-08-23).
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
@@ -132,14 +132,20 @@ and subclasses `DecoratorPipelineOrderTestsBase` against the real Tickets pair `
 `GetTicketByIdQuery`
 (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:30-31`),
 whose `ConfigureServices` runs the seed's own registration sequence: `AddApplication()`, the Tickets
-module scan, then `AddApplicationDecorators()` last (`:50-52`). That file is the only one in the repo
-importing the `MMCA.Common.Testing` namespace (`:10`); the package reference its domain-test project
+module scan, then `AddApplicationDecorators()` last (`:50-52`). Two files in that project import the
+`MMCA.Common.Testing` namespace, and only one of them belongs to this record: that decorator subclass
+(`:10`). The other, `MiddlewarePipelineOrderTests.cs` (`:1`), is a one-line subclass of
+`MiddlewarePipelineOrderTestsBase`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:29`,
+`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15`)
+guarding the ADR-079 shared HTTP edge-pipeline order, not one of the six contract bases above.
+The package reference the domain-test project
 carries (`MMCA.Helpdesk/Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain.Tests/MMCA.Helpdesk.Tickets.Domain.Tests.csproj:8`)
 is still unused. The five HTTP-facing bases have no Helpdesk subclass, so the seed's three test
 projects remain the Tickets domain and application suites plus the architecture suite, which now
 carries both tiers: the ADR-015 structural bases from the separate `MMCA.Common.Testing.Architecture`
-package (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/GlobalUsings.cs:3`) and
-this one runtime conformance base.
+package (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/GlobalUsings.cs:3`), and
+from `MMCA.Common.Testing` one base from this record's set plus the ADR-079 edge-pipeline base.
 
 ## Rationale
 - **Runtime conformance is the half ADR-015 excluded.** Structural rules answer "is the code shaped
@@ -191,6 +197,8 @@ ADR-015 (the structural / registration fitness layer this complements; its state
 runtime behavior", is exactly this ADR's scope, and the two tiers ship as two separate packages),
 ADR-014 (the decorator execution order `DecoratorPipelineOrderTestsBase` proves at runtime), ADR-013
 (the RFC 9457 ProblemDetails edge contract `ProblemDetailsContractTestsBase` guards), ADR-046 (HTTP
-API versioning, whose "shared fitness contract" is one of these bases), ADR-016 (lockstep versioning:
+API versioning, whose "shared fitness contract" is one of these bases), ADR-079 (the shared HTTP edge
+pipeline, whose own order-checking base ships in this same package but is not one of these six),
+ADR-016 (lockstep versioning:
 a new conformance base reaches consumers only through a release and a full sweep). Package inventory
 for the framework lives in `MMCA.Common/FACTS.md`.

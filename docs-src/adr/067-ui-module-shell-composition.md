@@ -48,11 +48,11 @@ Ship the application shell in the framework package and let each module plug int
 - **The nav menu is assembled from the registrations, trimmed per user.** `NavMenu` injects the same
   enumeration (`MMCA.Common.UI/Layout/NavMenu.razor:8`), flattens every module's `NavItems`, drops
   items whose `RequiredRole` or `RequiredClaim` the current principal does not carry, and splits the
-  remainder into the General, My Account and Administration sections (`:185-195`).
+  remainder into the General, My Account and Administration sections (`:196-204`).
 - **Two component extension points render module-supplied types.** `MainLayout` reads
   `AppBarComponentTypes` and `LayoutComponentTypes` off the registrations
   (`MMCA.Common.UI/Layout/MainLayout.razor:98-99`) and renders them through `DynamicComponent` in the
-  top app bar (`:41-44`, mirrored on the mobile top row at `NavMenu.razor:32-35`) and at the root of
+  top app bar (`:41-44`, mirrored on the mobile top row at `NavMenu.razor:41-43`) and at the root of
   the layout (`:80-83`), so a module can add an icon with a badge or a drawer without touching the
   layout.
 - **Registration is one call.** `AddUIModule<TModule>()` runs the Scrutor scan for the module's entity

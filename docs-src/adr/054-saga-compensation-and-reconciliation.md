@@ -41,7 +41,7 @@ saga-timeout backstop for steps that depend on an external system.
   payment is `OrderPaymentFailedSagaHandler` (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:20-22`).
   A new compensating action is a new handler, not an edit to the command.
 - **Each handler runs in its own DI scope.** Domain-event handlers are registered as singletons
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:135-140`), so every one
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:143-148`), so every one
   opens its own scope through `IServiceScopeFactory` (`OrderCancelledSagaHandler.cs:41`,
   `OrderPaymentFailedSagaHandler.cs:29`,
   `.../Infrastructure/Services/PaymentReconciliationService.cs:89,132`), and the ones that persist
@@ -162,7 +162,7 @@ adopted.
   is gone.
 - **Redelivery re-runs every handler of the event, not the failed one.** The dispatcher iterates
   handlers sequentially with no per-handler isolation
-  (`MMCA.Common/.../Services/DomainEventDispatcher.cs:55-64`), so one throwing handler also skips the
+  (`MMCA.Common/.../Services/DomainEventDispatcher.cs:76-85`), so one throwing handler also skips the
   handlers after it, and a redelivery re-runs the ones that already succeeded. The blast radius is
   wider than the one event: the interceptor dispatches every local event of a save in a single call
   and marks their outbox rows processed only afterwards
@@ -173,7 +173,7 @@ adopted.
   swallow its failures itself.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
-  (`MMCA.Store/infra/main.bicep:1309`) two replicas can pick the same stuck order and each spend a
+  (`MMCA.Store/infra/main.bicep:1339`) two replicas can pick the same stuck order and each spend a
   Stripe status call. Correctness holds through the concurrency token; the duplicated external call
   does not deduplicate.
 - **Every compensating action needs its own marker.** There is no generic mechanism: the ADR-021

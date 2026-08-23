@@ -5,7 +5,9 @@ Accepted (2026-07-28). Revised 2026-08-14: re-anchored the host, base-class and 
 their current lines; scoped the "only `@rendermode` attributes" enumeration to the repos this ADR
 governs (the workspace now also holds `InteractiveServer`-only sample and workshop heads); corrected the
 list-page inheritor count from sixteen to eighteen; and narrowed the Helpdesk `MudTable` claim to its
-list page.
+list page. Revised 2026-08-23: re-anchored the ADC `App.razor`, `ADCHome`, AppHost and ADR-051
+citations to their current lines, and set the list-page inheritor count to nineteen (thirteen in ADC,
+six in Store), eighteen of them routable.
 
 ## Context
 Both web applications are Blazor Web Apps: a static server-rendered (SSR) prerender pass produces the
@@ -22,7 +24,7 @@ InteractiveWebAssembly client)" (`027-multi-locale-i18n.md:13-16`); ADR-028 repe
 premise for the theme and records that "there is no free no-flash for InteractiveAuto"
 (`028-dark-theme-mode.md:11-15`, `028-dark-theme-mode.md:64-66`); ADR-051 builds the whole client token
 lifecycle around three heads with three storage stories and ends with "UI code never branches on render
-mode" (`051-client-auth-token-lifecycle.md:13-28`, `051-client-auth-token-lifecycle.md:34`). ADR-042
+mode" (`051-client-auth-token-lifecycle.md:13-28`, `051-client-auth-token-lifecycle.md:36`). ADR-042
 covers the MAUI head and never mentions render modes at all. So four decisions depend on a render-mode
 policy that no ADR states, and the policy itself is only discoverable by reading two `App.razor` files,
 two AppHosts, two CI workflows, and one framework base class. This ADR states it.
@@ -34,7 +36,7 @@ layer rather than by weakening the render mode.
 
 - **The mode is set once, at the root, on the shared router.** Each app's `App.razor` applies the same
   mode expression to `HeadOutlet` and to `Routes`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:16`, `App.razor:20`;
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:41`, `App.razor:45`;
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:17`, `App.razor:21`), and `Routes`
   is the single framework-owned router shared by both apps
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Routes.razor:7`). **No page or component in either app
@@ -46,7 +48,7 @@ layer rather than by weakening the render mode.
   scope and are not counted here.
 - **`InteractiveAuto` is the default for both web heads.** Each `App.razor` resolves an `AppRenderMode`
   property that returns `InteractiveAuto` unless an E2E flag is set
-  (`MMCA.ADC/.../App.razor:41-52`, `MMCA.Store/.../App.razor:39-42`). Both hosts register both runtimes on
+  (`MMCA.ADC/.../App.razor:66-77`, `MMCA.Store/.../App.razor:39-42`). Both hosts register both runtimes on
   both sides of the pipeline: `AddInteractiveServerComponents()` + `AddInteractiveWebAssemblyComponents()`
   at service registration and `AddInteractiveServerRenderMode()` + `AddInteractiveWebAssemblyRenderMode()`
   on `MapRazorComponents<App>()`
@@ -65,8 +67,8 @@ layer rather than by weakening the render mode.
   clears it instead of issuing a redundant API round-trip (`DataGridListPageBase.cs:444-458`), which the
   base's own comment records as the fix for the visible cancel-retry cycle caused by the
   SSR to Server to WASM transition (`DataGridListPageBase.cs:132-135`). The payload is a
-  `PersistedGridState` record of items plus total (`DataGridListPageBase.cs:805`). **Eighteen types
-  inherit this base** (twelve in ADC, six in Store), seventeen of them routable list pages plus ADC's
+  `PersistedGridState` record of items plus total (`DataGridListPageBase.cs:805`). **Nineteen types
+  inherit this base** (thirteen in ADC, six in Store), eighteen of them routable list pages plus ADC's
   non-routable Engagement `AttendeeSearchPanel`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIn/AttendeeSearchPanel.razor.cs:16`),
   so the policy is written once and adopted by inheritance.
@@ -85,7 +87,7 @@ layer rather than by weakening the render mode.
   `if (!RendererInfo.IsInteractive) return;` guard in `OnParametersSetAsync` / `OnInitializedAsync` appears
   across both apps, with two different stated reasons: avoiding the doubled reads under `InteractiveAuto`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionDetail.razor.cs:81-90`,
-  `.../Pages/Public/PublicSpeakerDetail.razor.cs:59`, `.../Pages/Home/ADCHome.razor.cs:101`,
+  `.../Pages/Public/PublicSpeakerDetail.razor.cs:59`, `.../Pages/Home/ADCHome.razor.cs:116`,
   `.../Pages/Speaker/SpeakerDashboard.razor.cs:65`,
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:69`,
   `.../Pages/SessionLive/PresenterView.razor.cs:56`) and the fact that no auth token can be read at
@@ -118,10 +120,10 @@ layer rather than by weakening the render mode.
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:9-14`).
 - **`InteractiveServer` is pinned only under E2E configuration flags, never in production or local dev.**
   `E2E:ForceServer` returns `InteractiveServer`; ADC additionally honors `E2E:ForceWebAssembly`, which
-  returns `InteractiveWebAssembly` and wins if both are set (`MMCA.ADC/.../App.razor:41-52`,
+  returns `InteractiveWebAssembly` and wins if both are set (`MMCA.ADC/.../App.razor:66-77`,
   `MMCA.Store/.../App.razor:39-42`). Those config keys are injected only by the AppHosts, and only when the
-  matching environment variable is present (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:307-322`,
-  `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:276-284`). In CI only `E2E_FORCE_SERVER` is
+  matching environment variable is present (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:305-320`,
+  `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:286-294`). In CI only `E2E_FORCE_SERVER` is
   exported (`MMCA.ADC/.github/workflows/e2e.yml:218`, `MMCA.Store/.github/workflows/e2e.yml:210`);
   ADC's workflow deliberately does **not** set `E2E_FORCE_WASM` and records why
   (`MMCA.ADC/.github/workflows/e2e.yml:203-210`). Both `App.razor` comments cite the same trace evidence:
@@ -147,12 +149,12 @@ layer rather than by weakening the render mode.
   Server circuit's immediate interactivity while the WASM bundle downloads in the background; return
   visits run client-side and stop consuming a server circuit. Because the mode is applied at the root
   router, no page has to opt in or know which runtime it is in, which is the same posture ADR-051 takes
-  for tokens (`051-client-auth-token-lifecycle.md:34`).
+  for tokens (`051-client-auth-token-lifecycle.md:36`).
 - **Keeping prerender is not negotiable, so the double fetch had to be fixed instead.** Prerender is the
   entire reason ADR-022's SSR cookie scheme exists, and it is what makes public browse pages render
   without waiting on a runtime boot. Disabling it would have removed the duplicate fetch by removing the
   feature; persisting the prerender result keeps both.
-- **Encoding the policy in a base class beats documenting it.** Eighteen types inherit the
+- **Encoding the policy in a base class beats documenting it.** Nineteen types inherit the
   persist/restore path, the explicit render-mode registration, and the bounded prerender fetch by
   inheriting one type; the alternative was the same 30 lines repeated per page, which is what
   `CatalogBrowse` shows happening the moment a page falls outside the family.

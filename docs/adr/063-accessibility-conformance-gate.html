@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -201,7 +206,11 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-01). Revised 2026-08-14: refreshed the <code>E2ETestBase</code> helper line anchors (explanatory
           comments were added above <code>ScanGridAsync</code>), the two consumer suite scan counts (ADC now 31, Store now 23),
-          and the MMCA.Helpdesk pin location; no decision changed.</p>
+          and the MMCA.Helpdesk pin location. Revised 2026-08-23: the forgot-password vertical
+          (<a href="091-cache-backed-password-reset.html">ADR-091</a>) added a fourth asserting Identity workflow base and three
+          gallery assertions, so the base count, the gallery count (now eleven assertions across seven classes), and
+          both consumer subclass counts are updated, along with a correction to ADC&#39;s grid/strict split; no decision
+          changed.</p>
           <h2 id="context">Context</h2>
           <p>Accessibility was documented before it was enforced. The narrative guide
           (<a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, rubric section 21) named WCAG 2.1 AA
@@ -235,10 +244,13 @@
           <code>.../Testing.E2E/Infrastructure/AccessibilityViolationException.cs:7</code>) carrying each rule&#39;s impact,
           id, help text, and the offending markup compacted to one line per node (<code>:170-178</code>), so a red gate
           points at the element rather than at a dashboard.</li>
-          <li><strong>The package&#39;s Identity workflow bases assert it, so a consumer inherits the scan.</strong> A subclass
-          gets a login-page, register-page, and profile-page a11y test with no test code of its own:
+          <li><strong>The package&#39;s Identity workflow bases assert it, so a consumer inherits the scan.</strong> Four bases carry
+          the assertion, so a subclass gets a login-page, register-page, profile-page, forgot-password-page, and
+          reset-password-page a11y test with no test code of its own:
           <code>.../Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:83</code>,
-          <code>UserRegistrationTestsBase.cs:91</code>, and <code>ProfileManagementTestsBase.cs:180</code> each call the assert with
+          <code>UserRegistrationTestsBase.cs:91</code>, <code>ProfileManagementTestsBase.cs:180</code>, and
+          <code>PasswordResetTestsBase.cs</code> (class at <code>:17</code>, the two scans asserting at <code>:88</code> and <code>:99</code>, added with the
+          password-recovery flow of <a href="091-cache-backed-password-reset.html">ADR-091</a>) each call the assert with
           <code>AxeOptions.Wcag21Aa</code>.</li>
           <li><strong>Consumer page scans go through two helpers that make strictness explicit.</strong> On
           <code>.../Testing.E2E/Infrastructure/E2ETestBase.cs</code>, <code>ScanAsync()</code> (<code>:293</code>) waits for any loading bar to
@@ -271,20 +283,26 @@
           surface ratio (<code>.../MMCA.Common.UI/Theme/BrandColors.cs:26</code>, rationale at <code>:22-24</code>).</li>
           </ul>
           <p>Adoption differs per repo and is uneven on purpose. <strong>MMCA.Common</strong> scans its own backend-less gallery:
-          eight assertions across five classes over <code>GalleryAxeTestBase</code>
+          eleven assertions across seven classes over <code>GalleryAxeTestBase</code>
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Infrastructure/GalleryAxeTestBase.cs:14</code>),
           covering login (<code>LoginPageE2ETests.cs:34</code>), register (<code>RegisterPageE2ETests.cs:36</code>), the primitives
-          showcase (<code>ComponentsPageE2ETests.cs:80</code>), both dark-mode states (<code>DarkModeE2ETests.cs:30,:40</code>), and the
+          showcase (<code>ComponentsPageE2ETests.cs:80</code>), both dark-mode states (<code>DarkModeE2ETests.cs:30,:40</code>), the
           notification pages, one of which is the gallery&#39;s use of the pager exception
-          (<code>NotificationPagesE2ETests.cs:32</code>, alongside strict scans at <code>:44</code> and <code>:56</code>). <strong>MMCA.Store</strong> subclasses
-          all three Identity bases (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
-          <code>UserRegistrationTests.cs:5</code>, <code>ProfileManagementTests.cs:5</code>). <strong>MMCA.ADC</strong> subclasses two
+          (<code>NotificationPagesE2ETests.cs:32</code>, alongside strict scans at <code>:44</code> and <code>:56</code>), and the password-recovery
+          pages added with <a href="091-cache-backed-password-reset.html">ADR-091</a>: forgot-password in both its form state and
+          its confirmation state, which replaces the form and is therefore a distinct rendering
+          (<code>ForgotPasswordPageE2ETests.cs:46</code> and <code>:60</code>), plus reset-password (<code>ResetPasswordPageE2ETests.cs:48</code>).
+          <strong>MMCA.Store</strong> subclasses all four Identity bases
+          (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
+          <code>UserRegistrationTests.cs:5</code>, <code>ProfileManagementTests.cs:5</code>, <code>PasswordResetTests.cs:5</code>). <strong>MMCA.ADC</strong>
+          subclasses three of the four
           (<code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
-          <code>UserRegistrationTests.cs:5</code>); its <code>ProfileManagementTests</code> derives <code>E2ETestBase</code> directly
+          <code>UserRegistrationTests.cs:5</code>, <code>PasswordResetTests.cs:5</code>); its <code>ProfileManagementTests</code> derives
+          <code>E2ETestBase</code> directly
           (<code>ProfileManagementTests.cs:8</code>) because the ADC profile page supports only password change and account
           deletion, so it does not inherit the base&#39;s profile scan. Beyond the Identity bases each app carries a
           dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 31 page
-          scans (11 through <code>ScanGridAsync</code>, 20 strict) and Store&#39;s
+          scans (10 through <code>ScanGridAsync</code>, 21 strict) and Store&#39;s
           <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 23 (6 grid, 17 strict).
           <strong>MMCA.Helpdesk adopts none of it</strong>: it pins the package version
           (<code>MMCA.Helpdesk/Directory.Packages.props:66</code>) but no project references it, and the repo has no E2E
@@ -300,9 +318,9 @@
           findings gets demoted to advisory itself. Scoping to the four WCAG tags means every failure is a real
           conformance violation, which is the precondition for making the check required rather than informational.</li>
           <li><strong>Assert in the base, not in the consumer.</strong> The same push-left posture as ADR-058: shipping the
-          assertion inside <code>UserLoginTestsBase</code> / <code>UserRegistrationTestsBase</code> / <code>ProfileManagementTestsBase</code>
-          means an app that adopts the Identity workflow tests cannot accidentally adopt them without the a11y
-          scan. Opting out is visible (it means not subclassing the base), the way ADC&#39;s profile page is.</li>
+          assertion inside <code>UserLoginTestsBase</code> / <code>UserRegistrationTestsBase</code> / <code>ProfileManagementTestsBase</code> /
+          <code>PasswordResetTestsBase</code> means an app that adopts the Identity workflow tests cannot accidentally adopt
+          them without the a11y scan. Opting out is visible (it means not subclassing the base), the way ADC&#39;s profile page is.</li>
           <li><strong>A real engine, not reflection.</strong> Contrast, accessible names, and live-region announcement exist only
           in a rendered accessibility tree. That is why this sits in the E2E package with Playwright and not in
           the NetArchTest tier (ADR-015) or the booted-host conformance tier (ADR-058).</li>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -226,30 +231,30 @@
           proves two live versions coexist.</p>
           <ul>
           <li><strong>One registration wires the whole policy.</strong> <code>AddCommonApiVersioning</code>
-          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:233</code>) deliberately
+          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:243</code>) deliberately
           does <strong>not</strong> set <code>DefaultApiVersion</code>: <code>1.0</code> is already the <code>Asp.Versioning</code> library default, and the
           API explorer inherits both it and <code>AssumeDefaultVersionWhenUnspecified</code> from the versioning options,
           so restating either one trips AV0011/AV0024. The code comment recording that omission is at
-          <code>WebApplicationBuilderExtensions.cs:235</code>-<code>WebApplicationBuilderExtensions.cs:237</code>. What the registration does set: it assumes the default
+          <code>WebApplicationBuilderExtensions.cs:245</code>-<code>WebApplicationBuilderExtensions.cs:247</code>. What the registration does set: it assumes the default
           version when a caller sends no header
-          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:240</code>), reports
+          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:250</code>), reports
           the supported/deprecated versions on every response (<code>ReportApiVersions = true</code>,
-          <code>WebApplicationBuilderExtensions.cs:241</code>), and selects the version from an <code>api-version</code> request
-          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:242</code>). The
+          <code>WebApplicationBuilderExtensions.cs:251</code>), and selects the version from an <code>api-version</code> request
+          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:252</code>). The
           reader is header-based deliberately: routes and query strings stay version-free, so a caller opts
           into a newer shape by adding one header rather than changing the URL.</li>
           <li><strong>The API explorer is wired for versioned OpenAPI.</strong> The same call chains <code>.AddMvc()</code> then
-          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:243</code>,
-          <code>WebApplicationBuilderExtensions.cs:244</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
-          (<code>WebApplicationBuilderExtensions.cs:246</code>) and substituting the version into the URL where a host
-          routes one (<code>SubstituteApiVersionInUrl = true</code>, <code>WebApplicationBuilderExtensions.cs:247</code>). The
+          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:253</code>,
+          <code>WebApplicationBuilderExtensions.cs:254</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
+          (<code>WebApplicationBuilderExtensions.cs:256</code>) and substituting the version into the URL where a host
+          routes one (<code>SubstituteApiVersionInUrl = true</code>, <code>WebApplicationBuilderExtensions.cs:257</code>). The
           explorer&#39;s default-version behavior is inherited rather than configured, exactly as the comment
-          above it records (<code>WebApplicationBuilderExtensions.cs:235</code>-<code>WebApplicationBuilderExtensions.cs:237</code>). That
+          above it records (<code>WebApplicationBuilderExtensions.cs:245</code>-<code>WebApplicationBuilderExtensions.cs:247</code>). That
           group format feeds the <code>v1</code> OpenAPI document <code>AddCommonOpenApi</code> registers
-          (<code>WebApplicationBuilderExtensions.cs:392</code>), which
+          (<code>WebApplicationBuilderExtensions.cs:402</code>), which
           <code>MapCommonOpenApi</code> serves at <code>/openapi/v1.json</code> outside Production only
-          (<code>Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:28</code>,
-          <code>OpenApiEndpointExtensions.cs:30</code>).</li>
+          (<code>Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:34</code>, guarded at
+          <code>OpenApiEndpointExtensions.cs:36</code> and mapped at <code>OpenApiEndpointExtensions.cs:38</code>).</li>
           <li><strong>A shipped exemplar proves two versions coexist.</strong> <code>ServiceInfoControllerBase</code>
           (<code>Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30</code>) serves the same
           <code>/ServiceInfo</code> route under two versions selected by the header: <code>GetV1</code> is mapped to <code>1.0</code>
@@ -336,7 +341,7 @@
           show up in a copied URL or a browser address bar, so the version in play is only visible to a
           caller that reads request/response headers.</li>
           <li><strong>The OpenAPI document is single-version and dev/CI only.</strong> <code>MapCommonOpenApi</code> serves one <code>v1</code>
-          document and is a no-op in Production (<code>OpenApiEndpointExtensions.cs:30</code>), so the machine-readable
+          document and is a no-op in Production (<code>OpenApiEndpointExtensions.cs:36</code>), so the machine-readable
           contract does not yet enumerate the <code>2.0</code> discovery shape and is not a public production surface.</li>
           </ul>
           <h2 id="related">Related</h2>

@@ -1,7 +1,10 @@
 # ADR-047: Runtime Revocation of Soft-Deleted Users' Active Sessions
 
 ## Status
-Accepted (2026-07-15).
+Accepted (2026-07-15). Revised 2026-08-07 (validator hoisted into a shared generic, the 30-second
+constant moved, the two apps revoke at different speeds). Revised 2026-08-23: the pipeline
+registration moved out of `WebApplicationExtensions` into the named-step `MiddlewarePipelineBuilder`
+(ADR-079), and a tenant-resolution step (ADR-073) now sits between authentication and rate limiting.
 
 ## Context
 Soft-delete is the framework's default deletion model (ADR-005): `AuditableBaseEntity.Delete()` sets
@@ -30,12 +33,26 @@ Add a shared-pipeline middleware, `SoftDeletedUserMiddleware`
 rejects an authenticated caller with HTTP 401 once the caller's account has been soft-deleted, backed
 by a short cache so the account-status lookup is not paid on every request.
 
-- **It runs after authentication, before authorization.** `UseCommonMiddlewarePipeline` registers it
-  at `Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:109`, immediately after
-  `UseAuthentication` / `UseRateLimiter`
-  (`WebApplicationExtensions.cs:96,108`) and before `UseAuthorization`
-  (`WebApplicationExtensions.cs:110`), so `HttpContext.User` is already populated and the check gates
-  every downstream endpoint.
+- **It runs after authentication, before authorization.** That position is data in a named-step
+  pipeline builder (ADR-079), not a hand-ordered sequence of `Use*` calls:
+  `UseCommonMiddlewarePipeline`
+  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:46`) delegates to the
+  private `ApplyPipeline` helper (`WebApplicationExtensions.cs:138`), which seeds the framework steps
+  from `MiddlewarePipelineBuilder.CreateDefault()` (`WebApplicationExtensions.cs:140`;
+  `Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:31-156`). This middleware
+  is the `SoftDeletedUserFilter` step (`MiddlewarePipelineStepNames.cs:59`), applied as
+  `app.UseMiddleware<SoftDeletedUserMiddleware>()` at `MiddlewarePipelineBuilder.cs:130`. Four
+  consecutive steps fix its place: `UseAuthentication` (`:110`), then `TenantResolutionMiddleware`
+  (`:118`, ADR-073, which has to sit immediately after authentication because its claim strategy
+  reads `HttpContext.User`), then `UseRateLimiter` (`:126`, ADR-019), then this middleware (`:130`),
+  and only after it `UseAuthorization` (`:134`). So `HttpContext.User` is already populated when the
+  check runs, and the check still gates every downstream endpoint. The order is frozen by a fitness
+  function rather than by a comment: `MiddlewarePipelineOrderTestsBase.ExpectedStepNames` asserts
+  `SoftDeletedUserFilter` between `RateLimiting` and `Authorization`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:51-53`).
+  `MiddlewarePipelineBuilder.Build()`'s startup-validated invariants (`MiddlewarePipelineBuilder.cs:257-280`)
+  do not name this step, so a host that moves it through the configure overload is caught by that
+  fitness function, not at startup.
 - **Anonymous requests pass straight through.** When `ICurrentUserService.UserId` is null the
   middleware calls the next delegate and returns without any lookup
   (`SoftDeletedUserMiddleware.cs:65-73`), so unauthenticated traffic pays nothing.
@@ -83,7 +100,7 @@ by a short cache so the account-status lookup is not paid on every request.
   (`SoftDeletedUserMiddleware.cs:76-83`): Identity is the source of truth and already validated the
   token upstream. Resolving it as a constructor/parameter dependency would instead 500 every request
   in those services. MMCA.Helpdesk wires the same pipeline
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111`) but hosts only a Tickets module and
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:117`) but hosts only a Tickets module and
   registers no validator, so it takes the same no-op path.
 
 `SoftDeletedUserMiddlewareTests`
@@ -161,7 +178,11 @@ passive bound Store lives with.
 ADR-005 (soft-delete is the deletion model whose still-authenticated tokens this middleware revokes;
 deleting a user is a soft-delete, not a row removal), ADR-004 (the stateless RS256/JWKS validation
 that has no built-in revocation, which this bounds without a per-request store lookup), ADR-022 (the
-SSR session cookie carries the same JWT into the prerender path this middleware also gates).
+SSR session cookie carries the same JWT into the prerender path this middleware also gates), ADR-079
+(the shared named-step HTTP pipeline that now owns this middleware's registration and its order),
+ADR-073 (multi-tenancy, whose `TenantResolutionMiddleware` step sits between authentication and the
+rate limiter, ahead of this one), ADR-019 (the rate limiter that runs immediately before it, for its
+own authentication-dependent reason).
 
 ## Revision (2026-08-07)
 Re-verified against current source. The decision is unchanged, but three things it described have
@@ -205,7 +226,52 @@ revoke at the same speed.
    cache read at `:91` (from `:63-66`), the cached-`true` 401 at `:102-106` (from `:66-71`), the
    cache-miss validator call at `:114-116` with the cache write at `:131-133` and the deleted-401 at
    `:143-147` (from `:73-84`), and the fall-through at `:150` (from `:86`). Unchanged and re-checked:
-   the pipeline registration (`WebApplicationExtensions.cs:109`, with `:96,108` and `:110` around it),
-   `ISoftDeletedUserValidator.cs:7,15`, the Helpdesk no-op path
-   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111`), and
+   the pipeline registration (`WebApplicationExtensions.cs:109`, with `:96,108` and `:110` around it,
+   both superseded on 2026-08-23, see below), `ISoftDeletedUserValidator.cs:7,15`, the Helpdesk no-op
+   path (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:111`, superseded below), and
+   `MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Middleware/SoftDeletedUserMiddlewareTests.cs`.
+
+## Revision (2026-08-23)
+Re-verified against current source. The decision, the cache design, the fail-open policy and the
+per-app asymmetry are all unchanged; what moved is where the middleware's position is expressed, and
+one new neighbour now sits ahead of it.
+
+1. **The registration left `WebApplicationExtensions.cs` entirely.** That file no longer calls
+   `UseAuthentication`, `UseRateLimiter`, `UseMiddleware<SoftDeletedUserMiddleware>` or
+   `UseAuthorization` at all: `UseCommonMiddlewarePipeline` (`WebApplicationExtensions.cs:46`, and the
+   configure overload at `:58`) only routes into the private `ApplyPipeline` helper (`:138`), which
+   seeds `MiddlewarePipelineBuilder.CreateDefault()` (`:140`). Every `:96`, `:108`, `:109` and `:110`
+   anchor the Decision and the 2026-08-07 revision carried is therefore dead. The step registrations
+   now live in `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs`:
+   `UseAuthentication` at `:110`, `UseRateLimiter` at `:126`,
+   `UseMiddleware<SoftDeletedUserMiddleware>()` at `:130`, `UseAuthorization` at `:134`. The behavior
+   is what it was; the order became data in a named-step builder (ADR-079).
+2. **A tenant-resolution step now runs between authentication and rate limiting.**
+   `TenantResolutionMiddleware` is applied at `MiddlewarePipelineBuilder.cs:118` under the
+   `TenantResolution` step name (ADR-073), so the current run of steps is Authentication (`:110`),
+   TenantResolution (`:118`), RateLimiting (`:126`), SoftDeletedUserFilter (`:130`), Authorization
+   (`:134`). The ADR's own claim, that the check runs after authentication and before authorization,
+   still holds exactly; it is simply no longer adjacent to `UseAuthentication`. That new step follows
+   the same opt-in, inert-unless-configured posture this middleware established, and its own comment
+   names this middleware as the precedent (`MiddlewarePipelineBuilder.cs:114-117`).
+3. **The order is now held by a fitness function.**
+   `MiddlewarePipelineOrderTestsBase.ExpectedStepNames`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:38-58`) lists
+   `SoftDeletedUserFilter` between `RateLimiting` and `Authorization` (`:51-53`), so a reorder fails a
+   test. Note the limit: `MiddlewarePipelineBuilder.Build()` validates four load-bearing adjacencies at
+   startup (`MiddlewarePipelineBuilder.cs:257-280`) and none of them names this step, so a host that
+   moves it with the configure overload gets no startup error, only the fitness-function failure.
+4. **Helpdesk anchor corrected.** `app.UseCommonMiddlewarePipeline()` is at
+   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:117` (the previously cited `:111` is now
+   `var app = builder.Build();`). The substance is unchanged: Helpdesk wires the shared pipeline,
+   registers no `ISoftDeletedUserValidator`, and takes the no-op path.
+5. **Re-checked and unchanged**: `SoftDeletedUserMiddleware.cs:31` (class declaration), `:65-73`
+   (anonymous pass-through), `:75` and `:76-83` (lazy resolution, no-validator pass-through), `:85`,
+   `:91`, `:102-106`, `:114-116`, `:131-133`, `:143-147`, `:150` (the cache/validator path), `:93-100`,
+   `:118-125`, `:135-140` (fail-open handlers), `ISoftDeletedUserValidator.cs:7,15`,
+   `SoftDeletedUserValidator.cs:19-34` with its constraint at `:20` and query at `:30-33`,
+   `SoftDeletedUserCache.cs:29,42-43,53-61`, the two registrations
+   (`MMCA.ADC.Identity.Application/DependencyInjection.cs:35`,
+   `MMCA.Store.Identity.Application/DependencyInjection.cs:41`), the two delete handlers
+   (ADC `DeleteUserHandler.cs:68-80`, Store `DeleteUserHandler.cs:35-60`), and
    `MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Middleware/SoftDeletedUserMiddlewareTests.cs`.

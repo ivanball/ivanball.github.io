@@ -86,10 +86,11 @@ Model a domain value that carries an invariant as an **immutable record value ob
 - **gRPC is mapped by hand, not inferred.** `Money` crosses a service boundary as a purpose-built
   `MoneyV1` message with a **string** amount (proto has no decimal) and a currency code
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:70,73`),
-  translated by `MoneyToWire`/`MoneyFromWire`
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:126`),
-  which honors the empty-code sentinel only when the amount is also zero and returns null for a
-  malformed entry rather than failing the whole batch (`:135-140`).
+  translated by `MoneyFromWire`
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:126`)
+  and `MoneyToWire` (`:157`).
+  `MoneyFromWire` honors the empty-code sentinel only when the amount is also zero and returns null
+  for a malformed entry rather than failing the whole batch (`:135-140`).
 - **Adoption is real but partial.** Store maps `ProductVariant.Price`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:21`) with
   `OwnsMoney` (`.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:31`),
@@ -99,7 +100,8 @@ Model a domain value that carries an invariant as an **immutable record value ob
   (`OrderLineConfiguration.cs:28`). Store Identity maps `Customer.Email` through `EmailValueConverter`
   and `Customer.Address` through a hand-rolled `OwnsOne` block (`CustomerConfiguration.cs:36,43`), and
   `User.Email` the same way (`UserConfiguration.cs:24`). ADC types `User.Email` as `Email`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38`, built at `:164`) with
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38`, validated through
+  `Email.Create` at `:171` and passed to the constructor at `:185`) with
   the same converter (`.../Identity.Infrastructure/.../UserConfiguration.cs:21`) and a speaker's
   optional email through `NullableEmailValueConverter`
   (`.../Conference.Infrastructure/.../SpeakerConfiguration.cs:43`). `Money` and `Email` are the two

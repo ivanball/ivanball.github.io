@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 91 ADRs</summary>
+        <summary>All 96 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -191,6 +191,11 @@
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
         <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -216,7 +221,7 @@
           Day/Dark lifecycle in one place. Inside that component <code>MudThemeProvider</code> is bound with
           <code>@bind-IsDarkMode</code> against the already-complete <code>MMCATheme.Instance</code>
           (<code>MMCA.Common.UI/Components/MmcaThemeProviders.razor:11</code>), a two-way binding to that component&#39;s own
-          <code>_isDarkMode</code> field (<code>MmcaThemeProviders.razor:17</code>); no <code>@ref</code> is used. The layout no longer holds the
+          <code>_isDarkMode</code> field (<code>MmcaThemeProviders.razor:24</code>); no <code>@ref</code> is used. The layout no longer holds the
           provider markup or the <code>_isDarkMode</code> field itself. No new palette work.</p>
           </li>
           <li><p><strong>A <code>ThemeService</code> (<code>MMCA.Common.UI</code>) owns the preference</strong>, registered in <code>AddUIShared</code>. It holds the
@@ -272,7 +277,6 @@
           and is the model for the theme no-flash SSR bootstrap that is not yet wired),
           <a href="022-browser-session-cookie-auth.html">ADR-022</a> (the SSR cookie-read pattern),
           <a href="015-architecture-fitness-functions.html">ADR-015</a> (the host-wiring fitness assertion).</p>
-          <pre class="doc-pre"><code class=""></code></pre>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

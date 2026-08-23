@@ -18,7 +18,7 @@ MassTransit-v8 license pin), but it deliberately stops there. The four controls 
 establish provenance and integrity, an SBOM release gate, committed lock files, a CI vulnerability
 audit, and package source mapping, already live in the release and CI workflows,
 `Directory.Build.props`, and `nuget.config`, and are summarized for consumers in SECURITY.md
-(SECURITY.md:33-42). No ADR owned them as a single coherent posture. This record does, and it exceeds
+(SECURITY.md:42-51). No ADR owned them as a single coherent posture. This record does, and it exceeds
 ADR-016's scope: ADR-016 gestures at lock files as sweep mechanics, this ADR owns supply-chain
 integrity as the decision.
 
@@ -106,5 +106,5 @@ governance from versioning and licensing into supply-chain provenance and integr
 (architecture invariants enforced as build-gating fitness functions; the same gate-the-build posture
 applied here to dependencies), ADR-010 (integration-event schema versioning; another release-discipline
 control that turns a contract into an enforced signal). See SECURITY.md ("Dependency & supply-chain
-security", SECURITY.md:33-42) for the consumer-facing summary and rubric §32
+security", SECURITY.md:42-51) for the consumer-facing summary and rubric §32
 (ArchitectureEvaluationCriteria.md:799-817) for the evaluation criteria.

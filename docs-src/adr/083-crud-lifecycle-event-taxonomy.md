@@ -1,7 +1,8 @@
 # ADR-083: One CRUD Lifecycle Event per Entity with a State Discriminator
 
 ## Status
-Accepted (2026-08-14).
+Accepted (2026-08-14). Revised 2026-08-23: the adopter counts were refreshed (ADC Conference's
+`ActivityChanged` joined the base-derived set) and three source citations were re-anchored.
 
 ## Context
 ADR-003 decides how a domain event **moves**: captured into the outbox inside `SaveChangesAsync`,
@@ -35,7 +36,7 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   (`MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:7-13`). No production call
   site in any repo raises `Unchanged`: it is the zero default, and it appears only as a negative
   `[InlineData]` case in handler tests
-  (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:45,60`,
+  (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:79,190-191`,
   `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/DomainEvents/SessionCreatedHandlerTests.cs:40`).
 - **`Added` from the factory, `Updated` from mutators, `Deleted` from `Delete()`.** The base's usage
   note fixes the mapping (`EntityChangedEvent.cs:10-13`), and `Session` is the canonical shape: one
@@ -47,7 +48,7 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   `SessionChanged` and returns immediately unless the state is `Added`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/DomainEventHandlers/SessionCreatedHandler.cs:17-18`),
   and the points award for asking a question does the same on `SessionQuestionChanged`
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:48-49`).
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:60-63`).
   A handler that genuinely wants every transition writes no filter and logs the discriminator instead:
   `TicketChangedAuditHandler` passes `domainEvent.State` straight into its `LoggerMessage` template
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/DomainEventHandlers/TicketChangedAuditHandler.cs:23,28-29`).
@@ -73,14 +74,15 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/IntegrationEventContractTests.cs:11`),
   so retyping or removing the discriminator fails the build and, under ADR-010, requires a new event
   type rather than a silent reshape.
-- **The shared base is the convenience; the discriminator shape is the convention.** Thirteen concrete
+- **The shared base is the convenience; the discriminator shape is the convention.** Fourteen concrete
   records derive `EntityChangedEvent<TId>` across the four repos: six in Store (`OrderChanged.cs:19`,
   `ShoppingCartChanged.cs:16`, `InventoryItemChanged.cs:17` under `Sales.Domain`,
   `Catalog.Domain/Products/DomainEvents/ProductChanged.cs:23`,
   `Catalog.Domain/Categories/DomainEvents/CategoryChanged.cs:19`,
-  `Identity.Domain/Customers/DomainEvents/CustomerChanged.cs:25`), six in ADC Conference
+  `Identity.Domain/Customers/DomainEvents/CustomerChanged.cs:25`), seven in ADC Conference
   (`SponsorChanged.cs:16`, `EventChanged.cs:16`, `QuestionChanged.cs:16`, `CategoryChanged.cs:16`,
-  `SpeakerChanged.cs:21`, `SessionChanged.cs:18`), and one in Helpdesk (`TicketChanged.cs:15`).
+  `ActivityChanged.cs:16`, `SpeakerChanged.cs:21`, `SessionChanged.cs:18`), and one in Helpdesk
+  (`TicketChanged.cs:15`).
   Nineteen further event types follow the same one-event-with-`State` shape while inheriting
   `BaseDomainEvent` or `BaseIntegrationEvent` directly, either because they identify a parent/child
   pair rather than a single entity (`RoomChanged` carries `EventId` + `RoomId`,
@@ -88,9 +90,9 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   `ShoppingCartItemChanged` carries `CustomerId` + `ProductVariantId`,
   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/ShoppingCarts/DomainEvents/ShoppingCartItemChanged.cs:16-22`)
   or because the module took the shape without the base (all seven ADC Engagement events, for example
-  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/UserSessionBookmarks/DomainEvents/UserSessionBookmarkChanged.cs:15-20`,
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/UserSessionBookmarks/DomainEvents/UserSessionBookmarkChanged.cs:21-26`,
   whose doc cites the same rule as BR-60 at `:8-9`). Counting the shape rather than the base type:
-  **22 in ADC, 9 in Store, 1 in Helpdesk**.
+  **23 in ADC** (16 Conference, 7 Engagement), **9 in Store, 1 in Helpdesk**.
 - **Nothing enforces the taxonomy.** The shared fitness rules require domain events to be sealed and to
   live in a `*.DomainEvents` namespace
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Naming.cs:52-60`), to
@@ -115,7 +117,7 @@ records exactly that gap (`TicketChangedAuditHandler.cs:13-14`). Outside the fou
 `MMCA.ECommerce` companion sample carries two more adopters on the same pattern
 (`MMCA.ECommerce/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/DomainEvents/ProductChanged.cs:15`,
 `.../Orders/MMCA.ECommerce.Orders.Domain/Orders/DomainEvents/OrderChanged.cs:15`), which brings the
-total number of records deriving the base to **15**.
+total number of records deriving the base to **16**.
 
 ## Rationale
 - **One type per entity is one subscription surface.** A subscriber declares interest in the entity,
@@ -150,7 +152,7 @@ total number of records deriving the base to **15**.
   tell the transitions apart
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/LivePolls/DomainEvents/LivePollChanged.cs:9-11,17-22`),
   which is a state machine expressed through the CRUD shape rather than as its own events.
-- **The base type is optional in practice.** 13 of the 32 lifecycle events across the three apps derive
+- **The base type is optional in practice.** 14 of the 33 lifecycle events across the three apps derive
   `EntityChangedEvent<TId>`; the other 19 re-declare the same two members on `BaseDomainEvent`.
   Consistency is a review convention, not a fitness function (ADR-015), so a new module can drift
   without a failing test.
