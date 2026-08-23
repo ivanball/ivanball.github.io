@@ -355,7 +355,7 @@
 
     subgraph DDD[&quot;Domain-Driven Design (G02, G17)&quot;]
         AGG[&quot;Aggregate root + child entities&quot;]
-        VO[&quot;Value objects + invariants&quot;]
+        VO[&quot;Value objects + invariants (ADR-068)&quot;]
         FACT[&quot;Factory methods → Result&amp;lt;T&amp;gt;&quot;]
         DE[&quot;Domain events&quot;]
     end
@@ -402,9 +402,13 @@
           <p>Handlers are thin (one method); every cross-cutting concern is a decorator wrapping the next. Scrutor
           <code>TryDecorate</code> composes them <strong>in reverse registration order</strong> (last registered = outermost), so the
           registration list in <code>AddApplicationDecorators()</code> reads inside-out while the <strong>execution order is
-          load-bearing</strong>: FeatureGate → Logging → Caching → Validating → Transactional → Handler for commands,
-          and FeatureGate → Logging → Caching → Handler for queries (a query gets no Validating and no
-          Transactional decorator). Opt-in marker interfaces let a handler switch each concern on.</p>
+          load-bearing</strong>: FeatureGate → Authorization → Logging → Caching → Validating → Timeout → Transactional →
+          Handler for commands, and FeatureGate → Authorization → Logging → Caching → Timeout → Handler for
+          queries (a query gets no Validating and no Transactional decorator). Authorization (keyed on
+          <code>IRequiresPermission</code>, resolved through <code>IPermissionRegistry</code>) sits outside caching deliberately, so
+          a denied request neither reads nor populates the cache; Timeout (keyed on <code>IHasTimeout</code>) links a
+          per-request budget token to the caller&#39;s. Opt-in marker interfaces let a handler switch each concern
+          on, and the shipped <code>DecoratorPipelineOrderTestsBase</code> pins the order rather than comments alone.</p>
           <pre class="mermaid">flowchart TD
     HTTP[&quot;HTTP / gRPC request&quot;]
     EDGE[&quot;Edge: controller base / model binder&lt;br/&gt;maps request → command/query (G12)&quot;]
@@ -413,9 +417,11 @@
     subgraph PIPELINE[&quot;Decorator pipeline (execution order, outermost→innermost)&quot;]
         direction TB
         FG[&quot;FeatureGate: 404 if flag off (ADR-031)&quot;]
+        AZ[&quot;Authorization: IRequiresPermission via IPermissionRegistry,&lt;br/&gt;outside the cache, denied = Forbidden (ADR-020)&quot;]
         LOG[&quot;Logging + RED metrics&quot;]
         CA[&quot;Caching: reads only (ADR-026)&quot;]
         VA[&quot;Validating: FluentValidation (G06, commands only)&quot;]
+        TO[&quot;Timeout: IHasTimeout execution budget&quot;]
         TX[&quot;Transactional: SaveChanges + outbox (commands only)&quot;]
         H[&quot;Concrete handler (one job)&quot;]
     end
@@ -424,12 +430,12 @@
     RESP[&quot;Result&amp;lt;T&amp;gt; → edge maps to HTTP/gRPC status (ADR-013)&quot;]
     EXC[&quot;Exceptional path: ordered IExceptionHandler chain&lt;br/&gt;OperationCanceled, Domain, DbUpdate, Validation, Global&lt;br/&gt;→ RFC 9457 ProblemDetails (ADR-013)&quot;]
 
-    HTTP --&gt; IDEMP --&gt; EDGE --&gt; FG --&gt; LOG --&gt; CA --&gt; VA --&gt; TX --&gt; H --&gt; DOMAIN
+    HTTP --&gt; IDEMP --&gt; EDGE --&gt; FG --&gt; AZ --&gt; LOG --&gt; CA --&gt; VA --&gt; TO --&gt; TX --&gt; H --&gt; DOMAIN
     DOMAIN --&gt; RESP
     H -.-&gt;|&quot;thrown, not returned&quot;| EXC
 
     classDef dec fill:#fef7e0,stroke:#f9ab00,color:#111
-    class FG,LOG,CA,VA,TX,H dec</pre>
+    class FG,AZ,LOG,CA,VA,TO,TX,H dec</pre>
           <hr>
           <h2 id="6-event-driven-integration-outbox-dual-dispatch-adr-003--010--021">6. Event-driven integration, outbox dual-dispatch (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a> / 010 / 021)</h2>
           <p>Domain events are captured into an <code>OutboxMessage</code> row <strong>in the same transaction</strong> as the data
@@ -452,7 +458,7 @@
         OBX[(&quot;OutboxMessage rows&quot;)]
     end
     DISP[&quot;IDomainEventDispatcher: in-process handlers&lt;br/&gt;(deferred until after commit)&quot;]
-    PROC[&quot;OutboxProcessor: background, smart-wait poll,&lt;br/&gt;leased rows for replica scale-out,&lt;br/&gt;dead-letter on retry exhaustion&quot;]
+    PROC[&quot;OutboxProcessor: background, smart-wait poll,&lt;br/&gt;leased rows for replica scale-out,&lt;br/&gt;broker publish behind a circuit breaker (ADR-087),&lt;br/&gt;dead-letter on retry exhaustion&quot;]
     BUS[&quot;IMessageBus: InProcessMessageBus or BrokerMessageBus&lt;br/&gt;→ MassTransit v8 (RabbitMQ / Azure Service Bus)&quot;]
     CONSUMER[&quot;IntegrationEventConsumer in another module/service&quot;]
     INBOX[(&quot;Opt-in inbox: dedup by MessageId (ADR-021)&quot;)]
@@ -467,7 +473,7 @@
     PROC --&gt;|&quot;integration events&quot;| BUS
     PROC -.-&gt;|&quot;safety net for a failed local dispatch&quot;| DISP
     BUS --&gt; CONSUMER --&gt; INBOX --&gt; HANDLER
-    SCHEMA[&quot;SchemaVersion + upcaster (ADR-010)&quot;] -.-&gt; BUS
+    SCHEMA[&quot;SchemaVersion + registered upcasters (ADR-010/090)&quot;] -.-&gt; BUS
 
     classDef evt fill:#e6f4ea,stroke:#34a853,color:#111
     class AGG,SAVE,EBUS,PROC,DISP,BUS,CONSUMER,HANDLER evt</pre>
@@ -479,7 +485,9 @@
           because application code talks to abstractions (<code>IMessageBus</code>, typed gRPC clients) and transport
           lives at the edges. MMCA.ADC has taken the second path all the way: its four modules each run as
           their own service host under <code>Source/Services/</code> behind the Gateway, and the former single
-          <code>MMCA.ADC.WebAPI</code> host is gone. Deploy A is not hypothetical: it is what MMCA.Helpdesk (its single
+          <code>MMCA.ADC.WebAPI</code> host is gone. The Gateway&#39;s route-to-service map is YARP <code>ReverseProxy</code>
+          configuration, not <code>MapForwarder</code> code (<a href="https://ivanball.github.io/docs/adr/089-gateway-topology-owned-by-configuration.html" target="_blank" rel="noopener">ADR-089</a>),
+          and the Gateway also owns a small set of cross-cutting edge behaviors (ADR-088). Deploy A is not hypothetical: it is what MMCA.Helpdesk (its single
           Tickets module in one API host) runs.</p>
           <pre class="mermaid">flowchart TD
     subgraph SRC[&quot;Same module code (IModule implementations)&quot;]
@@ -494,7 +502,7 @@
 
     subgraph SERVICES[&quot;Deploy B: extracted services (what ADC runs)&quot;]
         direction TB
-        GW[&quot;YARP Gateway (service discovery)&quot;]
+        GW[&quot;YARP Gateway: service discovery,&lt;br/&gt;route map owned by config (ADR-089)&quot;]
         SVC1[&quot;Conference service host&quot;]
         SVC2[&quot;Engagement service host&quot;]
         SVC3[&quot;Identity service host&quot;]
@@ -560,8 +568,8 @@
           <hr>
           <h2 id="9-authentication--authorization-stack">9. Authentication &amp; Authorization stack</h2>
           <p>The auth concern (G08) spans token validation, session cookies, federated sign-in, password hashing,
-          brute-force protection, refresh-token rotation and revocation, and a layered authorization model:
-          RBAC roles → opt-in permissions → resource ownership.</p>
+          brute-force protection, refresh-token rotation and revocation, a cache-backed forgot/reset-password
+          vertical, and a layered authorization model: RBAC roles → opt-in permissions → resource ownership.</p>
           <pre class="mermaid">flowchart TD
     subgraph AUTHN[&quot;Authentication&quot;]
         JWT[&quot;JWT bearer validation&quot;]
@@ -571,6 +579,7 @@
         LOGIN[&quot;ILoginProtectionService: lockout + per-IP cap (ADR-029)&quot;]
         EXT[&quot;External OAuth: Google / GitHub behind a short-lived&lt;br/&gt;ExternalLogin cookie + single-use code (ADR-036/043)&quot;]
         ROT[&quot;AuthenticationServiceBase: 15-min access token +&lt;br/&gt;one rotating refresh token per user (ADR-050);&lt;br/&gt;ITokenRefresher per head (ADR-051)&quot;]
+        RESET[&quot;Forgot/reset password: cache-backed single-use&lt;br/&gt;hashed token + email leg (ADR-091)&quot;]
     end
 
     CU[&quot;ICurrentUser / claims principal&quot;]
@@ -588,6 +597,7 @@
     JWKS --&gt; JWT
     COOKIE --&gt; CU
     HASH --&gt; LOGIN
+    RESET --&gt; HASH
     LOGIN --&gt; ROT
     EXT --&gt; ROT
     ROT --&gt; JWT
@@ -596,22 +606,23 @@
     CU --&gt; RL
 
     classDef a fill:#fce8e6,stroke:#ea4335,color:#111
-    class JWT,JWKS,COOKIE,HASH,LOGIN,EXT,ROT,REV,RBAC,PERM,OWN,RL a</pre>
+    class JWT,JWKS,COOKIE,HASH,LOGIN,EXT,ROT,RESET,REV,RBAC,PERM,OWN,RL a</pre>
           <hr>
           <h2 id="10-notifications-three-channels-behind-one-send-pipeline-adr-024--044">10. Notifications, three channels behind one send pipeline (<a href="https://ivanball.github.io/docs/adr/024-push-notifications.html" target="_blank" rel="noopener">ADR-024</a> / <a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">044</a>)</h2>
-          <p>One use case (<code>SendPushNotificationHandler</code>) writes a durable per-user inbox, fires a transient
-          SignalR push, and then an OS-level native push that reaches a backgrounded or killed app. The inbox
+          <p>One use case (<code>SendPushNotificationHandler</code>) writes a durable per-user inbox (optionally scoped to
+          an event via <code>ScopeKey</code>), fires a transient SignalR push, and then an OS-level native push that
+          reaches a backgrounded or killed app. The inbox
           is the source of truth, so both push legs are non-fatal: a failed SignalR send marks the audit row
           failed, a failed native send is only logged. Recipient providers resolve who gets notified; the thin
           <code>MMCA.ADC.Notification</code> module hosts the hub. Email is a <strong>separate</strong> framework leg
-          (<code>IEmailSender</code> / <code>SmtpEmailSender</code>) driven by its own handlers, not something the push sender fans
-          out to, and the same hub also carries <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>&#39;s
+          (<code>IEmailSender</code> / <code>SmtpEmailSender</code>) driven by its own handlers (Store order mail, the framework&#39;s
+          password-reset mail), not something the push sender fans out to, and the same hub also carries <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>&#39;s
           deliberately non-durable live-channel events.</p>
           <pre class="mermaid">flowchart TD
     SRC[&quot;Domain / integration event (e.g. new session, bookmark)&quot;]
     RP[&quot;INotificationRecipientProvider: resolve target users&quot;]
     UC[&quot;SendPushNotificationHandler: one use case, three legs&quot;]
-    DURABLE[(&quot;UserNotification inbox: durable, persisted, source of truth&quot;)]
+    DURABLE[(&quot;UserNotification inbox: durable, persisted,&lt;br/&gt;source of truth, event-scoped via ScopeKey&quot;)]
     PUSH[&quot;IPushNotificationSender → SignalR&lt;br/&gt;transient, optional Redis backplane for scale-out&quot;]
     NATIVE[&quot;INativePushSender → Azure Notification Hubs&lt;br/&gt;FCM v1 / APNs, best-effort (ADR-044)&quot;]
     LIVE[&quot;ILiveChannelPublisher: ephemeral channel events,&lt;br/&gt;same hub, never persisted (ADR-039)&quot;]
@@ -639,10 +650,13 @@
           in <code>MMCA.Common.UI</code> with MAUI-native, browser-JS and inert fallback adapters chosen at DI composition
           time (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>, taught in
           G26). Culture cookie + <code>IStringLocalizer</code> drive i18n (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>); <code>ThemeService</code>
-          drives day/dark (<a href="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html" target="_blank" rel="noopener">ADR-028</a>).</p>
+          drives day/dark (<a href="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html" target="_blank" rel="noopener">ADR-028</a>). Each
+          module&#39;s UI plugs into one shared shell by contributing navigation and routes through <code>IUIModule</code>
+          (<a href="https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html" target="_blank" rel="noopener">ADR-067</a>).</p>
           <pre class="mermaid">flowchart TD
     PAGE[&quot;Razor component authored once&lt;br/&gt;(per-module .UI library, e.g. EventList.razor)&quot;]
     COMMONUI[&quot;MMCA.Common.UI: MudBlazor building blocks,&lt;br/&gt;DataGrid list-page base, common pages/services (G15)&quot;]
+    SHELL[&quot;Shared shell + MainLayout: modules contribute&lt;br/&gt;nav + routes via IUIModule (ADR-067)&quot;]
 
     subgraph HOSTS[&quot;Same UI libraries referenced by every host&quot;]
         WEB[&quot;Web host: Blazor Server + WebAssembly&quot;]
@@ -668,6 +682,7 @@
     COMMONUI --&gt; MAUI
     WEB --&gt; BROWSER
     MAUI --&gt; AND &amp; IOS &amp; MAC &amp; WIN
+    SHELL -.-&gt; COMMONUI
     I18N -.-&gt; COMMONUI
     THEME -.-&gt; COMMONUI
     CSP -.-&gt; WEB
@@ -677,7 +692,7 @@
     CAP -.-&gt;|&quot;MMCA.Common.UI.Maui adapters&quot;| MAUI
 
     classDef u fill:#f3e8fd,stroke:#a142f4,color:#111
-    class PAGE,COMMONUI,WEB,MAUI,CAP u</pre>
+    class PAGE,COMMONUI,SHELL,WEB,MAUI,CAP u</pre>
           <hr>
           <h2 id="12-adc-business-modules-bounded-contexts-end-to-end">12. ADC business modules, bounded contexts end-to-end</h2>
           <p>Each ADC module is a vertical slice through all layers. Conference is large enough to split across
@@ -739,13 +754,21 @@
       005 Soft-delete vs erasure
       001 Manual DTO mapping
       048 Primitive identifier aliases
+      085 Identifier aliases revisited
+      068 Value objects as validated primitives
     CQRS and events
       014 CQRS decorator pipeline
       003 Outbox dual-dispatch
       010 Integration event schema versioning
+      090 Event upcaster registration
       021 Consumer inbox idempotency
+      066 Broker transport selection
+      087 Broker poison-message handling
+      083 CRUD lifecycle event taxonomy
       054 Saga compensation and reconciliation
+      086 Process manager deferred
       052 Background job execution
+      074 Recurring job scheduler
     Notifications and real time
       024 Two-channel notifications
       039 Live channel push
@@ -757,12 +780,18 @@
       002 Navigation populators
       035 Optimistic concurrency via RowVersion
       055 Repository and specification contract
+      095 Uniqueness under soft delete
       037 Field-level encryption at rest
       045 Managed file storage and avatars
       057 Expand and contract schema gate
+      073 Multi-tenancy model
+      075 Audit trail
+      076 Data-subject export
     Services and transport
       007 gRPC extraction
       008 Service-extraction topology
+      089 Gateway topology as configuration
+      088 Gateway edge responsibilities
       012 gRPC host transport
       009 Resilience and RTO/RPO
       059 IModule contract and composition
@@ -779,28 +808,45 @@
       047 Soft-deleted-user session revocation
       050 JWT and rotating refresh token
       051 Client auth token lifecycle
+      091 Cache-backed password reset
+      069 Shared data-protection key ring
+      082 Two-tier CORS posture
       061 Runtime secret management
     API edge
       017 Request idempotency
       031 Feature-flag management
       034 Generic entity controllers
+      079 Shared HTTP middleware pipeline
       040 Authenticated output caching
       046 HTTP API versioning
+      078 CSV export endpoint
+      084 Stripe webhook ingress
     Runtime and operations
       025 Startup warm-up and readiness
+      070 Fail-fast configuration contract
       026 Two-tier caching
+      077 HybridCache substrate
       041 Observability and telemetry
       062 SLO alerting as code
       064 Deploy recency gates
+      080 Rollout and revision rollback
+      081 Cost baseline deploy gate
+      093 Container image posture
+      096 Best-effort side-effect contract
     Front-end
       027 Multi-locale i18n
       028 Day and Dark theme
       056 Blazor render-mode strategy
+      067 UI module shell composition
+      094 Client entity data access
       063 Accessibility conformance gate
+      092 Web vitals budget gate
       011 en-US-only i18n superseded by 027
     Mobile and device
       042 Device capability abstraction
       043 Mobile deep links and native OAuth callback
+      071 Barcode scanning and QR display
+      072 QR badge check-in and points
     Governance
       015 Architecture fitness functions
       016 Lockstep versioning + MassTransit v8 pin
@@ -808,6 +854,7 @@
       049 Library ConfigureAwait policy
       053 Dual-registry package publishing
       058 Runtime conformance suites as a package
+      065 Scaffolding templates
       060 Performance-regression gate</pre>
           <hr>
           <h2 id="14-the-34-category-evaluation-rubric">14. The 34-category evaluation rubric</h2>
