@@ -28,8 +28,8 @@ There are five moving parts, and they map onto the test pyramid plus one governa
 2. **Architecture fitness functions** ([`IArchitectureMap`](#iarchitecturemap),
    [`ArchitectureMapBase`](#architecturemapbase), [`Layer`](#layer), [`LayerRef`](#layerref),
    [`ArchitectureAssert`](#architectureassert), [`RuleHelpers`](#rulehelpers),
-   [`CrossEntityNavigationFinder`](#crossentitynavigationfinder), the twenty
-   [`ArchitectureRules`](#architecturerules) partial files, and the thirty-six abstract `*TestsBase`
+   [`CrossEntityNavigationFinder`](#crossentitynavigationfinder), the twenty-two
+   [`ArchitectureRules`](#architecturerules) partial files, and the thirty-eight abstract `*TestsBase`
    classes including [`RouteAuthorizationTestsBase`](#routeauthorizationtestsbase),
    [`ModuleConformanceTestsBase<TModule>`](#moduleconformancetestsbasetmodule) and
    [`BrandColorTokenTestsBase`](#brandcolortokentestsbase)) turn architectural rules into
@@ -45,7 +45,8 @@ There are five moving parts, and they map onto the test pyramid plus one governa
    [`PageExtensions`](#pageextensions), [`AxeOptions`](#axeoptions),
    [`AccessibilityViolationException`](#accessibilityviolationexception),
    [`WebVitalsCollector`](#webvitalscollector), the reusable page objects
-   [`LoginPage`](#loginpage) / [`RegisterPage`](#registerpage) / [`ProfilePage`](#profilepage), and
+   [`LoginPage`](#loginpage) / [`RegisterPage`](#registerpage) / [`ProfilePage`](#profilepage) /
+   [`ForgotPasswordPage`](#forgotpasswordpage) / [`ResetPasswordPage`](#resetpasswordpage), and
    the shipped workflow suites such as [`AuthorizationTestsBase`](#authorizationtestsbase))
    drive a real browser against a running app, asserting accessibility and performance alongside
    behavior.
@@ -55,6 +56,7 @@ There are five moving parts, and they map onto the test pyramid plus one governa
    [`ServiceInfoVersioningContractTestsBase<TFixture>`](#serviceinfoversioningcontracttestsbasetfixture),
    [`GracefulShutdownTestsBase<TEntryPoint>`](#gracefulshutdowntestsbasetentrypoint),
    [`DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>`](#decoratorpipelineordertestsbasetcommand-tcommandresult-tquery-tqueryresult),
+   [`MiddlewarePipelineOrderTestsBase`](#middlewarepipelineordertestsbase),
    [`DependencyInjectionAssert`](#dependencyinjectionassert),
    [`HandlerTestBase<THandler>`](#handlertestbasethandler)) pin cross-cutting HTTP and pipeline
    guarantees so a refactor cannot silently drop them.
@@ -70,7 +72,7 @@ structural rules, and
 [ADR-058](https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html) for
 the runtime conformance suites that cover exactly what ADR-015 declared out of scope: "the tests
 assert **structure / registration**, not runtime behavior"
-(`Website/docs-src/adr/015-architecture-fitness-functions.md:57`).
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:61-62`).
 
 ## Integration tests: a real host, a throwaway database, a per-test reset
 
@@ -111,10 +113,13 @@ environment is chosen deliberately so `appsettings.Development.json` (which poin
 `DataSources` entry at `localhost`) does not load, leaving the resolver to collapse onto the
 overridden top-level connection string, a single-database monolith shape (`:16-24`). Server selection
 defaults to LocalDB but is overridable through `SqlBaseEnvironmentVariable` (`:58`, read at `:69-70`)
-so CI can target a SQL service container. The fixture also exposes `ConnectionString` (`:45`) so
-SQL-fidelity tests can read the raw tables, and `Services` (`:52`) so a cross-service test can
-resolve a consumer-side handler out of the booted host. Because these fixtures need a reachable SQL
-Server, the per-module `*.Integration.slnf` suites build in a headless sandbox but only *run* in CI.
+so CI can target a SQL service container. Subclasses push their own host-specific settings (test JWT
+key material, throttle lifts, faked gRPC edges) through the `ConfigureTestEnvironment` hook (`:142`,
+invoked at `:77`), which routes them through the same restore bookkeeping. The fixture also exposes
+`ConnectionString` (`:45`) so SQL-fidelity tests can read the raw tables, and `Services` (`:52`) so a
+cross-service test can resolve a consumer-side handler out of the booted host. Because these fixtures
+need a reachable SQL Server, the per-module `*.Integration.slnf` suites build in a headless sandbox
+but only *run* in CI.
 
 One tier up sits [`CrossServiceFixtureBase`](#crossservicefixturebase)
 (`MMCA.Common.Testing/CrossServiceFixtureBase.cs:41`), which boots **several** hosts in one process
@@ -149,8 +154,10 @@ Four helpers round out the tier. [`JwtTokenGenerator`](#jwttokengenerator)
 RSA keypair (`DefaultPublicKeyPem` at `:49`, `DefaultPrivateKeyPem` at `:68`) under a fixed `kid` of
 `mmca-test-key` (`:41`), so integration tests exercise the exact JWKS/RS256 validation code path
 production runs ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html));
-the class remarks flag, correctly, that the committed keypair is insecure by design and must never be
-used in a real deployment (`:22-28`). [`FeatureManagementTestExtensions`](#featuremanagementtestextensions)
+its `ConfigureInProcessTokenValidation` (`:167`) is what a test factory calls to re-point a host's
+`JwtBearerOptions` at that committed key instead of a network authority. The class remarks flag,
+correctly, that the committed keypair is insecure by design and must never be used in a real
+deployment (`:22-28`). [`FeatureManagementTestExtensions`](#featuremanagementtestextensions)
 (`MMCA.Common.Testing/FeatureManagementTestExtensions.cs:10`) adds a `ConfigureTestFeatureFlags`
 extension member (`:21`) that builds an in-memory `FeatureManagement:*` configuration (`:24-32`) so a
 test `WebApplicationFactory` can flip a gate without touching `appsettings.json`.
@@ -189,11 +196,11 @@ deliberately includes optional layers (`Ui`, `Grpc`, `Contracts`, `ServiceHost`,
 `IArchitectureMap.cs:16-19`) that a repo simply omits, so a rule iterating them is vacuously
 satisfied with no compile dependency on an absent assembly (`IArchitectureMap.cs:3-7`).
 
-The rule bodies are split across twenty [`ArchitectureRules`](#architecturerules) partial files
-(cancellation tokens, controllers, cycles, entities, events, governance, handlers, handler results,
-idempotency, immutability, layers, localization, localized text, modules, naming, protos, purity,
-slices, specifications, and transport; the partial type is declared in the first of them at
-`MMCA.Common.Testing.Architecture/ArchitectureRules.CancellationTokens.cs:5`). The
+The rule bodies are split across twenty-two [`ArchitectureRules`](#architecturerules) partial files
+(cancellation tokens, contracts, controllers, cycles, entities, events, governance, handlers, handler
+results, idempotency, immutability, layers, localization, localized text, modules, naming, protos,
+purity, slices, specifications, transport, and upcasters; the partial type is declared in the first
+of them at `MMCA.Common.Testing.Architecture/ArchitectureRules.CancellationTokens.cs:5`). The
 aggregate-convention rules live inside `ArchitectureRules.Entities.cs` (for example
 `DomainExposesAggregateRoots` at `MMCA.Common.Testing.Architecture/ArchitectureRules.Entities.cs:8`,
 `AggregateRootsHaveResultFactory` at `:19`, and the generalized `DomainFactoriesReturnResult` at
@@ -209,9 +216,10 @@ and more), each exposing its rules as `[Fact]`s that a sealed per-repo subclass 
 supplying its map. `AggregateConventionTestsBase` shows the shape in miniature: one abstract `Map`
 property and one `[Fact]` per rule
 (`MMCA.Common.Testing.Architecture/Bases/AggregateConventionTestsBase.cs:12-24`). The package ships
-**104 test methods across 36 abstract `*TestsBase` classes, of which MMCA.Common's own build executes
-99** (`MMCA.Common/FACTS.md:44-48`, a generated and CI-gated count: read it there rather than
-restating it elsewhere).
+**110 test methods across 38 abstract `*TestsBase` classes**, and MMCA.Common's own build executes
+**129** of them (the methods of the bases its arch-tests subclass, plus its Common-only direct tests
+such as `FrameworkSanityTests` and `SpecificationFitnessTests`), per `MMCA.Common/FACTS.md:43-48`: a
+generated and CI-gated count, so read it there rather than restating it elsewhere.
 
 Failures report through [`ArchitectureAssert`](#architectureassert)
 (`MMCA.Common.Testing.Architecture/ArchitectureAssert.cs:8`), which has two overloads: one lists the
@@ -259,7 +267,7 @@ host re-hardcodes the brand hex `#1565C0` instead of sourcing `var(--mmca-primar
 token (`BrandColorTokenTestsBase.cs:15-16,41-49`), with a non-empty check on the embedded list so the
 guard cannot pass vacuously (`:27-28`). [`DependencyVersionTestsBase`](#dependencyversiontestsbase)
 (`MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:15`, [Rubric §32, Dependency
-& Supply-Chain]) parses `Directory.Packages.props` and fails the build on two commercial-license
+& Supply-Chain]) checks the repo's pinned package majors and fails the build on two commercial-license
 traps a blanket package bump would otherwise walk into unnoticed: MassTransit at major 9
 (`DependencyVersionTestsBase.cs:24-37`,
 [ADR-016](https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html)) and
@@ -302,9 +310,17 @@ synchronous counterpart to `IntegrationEventContractTestsBase`: it rebuilds a re
 `.proto` contract and diffs it against a committed snapshot, and it is explicitly consumer-facing,
 because MMCA.Common ships the gRPC plumbing rather than any contracts of its own
 (`Bases/ProtoContractTestsBase.cs:3-11`). Sibling bases pin integration-event contracts
-([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)),
-data residency, forms conventions, localization resources,
-[concurrency](#concurrencyconventiontestsbase), [controller shape](#controllerconventiontestsbase),
+([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)), the
+one-upcaster-per-source-contract rule that keeps the upcast chain a function (so which contract a
+handler receives cannot depend on DI registration order,
+`MMCA.Common.Testing.Architecture/ArchitectureRules.Upcasters.cs:7-12`,
+[ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html)),
+[service-contract purity](#servicecontractpuritytestsbase) so an extracted service's wire surface
+carries only Shared and contract types and never the producer's internals
+(`MMCA.Common.Testing.Architecture/ArchitectureRules.Contracts.cs:13-18`,
+[ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)), data residency, forms
+conventions, localization resources, [concurrency](#concurrencyconventiontestsbase),
+[controller shape](#controllerconventiontestsbase),
 [state management](#statemanagementconventiontestsbase),
 [UI architecture](#uiarchitectureconventiontestsbase), and framework-version consistency, so the
 governance-as-tests pattern spans much of the 34-category rubric.
@@ -453,17 +469,23 @@ Web Vitals "good" band, LCP 2500 ms / FCP 1800 ms / TTFB 800 ms / CLS 0.1 / INP 
 (`WebVitalsCollector.cs:104-108`), and skipping the INP assertion when no interaction cleared the
 16 ms threshold (`:148-151`), [Rubric §23, Front-End Performance] (the source tags it rubric §12).
 LCP and CLS are Chromium-only, so on Firefox and WebKit those fields stay 0 and the observers fail
-silently rather than throwing (`WebVitalsCollector.cs:14-16,22-25`). The reusable identity page
-objects [`LoginPage`](#loginpage) (`MMCA.Common.Testing.E2E/PageObjects/LoginPage.cs:6`),
-[`RegisterPage`](#registerpage) (`MMCA.Common.Testing.E2E/PageObjects/RegisterPage.cs:6`), and
-[`ProfilePage`](#profilepage) (`MMCA.Common.Testing.E2E/PageObjects/ProfilePage.cs:6`) wrap the
-framework's real auth surfaces with role- and label-based locators (`LoginPage.cs:12-18`) and route
-their own fills through the anti-race helper (`LoginPage.cs:31-32`, invoked at `:25-26`); downstream
-apps add their own family, for example the 45 `MMCA.ADC.E2E.Tests` page objects covering events,
-sessions, speakers, rooms, questions, feedback, sponsors, and the QR check-in and points surfaces.
-Whole *workflows* ship too, not just page objects: six abstract suites under
-`MMCA.Common.Testing.E2E/Workflows/` (`AuthorizationTestsBase`, `UserLoginTestsBase`,
-`UserRegistrationTestsBase`, `LogoutTestsBase`, `ProfileManagementTestsBase`, and
+silently rather than throwing (`WebVitalsCollector.cs:14-16,22-25`).
+
+Five reusable identity page objects ship with the package: [`LoginPage`](#loginpage)
+(`MMCA.Common.Testing.E2E/PageObjects/LoginPage.cs:6`), [`RegisterPage`](#registerpage)
+(`MMCA.Common.Testing.E2E/PageObjects/RegisterPage.cs:6`), [`ProfilePage`](#profilepage)
+(`MMCA.Common.Testing.E2E/PageObjects/ProfilePage.cs:6`),
+[`ForgotPasswordPage`](#forgotpasswordpage)
+(`MMCA.Common.Testing.E2E/PageObjects/ForgotPasswordPage.cs:6`), and
+[`ResetPasswordPage`](#resetpasswordpage)
+(`MMCA.Common.Testing.E2E/PageObjects/ResetPasswordPage.cs:6`). They wrap the framework's real auth
+surfaces with role- and label-based locators (`LoginPage.cs:12-18`) and route their own fills through
+the anti-race helper (`LoginPage.cs:31-32`, invoked at `:25-26`); downstream apps add their own
+family, for example the 45 `MMCA.ADC.E2E.Tests` page objects covering events, sessions, speakers,
+rooms, questions, feedback, sponsors, and the QR check-in and points surfaces. Whole *workflows*
+ship too, not just page objects: seven abstract suites under `MMCA.Common.Testing.E2E/Workflows/`
+(`AuthorizationTestsBase`, `UserLoginTestsBase`, `UserRegistrationTestsBase`, `LogoutTestsBase`,
+`ProfileManagementTestsBase`, [`PasswordResetTestsBase`](#passwordresettestsbase), and
 `UserPreferencesTestsBase`) are authored once and re-run per consumer. Their shape is the same
 supply-only-your-facts contract as the fitness bases:
 [`AuthorizationTestsBase`](#authorizationtestsbase)
@@ -471,6 +493,12 @@ supply-only-your-facts contract as the fitness bases:
 for its route lists (`ProtectedPaths` `:26`, `PublicPaths` `:29`, optional `AuthenticatedUserPath`
 `:35` and `AdminPaths` `:44`) and owns the assertions, including the non-empty guard that keeps the
 anonymous-redirect check from passing vacuously (`:49-50`).
+[`PasswordResetTestsBase`](#passwordresettestsbase)
+(`MMCA.Common.Testing.E2E/Workflows/Identity/PasswordResetTestsBase.cs:17`) shows where the tier
+draws its own boundary: it asserts the recovery flow is reachable from the login page (`:24-41`) and
+that an unknown address produces the identical anti-enumeration confirmation (`:43-58`), but
+deliberately does not consume a real reset token, because that token only reaches the user by email
+and so belongs to an app-side integration test (`:10-16`).
 
 ## The Gallery harness
 
@@ -549,7 +577,7 @@ Continuity]): it boots a host through `ProductionHostApplicationFactory`, calls 
 `ApplicationStopping` then `ApplicationStopped` fired (`:58-61`). The failure it catches, a hosted
 service that refuses to drain, is invisible in production until it wedges a rolling deploy.
 
-Three bases guard the composition of the pipeline itself.
+Four bases guard the composition of the pipelines themselves.
 [`DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>`](#decoratorpipelineordertestsbasetcommand-tcommandresult-tquery-tqueryresult)
 (`MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:38`) is the opt-in fitness function for
 [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html): it builds a real
@@ -565,6 +593,18 @@ two `[Fact]`s at `:70-76`, with a final check that the innermost element is not 
 `TryDecorate` applies decorators in reverse registration order, an innocent-looking reorder of the
 `AddApplicationDecorators()` lines silently changes runtime behavior, and this base turns that into a
 test failure (see [group 5](group-05-cqrs-pipeline.md)).
+[`MiddlewarePipelineOrderTestsBase`](#middlewarepipelineordertestsbase)
+(`MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:29`) is its counterpart on the HTTP edge:
+it seeds `MiddlewarePipelineBuilder.CreateDefault`, applies the host's own `Configure` customization
+when it has one (`:35`), and asserts the eighteen-step order from the exception handler down to the
+controller endpoints (`:38-58`). Several adjacencies there are load-bearing (the pre-forwarded
+capture immediately before `UseForwardedHeaders`, authentication immediately before tenant
+resolution, authentication before the rate limiter per
+[ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html), forwarded headers before the
+HTTPS redirect), and a reorder that breaks one of them fails at runtime looking like a configuration
+bug: an unreachable `jwks_uri`, a tenant that never resolves, a per-user rate cap that never engages
+(`:13-18`). Unlike the contract bases it needs no host at all, because the steps are pure data until
+they are applied, so it runs in the fast unit tier (`:24-27`).
 [`DependencyInjectionAssert`](#dependencyinjectionassert)
 (`MMCA.Common.Testing/DependencyInjectionAssert.cs:13`) guards the other half of that composition:
 `ReturnsSameCollection` (`:21`) asserts a registration extension hands back the very
@@ -578,7 +618,7 @@ pre-configured to succeed (`HandlerTestBase.cs:41-42,45`), a `NullLogger<THandle
 TIdentifierType>()` (`:72`) helpers that wire a repository mock into the read and write accessors
 (the read-only variant exists for child entities, which expose no read-write repository).
 
-A smaller fourth tier measures rather than asserts behavior. `MMCA.Common.Benchmarks`
+A smaller final tier measures rather than asserts behavior. `MMCA.Common.Benchmarks`
 (BenchmarkDotNet) covers the per-request query pipeline, where the dynamic-LINQ predicate is
 re-parsed per call and the shaper reflects over DTO properties
 (`MMCA.Common.Benchmarks/QueryPipelineBenchmarks.cs:9-17`), and the specification hot path
@@ -600,6 +640,24 @@ one of the four `MMCA.Common.Testing.*` packages. Adoption is opt-in per host in
 tiers, which is the standing caveat in ADR-015 and ADR-058 alike: the framework ships the gate, a
 host gets it only once someone writes the subclass. Every remaining concrete test class is cataloged
 by project in the companion per-project test rollup for this chapter.
+
+### AbstractAnonymousFixtureControllerBase, AnonymousFixtureController, TypeLevelAnonymousFixtureController
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · (see per-type table) · Level 0 · class
+
+Three throwaway MVC controllers nested inside [AnonymousEndpointTestsBaseTests](#anonymousendpointtestsbasetests) (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs`). Between them they cover every placement of `[AllowAnonymous]` the scan has to recognize: on an action of a concrete controller, on an action of an abstract base, and on the controller type itself. They are the input side of the anonymous-endpoint allow-list gate; the subclasses that consume them supply the expectations.
+
+- **Depends on** - `Microsoft.AspNetCore.Mvc.ControllerBase` and `Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute` (`AnonymousEndpointTestsBaseTests.cs:1`-`:2`). No state, no behavior: every action is `=> Ok()`.
+- **Concept introduced** - *an allow-list is only as good as the identifier shapes it can be written in.* [AnonymousEndpointTestsBase](#anonymousendpointtestsbase) turns each discovered `[AllowAnonymous]` into a string, and there are exactly two shapes: a type-level attribute becomes the type's `FullName`, and a method-level attribute becomes `{declaring type FullName}.{method name}` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/AnonymousEndpointTestsBase.cs:133`-`:152`). A repo's allow-list is hand-written against those strings, so if the emitter and the hand-written convention ever disagree the gate silently reports phantom offenders or, worse, accepts a stale entry. These three fixtures exist so both shapes are produced by a real scan and matched by a real allow-list in the framework's own CI. Two scoping decisions in the base are also on display here: `ControllerBase`, `RouteAttribute` and `AllowAnonymousAttribute` are all matched by full name through reflection (`:32`-`:34`) so the rule package carries no ASP.NET reference, and abstract controllers are deliberately *included* in the scan (`IsController` walks `BaseType`, `:101`-`:112`) because a framework base action is where the attribute is declared. [Rubric §11 - Security] assesses whether the authorization posture of the HTTP surface is deliberate; an ungated endpoint that nobody reviewed is the single cheapest way to lose an app. [Rubric §26 - Front-End Security] extends the same scan to routable Blazor components (`IsRoutableComponent`, `:117`-`:118`). [Rubric §14 - Testability] covers the fixtures themselves.
+- **Walkthrough** - the scan enumerates `LoadableTypes` of each target assembly, keeps controllers and routable components, and projects each survivor through `AnonymousEndpointsOf`, distinct and ordinal-ordered (`AnonymousEndpointTestsBase.cs:125`-`:131`). Methods are read with `BindingFlags.DeclaredOnly` and `inherit: false` (`:142`,`:146`), which is what decides where an inherited action gets reported (see [InheritingFixtureController](#inheritingfixturecontroller)).
+
+| Type | File:Line | The identifier shape it produces |
+|------|-----------|----------------------------------|
+| `AnonymousFixtureController` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs:74` | The ordinary case: a sealed `ControllerBase` whose `PeekAsync` carries `[HttpGet]` and `[AllowAnonymous]` (`:78`-`:80`). Emits the method-level identifier `...AnonymousFixtureController.PeekAsync`, and is the name the drifted subclass's failure message must contain (`:22`). |
+| `AbstractAnonymousFixtureControllerBase` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs:84` | The declaration site: an `abstract` controller whose `virtual InheritedAnonymousAsync` carries `[HttpGet("inherited")]` and `[AllowAnonymous]` (`:88`-`:90`). Emits one identifier at the base, mirroring how the framework's own `AuthControllerBase` actions are declared once for every consumer that derives from them. |
+| `TypeLevelAnonymousFixtureController` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs:98` | The other identifier shape: `[AllowAnonymous]` on the type (`:97`) with a body-less declaration and no actions at all. Emits the bare `FullName`, with no method suffix. |
+
+- **Why they're built this way** - a gate whose fixtures only ever exercise one attribute placement would pass while being blind to the other, and the failure would land in a consumer repo rather than here. Nesting the fixtures inside the test class keeps them out of the assembly's public surface and, critically, out of the framework's real [AnonymousEndpointTests](#anonymousendpointtests) scan, which targets the API and UI assemblies rather than this one. See [ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html).
+- **Where they're used** - scanned by the four nested subclasses [DriftedTests](#driftedtests), [StaleAllowListTests](#staleallowlisttests), [EmptyScanTests](#emptyscantests) and [ConformantTests](#conformanttests), and named in the assertions of [AnonymousEndpointTestsBaseTests](#anonymousendpointtestsbasetests).
 
 ### AbstractFitnessControllerBase, IdempotentFitnessController, NonIdempotentFitnessController, UndeclaredFitnessController
 > MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · (see per-type table) · Level 0 · class
@@ -676,6 +734,14 @@ Six tiny services in one file (`MMCA.Common/Tests/Architecture/MMCA.Common.Archi
 - **Walkthrough** - no members at all; the declaration ends at its semicolon (`:81`). Being concrete is what puts it into the rule's `ConcreteClasses` scan while its abstract base stays out.
 - **Where it's used** - asserted absent from the rule's failure message by `Rule_AcceptsDirectAndInheritedAndOptedOutDeclarations` (`IdempotencyFitnessTests.cs:34`-`:36`).
 
+### InheritingFixtureController
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs:94` · Level 1 · class
+- **What it is** - a body-less concrete controller deriving [AbstractAnonymousFixtureControllerBase](#abstractanonymousfixturecontrollerbase-anonymousfixturecontroller-typelevelanonymousfixturecontroller). It is the fixture for the ruling that an inherited `[AllowAnonymous]` is reported once, at the base that declares it, and never again on the derived type.
+- **Depends on** - [AbstractAnonymousFixtureControllerBase](#abstractanonymousfixturecontrollerbase-anonymousfixturecontroller-typelevelanonymousfixturecontroller) (`public sealed class InheritingFixtureController : AbstractAnonymousFixtureControllerBase;`, `AnonymousEndpointTestsBaseTests.cs:94`).
+- **Concept introduced** - *the same inheritance question, answered the opposite way from the idempotency gate.* [InheritingFitnessController](#inheritingfitnesscontroller) exists because the idempotency rule reads attributes with `inherit: true`, so a base declaration covers every subclass. The anonymous-endpoint scan does the reverse: it reads methods with `BindingFlags.DeclaredOnly` and attributes with `inherit: false` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/AnonymousEndpointTestsBase.cs:142`,`:146`). Both choices are correct for their own rule, and the reason is who writes the allow-list. Idempotency intent is *declared* by the framework and must flow down to consumers, so inherited reads are what stop a wall of duplicate annotations. An anonymous endpoint must be *reviewed*, and if the scan reported the framework's base action once per derived controller, every consumer repo would have to re-approve the framework's four credential-exchange endpoints under its own type names, forever. The base's own comment states exactly that (`:140`-`:141`). [Rubric §11 - Security] is the property; [Rubric §33 - Developer Experience] is the reason for the shape, since a gate that demands the same approval in every downstream repo gets rubber-stamped rather than read.
+- **Walkthrough** - no members; the declaration ends at its semicolon (`:94`). Being concrete puts it in the scan (`IsController` walks the base chain, `AnonymousEndpointTestsBase.cs:101`-`:112`), and the `DeclaredOnly` filter is what keeps it silent: it declares no methods of its own, so `AnonymousEndpointsOf` yields nothing for it.
+- **Where it's used** - the subject of `Base_DoesNotReport_AnInheritedAttributeOnTheDerivedController` (`AnonymousEndpointTestsBaseTests.cs:61`-`:71`), which reads [ConformantTests](#conformanttests)'s scan output and asserts it does not contain `{InheritingFixtureController.FullName}.InheritedAnonymousAsync` (`:69`-`:70`). The inline comment there names the consequence being prevented (`:64`-`:66`).
+
 ### NavigationContractTests
 > MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/NavigationContractTests.cs:17` · Level 1 · class
 - **What it is** - a documentation-drift gate for navigation (rubric §25): it asserts that the "Routes shipped by the framework" table in `NavigationFlow.md` stays in lockstep with the routable pages the `MMCA.Common.UI` assembly actually ships, and that each route's documented auth posture matches the `[Authorize]` reality on the page.
@@ -711,6 +777,18 @@ Six tiny services in one file (`MMCA.Common/Tests/Architecture/MMCA.Common.Archi
 - **Walkthrough** - one member, `public RightModel? Model { get; set; }` (`:9`). Nullability is irrelevant to the rule (it reads the property type); the reference itself is the fixture.
 - **Where it's used** - referenced by [AcyclicConsumer](#acyclicconsumer) and scanned by [NamespaceCycleFitnessTests](#namespacecyclefitnesstests).
 
+### PasswordHashingFitnessTests
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PasswordHashingFitnessTests.cs:15` · Level 2 · class
+- **What it is** - a structural credential-storage gate asserted against compiled IL rather than source text: [PasswordHasher](group-08-auth.md#passwordhasher) must depend on `Rfc2898DeriveBytes` (a deliberately slow key-derivation function) and on `CryptographicOperations` (the constant-time comparison), so a rewrite cannot quietly swap either out.
+- **Depends on** - [PasswordHasher](group-08-auth.md#passwordhasher) as the assembly anchor and the type under scan (`PasswordHashingFitnessTests.cs:1`,`:21`), [ArchitectureAssert](#architectureassert) (`:37`,`:50`), NetArchTest's `Types` / `PredicateList` query API (`:56`-`:59`), and externals xUnit plus AwesomeAssertions.
+- **Concept introduced** - *asserting on a dependency edge instead of on an output value.* A hashing routine can be verified two ways. A known-answer test pins the *values* (iteration count, salt length, digest length) and is what `PasswordHasherSecurityTests` does; this class pins the *shape*, which catches a class of change the value tests cannot. Swap PBKDF2 for a single SHA-512 pass and keep the same 32-byte output length and the known-answer pin can be regenerated by whoever made the change, but the `Rfc2898DeriveBytes` reference disappears from the IL and this test goes red. Same for replacing `CryptographicOperations.FixedTimeEquals` with `SequenceEqual`: identical behavior on every test input, and a timing side channel in production. The two `because` strings spell out the attacks precisely: commodity GPUs trying billions of candidates per second against a stolen table (`:38`-`:39`), and a short-circuiting comparison leaking the matching prefix length so a digest is recovered byte by byte (`:51`-`:53`). [Rubric §11 - Security] assesses whether credential storage resists offline cracking and side channels; this is the build-time half of that guarantee. [Rubric §14 - Testability] covers the technique, and [Rubric §32 - Dependency & Supply-Chain] applies at the edges, since the assertion is that a specific BCL cryptographic primitive is actually reached.
+- **Walkthrough** - two `private const string` fully-qualified type names, `CryptographicOperationsType` (`:17`) and `Rfc2898DeriveBytesType` (`:19`), keep the matched names in one place. `Infrastructure` (`:21`) anchors the scanned assembly through `typeof(PasswordHasher).Assembly`, and the private `PasswordHasherTypes()` helper (`:56`-`:59`) narrows it with `Types.InAssembly(Infrastructure).That().HaveName(nameof(PasswordHasher))`.
+  - `ScannedPasswordHasherSet_IsNotEmpty` (`:23`-`:27`): the non-vacuity guard, and the first fact for a reason. `HaveName` matches on the simple name, so a renamed or moved type would leave the predicate list empty and both dependency assertions would pass having inspected nothing. `ContainSingle` on the full name (`:25`-`:26`) closes that.
+  - `PasswordHasher_DependsOnASlowKeyDerivationFunction` (`:29`-`:40`) and `PasswordHasher_DependsOnConstantTimeComparison` (`:42`-`:54`): each runs `.Should().HaveDependencyOnAll(<type name>).GetResult()` and routes the result through `ArchitectureAssert.NoViolations`. `HaveDependencyOnAll` is the positive form (the dependency must be present), which is the unusual direction for an architecture rule and the right one here.
+- **Why it's built this way** - [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) fixes the hashing scheme; the real implementation calls `Rfc2898DeriveBytes.Pbkdf2` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:35`) and `CryptographicOperations.FixedTimeEquals` (`:58`). Pinning the decision as a fitness function rather than a code-review convention is the [ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html) approach, and it is the one that survives a refactor by someone who has not read the ADR.
+- **Where it's used** - an independent class in the Common architecture suite. It is the shape half of a pair; the parameter values are pinned by `PasswordHasherSecurityTests` in the Infrastructure unit-test project (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/PasswordHasherSecurityTests.cs:18`), which holds PBKDF2-HMAC-SHA512 at 600,000 iterations with a 32-byte salt and a 64-byte output as reflected private constants (`:20`-`:22`). The class doc here records the division of labour (`PasswordHashingFitnessTests.cs:10`-`:13`).
+- **Caveats / not-in-source** - `HaveDependencyOnAll` reports a reference in the compiled IL, not that the reference is on the hashing path. It cannot tell an actually-used PBKDF2 call from a dead one, which is why the value pins in the companion test remain load-bearing.
+
 ### AcyclicConsumer
 > MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests.CycleFixtures.Acyclic` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/CycleFixtures/Acyclic/AcyclicFixtures.cs:6` · Level 3 · class
 - **What it is** - the negative control for the namespace-cycle rule: a third fixture namespace that points *into* `Left` and that nothing points back at, so it must never appear in a cycle report.
@@ -718,6 +796,15 @@ Six tiny services in one file (`MMCA.Common/Tests/Architecture/MMCA.Common.Archi
 - **Concept** - cross-references [LeftModelBase](#leftmodelbase). Its role is the discrimination half of the proof: a rule that reported every namespace with any edge would also "pass" the cycle test, so the fixture set needs a namespace that is genuinely coupled yet genuinely acyclic. Depending on `Left` (a namespace that *is* in a cycle) is deliberate: it proves the rule reports strongly connected components, not merely everything reachable from a cycle.
 - **Walkthrough** - one member, `public LeftService? Service { get; set; }` (`:9`).
 - **Where it's used** - asserted *absent* from the failure message by `Rule_FlagsTwoNamespaceCycle_ButNotAcyclicNamespaces` (`NamespaceCycleFitnessTests.cs:23`-`:25`).
+
+### EmptyScanTests
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs:117` · Level 3 · class
+- **What it is** - the adversarial fixture for the anonymous-endpoint gate's non-vacuity guard: a subclass pointed at an assembly that contains no controllers and no routable components at all, so the scan finds nothing and the guard must fail.
+- **Depends on** - [AnonymousEndpointTestsBase](#anonymousendpointtestsbase) (`private sealed class EmptyScanTests : AnonymousEndpointTestsBase`, `AnonymousEndpointTestsBaseTests.cs:117`) and the `MMCA.Common.Shared` assembly reached through `typeof(Shared.Abstractions.Result).Assembly` (`:121`).
+- **Concept introduced** - *guarding the guard: why a fitness function needs a floor.* The allow-list assertion is `offenders.Should().BeEmpty()` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/AnonymousEndpointTestsBase.cs:60`-`:62`), and an empty scan produces zero offenders, so the gate passes loudest exactly when it has stopped looking. A renamed assembly, a moved anchor type, or a repo re-layout all produce that failure mode, and none of them is visible in a green run. The base therefore ships a third fact, `ScannedEndpointSet_IsNotEmpty` (`:65`-`:76`), that counts the discovered controller and routable-component types and requires at least `MinimumScannedTypes`, whose default is 1 (`:51`). This fixture is what proves the counter is real: point it at an assembly that genuinely has neither shape and the fact must throw. Compare the equivalent floors elsewhere in the suite: `MinimumScannedTypes => 21` on [AnonymousEndpointTests](#anonymousendpointtests), `MinimumBaseResources => 3` on [LocalizationResourceTests](#localizationresourcetests), `MinimumRoutes = 8` in [NavigationContractTests](#navigationcontracttests). [Rubric §14 - Testability] assesses whether the guardrails are themselves trustworthy, and a vacuity floor is the cheapest thing that keeps one honest over a decade of refactors.
+- **Walkthrough** - two overrides and an inline comment that states why the chosen assembly works: the Shared package has neither controllers nor routable components (`:119`). `TargetAssemblies` returns that one assembly (`:120`-`:121`), and `AllowedAnonymousEndpoints` is empty (`:123`), which is irrelevant here because nothing is discovered to compare against. Being `private` and nested is what keeps xUnit from collecting its three inherited facts as deliberately-red tests of their own (class doc, `:10`-`:11`).
+- **Where it's used** - the subject of `Base_Fails_WhenNothingWasScanned` (`AnonymousEndpointTestsBaseTests.cs:37`-`:43`), which converts the inherited `ScannedEndpointSet_IsNotEmpty` into a delegate and asserts it throws (`:40`-`:42`).
+- **Caveats / not-in-source** - that fact asserts only that *an* exception is thrown, not what its message says. It proves the floor bites; it does not pin the wording.
 
 ### FakeDependentModule
 > MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ModuleConformanceTestsBaseTests.cs:31` · Level 3 · class
@@ -742,13 +829,79 @@ Six tiny services in one file (`MMCA.Common/Tests/Architecture/MMCA.Common.Archi
 - **Why it's built this way** - this is the exact shape the three byte-identical consumer `{X}ModuleTests` files collapse into (class doc, `:12`-`:13`), so the leaf path is the most-travelled one and the one whose silent breakage would be widest.
 - **Where it's used** - the `TModule` of [FakeLeafModuleConformanceTests](#fakeleafmoduleconformancetests) (`:51`), which in turn is driven directly by two of [ModuleConformanceTestsBaseTests](#moduleconformancetestsbasetests)'s facts (`:112`-`:129`).
 
+### FixtureCompliantV1, FixtureCompliantV2, FixtureCompliantV3, FixtureContestedV1, FixtureContestedV2, FixtureContestedV3, FixtureBackwardsV1, FixtureBackwardsV2
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests.UpcasterFixtures.IntegrationEvents` · (see per-type table) · Level 3 · record
+
+Eight throwaway integration-event contracts in one file (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs`), forming three groups: a compliant three-rung version ladder, a pair of rival successors to one contested source, and a backwards pair whose "successor" is older than its source. They are the data the two event-upcaster fitness rules are proven against.
+
+- **Depends on** - [BaseIntegrationEvent](group-04-events-outbox.md#baseintegrationevent) (every one of them derives from it, `EventUpcasterFixtures.cs:2`). Each is a one-parameter positional record carrying a single `string Sku`.
+- **Concept introduced** - *`SchemaVersion` as the ordering a fixture set has to make visible.* [BaseIntegrationEvent](group-04-events-outbox.md#baseintegrationevent) declares `public virtual int SchemaVersion => 1` (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:32`), so a contract that overrides nothing *is* version 1 and a successor states its own number ([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)). That default is what lets these fixtures be as small as they are: the V1 of each group is a bare record and only the successors carry an override. The rule reads the property without running a constructor, through `RuntimeHelpers.GetUninitializedObject` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Upcasters.cs:103`), which is why a get-only virtual returning a literal is the required shape and why no event needs a parameterless factory just to be inspected. [Rubric §6 - CQRS & Event-Driven] assesses whether event contracts are versioned and governed rather than edited in place; [Rubric §9 - API & Contract Design] applies because a published event is a wire contract; [Rubric §14 - Testability] covers the fixtures.
+- **Walkthrough** - the file's header doc records a subtlety worth internalizing (`:9`-`:13`): the contracts sit in a `*.IntegrationEvents` namespace so that the *residency* rule, which [EventScopeFitnessTests](#eventscopefitnesstests) exercises over this same assembly through a consumer-shaped map, stays satisfied. A fixture that broke a neighbouring rule to prove its own would be a poor fixture. They also never leave this test assembly, so no shipped event contract churns because of them.
+
+| Type | File:Line | SchemaVersion | Role |
+|------|-----------|---------------|------|
+| `FixtureCompliantV1` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:15` | 1 (inherited default) | First rung of the compliant ladder, and the source of exactly one upcaster. |
+| `FixtureCompliantV2` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:18` | 2 (`:20`) | The middle rung: a target of one upcaster and the source of the next. That dual role is the whole point, since it is a chain rather than a duplicate claim. |
+| `FixtureCompliantV3` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:24` | 3 (`:26`) | Terminal contract of the ladder. |
+| `FixtureContestedV1` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:30` | 1 (inherited default) | The offending source: two upcasters both read it, which is what the unique-source rule must report. |
+| `FixtureContestedV2` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:33` | 2 (`:35`) | One of the two rival successors. |
+| `FixtureContestedV3` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:39` | 3 (`:41`) | The other rival successor. Both targets are legal on their own; the offence is the shared source. |
+| `FixtureBackwardsV1` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:45` | 1 (inherited default) | The older contract of the backwards pair, used as the upcaster's *target*, which is the offence. |
+| `FixtureBackwardsV2` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:48` | 2 (`:50`) | The newer contract, used as the upcaster's *source*. |
+
+- **Why they're built this way** - three groups because the two rules have three distinct outcomes to prove between them (clean, duplicate claim, wrong direction), and because a chain has to be distinguishable from a duplicate claim. Nothing but `Sku` on any of them: the payload is irrelevant to both rules, and every byte of fixture that is not load-bearing is a byte that can mislead a future reader about what is being tested. See [ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html).
+- **Where they're used** - the type arguments of the five fixture upcasters ([FixtureCompliantV1ToV2Upcaster and family](#fixturecompliantv1tov2upcaster-fixturecompliantv2tov3upcaster-fixturecontestedclaimupcaster-fixturerivalclaimupcaster-fixturebackwardsversionupcaster)), and named by `nameof` in the assertions of [EventUpcasterFitnessTests](#eventupcasterfitnesstests).
+
+### AnonymousEndpointTests
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTests.cs:14` · Level 4 · class
+- **What it is** - the framework's own anonymous-endpoint allow-list: the live, reviewed statement of every controller action MMCA.Common ships without an authorization gate. Six entries today, all of them credential-exchange endpoints.
+- **Depends on** - [AnonymousEndpointTestsBase](#anonymousendpointtestsbase) (`public sealed class AnonymousEndpointTests : AnonymousEndpointTestsBase`, `AnonymousEndpointTests.cs:14`), [ApiControllerBase](group-12-api-hosting-mapping.md#apicontrollerbase) as the anchor for the API assembly (`:18`), and [UISharedAssemblyReference](group-15-common-ui-framework.md#uisharedassemblyreference) as the anchor for the shared UI assembly (`:19`).
+- **Concept introduced** - *an allow-list as a review artifact, not a suppression list.* The gate's value is not that it blocks `[AllowAnonymous]`; it is that adding one becomes a line in a test file with a comment next to it, landing in a diff that a human reads. Every entry here carries its justification inline, and each justification is the same argument: requiring a token would be circular, because minting or recovering the token is what the endpoint does. Login, register and refresh mint or rotate the token pair (`:24`-`:28`); the OAuth completion code is the caller's only credential at that point and is single-use, burned on first exchange (`:29`-`:31`); forgot-password and reset-password are for a caller who has lost the credential, are throttled by the same auth-ip rate-limit policy, and forgot-password always answers 202 so it reveals nothing about which addresses hold accounts (`:32`-`:34`). [Rubric §11 - Security] assesses the deliberateness of the authorization posture; note that the compensating control for every entry is rate limiting rather than authentication ([ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)). [Rubric §9 - API & Contract Design] applies because the anonymous surface is part of the published contract, and [Rubric §34 - Architecture Governance & Documentation] because the reasoning lives in compiled code rather than a wiki page.
+- **Walkthrough**
+  - `TargetAssemblies` (`:16`-`:20`) names two assemblies by anchor type, so the scan covers both the controllers and the routable Blazor pages the framework ships.
+  - `AllowedAnonymousEndpoints` (`:22`-`:39`) is the six-entry list. Two of them are worth reading closely: ``PasswordResetAuthControllerBase`2.ForgotPasswordAsync`` and its reset sibling (`:37`-`:38`) carry a backtick-2 arity suffix, because [PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>](group-12-api-hosting-mapping.md#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand) is generic over the app's command records and reflection renders a generic type's `FullName` that way. The comment above them says exactly that (`:35`-`:36`), which is the kind of note that saves the next person an hour.
+  - `MinimumScannedTypes => 21` (`:43`) raises the base's default floor of 1 to this repo's known count, described in the comment as a floor and not an equality: 12 API controller types plus the routable UI pages (`:41`-`:42`). Removing a scanned type is therefore a failure rather than a quietly smaller scan.
+- **Why it's built this way** - the four endpoints that cannot require a token are exactly the ones an attacker reaches first, so the framework's position is that they must be enumerated, justified, and rate-limited rather than merely working. The base's own doc records the one thing this gate cannot see: minimal-API endpoints opt out through the `.AllowAnonymous()` builder call, which is endpoint metadata produced at map time and invisible to static reflection (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/AnonymousEndpointTestsBase.cs:18`-`:24`). The framework's minimal-API anonymous surface (JWKS, OIDC discovery, app-association, session-cookie refresh, health) is deliberate and small, but it is not covered here.
+- **Where it's used** - collected and run by xUnit in the Common architecture suite; its three facts come entirely from the base. Consumers write their own subclass with their own list.
+- **Caveats / not-in-source** - the minimal-API blind spot above is stated in the base's documentation, and closing it would need an endpoint-metadata check over a built host. Nothing in this class compensates for it.
+
+### AnonymousEndpointTestsBaseTests
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs:13` · Level 4 · class
+- **What it is** - the meta-test for the shipped anonymous-endpoint base: five facts proving each of its three assertions fails on the drift it claims to catch, that both allow-list identifier shapes are accepted, and that an inherited attribute is not double-reported on the derived controller.
+- **Depends on** - [AnonymousEndpointTestsBase](#anonymousendpointtestsbase) (the type under test), its own nested fixtures ([AnonymousFixtureController and family](#abstractanonymousfixturecontrollerbase-anonymousfixturecontroller-typelevelanonymousfixturecontroller), [InheritingFixtureController](#inheritingfixturecontroller), [DriftedTests](#driftedtests), [StaleAllowListTests](#staleallowlisttests), [EmptyScanTests](#emptyscantests), [ConformantTests](#conformanttests)), plus xUnit `[Fact]` and AwesomeAssertions' delegate assertions.
+- **Concept introduced** - cross-references the "test a shipped test base from the outside by invoking its facts as delegates" technique introduced by [ModuleConformanceTestsBaseTests](#moduleconformancetestsbasetests). What this class adds is a third assertion axis. The module base is proven by *failing* it three ways; this base also has to be proven to *accept* the two identifier shapes its allow-list is written in, because that is a data contract between the base's emitter and every consumer's hand-written list, and getting it wrong makes the gate fail in the one repo the framework's CI never runs. The class doc states both halves (`:8`-`:11`). [Rubric §14 - Testability] assesses whether guardrails are trustworthy; [Rubric §11 - Security] is the property at stake, since a broken anonymous-endpoint gate is a gate that stops noticing lost authorization; [Rubric §33 - Developer Experience] covers the failure mode, a break that would only appear downstream after a release ([ADR-058](https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html)).
+- **Walkthrough**
+  - `Base_Fails_WhenAnAnonymousEndpointIsNotAllowListed` (`:15`-`:24`): drives [DriftedTests](#driftedtests) and asserts the thrown message names `AnonymousFixtureController` (`:22`), with the `because` stating the ruling, that the offender message must name the endpoint that lost its gate (`:23`).
+  - `Base_Fails_WhenTheAllowListHasAStaleEntry` (`:26`-`:35`): drives [StaleAllowListTests](#staleallowlisttests) and asserts the message contains `"NoLongerAnonymous"` (`:33`), the type name from an entry that matches nothing.
+  - `Base_Fails_WhenNothingWasScanned` (`:37`-`:43`): drives [EmptyScanTests](#emptyscantests) and asserts the non-vacuity fact throws (`:42`).
+  - `Base_Accepts_TypeLevelAndMethodLevelEntries` (`:45`-`:59`): the positive case. It calls all three of [ConformantTests](#conformanttests)'s inherited facts inside one delegate (`:50`-`:55`) and asserts `NotThrow` (`:57`-`:58`). Running all three together matters: the allow-list is only correct if it is simultaneously complete (no offenders) and exact (no stale entries).
+  - `Base_DoesNotReport_AnInheritedAttributeOnTheDerivedController` (`:61`-`:71`): reads the scan output through [ConformantTests](#conformanttests)'s `AnonymousEndpointsForTest()` and asserts the derived-controller identifier is absent (`:69`-`:70`). This is the only fact that inspects the emitted set rather than an assertion's outcome.
+- **Why it's built this way** - the four drifted and conformant subclasses are all `private`, which is what keeps xUnit from collecting their inherited facts as deliberately-failing tests of their own (class doc, `:10`-`:11`). The base ships in the `MMCA.Common.Testing.Architecture` package, so proving it here is proving it before a release rather than after one.
+- **Where it's used** - an independent class in the Common architecture suite. The base it protects is bound for real by [AnonymousEndpointTests](#anonymousendpointtests) here and by the equivalent subclass in each consumer repo.
+
+### ConformantTests
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs:126` · Level 4 · class
+- **What it is** - the positive fixture for the anonymous-endpoint gate: a subclass whose allow-list correctly names every anonymous endpoint in the fixture set, in both identifier shapes, so all three inherited facts must pass.
+- **Depends on** - [AnonymousEndpointTestsBase](#anonymousendpointtestsbase) (`private sealed class ConformantTests : AnonymousEndpointTestsBase`, `AnonymousEndpointTestsBaseTests.cs:126`) and the three fixture controllers it allow-lists.
+- **Concept introduced** - *building allow-list entries with `typeof(...).FullName` and `nameof(...)` rather than string literals.* Each of the three entries is interpolated from live metadata (`:133`-`:135`): `$"{typeof(AnonymousFixtureController).FullName}.{nameof(AnonymousFixtureController.PeekAsync)}"` for the method-level shape, the same construction against the abstract base for the inherited action, and a bare `typeof(TypeLevelAnonymousFixtureController).FullName!` for the type-level shape. Renaming any fixture is then a compile error instead of a silently-drifting test. That discipline is not available to a real consumer's list (the framework's endpoints are strings there, as in [AnonymousEndpointTests](#anonymousendpointtests)), which is precisely why the stale-entry fact exists to catch what `nameof` would have caught. [Rubric §15 - Best Practices & Code Quality] and [Rubric §14 - Testability] apply.
+- **Walkthrough** - `TargetAssemblies` is this test assembly (`:128`-`:129`), so the scan sees the nested fixture controllers. `AllowedAnonymousEndpoints` (`:131`-`:136`) holds the three entries described above; note the abstract base is listed at *its own* name rather than the deriving controller's, which is the ruling [InheritingFixtureController](#inheritingfixturecontroller) pins. `MinimumScannedTypes` is left at the base's default of 1, which the fixture set clears comfortably. One member is added beyond the base's surface: `internal IReadOnlyCollection<string> AnonymousEndpointsForTest() => [.. AnonymousEndpoints()];` (`:138`), which materializes the base's `protected` enumeration so the enclosing test class can assert on the emitted set directly. The base exposes `AnonymousEndpoints()` as `protected` for exactly this kind of extension (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/AnonymousEndpointTestsBase.cs:120`-`:125`).
+- **Where it's used** - `Base_Accepts_TypeLevelAndMethodLevelEntries` (`AnonymousEndpointTestsBaseTests.cs:45`-`:59`) runs its three inherited facts, and `Base_DoesNotReport_AnInheritedAttributeOnTheDerivedController` (`:61`-`:71`) reads its `AnonymousEndpointsForTest()` output.
+
 ### DriftedTests
-> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ModuleConformanceTestsBaseTests.cs:131` · Level 4 · class
-- **What it is** - the adversarial fixture: a conformance subclass whose three expectations are all deliberately wrong for the module it points at, so the base's assertions can be proven to actually fail on drift instead of passing regardless.
-- **Depends on** - [ModuleConformanceTestsBase<TModule>](#moduleconformancetestsbasetmodule) (`private sealed class DriftedTests : ModuleConformanceTestsBase<FakeDependentModule>`, `ModuleConformanceTestsBaseTests.cs:131`) and [FakeDependentModule](#fakedependentmodule) (the module under test).
-- **Concept introduced** - *negative fixtures, and hiding them from test discovery.* A fitness base that asserts nothing passes everywhere; the only way to know an assertion bites is to feed it a case that must fail. But a public subclass of an xUnit base is itself collected: its inherited `[Fact]`s would run and report as three red tests. Declaring the drifted subclass `private` (nested inside [ModuleConformanceTestsBaseTests](#moduleconformancetestsbasetests)) keeps xUnit from collecting it, while the enclosing class can still instantiate it and invoke the inherited methods directly as delegates. [Rubric §14 - Testability] assesses whether the guardrails themselves are trustworthy; this is the fixture that earns that trust. Compare [NavigatingSpec](#navigatingspec), the same negative-fixture technique applied to a specification rule.
-- **Walkthrough** - three overrides, each wrong in a different way against [FakeDependentModule](#fakedependentmodule)'s real declarations: `ExpectedName => "NotTheDeclaredName"` (`:133`) against the module's `"FakeDependent"`; `ExpectedDependencies => ["FakeLeaf"]` (`:135`) against the module's two-entry list, so one dependency is missing; and `ExpectedRequiresDependencies => false` (`:137`) against the module's `true`. `AssertDisabledStubs` is deliberately *not* overridden, so the fourth inherited fact stays vacuous here.
-- **Where it's used** - instantiated three times by [ModuleConformanceTestsBaseTests](#moduleconformancetestsbasetests) (`:91`,`:99`,`:107`), once per assertion under proof.
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · (see per-type table) · Level 4 · class
+
+The name is used twice in this assembly, once per fitness base under proof, and both are the same idea: a `private sealed` subclass of a shipped `*TestsBase` whose configuration is deliberately wrong, so the base's assertions can be shown to actually fail on the drift they claim to catch. They are nested in different outer classes, so their full names differ and neither is visible outside its own file.
+
+- **Depends on** - the base each one drifts from, plus the fixture it points at: [ModuleConformanceTestsBase<TModule>](#moduleconformancetestsbasetmodule) with [FakeDependentModule](#fakedependentmodule) for one, [AnonymousEndpointTestsBase](#anonymousendpointtestsbase) with the fixture controllers for the other.
+- **Concept introduced** - *negative fixtures, and hiding them from test discovery.* A fitness base that asserts nothing passes everywhere; the only way to know an assertion bites is to feed it a case that must fail. But a public subclass of an xUnit base is itself collected, so its inherited `[Fact]`s would run and report as red tests of their own. Declaring the drifted subclass `private` and nested keeps xUnit from collecting it, while the enclosing class can still instantiate it and invoke the inherited methods directly as delegates (`var assert = new DriftedTests().Module_ShouldDeclare_ExpectedName;`, `ModuleConformanceTestsBaseTests.cs:91`). Both class docs record that reasoning in the same words (`ModuleConformanceTestsBaseTests.cs:83`-`:84`, `AnonymousEndpointTestsBaseTests.cs:10`-`:11`). [Rubric §14 - Testability] assesses whether the guardrails themselves are trustworthy; this is the fixture shape that earns that trust. Compare [NavigatingSpec](#navigatingspec), the same negative-fixture technique applied to a specification rule.
+
+| Type | File:Line | What is deliberately wrong |
+|------|-----------|----------------------------|
+| `DriftedTests` (in [AnonymousEndpointTestsBaseTests](#anonymousendpointtestsbasetests)) | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs:100` | Points `TargetAssemblies` at this test assembly (`:102`-`:103`), so the scan finds the fixture controllers' `[AllowAnonymous]` attributes, and then supplies an empty `AllowedAnonymousEndpoints` (`:105`). Every discovered endpoint is therefore an offender, and the failure message must name `AnonymousFixtureController`. |
+| `DriftedTests` (in [ModuleConformanceTestsBaseTests](#moduleconformancetestsbasetests)) | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ModuleConformanceTestsBaseTests.cs:131` | Three overrides, each wrong in a different way against [FakeDependentModule](#fakedependentmodule)'s real declarations: `ExpectedName => "NotTheDeclaredName"` (`:133`) against the module's `"FakeDependent"`; `ExpectedDependencies => ["FakeLeaf"]` (`:135`) against the module's two-entry list, so one dependency is missing; and `ExpectedRequiresDependencies => false` (`:137`) against the module's `true`. `AssertDisabledStubs` is deliberately *not* overridden, so the fourth inherited fact stays vacuous here. |
+
+- **Why they're built this way** - one wrong value per assertion, and no more. If a single drifted subclass were wrong in three ways at once and the base only ever threw on the first, the other two assertions could rot undetected; the module-side fixture avoids that by being driven three separate times, once per fact.
+- **Where they're used** - the anonymous-endpoint one drives `Base_Fails_WhenAnAnonymousEndpointIsNotAllowListed` (`AnonymousEndpointTestsBaseTests.cs:15`-`:24`); the module one is instantiated three times by [ModuleConformanceTestsBaseTests](#moduleconformancetestsbasetests) (`:91`,`:99`,`:107`), once per assertion under proof.
 
 ### FakeDependentModuleConformanceTests
 > MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ModuleConformanceTestsBaseTests.cs:60` · Level 4 · class
@@ -774,6 +927,34 @@ Six tiny services in one file (`MMCA.Common/Tests/Architecture/MMCA.Common.Archi
 - **Walkthrough** - one auto-property, `bool IsActive` (`:59`). That is the only member; identity and audit fields come from the base. It is the navigation target referenced by `FitnessDependent.Principal`. Deriving from `AuditableBaseEntity<int>` is load-bearing rather than cosmetic: the rule's navigation walker only counts a property as an entity navigation when its type (or its collection element type) inherits the auditable entity base (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Specifications.cs:121`-`:138`).
 - **Why it's built this way** - the fitness test must be *non-vacuous*: it needs a real cross-entity navigation to flag. A minimal principal with a single scalar is the smallest thing a specification can legally navigate into.
 - **Where it's used** - referenced by [FitnessDependent](#fitnessdependent) and, through it, by [NavigatingSpec](#navigatingspec) and [NavigatingQuerySpec](#navigatingqueryspec-scalaronlyqueryspec); the whole fixture set drives [SpecificationFitnessTests](#specificationfitnesstests).
+
+### FixtureCompliantV1ToV2Upcaster, FixtureCompliantV2ToV3Upcaster, FixtureContestedClaimUpcaster, FixtureRivalClaimUpcaster, FixtureBackwardsVersionUpcaster
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests.UpcasterFixtures.IntegrationEvents` · (see per-type table) · Level 4 · class
+
+Five `internal sealed` upcasters over the eight fixture contracts, each a single expression-bodied `Upcast` that copies the one field across. Between them they are the truth table for the two event-upcaster fitness rules ([ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html)): two clean rungs of a chain, two rivals claiming one source, and one pointing backwards down the version ladder.
+
+- **Depends on** - [IEventUpcaster](group-05-cqrs-pipeline.md#ieventupcaster) in its two-parameter form (`EventUpcasterFixtures.cs:1`) and the [fixture event contracts](#fixturecompliantv1-fixturecompliantv2-fixturecompliantv3-fixturecontestedv1-fixturecontestedv2-fixturecontestedv3-fixturebackwardsv1-fixturebackwardsv2) they are generic over.
+- **Concept introduced** - *the upcast chain must be a function, and it must run forwards.* When a retired contract arrives from the outbox, the consumer resolves the one upcaster registered for that type and replays the message as its successor. Two properties make that mechanical rather than lucky. First, at most one upcaster may read a given source contract: with two claimants, which one runs would depend on DI registration order, so `EventUpcastersHaveUniqueSourceTypes` groups by source and reports any group with more than one entry (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Upcasters.cs:14`-`:17`). Second, the target must declare a strictly higher `SchemaVersion` than the source, because an upcaster that moves sideways or down is not producing a successor at all and the chain stops being a ladder anyone can reason about; `EventUpcastersIncreaseSchemaVersion` compares the two declared versions and flags `targetVersion <= sourceVersion` (`:44`-`:48`). Note what the second rule deliberately does *not* do: a missing or non-`int` `SchemaVersion` is skipped rather than reported (`:37`-`:42`), because that is the business of the separate `IntegrationEventsDeclareSchemaVersion` rule. One rule, one judgement. Both rules find their subjects by matching the interface on name and arity, ``"IEventUpcaster`2"`` (`:81`-`:83`), which is how the rule library stays free of a compile dependency on the framework's own Application package. [Rubric §6 - CQRS & Event-Driven] assesses whether asynchronous contracts evolve safely; [Rubric §9 - API & Contract Design] covers the versioning discipline; [Rubric §29 - Resilience & Business Continuity] is the operational consequence, since an outbox row written against a retired contract has to be replayable weeks later.
+- **Walkthrough** - every one of the five has the same body shape, `public {Target} Upcast({Source} integrationEvent) => new(integrationEvent.Sku);`, which is the typed overload declared by [IEventUpcaster](group-05-cqrs-pipeline.md#ieventupcaster) (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEventUpcaster.cs:82`); `SourceType` and `TargetType` come free as default interface implementations off the generic arguments (`:72`,`:75`), which is exactly what the rules read.
+
+| Type | File:Line | The case it models |
+|------|-----------|--------------------|
+| `FixtureCompliantV1ToV2Upcaster` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:54` | Clean: the only claimant on `FixtureCompliantV1`, and its target declares version 2. Must be absent from both rules' reports. |
+| `FixtureCompliantV2ToV3Upcaster` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:60` | The second rung, and the sharper of the two clean cases: its source is the previous upcaster's *target*. That is a chain, not a duplicate claim, and a naive implementation that grouped on "types that appear in more than one upcaster" would wrongly flag it. It gets its own dedicated fact. |
+| `FixtureContestedClaimUpcaster` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:66` | Offender: reads `FixtureContestedV1` and produces V2. Legal in isolation. |
+| `FixtureRivalClaimUpcaster` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:72` | The second claimant on the same `FixtureContestedV1`, producing V3 instead. The offence is the pair, so the rule's message must name the contested contract *and* both upcasters. |
+| `FixtureBackwardsVersionUpcaster` | `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:78` | Offender for the other rule: source `FixtureBackwardsV2` (version 2), target `FixtureBackwardsV1` (version 1). It is the only claimant on its source, so it passes the unique-source rule and fails the version rule, which is what keeps the two rules' proofs independent. |
+
+- **Why they're built this way** - the two rules judge different things about the same set of types, so the fixture set is designed so that each offender trips exactly one of them. If the backwards upcaster also shared a source, a failure in the unique-source rule would mask a regression in the version rule. Being `internal` keeps them off the assembly's public surface while still visible to `ConcreteClasses`, which is what the rule enumerates (`ArchitectureRules.Upcasters.cs:67`).
+- **Where they're used** - reflected over by [EventUpcasterFitnessTests](#eventupcasterfitnesstests) through [UpcasterTestMap](#upcastertestmap), and named by `nameof` in its assertions.
+
+### StaleAllowListTests
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs:108` · Level 4 · class
+- **What it is** - the adversarial fixture for the stale-entry half of the anonymous-endpoint gate: a subclass whose allow-list names an endpoint that does not exist, so the base's `AllowList_HasNoStaleEntries` fact must report it rather than shrug.
+- **Depends on** - [AnonymousEndpointTestsBase](#anonymousendpointtestsbase) (`private sealed class StaleAllowListTests : AnonymousEndpointTestsBase`, `AnonymousEndpointTestsBaseTests.cs:108`).
+- **Concept introduced** - *an allow-list rots in two directions, and only one of them is obvious.* A missing entry fails loudly the moment a new `[AllowAnonymous]` lands. A *stale* entry fails silently and permanently: the endpoint gets renamed, re-gated with `[Authorize]`, or deleted, and the list keeps granting a permission that is no longer being requested. Nothing breaks, so nobody looks, and the next endpoint that happens to match that identifier inherits an approval nobody granted it. The base therefore runs the comparison both ways, computing `stale` as the allow-list entries with no match in the scanned set (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/AnonymousEndpointTestsBase.cs:83`-`:89`), with a `because` that spells out the consequence: an entry that no longer matches hides a renamed or re-gated endpoint behind a permission that is no longer being granted (`:88`). [Rubric §11 - Security] is the property; [Rubric §16 - Maintainability] is the mechanism, since a self-pruning list is one that stays readable.
+- **Walkthrough** - `TargetAssemblies` is this test assembly (`:110`-`:111`), so the fixture controllers are discovered normally. `AllowedAnonymousEndpoints` holds exactly one entry, `"MMCA.Common.Architecture.Tests.NoLongerAnonymousController.ReadAsync"` (`:113`-`:114`), naming a controller that has never existed. That makes the fixture fail *both* facts at once (every real fixture endpoint is now an unlisted offender as well), which is harmless because the fact under proof invokes only `AllowList_HasNoStaleEntries` as a delegate.
+- **Where it's used** - the subject of `Base_Fails_WhenTheAllowListHasAStaleEntry` (`AnonymousEndpointTestsBaseTests.cs:26`-`:35`), which asserts the message contains `"NoLongerAnonymous"` (`:33`), the distinctive fragment of the phantom identifier.
 
 ### CancellationTestMap
 > MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/CancellationTokenFitnessTests.cs:63` · Level 5 · class
@@ -941,24 +1122,6 @@ The same unsafe/safe pair as [NavigatingSpec](#navigatingspec) and [ScalarOnlySp
 - **Walkthrough** - one overridden `Criteria` filtering on `PrincipalId` and `Flag` (`:71`). The test asserts the rule's exception message does *not* contain this type's name.
 - **Where it's used** - the "should not be flagged" input to [SpecificationFitnessTests](#specificationfitnesstests).
 
-### CommonArchitectureMap
-> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:15` · Level 7 · class
-- **What it is** - the architecture map for the MMCA.Common framework: it names each package's layer and pins the layer to a concrete assembly, so the shared rule library knows which assembly is Shared, Domain, Application, and so on for this repo.
-- **Depends on** - [ArchitectureMapBase](#architecturemapbase) (`internal sealed class CommonArchitectureMap : ArchitectureMapBase`, `CommonArchitectureMap.cs:15`), the [Layer](#layer) enum, [LayerRef](#layerref), and one anchor type per package (`Result`, `BaseEntity<>`, `DomainEventDispatcher`, `ApplicationDbContext`, `ApiControllerBase`, `ResultGrpcExtensions`, `UISharedAssemblyReference`, `:21`-`:27`).
-- **Concept introduced** - *the map as the single point of repo-specific truth for architecture rules.* The rule bodies live once in `MMCA.Common.Testing.Architecture` and are parameterized by an [IArchitectureMap](#iarchitecturemap); each repo supplies exactly one map so the same rules run identically across Common, Store, and ADC. Because Common is a module-less framework, every layer is registered as a *framework* layer via the `Framework(...)` helper rather than a module layer, and that distinction is load-bearing well beyond bookkeeping: several rules branch on `map.ModuleNames.Count` to decide whether they are judging a framework or a consumer (see [EventScopeFitnessTests](#eventscopefitnesstests)). [Rubric §3 - Clean Architecture] assesses whether layer boundaries are explicit and enforced; this map is the machine-readable statement of those boundaries.
-- **Walkthrough** - `RepoToken => "MMCA.Common"` (`:17`) identifies the repo and is what the source-scanning rules use to locate the repo root (they look for `{RepoToken}.slnx`). `DefineLayers()` (`:19`-`:28`) returns one `Framework(Layer.X, anchorType.Assembly)` entry per package, using a single anchor type to resolve each assembly (mirrors the old `PackageAssemblies` helper): Shared, Domain, Application, Infrastructure, Api, Grpc, and Ui (`:21`-`:27`). The doc comment (`:8`-`:13`) records a deliberate omission: `MMCA.Common.UI.Maui` ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)) is absent because its four MAUI TFM assemblies cannot load in the ubuntu net10.0 test process, so its UI-plus-Shared boundary is enforced at compile time by `EnforceUIMauiLayerBoundary` in `Source/Build/MMCA.Common.LayerEnforcement.targets` and the windows `build-maui` CI job instead.
-- **Why it's built this way** - one map per repo keeps the rule bodies DRY and identical everywhere (see the "Architecture Enforcement" section in `MMCA.Common/CLAUDE.md`); anchoring by type keeps the assembly reference refactor-safe.
-- **Where it's used** - supplied as `Map` by every thin `*ConventionTests` subclass in this unit, used directly by [EventScopeFitnessTests](#eventscopefitnesstests) as the module-less contrast case (`EventScopeFitnessTests.cs:39`), and is the pattern the single-layer fitness maps ([SpecTestMap](#spectestmap), [IdempotencyTestMap](#idempotencytestmap), [CancellationTestMap](#cancellationtestmap), [CycleTestMap](#cycletestmap)) collapse.
-
-### FrameworkSanityTests
-> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/FrameworkSanityTests.cs:13` · Level 7 · class
-- **What it is** - the home for the few architecture checks that are Common-only and do not generalize into the shared rule library: the `MMCA.Common.Grpc` transport boundary and the placement of the `IMessageBus`, `IJwksProvider`, and `ILiveChannelPublisher` abstractions.
-- **Depends on** - [IMessageBus](group-04-events-outbox.md#imessagebus), [IJwksProvider](group-08-auth.md#ijwksprovider), [ILiveChannelPublisher](group-10-notifications.md#ilivechannelpublisher), and the NetArchTest `Types` query API routed through [ArchitectureAssert](#architectureassert).
-- **Concept introduced** - *repo-specific sanity next to the shared library.* Not every rule fits the parameterized base classes; some assert facts true only of the framework repo. Keeping them in one explicitly-named class documents the boundary between "shared rule applied here" and "Common-only invariant." [Rubric §7 - Microservices Readiness] (transport isolation) and [Rubric §3 - Clean Architecture] (abstraction placement) both apply: gRPC is pure transport and must not couple to Domain, Application, or Infrastructure, and the cross-cutting abstractions must sit in the layer their consumers depend on.
-- **Walkthrough** - three private static `Assembly` accessors anchor the Grpc, Application, and Infrastructure assemblies by an anchor type each (`:15`-`:19`). Three `[Fact]`s assert `MMCA.Common.Grpc` has no dependency on Domain, Application, or Infrastructure (`:21`-`:34`) via the `AssertNoDependency` helper (`:51`-`:59`), which runs a `Types.InAssembly(...).ShouldNot().HaveDependencyOnAny(...)` NetArchTest query and routes the result through `ArchitectureAssert.NoViolations` (`:58`). Three more `[Fact]`s assert placement by comparing the abstraction's declaring assembly against the anchored layer assembly: `IMessageBus` lives in Application (`:36`-`:39`), `IJwksProvider` in Infrastructure because it handles crypto and PEM material (`:41`-`:44`), and `ILiveChannelPublisher` in Application beside `IPushNotificationSender` (`:46`-`:49`).
-- **Why it's built this way** - the message-bus abstraction must stay in Application so application code depends on transport through it (extraction boundary, [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)); the JWKS provider is crypto and belongs in Infrastructure ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)). These are load-bearing placements, so they get their own asserted facts.
-- **Where it's used** - an independent class in the Common architecture suite; it has no counterpart in Store or ADC because only Common owns the Grpc package and defines these abstractions.
-
 ### SpecificationFitnessTests
 > MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/SpecificationFitnessTests.cs:13` · Level 7 · class
 - **What it is** - the test that verifies the `SpecificationsDoNotNavigateToOtherEntities` fitness function actually discriminates: it must flag a specification that navigates into another entity, must leave a scalar-only specification alone, and must reach both shapes through the `QuerySpecification` subclass as well.
@@ -976,8 +1139,26 @@ The same unsafe/safe pair as [NavigatingSpec](#navigatingspec) and [ScalarOnlySp
 - **Walkthrough** - `RepoToken => "MMCA.Common"` (`:42`) and a one-entry `DefineLayers()` (`:44`-`:45`) pointing at this assembly.
 - **Where it's used** - instantiated once per fact inside [SpecificationFitnessTests](#specificationfitnesstests) (`:18`,`:29`).
 
+### CommonArchitectureMap
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:15` · Level 12 · class
+- **What it is** - the architecture map for the MMCA.Common framework: it names each package's layer and pins the layer to a concrete assembly, so the shared rule library knows which assembly is Shared, Domain, Application, and so on for this repo.
+- **Depends on** - [ArchitectureMapBase](#architecturemapbase) (`internal sealed class CommonArchitectureMap : ArchitectureMapBase`, `CommonArchitectureMap.cs:15`), the [Layer](#layer) enum, [LayerRef](#layerref), and one anchor type per package (`Result`, `BaseEntity<>`, `DomainEventDispatcher`, `ApplicationDbContext`, `ApiControllerBase`, `ResultGrpcExtensions`, `UISharedAssemblyReference`, `:21`-`:27`).
+- **Concept introduced** - *the map as the single point of repo-specific truth for architecture rules.* The rule bodies live once in `MMCA.Common.Testing.Architecture` and are parameterized by an [IArchitectureMap](#iarchitecturemap); each repo supplies exactly one map so the same rules run identically across Common, Store, and ADC. Because Common is a module-less framework, every layer is registered as a *framework* layer via the `Framework(...)` helper rather than a module layer, and that distinction is load-bearing well beyond bookkeeping: several rules branch on `map.ModuleNames.Count` to decide whether they are judging a framework or a consumer (see [EventScopeFitnessTests](#eventscopefitnesstests)). [Rubric §3 - Clean Architecture] assesses whether layer boundaries are explicit and enforced; this map is the machine-readable statement of those boundaries.
+- **Walkthrough** - `RepoToken => "MMCA.Common"` (`:17`) identifies the repo and is what the source-scanning rules use to locate the repo root (they look for `{RepoToken}.slnx`). `DefineLayers()` (`:19`-`:28`) returns one `Framework(Layer.X, anchorType.Assembly)` entry per package, using a single anchor type to resolve each assembly (mirrors the old `PackageAssemblies` helper): Shared, Domain, Application, Infrastructure, Api, Grpc, and Ui (`:21`-`:27`). The doc comment (`:8`-`:13`) records a deliberate omission: `MMCA.Common.UI.Maui` ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)) is absent because its four MAUI TFM assemblies cannot load in the ubuntu net10.0 test process, so its UI-plus-Shared boundary is enforced at compile time by `EnforceUIMauiLayerBoundary` in `Source/Build/MMCA.Common.LayerEnforcement.targets` and the windows `build-maui` CI job instead.
+- **Why it's built this way** - one map per repo keeps the rule bodies DRY and identical everywhere (see the "Architecture Enforcement" section in `MMCA.Common/CLAUDE.md`); anchoring by type keeps the assembly reference refactor-safe.
+- **Where it's used** - supplied as `Map` by every thin `*ConventionTests` subclass in this unit, used directly by [EventScopeFitnessTests](#eventscopefitnesstests) as the module-less contrast case (`EventScopeFitnessTests.cs:39`), and is the pattern the single-layer fitness maps ([SpecTestMap](#spectestmap), [IdempotencyTestMap](#idempotencytestmap), [CancellationTestMap](#cancellationtestmap), [CycleTestMap](#cycletestmap)) collapse.
+
+### FrameworkSanityTests
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/FrameworkSanityTests.cs:13` · Level 12 · class
+- **What it is** - the home for the few architecture checks that are Common-only and do not generalize into the shared rule library: the `MMCA.Common.Grpc` transport boundary and the placement of the `IMessageBus`, `IJwksProvider`, and `ILiveChannelPublisher` abstractions.
+- **Depends on** - [IMessageBus](group-04-events-outbox.md#imessagebus), [IJwksProvider](group-08-auth.md#ijwksprovider), [ILiveChannelPublisher](group-10-notifications.md#ilivechannelpublisher), and the NetArchTest `Types` query API routed through [ArchitectureAssert](#architectureassert).
+- **Concept introduced** - *repo-specific sanity next to the shared library.* Not every rule fits the parameterized base classes; some assert facts true only of the framework repo. Keeping them in one explicitly-named class documents the boundary between "shared rule applied here" and "Common-only invariant." [Rubric §7 - Microservices Readiness] (transport isolation) and [Rubric §3 - Clean Architecture] (abstraction placement) both apply: gRPC is pure transport and must not couple to Domain, Application, or Infrastructure, and the cross-cutting abstractions must sit in the layer their consumers depend on.
+- **Walkthrough** - three private static `Assembly` accessors anchor the Grpc, Application, and Infrastructure assemblies by an anchor type each (`:15`-`:19`). Three `[Fact]`s assert `MMCA.Common.Grpc` has no dependency on Domain, Application, or Infrastructure (`:21`-`:34`) via the `AssertNoDependency` helper (`:51`-`:59`), which runs a `Types.InAssembly(...).ShouldNot().HaveDependencyOnAny(...)` NetArchTest query and routes the result through `ArchitectureAssert.NoViolations` (`:58`). Three more `[Fact]`s assert placement by comparing the abstraction's declaring assembly against the anchored layer assembly: `IMessageBus` lives in Application (`:36`-`:39`), `IJwksProvider` in Infrastructure because it handles crypto and PEM material (`:41`-`:44`), and `ILiveChannelPublisher` in Application beside `IPushNotificationSender` (`:46`-`:49`).
+- **Why it's built this way** - the message-bus abstraction must stay in Application so application code depends on transport through it (extraction boundary, [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)); the JWKS provider is crypto and belongs in Infrastructure ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)). These are load-bearing placements, so they get their own asserted facts.
+- **Where it's used** - an independent class in the Common architecture suite; it has no counterpart in Store or ADC because only Common owns the Grpc package and defines these abstractions.
+
 ### AggregateConventionTests, CancellationTokenConventionTests, DomainPurityTests, EventVersioningConventionTests, HandlerResultConventionTests, IdempotencyConventionTests, LayerDependencyTests, LocalizedTextConventionTests, MicroserviceExtractionTests, NamespaceCycleTests, PiiConventionTests, RawQueryableConventionTests, SliceCohesionTests, StateManagementConventionTests, UIArchitectureConventionTests
-> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · (see per-type table) · Level 8 · class
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · (see per-type table) · Level 13 · class
 
 These fifteen sealed classes share one shape: each is a **thin subclass of a shared `*TestsBase` rule** from the `MMCA.Common.Testing.Architecture` package, supplying the repo's [CommonArchitectureMap](#commonarchitecturemap) (and, for a few, one extra override) so the same rule body runs identically across MMCA.Common, MMCA.Store, and MMCA.ADC. This is the [Rubric §34 - Architecture Governance & Documentation] and [Rubric §14 - Testability] story: architecture conventions are executable and enforced in CI rather than left to review, and the rule logic lives in exactly one place ([ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html)). See the thin-subclass pattern introduced by [DependencyVersionTests](#dependencyversiontests). The canonical body of each rule is the corresponding `*TestsBase`; these subclasses only wire in the map and any repo-specific floor or allowlist. Each fails the `build-and-test` CI job on violation, and a couple are deliberately *vacuous today* (they assert nothing until the framework grows a type that could break the convention, at which point they fire).
 
@@ -1006,7 +1187,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Caveats / not-in-source** - the per-rule fact counts live in each `*TestsBase`, not in these subclasses; the base sections elsewhere in this chapter are the authority on exactly what each rule asserts.
 
 ### EventScopeFitnessTests
-> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/EventScopeFitnessTests.cs:13` · Level 8 · class
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/EventScopeFitnessTests.cs:13` · Level 13 · class
 - **What it is** - the ownership-scoping guard for the integration-event rules: three facts pinning that a consumer-shaped map neither snapshots nor polices the framework's own events, while the framework's module-less map still covers them at the source.
 - **Depends on** - [ArchitectureRules](#architecturerules) (`BuildIntegrationEventContract` and `IntegrationEventsResideInSharedIntegrationEventsNamespace`, `EventScopeFitnessTests.cs:18`,`:30`), [CommonArchitectureMap](#commonarchitecturemap) (`:39`), its own [FakeConsumerMap](#fakeconsumermap), and [BaseIntegrationEvent](group-04-events-outbox.md#baseintegrationevent) as the Domain-assembly anchor (`:1`,`:56`).
 - **Concept introduced** - *a rule's scope is part of its contract, and ownership decides it.* Both event rules ask the same question of a map, and both answer differently depending on whether the map declares modules. `IntegrationEvents` includes framework layers only when `map.ModuleNames.Count == 0` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Events.cs:68`-`:73`), and the residency rule enforces the Shared-layer requirement only when the map is module-bearing (`:31`,`:33`). The reasoning is ownership: a framework-shipped event is the framework's contract, gated by the framework's own conventions and public-API baseline, so a consumer's frozen snapshot must neither churn on it nor claim jurisdiction over where it lives. This class is a *regression* guard, and the class doc names the incident that motivated it (`:6`-`:12`): when the framework shipped its first concrete integration event, [OutputCacheEvictionRequested](group-04-events-outbox.md#outputcacheevictionrequested), the Helpdesk canary broke. [Rubric §6 - CQRS & Event-Driven] assesses whether event contracts are governed; [Rubric §9 - API & Contract Design] covers the frozen-snapshot mechanism; [Rubric §33 - Developer Experience] is the failure mode being prevented, a framework release that reds every consumer's architecture suite for a change they did not make.
@@ -1017,13 +1198,44 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Why it's built this way** - a scoping fix is exactly the kind of change that silently over-corrects. Pinning both the exclusion and the retention, against a real framework event rather than a fixture one, is what keeps the fix from becoming a hole.
 - **Where it's used** - an independent class in the Common architecture suite; the rules it scopes are bound for real by `EventVersioningConventionTests` here and by the per-repo `IntegrationEventContractTestsBase` subclasses in the consumers.
 
+### EventUpcasterFitnessTests
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/EventUpcasterFitnessTests.cs:12` · Level 13 · class
+- **What it is** - the meta-test for the two event-upcaster fitness rules: four facts proving the unique-source rule reports a contract claimed twice, that it leaves a legitimate chain alone, that the version rule reports an upcaster pointing at a lower `SchemaVersion`, and that both rules pass on a map owning no upcasters at all.
+- **Depends on** - [ArchitectureRules](#architecturerules) (`EventUpcastersHaveUniqueSourceTypes` and `EventUpcastersIncreaseSchemaVersion`, `EventUpcasterFitnessTests.cs:53`,`:55`,`:61`,`:68`), the [fixture contracts](#fixturecompliantv1-fixturecompliantv2-fixturecompliantv3-fixturecontestedv1-fixturecontestedv2-fixturecontestedv3-fixturebackwardsv1-fixturebackwardsv2) and [fixture upcasters](#fixturecompliantv1tov2upcaster-fixturecompliantv2tov3upcaster-fixturecontestedclaimupcaster-fixturerivalclaimupcaster-fixturebackwardsversionupcaster) (`:1`), its nested [UpcasterTestMap](#upcastertestmap), [CommonArchitectureMap](#commonarchitecturemap) (`:51`), plus xUnit and AwesomeAssertions.
+- **Concept introduced** - *proving a rule is not vacuous when the framework itself has nothing to judge.* MMCA.Common ships no upcaster of its own, so running either rule over the real [CommonArchitectureMap](#commonarchitecturemap) proves only that it does not crash. That is a real property worth pinning (a rule that threw on an empty set would red every consumer that has not adopted upcasting yet), and the fourth fact pins exactly it. But the other three facts have to manufacture their subjects, which is what the `UpcasterFixtures` namespace and the private map are for. The pattern to take away: a fitness function for a *consumer-facing* convention is proven in the framework repo against fixtures, and only smoke-tested against the framework's own code. [ProtoContractFitnessTests](#protocontractfitnesstests) and [ServiceContractPurityTests](#servicecontractpuritytests) sit in the same position for their rules. [Rubric §6 - CQRS & Event-Driven] and [Rubric §9 - API & Contract Design] are the properties defended; [Rubric §14 - Testability] is the technique.
+- **Walkthrough** - two private helpers each run one rule against a fresh [UpcasterTestMap](#upcastertestmap) and return the thrown message: `RunUniqueSourceRule` (`:59`-`:64`) and `RunSchemaVersionRule` (`:66`-`:71`). Because the fixtures always contain an offender for each rule, both helpers can assert `Should().Throw<Exception>().Which.Message` unconditionally and let the facts make positive and negative `Contain` assertions against the one string.
+  - `UniqueSourceRule_FlagsTheContestedContract_ButNotTheCompliantLadder` (`:14`-`:25`): asserts the message names the contested contract *and* both rival upcasters (`:19`-`:21`), which is what makes the failure actionable, and that the compliant first rung is absent (`:22`-`:24`).
+  - `UniqueSourceRule_DoesNotFlag_AnUpcasterWhoseSourceIsAnotherUpcastersTarget` (`:31`-`:33`): the sharp one, given its own fact and its own doc comment (`:27`-`:30`). The compliant ladder's middle contract is both a target and a source; that is a chain, not a duplicate claim, and the rule must leave it alone.
+  - `SchemaVersionRule_FlagsTheBackwardsUpcaster_ButNotTheCompliantLadder` (`:35`-`:46`): names the offender (`:40`) and, notably, pins the message text `"must declare a HIGHER SchemaVersion"` (`:41`-`:43`), because the wording is what tells a developer which direction is allowed. Both clean rungs are asserted absent (`:44`-`:45`).
+  - `BothRules_Pass_OnAMapThatOwnsNoUpcasters` (`:48`-`:57`): runs both rules against the real framework map and asserts `NotThrow`, with the `because` stating that the framework ships no upcaster so the rule passes vacuously (`:54`).
+- **Why it's built this way** - the two rules exist because an upcast chain that is not a function, or that runs backwards, produces a bug that only appears when an old outbox row is replayed, potentially long after the change that caused it ([ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html), building on [ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)). Catching it at build time is worth a fixture namespace.
+- **Where it's used** - an independent class in the Common architecture suite. The shipped binding of both rules is [EventConventionTestsBase](#eventconventiontestsbase), whose two facts call them for every repo (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/EventConventionTestsBase.cs:23`,`:26`), and which MMCA.Common activates through [EventVersioningConventionTests](#aggregateconventiontests-cancellationtokenconventiontests-domainpuritytests-eventversioningconventiontests-handlerresultconventiontests-idempotencyconventiontests-layerdependencytests-localizedtextconventiontests-microserviceextractiontests-namespacecycletests-piiconventiontests-rawqueryableconventiontests-slicecohesiontests-statemanagementconventiontests-uiarchitectureconventiontests).
+
 ### FakeConsumerMap
-> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/EventScopeFitnessTests.cs:50` · Level 8 · class
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/EventScopeFitnessTests.cs:50` · Level 13 · class
 - **What it is** - a consumer-shaped architecture map: the framework's Domain assembly registered as a framework layer plus one *module* layer, which is the minimum that makes a map module-bearing.
 - **Depends on** - [ArchitectureMapBase](#architecturemapbase) (`private sealed class FakeConsumerMap : ArchitectureMapBase`, `EventScopeFitnessTests.cs:50`), [LayerRef](#layerref), the [Layer](#layer) enum, and [BaseIntegrationEvent](group-04-events-outbox.md#baseintegrationevent) as the anchor for the framework Domain assembly (`:56`).
 - **Concept introduced** - *the `Module(...)` factory, and what a single module entry changes.* Every other map in this chapter uses only `Framework(...)`, whose `LayerRef.Module` is the empty string (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureMapBase.cs:94`-`:95`). `Module(name, layer, assembly)` sets it to the module name and derives the root namespace as `{RepoToken}.{module}.{segment}` (`:98`-`:99`), and `ModuleNames` is computed from exactly those non-empty entries (`:27`-`:32`). One module layer is therefore all it takes to flip a map from "framework" to "consumer" for every rule that branches on ownership. Building that shape from the framework's own assemblies, rather than referencing a real consumer, keeps the regression guard inside MMCA.Common's CI where it can run before a release.
 - **Walkthrough** - `RepoToken => "MMCA.FakeConsumer"` (`:52`), deliberately not `MMCA.Common`, so the derived module namespace looks like a consumer's. `DefineLayers()` (`:54`-`:58`) is a `yield`-based iterator returning two entries: `Framework(Layer.Domain, typeof(BaseIntegrationEvent).Assembly)` (`:56`), which brings the framework's real integration event into the map, and `Module("Fake", Layer.Shared, typeof(EventScopeFitnessTests).Assembly)` (`:57`), a stand-in module Shared layer that ships no integration events of its own (class doc, `:46`-`:49`). That combination is the exact situation the guard exists for: a consumer whose map can *see* a framework event but does not own it.
 - **Where it's used** - the input to the first two facts of [EventScopeFitnessTests](#eventscopefitnesstests) (`:18`,`:31`).
+
+### ServiceContractPurityTests
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ServiceContractPurityTests.cs:11` · Level 13 · class
+- **What it is** - the MMCA.Common binding of the `[ServiceContract]` purity rule: a two-line subclass that supplies the repo's map so any type marked as part of a published wire surface is checked for dependencies on the producing service's Domain, Application or Infrastructure.
+- **Depends on** - [ServiceContractPurityTestsBase](#servicecontractpuritytestsbase) (`public sealed class ServiceContractPurityTests : ServiceContractPurityTestsBase`, `ServiceContractPurityTests.cs:11`), [IArchitectureMap](#iarchitecturemap) and [CommonArchitectureMap](#commonarchitecturemap) (the single override, `:13`), and indirectly [ServiceContractAttribute](group-13-grpc-contracts.md#servicecontractattribute), which the rule matches by full name rather than by reference.
+- **Concept introduced** - *a rule that is deliberately vacuous today, kept as a ratchet.* Most gates in this chapter earn their place by failing on real code. This one asserts nothing in MMCA.Common, because the framework marks no type with `[ServiceContract]`, and both the subclass doc (`:9`-`:10`) and the base's remarks (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ServiceContractPurityTestsBase.cs:12`-`:17`) say so plainly. The value is in the timing: the invariant is enforced from the *first* marked type onward, with no test for anyone to remember to write, at the moment when a contract package's shape is still cheap to change. Two design choices follow from that. It is attribute-driven rather than [Layer](#layer)`.Contracts`-driven, because no repo registers that layer today and a layer-iterating rule would pass vacuously forever (base remarks, `:9`-`:11`); and it scans every assembly the map registers, so a marked type is judged wherever it lives. A marked type sitting *inside* a Domain, Application or Infrastructure assembly then fails by construction, which the rule's own remarks call the intent: a published contract belongs in a `*.Contracts` or Shared assembly, not inside the service it describes (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Contracts.cs:26`-`:29`). [Rubric §7 - Microservices Readiness] is the property: a contract that leaks a domain entity, a handler abstraction or a persistence type forces every consumer to take the producer's internals as a package dependency, which is what makes an extraction irreversible (`:16`-`:18`). [Rubric §9 - API & Contract Design] covers the wire surface itself, and [Rubric §34 - Architecture Governance & Documentation] the ratchet.
+- **Walkthrough** - one member, `protected override IArchitectureMap Map { get; } = new CommonArchitectureMap();` (`:13`). Everything else is inherited: the base contributes a single `[Fact]`, `ServiceContracts_ShouldNotDependOn_ServiceInternals` (`ServiceContractPurityTestsBase.cs:24`-`:26`), which calls `ArchitectureRules.ServiceContractsDoNotDependOnServiceInternals(Map)`. The rule first derives the forbidden namespace set from the map's Domain, Application and Infrastructure layers (`ArchitectureRules.Contracts.cs:57`-`:66`) and returns immediately when that set is empty (`:35`-`:38`), then walks every layer, selects marked types through the Mono.Cecil custom rule `CarriesServiceContractAttribute` (`:44`,`:69`-`:74`), and asserts `ShouldNot().HaveDependencyOnAny(forbidden)` per layer with the layer's root namespace in the message (`:42`-`:52`).
+- **Why it's built this way** - matching the marker by its full-name string, `"MMCA.Common.Shared.Abstractions.ServiceContractAttribute"` (`ArchitectureRules.Contracts.cs:10`-`:11`), is the same zero-reference idiom the rest of the rule library uses: the testing package deliberately takes no compile dependency on the framework assemblies it inspects. The rule complements, and does not replace, the transport- and layer-purity rules that guard the same boundary from the layer side ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html), [ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html)).
+- **Where it's used** - run by the `MMCA.Common.Architecture.Tests` suite in CI's `build-and-test` job. Its sibling in this chapter is [ProtoContractFitnessTests](#protocontractfitnesstests), the other consumer-facing contract gate the framework exercises without owning any subject of its own.
+- **Caveats / not-in-source** - because the framework marks no type, this class asserts nothing today; there is no fixture proving the rule fires. That proof exists only in whichever repo first marks a type.
+
+### UpcasterTestMap
+> MMCA.Common.Architecture.Tests · `MMCA.Common.Architecture.Tests` · `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/EventUpcasterFitnessTests.cs:74` · Level 13 · class
+- **What it is** - a one-layer architecture map used only by [EventUpcasterFitnessTests](#eventupcasterfitnesstests): it registers this test assembly as the map's single Application layer so the two upcaster rules see the fixture upcasters and nothing else.
+- **Depends on** - [ArchitectureMapBase](#architecturemapbase) (`private sealed class UpcasterTestMap : ArchitectureMapBase`, `EventUpcasterFitnessTests.cs:74`), [LayerRef](#layerref), and the [Layer](#layer) enum.
+- **Concept** - cross-references the map concept from [CommonArchitectureMap](#commonarchitecturemap), with one detail specific to these rules. Both of them scope by ownership exactly as the integration-event rules do: `EventUpcasters` includes framework layers only when the map declares no modules (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Upcasters.cs:62`-`:64`). Because this map is built entirely from `Framework(...)` entries, `ModuleNames` is empty and the single Application layer is scanned, which is what puts the fixtures in scope. Registering a module layer instead would silently exclude them and both rules would pass vacuously, so the choice is load-bearing rather than incidental. Compare [FakeConsumerMap](#fakeconsumermap), which flips exactly that switch on purpose.
+- **Walkthrough** - `RepoToken => "MMCA.Common"` (`:76`) and a one-entry `DefineLayers()` returning `Framework(Layer.Application, typeof(EventUpcasterFitnessTests).Assembly)` (`:78`-`:79`). The doc comment states the intent in one line (`:73`). The layer's derived root namespace is unused by these rules, which enumerate `ConcreteClasses` across whole assemblies (`ArchitectureRules.Upcasters.cs:67`) rather than namespace-scoped subsets.
+- **Where it's used** - constructed on every call of the test class's two private rule helpers (`EventUpcasterFitnessTests.cs:61`,`:68`).
 
 ### CrossServiceDataSource
 > MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:15` · Level 0 · sealed record
@@ -1031,26 +1243,27 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **What it is**: a two-field record naming one logical data source a cross-service fixture routes to its
   own physical database: the logical name the framework's `DataSources` configuration section keys on
   (normally the module name) and the database that name resolves to on the shared SQL Server container
-  (`CrossServiceFixtureBase.cs:8-15`).
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:8-15`).
 - **Depends on**: nothing. A positional `sealed record` of two strings, declared above
   [CrossServiceFixtureBase](#crossservicefixturebase) in the same file.
 - **Concept**: it is the declarative half of database-per-service
   ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html), taught in
   [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)) expressed as test data. The
   doc's own examples are the shape to hold onto: `LogicalName` is `Conference`, `DatabaseName` is
-  `ADC_Conference` (`CrossServiceFixtureBase.cs:13-14`). `[Rubric §8, Data Architecture]` assesses whether
-  each service owns its own store; this record is how a test fixture states that ownership once and derives
-  everything else from it.
+  `ADC_Conference` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:13-14`).
+  `[Rubric §8, Data Architecture]` assesses whether each service owns its own store; this record is how a
+  test fixture states that ownership once and derives everything else from it.
 - **Walkthrough**: two positional members, `LogicalName` and `DatabaseName`
-  (`CrossServiceFixtureBase.cs:15`), so it gets structural equality and immutability for free. The base
-  consumes each instance three ways: the database name drives the pre-create loop
-  (`CrossServiceFixtureBase.cs:213`), and the logical name drives both environment keys
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:15`), so it gets structural
+  equality and immutability for free. The base consumes each instance three ways: the database name drives
+  the pre-create loop (`CrossServiceFixtureBase.cs:213`), and the logical name drives both environment keys
   `SetNamedDataSource` pushes, `DataSources__{LogicalName}__SQLServerConnectionString` and
   `DataSources__{LogicalName}__SQLServerMigrationsAssembly` (`CrossServiceFixtureBase.cs:272-275`).
 - **Where it's used**: as the `DataSources` list a subclass supplies (`CrossServiceFixtureBase.cs:60`); ADC
-  declares three (`MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:61-66`)
-  and Store its own set
-  (`MMCA.Store/Tests/Integration/MMCA.Store.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:29`).
+  declares three, Identity, Conference and Engagement
+  (`MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:61-66`),
+  and Store declares two, Catalog and Sales
+  (`MMCA.Store/Tests/Integration/MMCA.Store.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:56-60`).
 
 ### DependencyInjectionAssert
 > MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/DependencyInjectionAssert.cs:13` · Level 0 · class (static)
@@ -1059,29 +1272,33 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   exposes. It proves a registration extension hands back the very `IServiceCollection` it was given, so a
   fluent chain stays intact.
 - **Depends on**: `AwesomeAssertions` and `Microsoft.Extensions.DependencyInjection`
-  (`DependencyInjectionAssert.cs:1-2`). No first-party dependency.
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DependencyInjectionAssert.cs:1-2`). No first-party
+  dependency.
 - **Concept introduced, the fluent-contract guard.** The framework's registration methods are fluent by
   convention: hosts chain `AddApplication().AddInfrastructure(...).AddAPI(...)`. An extension that returns a
   *new* collection silently drops every registration chained after it, and no other test catches that,
-  because the dropped services are simply absent rather than wrong (`DependencyInjectionAssert.cs:6-11`).
+  because the dropped services are simply absent rather than wrong
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DependencyInjectionAssert.cs:6-11`).
   `[Rubric §14, Testability]` assesses whether an invariant can be checked cheaply; this one turns an
   otherwise invisible composition failure into a one-line test. `[Rubric §16, Maintainability]` covers the
   convention itself: the return-the-same-collection contract is what lets host composition stay declarative.
 - **Walkthrough**
   - `ReturnsSameCollection(Func<IServiceCollection, IServiceCollection> register)`
-    (`DependencyInjectionAssert.cs:21-32`): null-guards the delegate (`:23`), creates the `ServiceCollection`
-    itself so the call site stays one line (`:25`, the doc shows the shape at `:16-18`), invokes the
-    registration under test (`:27`), and asserts `result.Should().BeSameAs(services, ...)` with a
-    because-reason that spells out the consequence of failing (`:29-31`).
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DependencyInjectionAssert.cs:21-32`): null-guards the
+    delegate (`:23`), creates the `ServiceCollection` itself so the call site stays one line (`:25`, the doc
+    shows the shape at `:16-18`), invokes the registration under test (`:27`), and asserts
+    `result.Should().BeSameAs(services, ...)` with a because-reason that spells out the consequence of
+    failing (`:29-31`).
   - Reference equality is the whole assertion. It deliberately says nothing about *what* was registered;
     the per-module tests that call it assert their own service descriptors separately.
 - **Why it's built this way**: creating the collection inside the helper is what keeps adoption free. A
   module's DI test adds one line per registration extension rather than three lines of arrange plus an
   assertion nobody remembers to write.
-- **Where it's used**: across the module DI test classes in both apps, for example
+- **Where it's used**: seven module DI test classes across the two apps, for example
   `MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.Infrastructure.Tests/DependencyInjectionTests.cs:29`,
   `MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.API.Tests/DependencyInjectionTests.cs:63,68`,
   `MMCA.Store/Tests/Modules/Catalog/MMCA.Store.Catalog.API.Tests/DependencyInjectionTests.cs:68,73`,
+  `MMCA.Store/Tests/Modules/Identity/MMCA.Store.Identity.API.Tests/DependencyInjectionTests.cs:49,54`,
   `MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.API.Tests/DependencyInjectionTests.cs:26,31`, and
   `MMCA.ADC/Tests/Modules/Notification/MMCA.ADC.Notification.Application.Tests/DependencyInjectionTests.cs:35`.
   MMCA.Common self-tests the helper, including that it fails for an extension returning a different
@@ -1094,18 +1311,20 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   defaults for one entity type so a test only has to state the properties it actually cares about, then
   calls `Build()` to materialize the entity through its real domain factory.
 - **Depends on**: nothing first-party, and no BCL surface beyond `object`. Two type parameters and one
-  abstract method is the whole type (`EntityBuilderBase.cs:9-18`).
+  abstract method is the whole type
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Builders/EntityBuilderBase.cs:9-18`).
 - **Concept introduced, the Test Data Builder plus the self-referencing generic (CRTP).**
   `[Rubric §14, Testability]` assesses how easily the code can be exercised in isolation; a builder base
   is a textbook §14 affordance, it removes the copy-pasted setup that otherwise bloats every arrange
   step. The signature `EntityBuilderBase<TBuilder, TEntity> where TBuilder : EntityBuilderBase<TBuilder,
-  TEntity>` (`EntityBuilderBase.cs:9-10`) is the curiously-recurring template pattern: a concrete builder
-  passes *itself* as `TBuilder`, so the `WithX(...)` methods a subclass adds can return the concrete
-  builder type and keep a fluent chain strongly typed without a cast.
+  TEntity>` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Builders/EntityBuilderBase.cs:9-10`) is the
+  curiously-recurring template pattern: a concrete builder passes *itself* as `TBuilder`, so the
+  `WithX(...)` methods a subclass adds can return the concrete builder type and keep a fluent chain
+  strongly typed without a cast.
 - **Walkthrough**
-  - `Build()` (`EntityBuilderBase.cs:17`): the single abstract member. The XML doc
-    (`EntityBuilderBase.cs:12-15`) records the contract, the subclass calls the entity's
-    [Result](group-01-result-error-handling.md#result)-returning factory
+  - `Build()` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Builders/EntityBuilderBase.cs:17`): the
+    single abstract member. The XML doc (`EntityBuilderBase.cs:12-15`) records the contract, the subclass
+    calls the entity's [Result](group-01-result-error-handling.md#result)-returning factory
     ([ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html)) and throws if it failed, so
     a builder never yields a domain object that violated its invariants. The base deliberately owns no
     state and no default `WithX` helpers, those live on each concrete builder because defaults are
@@ -1113,9 +1332,10 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Why it's built this way**: keeping the base to one abstract method means it adds zero coupling and
   zero opinions beyond "a builder produces a `TEntity`". The CRTP is the only structural rule it
   enforces, and it exists purely so fluent chaining stays type-safe down in the subclasses.
-- **Where it's used**: the domain-test builders in both apps subclass it, eight today:
-  `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Domain.Tests/Builders/EventBuilder.cs:10`,
-  `.../Builders/SessionBuilder.cs:10`, `.../Builders/SpeakerBuilder.cs:10`,
+- **Where it's used**: the domain-test builders in both apps subclass it, ten today:
+  `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Domain.Tests/Builders/ActivityBuilder.cs:10`,
+  `.../Builders/EventBuilder.cs:10`, `.../Builders/SessionBuilder.cs:10`,
+  `.../Builders/SpeakerBuilder.cs:10`, `.../Builders/SponsorBuilder.cs:11`,
   `MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Domain.Tests/Builders/UserBuilder.cs:10`,
   `MMCA.Store/Tests/Modules/Catalog/MMCA.Store.Catalog.Domain.Tests/Builders/CategoryBuilder.cs:10`,
   `.../Builders/ProductBuilder.cs:10`,
@@ -1132,7 +1352,8 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   assert both branches of a feature-gated command or query.
 - **Depends on**: BCL and NuGet only, `IServiceCollection` and `IConfiguration` from
   `Microsoft.Extensions.*` plus `AddFeatureManagement` from `Microsoft.FeatureManagement`
-  (`FeatureManagementTestExtensions.cs:1-3`). No first-party dependency.
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/FeatureManagementTestExtensions.cs:1-3`). No
+  first-party dependency.
 - **Concept**: this is the test-side counterpart to the framework's
   [FeatureGateCommandDecorator<TCommand, TResult>](group-05-cqrs-pipeline.md#featuregatecommanddecoratortcommand-tresult),
   the outermost link in the CQRS pipeline (taught in
@@ -1143,22 +1364,26 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   concern, and this helper keeps its test-time configuration in one reusable place.
 - **Walkthrough**
   - The whole class body is a single C# preview `extension(IServiceCollection services)` block
-    (`FeatureManagementTestExtensions.cs:12`), the same extension-member style the framework uses for DI
-    registration (see [primer §4](00-primer.md#c-extensiont-types-read-this-once)), not a classic
-    `this`-parameter extension method.
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/FeatureManagementTestExtensions.cs:12`), the same
+    extension-member style the framework uses for DI registration (see
+    [primer §4](00-primer.md#c-extensiont-types-read-this-once)), not a classic `this`-parameter
+    extension method.
   - `ConfigureTestFeatureFlags(Dictionary<string, bool> features)`
-    (`FeatureManagementTestExtensions.cs:21-35`): projects each name-to-bool pair into an in-memory
-    configuration key under the `FeatureManagement:` section (`:24-29`), registers that `IConfiguration`
-    as a singleton (`:31`), calls `AddFeatureManagement` against the section (`:32`), and returns the
-    collection for chaining (`:34`).
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/FeatureManagementTestExtensions.cs:21-35`): projects
+    each name-to-bool pair into an in-memory configuration key under the `FeatureManagement:` section
+    (`:24-29`), registers that `IConfiguration` as a singleton (`:31`), calls `AddFeatureManagement`
+    against the section (`:32`), and returns the collection for chaining (`:34`).
 - **Why it's built this way**: pushing overrides through the real `IConfiguration` plus
   `AddFeatureManagement` path (rather than mocking an `IFeatureManager`) means the test exercises the
   same feature-evaluation code the production host runs, only the source of the flag value changes.
 - **Where it's used**: it is intended for a test `WebApplicationFactory`'s `ConfigureServices`, and the
-  XML doc says exactly that (`FeatureManagementTestExtensions.cs:14-18`).
+  XML doc says exactly that
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/FeatureManagementTestExtensions.cs:14-18`).
 - **Caveats / not-in-source**: as of this pass **no first-party caller exists**. A workspace-wide search
-  finds `ConfigureTestFeatureFlags` only at its definition; every other hit is documentation. It ships in
-  the package as available capability, not as a technique any suite currently uses.
+  finds `ConfigureTestFeatureFlags` only at its definition
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/FeatureManagementTestExtensions.cs:21`); every other
+  hit is documentation. It ships in the package as available capability, not as a technique any suite
+  currently uses.
 
 ### IIntegrationTestFixture
 > MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/IIntegrationTestFixture.cs:8` · Level 0 · interface
@@ -1175,11 +1400,11 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   app-specific wiring in each repo, which is the whole premise of
   [ADR-058](https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html).
 - **Walkthrough**
-  - `CreateClient()` (`IIntegrationTestFixture.cs:11`): returns an `HttpClient` configured for the
-    in-process test server.
-  - `ResetDatabaseAsync()` (`IIntegrationTestFixture.cs:19`): resets the database between tests (the doc
-    names Respawn as the typical mechanism). The doc comment (`IIntegrationTestFixture.cs:13-18`) records
-    a load-bearing rule for the database-per-service topology
+  - `CreateClient()` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/IIntegrationTestFixture.cs:11`):
+    returns an `HttpClient` configured for the in-process test server.
+  - `ResetDatabaseAsync()` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/IIntegrationTestFixture.cs:19`):
+    resets the database between tests (the doc names Respawn as the typical mechanism). The doc comment
+    (`IIntegrationTestFixture.cs:13-18`) records a load-bearing rule for the database-per-service topology
     ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)): a host with multiple
     physical data sources must reset **every** relational source, and can enumerate them by resolving
     [IEntityDataSourceRegistry](group-07-persistence-ef-core.md#ientitydatasourceregistry) and
@@ -1189,9 +1414,11 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   base's.
 - **Where it's used**: implemented by
   [SqlServerIntegrationTestFixtureBase<TEntryPoint>](#sqlserverintegrationtestfixturebasetentrypoint)
-  (`SqlServerIntegrationTestFixtureBase.cs:27`) and through it by every per-service fixture in both apps;
-  consumed as the `TFixture` constraint on [IntegrationTestBase<TFixture>](#integrationtestbasetfixture)
-  (`IntegrationTestBase.cs:14`) and therefore by all three contract bases in this unit.
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/SqlServerIntegrationTestFixtureBase.cs:27`) and through
+  it by every per-service fixture in both apps; consumed as the `TFixture` constraint on
+  [IntegrationTestBase<TFixture>](#integrationtestbasetfixture)
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/IntegrationTestBase.cs:14`) and therefore by all three
+  contract bases in this unit.
 
 ### JwtTokenGenerator
 > MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/JwtTokenGenerator.cs:30` · Level 0 · class (static)
@@ -1200,13 +1427,15 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   matching switch that re-points a test host's Bearer scheme at the same committed key. Together they let a
   test call an authorized endpoint as any role or user without standing up the real login flow or a
   reachable JWKS endpoint. Each downstream project wraps the generator with role-specific convenience
-  methods (AdminToken, OrganizerToken, and so on, `JwtTokenGenerator.cs:11-12`).
+  methods (AdminToken, OrganizerToken, and so on,
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/JwtTokenGenerator.cs:11-12`).
 - **Depends on**: BCL and NuGet only, `System.Globalization`, `System.IdentityModel.Tokens.Jwt`,
   `System.Security.Claims`, `System.Security.Cryptography` (RSA),
   `Microsoft.AspNetCore.Authentication.JwtBearer` (for the options type the second member configures), and
-  `Microsoft.IdentityModel.Tokens` (`JwtTokenGenerator.cs:1-6`). The generated claim layout mirrors the
-  framework's [ITokenService](group-08-auth.md#itokenservice) so downstream auth middleware cannot tell a
-  test token from a real one (`JwtTokenGenerator.cs:99-102`). The `userId` parameter is typed
+  `Microsoft.IdentityModel.Tokens`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/JwtTokenGenerator.cs:1-6`). The generated claim layout
+  mirrors the framework's [ITokenService](group-08-auth.md#itokenservice) so downstream auth middleware
+  cannot tell a test token from a real one (`JwtTokenGenerator.cs:99-102`). The `userId` parameter is typed
   `UserIdentifierType` (`JwtTokenGenerator.cs:114`), the solution-wide identifier alias
   ([ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)).
 - **Concept introduced, exercising the real RS256 path in tests.** `[Rubric §11, Security]` assesses
@@ -1219,12 +1448,13 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   shortcut. `[Rubric §14, Testability]` covers the ergonomics: deterministic tokens with no per-run key
   generation, and a host that validates them with no network dependency at all.
 - **Walkthrough**
-  - Public constants (`JwtTokenGenerator.cs:33-96`): `DefaultIssuer` (`https://localhost:6001`, line 33),
-    `DefaultKeyId` (`mmca-test-key`, line 41, the `kid` the host advertises on its JWKS document), and
-    the paired `DefaultPublicKeyPem` (line 49) and `DefaultPrivateKeyPem` (line 68). The class doc records
-    the wiring contract: test host appsettings set `Jwt:SigningAlgorithm=RS256`, `Jwt:RsaPublicKeyPem`,
-    and `Jwks:KeyId` (`JwtTokenGenerator.cs:18-20`) so
-    [RsaJwksProvider](group-08-auth.md#rsajwksprovider) publishes a JWKS entry with the matching `kid`.
+  - Public constants (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/JwtTokenGenerator.cs:33-96`):
+    `DefaultIssuer` (`https://localhost:6001`, line 33), `DefaultKeyId` (`mmca-test-key`, line 41, the
+    `kid` the host advertises on its JWKS document), and the paired `DefaultPublicKeyPem` (line 49) and
+    `DefaultPrivateKeyPem` (line 68). The class doc records the wiring contract: test host appsettings set
+    `Jwt:SigningAlgorithm=RS256`, `Jwt:RsaPublicKeyPem`, and `Jwks:KeyId`
+    (`JwtTokenGenerator.cs:18-20`) so [RsaJwksProvider](group-08-auth.md#rsajwksprovider) publishes a JWKS
+    entry with the matching `kid`.
   - `GenerateToken(...)` (`JwtTokenGenerator.cs:112-153`): imports the PEM private key into
     `RSAParameters` inside a `using` so the `RSA` instance can be disposed without invalidating the key
     held by `SigningCredentials` (`:121-131`), assembles the standard claim set
@@ -1244,19 +1474,26 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   fixture and a multi-host cross-service fixture share one committed keypair.
 - **Where it's used**: tokens are applied to a client through
   [IntegrationTestBase<TFixture>](#integrationtestbasetfixture)'s `SetBearerToken(...)`
-  (`IntegrationTestBase.cs:42-44`) and wrapped by each app's role-specific token helpers.
-  `ConfigureInProcessTokenValidation` is called from a `PostConfigure<JwtBearerOptions>` in the test
-  factories of the non-Identity hosts, for example
-  `MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Infrastructure/CatalogTestWebApplicationFactory.cs:34`,
-  `MMCA.ADC/Tests/Integration/MMCA.ADC.Notification.IntegrationTests/Infrastructure/NotificationTestWebApplicationFactory.cs:44`,
-  and both Store cross-service factories
-  (`MMCA.Store/Tests/Integration/MMCA.Store.CrossService.IntegrationTests/Infrastructure/CatalogCrossServiceFactory.cs:44`,
-  `.../SalesCrossServiceFactory.cs:46`). It is covered directly by
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/IntegrationTestBase.cs:42-44`) and wrapped by each
+  app's role-specific token helpers. `ConfigureInProcessTokenValidation` is called from a
+  `PostConfigure<JwtBearerOptions>` in the test factories of the non-Identity hosts, in ADC
+  (`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Infrastructure/ConferenceTestWebApplicationFactory.cs:49,77`,
+  `.../MMCA.ADC.Engagement.IntegrationTests/Infrastructure/EngagementTestWebApplicationFactory.cs:56,86`,
+  `.../MMCA.ADC.Notification.IntegrationTests/Infrastructure/NotificationTestWebApplicationFactory.cs:50,69`)
+  and in Store
+  (`MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Infrastructure/CatalogTestWebApplicationFactory.cs:40,43`,
+  `.../MMCA.Store.Sales.IntegrationTests/Infrastructure/SalesTestWebApplicationFactory.cs:47,57`), plus
+  all four cross-service factories
+  (`MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/Infrastructure/ConferenceCrossServiceFactory.cs:45`,
+  `.../EngagementCrossServiceFactory.cs:54`,
+  `MMCA.Store/Tests/Integration/MMCA.Store.CrossService.IntegrationTests/Infrastructure/CatalogCrossServiceFactory.cs:50`,
+  `.../SalesCrossServiceFactory.cs:52`). It is covered directly by
   `MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/JwtTokenGeneratorTests.cs:38-94`.
-- **Caveats / not-in-source**: the class doc (`JwtTokenGenerator.cs:22-28`) carries an explicit security
-  warning, the embedded keypair is committed to the public git repo and is insecure by design, it exists
-  only to make integration tests deterministic. Production keys are provisioned via user-secrets or Azure
-  Key Vault per `JwtSettings.RsaPrivateKeyPem` and must never be this keypair.
+- **Caveats / not-in-source**: the class doc
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/JwtTokenGenerator.cs:22-28`) carries an explicit
+  security warning, the embedded keypair is committed to the public git repo and is insecure by design, it
+  exists only to make integration tests deterministic. Production keys are provisioned via user-secrets or
+  Azure Key Vault per `JwtSettings.RsaPrivateKeyPem` and must never be this keypair.
 
 ### ProductionHostApplicationFactory<TEntryPoint>
 > MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/ProductionHostApplicationFactory.cs:22` · Level 0 · class
@@ -1265,12 +1502,15 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   pins the hosting environment to `Production` and hangs on to the started `IHost`, so a test can both
   exercise production-only middleware branches and drive the host's own lifetime.
 - **Depends on**: `Microsoft.AspNetCore.Mvc.Testing`'s `WebApplicationFactory<TEntryPoint>` (extended,
-  `ProductionHostApplicationFactory.cs:22`) and `Microsoft.Extensions.Hosting`'s `IHost` / `IHostBuilder`
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/ProductionHostApplicationFactory.cs:22`) and
+  `Microsoft.Extensions.Hosting`'s `IHost` / `IHostBuilder`
   (`ProductionHostApplicationFactory.cs:1-2`). No first-party dependency.
 - **Concept introduced, the second boot path.** The integration tier has two ways to get a running host:
   [SqlServerIntegrationTestFixtureBase<TEntryPoint>](#sqlserverintegrationtestfixturebasetentrypoint)
   for hosts that need a real database, and this one for hosts that do not (a YARP reverse-proxy gateway
-  is the usual case, `ProductionHostApplicationFactory.cs:16-19`). Both are named as the two paths in
+  is the usual case,
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/ProductionHostApplicationFactory.cs:16-19`). Both are
+  named as the two paths in
   [ADR-058](https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html).
   `[Rubric §11, Security]` is the reason `Production` is pinned: the restrictive CORS policy, HSTS
   emission, and other production-only middleware are branches a default `Development` boot skips
@@ -1278,22 +1518,25 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   (`ProductionHostApplicationFactory.cs:9-12`). `[Rubric §14, Testability]` covers the second half,
   capturing the host is what makes a lifetime test possible at all.
 - **Walkthrough**
-  - `StartedHost` (`ProductionHostApplicationFactory.cs:29`): a public property with a private setter,
-    nullable because `WebApplicationFactory` builds its host lazily, so it stays null until the first
-    client is created (`:25-28`).
-  - `CreateHost(IHostBuilder builder)` (`ProductionHostApplicationFactory.cs:32-39`): null-guards the
-    builder (`:34`), calls `builder.UseEnvironment("Production")` (`:36`), then assigns and returns
-    `base.CreateHost(builder)` (`:37-38`). Three lines of override, and the assignment is the entire
-    reason the class exists.
+  - `StartedHost`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/ProductionHostApplicationFactory.cs:29`): a public
+    property with a private setter, nullable because `WebApplicationFactory` builds its host lazily, so it
+    stays null until the first client is created (`:25-28`).
+  - `CreateHost(IHostBuilder builder)`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/ProductionHostApplicationFactory.cs:32-39`):
+    null-guards the builder (`:34`), calls `builder.UseEnvironment("Production")` (`:36`), then assigns and
+    returns `base.CreateHost(builder)` (`:37-38`). Three lines of override, and the assignment is the
+    entire reason the class exists.
 - **Why it's built this way**: `IHost.StopAsync` is not reachable through the `WebApplicationFactory`
   surface alone (`ProductionHostApplicationFactory.cs:12-14`), so a graceful-shutdown test has no handle
   to pull without this capture. The class is deliberately left unsealed and non-abstract so it can be
   used directly as an xUnit `IClassFixture<...>` with no subclass.
 - **Where it's used**: as the default factory of
   [GracefulShutdownTestsBase<TEntryPoint>](#gracefulshutdowntestsbasetentrypoint)
-  (`GracefulShutdownTestsBase.cs:31`), and directly as the class fixture of both gateway security-header
-  tests (`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:11-12`,
-  `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:11-12`).
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/GracefulShutdownTestsBase.cs:31`), and directly as the
+  class fixture of both gateway security-header tests
+  (`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:12`,
+  `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:12`).
 - **Caveats / not-in-source**: the doc is explicit that a host which migrates or seeds on startup needs
   its own fixture (`ProductionHostApplicationFactory.cs:16-19`); this factory does nothing about a
   database.
@@ -1304,7 +1547,8 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **What it is**: a one-test conformance base that asserts a booted host emits the hardened set of
   security response headers on every response, so a later pipeline refactor cannot silently drop them.
   Authored once, re-run as a thin subclass per host under test.
-- **Depends on**: `AwesomeAssertions` and `Xunit` (`SecurityHeadersTestsBase.cs:1-2`). It deliberately
+- **Depends on**: `AwesomeAssertions` and `Xunit`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/SecurityHeadersTestsBase.cs:1-2`). It deliberately
   does **not** extend [IntegrationTestBase<TFixture>](#integrationtestbasetfixture): it needs only an
   `HttpClient`, so it takes one through an abstract factory rather than inheriting the SQL fixture
   machinery.
@@ -1315,28 +1559,31 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   [ADR-023](https://ivanball.github.io/docs/adr/023-security-response-headers.html)) is expected to emit.
   `[Rubric §14, Testability]` covers the reusable-base shape.
 - **Walkthrough**
-  - `ProbePath` (`SecurityHeadersTestsBase.cs:19`): overridable, defaults to `/alive` because the
-    liveness endpoint always answers independent of any backend being reachable, so the header check is
-    never flaky for the wrong reason (rationale in the class doc, `:12-14`).
-  - `AliveResponse_CarriesHardenedSecurityHeaders` (`SecurityHeadersTestsBase.cs:21-36`): the single
+  - `ProbePath` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/SecurityHeadersTestsBase.cs:19`):
+    overridable, defaults to `/alive` because the liveness endpoint always answers independent of any
+    backend being reachable, so the header check is never flaky for the wrong reason (rationale in the
+    class doc, `:12-14`).
+  - `AliveResponse_CarriesHardenedSecurityHeaders`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/SecurityHeadersTestsBase.cs:21-36`): the single
     `[Fact]`. It GETs `ProbePath` (`:26-27`, threading `TestContext.Current.CancellationToken`) and
     asserts six headers (`:29-35`): `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
     `Referrer-Policy: strict-origin-when-cross-origin`, a `Permissions-Policy` containing
     `geolocation=()`, a `Content-Security-Policy` containing `frame-ancestors 'none'`, and (because the
     host under test boots in the Production environment) an HSTS `Strict-Transport-Security` header with
     a `max-age=`.
-  - `CreateClient()` (`SecurityHeadersTestsBase.cs:42`): abstract, the subclass supplies it from its
-    `WebApplicationFactory` class fixture. `Header(...)` (`:44-45`) is the private helper that joins a
-    header's values or returns null when the header is absent, which is what makes a missing header fail
-    with a readable null-versus-expected message.
+  - `CreateClient()` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/SecurityHeadersTestsBase.cs:42`):
+    abstract, the subclass supplies it from its `WebApplicationFactory` class fixture. `Header(...)`
+    (`:44-45`) is the private helper that joins a header's values or returns null when the header is
+    absent, which is what makes a missing header fail with a readable null-versus-expected message.
 - **Why it's built this way**: pinning literal header values (not just presence) turns "we harden
   responses" into an executable, per-host guarantee, and probing `/alive` keeps the test independent of
   application state. Booting the subclass fixture in Production is what makes the HSTS assertion valid,
   which is why the two adopters pair it with
   [ProductionHostApplicationFactory<TEntryPoint>](#productionhostapplicationfactorytentrypoint).
 - **Where it's used**: both gateway hosts subclass it with a single `CreateClient` override,
-  `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:11-12` and
-  `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:11-12`.
+  `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:12` and
+  `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:12`, each also taking a
+  `ProductionHostApplicationFactory<Program>` as its xUnit class fixture on the same line.
 
 ### TestPolling
 > MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/TestPolling.cs:9` · Level 0 · class (static)
@@ -1347,17 +1594,19 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   library, so the caller keeps ownership of the assertion.
 - **Concept introduced, replacing the pre-assert sleep.** Anything that travels the outbox to a broker and
   back, or any other eventually-consistent path, arrives at a time the test cannot know
-  (`TestPolling.cs:3-8`). A fixed `Task.Delay` before the assertion is both slow and flaky: too short and
-  the suite reds intermittently, too long and every green run pays the worst case. Polling returns as soon
-  as the condition holds and bounds the wait. `[Rubric §14, Testability]` assesses whether the suite is
-  deterministic; `[Rubric §6, CQRS & Event-Driven]` is why the problem exists at all, since the outbox
-  ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-pattern.html)) is asynchronous by design and
-  offers no synchronous handle to await.
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/TestPolling.cs:3-8`). A fixed `Task.Delay` before the
+  assertion is both slow and flaky: too short and the suite reds intermittently, too long and every green
+  run pays the worst case. Polling returns as soon as the condition holds and bounds the wait.
+  `[Rubric §14, Testability]` assesses whether the suite is deterministic; `[Rubric §6, CQRS &
+  Event-Driven]` is why the problem exists at all, since the outbox
+  ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) is asynchronous by design
+  and offers no synchronous handle to await.
 - **Walkthrough**
   - `PollUntilAsync<T>(Func<Task<T>> probe, Func<T, bool> isSatisfied, TimeSpan? timeout = null, TimeSpan? interval = null)`
-    (`TestPolling.cs:22-41`): null-guards both delegates (`:28-29`), computes a deadline from the
-    **60-second** default budget (`:31`) and a **500 ms** default interval (`:32`), probes once before the
-    loop (`:33`), then loops while the condition is unmet and the deadline has not passed (`:34-38`).
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/TestPolling.cs:22-41`): null-guards both delegates
+    (`:28-29`), computes a deadline from the **60-second** default budget (`:31`) and a **500 ms** default
+    interval (`:32`), probes once before the loop (`:33`), then loops while the condition is unmet and the
+    deadline has not passed (`:34-38`).
   - The return is the design decision worth noticing: it returns `last` unconditionally (`:40`) rather than
     throwing on timeout, so a timed-out poll still fails on the caller's real assertion message rather than
     on a bare timeout exception (the doc states exactly this at `:11-14`).
@@ -1372,7 +1621,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   with call sites such as
   `MMCA.Store/Tests/Integration/MMCA.Store.CrossService.IntegrationTests/CrossService/ProductVariantChangedRoundTripTests.cs:28,48,51`.
   MMCA.Common covers the helper itself, including the null-argument guards
-  (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/TestPollingTests.cs:18-63`).
+  (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/TestPollingTests.cs:14-63`).
 
 ### CrossServiceFixtureBase
 > MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:41` · Level 1 · class (abstract)
@@ -1380,16 +1629,18 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **What it is**: the shared scaffolding for the cross-service **real-broker** integration tier. It boots
   several service hosts in ONE process against a real Testcontainers SQL Server and a real Testcontainers
   RabbitMQ, so the genuine outbox to broker to consumer round-trip (and any real cross-service gRPC read)
-  is exercised end to end rather than faked (`CrossServiceFixtureBase.cs:17-25`).
+  is exercised end to end rather than faked
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:17-25`).
 - **Depends on**: [CrossServiceDataSource](#crossservicedatasource) (the per-source declaration), plus
   `Microsoft.Data.SqlClient`, `Testcontainers.MsSql`, `Testcontainers.RabbitMq`, and xUnit's
-  `IAsyncLifetime` (`CrossServiceFixtureBase.cs:1-4,41`).
+  `IAsyncLifetime` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:1-4,41`).
 - **Concept introduced, the multi-host in-process topology and its configuration channel.** Where
   [SqlServerIntegrationTestFixtureBase<TEntryPoint>](#sqlserverintegrationtestfixturebasetentrypoint) boots
   one host with the cross-service edges faked and no broker, this base owns a whole topology. Two
   mechanisms are load-bearing, and both are documented on the class. First, **process environment
-  variables are the only override channel these hosts honour** (`CrossServiceFixtureBase.cs:26-39`): each
-  host reads its connection string, `MessageBus` settings, and JWT settings from `builder.Configuration` at
+  variables are the only override channel these hosts honor**
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:26-39`): each host reads its
+  connection string, `MessageBus` settings, and JWT settings from `builder.Configuration` at
   configure-time, before `builder.Build()`, which is before
   `WebApplicationFactory.ConfigureAppConfiguration` deltas apply, so in-memory config would arrive too
   late. Second, because the one genuinely per-host key is the SQL connection string, hosts must boot
@@ -1397,12 +1648,13 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   connection (the data-source resolver, the context factory, the outbox processor, and the MassTransit bus
   are all built during `StartAsync`). `[Rubric §7, Microservices Readiness]` assesses whether extracted
   services really do collaborate over their declared transports; `[Rubric §6, CQRS & Event-Driven]` covers
-  the outbox path ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-pattern.html));
+  the outbox path ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html));
   `[Rubric §8, Data Architecture]` covers database-per-service
   ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)); and
   `[Rubric §14, Testability]` covers shipping the whole topology as a reusable base.
 - **Walkthrough**
-  - State: the private `DummyBearerAuthority` constant (`CrossServiceFixtureBase.cs:45`), the
+  - State: the private `DummyBearerAuthority` constant
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:45`), the
     original-environment snapshot map (`:47`), the two nullable containers (`:49-50`), and the public
     `RabbitMqConnectionString` (`:53`).
   - Subclass knobs: `DataSources` (`:60`, the logical sources in the order their databases are created),
@@ -1451,82 +1703,102 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   `MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:23`
   (three databases for three REST hosts at `:61-66`, migrations prefix `MMCA.ADC.Migrations.SqlServer` at
   `:69`) and
-  `MMCA.Store/Tests/Integration/MMCA.Store.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:29`.
-  MMCA.Common covers the container-free half of the base through its own private `FakeCrossServiceFixture`
-  (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/CrossServiceFixtureBaseTests.cs:13,106`).
+  `MMCA.Store/Tests/Integration/MMCA.Store.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:29`
+  (two databases at `:56-60`, prefix `MMCA.Store.Migrations.SqlServer` at `:63`). MMCA.Common covers the
+  container-free half of the base through its own private `FakeCrossServiceFixture`
+  (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/CrossServiceFixtureBaseTests.cs:106`).
 - **Caveats / not-in-source**: this tier needs a Docker daemon. Where each repo schedules it is a CI
   decision recorded outside this class; the base itself says nothing about scheduling.
 
 ### DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>
-> MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:36` · Level 1 · class (abstract)
+> MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:38` · Level 1 · class (abstract)
 
-- **What it is**: an opt-in conformance base that builds a real `ServiceCollection` through a repo's own
+- **What it is**: an opt-in fitness function that builds a real `ServiceCollection` through a repo's own
   registration sequence, resolves the decorated command and query handlers out of the built provider, and
   asserts the *runtime object graph* nests the decorators in exactly the
   [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html) order.
 - **Depends on**:
   [ICommandHandler<in TCommand, TResult>](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
   and [IQueryHandler<in TQuery, TResult>](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) from
-  `MMCA.Common.Application.UseCases` (`DecoratorPipelineOrderTestsBase.cs:4`), plus `System.Reflection`,
-  `Microsoft.Extensions.DependencyInjection`, `AwesomeAssertions`, and `Xunit` (`:1-5`).
+  `MMCA.Common.Application.UseCases`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:4`), plus
+  `System.Reflection`, `Microsoft.Extensions.DependencyInjection`, `AwesomeAssertions`, and `Xunit`
+  (`:1-5`).
 - **Concept introduced, verifying a decorator chain by unwrapping the constructed graph.** The decorator
   pipeline itself is taught in
   [group-05](group-05-cqrs-pipeline.md#loggingcommanddecoratortcommand-tresult); what is new here is *how
   you prove it*. Scrutor's `TryDecorate` applies decorators in **reverse registration order**, so the
   outermost decorator is the last one registered, and an innocent-looking reorder of the
   `AddApplicationDecorators()` lines (or a module scan that runs after it) silently changes runtime
-  behavior with no compile error (class doc, `DecoratorPipelineOrderTestsBase.cs:15-18`). Rather than
+  behavior with no compile error (class doc,
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:16-19`). Rather than
   inspecting the registration list, this base resolves the service and walks the real chain by reflection
-  (`:27-30`). `[Rubric §6, CQRS & Event-Driven]` assesses whether the command/query pipeline is coherent
+  (`:29-32`). `[Rubric §6, CQRS & Event-Driven]` assesses whether the command/query pipeline is coherent
   and intentional; `[Rubric §2, Design Patterns]` assesses correct application of the decorator pattern;
   `[Rubric §14, Testability]` covers turning an ordering convention into an executable check; and
   `[Rubric §34, Architecture Governance & Documentation]` covers the fact that a decision record is
-  enforced here rather than merely written down. It is also the one non-HTTP member of the
+  enforced here rather than merely written down
+  ([ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html) is the general
+  case). It is also the one non-HTTP member of the
   [ADR-058](https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html)
   conformance tier.
 - **Walkthrough**
-  - Four type parameters (`DecoratorPipelineOrderTestsBase.cs:32-35`): a representative command with its
-    `TResult` and a representative query with its `TResult`, each of which must have a concrete
-    registered handler.
-  - `ConfigureServices(IServiceCollection services)` (`DecoratorPipelineOrderTestsBase.cs:44`): the one
+  - Four type parameters
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:34-37`): a
+    representative command with its `TResult` and a representative query with its `TResult`, each of which
+    must have a concrete registered handler.
+  - `ConfigureServices(IServiceCollection services)`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:46`): the one
     abstract member. The subclass registers test doubles for the decorator dependencies (`IFeatureManager`,
+    [ICurrentUserService](group-08-auth.md#icurrentuserservice),
+    [IPermissionRegistry](group-08-auth.md#ipermissionregistry),
     [ICorrelationContext](group-12-api-hosting-mapping.md#icorrelationcontext),
     [ICacheService](group-09-caching.md#icacheservice),
     [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork), `ILogger<>`) and then runs the repo's
-    real registration sequence, module scans first and `AddApplicationDecorators()` last (doc `:19-26`).
-  - `ExpectedCommandDecorators` (`:47-54`) pins, outermost first,
+    real registration sequence, module scans first and `AddApplicationDecorators()` last (doc `:20-28`).
+  - `ExpectedCommandDecorators` (`:49-58`) pins seven links, outermost first:
     [FeatureGateCommandDecorator<TCommand, TResult>](group-05-cqrs-pipeline.md#featuregatecommanddecoratortcommand-tresult),
+    [AuthorizationCommandDecorator<TCommand, TResult>](group-05-cqrs-pipeline.md#authorizationcommanddecoratortcommand-tresult),
     [LoggingCommandDecorator<TCommand, TResult>](group-05-cqrs-pipeline.md#loggingcommanddecoratortcommand-tresult),
     [CachingCommandDecorator<TCommand, TResult>](group-05-cqrs-pipeline.md#cachingcommanddecoratortcommand-tresult),
     [ValidatingCommandDecorator<TCommand, TResult>](group-05-cqrs-pipeline.md#validatingcommanddecoratortcommand-tresult),
+    [TimeoutCommandDecorator<TCommand, TResult>](group-05-cqrs-pipeline.md#timeoutcommanddecoratortcommand-tresult),
     [TransactionalCommandDecorator<TCommand, TResult>](group-05-cqrs-pipeline.md#transactionalcommanddecoratortcommand-tresult).
-    `ExpectedQueryDecorators` (`:57-62`) pins FeatureGate, Logging, Caching, the query pipeline having
-    neither validation nor a transaction. Both are `virtual`, so a host with a deliberately different
-    chain can narrow them.
-  - The two `[Fact]`s, `CommandPipeline_NestsDecorators_InAdr014Order` (`:64-66`) and
-    `QueryPipeline_NestsDecorators_InAdr014Order` (`:68-70`), each hand the closed handler interface and
+    `ExpectedQueryDecorators` (`:61-68`) pins five:
+    [FeatureGateQueryDecorator<TQuery, TResult>](group-05-cqrs-pipeline.md#featuregatequerydecoratortquery-tresult),
+    [AuthorizationQueryDecorator<TQuery, TResult>](group-05-cqrs-pipeline.md#authorizationquerydecoratortquery-tresult),
+    [LoggingQueryDecorator<TQuery, TResult>](group-05-cqrs-pipeline.md#loggingquerydecoratortquery-tresult),
+    [CachingQueryDecorator<TQuery, TResult>](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult),
+    [TimeoutQueryDecorator<TQuery, TResult>](group-05-cqrs-pipeline.md#timeoutquerydecoratortquery-tresult),
+    the query pipeline having neither validation nor a transaction. Both lists are `virtual`, so a host
+    with a deliberately different chain can narrow them.
+  - The two `[Fact]`s, `CommandPipeline_NestsDecorators_InAdr014Order` (`:70-72`) and
+    `QueryPipeline_NestsDecorators_InAdr014Order` (`:74-76`), each hand the closed handler interface and
     the expected list to `AssertPipeline`.
-  - `AssertPipeline` (`:72-91`): builds the collection, builds a provider, opens a scope (handlers are
-    scoped, `:77-78`), resolves the outermost handler and asserts it is non-null with a message that
-    tells the subclass author what is missing (`:80-82`). It then unwraps the chain, maps each link to a
+  - `AssertPipeline` (`:78-97`): builds the collection, builds a provider, opens a scope (handlers are
+    scoped, `:83-84`), resolves the outermost handler and asserts it is non-null with a message that
+    tells the subclass author what is missing (`:86-88`). It then unwraps the chain, maps each link to a
     simple type name, and asserts every element *except the last* equals the expected decorator list in
-    order (`:84-87`), finally asserting the innermost element does **not** end in `Decorator`, that is,
-    it is the concrete handler (`:89-90`).
-  - `UnwrapChain` (`:98-118`): walks outermost to innermost by reflecting over each object's instance
+    order (`:90-93`), finally asserting the innermost element does **not** end in `Decorator`, that is,
+    it is the concrete handler (`:95-96`).
+  - `UnwrapChain` (`:104-124`): walks outermost to innermost by reflecting over each object's instance
     fields (public and non-public) and picking the first value that implements the same closed handler
-    interface and is not the object itself (`:105-108`), which is how it finds the compiler-generated
-    backing field holding the inner handler. `SimpleTypeName` (`:120-125`) strips the generic-arity
+    interface and is not the object itself (`:111-114`), which is how it finds the compiler-generated
+    backing field holding the inner handler. `SimpleTypeName` (`:126-131`) strips the generic-arity
     backtick suffix so a two-arity `LoggingCommandDecorator` compares as the plain name.
 - **Why it's built this way**: asserting the constructed object graph is strictly stronger than asserting
   the registration list, it catches a decorator that was registered but never applied (for example
   because a module scan re-registered the handler afterwards). Comparing simple type names keeps the base
   free of a compile-time reference to the decorator classes, which live in `MMCA.Common.Application`.
-- **Where it's used**: three subclasses today. MMCA.Common self-tests the base against its own
+- **Where it's used**: four subclasses today. MMCA.Common self-tests the base against its own
   registration sequence with a synthetic `PingCommand` / `PingQuery` pair
-  (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:20-21`), and both
-  apps subclass it in their architecture tiers over the real Identity pair
-  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:26-27`,
-  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:26-27`).
+  (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21-22`), and the
+  three applications subclass it in their architecture tiers,
+  `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:27-28` and
+  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:26-27` over
+  the real Identity `ChangePreferencesCommand` / `GetUserPreferencesQuery` pair, and
+  `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:30-31`
+  over the Tickets `UpdateTicketCommand` / `GetTicketByIdQuery` pair.
 - **Caveats / not-in-source**: each subclass pins one representative command/query pair, not every
   handler, so the guard proves the *ordering* is right, not that every handler is decorated.
 
@@ -1538,23 +1810,25 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   then `ApplicationStopped` inside the timeout.
 - **Depends on**:
   [ProductionHostApplicationFactory<TEntryPoint>](#productionhostapplicationfactorytentrypoint)
-  (`GracefulShutdownTestsBase.cs:31`), plus `Microsoft.Extensions.Hosting`'s `IHost` /
-  `IHostApplicationLifetime`, `Microsoft.Extensions.DependencyInjection`, `AwesomeAssertions`, and `Xunit`
-  (`:1-4`).
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/GracefulShutdownTestsBase.cs:31`), plus
+  `Microsoft.Extensions.Hosting`'s `IHost` / `IHostApplicationLifetime`,
+  `Microsoft.Extensions.DependencyInjection`, `AwesomeAssertions`, and `Xunit` (`:1-4`).
 - **Concept introduced, the bounded-stop drain check.** `[Rubric §29, Resilience & Business Continuity]`
-  (named in the class doc itself, `GracefulShutdownTestsBase.cs:9`) assesses whether the system survives
-  planned and unplanned interruption; a rolling deploy is the planned one. The failure this catches is a
-  hosted service (a warm-up runner, service discovery, proxy infrastructure) that refuses to drain, which
-  in production does not announce itself: it silently wedges a rolling deploy while the platform waits out
-  its termination grace period (`:13-17`). `[Rubric §13, Observability & Operability]` is the operational
-  half, lifetime events firing in order are what a platform's shutdown handling depends on. The
-  recovery-objective framing is
+  (named in the class doc itself,
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/GracefulShutdownTestsBase.cs:9`) assesses whether the
+  system survives planned and unplanned interruption; a rolling deploy is the planned one. The failure this
+  catches is a hosted service (a warm-up runner, service discovery, proxy infrastructure) that refuses to
+  drain, which in production does not announce itself: it silently wedges a rolling deploy while the
+  platform waits out its termination grace period (`:13-17`). `[Rubric §13, Observability & Operability]`
+  is the operational half, lifetime events firing in order are what a platform's shutdown handling depends
+  on. The recovery-objective framing is
   [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html); the base
   itself is one of the suites recorded in
   [ADR-058](https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html).
 - **Walkthrough**
-  - `ShutdownTimeoutSeconds` (`GracefulShutdownTestsBase.cs:28`): `virtual`, defaults to **20** seconds.
-    This number is the test: a host that drains slower than this fails.
+  - `ShutdownTimeoutSeconds`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/GracefulShutdownTestsBase.cs:28`): `virtual`, defaults
+    to **20** seconds. This number is the test: a host that drains slower than this fails.
   - `CreateFactory()` (`:31`): `virtual`, returns a plain
     `ProductionHostApplicationFactory<TEntryPoint>`. The doc says to override it only when the host needs
     a fixture beyond a Production-pinned boot (`:18-21`).
@@ -1588,14 +1862,15 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   client and lifecycle, typed request helpers, bearer-token management, and a thread-safe id counter, so
   a concrete test class is left with just its arrange/act/assert.
 - **Depends on**: [IIntegrationTestFixture](#iintegrationtestfixture) (the `TFixture` constraint,
-  `IntegrationTestBase.cs:14`), plus `Xunit`'s `IAsyncLifetime`, `System.Net.Http.Headers`, and
-  `System.Net.Http.Json` (`:1-3`).
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/IntegrationTestBase.cs:14`), plus `Xunit`'s
+  `IAsyncLifetime`, `System.Net.Http.Headers`, and `System.Net.Http.Json` (`:1-3`).
 - **Concept introduced, the xUnit async test lifecycle and per-test isolation.** `[Rubric §14,
   Testability]`: the base implements `IAsyncLifetime` so `InitializeAsync` runs **before each test** and
   `DisposeAsync` **after**, and it hangs the database reset off that hook so every test starts from a
   clean database, the single most important property for reliable integration tests.
 - **Walkthrough**
-  - Fields and properties: a `static int _nextId = 1000` seed (`IntegrationTestBase.cs:16`), and the
+  - Fields and properties: a `static int _nextId = 1000` seed
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/IntegrationTestBase.cs:16`), and the
     `Fixture` / `Client` protected properties (`:19-22`).
   - Constructor (`:24-28`): stores the injected fixture and eagerly creates the `HttpClient` from it.
   - `InitializeAsync` (`:31`): a `ValueTask` that awaits `Fixture.ResetDatabaseAsync()` before each test.
@@ -1627,9 +1902,9 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   Respawn, and drops the database on disposal. It is the concrete engine behind
   [IIntegrationTestFixture](#iintegrationtestfixture) for SQL Server hosts.
 - **Depends on**: [IIntegrationTestFixture](#iintegrationtestfixture) (implemented,
-  `SqlServerIntegrationTestFixtureBase.cs:27`), plus `Microsoft.AspNetCore.Mvc.Testing`
-  (`WebApplicationFactory`), `Microsoft.Data.SqlClient`, `Respawn`, and `Xunit`'s `IAsyncLifetime`
-  (`:1-4`).
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/SqlServerIntegrationTestFixtureBase.cs:27`), plus
+  `Microsoft.AspNetCore.Mvc.Testing` (`WebApplicationFactory`), `Microsoft.Data.SqlClient`, `Respawn`, and
+  `Xunit`'s `IAsyncLifetime` (`:1-4`).
 - **Concept introduced, the disposable-database integration fixture and environment-variable overrides.**
   `[Rubric §14, Testability]` and `[Rubric §8, Data Architecture]`: real integration coverage needs a
   real relational database, and this fixture makes that cheap and hermetic, a fresh GUID-named database
@@ -1638,11 +1913,11 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) is why the class doc
   stresses the `DataSources` collapse onto a single overridden connection string (`:16-24`).
 - **Walkthrough**
-  - State (`SqlServerIntegrationTestFixtureBase.cs:30-45`): the recorded original-environment map, the
-    server-base and database-name strings, the `WebApplicationFactory`, the `Respawner`, a
-    `_databaseCreated` flag, and the public `Client` / `ConnectionString`. `ConnectionString` (`:45`) is
-    exposed so SQL-fidelity tests can read raw tables (for example to assert an integration event landed
-    in the outbox).
+  - State (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/SqlServerIntegrationTestFixtureBase.cs:30-45`):
+    the recorded original-environment map, the server-base and database-name strings, the
+    `WebApplicationFactory`, the `Respawner`, a `_databaseCreated` flag, and the public `Client` /
+    `ConnectionString`. `ConnectionString` (`:45`) is exposed so SQL-fidelity tests can read raw tables
+    (for example to assert an integration event landed in the outbox).
   - `Services` (`:52`): the booted host's root service provider, exposed so cross-service tests can
     resolve a consumer-side integration-event handler or a repository and drive the flow directly against
     the real database.
@@ -1696,14 +1971,15 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   resources, so an accidental controller or route removal fails CI instead of silently changing the
   published contract.
 - **Depends on**: [IntegrationTestBase<TFixture>](#integrationtestbasetfixture) (inherited,
-  `OpenApiContractTestsBase.cs:21`), `System.Net`, `System.Text.Json`, `AwesomeAssertions`, and `Xunit`
-  (`:1-4`).
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/OpenApiContractTestsBase.cs:21`), `System.Net`,
+  `System.Text.Json`, `AwesomeAssertions`, and `Xunit` (`:1-4`).
 - **Concept introduced, the contract guard on the live document.** `[Rubric §9, API & Contract Design]`
   assesses whether the API surface is described and kept stable; the pattern across all three Level 2
-  bases is a **live-document guard with no committed snapshot** (`OpenApiContractTestsBase.cs:14-16`),
-  the assertions run against the document the host actually serves, so new controllers can never leave a
-  stale snapshot behind and a removed one is caught immediately. This is one of the suites recorded
-  in [ADR-058](https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html), and
+  bases is a **live-document guard with no committed snapshot**
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/OpenApiContractTestsBase.cs:14-16`), the assertions run
+  against the document the host actually serves, so new controllers can never leave a stale snapshot behind
+  and a removed one is caught immediately. This is one of the suites recorded in
+  [ADR-058](https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html), and
   the one with the widest adoption.
 - **Walkthrough**
   - Overridable and abstract knobs: `OpenApiDocumentPath` (`:30`, defaults to `/openapi/v1.json`),
@@ -1740,10 +2016,12 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   Details documents, machine-readable bodies carrying `status`, `title`, and a diagnostic extension,
   across both error-shaping paths the framework uses.
 - **Depends on**: [IntegrationTestBase<TFixture>](#integrationtestbasetfixture) (inherited,
-  `ProblemDetailsContractTestsBase.cs:21`), `System.Net`, `System.Net.Http.Json`, `System.Text.Json`,
-  `AwesomeAssertions`, and `Xunit` (`:1-5`). Same live-guard shape as the OpenAPI base above.
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/ProblemDetailsContractTestsBase.cs:21`), `System.Net`,
+  `System.Net.Http.Json`, `System.Text.Json`, `AwesomeAssertions`, and `Xunit` (`:1-5`). Same live-guard
+  shape as the OpenAPI base above.
 - **Concept**: still `[Rubric §9, API & Contract Design]`, here the pinned contract is the **error
-  shape**. The class covers the two distinct paths that produce errors (class doc, `:10-18`): ASP.NET
+  shape**. The class covers the two distinct paths that produce errors (class doc,
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/ProblemDetailsContractTestsBase.cs:10-18`): ASP.NET
   Core model validation (a 400 `application/problem+json` body) and the framework's `HandleFailure`
   `Result`-error mapping (see
   [ApiControllerBase](group-12-api-hosting-mapping.md#apicontrollerbase)), which turns a
@@ -1751,7 +2029,8 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   [Error](group-01-result-error-handling.md#error) not-found into a 404 problem
   ([ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html) defines that edge contract).
 - **Walkthrough**
-  - `Validation_400_HasProblemDetailsShape` (`ProblemDetailsContractTestsBase.cs:29-39`): sends the
+  - `Validation_400_HasProblemDetailsShape`
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/ProblemDetailsContractTestsBase.cs:29-39`): sends the
     subclass's validation probe, asserts the shared shape at 400, then checks the `problem+json` content
     type and the model-validation-only extensions `type`, `traceId`, and `errors` (`:35-38`).
   - `NotFound_404_HasProblemDetailsShape` (`:41-47`): sends the 404 probe and asserts the shared shape.
@@ -1766,14 +2045,18 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   means a regression in either error channel breaks CI, and factoring the shape assertion into a shared
   static keeps every host's error contract identical while still letting a host with a reachable
   409-conflict path layer its own test on top (`:16-18`).
-- **Where it's used**: subclassed per host, three in ADC
+- **Where it's used**: subclassed per host, four in ADC
   (`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:20`,
   `.../MMCA.ADC.Engagement.IntegrationTests/Contract/ProblemDetailsContractTests.cs:17`,
-  `.../MMCA.ADC.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:17`) and three in Store
+  `.../MMCA.ADC.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:17`,
+  `.../MMCA.ADC.Notification.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16`) and three in
+  Store
   (`MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ProblemDetailsContractTests.cs:20`,
   `.../MMCA.Store.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16`,
   `.../MMCA.Store.Sales.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16`). ADC Conference is
-  the one that adds a 409 stale-`RowVersion` conflict test on top of the inherited facts.
+  the one that adds a 409 stale-`RowVersion` conflict test on top of the inherited facts
+  (`.../MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:40-67`, reusing
+  `AssertProblemDetailsShapeAsync` at `:67`).
 
 ### ServiceInfoVersioningContractTestsBase<TFixture>
 > MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/ServiceInfoVersioningContractTestsBase.cs:19` · Level 2 · class (abstract)
@@ -1783,8 +2066,8 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   selected by the `api-version` header, and that the host reports supported and deprecated versions in
   response headers.
 - **Depends on**: [IntegrationTestBase<TFixture>](#integrationtestbasetfixture) (inherited,
-  `ServiceInfoVersioningContractTestsBase.cs:19`), `System.Net`, `System.Text.Json`,
-  `AwesomeAssertions`, and `Xunit` (`:1-4`).
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing/ServiceInfoVersioningContractTestsBase.cs:19`),
+  `System.Net`, `System.Text.Json`, `AwesomeAssertions`, and `Xunit` (`:1-4`).
 - **Concept**: `[Rubric §9, API & Contract Design]` again, the versioning axis
   ([ADR-046](https://ivanball.github.io/docs/adr/046-http-api-versioning.html)). The class doc
   (`:8-17`) makes the point that without a second working version the whole versioning story would be
@@ -1794,9 +2077,10 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   test body is identical across repos; a subclass supplies only its fixture.
 - **Walkthrough**
   - `ServiceInfo_V1_ReturnsMinimalShape_AndIsReportedDeprecated`
-    (`ServiceInfoVersioningContractTestsBase.cs:27-41`): requests v1.0, asserts 200, checks
-    `apiVersion == "1.0"` and that the evolved `supportedVersions` list is **absent** in the v1 shape
-    (`:35-36`), then asserts an `api-deprecated-versions` response header contains `1.0` (`:38-40`).
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/ServiceInfoVersioningContractTestsBase.cs:27-41`):
+    requests v1.0, asserts 200, checks `apiVersion == "1.0"` and that the evolved `supportedVersions` list
+    is **absent** in the v1 shape (`:35-36`), then asserts an `api-deprecated-versions` response header
+    contains `1.0` (`:38-40`).
   - `ServiceInfo_V2_ReturnsEvolvedShape_AndIsReportedSupported` (`:43-57`): requests v2.0, asserts 200,
     checks `apiVersion == "2.0"` and that `supportedVersions` contains `2.0` (`:50-52`), then asserts an
     `api-supported-versions` header advertises `2.0` (`:54-56`).
@@ -1812,8 +2096,76 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Caveats / not-in-source**: adoption is per-repo partial, one host each in ADC and Store, not every
   extracted REST service.
 
+### MiddlewarePipelineOrderTestsBase
+> MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:29` · Level 11 · class (abstract)
+
+- **What it is**: the HTTP-edge counterpart of
+  [DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>](#decoratorpipelineordertestsbasetcommand-tcommandresult-tquery-tqueryresult).
+  It seeds the framework's default middleware step list, applies the host's own customization if it has
+  one, and asserts the resulting step order is exactly the documented pipeline, plus that the
+  startup-validated adjacency invariants still hold.
+- **Depends on**:
+  [MiddlewarePipelineBuilder](group-12-api-hosting-mapping.md#middlewarepipelinebuilder) and
+  [MiddlewarePipelineStepNames](group-12-api-hosting-mapping.md#middlewarepipelinestepnames) from
+  `MMCA.Common.API.Startup` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:2`),
+  plus `AwesomeAssertions` and `Xunit` (`:1,3`). This is the reference that makes
+  `MMCA.Common.Testing` depend on `MMCA.Common.API`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MMCA.Common.Testing.csproj:44`).
+- **Concept introduced, order-as-data at the HTTP edge.** In ASP.NET Core middleware order *is* behavior,
+  not style, and the failures it produces do not look like ordering bugs. The class doc names three
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:13-18`): an
+  unreachable `jwks_uri` when the pre-forwarded capture drifts away from `UseForwardedHeaders`, a tenant
+  that never resolves when tenant resolution runs before authentication, and a per-user rate cap that
+  never engages when the limiter runs before authentication. What makes the check cheap is that
+  [ADR-079](https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html) turned the
+  order into **data**: `MiddlewarePipelineBuilder.CreateDefault()` produces a list of named steps that are
+  inert until applied, so no `WebApplication` has to be built and the test runs in the fast unit tier with
+  no database and no host (`:24-27`). `[Rubric §10, Cross-Cutting]` assesses whether cross-cutting edge
+  concerns are composed deliberately; `[Rubric §11, Security]` is why authentication before the rate
+  limiter is load-bearing ([ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html));
+  `[Rubric §14, Testability]` and
+  `[Rubric §34, Architecture Governance & Documentation]` cover the fitness-function form itself
+  ([ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html)).
+- **Walkthrough**
+  - `Configure` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:35`):
+    `virtual`, defaults to `null`, meaning the host under test calls the zero-argument
+    `UseCommonMiddlewarePipeline()` overload. A host that customizes the pipeline overrides this with the
+    same `Action<MiddlewarePipelineBuilder>` its `Program.cs` passes (`:20-23`).
+  - `ExpectedStepNames` (`:38-58`): the pinned order, outermost first, all eighteen steps named through
+    `MiddlewarePipelineStepNames` constants rather than string literals: ExceptionHandler, CorrelationId,
+    RequestLocalization, PreForwardedCapture, ForwardedHeaders, HttpsRedirection, ResponseCompression,
+    Routing, Cors, Authentication, TenantResolution, RateLimiting, SoftDeletedUserFilter, Authorization,
+    OutputCache, JwksEndpoint, OidcDiscoveryEndpoint, Controllers. It is `virtual`, so a host with a
+    deliberately different pipeline states its own order.
+  - `EdgePipeline_OrdersSteps_InDocumentedOrder` (`:60-67`): the first `[Fact]`. It builds the seeded
+    builder and asserts `builder.StepNames` equals `ExpectedStepNames`, with a because-reason (`:66`) that
+    spells out the three adjacencies rather than just reporting a list mismatch.
+  - `EdgePipeline_SatisfiesLoadBearingInvariants` (`:69-77`): the second `[Fact]`. It asserts
+    `builder.Build()` does not throw. `Build()`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:257-280`)
+    re-checks four invariants at startup, PreForwardedCapture immediately before ForwardedHeaders
+    (`:259-262`), Authentication immediately before TenantResolution (`:264-267`), Authentication before
+    RateLimiting (`:269-272`), and ForwardedHeaders before HttpsRedirection (`:274-277`), so a pipeline
+    that fails here would have thrown while the host was starting.
+  - `CreateBuilder` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:79-84`):
+    the two-line private helper both facts share, `MiddlewarePipelineBuilder.CreateDefault()` followed by
+    `Configure?.Invoke(builder)`.
+- **Why it's built this way**: the two facts are complementary rather than redundant. The first pins the
+  exact order, so any reorder (including one that still satisfies every adjacency) fails visibly; the
+  second re-runs the host's own startup validation in the unit tier, so an override that breaks an
+  adjacency fails in a test rather than at boot. Naming steps through `MiddlewarePipelineStepNames`
+  constants means a step rename is a compile error in the test rather than a silent string mismatch.
+- **Where it's used**: four subclasses, every one of them body-less because every host calls the
+  zero-argument overload,
+  `MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/MiddlewarePipelineOrderTests.cs:10`,
+  `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15`,
+  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15`, and
+  `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15`.
+  The framework's own `UseCommonMiddlewarePipeline` doc points back at this base as the way to freeze the
+  order (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:42`).
+
 ### HandlerTestBase<THandler>
-> MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/HandlerTestBase.cs:38` · Level 9 · class (abstract)
+> MMCA.Common.Testing · `MMCA.Common.Testing` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing/HandlerTestBase.cs:38` · Level 14 · class (abstract)
 
 - **What it is**: the reusable Moq scaffold for command/query handler **unit** tests. It hands a derived
   test class a pre-configured `Mock<IUnitOfWork>`, a no-op logger typed to the handler under test, and
@@ -1825,21 +2177,23 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   and
   [AuditableBaseEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
   (the two generic constraints), plus `Moq`, `Microsoft.Extensions.Logging`, and `NullLogger<T>`
-  (`HandlerTestBase.cs:1-5`).
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/HandlerTestBase.cs:1-5`).
 - **Concept**: *the arrange-phase base class.* Where
   [IntegrationTestBase<TFixture>](#integrationtestbasetfixture) gives an end-to-end test a booted host,
   this gives an isolated unit test a mocked persistence boundary: no database, no host, no HTTP. The
-  class doc (`HandlerTestBase.cs:10-12`) frames it as the shared replacement for the per-test copy-paste
-  of `Mock<IUnitOfWork>` plus `GetRepository` wiring plus `SaveChangesAsync` setup. `[Rubric §14,
-  Testability]` assesses whether the design permits fast isolated tests; the fact that handlers depend on
-  `IUnitOfWork` (an Application-layer abstraction) rather than a `DbContext` is what makes this scaffold
-  possible at all, which is `[Rubric §3, Clean Architecture]` paying off in the test tier
+  class doc (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/HandlerTestBase.cs:10-12`) frames it as the
+  shared replacement for the per-test copy-paste of `Mock<IUnitOfWork>` plus `GetRepository` wiring plus
+  `SaveChangesAsync` setup. `[Rubric §14, Testability]` assesses whether the design permits fast isolated
+  tests; the fact that handlers depend on `IUnitOfWork` (an Application-layer abstraction) rather than a
+  `DbContext` is what makes this scaffold possible at all, which is `[Rubric §3, Clean Architecture]`
+  paying off in the test tier
   ([ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html) records
   that contract). `[Rubric §16, Maintainability]` covers the deduplication itself.
 - **Walkthrough**
-  - Constructor (`HandlerTestBase.cs:41-42`): a single expression-bodied statement that pre-configures
-    `UnitOfWork.SaveChangesAsync(...)` to return `1`, the success path, so a happy-path test writes no
-    persistence setup at all. Failure-path tests override it with their own `Setup` (doc `:32-35`).
+  - Constructor (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/HandlerTestBase.cs:41-42`): a single
+    expression-bodied statement that pre-configures `UnitOfWork.SaveChangesAsync(...)` to return `1`, the
+    success path, so a happy-path test writes no persistence setup at all. Failure-path tests override it
+    with their own `Setup` (doc `:32-35`).
   - `UnitOfWork` (`:45`): the `Mock<IUnitOfWork>` every registered repository is wired into, created by a
     property initializer so the constructor can configure it.
   - `Logger` (`:48`): `NullLogger<THandler>.Instance`, typed by the handler type parameter so it binds
@@ -1856,14 +2210,33 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   may read through `GetReadRepository` and write through `GetRepository` on the same aggregate; a test
   forced to register two mocks would have to keep their state in sync. Pre-succeeding `SaveChangesAsync`
   encodes the common case so only the interesting deviation appears in a test.
-- **Where it's used**: the base of handler unit-test classes across the framework and the downstream
-  application modules, 87 classes today, including the framework's own scaffold test
-  (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/HandlerTestBaseTests.cs:12`) and dozens of ADC
-  Application-tier classes (for example
+- **Where it's used**: 116 test classes today, the framework's own scaffold test
+  (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/HandlerTestBaseTests.cs:12`) plus 115 ADC
+  Application-tier classes spread across all four modules (for example
   `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Categories/UseCases/CreateConferenceCategoryHandlerTests.cs:13`,
   `MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/LivePolls/UseCases/CastVoteHandlerTests.cs:13`,
-  `MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Application.Tests/Users/UseCases/ChangePasswordHandlerTests.cs:12`).
-  The class doc carries a worked `CreateEventHandlerTests` example (`HandlerTestBase.cs:19-31`).
+  `MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Application.Tests/Users/UseCases/ChangePasswordHandlerTests.cs:12`,
+  `MMCA.ADC/Tests/Modules/Notification/MMCA.ADC.Notification.Application.Tests/UserNotificationExportServiceTests.cs`).
+  The class doc carries a worked `CreateEventHandlerTests` example
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/HandlerTestBase.cs:19-31`).
+- **Caveats / not-in-source**: adoption is uneven. MMCA.Store and MMCA.Helpdesk handler tests do not
+  subclass it at all: a workspace-wide search finds no `HandlerTestBase` reference under either repo's
+  `Tests/` tree. Why those two arrange their handler tests by hand is not recorded in source.
+
+### AnonymousEndpointTestsBase
+> MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/AnonymousEndpointTestsBase.cs:30` · Level 0 · abstract class
+
+- **What it is**: an allow-list gate for authorization opt-outs. Every `[AllowAnonymous]` in the assemblies a subclass names must appear in an explicit, reviewed list, so an endpoint cannot quietly lose its authorization gate.
+- **Depends on**: `[Fact]` (xUnit), AwesomeAssertions, [RuleHelpers](#rulehelpers)`.LoadableTypes`, and reflection over attribute instances matched by full name: `AllowAnonymousAttribute`, `ControllerBase`, and Blazor's `RouteAttribute` are three private full-name constants (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/AnonymousEndpointTestsBase.cs:32-34`), not compile-time references.
+- **Concept introduced, the two-directional allow-list gate.** A one-directional "no anonymous endpoints" rule is unusable (login has to be anonymous) and a one-directional "these are allowed" rule rots. This base asserts both halves: no unlisted `[AllowAnonymous]` exists, and no list entry matches nothing. The second half is the subtle one, since a stale entry hides a renamed or re-gated endpoint behind a permission that is no longer being granted (line 88). `[Rubric §11, Security]` assesses whether authentication gates stay where they were put; `[Rubric §14, Testability]` assesses turning a review-only property into an executable one; `[Rubric §34, Architecture Governance]` applies because the exception list, with its per-entry justification comments, becomes the reviewed record of the anonymous surface.
+- **Walkthrough**
+  - The subclass supplies `TargetAssemblies` (line 37), `AllowedAnonymousEndpoints` (line 44, identified as the type's `FullName` for a type-level attribute and `FullName.MethodName` for a method-level one, lines 40-42), and a `MinimumScannedTypes` floor (line 51, default 1).
+  - Three `[Fact]`s. `AnonymousEndpoints_AreAllowListed` (line 54) subtracts the allow-list from the discovered set and names what is left. `ScannedEndpointSet_IsNotEmpty` (line 66) is the non-vacuity guard: with no controllers and no routable components discovered, the first assertion passes without having looked at anything (comment, lines 68-69). `AllowList_HasNoStaleEntries` (line 79) runs the comparison the other way.
+  - Two shapes are scanned, both by reflection: `IsController` (line 101) walks the base chain for `ControllerBase`, and `IsRoutableComponent` (line 117) looks for `RouteAttribute` on the type, combined in `IsScannedEndpointType` (line 95).
+  - `AnonymousEndpoints()` (line 125) is `protected` rather than private so a subclass can build a richer report over the same data (doc, lines 120-123); it flattens the assemblies, filters to the scanned shapes, and returns a distinct, ordinally-ordered set.
+  - `AnonymousEndpointsOf` (line 133) is the load-bearing detail: type-level attributes are read with `inherit: false` (line 135) and methods are enumerated `DeclaredOnly` (line 142), so a framework base action is reported once at its declaration site instead of once per derived controller in every consumer repo (comment, lines 140-141).
+- **Why it's built this way**: the class doc is explicit about the limit (lines 18-24). Minimal-API endpoints opt out through the `.AllowAnonymous()` builder call, which produces endpoint metadata at map time and is invisible to static reflection, so the framework's own minimal-API anonymous surface (JWKS, OIDC discovery, app-association, session-cookie refresh, health) is outside this gate; catching it would need an endpoint-metadata check over a built host. Matching ASP.NET types by full name keeps the package free of an ASP.NET reference, the same stance the whole rule library takes (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/MMCA.Common.Testing.Architecture.csproj:22-29`).
+- **Where it's used**: subclassed in all four repos, and the `DeclaredOnly` decision is what keeps each list local to what that repo declares. MMCA.Common's [AnonymousEndpointTests](#anonymousendpointtests) lists six credential-exchange actions on `AuthControllerBase`, `OAuthControllerBase` and the generic `PasswordResetAuthControllerBase` (whose two entries carry the reflected generic-arity suffix, a detail the file comments call out at `:35-36`), with a floor of 21 (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTests.cs:14`, list at `:22-39`, floor at `:43`). ADC's lists the two Identity credential actions plus the public conference-browse reads, calendar exports and bookmark counts, with a floor of 79 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/AnonymousEndpointTests.cs:21`, floor at `:108`). Store's covers the public storefront reads, product images, registration and the Stripe webhook, with a floor of 32 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/AnonymousEndpointTests.cs:10`, floor at `:55`). Helpdesk's single entry is its whole `TicketsController`, because the seed ships without an Identity issuer so there is no token to require (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/AnonymousEndpointTests.cs:17`, entry and reason at `:26-30`). MMCA.Common also carries the adversarial coverage for the base itself in [AnonymousEndpointTestsBaseTests](#anonymousendpointtestsbasetests) (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/AnonymousEndpointTestsBaseTests.cs:13`), which proves each assertion fails on its own drift through private `DriftedTests`, `StaleAllowListTests` and `EmptyScanTests` subclasses (`:100`, `:108`, `:117`) and pins the inheritance behavior with a fixture base controller whose anonymous action must NOT be re-reported on the derived controller (`:61-71`).
 
 ### ArchitectureAssert
 > MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureAssert.cs:8` · Level 0 · static class
@@ -1888,7 +2261,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   - The subclass supplies `EmbeddedCssLogicalNames` (line 22), the manifest-resource names of its landing-page stylesheets.
   - The single `[Fact]` `LandingPageCss_SourcesBrandColorFromToken_NotHardcodedHex` (line 25) first asserts the list is non-empty (a non-vacuity guard, lines 27-28), then for each stylesheet reads it via `ReadEmbeddedCss` (line 56, which throws a clear `InvalidOperationException` when the resource is missing, lines 58-60) and records a violation when the file is blank (line 37), when the token is absent (line 43), or when the raw hex is present (line 48, matched with `OrdinalIgnoreCase` so `#1565c0` cannot slip past).
   - Resources are resolved from `GetType().Assembly` (line 33), that is, the *subclass's* assembly, which is what lets a package-shipped base read a consumer's stylesheet.
-- **Why it's built this way**: the doc (lines 3-12) explains the split. MMCA.Common's own [BrandColorTokenTests](#brandcolortokentests) guards the C#-to-CSS token *definition* (from `BrandColors.Primary`), while this base guards every downstream *consumer* of it, embedding the stylesheets as manifest resources so the package needs no file-system access into the consumer repo.
+- **Why it's built this way**: the doc (lines 3-12) explains the split. MMCA.Common's own [BrandColorTokenTests](#brandcolortokentests) guards the C#-to-CSS token *definition* (from `BrandColors.Primary`, `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Theme/BrandColorTokenTests.cs:14`), while this base guards every downstream *consumer* of it, embedding the stylesheets as manifest resources so the package needs no file-system access into the consumer repo.
 - **Where it's used**: subclassed once per repo that ships a branded landing page, as `BrandColorTokenTests` in ADC (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/BrandColorTokenTests.cs:12`) and Store (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/BrandColorTokenTests.cs:10`).
 
 ### CrossEntityNavigationFinder
@@ -1912,7 +2285,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Depends on**: nothing; a plain enum.
 - **Concept introduced**: the Clean Architecture layer taxonomy made into a type. The layer flow itself is taught in [primer §1](00-primer.md#1-the-big-picture); here it becomes an enum the rule library keys off, so a rule that iterates layers is written once against the enum rather than hard-coded per repo. `[Rubric §3, Clean Architecture]` assesses whether the layering is explicit and enforced; this enum is the shared alphabet.
 - **Walkthrough**: the doc (lines 3-8) notes that `Ui`, `Grpc`, `Contracts`, and `ServiceHost` are optional: a repo simply omits them from its map when absent, so a rule iterating them is vacuously satisfied with no compile dependency on the missing assembly. [ArchitectureMapBase](#architecturemapbase)`.Segment` translates each member to its namespace segment, and two of those translations are not the identity mapping: `Api` becomes `"API"` and `ServiceHost` becomes `"Service"` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureMapBase.cs:105-117`).
-- **Where it's used**: carried by [LayerRef](#layerref), projected by [IArchitectureMap](#iarchitecturemap)`.OfLayer`, and threaded through nearly every method in [ArchitectureRules](#architecturerules).
+- **Where it's used**: carried by [LayerRef](#layerref), projected by [IArchitectureMap](#iarchitecturemap)`.OfLayer`, and threaded through nearly every method in [ArchitectureRules](#architecturerules). `Contracts` is the one member no repo registers today, which is exactly why [ServiceContractPurityTestsBase](#servicecontractpuritytestsbase) is attribute-driven rather than layer-driven.
 
 ### ModuleConformanceTestsBase<TModule>
 > MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ModuleConformanceTestsBase.cs:21` · Level 0 · abstract generic class
@@ -1959,7 +2332,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 - **What it is**: an abstract test base that reflects over a UI assembly's routable Blazor pages and fails the build if a page the subclass marks as governed has lost its `[Authorize(Roles = "...")]` role gate.
 - **Depends on**: `[Fact]` (xUnit), AwesomeAssertions, [RuleHelpers](#rulehelpers)`.LoadableTypes`, and pure reflection over attribute instances matched by full name (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/RouteAuthorizationTestsBase.cs:24-25`).
-- **Concept introduced, the security-regression fitness function.** `[Rubric §11, Security]` and `[Rubric §25, Navigation & IA]` assess whether protected routes stay protected; this base turns "the admin page must require the Organizer role" from a review checklist into a compiled assertion, so a page cannot silently regress from `[Authorize(Roles=...)]` to a bare `[Authorize]` reachable by any authenticated user.
+- **Concept introduced, the security-regression fitness function.** `[Rubric §11, Security]` and `[Rubric §25, Navigation & IA]` assess whether protected routes stay protected; this base turns "the admin page must require the Organizer role" from a review checklist into a compiled assertion, so a page cannot silently regress from `[Authorize(Roles=...)]` to a bare `[Authorize]` reachable by any authenticated user. It is the page-level counterpart to [AnonymousEndpointTestsBase](#anonymousendpointtestsbase), which guards the opt-out side of the same question.
 - **Walkthrough**
   - The subclass supplies `TargetAssembly` (line 28), the exact `RequiredRole` (line 31), an `IsGovernedPage` strategy (line 40), and a `MinimumGovernedPages` non-vacuity floor (line 47, default 1).
   - `GovernedPages_RequireDeclaredRole` (line 50) collects pages that are routable, governed, and do not require the role, then asserts the offender set is empty, naming each offender's route templates (lines 52-60).
@@ -1979,7 +2352,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   - `extension(Type type)` (line 40): `SimpleName` (line 47) strips the generic-arity backtick so suffix conventions match generic types too. `InheritsGeneric` (line 58) walks the base chain and `ImplementsGeneric` (line 72) scans the interface set for an open generic. `HasBaseTypeStartingWith` (line 80) detects a framework base by full-name prefix without a compile dependency (for example FluentValidation's `AbstractValidator`). `DeclaredPublicProperties` (line 94) narrows to declared-only public instance properties. `InheritsAggregateRoot` (line 101) and `InheritsAuditableEntity` (line 108) hard-code the MMCA entity base full names ([AuditableAggregateRootEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) plus the [AuditableBaseEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) and [BaseEntity<TIdentifierType>](group-02-domain-building-blocks.md#baseentitytidentifiertype) ancestors) so the entity rules can classify types cross-repo.
   - `extension(PropertyInfo property)` (line 114): `HasPublicMutableSetter` (line 121) is the immutability primitive. It reports `false` when there is no public setter, and `false` for `init`-only setters by looking for the `System.Runtime.CompilerServices.IsExternalInit` required custom modifier on the setter's return parameter (lines 131-135).
 - **Why it's built this way**: every helper avoids a compile-time reference to the type it detects (base types matched by string prefix), which is what lets one rule body run identically across four repos that do not reference each other. The class carries a file-level `[SuppressMessage]` for CA1708 (lines 10-13): with multiple `extension(T)` blocks in one static class the analyzer flags the compiler-generated grouping members as case-colliding, a documented false positive.
-- **Where it's used**: throughout the [ArchitectureRules](#architecturerules) partials, inside [CrossEntityNavigationFinder](#crossentitynavigationfinder), and directly by [RouteAuthorizationTestsBase](#routeauthorizationtestsbase).
+- **Where it's used**: throughout the [ArchitectureRules](#architecturerules) partials, inside [CrossEntityNavigationFinder](#crossentitynavigationfinder), and directly by [RouteAuthorizationTestsBase](#routeauthorizationtestsbase) and [AnonymousEndpointTestsBase](#anonymousendpointtestsbase).
 - **Caveats / not-in-source**: the type is `internal`, so consumer repos cannot call these helpers directly; they reach the same behavior only through the public rules and bases. [StateManagementConventionTestsBase](#statemanagementconventiontestsbase) is the one base that re-implements the tolerant type load privately rather than using this class.
 
 ### LayerRef
@@ -1989,7 +2362,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Depends on**: [Layer](#layer) and `System.Reflection.Assembly`.
 - **Concept introduced**: the atomic unit of an architecture map. `Module` is the empty string for framework (MMCA.Common) layers that belong to no business module (lines 22-30), which is how the same record models both a module assembly (`("Catalog", Application, ...)`) and a shared framework assembly (`("", Shared, ...)`). Every projection and every isolation rule keys off that one convention.
 - **Walkthrough**: a four-parameter positional `sealed record` (line 31), so it gets structural equality and immutability for free; its members are set once at construction by the map's `DefineLayers`.
-- **Where it's used**: [ArchitectureMapBase](#architecturemapbase) stores a lazy `IReadOnlyList<LayerRef>` and derives every projection from it; its `Framework` and `Module` factory helpers are what build these. The namespace-cycle rule takes a `LayerRef` directly, using its `RootNamespace` to decide which namespace node a type belongs to (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Cycles.cs:84`).
+- **Where it's used**: [ArchitectureMapBase](#architecturemapbase) stores a lazy `IReadOnlyList<LayerRef>` and derives every projection from it; its `Framework` and `Module` factory helpers are what build these. The namespace-cycle rule takes a `LayerRef` directly, using its `RootNamespace` to decide which namespace node a type belongs to (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Cycles.cs:84`), and the `[ServiceContract]` purity rule iterates `map.Layers` directly rather than one projection (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Contracts.cs:40`).
 
 ### ProtoScope
 > MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Protos.cs:297` · Level 1 · private sealed record
@@ -2003,7 +2376,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 ### IArchitectureMap
 > MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/IArchitectureMap.cs:39` · Level 2 · interface
 
-- **What it is**: the single per-repo abstraction every architecture fitness function keys off. Each repo supplies one implementation declaring its layer and module assemblies; the shared rule library and abstract test bases consume *only* this interface, so a rule is written once and runs identically across MMCA.Common, MMCA.Store, MMCA.ADC, and MMCA.Helpdesk (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/IArchitectureMap.cs:33-38`).
+- **What it is**: the single per-repo abstraction every architecture fitness function keys off. Each repo supplies one implementation declaring its layer and module assemblies; the shared rule library and abstract test bases consume *only* this interface, so a rule is written once and runs identically across every repo that supplies a map (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/IArchitectureMap.cs:33-38`, whose doc names MMCA.Common, MMCA.Store and MMCA.ADC; MMCA.Helpdesk supplies a fourth map).
 - **Depends on**: [LayerRef](#layerref), [Layer](#layer), `System.Reflection.Assembly`.
 - **Concept introduced, the architecture map as the fitness-function extension point.** This is a classic Dependency Inversion: the rules depend on an abstraction (the map), and each repo provides the concrete inventory of its assemblies. `[Rubric §1, SOLID]` (DIP) and `[Rubric §7, Microservices Readiness]` apply: the map also models the per-module layers a would-be extracted service owns, so the isolation rules can check module boundaries the same way in any repo.
 - **Walkthrough**: the interface exposes identity (`RepoToken` line 42, `ModuleNames` line 45), the raw `Layers` inventory (line 48), and the projections the rules lean on: `OfLayer` (all assemblies of a kind, line 51), the per-module `ModuleDomain`/`ModuleApplication`/`ModuleShared` (lines 54-60), `Infrastructure()`/`Api()` across framework plus modules (lines 63-66), the lookups `For(module, layer)` (line 69) and `ModuleOf(assembly)` (line 72), namespace derivation `RootNamespace(module, layer)` (line 75), and `OtherModuleNamespaces` (line 81), which returns the same-layer namespaces of every *other* module (the forbidden targets for a module-isolation rule, empty for framework layers and single-module repos).
@@ -2040,17 +2413,18 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 ### ArchitectureRules
 > MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.CancellationTokens.cs:5` · Level 4 · static partial class
 
-- **What it is**: the reusable rule library: one large `static partial class` split across twenty `ArchitectureRules.*.cs` files, whose methods each assert one architectural invariant across every applicable assembly a map declares. A repo's test classes reduce to a sealed subclass of the matching `*TestsBase` supplying its own map.
-- **Depends on**: [IArchitectureMap](#iarchitecturemap), [Layer](#layer), [ArchitectureAssert](#architectureassert), [RuleHelpers](#rulehelpers), NetArchTest (`Types.InAssembly(...)`), `System.Xml.Linq` for the props-file and `.resx` rules, source-generated `System.Text.RegularExpressions` for the proto and localized-text parsers, and, for the specification rule, `System.Linq.Expressions` plus [CrossEntityNavigationFinder](#crossentitynavigationfinder).
-- **Concept introduced, the rule as a parameterized function.** Each method takes an `IArchitectureMap` and does its own loop, so the `*TestsBase` classes are thin `[Fact]` shells that delegate. The partial is organized by concern across the files `ArchitectureRules.{CancellationTokens, Controllers, Cycles, Entities, Events, Governance, HandlerResults, Handlers, Idempotency, Immutability, Layers, Localization, LocalizedText, Modules, Naming, Protos, Purity, Slices, Specifications, Transport}.cs`. `[Rubric §3, Clean Architecture]`, `[Rubric §4, DDD]`, `[Rubric §7, Microservices Readiness]`, and `[Rubric §34, Architecture Governance]` all apply: this is where the codebase's structural decisions become executable assertions.
-- **Walkthrough**: four representative shapes.
+- **What it is**: the reusable rule library: one large `static partial class` split across twenty-two `ArchitectureRules.*.cs` files, whose methods each assert one architectural invariant across every applicable assembly a map declares. A repo's test classes reduce to a sealed subclass of the matching `*TestsBase` supplying its own map.
+- **Depends on**: [IArchitectureMap](#iarchitecturemap), [Layer](#layer), [ArchitectureAssert](#architectureassert), [RuleHelpers](#rulehelpers), NetArchTest (`Types.InAssembly(...)`, and `Mono.Cecil.TypeDefinition` for the one custom rule), `System.Xml.Linq` for the props-file and `.resx` rules, source-generated `System.Text.RegularExpressions` for the proto and localized-text parsers, and, for the specification rule, `System.Linq.Expressions` plus [CrossEntityNavigationFinder](#crossentitynavigationfinder).
+- **Concept introduced, the rule as a parameterized function.** Each method takes an `IArchitectureMap` and does its own loop, so the `*TestsBase` classes are thin `[Fact]` shells that delegate. The partial is organized by concern across the files `ArchitectureRules.{CancellationTokens, Contracts, Controllers, Cycles, Entities, Events, Governance, HandlerResults, Handlers, Idempotency, Immutability, Layers, Localization, LocalizedText, Modules, Naming, Protos, Purity, Slices, Specifications, Transport, Upcasters}.cs`. `[Rubric §3, Clean Architecture]`, `[Rubric §4, DDD]`, `[Rubric §7, Microservices Readiness]`, and `[Rubric §34, Architecture Governance]` all apply: this is where the codebase's structural decisions become executable assertions.
+- **Walkthrough**: five representative shapes.
   - *NetArchTest shape*, `ControllersDoNotDependOnInfrastructure` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Controllers.cs:6`): loops the map's per-module API layer refs, computes the forbidden Infrastructure namespace via `map.RootNamespace(...)`, runs `Types.InAssembly(...).That().HaveNameEndingWith("Controller").ShouldNot().HaveDependencyOnAny(forbidden)`, and reports through `ArchitectureAssert.NoViolations(result, ...)`.
   - *Layer-flow shape*, `ArchitectureRules.Layers.cs`: one public method per forbidden edge, `DomainDoesNotDependOnApplication` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Layers.cs:12`) through `UiDoesNotDependOnInfrastructure` (line 60), all delegating to the private `LayerNotDependOnLayer` (line 101), which loops every assembly of the `from` layer and asserts no dependency on the `to` layer's namespace. Two non-vacuity rules sit alongside them: `LayerMapDeclaresLayers` (line 72) and `ModulesDeclareLayers` (line 89).
   - *Reflection shape*, `ControllersAreSealed` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Controllers.cs:37`): enumerates `map.Api().ConcreteClasses` (the [RuleHelpers](#rulehelpers) extension property), filters non-sealed controllers via the private `IsController` (line 70, which matches on the `Controller` suffix or an MVC base type), and asserts the string offender list is empty. `ControllersInheritApiControllerBase` (line 54) is the same shape with a caller-supplied exempt set, accepting either [ApiControllerBase](group-12-api-hosting-mapping.md#apicontrollerbase) or [EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>](group-12-api-hosting-mapping.md#entitycontrollerbasetentity-tentitydto-tidentifiertype) as the base.
+  - *Custom-rule shape*, `ServiceContractsDoNotDependOnServiceInternals` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Contracts.cs:32`): the one rule that hands NetArchTest a `MeetCustomRule` predicate (line 44) reading Cecil metadata directly, because the selector is an attribute, not a name or a namespace.
   - *Graph shape*, `NamespacesHaveNoDependencyCycles` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Cycles.cs:45`): builds a namespace-to-namespace graph per layer assembly from signature-level references (`BuildNamespaceGraph`, line 84), finds every strongly connected component (`FindNamespaceCycles`, line 253), and reports the shortest cycle path plus any extra members of the component (lines 66-68). This is the largest single rule file in the library.
 - **Why it's built this way**: [ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html) records the intent: the rule bodies live *once* here, and each repo's architecture test project is a set of sealed subclasses supplying its map, so all four repos enforce identical rules. The compile-time `MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets` guards the same layer flow at build time as a second, faster gate.
 - **Where it's used**: every `*TestsBase` in this group calls into it; those `[Fact]` methods are its public surface. A handful of rules are also called directly from MMCA.Common's own fitness self-tests, for example `BuildProtoContract`/`AssertProtoContract` from [ProtoContractFitnessTests](#protocontractfitnesstests) (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ProtoContractFitnessTests.cs:14`).
-- **Caveats / not-in-source**: the full method roster spans twenty partials; only the entry file and representative methods are cited here. The authoritative fitness-method and base-class counts are generated into `MMCA.Common/FACTS.md:43-48` and CI-gated, so read them there rather than counting by hand.
+- **Caveats / not-in-source**: the full method roster spans twenty-two partials; only the entry file and representative methods are cited here. The authoritative fitness-method and base-class counts are generated into `MMCA.Common/FACTS.md:43-48` and CI-gated, so read them there rather than counting by hand.
 
 ### DataResidencyTestsBase
 > MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DataResidencyTestsBase.cs:14` · Level 4 · abstract class
@@ -2190,12 +2564,12 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Where it's used**: subclassed in Store, ADC, and Helpdesk (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/EntityConventionTests.cs:3`, `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/EntityConventionTests.cs:3`, `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:87`).
 
 ### EventConventionTestsBase
-> MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/EventConventionTestsBase.cs:8` · Level 5 · abstract class
+> MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/EventConventionTestsBase.cs:9` · Level 5 · abstract class
 
-- **What it is**: an integration-event convention base (the doc cites [ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)): every concrete integration event inherits [BaseIntegrationEvent](group-04-events-outbox.md#baseintegrationevent), declares an `int SchemaVersion`, and lives in a `*.IntegrationEvents` namespace in the Shared layer.
-- **Depends on**: [IArchitectureMap](#iarchitecturemap), [ArchitectureRules](#architecturerules) (`ArchitectureRules.Events.cs`).
+- **What it is**: an integration-event convention base (the doc cites [ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)): every concrete integration event inherits [BaseIntegrationEvent](group-04-events-outbox.md#baseintegrationevent), declares an `int SchemaVersion`, and lives in a `*.IntegrationEvents` namespace in the Shared layer. It also polices the upcasters that carry a retired contract forward.
+- **Depends on**: [IArchitectureMap](#iarchitecturemap), [ArchitectureRules](#architecturerules) (`ArchitectureRules.Events.cs` and `ArchitectureRules.Upcasters.cs`).
 - **Concept**: cross-references the delegating-base shape ([AggregateConventionTestsBase](#aggregateconventiontestsbase)). `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §9, API & Contract Design]` assess versioned, discoverable cross-service event contracts. It pairs with [IntegrationEventContractTestsBase](#integrationeventcontracttestsbase), which freezes the exact shape.
-- **Walkthrough**: three `[Fact]`s: `IntegrationEvents_ShouldDeclare_SchemaVersion` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/EventConventionTestsBase.cs:13`), `IntegrationEvents_ShouldInherit_BaseIntegrationEvent` (line 16), `IntegrationEvents_ShouldResideIn_SharedIntegrationEventsNamespace` (line 19).
+- **Walkthrough**: five `[Fact]`s. The three schema rules come first: `IntegrationEvents_ShouldDeclare_SchemaVersion` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/EventConventionTestsBase.cs:14`), `IntegrationEvents_ShouldInherit_BaseIntegrationEvent` (line 17), `IntegrationEvents_ShouldResideIn_SharedIntegrationEventsNamespace` (line 20). Two upcaster rules follow ([ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html), doc lines 6-7): `EventUpcasters_ShouldHave_UniqueSourceTypes` (line 23, delegating to `ArchitectureRules.Upcasters.cs:12`, because with two [IEventUpcaster](group-05-cqrs-pipeline.md#ieventupcaster) implementations reading one source contract the message a handler receives would depend on DI registration order) and `EventUpcasters_ShouldIncrease_SchemaVersion` (line 26, delegating to `ArchitectureRules.Upcasters.cs:28`, which skips a source or target whose `SchemaVersion` is missing or non-int, that being the first rule's business, lines 37-42). A repo with no upcasters passes both vacuously (doc, line 7).
 - **Where it's used**: subclassed in every repo that publishes integration events: Store (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/EventConventionTests.cs:3`), ADC (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/EventConventionTests.cs:3`), Helpdesk (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:38`), and MMCA.Common itself under the name `EventVersioningConventionTests` (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/EventVersioningConventionTests.cs:12`).
 
 ### HandlerConventionTestsBase
@@ -2281,7 +2655,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 - **What it is**: a transport-boundary base for the modular-monolith to microservices path: MassTransit, gRPC, and Protobuf must never leak into Domain, Application, or Shared, so a module behaves identically in-process or extracted and the split stays reversible.
 - **Depends on**: [IArchitectureMap](#iarchitecturemap), [ArchitectureRules](#architecturerules) (`ArchitectureRules.Transport.cs:19`).
-- **Concept**: cross-references the delegating-base shape ([AggregateConventionTestsBase](#aggregateconventiontestsbase)); the extraction invariant (application and domain code talks to abstractions, transport choices live at the edges) is the [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) / [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) / [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) story the doc cites (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/MicroserviceExtractionTestsBase.cs:3-7`). `[Rubric §7, Microservices Readiness]` assesses exactly this reversibility.
+- **Concept**: cross-references the delegating-base shape ([AggregateConventionTestsBase](#aggregateconventiontestsbase)); the extraction invariant (application and domain code talks to abstractions, transport choices live at the edges) is the [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) / [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) / [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) story the doc cites (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/MicroserviceExtractionTestsBase.cs:3-7`). `[Rubric §7, Microservices Readiness]` assesses exactly this reversibility. [ServiceContractPurityTestsBase](#servicecontractpuritytestsbase) guards the same boundary from the contract side.
 - **Walkthrough**: one `[Fact]` `CoreLayers_ShouldNotDependOn_Transport` (line 13) delegating to `ArchitectureRules.TransportDoesNotLeakIntoCoreLayers(Map)`.
 - **Where it's used**: subclassed in all four repos (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/MicroserviceExtractionTests.cs:10`, `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/MicroserviceExtractionTests.cs:3`, `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MicroserviceExtractionTests.cs:3`, and Helpdesk at `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:109`).
 
@@ -2304,7 +2678,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   - The subclass supplies `Map` (line 18) and optionally `AllowedCycleNamespaces` (line 26), fully-qualified nodes whose cycle is accepted by design.
   - The allowance rule is the interesting part: a cycle is skipped only when *every* namespace on its reported path appears in the list, so an allowance can never hide a NEW cycle that merely touches an accepted namespace (doc, lines 21-25). The rule enforces that over the whole strongly connected component, not just the rendered shortest path (`ArchitectureRules.Cycles.cs:58-64`).
   - The single `[Fact]` `Namespaces_ShouldNotHave_DependencyCycles` (line 29) forwards both to the rule, which builds a per-assembly namespace graph from base types, interfaces, field, property, method return and parameter types, and attribute types, with generic arguments and array or by-ref element types expanded (`ArchitectureRules.Cycles.cs:25-28`, `:84`, `:174`).
-- **Caveats / not-in-source**: the rule is signature-level reflection and blind to method bodies, because the package carries no IL or Roslyn dependency, so a green result means "no STRUCTURAL cycle", not "no coupling" (doc, lines 10-13; the rule's own statement of the limit at `ArchitectureRules.Cycles.cs:30-37`). Compiler-generated types are skipped deliberately so the answer stays a signature-level one.
+- **Caveats / not-in-source**: the rule is signature-level reflection and blind to method bodies, because the package carries no IL or Roslyn dependency, so a green result means "no STRUCTURAL cycle", not "no coupling" (doc, lines 10-13; the rule's own statement of the limit at `ArchitectureRules.Cycles.cs:29-37`). Compiler-generated types are skipped deliberately so the answer stays a signature-level one.
 - **Where it's used**: subclassed today only in MMCA.Common, as [NamespaceCycleTests](#namespacecycletests) (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/NamespaceCycleTests.cs:9`). Its `AllowedCycleNamespaces` records the single accepted tangle in the framework, `MMCA.Common.Infrastructure` to `Settings` to `Persistence` and back (`:39-44`), with each of the three edges justified in the doc comment above it (`:13-38`).
 
 ### NamingConventionTestsBase
@@ -2337,6 +2711,20 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   - The comparison is two-directional: `AssertProtoContract` (`ArchitectureRules.Protos.cs:58`) reports lines present in the protos but not frozen with a `+` marker and frozen lines missing from the protos with a `-` marker (lines 67-70), then funnels both through [ArchitectureAssert](#architectureassert). A `.proto` path that does not exist yields one explicit `<missing proto file>` line rather than silently contributing nothing (line 96).
 - **Why it's built this way**: the remarks say the snapshot is meant to be regenerated deliberately by printing `ArchitectureRules.BuildProtoContract(...)` for the same files, as part of the commit that changes the contract, never edited to make a red test go green (`Bases/ProtoContractTestsBase.cs:12-17`). MMCA.Common ships no `.proto` of its own (it supplies the gRPC plumbing, not the contracts), so the framework does NOT subclass this (lines 9-11).
 - **Where it's used**: subclassed in the two repos with `*.Contracts` projects: ADC, pinning seven protos across four Contracts projects (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/ProtoContractTests.cs:3`, file list at `:9-18`), and Store, pinning three (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/ProtoContractTests.cs:9`, file list at `:13-18`). MMCA.Common exercises the underlying rule instead, from fixture protos including a deliberately drifted copy, in [ProtoContractFitnessTests](#protocontractfitnesstests) (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ProtoContractFitnessTests.cs:14`).
+
+### ServiceContractPurityTestsBase
+> MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ServiceContractPurityTestsBase.cs:20` · Level 5 · abstract class
+
+- **What it is**: a one-rule delegating base asserting that every type marked with the framework's [ServiceContractAttribute](group-13-grpc-contracts.md#servicecontractattribute) stays free of the producing service's Domain, Application, and Infrastructure, so a consumer can take the contract package without taking the producer's internals.
+- **Depends on**: [IArchitectureMap](#iarchitecturemap) and [ArchitectureRules](#architecturerules)`.ServiceContractsDoNotDependOnServiceInternals` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Contracts.cs:32`).
+- **Concept introduced, the attribute-driven ratchet.** Two design choices are worth reading closely, and both are recorded in the base's remarks (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ServiceContractPurityTestsBase.cs:8-18`). First, the rule is attribute-driven rather than [Layer](#layer)`.Contracts`-driven, because no repo registers that layer in its map today, so a layer-iterating rule would pass vacuously forever; scanning every registered assembly for the marker enforces the invariant wherever the contract types live. Second, the base is honest about the vacuous case: a repo that has marked no type yet asserts nothing, and the value is the *ratchet*, the invariant bites from the first marked type onward with no test left to remember. `[Rubric §7, Microservices Readiness]` assesses whether an extraction stays reversible; a contract that leaks a domain entity, a handler abstraction, or a persistence type forces every consumer to depend on the producer's internals, which is what makes an extraction irreversible (`ArchitectureRules.Contracts.cs:13-19`). `[Rubric §9, API & Contract Design]` assesses the published surface itself ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)).
+- **Walkthrough**
+  - The subclass supplies `Map` (line 22); the single `[Fact]` `ServiceContracts_ShouldNotDependOn_ServiceInternals` (line 25) forwards to the rule.
+  - In the rule, `ServiceInternalNamespaces` (`ArchitectureRules.Contracts.cs:57`) collects the distinct, ordered root namespaces of every Domain, Application and Infrastructure ref in the map (lines 59-65) and the rule returns immediately when that set is empty (lines 35-38).
+  - It then loops `map.Layers` and runs NetArchTest per assembly with `MeetCustomRule(CarriesServiceContractAttribute)` as the selector (lines 40-47). `CarriesServiceContractAttribute` (line 69) reads `Mono.Cecil.TypeDefinition` custom attributes and matches the constant `ServiceContractAttributeFullName` (line 10, `"MMCA.Common.Shared.Abstractions.ServiceContractAttribute"`) by string, the same zero-reference stance the rest of the library takes.
+  - Because the rule scans *every* registered assembly, a marked type that lives inside a Domain, Application or Infrastructure assembly fails by construction, and the remarks say that is the intent: a published contract belongs in a `*.Contracts` or Shared assembly (`ArchitectureRules.Contracts.cs:25-29`).
+- **Where it's used**: subclassed once per repo, in all four: MMCA.Common (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ServiceContractPurityTests.cs:11`), ADC (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/ServiceContractPurityTests.cs:9`), Store (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/ServiceContractPurityTests.cs:9`), and Helpdesk (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ServiceContractPurityTests.cs:9`); see [ServiceContractPurityTests](#servicecontractpuritytests). It complements, and does not replace, the transport-purity rule behind [MicroserviceExtractionTestsBase](#microserviceextractiontestsbase) and the layer-purity rules behind [LayerDependencyTestsBase](#layerdependencytestsbase), which guard the same boundary from the layer side ([ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html)).
+- **Caveats / not-in-source**: no first-party type in any of the four repos carries `[ServiceContract]` today (the attribute's own doc records that MMCA.Common applies it to no type, `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:10-12`), so every one of the four subclasses currently passes without asserting anything. That is the documented ratchet state, not a gap in the rule.
 
 ### SharedLayerTestsBase
 > MMCA.Common.Testing.Architecture · `MMCA.Common.Testing.Architecture` · `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/SharedLayerTestsBase.cs:7` · Level 5 · abstract class
@@ -2394,7 +2782,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   - `Wcag21Aa` (`AxeOptions.cs:17`) sets `RunOnly` to `Type = "tag"` with the four WCAG A/AA tag values `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` (`:19-23`). This is the target for every strict scan.
   - `Wcag21AaExceptMudPagerCombobox` (`:35`) repeats that tag set and adds a `Rules` dictionary disabling `aria-input-field-name` (`:42-45`), for grid list pages whose only violation is MudBlazor's internal `MudTablePager` "rows per page" select. The XML doc (`:26-34`) records the detail: MudBlazor 9.6.0 mirrored combobox semantics onto the hidden-input presenter, the pager's own select gets no accessible name, and it is not reachable from app markup (no `Label` or `aria-label` parameter on `MudTablePager`), so this is an accepted upstream limitation. The doc warns it must be used only on a page whose sole combobox is a pager.
 - **Why it's built this way**: shipping the options in the package rather than re-declaring them per test guarantees every consumer scans the identical rule set; the narrowly scoped pager exception keeps one known third-party gap from forcing a blanket rule-disable across all scans.
-- **Where it's used**: passed to [PageExtensions](#pageextensions)`.AssertNoAccessibilityViolationsAsync` through [E2ETestBase](#e2etestbase)`.ScanAsync` (strict `Wcag21Aa`, `MMCA.Common.Testing.E2E/Infrastructure/E2ETestBase.cs:296`) and `.ScanGridAsync` (the pager exception, `:288`), and directly by the `*_ShouldHaveNoAccessibilityViolations` facts on [UserLoginTestsBase](#userlogintestsbase), [UserRegistrationTestsBase](#userregistrationtestsbase), and [ProfileManagementTestsBase](#profilemanagementtestsbase).
+- **Where it's used**: passed to [PageExtensions](#pageextensions)`.AssertNoAccessibilityViolationsAsync` through [E2ETestBase](#e2etestbase)`.ScanAsync` (strict `Wcag21Aa`, `MMCA.Common.Testing.E2E/Infrastructure/E2ETestBase.cs:296`) and `.ScanGridAsync` (the pager exception, `:288`), and directly by the `*_ShouldHaveNoAccessibilityViolations` facts on [UserLoginTestsBase](#userlogintestsbase) (`MMCA.Common.Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:83`), [UserRegistrationTestsBase](#userregistrationtestsbase) (`:91`), [ProfileManagementTestsBase](#profilemanagementtestsbase) (`:180`), and [PasswordResetTestsBase](#passwordresettestsbase) (`MMCA.Common.Testing.E2E/Workflows/Identity/PasswordResetTestsBase.cs:88`, `:99`).
 
 ### E2ETestConfiguration
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Infrastructure` · `MMCA.Common.Testing.E2E/Infrastructure/E2ETestConfiguration.cs:8` · Level 0 · static class
@@ -2410,6 +2798,15 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Why it's built this way**: separating `AuthTimeout` and `AuthGraceTimeout` from the general `DefaultTimeout` is deliberate. The auth round-trip (full sign-in plus `forceLoad` reload plus re-render) can spike past a normal action budget on a contended CI runner, so it is tuned independently rather than by inflating every timeout in the suite. The doc ties the grace window to the TD-06/07 contention cluster and names the rejected alternative, forcing WASM, which broke login (`:30-36`).
 - **Where it's used**: read throughout [PlaywrightFixture](#playwrightfixture) (engine, headless, slow-mo) and [E2ETestBase](#e2etestbase) (base URL, timeouts, trace path, credentials).
 
+### ForgotPasswordPage
+> MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.PageObjects` · `MMCA.Common.Testing.E2E/PageObjects/ForgotPasswordPage.cs:6` · Level 0 · sealed class
+
+- **What it is**: the Page Object for the shared `/forgot-password` screen, the entry point of the password-recovery flow. It exposes the address field, the submit button, the confirmation alert, and the return-to-login link, plus a one-call `RequestResetAsync` action.
+- **Depends on**: `Microsoft.Playwright` (`IPage`, `ILocator`, `AriaRole`) and the [PageExtensions](#pageextensions) helpers `GotoAndWaitForBlazorAsync` and `FillAndVerifyAsync` (`MMCA.Common.Testing.E2E/PageObjects/ForgotPasswordPage.cs:1-2`).
+- **Concept**: the Page Object Model taught in [LoginPage](#loginpage). One locator carries a design decision rather than a selector detail: `ConfirmationAlert` targets the success alert unconditionally, and the inline comment states why, the page lands on the same success alert whether or not the address has an account (`ForgotPasswordPage.cs:15-16`). That is the anti-enumeration contract of [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) expressed as a test affordance: there is deliberately no "unknown address" locator to assert on, because the UI must not render one. `[Rubric §11, Security]` assesses whether account enumeration is closed off; a Page Object that cannot express the enumerating assertion is a small structural guard on that. `[Rubric §28, Front-End Testing]` applies as with every Page Object here.
+- **Walkthrough**: a private `IPage` field set in the constructor (`ForgotPasswordPage.cs:8-10`); `EmailField` located by label and `SubmitButton` by its accessible name "Send a password reset link" (`:12-13`); `ConfirmationAlert` as MudBlazor's `.mud-alert-text-success` class (`:16`); `BackToLoginLink` located by **link** role, with the comment recording that "Back to Sign In" is a MudButton with `Href` and therefore renders as an `<a>` (`:18-19`). `GotoAsync` full-loads `/forgot-password` and waits for interactivity (`:21-22`). `RequestResetAsync` fills the address through [PageExtensions](#pageextensions)`.FillAndVerifyAsync` and clicks submit (`:24-28`).
+- **Where it's used**: driven by [PasswordResetTestsBase](#passwordresettestsbase) for the unknown-address confirmation fact and the a11y fact (`MMCA.Common.Testing.E2E/Workflows/Identity/PasswordResetTestsBase.cs:47-57`, `:82-88`), and by the framework's own gallery suite, which exercises it against the backend-less gallery host including the confirmation state's own separate scan (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/ForgotPasswordPageE2ETests.cs:19-24`, `:32-37`, `:43-46`, `:54-60`).
+
 ### LoginPage
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.PageObjects` · `MMCA.Common.Testing.E2E/PageObjects/LoginPage.cs:6` · Level 0 · sealed class
 
@@ -2417,7 +2814,8 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Depends on**: `Microsoft.Playwright` (`IPage`, `ILocator`, `AriaRole`) and the [PageExtensions](#pageextensions) helpers `GotoAndWaitForBlazorAsync` and `FillAndVerifyAsync` (`MMCA.Common.Testing.E2E/PageObjects/LoginPage.cs:1-2`).
 - **Concept introduced, the Page Object Model.** A Page Object wraps one screen behind an intention-revealing API, locating controls by their accessible name (`GetByLabel("Email")`, `GetByRole(AriaRole.Button, Name = "Sign in to your account")`) rather than by brittle CSS. That keeps tests coupled to what a user sees, not to MudBlazor's internal class names, and it centralizes each selector in one place. `[Rubric §28, Front-End Testing]` assesses whether E2E tests are maintainable; the Page Object is the canonical pattern for that. `[Rubric §21, Accessibility]` applies indirectly: locating by role and label only works if the component renders proper accessible names, so the test style pressures accessible markup.
 - **Walkthrough**: a private `IPage` field set in the constructor (`LoginPage.cs:8-10`); locator properties for `EmailField`, `PasswordField`, `LoginButton`, the `ErrorAlert` (MudBlazor's `.mud-alert-text-error` class), and the `CreateAccountLink`, which the inline comment explains is a MudButton with `Href` and therefore renders as an `<a>` located by link role (`:12-18`). `GotoAsync` navigates through `GotoAndWaitForBlazorAsync("/login")` (`:20-21`); `LoginAsync` fills both fields through the shared `FillFieldAsync` and then clicks (`:23-28`). The private `FillFieldAsync` delegates to [PageExtensions](#pageextensions)`.FillAndVerifyAsync` (`:31-32`), guarding the Blazor re-hydration race without a fixed delay.
-- **Where it's used**: instantiated by [UserLoginTestsBase](#userlogintestsbase) for the invalid-password, create-account-link, and accessibility facts.
+- **Where it's used**: instantiated by [UserLoginTestsBase](#userlogintestsbase) for the invalid-password, create-account-link, and accessibility facts, and by [PasswordResetTestsBase](#passwordresettestsbase) to reach the login screen before probing the recovery entry point (`MMCA.Common.Testing.E2E/Workflows/Identity/PasswordResetTestsBase.cs:28-29`).
+- **Caveats / not-in-source**: the Page Object exposes no locator for the "Forgot your password?" link; the one test that asserts it locates it directly off the page (`PasswordResetTestsBase.cs:31`).
 
 ### ProfilePage
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.PageObjects` · `MMCA.Common.Testing.E2E/PageObjects/ProfilePage.cs:6` · Level 0 · sealed class
@@ -2425,8 +2823,8 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **What it is**: the Page Object for the authenticated `/profile` screen, exposing the name, address, and password sections' fields and buttons as named locators.
 - **Depends on**: `Microsoft.Playwright` and [PageExtensions](#pageextensions)`.BlazorNavigateAsync` (`MMCA.Common.Testing.E2E/PageObjects/ProfilePage.cs:1-2`).
 - **Concept**: the Page Object Model taught in [LoginPage](#loginpage). One difference is load-bearing: `GotoAsync` uses `BlazorNavigateAsync("/profile")`, client-side routing (`ProfilePage.cs:34-35`), not a full page load, because `/profile` is `[Authorize]` and server-side rendering cannot read the JWT from browser storage, so a full load would bounce to `/login`. `[Rubric §28, Front-End Testing]` and `[Rubric §11, Security]` both apply: exercising the authenticated page correctly requires respecting the client-token boundary.
-- **Walkthrough**: three grouped sets of locators. Name (`FirstNameField`, `LastNameField`, `SaveNameButton`, `:13-15`), address (`AddressLine1Field` through `CountryField` plus `SaveAddressButton`, `:18-24`), and password (`CurrentPasswordField`, `NewPasswordField` with `Exact = true` so it does not also match "Confirm New Password", `ConfirmNewPasswordField`, `ChangePasswordButton`, `:27-30`), plus a generic `ErrorAlert` located by the alert role (`:32`). This Page Object has no bulk action method: each fact drives the individual locators.
-- **Where it's used**: instantiated throughout [ProfileManagementTestsBase](#profilemanagementtestsbase), and directly by ADC's own `ProfileManagementTests`, which drives the same Page Object off [E2ETestBase](#e2etestbase) instead of the shared base (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/ProfileManagementTests.cs:15`).
+- **Walkthrough**: three commented locator groups. Name (`FirstNameField`, `LastNameField`, `SaveNameButton`, `:12-15`); address (six fields plus `SaveAddressButton`, `:17-24`); password (`CurrentPasswordField`, `NewPasswordField` located with `Exact = true` so it does not also match "Confirm New Password", `ConfirmNewPasswordField`, `ChangePasswordButton`, `:26-30`). `ErrorAlert` is located by ARIA alert role rather than a MudBlazor class (`:32`). `GotoAsync` is the client-side navigation described above (`:34-35`).
+- **Where it's used**: by [ProfileManagementTestsBase](#profilemanagementtestsbase) for all six of its facts, and by ADC's own `ProfileManagementTests`, which drives the same Page Object without deriving from the shared base (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/ProfileManagementTests.cs:30-40`).
 
 ### RegisterPage
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.PageObjects` · `MMCA.Common.Testing.E2E/PageObjects/RegisterPage.cs:6` · Level 0 · sealed class
@@ -2436,6 +2834,16 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Concept**: the Page Object Model taught in [LoginPage](#loginpage), applied to a longer form. `PasswordField` uses `GetByLabel("Password", Exact = true)` so it does not also match "Confirm Password" (`RegisterPage.cs:15`), and the optional address fields sit inside an expansion panel located by its text (`:24-29`). `[Rubric §28, Front-End Testing]` applies.
 - **Walkthrough**: locator properties for the five required fields plus `RegisterButton` and `ErrorAlert` (`:12-18`), the `AlreadyHaveAccountLink` sign-in link (`:21`), and the optional address panel and fields (`:24-29`). `GotoAsync` full-loads `/register` (`:31-32`); `RegisterAsync` fills the five required fields through the shared helper, reusing the same password for the confirm field, then clicks (`:34-42`); the private `FillFieldAsync` delegates to [PageExtensions](#pageextensions)`.FillAndVerifyAsync` (`:48-49`).
 - **Where it's used**: instantiated by [UserRegistrationTestsBase](#userregistrationtestsbase) for all four of its facts.
+
+### ResetPasswordPage
+> MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.PageObjects` · `MMCA.Common.Testing.E2E/PageObjects/ResetPasswordPage.cs:6` · Level 0 · sealed class
+
+- **What it is**: the Page Object for the shared `/reset-password` screen, the redemption half of the recovery flow. It exposes the address, token, and new-password fields, both outcome alerts, the return-to-login link, and two navigation entry points: the bare page and the prefilled emailed-link form.
+- **Depends on**: `Microsoft.Playwright` and the [PageExtensions](#pageextensions) helpers `GotoAndWaitForBlazorAsync` and `FillAndVerifyAsync` (`MMCA.Common.Testing.E2E/PageObjects/ResetPasswordPage.cs:1-2`).
+- **Concept**: the Page Object Model taught in [LoginPage](#loginpage). What is worth teaching here is `GotoWithLinkAsync`, which reproduces the way a real user arrives: the emailed link carries the address and the token as query parameters, so both fields land prefilled and the test exercises the same route the mail does (`ResetPasswordPage.cs:30-36`). The fields stay editable, which the doc comment records is deliberate, so the raw token from the same email can also be typed by hand. `[Rubric §24, Forms/Validation/UX Safety]` assesses whether the recovery form's real arrival paths are covered; modelling both the bare and the linked entry is how this Page Object does it.
+- **Walkthrough**: a private `IPage` field set in the constructor (`:8-10`); `EmailField` and `TokenField` located by label (`:12-13`); `NewPasswordField` located with `Exact = true`, with the comment spelling out that "New Password" is a substring of "Confirm New Password" so the default substring match would resolve to both fields (`:15-17`), and `ConfirmPasswordField` beside it (`:18`). `SubmitButton` is located by the accessible name "Reset your password" (`:20`); `ErrorAlert` and `SuccessAlert` are the two MudBlazor alert classes (`:21-22`); `GoToLoginLink` is again a link-role locator over a MudButton with `Href` (`:24-25`). `GotoAsync` loads the bare page (`:27-28`); `GotoWithLinkAsync` builds `/reset-password?email=...&token=...` with `Uri.EscapeDataString` on both values (`:34-36`); `ResetAsync` fills all four fields through `FillAndVerifyAsync` and clicks submit (`:38-45`).
+- **Where it's used**: by [PasswordResetTestsBase](#passwordresettestsbase) for the empty-form validation fact and the a11y fact (`MMCA.Common.Testing.E2E/Workflows/Identity/PasswordResetTestsBase.cs:64-68`, `:95-99`), and by the framework's gallery suite, which additionally asserts the query-string prefill round-trip (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/ResetPasswordPageE2ETests.cs:19-27`, `:35-39`, `:45-48`).
+- **Caveats / not-in-source**: no test in this package submits a genuine token. [PasswordResetTestsBase](#passwordresettestsbase)'s doc states why (the token only reaches the user by email, so consuming one is an app-side integration-test concern, `PasswordResetTestsBase.cs:10-15`), so `ResetAsync` and `SuccessAlert` are shipped affordances that the framework's own suites do not currently drive end to end.
 
 ### UserCredentials
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Infrastructure` · `MMCA.Common.Testing.E2E/Infrastructure/E2ETestConfiguration.cs:78` · Level 0 · nested static class
@@ -2466,7 +2874,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   - `extension(ILocator locator)` (`:185`). `FillAndVerifyAsync` fills, then auto-waits `ToHaveValueAsync`, and if the value was wiped by re-hydration it clears the field, re-types character by character with a 20 ms delay, and re-asserts (`:197-216`). This is the single shared fill helper the base and the Page Objects all call. `ClickAndVerifyAsync` waits for interactivity, then clicks and waits a third of the timeout for the expected effect, up to three clicks in total, so a genuinely applied click is never re-issued and only a no-op click is retried (`:230-261`). `ClickAndWaitForUrlAsync` clicks a navigating link and re-clicks until the URL matches the supplied regular expression, for grid rows whose cells wrap content in `MudLink` so a row-center click lands on padding (`:273-296`).
   - The private `CompactHtml` collapses a violating node's markup to one trimmed line, truncated at 220 characters, so the failure message points at the exact offending element (`:305-314`).
 - **Why it's built this way**: the fill and click helpers exist because InteractiveAuto's prerender-then-hydrate model makes a bare fill or click a race on a fast host; auto-waiting assertions with a bounded re-type or re-click are strictly safer than fixed delays, since they succeed as soon as the value or effect appears. Two `[SuppressMessage]` attributes document analyzer false positives across the `extension(T)` boundary: CA1708 on the class, where the compiler-generated grouping members read as case-colliding (`:15-18`), and IDE0051 on `CompactHtml`, which the SDK 10.0.201+ analyzer cannot see being called from inside the extension block (`:301-304`).
-- **Where it's used**: throughout the Page Objects ([LoginPage](#loginpage), [ProfilePage](#profilepage), [RegisterPage](#registerpage)), inside [E2ETestBase](#e2etestbase) (`FillFieldAsync`, `ScanAsync`, `ScanGridAsync`, the navigation helpers), and directly by every workflow base in this group.
+- **Where it's used**: throughout the Page Objects ([ForgotPasswordPage](#forgotpasswordpage), [LoginPage](#loginpage), [ProfilePage](#profilepage), [RegisterPage](#registerpage), [ResetPasswordPage](#resetpasswordpage)), inside [E2ETestBase](#e2etestbase) (`FillFieldAsync`, `ScanAsync`, `ScanGridAsync`, the navigation helpers), and directly by every workflow base in this group.
 
 ### PlaywrightFixture
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Infrastructure` · `MMCA.Common.Testing.E2E/Infrastructure/PlaywrightFixture.cs:6` · Level 1 · sealed class
@@ -2495,8 +2903,8 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Walkthrough**: a positional record with five defaulted parameters, `Lcp = 2500`, `Fcp = 1800`, `Ttfb = 800`, `Cls = 0.1`, `Inp = 500` (`WebVitalsCollector.cs:103-108`), all milliseconds except the unitless CLS. Two members.
   - The static `Describe(label, path, sample)` (`:118`) renders one invariant-culture line, `[web-vitals:{label}] path=... LCP=...ms FCP=...ms CLS=... TTFB=...ms INP-sample=...ms`, with CLS at three decimals and the rest at zero (`:122-124`), which is the record a reviewer greps for next to the uploaded JSON artifact.
   - `AssertWithinBudget(sample, label, path, writeLine = null)` (`:137`) invokes the optional sink with that line (normally `ITestOutputHelper.WriteLine`, `:141`), then asserts LCP, FCP, TTFB, and CLS against their ceilings (`:143-146`). INP is asserted **only when `sample.Inp > 0`** (`:148-151`), because no interaction clearing the collector's 16 ms event threshold leaves the sample at 0, and 0 must read as neither a pass-by-absence nor a failure. Failure text comes from the private `Message` helper, which names the metric, the measured value, the ceiling, and the page path (`:154-157`).
-- **Why it's built this way**: keeping the numbers consumer-side while shipping the assert body is what lets ADC and Store hold different calibrated budgets without either repo re-deriving the INP-zero rule or the message format. The 0-INP carve-out is the subtle one, and it is pinned by its own unit test rather than left to a comment (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitalsBudgetTests.cs:58-64`).
-- **Where it's used**: ADC holds one static default instance and takes the framework numbers as-is (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:27`, asserted at `:79`); Store constructs one per measurement (`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs:68`, `:94`). The framework's own gallery suite instead asserts against local constants tuned for the backend-less host (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitalsE2ETests.cs:18-20,43-45`), and `WebVitalsBudgetTests` covers the record's mechanics without starting a browser (`WebVitalsBudgetTests.cs:12`).
+- **Why it's built this way**: keeping the numbers consumer-side while shipping the assert body is what lets ADC and Store hold different calibrated budgets without either repo re-deriving the INP-zero rule or the message format. The 0-INP carve-out is the subtle one, and it is pinned by its own unit test rather than left to a comment (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitalsBudgetTests.cs:59-64`).
+- **Where it's used**: ADC holds one static default instance and takes the framework numbers as-is (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:27`, asserted at `:86`); Store constructs one per measurement (`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs:68`, `:94`). The framework's own gallery suite instead asserts against local constants tuned for the backend-less host (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitalsE2ETests.cs:18-20,43-45`), and `WebVitalsBudgetTests` covers the record's mechanics without starting a browser (`WebVitalsBudgetTests.cs:12`).
 
 ### E2ETestCollection
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Infrastructure` · `MMCA.Common.Testing.E2E/Infrastructure/PlaywrightFixture.cs:48` · Level 2 · sealed class
@@ -2506,7 +2914,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Concept introduced, the xUnit collection fixture binding.** A collection fixture is instantiated once and shared by every test class that opts into the collection by name. This class carries a `public const string Name = "E2E"` (`:50`) used both in its own `[CollectionDefinition(Name)]` and in each test's `[Collection(E2ETestCollection.Name)]`, so the string is declared once and cannot drift. `[Rubric §14, Testability]` assesses fixture design; a single named constant binding is the robust way to share a fixture.
 - **Walkthrough**: an otherwise empty class body carrying the collection definition and the `Name` constant (`:47-51`). It exists purely as an xUnit marker, and it lives in the same file as the fixture it binds.
 - **Where it's used**: referenced by [E2ETestBase](#e2etestbase)'s `[Collection(E2ETestCollection.Name)]` attribute (`MMCA.Common.Testing.E2E/Infrastructure/E2ETestBase.cs:7`), so every workflow base and every consumer subclass inherits collection membership.
-- **Caveats / not-in-source**: xUnit collection definitions do not cross assembly boundaries, so each consumer E2E assembly re-declares its own identically named definition over the same fixture type (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Infrastructure/E2ETestCollection.cs:7-11`).
+- **Caveats / not-in-source**: xUnit collection definitions do not cross assembly boundaries, so each consumer E2E assembly re-declares its own identically named definition over the same fixture type, and says so in its doc comment (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Infrastructure/E2ETestCollection.cs:3-11`).
 
 ### WebVitalsCollector
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Infrastructure` · `MMCA.Common.Testing.E2E/Infrastructure/WebVitalsCollector.cs:20` · Level 2 · static class
@@ -2516,7 +2924,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Concept introduced, in-browser performance measurement with no third-party JS.** Rather than shipping an analytics SDK, it injects a small init script that installs `PerformanceObserver`s for LCP, CLS, FCP, and INP, each wrapped in try/catch so an engine lacking an entry type leaves that metric at 0 instead of throwing, and accumulates into `window.__vitals` (`:26-35`). The type doc is explicit that this is the client-side analogue of a backend load test, not a cross-engine field measurement: LCP and CLS are Chromium-only, so on Firefox and WebKit those fields stay 0 and budget assertions pass (`:9-18`). `[Rubric §23, Front-End Performance]` and `[Rubric §12, Performance & Scalability]` assess whether user-centric performance is measured; observing the vitals APIs directly, with no network egress, is a self-contained way to do it. The same doc states the class is only the measurement infrastructure, that [WebVitalsBudget](#webvitalsbudget) is the shared assert mechanics, and that consumers own which pages carry a budget and what the numbers are (`:16-18`).
 - **Walkthrough**: `InstallAsync` registers the observers through `AddInitScriptAsync` so they are active on the next navigation (`:40-44`). `CollectAsync` evaluates a script that stamps TTFB from Navigation Timing and returns `window.__vitals` as JSON, deserialized into a [WebVitalsSample](#webvitalssample) (`:47-57`). `WriteArtifactAsync` resolves the output directory from `WEB_VITALS_OUTPUT_DIR` or falls back to `artifacts/` under the current directory, creates it, wraps the sample in a [WebVitalsArtifact](#webvitalsartifact), and writes `web-vitals-{label}.json` indented (`:63-72`).
 - **Why it's built this way**: the observers install before the document's own scripts (through `AddInitScript`) so early metrics such as FCP are not missed, and the per-observer try/catch is what makes the same code run green on all three engines despite the Chromium-only metrics. The init script is kept as one concatenated string rather than a raw literal to stay clear of the MA0136 analyzer (`:22-25`).
-- **Where it's used**: by the budget-asserting tests each repo owns, which install, navigate, collect, assert, and write the artifact for CI upload: the framework's own gallery suite (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitalsE2ETests.cs:37-41`), ADC (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:58`, `:76-77`), and Store (`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs:73`, `:91-92`).
+- **Where it's used**: by the budget-asserting tests each repo owns, which install, navigate, collect, assert, and write the artifact for CI upload: the framework's own gallery suite (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitalsE2ETests.cs:37-41`), ADC (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:65`, `:83-84`), and Store (`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs:73`, `:91-92`).
 
 ### E2ETestBase
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Infrastructure` · `MMCA.Common.Testing.E2E/Infrastructure/E2ETestBase.cs:8` · Level 3 · abstract class
@@ -2530,17 +2938,17 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   - Post-auth robustness. `WaitForInteractiveOrReloadAsync` (`:192-203`) waits for interactivity and, on either a `PlaywrightException` or a `TimeoutException`, reloads once and re-waits rather than watching the same stuck boot; the comment records why both exception types are caught (Playwright's `TimeoutException` derives from `System.TimeoutException`, not `PlaywrightException`, so an earlier single catch skipped the retry entirely) and why a reload beats a re-wait (the framework assets are now HTTP-cached, `:181-191`). `WaitForAuthResultAsync` (`:213-236`) races three signals through `Task.WhenAny`, leaving the auth page, the logout button appearing, or an error alert appearing, so success detection does not depend on the interactive button having hydrated; only an error alert still visible on the auth page after the grace window is a real failure, raised as an `InvalidOperationException` carrying the alert text. `AuthSucceededWithinGraceAsync` (`:241-259`) implements that grace window, falling back to the logout-button signal when no navigation occurs.
   - Helpers. `NavigateAndWaitAsync` (`:261-262`), the shared static `FillFieldAsync` delegating to [PageExtensions](#pageextensions)`.FillAndVerifyAsync` (`:269-270`), `UniqueId` (`:272`), and the two scan helpers. `ScanGridAsync` (`:283-289`) waits for a visible data row and for zero `[role='progressbar']` elements, then scans with [AxeOptions](#axeoptions)`.Wcag21AaExceptMudPagerCombobox`; `ScanAsync` (`:293-297`) applies the progressbar guard only and scans strictly with `Wcag21Aa`.
 - **Why it's built this way**: the auth helpers encode hard-won timing knowledge once (the `forceLoad` reload, the Server-versus-WASM hydration lag, the cookie-and-localStorage dual session store), so every consumer workflow inherits a deterministic sign-in instead of re-deriving the races. Clearing both token stores is essential: the Blazor Server host is cookie-only, so a localStorage clear alone would leave the next login authenticated as the wrong user (`:99-104`). The scan split lets grid pages accept the documented pager-combobox exception while every other page stays strict, and the grid wait keys off a data row rather than the loading bar hiding, which would resolve instantly before the transient unnamed progressbar even appears (`:274-282`).
-- **Where it's used**: the base class of all six workflow bases in this unit ([AuthorizationTestsBase](#authorizationtestsbase), [LogoutTestsBase](#logouttestsbase), [ProfileManagementTestsBase](#profilemanagementtestsbase), [UserLoginTestsBase](#userlogintestsbase), [UserPreferencesTestsBase](#userpreferencestestsbase), [UserRegistrationTestsBase](#userregistrationtestsbase)) and, through them and directly, every E2E test class in the ADC and Store suites (for example ADC's own `ProfileManagementTests`, which derives from this base rather than the shared profile workflow, `MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/ProfileManagementTests.cs:8`).
+- **Where it's used**: the base class of all seven workflow bases in this unit ([AuthorizationTestsBase](#authorizationtestsbase), [LogoutTestsBase](#logouttestsbase), [PasswordResetTestsBase](#passwordresettestsbase), [ProfileManagementTestsBase](#profilemanagementtestsbase), [UserLoginTestsBase](#userlogintestsbase), [UserPreferencesTestsBase](#userpreferencestestsbase), [UserRegistrationTestsBase](#userregistrationtestsbase)) and, through them and directly, every E2E test class in the ADC and Store suites (for example ADC's own `ProfileManagementTests`, which derives from this base rather than the shared profile workflow, `MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/ProfileManagementTests.cs:8`).
 
 ### AuthorizationTestsBase
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Workflows.Identity` · `MMCA.Common.Testing.E2E/Workflows/Identity/AuthorizationTestsBase.cs:18` · Level 4 · abstract class
 
 - **What it is**: the reusable authorization workflow fitness base, authored once and re-run as a thin subclass per repo. It asserts that anonymous users are redirected off protected paths, that public paths stay reachable, that a registered non-admin can reach an authenticated page, and that a non-admin probing admin routes gets the Forbidden page.
 - **Depends on**: [E2ETestBase](#e2etestbase), [PageExtensions](#pageextensions) (`GotoAndWaitForBlazorAsync`, `GotoProtectedAsync`), AwesomeAssertions, and `Microsoft.Playwright` (`MMCA.Common.Testing.E2E/Workflows/Identity/AuthorizationTestsBase.cs:1-6`).
-- **Concept introduced, the authored-once workflow fitness base.** This is the pattern shared by all six bases in this unit: the framework owns the assertions and the SSR-versus-client-navigation mechanics, and each consumer supplies only its own route lists through abstract or virtual members, so identical security behavior is verified across repos without copying test bodies (`:10-17`). `[Rubric §11, Security]` assesses whether authorization is actually exercised; this base machine-checks both the anonymous-redirect and the authenticated-non-admin-escalation directions. `[Rubric §25, Navigation & IA]` applies because it pins which routes are public and which are gated.
+- **Concept introduced, the authored-once workflow fitness base.** This is the pattern shared by all seven bases in this unit: the framework owns the assertions and the SSR-versus-client-navigation mechanics, and each consumer supplies only its own route lists through abstract or virtual members, so identical security behavior is verified across repos without copying test bodies (`:10-17`). `[Rubric §11, Security]` assesses whether authorization is actually exercised; this base machine-checks both the anonymous-redirect and the authenticated-non-admin-escalation directions. `[Rubric §25, Navigation & IA]` applies because it pins which routes are public and which are gated.
 - **Walkthrough**: the subclass supplies `ProtectedPaths` and `PublicPaths` (abstract, `:26`, `:29`) and optionally `AuthenticatedUserPath` and `AdminPaths` (virtual, defaulting to null and an empty list, `:35`, `:44`). Four facts follow. `AnonymousUser_ProtectedPages_ShouldRedirectToLogin` asserts each protected path bounces to `/login` (`:46-58`). `AnonymousUser_PublicPages_ShouldBeAccessible` asserts each public path stays put (`:60-72`). `RegisteredUser_AuthenticatedPage_ShouldBeAccessible` registers a non-admin, then client-navigates through `GotoProtectedAsync` because SSR cannot read the JWT, passing vacuously when no path is declared (`:74-93`). `RegisteredUser_AdminPages_ShouldBeForbidden` registers a non-admin, then asserts each admin path renders the shared Forbidden page, matching `h1[role='alert']` containing "Access Denied", with the comment noting that role denial is not a redirect so the page content is the only reliable signal (`:95-120`).
 - **Why it's built this way**: the two optional members use a no-dynamic-skip convention (an app with no such page simply passes) because the shipped library deliberately does not reference `xunit.v3.assert` for a declared skip (`:77-78`, `:98-99`). The non-empty assertions on `ProtectedPaths` and `PublicPaths` (`:49-50`, `:63-64`) are non-vacuity guards: a repo that declares no paths fails rather than passing silently.
-- **Where it's used**: subclassed in both consumer E2E suites with that app's route lists (`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/AuthorizationTests.cs:11-21`, `MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/AuthorizationTests.cs:11-22`); Store's subclass also adds one app-specific fact of its own, an anonymous order-detail deep link that must leak no order content (`AuthorizationTests.cs:23-37`).
+- **Where it's used**: subclassed in both consumer E2E suites with that app's route lists (`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/AuthorizationTests.cs:11-21`, `MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/AuthorizationTests.cs:11-39`, whose twelve-entry `AdminPaths` carries a comment explaining which authenticated-but-not-Organizer routes are deliberately excluded, `:21-24`); Store's subclass also adds one app-specific fact of its own, an anonymous order-detail deep link that must leak no order content (`AuthorizationTests.cs:23-37`).
 
 ### LogoutTestsBase
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Workflows.Identity` · `MMCA.Common.Testing.E2E/Workflows/Identity/LogoutTestsBase.cs:9` · Level 4 · abstract class
@@ -2552,6 +2960,20 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Why it's built this way**: waiting for the cookie-clear response is the fix for a real full-speed race. At speed the test otherwise reaches `/profile` before the DELETE finishes, so the HttpOnly cookie is still present and SSR re-authenticates. The bounded re-request loop converges deterministically where any slowdown (slow-mo, or even trace capture) would have hidden the race entirely (`:42-46`, `:57-63`).
 - **Where it's used**: subclassed in both consumer E2E suites (`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/LogoutTests.cs:5`, `MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/LogoutTests.cs:5`).
 
+### PasswordResetTestsBase
+> MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Workflows.Identity` · `MMCA.Common.Testing.E2E/Workflows/Identity/PasswordResetTestsBase.cs:17` · Level 4 · abstract class
+
+- **What it is**: the reusable password-recovery workflow base covering the shared `/forgot-password` and `/reset-password` pages: the entry point is reachable from the login screen, an unknown address gets the same confirmation as a known one, the reset form's client-side validation blocks an empty submit, and both pages are accessibility-clean.
+- **Depends on**: [E2ETestBase](#e2etestbase), [LoginPage](#loginpage), [ForgotPasswordPage](#forgotpasswordpage), [ResetPasswordPage](#resetpasswordpage), [PageExtensions](#pageextensions), [AxeOptions](#axeoptions), and `Microsoft.Playwright` (`MMCA.Common.Testing.E2E/Workflows/Identity/PasswordResetTestsBase.cs:1-6`).
+- **Concept introduced, drawing the E2E boundary around what a browser can honestly observe.** The type doc states outright that the real token round-trip is deliberately not exercised here: the token only reaches the user by email, so redeeming one is an app-side integration-test concern, and what E2E owns is the reachability of the flow, the anti-enumeration confirmation, client-side validation, and WCAG 2.1 AA conformance of both pages (`:10-16`). That is a scope decision worth internalizing, a browser test that cannot reach the mailbox should assert the contract it *can* see rather than fake the one it cannot. `[Rubric §11, Security]` assesses whether the recovery flow leaks account existence; the unknown-address fact is the machine check on [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html)'s anti-enumeration rule. `[Rubric §24, Forms/Validation/UX Safety]` covers the empty-submit validation, `[Rubric §21, Accessibility]` the two scans, and `[Rubric §25, Navigation & IA]` the entry-point fact, since a locked-out user has no other way in.
+- **Walkthrough**: five facts, no abstract members, so a consumer subclass is a single line.
+  - `LoginPage_ForgotPasswordLink_NavigatesToForgotPasswordPage` (`:25-41`) opens the [LoginPage](#loginpage), asserts the "Forgot your password?" link is visible at all (the comment notes a user locked out of their account has no other entry point, `:33-34`), clicks it, and asserts the URL ends at `/forgot-password` (`:40`).
+  - `ForgotPassword_WithUnknownEmail_ShowsTheSameConfirmation` (`:44-58`) submits a `unknown-{UniqueId()}@test.com` address that certainly has no account, then asserts the positive path exactly: the success confirmation appears (`:55`), the URL stays on `/forgot-password` (`:56`), and the back-to-login link is visible (`:57`). There is no error alert and no navigation to distinguish it from a real address, which is the whole point.
+  - `ResetPassword_WithEmptyForm_ShowsClientValidationErrors` (`:61-76`) clicks submit on an untouched form; DataAnnotations block `OnValidSubmit` so nothing is sent, and the fact asserts the field-level texts "Email is required" and "Reset token is required" plus staying on `/reset-password` (`:73-75`).
+  - `ForgotPasswordPage_ShouldHaveNoAccessibilityViolations` (`:79-89`) and `ResetPasswordPage_ShouldHaveNoAccessibilityViolations` (`:92-100`) each load their page and scan with [AxeOptions](#axeoptions)`.Wcag21Aa`.
+- **Why it's built this way**: the validation fact asserts the field-level **text** rather than a page-level alert, and the source gives the reason, those messages are present in both render modes (Server prerender and WebAssembly) while a page-level alert is not, the same reasoning as the mismatched-password registration test (`:70-72`, and [UserRegistrationTestsBase](#userregistrationtestsbase)`.Register_WithMismatchedPasswords_ShouldShowError`). The a11y scans use the strict `Wcag21Aa` preset explicitly rather than an unscoped `RunAxe`, keeping this workflow on the same documented target as the rest of Identity (`:85-88`).
+- **Where it's used**: subclassed with no additions in both consumer E2E suites (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/PasswordResetTests.cs:5`, `MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/PasswordResetTests.cs:5`). The two Page Objects it drives are additionally exercised against the framework's own backend-less gallery host by `ForgotPasswordPageE2ETests` and `ResetPasswordPageE2ETests` (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/ForgotPasswordPageE2ETests.cs:9`, `MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/ResetPasswordPageE2ETests.cs:9`).
+
 ### ProfileManagementTestsBase
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Workflows.Identity` · `MMCA.Common.Testing.E2E/Workflows/Identity/ProfileManagementTestsBase.cs:11` · Level 4 · abstract class
 
@@ -2560,7 +2982,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **Concept**: the authored-once workflow base taught in [AuthorizationTestsBase](#authorizationtestsbase), here driving a [ProfilePage](#profilepage). `[Rubric §24, Forms/Validation/UX Safety]` assesses whether edit-and-persist journeys work end to end; `[Rubric §21, Accessibility]` applies through the a11y fact.
 - **Walkthrough**: one virtual switch, `ProfileSupportsEmailChange`, off by default (`:24`). Six facts follow. `ChangeName_ShouldUpdateProfileName` clears and fills both name fields, saves, re-navigates, and asserts the values persisted (`:26-53`); `ChangeAddress_ShouldUpdateProfileAddress` does the same for the five address fields and asserts on line 1 (`:55-78`). Both use Playwright's plain `FillAsync` rather than the re-hydration-safe helper, since the profile page is reached by client-side navigation on an already interactive runtime. `ChangePassword_WithValidCurrentPassword_ShouldSucceed` fills the three password fields through the shared `FillFieldAsync`, waits for the "Password changed successfully." snackbar, then signs out and logs back in with the new password, waiting for the logout `forceLoad`'s `/login` URL rather than `LoadState.Load` so it does not race the in-flight navigation (`:80-110`). `ChangeEmail_ShouldUpdateEmail` is opt-in and returns immediately unless `ProfileSupportsEmailChange` is overridden true (`:112-146`). `ProfilePage_ShouldLoadWithUserData` asserts the form is pre-filled from registration (`:148-166`). `ProfilePage_ShouldHaveNoAccessibilityViolations` scans with [AxeOptions](#axeoptions)`.Wcag21Aa` (`:168-181`).
 - **Why it's built this way**: the email-change fact is a declared opt-in rather than a DOM probe because the previous probing version passed vacuously when the field was absent, reporting coverage for a journey the app does not offer; overriding the flag makes a missing field fail loud (`:18-23`, `:129-131`). The logout-then-login URL wait is called out in the source as the one remaining sign-out-then-login site still on the racy pattern, fixed to match [UserLoginTestsBase](#userlogintestsbase) (`:100-105`).
-- **Where it's used**: subclassed only by Store, with no additions and no override of `ProfileSupportsEmailChange` (`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/ProfileManagementTests.cs:5`), so the email-change fact passes without exercising a journey Store offers. ADC does **not** subclass this base: its profile page supports only password change and account deletion, so `MMCA.ADC.E2E.Tests` writes its own `ProfileManagementTests` directly on [E2ETestBase](#e2etestbase) with a password-change fact and a `/profile/claims` fact (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/ProfileManagementTests.cs:8`, `:10-38`, `:40-52`).
+- **Where it's used**: subclassed only by Store, with no additions and no override of `ProfileSupportsEmailChange` (`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/ProfileManagementTests.cs:5`), so the email-change fact passes without exercising a journey Store offers. ADC does **not** subclass this base: its profile page supports the avatar photo, password change, and account deletion but no name or address editing, so `MMCA.ADC.E2E.Tests` writes its own `ProfileManagementTests` directly on [E2ETestBase](#e2etestbase) with a password-change fact mirroring this one, a `/profile/claims` fact, and an avatar upload-replace-remove round trip that builds its two PNGs from base64 constants so the test needs no fixture file on disk (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Identity/ProfileManagementTests.cs:8`, `:26`, `:56`, `:70`, `:13-17`).
 
 ### UserLoginTestsBase
 > MMCA.Common.Testing.E2E · `MMCA.Common.Testing.E2E.Workflows.Identity` · `MMCA.Common.Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:10` · Level 4 · abstract class
@@ -2906,7 +3328,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **What it is** - the ADC end of the brand-token drift guard. It is a five-line subclass of the shared [BrandColorTokenTestsBase](#brandcolortokentestsbase) that names one embedded stylesheet, `ADCHome.Shared.razor.css` (`MMCA.ADC.Architecture.Tests/BrandColorTokenTests.cs:14`-`:17`); the rule body itself lives in MMCA.Common.
 - **Depends on** - [BrandColorTokenTestsBase](#brandcolortokentestsbase) from the `MMCA.Common.Testing.Architecture` package (referenced at `MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:41`), plus the `EmbeddedResource` item that maps the conference landing page's scoped stylesheet into this assembly under that logical name (`MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:11`-`:13`). Externals: xUnit v3, AwesomeAssertions, and NetArchTest (`MMCA.ADC.Architecture.Tests.csproj:25`-`:27`), the last two reachable everywhere in the assembly through the global usings (`MMCA.ADC.Architecture.Tests/GlobalUsings.cs:1`-`:5`).
 - **Concept introduced, the thin-subclass fitness function.** Every type in this unit follows one shape, so learn it once here. A *fitness function* is an executable test that asserts an architectural property instead of a behavior. MMCA keeps the property's logic in exactly one place, an abstract `*TestsBase` in the shared `MMCA.Common.Testing.Architecture` package, and each repo derives a sealed subclass that supplies only its own identity: which assemblies to scan, which floors and allowlists apply, which files to read. xUnit discovers `[Fact]`s on inherited members, so the subclass needs no test method of its own; deriving the class is what makes the rule run in this repo ([ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html)). `[Rubric §34 - Architecture Governance & Documentation]` assesses whether architectural decisions are recorded and enforced rather than trusted to reviewers; here the decision is enforced by a build that goes red. `[Rubric §20 - Design System & Theming]` assesses whether a design system has one source of truth for its tokens; this rule is what stops a host copy of the landing page from re-hardcoding the brand hex.
-- **Walkthrough** - one member. `EmbeddedCssLogicalNames` (`BrandColorTokenTests.cs:14`-`:17`) is a collection expression with a single entry, `"ADCHome.Shared.razor.css"`. That string is not a file path: it is the `LogicalName` the csproj assigns when it embeds `Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Home/ADCHome.razor.css` as a manifest resource (`MMCA.ADC.Architecture.Tests.csproj:11`-`:13`), which is how a test assembly reads a file from a project it does not reference. The inherited fact `LandingPageCss_SourcesBrandColorFromToken_NotHardcodedHex` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/BrandColorTokenTestsBase.cs:25`) then loads each named resource (`:56`-`:63`, throwing a clear error if the embed is missing), requires the text to contain `var(--mmca-primary)` (`:41`-`:44`), and requires it not to contain the literal `#1565C0` in any casing (`:46`-`:49`). Both constants are declared once in the base (`:15`-`:16`).
+- **Walkthrough** - one member. `EmbeddedCssLogicalNames` (`BrandColorTokenTests.cs:14`-`:17`) is a collection expression with a single entry, `"ADCHome.Shared.razor.css"`. That string is not a file path: it is the `LogicalName` the csproj assigns when it embeds `Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Home/ADCHome.razor.css` as a manifest resource (`MMCA.ADC.Architecture.Tests.csproj:11`-`:13`), which is how a test assembly reads a file from a project it does not reference. The inherited fact `LandingPageCss_SourcesBrandColorFromToken_NotHardcodedHex` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/BrandColorTokenTestsBase.cs:25`) then loads each named resource, requires the text to contain `var(--mmca-primary)`, and requires it not to contain the literal `#1565C0` in any casing. Both constants are declared once in the base (`:15`-`:16`), and the abstract hook this class implements is declared at `:22`.
 - **Why it's built this way** - the class comment records the split (`BrandColorTokenTests.cs:3`-`:11`): MMCA.Common's own `BrandColorTokenTests` guards the C#-to-CSS token *definition*, and this one guards the ADC *consumer* of it. Embedding the stylesheet rather than reading it off disk means the guard travels with the compiled test assembly and cannot be defeated by a runner whose working directory differs.
 - **Where it's used** - the whole project is inside ADC's CI solution filter (`MMCA.ADC/MMCA.ADC.CI.slnf:58`), which the `build-and-test` job restores, builds, and tests on every PR and every push to `main` (`MMCA.ADC/.github/workflows/deploy.yml:124`, `:199`, `:205`, `:219`).
 - **Caveats / not-in-source** - the guard only covers stylesheets that are both embedded and listed. ADC lists exactly one, so a second landing-page stylesheet added later is invisible to the rule until someone adds it to both places.
@@ -2918,24 +3340,68 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 - **What it is** - the SLO alert-to-runbook pairing gate for ADC, and the shortest type in this unit: a bodyless class declaration, `public sealed class ObservabilityConventionTests : ObservabilityConventionTestsBase;` (`MMCA.ADC.Architecture.Tests/ObservabilityConventionTests.cs:7`). It overrides nothing at all.
 - **Depends on** - [ObservabilityConventionTestsBase](#observabilityconventiontestsbase), plus two `EmbeddedResource` entries in the csproj that supply the files the base reads: `infra/main.bicep` under the logical name `infra.main.bicep` and `infra/OPERATIONS.md` under `infra.OPERATIONS.md` (`MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:17`-`:22`).
 - **Concept introduced, identity by inheritance alone.** This is the thin-subclass pattern from [BrandColorTokenTests](#brandcolortokentests) reduced to its limit. The base defaults `ResourceAssembly` to `GetType().Assembly` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ObservabilityConventionTestsBase.cs:51`), so the derived type *is* the configuration: deriving in this assembly is what points the rule at ADC's embedded bicep and runbook. The file comment states exactly that ("this repo supplies only its identity", `ObservabilityConventionTests.cs:3`-`:6`). `[Rubric §13 - Observability & Operability]` assesses whether the system can be operated under failure, which means alerts that lead somewhere; this pairs each provisioned alert with a runbook section at build time instead of at 3am.
-- **Walkthrough** - no members. Everything runs from the base's three inherited facts: `SloAlertSpecs_AreDiscovered_GateIsNotVacuous` (`ObservabilityConventionTestsBase.cs:54`) enforces the non-vacuity floor of `MinimumAlertSpecs`, defaulted to 3 and not overridden here (`:39`); `EveryProvisionedSloAlert_HasASeverityCorrectRunbookSection` (`:64`) walks the alerts declared in the embedded bicep and requires a matching, severity-correct section in the embedded runbook; and `EveryRunbookAlertSection_MapsToAProvisionedAlert` (`:92`) closes the other direction, failing on an orphan runbook section for an alert that no longer exists. The resource names the base reads default to `infra.main.bicep` and `infra.OPERATIONS.md` (`:42`, `:45`), which is why the csproj logical names must match exactly.
+- **Walkthrough** - no members. Everything runs from the base's three inherited facts: `SloAlertSpecs_AreDiscovered_GateIsNotVacuous` (`ObservabilityConventionTestsBase.cs:54`) enforces the non-vacuity floor of `MinimumAlertSpecs`, defaulted to 3 and not overridden here (`:39`); `EveryProvisionedSloAlert_HasASeverityCorrectRunbookSection` (`:64`) walks the alerts declared in the embedded bicep and requires a matching, severity-correct section in the embedded runbook; and `EveryRunbookAlertSection_MapsToAProvisionedAlert` (`:92`) closes the other direction, failing on an orphan runbook section for an alert that no longer exists. Alerts are recognised by the `-alert-` infix in their resource name (`:32`). The resource names the base reads default to `infra.main.bicep` and `infra.OPERATIONS.md` (`:42`, `:45`), which is why the csproj logical names must match exactly.
 - **Why it's built this way** - alert definitions live in infrastructure-as-code and the response procedure lives in a Markdown runbook; nothing in either file references the other, so the pairing is exactly the kind of invariant that decays silently. Embedding both into the test assembly turns the pairing into a compile-and-run artifact.
 - **Where it's used** - runs with the rest of the suite in the `build-and-test` job (`MMCA.ADC/.github/workflows/deploy.yml:124`).
 
+### AnonymousEndpointTests
+
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/AnonymousEndpointTests.cs:21` · Level 6 · class (public, sealed)
+
+- **What it is** - the security gate that no endpoint loses its authorization unnoticed: every `[AllowAnonymous]` reachable in ADC's three module API assemblies and three module UI assemblies must appear as a reviewed line in this file (`MMCA.ADC.Architecture.Tests/AnonymousEndpointTests.cs:23`-`:31`, `:33`-`:103`). It is the largest subclass in the unit, 48 allowlist entries long.
+- **Depends on** - [AnonymousEndpointTestsBase](#anonymousendpointtestsbase), `System.Reflection.Assembly` (global-used at `MMCA.ADC.Architecture.Tests/GlobalUsings.cs:1`), and, as type references pinning the three API assemblies, [IdentityModule](group-24-identity-module.md#identitymodule), [ConferenceModule](group-20-conference-api-grpc.md#conferencemodule), and [EngagementModule](group-22-engagement-module.md#engagementmodule) (`:25`-`:27`). The three UI assemblies are loaded by name (`:28`-`:30`). Note it does **not** take the map: it names its own assembly set.
+- **Concept introduced, the reviewed-allowlist gate.** The rules elsewhere in this unit assert a structural property. This one asserts a *review* property: the set of anonymous endpoints is not wrong, it is simply not allowed to change silently. The base makes that stick in three directions at once (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/AnonymousEndpointTestsBase.cs:53`-`:90`): `AnonymousEndpoints_AreAllowListed` fails on an unlisted `[AllowAnonymous]` (`:54`), `ScannedEndpointSet_IsNotEmpty` fails when fewer than `MinimumScannedTypes` endpoint types were discovered at all (`:66`), and `AllowList_HasNoStaleEntries` fails on a listed entry that no longer matches anything (`:79`), which is what stops the list from silently accumulating names for endpoints that were renamed or re-gated. `[Rubric §11 - Security]` assesses whether the authorization posture is deliberate and verifiable; an allowlist that must be edited, in a file a reviewer reads, is the mechanism. `[Rubric §26 - Front-End Security]` applies too, because routable Blazor components are scanned alongside controllers.
+- **Walkthrough** - three members.
+  - `TargetAssemblies` (`:23`-`:31`) names six assemblies: the Identity, Conference, and Engagement API assemblies by anchor type, and the matching three UI assemblies via `Assembly.Load`. The base scans each for the two shapes it understands, MVC controllers (any type whose base chain reaches `ControllerBase`, `AnonymousEndpointTestsBase.cs:101`-`:112`) and routable Blazor components (any type carrying a `RouteAttribute`, `:117`-`:118`), both matched by attribute full name so the rule library keeps no ASP.NET reference (`:26`-`:28`, `:32`-`:34`).
+  - `AllowedAnonymousEndpoints` (`:33`-`:103`) is the reviewed list, grouped by justification rather than alphabetically. Two Identity credential-exchange actions on [AuthController](group-24-identity-module.md#authcontroller), `LoginAsync` and `RegisterAsync`, because requiring a token to mint one would be circular; they are throttled by the auth-ip rate-limit policy instead (`:35`-`:39`). Then the Conference public-browse reads: the `GetAllAsync` / `GetAllForLookupAsync` / `GetByIdAsync` triple on thirteen agenda controllers ([ActivitiesController](group-20-conference-api-grpc.md#activitiescontroller), [EventsController](group-20-conference-api-grpc.md#eventscontroller), [SessionsController](group-20-conference-api-grpc.md#sessionscontroller), [SpeakersController](group-20-conference-api-grpc.md#speakerscontroller), [SponsorsController](group-20-conference-api-grpc.md#sponsorscontroller), and their category/lookup siblings, `:45`-`:83`), because the conference website is readable without an account and is output-cached per [ADR-040](https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html); the comment is careful to note that every create/update/delete on those same controllers stays behind the class-level `[HasPermission]` (`:43`-`:44`). Then three smaller families with their own reasons: the Now/Next wayfinding reads (`:85`-`:88`), the ICS calendar exports a calendar client fetches without a bearer token (`:90`-`:93`), and the aggregate bookmark counts behind the popularity badge, counts only and never a per-user list (`:95`-`:98`). Last, the type-level entry for [ServiceInfoController](group-20-conference-api-grpc.md#serviceinfocontroller), which must answer before a caller has a token to negotiate with (`:100`-`:102`). Type-level and method-level attributes use different identifier shapes, a bare `FullName` versus `FullName.MethodName` (`AnonymousEndpointTestsBase.cs:39`-`:44`), which is why that last entry has no method suffix.
+  - `MinimumScannedTypes => 79` (`:108`) raises the base floor of 1 (`AnonymousEndpointTestsBase.cs:51`) to the exact count of controller and routable-component types across the six assemblies today, so a renamed assembly or a dropped surface is a failure rather than a quietly smaller scan (`:105`-`:107`).
+- **Why it's built this way** - the class comment explains what the *absences* mean, which is the part a reader cannot infer. The two password-recovery actions on [PasswordResetController](group-24-identity-module.md#passwordresetcontroller) are anonymous for the same circularity reason as login, but ADC does not override them, so the framework base owns their allowlist entries and none appear here (`:11`-`:15`); the same is true of refresh (`:37`). The base reads attributes with `DeclaredOnly` and `inherit: false` precisely so an inherited framework action is reported once at its declaration site rather than once per derived controller in every consumer (`AnonymousEndpointTestsBase.cs:140`-`:142`). Notification is absent because that module ships no controller and no routable component, hosting only the SignalR hub, so it contributes nothing to the scan (`:16`-`:19`).
+- **Caveats / not-in-source** - the base states its own blind spot: minimal-API endpoints opt out through the `.AllowAnonymous()` builder call, which produces endpoint metadata at map time and is invisible to static reflection, so the framework's own small anonymous minimal-API surface (JWKS, OIDC discovery, app-association, session-cookie refresh, health) is not covered here (`AnonymousEndpointTestsBase.cs:18`-`:24`). Nothing recomputes the 79 floor, so it is a lower bound a human maintains.
+
+### ProtoContractTests
+
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ProtoContractTests.cs:3` · Level 6 · class (public, sealed)
+
+- **What it is** - the frozen wire contract for ADC's *synchronous* cross-service API. It names the seven `.proto` files the four `*.Contracts` projects compile and commits a 75-line snapshot of everything they declare, so a renumbered field or a renamed rpc fails the build (`MMCA.ADC.Architecture.Tests/ProtoContractTests.cs:9`-`:18`, `:20`-`:97`).
+- **Depends on** - [ProtoContractTestsBase](#protocontracttestsbase). Nothing else: the rule reads `.proto` files off disk from the repo root, so this class takes no map and the csproj needs no reference to the `*.Contracts` projects.
+- **Concept introduced, pinning a contract that no compiler checks.** A `.proto` file is a published contract between processes that are built separately, so nothing in a single repo's build notices when it changes incompatibly. The rule library rebuilds the live contract by parsing the files and diffs it against the committed list, reporting each side separately as "present but NOT frozen" and "frozen but NOT present" (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Protos.cs:67`-`:77`). What gets pinned is exactly the wire surface: the package, every rpc with its request/response types and streaming flags, every message field with its declared type, label, and **field number**, and every enum value with its number (`ArchitectureRules.Protos.cs:20`-`:25`). What is deliberately not pinned is `syntax`, `import`, and `option` lines including `csharp_namespace`, because none of them changes a byte on the wire and failing on them is the fastest way to teach a team to update a snapshot without reading it (`:26`-`:31`). `[Rubric §9 - API & Contract Design]` assesses contract governance across the whole surface, not just REST. `[Rubric §7 - Microservices Readiness]`: this list *is* the synchronous coupling between ADC's four services, in the same way [IntegrationEventContractTests](#integrationeventcontracttests) is the asynchronous one ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)).
+- **Walkthrough** - three members, all implementing abstract hooks.
+  - `SolutionFileName => "MMCA.ADC.slnx"` (`:5`) implements `ProtoContractTestsBase.SolutionFileName` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ProtoContractTestsBase.cs:22`). The rule resolves the repo root from it via `ArchitectureMapBase.FindRepoRoot` (`ArchitectureRules.Protos.cs:45`), so the files are read from the working tree regardless of the runner's working directory.
+  - `ProtoFiles` (`:9`-`:18`) lists seven repo-root-relative paths, and the comment states the scope rule: every `.proto` compiled by the four `*.Contracts` projects (`:7`-`:8`). Two from Conference (`event_live_validation`, `session_bookmark_validation`), two from Engagement (`bookmark_count`, `user_engagement_export`), one from Identity (`attendee_query`), and two from Notification (`live_channel`, `user_notification_export`). That is every `.proto` file in the repository today.
+  - `FrozenProtoContracts` (`:20`-`:97`) is the snapshot: 63 `message ...` lines, one per field, each ending in `= <number> : <type>`, and 12 `service ...` lines, one per rpc. The entries are sorted, which is what makes a regenerated snapshot diff line by line, and the base's `<remarks>` explains how to regenerate it (print `ArchitectureRules.BuildProtoContract(...)` and paste, `ProtoContractTestsBase.cs:12`-`:17`). Reading the list is the fastest way to see what ADC's services actually say to each other: live-window validation and current-room lookup from Conference, bookmark counts and the GDPR engagement export from Engagement, the attendee user-id list from Identity, and channel push plus the notification export from Notification.
+  - The single inherited fact is `ProtoContracts_ShouldMatch_TheFrozenSnapshot` (`ProtoContractTestsBase.cs:33`).
+- **Why it's built this way** - the base is explicit that this is consumer-facing only: MMCA.Common ships the gRPC plumbing but no `.proto` of its own, so the framework does not subclass it, and a repo with a `*.Contracts` project does (`ProtoContractTestsBase.cs:8`-`:11`). Note also that Notification's protos are pinned here even though the Notification module is absent from [AdcArchitectureMap](#adcarchitecturemap): this rule works from file paths, not from mapped assemblies, so the thin module is covered for free.
+- **Caveats / not-in-source** - the file list is hand-maintained, so a brand-new `.proto` added to a `*.Contracts` project is not pinned until someone lists it here. Nothing asserts that `ProtoFiles` covers every `.proto` in the tree.
+
 ### TranslationCompletenessTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/TranslationCompletenessTests.cs:12` · Level 5 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/TranslationCompletenessTests.cs:12` · Level 6 · class (public, sealed)
 
 - **What it is** - the internationalization completeness gate: every base `*.resx` under `Source/` must have a complete, non-empty Spanish `.es.resx` sibling, so adding an English key without its translation fails CI instead of shipping a half-translated UI (`MMCA.ADC.Architecture.Tests/TranslationCompletenessTests.cs:3`-`:11`).
 - **Depends on** - [LocalizationResourceTestsBase](#localizationresourcetestsbase). Note the deliberate name divergence: the ADC subclass is named for what it guarantees (translation completeness), not for the base it derives from.
-- **Concept introduced, the non-vacuity floor.** A convention scan that discovers nothing passes trivially, which is the failure mode that makes fitness functions untrustworthy over time. The MMCA bases answer it with a minimum-count floor that the subclass raises to the repo's real magnitude, so a broken scan root (a moved directory, a renamed convention, a case-sensitivity slip on the Ubuntu runner) fails loudly instead of going green while checking zero files. You will see this floor again in [FormsConventionTests](#formsconventiontests) and [LocalizedTextConventionTests](#localizedtextconventiontests). `[Rubric §27 - i18n]` assesses whether localization is enforced rather than aspirational; the gate is the enforcement, and [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) (which supersedes the single-locale ADR-011) is the decision it executes.
+- **Concept introduced, the non-vacuity floor.** A convention scan that discovers nothing passes trivially, which is the failure mode that makes fitness functions untrustworthy over time. The MMCA bases answer it with a minimum-count floor that the subclass raises to the repo's real magnitude, so a broken scan root (a moved directory, a renamed convention, a case-sensitivity slip on the Ubuntu runner) fails loudly instead of going green while checking zero files. You have already seen the floor in [AnonymousEndpointTests](#anonymousendpointtests), and you will see it again in [FormsConventionTests](#formsconventiontests) and [LocalizedTextConventionTests](#localizedtextconventiontests). `[Rubric §27 - i18n]` assesses whether localization is enforced rather than aspirational; the gate is the enforcement, and [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) (which supersedes the single-locale ADR-011) is the decision it executes.
 - **Walkthrough** - two members. `RequiredCultures => ["es"]` (`TranslationCompletenessTests.cs:14`) implements the base's abstract culture list (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/LocalizationResourceTestsBase.cs:13`), so Spanish is the one culture ADC contractually completes. `MinimumBaseResources => 40` (`TranslationCompletenessTests.cs:16`) raises the base's default of 0 (`LocalizationResourceTestsBase.cs:21`), which would otherwise let an empty scan pass. The inherited fact is `Translations_AreComplete_ForEveryRequiredCulture` (`LocalizationResourceTestsBase.cs:24`).
 - **Why it's built this way** - the class comment justifies the floor from the repo's real shape: ADC has 40 or more localized resource sets across the three module UIs, the UI hosts' landing page, the nav-item module descriptors, and the API error-resource sets, so a near-zero discovery count means the scan path is wrong (`TranslationCompletenessTests.cs:8`-`:10`).
 - **Caveats / not-in-source** - the floor is a lower bound stated in the subclass, not a count computed from the tree, so it stays correct only as long as someone raises it when the resource set grows materially.
 
+### DecoratorPipelineOrderTests
+
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:27` · Level 9 · class (public, sealed)
+
+- **What it is** - the one type in this unit that builds a real DI container instead of reading metadata. It asserts that ADC's genuine registration sequence produces the [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html) decorator nesting at runtime, exercised against a real Identity command/query pair (`MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:17`-`:28`).
+- **Depends on** - [DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;](#decoratorpipelineordertestsbasetcommand-tcommandresult-tquery-tqueryresult) from the `MMCA.Common.Testing` package (`MMCA.ADC.Architecture.Tests.csproj:43`), closed over [ChangePreferencesCommand](group-24-identity-module.md#changepreferencescommand) / [Result](group-01-result-error-handling.md#result) and [GetUserPreferencesQuery](group-14-module-system-composition.md#getuserpreferencesquery) / `Result<`[UserPreferencesResponse](group-08-auth.md#userpreferencesresponse)`>` (`DecoratorPipelineOrderTests.cs:28`). Externals: `Microsoft.Extensions.DependencyInjection`, `Microsoft.FeatureManagement`, `NullLogger<>`, and Moq (`:1`-`:13`).
+- **Concept introduced, an object-graph assertion.** Scrutor's `TryDecorate` applies decorators in reverse registration order, so the *last* decorator registered becomes the outermost wrapper. That makes an innocent-looking reorder of the `AddApplicationDecorators()` lines, or a module handler scan that runs after it instead of before, a silent change in runtime behavior: the code still compiles, the container still resolves, and the pipeline quietly runs validation after the transaction opens. The base turns that into a test failure by resolving the handler and walking the constructed graph via reflection over each decorator's private inner-handler field, so it verifies the objects that actually exist rather than the registration list (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:29`-`:32`, `:99`-`:124`). `[Rubric §2 - Design Patterns]` assesses whether patterns are applied deliberately and correctly; the decorator chain is the framework's central pattern and this is the only test that proves its composition. `[Rubric §14 - Testability]`: the fact that a production registration sequence can be replayed in a bare `ServiceCollection` with seven mocked dependencies is itself the evidence that the composition root is not entangled with hosting.
+- **Walkthrough** - one member, `ConfigureServices(IServiceCollection)` (`DecoratorPipelineOrderTests.cs:30`), which implements the base's single abstract hook (`DecoratorPipelineOrderTestsBase.cs:46`) and reads in two halves.
+  - **Test doubles for the decorator constructor dependencies** (`:33`-`:39`): `Mock.Of<IFeatureManager>()`, `Mock.Of<ICurrentUserService>()`, `Mock.Of<IPermissionRegistry>()`, `Mock.Of<ICorrelationContext>()`, and `Mock.Of<ICacheService>()` as singletons, a scoped `IUnitOfWork` factory, and the open generic `ILogger<>` mapped to `NullLogger<>`. These exist only so the decorators can be constructed; the test never invokes a handler. The base names the same seven dependencies as the contract for a subclass (`DecoratorPipelineOrderTestsBase.cs:22`-`:25`).
+  - **The real registration sequence** (`:43`-`:45`): `AddApplication()`, then `ScanModuleApplicationServices<MMCA.ADC.Identity.Application.ClassReference>()`, then `AddApplicationDecorators()` last. The comment states the load-bearing constraint plainly (`:41`-`:42`): TryDecorate can only wrap handlers already registered.
+  - The two inherited facts then assert the chains. `CommandPipeline_NestsDecorators_InAdr014Order` (`DecoratorPipelineOrderTestsBase.cs:71`) expects FeatureGate, Authorization, Logging, Caching, Validating, Timeout, Transactional, then the concrete handler (`:49`-`:58`); `QueryPipeline_NestsDecorators_InAdr014Order` (`:75`) expects FeatureGate, Authorization, Logging, Caching, Timeout, then the handler (`:61`-`:68`). Both are asserted by `AssertPipeline` (`:78`-`:97`), which compares every element except the last against the expected list (`:92`-`:93`) and then requires the innermost element *not* to end in "Decorator" (`:95`-`:96`), so a truncated chain cannot pass. ADC overrides neither expected list, so it accepts the framework default order as its contract.
+- **Why it's built this way** - the pair was chosen for realism rather than convenience. [ChangePreferencesCommand](group-24-identity-module.md#changepreferencescommand) and its handler are shipped ADC Identity use cases, while [GetUserPreferencesQuery](group-14-module-system-composition.md#getuserpreferencesquery) is declared in `MMCA.Common.Application` and its concrete [GetUserPreferencesHandler](group-24-identity-module.md#getuserpreferenceshandler) lives in ADC on top of Common's [GetUserPreferencesHandlerBase&lt;TUser&gt;](group-14-module-system-composition.md#getuserpreferenceshandlerbasetuser). So the scan-then-decorate ordering is exercised across the framework and app boundary rather than against a fixture, which is exactly what the base asks a subclass to supply (`DecoratorPipelineOrderTestsBase.cs:26`-`:27`).
+- **Where it's used** - an independent class in ADC's architecture suite; nothing consumes it.
+- **Caveats / not-in-source** - the chain is unwrapped by reading compiler-generated private fields (`DecoratorPipelineOrderTestsBase.cs:104`-`:124`), so a future decorator that stores its inner handler somewhere other than a field (a property-only or captured-closure design) would be invisible to the walk. The base flags the reflection strategy explicitly (`:29`-`:32`).
+
 ### AdcArchitectureMap
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:8` · Level 9 · class (internal, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:8` · Level 12 · class (internal, sealed)
 
 - **What it is** - the single declaration of what "the ADC architecture" *is*, in assembly terms: five MMCA.Common framework layers plus the Identity, Conference, and Engagement modules at six layers each, 23 entries in all (`MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:12`-`:44`). Every map-driven rule in this unit scans exactly the assemblies listed here.
 - **Depends on** - [ArchitectureMapBase](#architecturemapbase) (which implements [IArchitectureMap](#iarchitecturemap)), the [Layer](#layer) enum and the [LayerRef](#layerref) record, and `System.Reflection.Assembly` (global-used at `MMCA.ADC.Architecture.Tests/GlobalUsings.cs:1`). Through its anchor types it also depends on [Result](group-01-result-error-handling.md#result), [BaseEntity&lt;TIdentifierType&gt;](group-02-domain-building-blocks.md#baseentitytidentifiertype), [EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype), [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext), and [ApiControllerBase](group-12-api-hosting-mapping.md#apicontrollerbase) on the framework side, and on [User](group-24-identity-module.md#user), [Event](group-17-conference-domain.md#event), [UserSessionBookmark](group-22-engagement-module.md#usersessionbookmark), their DTOs, and the three [IdentityModule](group-24-identity-module.md#identitymodule) / [ConferenceModule](group-20-conference-api-grpc.md#conferencemodule) / [EngagementModule](group-22-engagement-module.md#engagementmodule) entry points on the app side.
@@ -2946,37 +3412,36 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   - **Module layers** (`:22`-`:43`) use the instance `Module(name, layer, assembly)` helper, three modules times six layers. Domain, Shared, and API are pinned by anchor type (`Identity.Domain.Users.User`, `Conference.Shared.Events.EventDTO`, `Engagement.API.EngagementModule`, and their siblings); Application, Infrastructure, and UI are loaded by name through `Assembly.Load` (for example `:23`, `:24`, `:27`), because, as the class comment explains, those assemblies have no convenient public anchor type (`:5`-`:6`). `Assembly.Load` succeeds here only because the csproj takes a `ProjectReference` on all eighteen module projects (`MMCA.ADC.Architecture.Tests.csproj:46`-`:65`), which is what puts the DLLs beside the test binary.
   - **Laziness** is inherited: `DefineLayers()` is materialized once through a `Lazy<IReadOnlyList<LayerRef>>` built in the base constructor (`ArchitectureMapBase.cs:13`-`:16`), so the twenty-odd subclasses that each construct their own map instance still pay the `Assembly.Load` cost only on first use.
 - **Why it's built this way** - centralizing every namespace and assembly string in one file also fixes Ubuntu CI case sensitivity in one place, which the base states as an explicit goal (`ArchitectureMapBase.cs:7`-`:9`). Compare [CommonArchitectureMap](#commonarchitecturemap), the same abstraction for a repo with no business modules.
-- **Where it's used** - instantiated as a field initializer by every map-driven subclass in this unit (25 of the 30 types here, all of them at Level 10), for example `ConcurrencyConventionTests.cs:5`. It is `internal`, so it never leaves this assembly.
-- **Caveats / not-in-source** - the thin Notification module (API plus Application only) is deliberately absent from the map, so the module-shaped rules do not cover it; [RawQueryableConventionTests](#rawqueryableconventiontests) is the one rule that re-adds Notification by hand, and it says why (`RawQueryableConventionTests.cs:16`-`:20`). Nothing in this repository asserts that the map lists every module that exists, so a fourth mapped module would have to be added here by a human.
+- **Where it's used** - instantiated as a field initializer by every map-driven subclass in this unit (27 of the 35 types here, all of them at Level 13), for example `ConcurrencyConventionTests.cs:5`. It is `internal`, so it never leaves this assembly. The eight non-map types are the two embedded-resource guards, [AnonymousEndpointTests](#anonymousendpointtests), [ProtoContractTests](#protocontracttests), [TranslationCompletenessTests](#translationcompletenesstests), the two pipeline-order tests, and the map itself.
+- **Caveats / not-in-source** - the thin Notification module (API plus Application only) is deliberately absent from the map, so the module-shaped rules do not cover it. Two rules re-add it by hand and each says why: [RawQueryableConventionTests](#rawqueryableconventiontests) appends its Application directory (`RawQueryableConventionTests.cs:16`-`:20`), and [ProtoContractTests](#protocontracttests) pins its protos by path. Nothing in this repository asserts that the map lists every module that exists, so a fourth mapped module would have to be added here by a human.
 
-### DecoratorPipelineOrderTests
+### MiddlewarePipelineOrderTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:26` · Level 9 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15` · Level 12 · class (public, sealed)
 
-- **What it is** - the one type in this unit that builds a real DI container instead of reading metadata. It asserts that ADC's genuine registration sequence produces the [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html) decorator nesting at runtime, exercised against a real Identity command/query pair (`MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:17`-`:27`).
-- **Depends on** - [DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;](#decoratorpipelineordertestsbasetcommand-tcommandresult-tquery-tqueryresult) from the `MMCA.Common.Testing` package (`MMCA.ADC.Architecture.Tests.csproj:43`), closed over [ChangePreferencesCommand](group-24-identity-module.md#changepreferencescommand) / [Result](group-01-result-error-handling.md#result) and [GetUserPreferencesQuery](group-14-module-system-composition.md#getuserpreferencesquery) / `Result<`[UserPreferencesResponse](group-08-auth.md#userpreferencesresponse)`>` (`DecoratorPipelineOrderTests.cs:27`). Externals: `Microsoft.Extensions.DependencyInjection`, `Microsoft.FeatureManagement`, `NullLogger<>`, and Moq (`:1`-`:13`).
-- **Concept introduced, an object-graph assertion.** Scrutor's `TryDecorate` applies decorators in reverse registration order, so the *last* decorator registered becomes the outermost wrapper. That makes an innocent-looking reorder of the `AddApplicationDecorators()` lines, or a module handler scan that runs after it instead of before, a silent change in runtime behavior: the code still compiles, the container still resolves, and the pipeline quietly runs validation after the transaction opens. The base turns that into a test failure by resolving the handler and walking the constructed graph via reflection over each decorator's private inner-handler field, so it verifies the objects that actually exist rather than the registration list (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:27`-`:30`, `:98`-`:118`). `[Rubric §2 - Design Patterns]` assesses whether patterns are applied deliberately and correctly; the decorator chain is the framework's central pattern and this is the only test that proves its composition. `[Rubric §14 - Testability]`: the fact that a production registration sequence can be replayed in a bare `ServiceCollection` with five mocked dependencies is itself the evidence that the composition root is not entangled with hosting.
-- **Walkthrough** - one member, `ConfigureServices(IServiceCollection)` (`DecoratorPipelineOrderTests.cs:29`), which implements the base's single abstract hook (`DecoratorPipelineOrderTestsBase.cs:44`) and reads in two halves.
-  - **Test doubles for the decorator constructor dependencies** (`:32`-`:36`): `Mock.Of<IFeatureManager>()`, `Mock.Of<ICorrelationContext>()`, and `Mock.Of<ICacheService>()` as singletons, a scoped `IUnitOfWork` factory, and the open generic `ILogger<>` mapped to `NullLogger<>`. These exist only so the decorators can be constructed; the test never invokes a handler.
-  - **The real registration sequence** (`:40`-`:42`): `AddApplication()`, then `ScanModuleApplicationServices<MMCA.ADC.Identity.Application.ClassReference>()`, then `AddApplicationDecorators()` last. The comment states the load-bearing constraint plainly (`:38`-`:39`): TryDecorate can only wrap handlers already registered.
-  - The two inherited facts then assert the chains. `CommandPipeline_NestsDecorators_InAdr014Order` (`DecoratorPipelineOrderTestsBase.cs:65`) expects FeatureGate, Logging, Caching, Validating, Transactional, then the concrete handler; `QueryPipeline_NestsDecorators_InAdr014Order` (`:69`) expects FeatureGate, Logging, Caching, then the handler (`:47`-`:62`). Both also assert the innermost element does *not* end in "Decorator" (`:89`-`:90`), so a truncated chain cannot pass.
-- **Why it's built this way** - the pair was chosen for realism rather than convenience: `ChangePreferencesCommand` and `GetUserPreferencesQuery` are shipped Identity use cases, and the query's handler lives in MMCA.Common while the command's lives in ADC, so the scan-then-decorate ordering is exercised across the framework and app boundary rather than against a fixture.
-- **Where it's used** - an independent class in ADC's architecture suite; nothing consumes it.
-- **Caveats / not-in-source** - the chain is unwrapped by reading compiler-generated private fields, so a future decorator that stores its inner handler somewhere other than a field (a property-only or captured-closure design) would be invisible to the walk. The base flags the reflection strategy explicitly (`DecoratorPipelineOrderTestsBase.cs:93`-`:97`).
+- **What it is** - the HTTP-edge counterpart of [DecoratorPipelineOrderTests](#decoratorpipelineordertests), and, like [ObservabilityConventionTests](#observabilityconventiontests), a bodyless declaration: `public sealed class MiddlewarePipelineOrderTests : MiddlewarePipelineOrderTestsBase;` (`MMCA.ADC.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15`). Deriving it is the whole assertion.
+- **Depends on** - [MiddlewarePipelineOrderTestsBase](#middlewarepipelineordertestsbase) from the `MMCA.Common.Testing` package (`using MMCA.Common.Testing;`, `:1`), and transitively on [MiddlewarePipelineBuilder](group-12-api-hosting-mapping.md#middlewarepipelinebuilder) and [MiddlewarePipelineStepNames](group-12-api-hosting-mapping.md#middlewarepipelinestepnames).
+- **Concept introduced, an empty subclass as a conformance claim.** The class comment states what the emptiness *means* (`:5`-`:14`): every ADC REST and gRPC service host calls the zero-argument `UseCommonMiddlewarePipeline()`, so the framework's default step order is ADC's contract and the base needs no overrides. The two hooks that exist are the escape hatch a host would use if it customized the pipeline: `Configure`, which defaults to null (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:35`), and `ExpectedStepNames` (`:38`-`:58`). Leaving both alone is a positive statement, not an omission. `[Rubric §10 - Cross-Cutting]` assesses whether cross-cutting behavior is applied uniformly rather than per host; `[Rubric §11 - Security]` is the sharp edge, because the ordering invariants below are authentication and rate-limiting invariants.
+- **Walkthrough** - no members. Two inherited facts run against a builder seeded from `MiddlewarePipelineBuilder.CreateDefault()` (`MiddlewarePipelineOrderTestsBase.cs:79`-`:84`).
+  - `EdgePipeline_OrdersSteps_InDocumentedOrder` (`:61`) compares `builder.StepNames` against the 18-step default sequence, outermost first: exception handler, correlation id, request localization, pre-forwarded capture, forwarded headers, HTTPS redirection, response compression, routing, CORS, authentication, tenant resolution, rate limiting, soft-deleted-user filter, authorization, output cache, JWKS endpoint, OIDC discovery endpoint, controllers (`:40`-`:57`).
+  - `EdgePipeline_SatisfiesLoadBearingInvariants` (`:70`) calls `Build()` and requires it not to throw, because `Build()` re-checks the load-bearing adjacencies at startup, so a pipeline that failed here would have thrown while the host was starting (`:73`-`:76`).
+  - Four adjacencies are named as load-bearing in both the base and the ADC comment: the pre-forwarded capture immediately before the forwarded-headers rewrite (or `jwks_uri` stops being reachable), authentication immediately before tenant resolution (so the claim strategy sees `HttpContext.User`), authentication before the rate limiter per [ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html) (so the per-user cap engages), and forwarded headers before the HTTPS redirect (`MiddlewarePipelineOrderTests.cs:9`-`:13`, `MiddlewarePipelineOrderTestsBase.cs:66`).
+- **Why it's built this way** - a reorder here fails at runtime in ways that look like configuration bugs: an unreachable `jwks_uri`, a tenant that never resolves, a per-user rate cap that never engages (`MiddlewarePipelineOrderTestsBase.cs:16`-`:18`). Making it a red test in the consumer repo is what turns a framework-side reorder into a build failure rather than a silent production behavior change ([ADR-079](https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html)). No `WebApplication` is built: the steps are pure data until they are applied, so this runs in the fast unit tier with no database and no host (`:24`-`:27`).
+- **Caveats / not-in-source** - the test asserts the *framework default*, seeded from `CreateDefault()`. It does not read any ADC `Program.cs`, so the claim that every ADC host calls the zero-argument overload is asserted by the comment, not by this test. A host that started passing a customization would silently fall outside this gate unless someone also overrode `Configure` here.
 
 ### ConcurrencyConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ConcurrencyConventionTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ConcurrencyConventionTests.cs:3` · Level 13 · class (public, sealed)
 
-- **What it is** - the guard that every update request participates in optimistic concurrency. It is also the plainest example of the Level 10 shape in this unit: a sealed class whose entire body is one line supplying the map (`MMCA.ADC.Architecture.Tests/ConcurrencyConventionTests.cs:5`).
+- **What it is** - the guard that every update request participates in optimistic concurrency. It is also the plainest example of the Level 13 shape in this unit: a sealed class whose entire body is one line supplying the map (`MMCA.ADC.Architecture.Tests/ConcurrencyConventionTests.cs:5`).
 - **Depends on** - [ConcurrencyConventionTestsBase](#concurrencyconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap).
-- **Concept introduced, the map-only subclass.** Seventeen types in this unit are exactly this: `protected override IArchitectureMap Map { get; } = new AdcArchitectureMap();` and nothing else. Note the property is an auto-property with an initializer, not an expression body, so each class constructs its map once per test-class instance rather than per fact. Everything else (the rule bodies, the `[Fact]` attributes, the failure messages) is inherited, which is precisely the point: MMCA.Common, MMCA.Store, and MMCA.ADC run byte-identical rule logic and differ only in what they point it at. The sections below for the other map-only subclasses do not repeat this explanation; they name the base and list what it asserts. `[Rubric §16 - Maintainability]` assesses duplication and change cost: a new rule ships to all three repos by adding a base and one derived line per repo.
-- **Walkthrough** - one member, `Map` (`:5`). The inherited fact is `UpdateRequests_ShouldImplement_IConcurrencyAware` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ConcurrencyConventionTestsBase.cs:13`), which delegates to `ArchitectureRules.UpdateRequestsAreConcurrencyAware(Map)`. `[Rubric §8 - Data Architecture]`: an update request that does not carry a row version cannot detect a lost update, so this rule keeps [IConcurrencyAware](group-12-api-hosting-mapping.md#iconcurrencyaware) from being optional in practice.
+- **Concept introduced, the map-only subclass.** Nineteen of the 27 map-driven types in this unit are exactly this: `protected override IArchitectureMap Map { get; } = new AdcArchitectureMap();` and nothing else. Note the property is an auto-property with an initializer, not an expression body, so each class constructs its map once per test-class instance rather than per fact. Everything else (the rule bodies, the `[Fact]` attributes, the failure messages) is inherited, which is precisely the point: MMCA.Common, MMCA.Store, and MMCA.ADC run byte-identical rule logic and differ only in what they point it at. The sections below for the other map-only subclasses do not repeat this explanation; they name the base and list what it asserts. `[Rubric §16 - Maintainability]` assesses duplication and change cost: a new rule ships to all three repos by adding a base and one derived line per repo.
+- **Walkthrough** - one member, `Map` (`:5`), implementing the base's abstract property (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ConcurrencyConventionTestsBase.cs:10`). The inherited fact is `UpdateRequests_ShouldImplement_IConcurrencyAware` (`:13`), which delegates to `ArchitectureRules.UpdateRequestsAreConcurrencyAware(Map)`. `[Rubric §8 - Data Architecture]`: an update request that does not carry a row version cannot detect a lost update, so this rule keeps [IConcurrencyAware](group-12-api-hosting-mapping.md#iconcurrencyaware) from being optional in practice.
 - **Where it's used** - runs with the whole suite in the `build-and-test` job (`MMCA.ADC/.github/workflows/deploy.yml:124`, `:219`). The same is true of every remaining type in this unit and is not repeated below.
 
 ### ConstructorDependencyCountTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ConstructorDependencyCountTests.cs:17` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ConstructorDependencyCountTests.cs:17` · Level 13 · class (public, sealed)
 
 - **What it is** - a single-responsibility ceiling: no service in a mapped module Application assembly may take more than seven constructor dependencies (`MMCA.ADC.Architecture.Tests/ConstructorDependencyCountTests.cs:19`-`:21`).
 - **Depends on** - [ConstructorDependencyCountTestsBase](#constructordependencycounttestsbase) and [AdcArchitectureMap](#adcarchitecturemap).
@@ -2987,7 +3452,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### ControllerConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ControllerConventionTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ControllerConventionTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the API-layer convention guard, with a two-entry exemption list for the controllers that legitimately do not route through the framework's base controller (`MMCA.ADC.Architecture.Tests/ControllerConventionTests.cs:11`-`:15`).
 - **Depends on** - [ControllerConventionTestsBase](#controllerconventiontestsbase), [AdcArchitectureMap](#adcarchitecturemap), and, by name only (they are strings, not type references), [OAuthController](group-24-identity-module.md#oauthcontroller) and [ServiceInfoController](group-20-conference-api-grpc.md#serviceinfocontroller).
@@ -2997,22 +3462,22 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### DataResidencyTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:12` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:12` · Level 13 · class (public, sealed)
 
 - **What it is** - a compliance drift guard: the data-residency statement published in ADC's `PRIVACY.md` must match the Azure region where personal data is actually provisioned, parsed out of the deployment workflow (`MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:3`-`:11`).
 - **Depends on** - [DataResidencyTestsBase](#dataresidencytestsbase), [AdcArchitectureMap](#adcarchitecturemap), `System.IO.File`/`Path`, and AwesomeAssertions (used directly inside the override, `:26`).
-- **Concept introduced, a test as the join between a document and an infrastructure fact.** Most of the rules in this unit compare code to code. This one compares prose to infrastructure: it reads the deployed region out of the source of truth (`SQL_LOCATION="${SQL_LOCATION_OVERRIDE:-westus2}"`, `MMCA.ADC/.github/workflows/deploy.yml:949`) and then requires `PRIVACY.md` to say the same thing, comparing whitespace-insensitively and case-insensitively so "West US 2" matches the `westus2` region token (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DataResidencyTestsBase.cs:55`-`:58`). `[Rubric §30 - Compliance/Privacy/Data Governance]` assesses whether privacy claims are true and stay true; a policy that names a region the data never lived in is a compliance defect that no code review would catch, and this is the mechanism that closes it.
+- **Concept introduced, a test as the join between a document and an infrastructure fact.** Most of the rules in this unit compare code to code. This one compares prose to infrastructure: it reads the deployed region out of the source of truth (`SQL_LOCATION="${SQL_LOCATION_OVERRIDE:-westus2}"`, `MMCA.ADC/.github/workflows/deploy.yml:949`) and then requires `PRIVACY.md` to say the same thing, comparing whitespace-insensitively and case-insensitively so "West US 2" matches the `westus2` region token. `[Rubric §30 - Compliance/Privacy/Data Governance]` assesses whether privacy claims are true and stay true; a policy that names a region the data never lived in is a compliance defect that no code review would catch, and this is the mechanism that closes it.
 - **Walkthrough** - three members.
-  - `Map` (`:14`) exists only so the base can resolve the repo root through `ArchitectureMapBase.FindRepoRoot($"{Map.RepoToken}.slnx")` (`DataResidencyTestsBase.cs:28`); no assembly scanning happens in this rule.
-  - `ForbiddenResidencyClaims => ["central United States"]` (`:16`) overrides the base's empty default (`DataResidencyTestsBase.cs:23`) and blocks a specific stale statement from returning, one that once contradicted the deployed region (`DataResidencyTests.cs:9`-`:10`).
-  - `ExtractDeployedRegion(string repoRoot)` (`:20`-`:31`) implements the base's abstract hook (`DataResidencyTestsBase.cs:53`). It reads `.github/workflows/deploy.yml` (`:22`), locates the literal marker `SQL_LOCATION_OVERRIDE:-` with an ordinal `IndexOf` (`:24`-`:25`), asserts the marker exists with a `because` explaining what the workflow must declare (`:26`-`:27`), then takes the alphanumeric run that follows as the region (`:29`-`:30`). Assert-then-parse rather than return-empty is exactly what the base asks implementations to do (`DataResidencyTestsBase.cs:47`-`:52`).
-  - The inherited fact `PrivacyPolicy_DataStorageRegion_MatchesDeployedRegion` (`DataResidencyTestsBase.cs:26`) then asserts the normalized policy contains the normalized region (`:37`) and contains none of the forbidden claims (`:40`-`:44`).
+  - `Map` (`:14`) exists only so the base can resolve the repo root through `ArchitectureMapBase.FindRepoRoot($"{Map.RepoToken}.slnx")`; no assembly scanning happens in this rule.
+  - `ForbiddenResidencyClaims => ["central United States"]` (`:16`) overrides the base's empty default (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DataResidencyTestsBase.cs:23`) and blocks a specific stale statement from returning, one that once contradicted the deployed region (`DataResidencyTests.cs:9`-`:10`).
+  - `ExtractDeployedRegion(string repoRoot)` (`:20`-`:31`) implements the base's abstract hook (`DataResidencyTestsBase.cs:53`). It reads `.github/workflows/deploy.yml` (`:22`), locates the literal marker `SQL_LOCATION_OVERRIDE:-` with an ordinal `IndexOf` (`:24`-`:25`), asserts the marker exists with a `because` explaining what the workflow must declare (`:26`-`:27`), then takes the alphanumeric run that follows as the region (`:29`-`:30`). Assert-then-parse rather than return-empty is what the base asks implementations to do.
+  - The inherited fact `PrivacyPolicy_DataStorageRegion_MatchesDeployedRegion` (`DataResidencyTestsBase.cs:26`) then asserts the normalized policy contains the normalized region and contains none of the forbidden claims.
 - **Why it's built this way** - the account data and session bookmarks live in the Azure SQL database, and the QiMata Sponsorship subscription forces that SQL server into a different region from the Container Apps (`DataResidencyTests.cs:5`-`:9`), so "where the app runs" is genuinely not "where the personal data sits". Parsing the SQL region default rather than the app region encodes that distinction.
 - **Caveats / not-in-source** - the parse is positional: it takes the first occurrence of the marker in `deploy.yml`. The workflow contains both a job-level `SQL_LOCATION_OVERRIDE` env binding (`deploy.yml:914`) and the shell default (`:949`), so the rule depends on the marker string `SQL_LOCATION_OVERRIDE:-` appearing only in the latter form.
 
 ### DomainPurityTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/DomainPurityTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/DomainPurityTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the Clean Architecture purity guard, plus one repo-specific addition: RabbitMQ is added to the forbidden-dependency list for Domain and Shared (`MMCA.ADC.Architecture.Tests/DomainPurityTests.cs:9`).
 - **Depends on** - [DomainPurityTestsBase](#domainpuritytestsbase) and [AdcArchitectureMap](#adcarchitecturemap).
@@ -3021,7 +3486,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### EntityConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/EntityConventionTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/EntityConventionTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the DDD entity-shape guard for ADC's three module domains: aggregate roots exist, each has a `Result`-returning static factory and no public constructor, domain entities are sealed and live in the Domain layer, and DTOs or requests do not.
 - **Depends on** - [EntityConventionTestsBase](#entityconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3029,29 +3494,29 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### EventConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/EventConventionTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/EventConventionTests.cs:3` · Level 13 · class (public, sealed)
 
-- **What it is** - the integration-event shape guard: every integration event declares a schema version, inherits the framework's base integration event, and lives in an `*.IntegrationEvents` namespace under Shared.
+- **What it is** - the integration-event shape guard: every integration event declares a schema version, inherits the framework's base integration event, and lives in an `*.IntegrationEvents` namespace under Shared; and every event upcaster is unique and moves the version forward.
 - **Depends on** - [EventConventionTestsBase](#eventconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
-- **Walkthrough** - one member, `Map` (`:5`). Three inherited facts (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/EventConventionTestsBase.cs:13`, `:16`, `:19`) enforce `SchemaVersion`, base-type inheritance, and namespace placement ([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)). `[Rubric §6 - CQRS & Event-Driven]` assesses the discipline around asynchronous contracts; this rule handles the *shape*, while [IntegrationEventContractTests](#integrationeventcontracttests) freezes the *content*.
+- **Walkthrough** - one member, `Map` (`:5`). Five inherited facts (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/EventConventionTestsBase.cs:14`, `:17`, `:20`, `:23`, `:26`). The first three enforce `SchemaVersion`, base-type inheritance, and namespace placement ([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)). The last two guard the upcaster machinery that ADR-010 depends on: `EventUpcasters_ShouldHave_UniqueSourceTypes` (`:23`), so two upcasters cannot claim the same source shape, and `EventUpcasters_ShouldIncrease_SchemaVersion` (`:26`), so an upcaster cannot map an event onto the same or an earlier version. `[Rubric §6 - CQRS & Event-Driven]` assesses the discipline around asynchronous contracts; this rule handles the *shape*, while [IntegrationEventContractTests](#integrationeventcontracttests) freezes the *content*.
 
 ### FormsConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/FormsConventionTests.cs:14` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/FormsConventionTests.cs:14` · Level 13 · class (public, sealed)
 
 - **What it is** - the UX-safety guard over ADC's admin forms. It configures the shared rule for the six Conference create forms and adds a hand-written fact for the Identity Profile form, which by design does not match the shared rule's glob (`MMCA.ADC.Architecture.Tests/FormsConventionTests.cs:3`-`:13`).
 - **Depends on** - [FormsConventionTestsBase](#formsconventiontestsbase), [AdcArchitectureMap](#adcarchitecturemap), [ArchitectureMapBase](#architecturemapbase) (called statically for the repo root, `:34`), `System.IO`, and AwesomeAssertions.
-- **Concept introduced, extending a rule instead of replacing it, and covering what it cannot reach.** Two mechanisms appear here for the first time in this unit. First, `RequiredMarkers` is overridden by *spreading the base list* and appending to it (`.. base.RequiredMarkers`, `:26`), so ADC inherits the six framework markers (`UnsavedChangesGuard`, `IsDirtyAccessor`, `_isDirty`, `<MudForm`, `Required="true"`, `RequiredError`; `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/FormsConventionTestsBase.cs:27`-`:35`) and adds two of its own without restating them. Second, when a real surface falls outside the shared rule's reach, the subclass writes the missing coverage itself rather than loosening the shared rule. `[Rubric §24 - Forms/Validation/UX Safety]` assesses whether users are protected from losing work and from unclear validation; both halves here are that protection made executable.
+- **Concept introduced, extending a rule instead of replacing it, and covering what it cannot reach.** Two mechanisms appear here for the first time in this unit. First, `RequiredMarkers` is overridden by *spreading the base list* and appending to it (`.. base.RequiredMarkers`, `:26`), so ADC inherits the framework markers (`UnsavedChangesGuard`, `IsDirtyAccessor`, `_isDirty`, `<MudForm`, `Required="true"`, `RequiredError`; `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/FormsConventionTestsBase.cs:27`-`:35`) and adds two of its own without restating them. Second, when a real surface falls outside the shared rule's reach, the subclass writes the missing coverage itself rather than loosening the shared rule. `[Rubric §24 - Forms/Validation/UX Safety]` assesses whether users are protected from losing work and from unclear validation; both halves here are that protection made executable.
 - **Walkthrough**
   - `Map` (`:16`) and `MinimumCreateForms => 6` (`:18`), raising the base floor of 1 (`FormsConventionTestsBase.cs:24`) to ADC's real count: Event, Session, Room, Question, Speaker, and ConferenceCategory (`FormsConventionTests.cs:5`-`:6`).
-  - `RequiredMarkers` (`:24`-`:29`) appends two literals to the inherited set: the per-form `<MudAlert Severity="Severity.Error"` error summary and the localized heading key `Validation.CorrectFollowing`.
+  - `RequiredMarkers` (`:24`-`:29`) appends two literals to the inherited set: the per-form `<MudAlert Severity="Severity.Error"` error summary and the localized heading key `Validation.CorrectFollowing`. The inherited fact that consumes them is `AdminCreateForms_KeepUnsavedChangesGuardAndValidation` (`FormsConventionTestsBase.cs:38`).
   - `ProfileForm_KeepsErrorSummaryAndPasswordValidation` (`:31`-`:62`) is the only hand-written `[Fact]` in this unit. It resolves the repo root from the map's token (`:34`), builds the path to `Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/Profile/Profile.razor` (`:35`-`:36`), and asserts the file exists first, with a `because` explaining that a form that is not discovered is a convention that is not verified (`:38`-`:39`). It then requires four markers (`:43`-`:49`): the error summary, `Errors.Length: > 0` (the summary rendering from the live MudForm error list), and the `ValidateNewPassword` / `ValidateConfirmPassword` client-side wiring; it reports every missing marker at once rather than failing on the first (`:51`-`:56`). Finally it counts occurrences of `Required="true"` and `RequiredError`, requiring at least three of each so all three password fields stay required and keep a user-facing message (`:58`-`:61`), using the local `CountOccurrences` helper (`:64`-`:75`).
 - **Why it's built this way** - the Profile form is a single-section password and delete form with no navigate-away step, so it carries no unsaved-changes guard by design and does not match the base's `*Create.razor` glob (`:9`-`:12`); the base documents exactly that exclusion (`FormsConventionTestsBase.cs:11`-`:13`). Rather than weakening the shared rule to accommodate it, ADC asserts the markers that *do* apply.
 - **Caveats / not-in-source** - the hand-written fact hardcodes one file path, so moving `Profile.razor` fails the test (again, the safe direction) but adding a second self-service form gains no coverage automatically.
 
 ### FrameworkVersionConsistencyTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/FrameworkVersionConsistencyTests.cs:9` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/FrameworkVersionConsistencyTests.cs:9` · Level 13 · class (public, sealed)
 
 - **What it is** - the lockstep-versioning gate: every `MMCA.Common.*` package pinned in ADC's `Directory.Packages.props` must carry one and the same version, so a partial sweep fails CI instead of producing a subtly mismatched framework surface at runtime (`MMCA.ADC.Architecture.Tests/FrameworkVersionConsistencyTests.cs:3`-`:8`).
 - **Depends on** - [FrameworkVersionConsistencyTestsBase](#frameworkversionconsistencytestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)); the map is used for its repo token, to find the props file from the repo root.
@@ -3060,7 +3525,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### HandlerConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/HandlerConventionTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/HandlerConventionTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the CQRS handler placement and composition guard: handlers and validators live in the Application layer, handlers do not inject other handlers, application services do not inject handlers, domain event handlers are sealed and live in Application, and application services respect a constructor-arity limit.
 - **Depends on** - [HandlerConventionTestsBase](#handlerconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3068,16 +3533,27 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### HandlerResultConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/HandlerResultConventionTests.cs:8` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/HandlerResultConventionTests.cs:8` · Level 13 · class (public, sealed)
 
 - **What it is** - the gate that turns a runtime constraint into a build-time one: every ADC command and query handler's `TResult` must be [Result](group-01-result-error-handling.md#result) or `Result<T>` (`MMCA.ADC.Architecture.Tests/HandlerResultConventionTests.cs:3`-`:7`).
 - **Depends on** - [HandlerResultConventionTestsBase](#handlerresultconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
-- **Concept introduced** - shifting a failure left. The decorator pipeline can short-circuit (a feature flag off, a validation failure, a cache hit), and to do that it must manufacture a failed result of the handler's `TResult`; the comment names the mechanism, `ResultFailureFactory` (`:5`-`:6`). A handler returning a bare DTO therefore compiles and registers cleanly and only explodes the first time a short-circuit fires in production. `[Rubric §6 - CQRS & Event-Driven]` and `[Rubric §14 - Testability]`: an invariant the type system cannot express is exactly what a fitness function is for.
+- **Concept introduced** - shifting a failure left. The decorator pipeline can short-circuit (a feature flag off, an authorization denial, a validation failure, a cache hit), and to do that it must manufacture a failed result of the handler's `TResult`; the comment names the mechanism, `ResultFailureFactory` (`:5`-`:6`). A handler returning a bare DTO therefore compiles and registers cleanly and only explodes the first time a short-circuit fires in production. `[Rubric §6 - CQRS & Event-Driven]` and `[Rubric §14 - Testability]`: an invariant the type system cannot express is exactly what a fitness function is for.
 - **Walkthrough** - one member, `Map` (`:10`). Three inherited facts (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/HandlerResultConventionTestsBase.cs:21`, `:24`, `:27`): the Application layers declare at least one handler (a non-vacuity check), command handlers return result types, and query handlers do too. Opt-in from v1.120.0 (`HandlerResultConventionTests.cs:3`).
+
+### IdempotencyConventionTests
+
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/IdempotencyConventionTests.cs:3` · Level 13 · class (public, sealed)
+
+- **What it is** - the rule that every POST action in ADC's API layer states, in code, whether a retried request replays the original response or deliberately does not. Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)): the body is one line (`MMCA.ADC.Architecture.Tests/IdempotencyConventionTests.cs:5`).
+- **Depends on** - [IdempotencyConventionTestsBase](#idempotencyconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap), and, by attribute name, [IdempotentAttribute](group-12-api-hosting-mapping.md#idempotentattribute) and [NonIdempotentAttribute](group-12-api-hosting-mapping.md#nonidempotentattribute).
+- **Concept introduced, forcing a decision rather than a default.** POST is the one verb HTTP does not define as idempotent, so a client retrying a timed-out POST cannot know whether the first attempt landed. The framework's answer is the `Idempotency-Key` filter, and it costs an existing client nothing, because the filter no-ops for a request that carries no key header. That makes the only failure mode worth gating an *omission nobody noticed*: an action that should replay but silently does not. The rule therefore does not demand `[Idempotent]`; it demands that the author write down which of the two applies, with `[NonIdempotent("why")]` carrying its own justification string (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Idempotency.cs:14`-`:31`, `:57`-`:60`). `[Rubric §9 - API & Contract Design]` assesses retry semantics as part of the contract; `[Rubric §29 - Resilience & Business Continuity]`: a retry that double-writes is precisely the failure a resilience policy creates when the endpoint has not thought about it.
+- **Walkthrough** - one member, `Map` (`:5`), implementing the base's abstract property (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/IdempotencyConventionTestsBase.cs:12`). One inherited fact, `PostActions_ShouldDeclare_IdempotencyIntent` (`:15`), delegating to `ArchitectureRules.PostActionsDeclareIdempotencyIntent(Map)` (`ArchitectureRules.Idempotency.cs:43`-`:60`), which walks the concrete controllers in every `Layer.Api` assembly the map declares (`:47`-`:52`). Attributes are read with `inherit: true` and abstract controller types are skipped, so an ADC controller that inherits a POST action from `AuthControllerBase` or `AggregateRootEntityControllerBase` already satisfies the rule through that base rather than needing its own attribute (`:32`-`:37`).
+- **Why it's built this way** - the base states the subclassing rule: derive it in a repo whose map declares an `Api` layer, and a repo with no API layer simply does not subclass (`IdempotencyConventionTestsBase.cs:6`-`:8`). ADC declares an Api layer for all three mapped modules, so the gate is live across the whole REST surface.
+- **Caveats / not-in-source** - detection is by attribute type *name*, keeping the rule library free of an ASP.NET reference, and only `[HttpPost]` is recognised: an action routed through `[AcceptVerbs("POST")]` or a conventional route is out of scope (`ArchitectureRules.Idempotency.cs:38`-`:42`). The Notification module's API assembly is not in the map, so its POST actions, if any, are outside this gate.
 
 ### ImmutabilityTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ImmutabilityTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ImmutabilityTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the immutability guard across five categories of type: DTOs, commands and queries, domain events, integration events, and value objects (the last also required to be sealed and to live in Shared).
 - **Depends on** - [ImmutabilityTestsBase](#immutabilitytestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3085,18 +3561,18 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### IntegrationEventContractTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/IntegrationEventContractTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/IntegrationEventContractTests.cs:3` · Level 13 · class (public, sealed)
 
-- **What it is** - the frozen wire contract for ADC's cross-service asynchronous API. It commits a seven-line snapshot of every integration event's full name and property shape, and the build fails if the live contract differs (`MMCA.ADC.Architecture.Tests/IntegrationEventContractTests.cs:9`-`:20`).
+- **What it is** - the frozen wire contract for ADC's cross-service *asynchronous* API. It commits a seven-line snapshot of every integration event's full name and property shape, and the build fails if the live contract differs (`MMCA.ADC.Architecture.Tests/IntegrationEventContractTests.cs:9`-`:20`).
 - **Depends on** - [IntegrationEventContractTestsBase](#integrationeventcontracttestsbase) and [AdcArchitectureMap](#adcarchitecturemap).
-- **Concept introduced, the approval snapshot.** The rules above check *shape rules*; this one checks *identity*. A consumer in another service deserializes by shape, so a renamed, removed, or retyped property (or a brand-new event shipped without a consumer) breaks the contract at runtime with no compile error anywhere. The base rebuilds the live contract from the map and asserts sequence equality against the committed list (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/IntegrationEventContractTestsBase.cs:21`-`:28`), so any change surfaces as a diff in this file that a reviewer must consciously accept. `[Rubric §9 - API & Contract Design]` assesses contract governance, and the asynchronous contract is as much an API as the REST surface; `[Rubric §7 - Microservices Readiness]`: with all four ADC modules already running as separate services, this list is the actual coupling between them.
-- **Walkthrough** - two members. `Map` (`:5`), and `ExpectedContract` (`:9`-`:20`), a collection expression of seven strings in `FullName { Prop:Type, ... }` form: `EventFeedbackSubmitted` and `SessionFeedbackSubmitted` from Conference, `SpeakerLinkedToUser` and `SpeakerUnlinkedFromUser` from Conference (the pair Identity consumes to set and clear `User.LinkedSpeakerId`), [AttendeeCheckedIn](group-22-engagement-module.md#attendeecheckedin) from Engagement, and `UserDeleted` plus [UserRegistered](group-24-identity-module.md#userregistered) from Identity. The properties are listed in sorted order, which is how a rebuilt contract stays comparable line by line.
+- **Concept introduced, the approval snapshot.** The rules above check *shape rules*; this one checks *identity*. A consumer in another service deserializes by shape, so a renamed, removed, or retyped property (or a brand-new event shipped without a consumer) breaks the contract at runtime with no compile error anywhere. The base rebuilds the live contract from the map and asserts sequence equality against the committed list (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/IntegrationEventContractTestsBase.cs:19`-`:29`), so any change surfaces as a diff in this file that a reviewer must consciously accept. `[Rubric §9 - API & Contract Design]` assesses contract governance, and the asynchronous contract is as much an API as the REST surface; `[Rubric §7 - Microservices Readiness]`: with all four ADC modules already running as separate services, this list is the actual coupling between them. Its synchronous twin is [ProtoContractTests](#protocontracttests).
+- **Walkthrough** - two members. `Map` (`:5`), and `ExpectedContract` (`:9`-`:20`), a collection expression of seven strings in `FullName { Prop:Type, ... }` form: [EventFeedbackSubmitted](group-17-conference-domain.md#eventfeedbacksubmitted) and [SessionFeedbackSubmitted](group-17-conference-domain.md#sessionfeedbacksubmitted) from Conference, [SpeakerLinkedToUser](group-17-conference-domain.md#speakerlinkedtouser) and [SpeakerUnlinkedFromUser](group-17-conference-domain.md#speakerunlinkedfromuser) from Conference (the pair Identity consumes to set and clear the linked-speaker reference on the user), [AttendeeCheckedIn](group-22-engagement-module.md#attendeecheckedin) from Engagement, and [UserDeleted](group-24-identity-module.md#userdeleted) plus [UserRegistered](group-24-identity-module.md#userregistered) from Identity. The properties are listed in sorted order, which is how a rebuilt contract stays comparable line by line.
 - **Why it's built this way** - the comment states the rule of engagement (`:7`-`:8`): update the snapshot deliberately, and version the event or coordinate the consumer rollout in the same commit. The `AttendeeCheckedIn` entry carries its own inline justification (`:15`-`:16`): `SponsorId` is additive, optional, defaults to null, and is declared last precisely so a payload written before the sponsor scope existed still deserializes (confirmed in the event itself, `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/CheckIns/IntegrationEvents/AttendeeCheckedIn.cs:21`, `:29`).
-- **Caveats / not-in-source** - the snapshot proves that the shape has not changed, not that any consumer actually handles it. Consumer-side behavior is exercised by the cross-service Testcontainers tier, not here.
+- **Caveats / not-in-source** - the snapshot proves that the shape has not changed, not that any consumer actually handles it. Consumer-side behavior is exercised by the cross-service Testcontainers tier, not here. The contract is rebuilt from mapped assemblies, so an integration event declared in the unmapped Notification module would not appear.
 
 ### LayerDependencyTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/LayerDependencyTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/LayerDependencyTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the Clean Architecture layer-flow guard, and the highest-fact-count rule in the unit: fifteen inherited facts covering which layer may reference which.
 - **Depends on** - [LayerDependencyTestsBase](#layerdependencytestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3104,7 +3580,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### LocalizedTextConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/LocalizedTextConventionTests.cs:14` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/LocalizedTextConventionTests.cs:14` · Level 13 · class (public, sealed)
 
 - **What it is** - the companion to [TranslationCompletenessTests](#translationcompletenesstests). Where that one asks "is every key translated", this one asks "does every user-visible string go through a key at all": no hard-coded literals in `.razor` or `.razor.cs` under `Source/` (`MMCA.ADC.Architecture.Tests/LocalizedTextConventionTests.cs:3`-`:13`).
 - **Depends on** - [LocalizedTextConventionTestsBase](#localizedtextconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap).
@@ -3113,7 +3589,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### MicroserviceExtractionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/MicroserviceExtractionTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/MicroserviceExtractionTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the single-fact guard that transport never leaks into the core layers, so a module behaves identically in-process or extracted.
 - **Depends on** - [MicroserviceExtractionTestsBase](#microserviceextractiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3121,7 +3597,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### ModuleIsolationTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ModuleIsolationTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ModuleIsolationTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the guard that Identity, Conference, and Engagement do not reach into each other: module Domains, Applications, Infrastructures, and APIs are each isolated from their siblings, and neither Domain nor Application may reach another module's Infrastructure.
 - **Depends on** - [ModuleIsolationTestsBase](#moduleisolationtestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3129,7 +3605,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### NamingConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/NamingConventionTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/NamingConventionTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the ten-fact naming and sealing guard: handler, command, query, validator, DTO, specification, repository, and EF configuration suffixes, plus domain events sealed in a `*.DomainEvents` namespace and invariant classes static.
 - **Depends on** - [NamingConventionTestsBase](#namingconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3137,7 +3613,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### PiiConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/PiiConventionTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/PiiConventionTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the privacy structural guard: every domain entity declaring a [PiiAttribute](group-02-domain-building-blocks.md#piiattribute)-marked property must implement [IAnonymizable](group-02-domain-building-blocks.md#ianonymizable), so an entity that holds personal data always has an erasure path.
 - **Depends on** - [PiiConventionTestsBase](#piiconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3145,7 +3621,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### RawQueryableConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/RawQueryableConventionTests.cs:11` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/RawQueryableConventionTests.cs:11` · Level 13 · class (public, sealed)
 
 - **What it is** - the rule that Application-layer code must not use the repository's raw `IQueryable` surfaces (`Table` / `TableNoTracking*`), carrying an eight-file allowlist that pins ADC's existing deliberate uses (`MMCA.ADC.Architecture.Tests/RawQueryableConventionTests.cs:3`-`:9`, `:33`-`:52`).
 - **Depends on** - [RawQueryableConventionTestsBase](#rawqueryableconventiontestsbase), [AdcArchitectureMap](#adcarchitecturemap), [ArchitectureMapBase](#architecturemapbase) (statically, for the repo root at `:28`), and `System.IO.Path`.
@@ -3157,9 +3633,19 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
   - The inherited fact is `ApplicationLayer_DoesNotUseRawQueryableSurfaces` (`RawQueryableConventionTestsBase.cs:61`), a textual scan rather than an assembly scan, which is why it needs directories rather than the map's assemblies.
 - **Caveats / not-in-source** - `AllowedFiles` matches by file name, not by path, so two files with the same name in different modules would both be exempted. Nothing here enforces the "shrink it over time" discipline the comment asks for.
 
+### ServiceContractPurityTests
+
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/ServiceContractPurityTests.cs:9` · Level 13 · class (public, sealed)
+
+- **What it is** - the purity rule for the published gRPC wire surface: a type marked [ServiceContractAttribute](group-13-grpc-contracts.md#servicecontractattribute) must not depend on the producing service's Domain, Application, or Infrastructure (`MMCA.ADC.Architecture.Tests/ServiceContractPurityTests.cs:3`-`:8`). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
+- **Depends on** - [ServiceContractPurityTestsBase](#servicecontractpuritytestsbase) and [AdcArchitectureMap](#adcarchitecturemap).
+- **Concept introduced, the attribute-driven ratchet, and the honest vacuous pass.** The other purity rules in this unit iterate *layers*. This one cannot: no repo registers `Layer.Contracts` in its map today, so a layer-iterating rule would pass vacuously forever without anyone noticing (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ServiceContractPurityTestsBase.cs:8`-`:11`). Instead it scans every assembly the map registers for types carrying the marker, wherever they live, and enforces the invariant from the first marked type onward. The base is explicit that a repo which marks no type yet passes without asserting anything, and that this is the deliberate trade: the value is the ratchet, an invariant already wired up with no test left to remember to write (`:12`-`:18`). `[Rubric §7 - Microservices Readiness]` assesses whether a service can be consumed without its internals: a contract that leaks a domain entity or a persistence type forces every consumer to take the producer as a package dependency, which is what makes an extraction irreversible (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Contracts.cs:14`-`:18`). `[Rubric §9 - API & Contract Design]` covers the same boundary from the contract side.
+- **Walkthrough** - one member, `Map` (`:11`), implementing the base's abstract property (`ServiceContractPurityTestsBase.cs:22`). One inherited fact, `ServiceContracts_ShouldNotDependOn_ServiceInternals` (`:25`), delegating to `ArchitectureRules.ServiceContractsDoNotDependOnServiceInternals(Map)` (`ArchitectureRules.Contracts.cs:32`-`:54`). The rule computes the forbidden internal namespaces from the map, returns immediately if that set is empty (`:34`-`:38`), and otherwise runs a NetArchTest query per mapped assembly against the types carrying the marker (`:40`-`:53`). The marker is matched by full name, `MMCA.Common.Shared.Abstractions.ServiceContractAttribute` (`:10`-`:11`), keeping the rule library free of a framework reference.
+- **Caveats / not-in-source** - ADC declares no `[ServiceContract]` type in `Source/` today, and the four `*.Contracts` projects are not in [AdcArchitectureMap](#adcarchitecturemap), so this rule currently passes without inspecting anything in this repo. That is the base's documented vacuous case, not a defect, but it does mean the enforcement here is latent: it starts biting the day someone marks a type in a mapped assembly. ADC's actual gRPC contract governance today runs through [ProtoContractTests](#protocontracttests), which is not vacuous.
+
 ### SharedLayerTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/SharedLayerTests.cs:3` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/SharedLayerTests.cs:3` · Level 13 · class (public, sealed)
 
 - **What it is** - the guard on the Shared layer, the one layer other modules are allowed to reference: a module's Shared project must not depend on that module's own internal layers, must not reach sibling modules, and must stay free of EF Core.
 - **Depends on** - [SharedLayerTestsBase](#sharedlayertestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3167,7 +3653,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### SliceCohesionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/SliceCohesionTests.cs:8` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/SliceCohesionTests.cs:8` · Level 13 · class (public, sealed)
 
 - **What it is** - the vertical-slice cohesion rule: every module's `Application/{Aggregate}/UseCases/{Operation}/` slice keeps its command or query, its handler, and its validator in one namespace, and the build fails if a handler is stranded from its contract (`MMCA.ADC.Architecture.Tests/SliceCohesionTests.cs:3`-`:7`).
 - **Depends on** - [SliceCohesionTestsBase](#slicecohesiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3175,7 +3661,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### SpecificationConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/SpecificationConventionTests.cs:8` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/SpecificationConventionTests.cs:8` · Level 13 · class (public, sealed)
 
 - **What it is** - the cross-source specification guard: no specification may filter by navigating to another entity, because such a filter would not translate if that entity later moved to a different data source. The stated alternative is [CrossSourceSpecification](group-03-querying-specifications.md#crosssourcespecification) (`MMCA.ADC.Architecture.Tests/SpecificationConventionTests.cs:3`-`:7`).
 - **Depends on** - [SpecificationConventionTestsBase](#specificationconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3184,7 +3670,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### StateManagementConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/StateManagementConventionTests.cs:9` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/StateManagementConventionTests.cs:9` · Level 13 · class (public, sealed)
 
 - **What it is** - the Blazor state-ownership guard: the Identity, Conference, and Engagement UI assemblies carry no mutable static state, and stateful UI services stay scoped (`MMCA.ADC.Architecture.Tests/StateManagementConventionTests.cs:3`-`:8`).
 - **Depends on** - [StateManagementConventionTestsBase](#statemanagementconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).
@@ -3193,7 +3679,7 @@ Where a subclass carries an override beyond `Map`, that override is itself a doc
 
 ### UIArchitectureConventionTests
 
-> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/UIArchitectureConventionTests.cs:10` · Level 10 · class (public, sealed)
+> MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC.Architecture.Tests/UIArchitectureConventionTests.cs:10` · Level 13 · class (public, sealed)
 
 - **What it is** - the container/presentational split enforced mechanically: every code-behind under `Source/` (module UI and UI hosts alike) stays within the 400-line convention cap, and inline `@code` blocks stay small (`MMCA.ADC.Architecture.Tests/UIArchitectureConventionTests.cs:3`-`:9`).
 - **Depends on** - [UIArchitectureConventionTestsBase](#uiarchitectureconventiontestsbase) and [AdcArchitectureMap](#adcarchitecturemap). Map-only shape ([ConcurrencyConventionTests](#concurrencyconventiontests)).

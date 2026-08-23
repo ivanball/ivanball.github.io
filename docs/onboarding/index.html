@@ -205,9 +205,9 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <p>The type inventory and dependency graph are produced <strong>mechanically</strong> by a small Roslyn syntactic
           parser (<code>Tools/invtool/</code>), so the type list, namespaces, and <code>file:line</code> are exact and reproducible. Edges
           are resolved by <strong>namespace-aware name matching</strong>; ~96% bind by namespace visibility, the rest by a
-          globally-unique-name fallback (493 edges), and 29 references are dropped as ambiguous. The functional grouping is
+          globally-unique-name fallback (540 edges), and 29 references are dropped as ambiguous. The functional grouping is
           then applied mechanically (<code>Tools/invtool/classify.ps1</code> → <code>00-group-taxonomy.md</code>), so every one of the
-          <strong>3,465</strong> distinct type nodes maps to exactly one group with no silent drops. See the
+          <strong>3,668</strong> distinct type nodes maps to exactly one group with no silent drops. See the
           <a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest&#39;s accuracy note</a> for residual caveats.</p>
           <hr>
           <h2 id="chapters">Chapters</h2>
@@ -225,7 +225,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           </tr>
           <tr>
           <td><a href="00-inventory.html"><code>00-inventory.md</code></a></td>
-          <td>Phase 0, every in-scope type (3,465 distinct), mechanically extracted, with <code>file:line</code></td>
+          <td>Phase 0, every in-scope type (3,668 distinct), mechanically extracted, with <code>file:line</code></td>
           </tr>
           <tr>
           <td><a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a></td>
@@ -261,7 +261,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>3</td>
           <td><a href="group-03-querying-specifications.html">Querying: Specifications, Filtering &amp; the Entity Query Service</a></td>
-          <td>37</td>
+          <td>38</td>
           <td>Specification pattern (incl. cross-source), dynamic filter/sort/page (incl. IN-list value parsing), the generic query pipeline</td>
           </tr>
           <tr>
@@ -273,7 +273,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>5</td>
           <td><a href="group-05-cqrs-pipeline.html">CQRS: Commands, Queries &amp; the Decorator Pipeline</a></td>
-          <td>36</td>
+          <td>38</td>
           <td>Handler abstraction + the logging/transaction/caching/feature-gate/idempotency decorators (incl. the cache-stampede lock)</td>
           </tr>
           <tr>
@@ -285,13 +285,13 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>7</td>
           <td><a href="group-07-persistence-ef-core.html">Persistence &amp; EF Core</a></td>
-          <td>116</td>
+          <td>118</td>
           <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors (incl. the deferred-dispatch record), repositories, engine-aware entity config, data-source routing, conventions (incl. the soft-delete unique-index convention), factories, managed file storage + image processing (<a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a>), native-push device registrar (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>)</td>
           </tr>
           <tr>
           <td>8</td>
           <td><a href="group-08-auth.html">Authentication &amp; Authorization</a></td>
-          <td>69</td>
+          <td>77</td>
           <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login/refresh workflow (<code>IAuthUser</code>), current-user/claims, password hashing, cookie sessions, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base, the external-auth-broker contract (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043)</td>
           </tr>
           <tr>
@@ -315,7 +315,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>12</td>
           <td><a href="group-12-api-hosting-mapping.html">API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></td>
-          <td>74</td>
+          <td>79</td>
           <td>Controller bases (incl. OAuth + service-info + API versioning, <a href="https://ivanball.github.io/docs/adr/046-http-api-versioning.html" target="_blank" rel="noopener">ADR-046</a>), middleware (incl. soft-deleted-user revocation, <a href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html" target="_blank" rel="noopener">ADR-047</a>), startup, model binders, JSON converters, feature mgmt, idempotency, mapping, edge error localization (i18n), authenticated output caching (<a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>), app-association/deep-link endpoints (<a href="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html" target="_blank" rel="noopener">ADR-043</a>)</td>
           </tr>
           <tr>
@@ -327,13 +327,13 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>14</td>
           <td><a href="group-14-module-system-composition.html">Module System, Composition &amp; Configuration</a></td>
-          <td>68</td>
+          <td>70</td>
           <td><code>IModule</code> + Kahn-ordered loader, DI composition roots, data-source attributes, options binding</td>
           </tr>
           <tr>
           <td>15</td>
           <td><a href="group-15-common-ui-framework.html">Common UI Framework</a></td>
-          <td>89</td>
+          <td>91</td>
           <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>)</td>
           </tr>
           <tr>
@@ -345,31 +345,31 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>17</td>
           <td><a href="group-17-conference-domain.html">ADC Conference, Domain Model &amp; Module Contracts</a></td>
-          <td>96</td>
+          <td>100</td>
           <td>Event/Session/Speaker/Category/Question aggregates + domain events + invariants + Shared contracts (incl. <code>ConferencePermissions</code>, the current/next-event selector + live-validation contracts)</td>
           </tr>
           <tr>
           <td>18</td>
           <td><a href="group-18-conference-application.html">ADC Conference, Application &amp; Use Cases</a></td>
-          <td>252</td>
+          <td>285</td>
           <td>Conference CQRS handlers, validators (incl. the per-field session validation-rule family), DTOs, specs, Sessionize import, decision-support analytics, batch bookmark-count query, event-filtering-by-role handlers, calendar (.ics) export slice (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>)</td>
           </tr>
           <tr>
           <td>19</td>
           <td><a href="group-19-conference-infrastructure.html">ADC Conference, Infrastructure &amp; Persistence</a></td>
-          <td>32</td>
+          <td>33</td>
           <td>Conference DbContext registration, EF configs, seeding, infra services</td>
           </tr>
           <tr>
           <td>20</td>
           <td><a href="group-20-conference-api-grpc.html">ADC Conference, API, gRPC Contracts &amp; Service Host</a></td>
-          <td>42</td>
+          <td>43</td>
           <td>REST controllers, <code>.Contracts</code> gRPC, the extractable service host (incl. its Kestrel config), the gRPC adapters (incl. cross-service live-validation), localized error resources</td>
           </tr>
           <tr>
           <td>21</td>
           <td><a href="group-21-conference-ui.html">ADC Conference, UI</a></td>
-          <td>97</td>
+          <td>106</td>
           <td>Conference Blazor pages + UI services, the single canonical ADC Home page + its view models, the AI-scoring poll recovery tracker, calendar/QR export UI, OfflineBanner, PresenterLayout on Common theme providers</td>
           </tr>
           <tr>
@@ -381,13 +381,13 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>23</td>
           <td><a href="group-23-engagement-live-layer.html">ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></td>
-          <td>94</td>
+          <td>95</td>
           <td>Event-wide live polls with voting + moderated per-session Q&amp;A with upvoting, over the <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a> hub-channel transport and the cross-service gRPC live-channel adapter (HappeningNow / SessionLive / PresenterView)</td>
           </tr>
           <tr>
           <td>24</td>
           <td><a href="group-24-identity-module.html">ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></td>
-          <td>83</td>
+          <td>88</td>
           <td>The Identity bounded context end-to-end (incl. <code>IdentityPermissions</code>, user culture/theme preferences, the <a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a> user-avatar photo slice end to end, the external-login email verifier + extractable-host Kestrel config; <code>AuthenticationService</code> now extends Common&#39;s shared base)</td>
           </tr>
           <tr>
@@ -405,7 +405,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>27</td>
           <td><a href="group-27-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
-          <td>1780</td>
+          <td>1,907</td>
           <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases, the shared production-host/graceful-shutdown bases, the observability-convention fitness base, and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
           </tr>
           </tbody></table></div>

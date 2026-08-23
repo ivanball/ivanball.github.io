@@ -161,48 +161,48 @@
           </thead>
           <tbody><tr>
           <td><code>.cs</code> files scanned</td>
-          <td align="right">2,810</td>
+          <td align="right">2,950</td>
           <td><code>00-inventory.md</code></td>
           </tr>
           <tr>
           <td>, in-scope</td>
-          <td align="right">2,692</td>
+          <td align="right">2,828</td>
           <td></td>
           </tr>
           <tr>
           <td>, generated/excluded</td>
-          <td align="right">118</td>
+          <td align="right">122</td>
           <td>logged exception §2.1</td>
           </tr>
           <tr>
           <td>Type declaration rows (incl. partial-class fragments)</td>
-          <td align="right">3,586</td>
+          <td align="right">3,797</td>
           <td><code>00-inventory.md</code></td>
           </tr>
           <tr>
           <td><strong>Distinct type nodes (partials collapsed)</strong></td>
-          <td align="right"><strong>3,465</strong></td>
+          <td align="right"><strong>3,668</strong></td>
           <td>the master checklist</td>
           </tr>
           <tr>
           <td>→ mapped to a functional group</td>
-          <td align="right">3,465</td>
+          <td align="right">3,668</td>
           <td><code>classify.ps1</code> (0 unmapped)</td>
           </tr>
           <tr>
           <td>→ individually sectioned (named in a chapter)</td>
-          <td align="right">1,890</td>
+          <td align="right">2,001</td>
           <td><code>verify.ps1</code></td>
           </tr>
           <tr>
           <td>→ rolled up by project (G25 test classes)</td>
-          <td align="right">1,575</td>
+          <td align="right">1,667</td>
           <td>logged exception §2.2</td>
           </tr>
           <tr>
           <td>Distinct <code>###</code> sections written across 27 chapters</td>
-          <td align="right">1,834</td>
-          <td>covering the 1,890 (sibling families share a section, §2.3)</td>
+          <td align="right">1,910</td>
+          <td>covering the 2,001 (sibling families share a section, §2.3)</td>
           </tr>
           <tr>
           <td>Chapter overviews written</td>
@@ -210,9 +210,9 @@
           <td>one per group</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 1,890 individually-sectioned types are
+          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 2,001 individually-sectioned types are
           missing from their group chapter, every one appears as a <code>###</code> heading or in a sibling-family
-          <code>File:Line</code> table. 3,465 = 1,890 individually-sectioned + 1,575 rolled-up. Nothing dropped, nothing
+          <code>File:Line</code> table. 3,668 = 2,001 individually-sectioned + 1,667 rolled-up. Nothing dropped, nothing
           double-counted (each type maps to exactly one group).</p>
           <blockquote>
           <p><strong>Caveat on what <code>verify.ps1</code> proves.</strong> Its check is name presence: a type counts as covered when
@@ -1141,20 +1141,65 @@
           bodies remains open outside the parts re-authored here.</li>
           </ul>
           </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, 2026-08-23 full drift sweep).</strong> Regenerated
+          at MMCA.Common <code>0110aee</code> + MMCA.ADC <code>96f0919a</code> (both clean; prior pass <code>0b19b56</code> / <code>018ccc50</code>).
+          Net change: <strong>+203</strong> distinct nodes (3,465 to <strong>3,668</strong>), 0 removed, 0 regrouped; <code>classify.ps1</code>
+          reports 0 unmapped and the per-group counts sum to 3,668. Individually-sectioned types 1,890 to
+          <strong>2,001</strong>, roll-ups 1,575 to <strong>1,667</strong>, <code>###</code> sections 1,834 to <strong>1,910</strong>, cycles 30 to <strong>34</strong>.</p>
+          <ul>
+          <li><strong>Password-reset vertical (G08 +8, G12 +5, G14 +2, <a href="https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html" target="_blank" rel="noopener">ADR-091</a>):</strong> the cache-backed
+          forgot/reset-password flow: <code>ForgotPasswordHandlerBase&lt;TUser, TCommand&gt;</code>
+          (<code>MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:35</code>) and its
+          Reset sibling, <code>PasswordResetTokenService</code> (<code>MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:26</code>),
+          <code>PasswordResetSettings</code> (<code>MMCA.Common.Application/Auth/PasswordResetSettings.cs:10</code>), and
+          <code>PasswordResetAuthControllerBase&lt;TForgotPasswordCommand, TResetPasswordCommand&gt;</code>
+          (<code>MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:43</code>).</li>
+          <li><strong>Event upcasting (G03 +1, G05 +2, <a href="https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html" target="_blank" rel="noopener">ADR-090</a>):</strong> <code>IEventUpcaster&lt;in TSource, out TTarget&gt;</code>
+          and <code>EventUpcasterRegistry</code> (<code>MMCA.Common.Application/Services/EventUpcasterRegistry.cs:30</code>).</li>
+          <li><strong>ADC Conference application (G18 +33):</strong> the session-selection decision-support vertical
+          (<code>GetContentSimilarity</code>, <code>GetSessionSelectionDashboard</code>, <code>GetSpeakerSessionOverlap</code>,
+          <code>GetCategoryDistribution</code> under <code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/</code>,
+          incl. <code>IAiScoringService</code> at <code>.../ScoreEventSessions/IAiScoringService.cs:40</code>), calendar export
+          (<code>ExportEventCalendarQuery</code>/<code>ExportSessionCalendarQuery</code>), and new sponsor/category/question
+          update use-cases; G17 +4, G19 +1, G20 +1, G21 +9, G23/Identity +5, G26/Live +1, G15 +2, G07 +2
+          ride the same waves.</li>
+          <li><strong>Testing growth (G25 +127):</strong> per-<code>[Fact]</code> classes rolled up per the standing exception; the
+          individually-sectioned reusable base set in group-27 now counts 240 types.</li>
+          <li><strong>Level-repack fallout (the reason 17 extra parts were re-authored):</strong> <code>plan.ps1</code>&#39;s repack moved
+          174 existing sections across unit boundaries beyond the delta-touched units (G08, G15, G18 p03/p06-p16,
+          G19, G21, G22). A deterministic heading-vs-membership scan over <code>parts/</code> confirms 0 stale sections
+          remain; the residual duplicate headings in group-23/group-24 are distinct same-name types (two
+          <code>OptionState</code> component states; <code>UserDeleted</code> domain event vs integration event), not leftovers.</li>
+          <li><strong>Cycles 30 to 34:</strong> four new SCCs, each wholly inside one group: two in G12
+          (<code>InsecureJwtMetadataWarningStartupFilter</code> / <code>WebApplicationBuilderExtensions</code> and
+          <code>MiddlewarePipelineBuilder</code> / <code>WebApplicationExtensions</code>) and two test-only in G25
+          (<code>AnonymousEndpointTestsBaseTests</code> / <code>DriftedTests</code> / <code>StaleAllowListTests</code> / <code>ConformantTests</code>,
+          and <code>EventUpcasterFitnessTests</code> / <code>UpcasterTestMap</code>).</li>
+          <li><strong>Outside the type pipeline:</strong> <code>devops-iac</code> was re-authored against the 2026-08-22 FinOps
+          second-stage Bicep changes (<code>MMCA.ADC/infra/main.bicep</code>, <code>foundation.bicep</code>; ADC PRs #135/#136);
+          <code>CONCEPT-MAPS.md</code> needed no change (27 groups, 15 packages unchanged); the <code>00-primer.md</code> ADR
+          table gained rows 090-096 from the canonical index.</li>
+          <li><strong>Authoring pass and verification:</strong> 73 parts re-authored across 16 group chapters (52 approved
+          units + the 17 repack-fallout units + 3 G18 units + <code>devops-iac</code>), authored against real source
+          with <code>path:line</code> citations. <code>verify.ps1</code>: <strong>0 missing</strong>, rubric <strong>34/34</strong>. All adversarial
+          spot-checks (overviews of G03/G05/G07/G08/G12, G08-p02, G15-p04) returned CONFIRMED.</li>
+          </ul>
+          </blockquote>
           <hr>
           <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
-          <h3 id="21-generated--scaffolded-code-not-sectioned-118-files">2.1 Generated / scaffolded code, not sectioned (118 files)</h3>
+          <h3 id="21-generated--scaffolded-code-not-sectioned-122-files">2.1 Generated / scaffolded code, not sectioned (122 files)</h3>
           <p>EF Core migrations (<code>/Migrations/</code>, <code>.Migrations.SqlServer</code>), <code>ModelSnapshot</code>, <code>*.Designer.cs</code>,
           <code>*.g.cs</code>, <code>GlobalUsings.g.cs</code>, and <code>AssemblyInfo.cs</code> are excluded by rule (<code>Tools/invtool</code> <code>IsGenerated</code>).
           The <strong>mechanisms</strong> that produce them are taught instead: the <code>DbContext</code>, the migration workflow, and
           the <code>.proto</code>/gRPC contracts (see <a href="group-07-persistence-ef-core.html">group-07</a>,
           <a href="group-13-grpc-contracts.html">group-13</a>, and <a href="devops-testing.html">devops-testing</a>). The full file list is
           in <a href="00-inventory.html#generated--excluded-artifacts-no-type-sections-written"><code>00-inventory.md</code></a>.</p>
-          <h3 id="22-per-fact-test-classes-rolled-up-by-project-1460-types">2.2 Per-<code>[Fact]</code> test classes, rolled up by project (1,460 types)</h3>
+          <h3 id="22-per-fact-test-classes-rolled-up-by-project-1667-types">2.2 Per-<code>[Fact]</code> test classes, rolled up by project (1,667 types)</h3>
           <p>Per the guide&#39;s TESTS note, individual test classes are <strong>not</strong> given per-type sections. The
           <a href="group-27-testing-infrastructure.html">Testing chapter (group-27)</a> instead:</p>
           <ul>
-          <li>sections the <strong>reusable</strong> test infrastructure in full (the <strong>168</strong> types in <code>MMCA.Common.Testing</code>,
+          <li>sections the <strong>reusable</strong> test infrastructure in full (the <strong>240</strong> types in <code>MMCA.Common.Testing</code>,
           <code>.Testing.E2E</code>, <code>.Testing.UI</code>, the shared <strong><code>.Testing.Architecture</code></strong> rule library + bases, now
           including the six convention/fitness bases added since v1.93.0, the web-vitals collector, the
           localization resx-parity base, the slice-cohesion base, the markup-snapshot helper, the new
@@ -1166,7 +1211,7 @@
           <code>DependencyInjectionAssert</code>, <code>TestPolling</code>, <code>ModuleConformanceTestsBase&lt;TModule&gt;</code> and the
           <code>WebVitalsBudget</code> added at the v1.142.0 pass, and the per-repo architecture-fitness test classes
           plus the <code>Gallery</code> harness), and</li>
-          <li>rolls the remaining <strong>1,460</strong> per-suite test classes (including the <code>MMCA.Common.Benchmarks</code>
+          <li>rolls the remaining <strong>1,667</strong> per-suite test classes (including the <code>MMCA.Common.Benchmarks</code>
           perf-smoke project) into a <strong>per-project table</strong> (purpose + style:
           unit / integration / fitness / E2E / component / performance-smoke).
           Every one of the 1,460 remains individually listed with <code>file:line</code> in
@@ -1177,14 +1222,14 @@
           <p>Near-identical families (per-entity <code>Add*/Remove*/Update*</code> commands, <code>*DTOMapper</code>, <code>*CreateRequest</code>,
           <code>*Validator</code>, per-type filter strategies, etc.) are taught in one <code>### A, B, C</code> section that explains
           the shared shape once. <strong>Every</strong> grouped type is still named and cited individually via the section&#39;s
-          <code>File:Line</code> table, so citation coverage is complete (this is what <code>verify.ps1</code> checks). The 1,804
-          individually-sectioned types are covered by 1,740 <code>###</code> sections; the 64-type difference is family grouping.</p>
+          <code>File:Line</code> table, so citation coverage is complete (this is what <code>verify.ps1</code> checks). The 2,001
+          individually-sectioned types are covered by 1,910 <code>###</code> sections; the 91-type difference is family grouping.</p>
           <hr>
           <h2 id="3-grouping--ordering-verification">3. Grouping &amp; ordering verification</h2>
           <ul>
-          <li><strong>Every type in exactly one group.</strong> <code>classify.ps1</code> assigns all 3,465 nodes via name-level overrides
+          <li><strong>Every type in exactly one group.</strong> <code>classify.ps1</code> assigns all 3,668 nodes via name-level overrides
           (for the grab-bag <code>MMCA.Common.*Interfaces*/Services</code> namespaces) + ordered namespace-prefix rules;
-          it reports <strong>0 unmapped</strong> and the per-group counts sum to 3,465. See
+          it reports <strong>0 unmapped</strong> and the per-group counts sum to 3,668. See
           <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a>.</li>
           <li><strong>Within-group ascending Level.</strong> Each chapter&#39;s sections were authored from a pre-sorted, Level-
           ascending unit table, so no section precedes a same-group type it depends on (ties broken by name).</li>
