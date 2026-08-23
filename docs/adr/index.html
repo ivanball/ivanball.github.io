@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 90 ADRs</summary>
+        <summary>All 91 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -189,6 +189,7 @@
         <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
         <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
         <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
           </ol>
         </nav>
       </details>
@@ -655,6 +656,11 @@
           <td><a href="090-event-upcaster-registration.html">090</a></td>
           <td>Event upcaster registration extension point (completes 010)</td>
           <td>The consumer-side half of ADR-010 becomes a mechanism: <code>IEventUpcaster&lt;TSource, TTarget&gt;</code> (a pure payload mapping from a retired contract to its successor) registered per module via <code>AddEventUpcaster&lt;...&gt;()</code> (TryAddEnumerable idiom), assembled into a chaining <code>EventUpcasterRegistry</code> that walks V1 -&gt; V2 -&gt; V3 by declared target type, preserves <code>MessageId</code>/<code>DateOccurred</code> across every hop (inbox dedup keys survive by construction), and fails startup, naming the offenders, on duplicate sources, self-maps or cycles. Both delivery paths consult it: <code>DomainEventDispatcher</code> upcasts before selecting integration handlers (covers monolith mode and pre-upgrade outbox rows), and broker hosts drain a retired type via the dedicated <code>RegisterUpcastedIntegrationEventConsumer&lt;TOld&gt;()</code>, so handlers are written once against the newest contract. Two new fitness functions on <code>EventConventionTestsBase</code> (unique source types; target <code>SchemaVersion</code> strictly higher) are inherited by every consumer tree with no edit. Deferred and recorded: outbox type-name aliasing for prematurely deleted types, and producer-side rewriting of old rows.</td>
+          </tr>
+          <tr>
+          <td><a href="091-cache-backed-password-reset.html">091</a></td>
+          <td>Cache-backed password reset (extends 029/032)</td>
+          <td>The reset credential is a cache record, not three columns on the user row and not a self-contained signed payload: single use is unimplementable without a store anyway, and TTL plus attempt cap are native to the cache, so the feature reached two production apps with <strong>no migration</strong>. <code>IPasswordResetTokenService</code> mirrors <code>LoginProtectionService</code> down to the address normalization (the load-bearing part: raw-input keys give <code>User@x.com</code> and <code>user@x.com</code> independent tokens for one account), and adds 256-bit tokens, SHA-256 at rest, <code>FixedTimeEquals</code>, one live token per address, and a wrong guess that rewrites the record with its <strong>remaining</strong> lifetime so guessing cannot extend the window. The anti-enumeration contract lives in <code>ForgotPasswordHandlerBase</code>, whose every path returns success (unknown address, throttle, failed send), with <code>ResetPasswordHandlerBase</code> collapsing every rejection into one <code>Auth.InvalidResetToken</code> 401; a subclass cannot leak the distinction by accident. <code>PasswordResetAuthControllerBase</code> is an additive <strong>sibling</strong> of <code>AuthControllerBase</code> (both apps&#39; <code>AuthController</code> already occupies that inheritance chain) routed to the same <code>Auth</code> prefix, so no gateway route changes; both actions are <code>AllowAnonymous</code> + <code>[Idempotent]</code> + <code>auth-ip</code>. Email is composed in the handler behind overridable hooks (link <strong>and</strong> raw token, because the MAUI head cannot deep link), English only, fire-and-log with no outbox. Residuals recorded: cache eviction kills live links, and the duration of a registered-address request still correlates with existence, so the timing oracle the always-202 contract does not close is named rather than implied.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

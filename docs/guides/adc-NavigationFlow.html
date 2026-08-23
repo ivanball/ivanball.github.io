@@ -160,11 +160,13 @@
           </blockquote>
           <hr>
           <h2 id="1-anonymous-user">1. Anonymous User</h2>
-          <p>Pages accessible without authentication: home, login, register, and all public conference pages.</p>
+          <p>Pages accessible without authentication: home, login, register, the two password-reset pages, and all public conference pages.</p>
           <pre class="mermaid">flowchart TD
     subgraph Auth[&quot;Authentication&quot;]
         Login[&quot;/login&lt;br/&gt;Login&quot;]
         Register[&quot;/register&lt;br/&gt;Register&quot;]
+        ForgotPassword[&quot;/forgot-password&lt;br/&gt;Request Reset Link&quot;]
+        ResetPassword[&quot;/reset-password&lt;br/&gt;Set New Password&quot;]
     end
 
     subgraph Public[&quot;Public Conference&quot;]
@@ -188,6 +190,11 @@
 
     Login --&gt;|on success| Home
     Register --&gt;|on success| Home
+
+    Login --&gt;|Forgot password link| ForgotPassword
+    ForgotPassword --&gt;|back to sign in| Login
+    ForgotPassword -.-&gt;|reset link in the email| ResetPassword
+    ResetPassword --&gt;|on success| Login
 
     PubEvents --&gt;|row click| PubEventDetail
     PubEventDetail --&gt;|back| PubEvents
@@ -513,6 +520,10 @@
     Visitor --&gt;|Login| Login[&quot;/login&lt;br/&gt;Login&quot;]
     Register --&gt;|submit, auto-links speaker by email| Home[&quot;/&lt;br/&gt;Home, signed in&quot;]
     Login --&gt;|submit| Home
+    Login --&gt;|Forgot password| ForgotPassword[&quot;/forgot-password&lt;br/&gt;Request Reset Link&quot;]
+    ForgotPassword --&gt;|submit, always accepted| Sent[&quot;Check your email notice&quot;]
+    Sent -.-&gt;|reset link or pasted token| ResetPassword[&quot;/reset-password&lt;br/&gt;Set New Password&quot;]
+    ResetPassword --&gt;|submit| Login
     Home --&gt;|My Profile| Profile[&quot;/profile&lt;br/&gt;Change Password&quot;]
     Profile --&gt;|Change Password| Profile
     Profile -.-&gt;|direct route| Claims[&quot;/profile/claims&lt;br/&gt;My Claims, incl. speaker_id&quot;]
@@ -597,6 +608,7 @@
           <li>Unauthenticated users accessing protected pages are redirected to <code>/login</code> via the <code>RedirectToLogin</code> component.</li>
           <li>Successful login/register redirects to Home (<code>/</code>) with a full page reload.</li>
           <li>Logout (from NavMenu, MainLayout, or Profile) redirects to <code>/login</code> with a full page reload.</li>
+          <li>The &quot;Forgot password?&quot; link on <code>/login</code> opens <code>/forgot-password</code>. The emailed reset link opens <code>/reset-password</code> with the email and token already in the query string (both fields stay editable, so a recipient can paste the token by hand instead), and a successful reset returns to <code>/login</code>.</li>
           </ul>
           <h3 id="authorization-model">Authorization Model</h3>
           <ul>
@@ -607,7 +619,7 @@
           <li><strong>Page guards (<code>@attribute [Authorize…]</code>):</strong><ul>
           <li><em>Organizer role required:</em> <code>/sessions/selection-dashboard</code>, <code>/events/{EventId}/feedback</code>, <code>/sessions/{SessionId}/feedback</code>, and every conference/user management page (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>, <code>/conferencecategories</code>, <code>/questions</code>, <code>/rooms</code>, <code>/users</code>), each carrying a page-level <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> (e.g. <code>EventList.razor</code>, <code>UserList.razor</code>). The shared <code>Routes.razor</code> renders the Forbidden page for an authenticated non-Organizer; the inherited <code>RegisteredUser_AdminPages_ShouldBeForbidden</code> E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth). The sponsor management pages (<code>/sponsors</code>, <code>/sponsors/create</code>, <code>/sponsors/{Id}</code>) and the check-in and rewards pages (<code>/check-in</code>, <code>/organizer/attendance</code>, <code>/organizer/points</code>) carry the same page-level attribute, and their <strong>writes</strong> are additionally permission-checked API-side (<code>conference:sponsors:manage</code>, <code>engagement:checkin:manage</code>, <code>engagement:points:view-overview</code>), so the role opens the page and the permission authorizes the call.</li>
           <li><em>Authentication only:</em> <code>/profile</code>, <code>/profile/claims</code>, <code>/speaker/dashboard</code>, <code>/my-badge</code>, <code>/points</code>, both attendee feedback forms, the conference-day live pages (<code>/happening-now</code>, <code>/conference/sessions/{Id}/live</code>, <code>/conference/sessions/{Id}/present</code>), and <code>/speakers/{Id}</code> (SpeakerDetail is the one management page still gated by plain <code>[Authorize]</code> because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).</li>
-          <li><em>Public (no attribute):</em> all <code>/conference/*</code> read pages, except the two live-layer routes above.</li>
+          <li><em>Public (no attribute):</em> all <code>/conference/*</code> read pages, except the two live-layer routes above, plus the two password-reset pages (<code>/forgot-password</code>, <code>/reset-password</code>), which ship in the framework UI package and are reachable only by an unauthenticated visitor&#39;s own action (the &quot;Forgot password?&quot; link on <code>/login</code> or the link in the reset email).</li>
           <li><em>MAUI head only:</em> <code>/settings/device</code> is registered by <code>DeviceUIModule</code> and exists in no web head.</li>
           </ul>
           </li>

@@ -17,13 +17,15 @@ This document maps the site navigation flow for each actor in the MMCA.ADC appli
 
 ## 1. Anonymous User
 
-Pages accessible without authentication: home, login, register, and all public conference pages.
+Pages accessible without authentication: home, login, register, the two password-reset pages, and all public conference pages.
 
 ```mermaid
 flowchart TD
     subgraph Auth["Authentication"]
         Login["/login<br/>Login"]
         Register["/register<br/>Register"]
+        ForgotPassword["/forgot-password<br/>Request Reset Link"]
+        ResetPassword["/reset-password<br/>Set New Password"]
     end
 
     subgraph Public["Public Conference"]
@@ -47,6 +49,11 @@ flowchart TD
 
     Login -->|on success| Home
     Register -->|on success| Home
+
+    Login -->|Forgot password link| ForgotPassword
+    ForgotPassword -->|back to sign in| Login
+    ForgotPassword -.->|reset link in the email| ResetPassword
+    ResetPassword -->|on success| Login
 
     PubEvents -->|row click| PubEventDetail
     PubEventDetail -->|back| PubEvents
@@ -397,6 +404,10 @@ flowchart TD
     Visitor -->|Login| Login["/login<br/>Login"]
     Register -->|submit, auto-links speaker by email| Home["/<br/>Home, signed in"]
     Login -->|submit| Home
+    Login -->|Forgot password| ForgotPassword["/forgot-password<br/>Request Reset Link"]
+    ForgotPassword -->|submit, always accepted| Sent["Check your email notice"]
+    Sent -.->|reset link or pasted token| ResetPassword["/reset-password<br/>Set New Password"]
+    ResetPassword -->|submit| Login
     Home -->|My Profile| Profile["/profile<br/>Change Password"]
     Profile -->|Change Password| Profile
     Profile -.->|direct route| Claims["/profile/claims<br/>My Claims, incl. speaker_id"]
@@ -510,6 +521,7 @@ flowchart TD
 - Unauthenticated users accessing protected pages are redirected to `/login` via the `RedirectToLogin` component.
 - Successful login/register redirects to Home (`/`) with a full page reload.
 - Logout (from NavMenu, MainLayout, or Profile) redirects to `/login` with a full page reload.
+- The "Forgot password?" link on `/login` opens `/forgot-password`. The emailed reset link opens `/reset-password` with the email and token already in the query string (both fields stay editable, so a recipient can paste the token by hand instead), and a successful reset returns to `/login`.
 
 ### Authorization Model
 - **Roles:** `Organizer` is the only elevated role; every other authenticated user is an `Attendee` (the default). There is no separate "Admin" role.
@@ -519,7 +531,7 @@ flowchart TD
 - **Page guards (`@attribute [Authorize…]`):**
   - *Organizer role required:* `/sessions/selection-dashboard`, `/events/{EventId}/feedback`, `/sessions/{SessionId}/feedback`, and every conference/user management page (`/events`, `/sessions`, `/speakers`, `/conferencecategories`, `/questions`, `/rooms`, `/users`), each carrying a page-level `[Authorize(Roles = "Organizer")]` (e.g. `EventList.razor`, `UserList.razor`). The shared `Routes.razor` renders the Forbidden page for an authenticated non-Organizer; the inherited `RegisteredUser_AdminPages_ShouldBeForbidden` E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth). The sponsor management pages (`/sponsors`, `/sponsors/create`, `/sponsors/{Id}`) and the check-in and rewards pages (`/check-in`, `/organizer/attendance`, `/organizer/points`) carry the same page-level attribute, and their **writes** are additionally permission-checked API-side (`conference:sponsors:manage`, `engagement:checkin:manage`, `engagement:points:view-overview`), so the role opens the page and the permission authorizes the call.
   - *Authentication only:* `/profile`, `/profile/claims`, `/speaker/dashboard`, `/my-badge`, `/points`, both attendee feedback forms, the conference-day live pages (`/happening-now`, `/conference/sessions/{Id}/live`, `/conference/sessions/{Id}/present`), and `/speakers/{Id}` (SpeakerDetail is the one management page still gated by plain `[Authorize]` because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).
-  - *Public (no attribute):* all `/conference/*` read pages, except the two live-layer routes above.
+  - *Public (no attribute):* all `/conference/*` read pages, except the two live-layer routes above, plus the two password-reset pages (`/forgot-password`, `/reset-password`), which ship in the framework UI package and are reachable only by an unauthenticated visitor's own action (the "Forgot password?" link on `/login` or the link in the reset email).
   - *MAUI head only:* `/settings/device` is registered by `DeviceUIModule` and exists in no web head.
 - **Feature-gated surfaces:** the badge and check-in pages (`/my-badge`, `/check-in`, `/organizer/attendance`) and the points pages (`/points`, `/organizer/points`) call APIs behind the `Engagement.CheckIn` and `Engagement.Points` flags. With a flag off the controller returns **404** rather than 403 (ADR-031) and the page renders empty; the route itself is not removed.
 - **One route, two input surfaces:** `/check-in` renders the camera scan card only where the barcode-scanner capability reports itself supported (the MAUI head, [ADR-071](../adr/071-barcode-scanning-and-qr-display.md)). The manual attendee-search panel is always rendered, so on the web and Windows heads that search *is* the check-in surface rather than a degraded fallback. The page adapts; it does not branch on platform.

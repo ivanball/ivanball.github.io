@@ -155,11 +155,13 @@
           </blockquote>
           <hr>
           <h2 id="1-anonymous-user">1. Anonymous User</h2>
-          <p>Pages accessible without authentication: home, login, register, and the public catalog.</p>
+          <p>Pages accessible without authentication: home, login, register, the two password-reset pages, and the public catalog.</p>
           <pre class="mermaid">flowchart TD
     subgraph Auth[&quot;Authentication&quot;]
         Login[&quot;/login&lt;br/&gt;Login&quot;]
         Register[&quot;/register&lt;br/&gt;Register&quot;]
+        ForgotPassword[&quot;/forgot-password&lt;br/&gt;Request Reset Link&quot;]
+        ResetPassword[&quot;/reset-password&lt;br/&gt;Set New Password&quot;]
     end
 
     subgraph Catalog[&quot;Public Catalog&quot;]
@@ -176,11 +178,19 @@
     Login --&gt;|on success| Home
     Register --&gt;|on success| Home
 
+    Login --&gt;|Forgot password link| ForgotPassword
+    ForgotPassword --&gt;|back to sign in| Login
+    ForgotPassword -.-&gt;|reset link in the email| ResetPassword
+    ResetPassword --&gt;|on success| Login
+
     Browse --&gt;|card click| ProductDetail
     ProductDetail --&gt;|back| Browse
     ProductDetail --&gt;|add to cart| Login</pre>
           <blockquote>
           <p>Add-to-cart on the product detail page sits inside an <code>AuthorizeView</code>; an anonymous visitor is prompted to log in instead.</p>
+          </blockquote>
+          <blockquote>
+          <p><code>/forgot-password</code> and <code>/reset-password</code> are shipped by the framework UI package and carry no <code>[Authorize]</code> attribute. The dashed edge is the reset email: the link carries the email and the token in the query string, and both fields stay editable so a recipient can paste the token by hand.</p>
           </blockquote>
           <hr>
           <h2 id="2-customer-authenticated-user">2. Customer (Authenticated User)</h2>

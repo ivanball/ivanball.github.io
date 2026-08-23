@@ -560,7 +560,7 @@ Every entity in the system tracks:
 
 ### UC-1: User Registration & Login
 
-See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the current email + password authentication flows.
+See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the current email + password authentication flows. **UC-34** (Request password reset) and **UC-35** (Reset password) in the same section cover the self-service recovery path.
 
 ---
 
@@ -923,7 +923,7 @@ the count, never who voted (BR-238).
 **Postconditions:** Sessions carry AI scores that inform the accept/decline decision.
 
 > **Use-case numbering.** UC-12 to UC-18, UC-20, and UC-28/UC-29 are unused; the numbers were retired
-> as the specification was reorganized and are deliberately not recycled. UC-30 to UC-33 are the
+> as the specification was reorganized and are deliberately not recycled. UC-30 to UC-35 are the
 > authentication flows and live in Section 12.2.
 
 ---
@@ -976,6 +976,8 @@ All API Consumer actions, plus:
 | 15a | Refresh access token (web only) | UC-32, BR-205 | `POST /auth/refresh` |
 | 15b | Revoke refresh token (logout) | BR-216 | `POST /auth/revoke` |
 | 15c | Change password | UC-33 | `PUT /auth/password` |
+| 15d | Request a password reset link | UC-34, BR-217, BR-219 | `POST /auth/forgot-password` |
+| 15e | Reset the password with the emailed token | UC-35, BR-218 | `POST /auth/reset-password` |
 | 16 | View own JWT claims | UC-10 | `GET /api/userclaims` |
 
 **Feedback (Conference context, attendee-written):**
@@ -1128,7 +1130,7 @@ Actions initiated autonomously by domain event handlers after persistence:
 | Actor | Explicit UCs | Implicit Actions | Total |
 |-------|-------------|-----------------|-------|
 | **API Consumer** | UC-2, UC-3 | 13 entity read endpoints + 2 speaker metrics (feedback, bookmark count) | 15 |
-| **Attendee** | UC-30, UC-31, UC-32, UC-33, UC-4, UC-5, UC-10, UC-11, UC-21 | + API Consumer actions + feedback update/delete + account deletion + password change | 30 |
+| **Attendee** | UC-30, UC-31, UC-32, UC-33, UC-34, UC-35, UC-4, UC-5, UC-10, UC-11, UC-21 | + API Consumer actions + feedback update/delete + account deletion + password change + password reset | 32 |
 | **Speaker** | *(Attendee + speaker-specific views)* | Profile editing (feedback + bookmark count views are public, already in API Consumer) | Attendee + 1 |
 | **Organizer** | UC-6-UC-9, UC-19, UC-21 | + Attendee actions + Conference CRUD (29 write actions: speaker question answer endpoints are domain-only, not yet exposed via REST) + user list/delete + publish/unpublish + speaker link/unlink | 62 |
 | **System** |: | Logging | 2 |
@@ -2247,6 +2249,94 @@ A user is uniquely identified by their **email address**. Each email corresponds
 
 ---
 
+#### UC-34: Request Password Reset
+
+**Actors:** Unauthenticated user who cannot sign in (any platform)
+**Preconditions:** None. The caller has lost the credential, so the endpoint is anonymous by necessity.
+
+**Endpoint:** `POST /auth/forgot-password`
+
+**Request body:**
+
+```json
+{
+  "email": "attendee@example.com"
+}
+```
+
+**Required fields:** `email`
+
+**Main Flow:**
+
+1. System validates the shape of the address (non-empty, valid email format). Whether the address belongs to an account is deliberately not validated (BR-217)
+2. System looks up the account behind the address without tracking it
+3. System increments the per-address request counter and checks it against the rolling-hour throttle (BR-219)
+4. System mints a 256-bit single-use token, stores only its SHA-256 hash against the address with the configured TTL, and returns the raw token to the handler (BR-218)
+5. System sends an email containing the reset link (`{PasswordReset:ResetUrl}?email=...&token=...`) and the raw token, so a client that cannot follow a deep link can have the token entered by hand
+6. Returns HTTP 202 Accepted
+
+**Response body:** None.
+
+**Response codes:**
+- HTTP 202: request accepted (returned for every well-formed address, registered or not)
+- HTTP 400: malformed or missing email address
+- HTTP 429: `auth-ip` per-IP rate limit exceeded
+
+**Alternate Flows:**
+- No account for the address → steps 3-5 are skipped, the reason is logged server-side, and the response is still HTTP 202 (BR-217)
+- Address over the throttle → no token is minted and no email is sent; the response is still HTTP 202 (BR-219)
+- Email delivery fails → the failure is logged with the user id; the token stays live so the user can retry, and the response is still HTTP 202
+- An earlier token exists for the address → it is overwritten, so only the newest link works (BR-218)
+
+**Postconditions:** At most one active reset token exists for the address. No account state changed: nothing is written to the database, and the response carries no signal about whether the address is registered.
+
+---
+
+#### UC-35: Reset Password
+
+**Actors:** Unauthenticated user holding a reset token (any platform)
+**Preconditions:** The user has an unexpired, unused reset token issued by UC-34 for the same address.
+
+**Endpoint:** `POST /auth/reset-password`
+
+**Request body:**
+
+```json
+{
+  "email": "attendee@example.com",
+  "token": "3Yb1t...43-character Base64Url token",
+  "newPassword": "NewSecureP@ss2"
+}
+```
+
+**Required fields:** `email`, `token`, `newPassword`
+
+**Main Flow:**
+
+1. System validates the request (address shape, token present, new password meets BR-203 through the same strength rules registration uses)
+2. System validates the presented token against the stored hash in constant time and **consumes** it, before any write, so it cannot be redeemed twice (BR-218)
+3. System loads the account the token redeems to
+4. System hashes the new password (BR-204) and applies it through the aggregate, which enforces its own invariants
+5. System persists the change
+6. System clears the account's login brute-force counters so a user who was locked out can sign in immediately (BR-219)
+7. Returns HTTP 204 No Content
+
+**Response body:** None.
+
+**Response codes:**
+- HTTP 204: password reset successfully
+- HTTP 400: malformed request (missing token, invalid address shape, new password fails BR-203)
+- HTTP 401: token invalid, expired, already used, issued for a different address, attempt-capped, or the account is no longer resolvable
+- HTTP 429: `auth-ip` per-IP rate limit exceeded
+
+**Alternate Flows:**
+- Wrong token presented → the failed-attempt count on the record increases and the record is rewritten with its *remaining* lifetime; at 5 failures the record is discarded and the user must request a new link (BR-218). Every one of these returns the same generic `Auth.InvalidResetToken` 401
+- Token valid but a later invariant rejects the password change → the token is already consumed, so the user requests a new link. This is the deliberate cost of closing the replay window
+
+**Postconditions:** The account has the new password hash and salt, the reset token and the address's request counter are gone, and the login lockout counters are cleared. Existing access tokens are not revoked: they remain valid until their 1-hour TTL expires (BR-216).
+
+---
+
 ### 12.3 Token Architecture
 
 #### Access Token (JWT)
@@ -2391,6 +2481,9 @@ IAuthService (UI abstraction)
 | BR-214 | Speakers can update their **own** speaker profile (bio, tagline, social links) when linked. The `speaker_id` in the JWT must match the target Speaker entity's ID. Organizers can update any speaker profile regardless of linking. |
 | BR-215 | Sessionize refresh (UC-6) **overwrites all speaker profile fields** including any local edits made by speakers via the app. Sessionize remains the source of truth (BR-48). |
 | BR-216 | **Logout** invalidates the user's current refresh token (web) or clears stored credentials (MAUI). Access tokens cannot be server-side invalidated before expiry: they remain valid until their 1-hour TTL expires. For immediate revocation needs (e.g., account deletion, role change), a token blacklist or short-lived tokens would be needed (out of scope). |
+| BR-217 | **Password reset anti-enumeration:** `POST /auth/forgot-password` returns **HTTP 202** for every well-formed request. An address with no account, an address over the BR-219 throttle, and a failed email send are all reported as accepted and recorded only in the server log, so neither the status code nor the response body discloses which addresses hold accounts. The rule holds on the other endpoint too: `POST /auth/reset-password` collapses every rejection into one generic 401 (BR-218), and the reset page renders the same confirmation whatever the API answered. Only the request validator can return HTTP 400, and it inspects the shape of the address, never whether it is registered. |
+| BR-218 | **Reset tokens** are **256 bits** of cryptographic randomness (Base64Url-encoded), **single-use**, and held **SHA-256 hashed** rather than in clear, compared in constant time. A token expires after the configured TTL (`PasswordReset:TokenLifetimeMinutes`, **default 30 minutes**) and the record is discarded after **5 failed validation attempts** (`PasswordReset:MaxValidationAttempts`); a wrong guess rewrites the record with the token's *remaining* lifetime, never a fresh one, so guessing cannot extend the window. Issuing a new token overwrites the previous one, so only the newest link works. The token is consumed before the password is written, which closes the replay window at the cost of burning a token when a later invariant fails. Every invalid, expired, mismatched, attempt-capped or orphaned token returns the single error `Auth.InvalidResetToken` with **HTTP 401**. |
+| BR-219 | **Reset request throttle:** at most **3 reset requests per email address per rolling hour** (`PasswordReset:MaxRequestsPerEmail` / `PasswordReset:RequestWindowMinutes`). An over-limit request still answers 202 and simply sends no email (BR-217). Both reset endpoints additionally carry the same `auth-ip` per-IP endpoint limit as login and register (30 requests per minute per client IP), which is the only path to an HTTP 429 here. A **successful** reset clears the account's login brute-force counters (BR-212) and its own request counter, so a user who reset precisely because they were locked out can sign in immediately and is not throttled out of a later legitimate request. |
 
 ---
 
@@ -2398,13 +2491,22 @@ IAuthService (UI abstraction)
 
 **Password change** (UC-33) is supported via `PUT /auth/password`, authenticated users can change their own password by providing the current password and a new password.
 
-**Password reset via email** is **out of scope for the initial implementation**. If an attendee forgets their password during the conference, they must contact an organizer to have their account deleted (UC-21) so they can re-register.
+**Password reset via email** is **implemented** (UC-34, UC-35). An attendee who forgets their password recovers the account themselves; deleting the account (UC-21) and re-registering is no longer the recovery path.
 
-**Rationale:** The conference engagement window is 1-2 days. Re-registration is low-cost (bookmarks can be recreated in minutes). Adding password reset requires email sending infrastructure (SMTP/SendGrid) and a secure token flow, which is disproportionate to the benefit for v1.
+**Flow:**
+1. `POST /auth/forgot-password` with `{ "email": "..." }` → **HTTP 202** for every well-formed request, whether or not the address belongs to an account (BR-217). A malformed address returns HTTP 400 from the request validator, which inspects the shape of the address only.
+2. The system emails a reset link (`{PasswordReset:ResetUrl}?email=...&token=...`) **and** the raw token in the body, so a client that cannot follow a deep link (the MAUI head) can have the token typed into the reset page by hand. With no `ResetUrl` configured the email degrades to the token alone rather than carrying a broken link.
+3. `POST /auth/reset-password` with `{ "email": "...", "token": "...", "newPassword": "..." }` → **HTTP 204** on success. Every rejection collapses to the single generic `Auth.InvalidResetToken` HTTP 401 (BR-218). A new password that fails BR-203 returns HTTP 400 from the same strength rules that guard registration, so a reset is not a way around the complexity policy.
 
-**Planned flow (when implemented):**
-1. `POST /auth/forgot-password` with `{ "email": "..." }` → sends a reset code to the email (always returns HTTP 202 to prevent email enumeration)
-2. `POST /auth/reset-password` with `{ "email": "...", "code": "...", "newPassword": "..." }` → validates code, updates password
+Both endpoints are `AllowAnonymous` (the caller has lost the credential, so requiring one would be circular), carry the same `auth-ip` per-IP rate limit as login and register, and are `[Idempotent]`. They are served by a dedicated `PasswordResetController` routed to the same `Auth` prefix as the other auth actions, so the Gateway forwards them on its existing `/Auth` route with no gateway change.
+
+**Token storage:** reset tokens live in the cache, not the database, so the feature adds **no schema change and no migration**: expired tokens are reaped by cache TTL rather than by a sweeper. The trade-off is that a cache eviction or flush invalidates every outstanding token; requesting a new link is cheap, so the failure mode is a repeated request rather than a locked-out account.
+
+**UI:** the framework UI package ships `/forgot-password` and `/reset-password` as anonymous pages, plus the "Forgot password?" link on `/login`. The reset page prefills `email` and `token` from the query string and keeps the token field visible and editable, so the manual-entry path works when the link cannot be followed. Email copy is English only in this version; the subject, body, and link composition are overridable hooks on the handler for a later localization pass.
+
+**Configuration:** section `PasswordReset` (`ResetUrl`, `TokenLifetimeMinutes`, `MaxValidationAttempts`, `MaxRequestsPerEmail`, `RequestWindowMinutes`), bound with data-annotation validation at startup. `ResetUrl` is deliberately optional so a host without a UI base still boots; production sets it through the `PasswordReset__ResetUrl` container-app environment variable, and the Aspire AppHost sets it for local runs.
+
+See [ADR-091](../adr/091-cache-backed-password-reset.md) for the decision record behind the token substrate, the anti-enumeration contract, and the email-delivery posture.
 
 ---
 

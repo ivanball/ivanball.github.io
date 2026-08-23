@@ -729,6 +729,34 @@
           <li><code>Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs</code></li>
           </ul>
           <hr>
+          <h3 id="312-password-reset">3.12 Password Reset</h3>
+          <p><strong>Trigger:</strong> A customer who cannot sign in asks for a reset link from <code>/forgot-password</code>, then sets a new password on <code>/reset-password</code>.</p>
+          <p><strong>Steps (request):</strong></p>
+          <ol>
+          <li><code>POST /Auth/forgot-password</code> with <code>{ &quot;email&quot;: &quot;...&quot; }</code>. The request validator checks the shape of the address only</li>
+          <li>Look up the account behind the address without tracking it</li>
+          <li>Increment the per-address request counter and check it against the rolling-hour throttle</li>
+          <li>Mint a 256-bit single-use token, store only its SHA-256 hash under the address with the configured TTL, and hand the raw token back</li>
+          <li>Email the reset link (<code>{PasswordReset:ResetUrl}?email=...&amp;token=...</code>) plus the raw token, so a client that cannot follow a deep link can have the token entered by hand</li>
+          <li>Return <strong>HTTP 202 Accepted</strong>, which is also what an unknown address, a throttled address and a failed email send return: the response never discloses whether an address holds an account</li>
+          </ol>
+          <p><strong>Steps (reset):</strong></p>
+          <ol>
+          <li><code>POST /Auth/reset-password</code> with <code>{ &quot;email&quot;: &quot;...&quot;, &quot;token&quot;: &quot;...&quot;, &quot;newPassword&quot;: &quot;...&quot; }</code>. The new password goes through the same strength rules registration uses</li>
+          <li>Validate the presented token against the stored hash in constant time and <strong>consume</strong> it before any write, so it cannot be redeemed twice</li>
+          <li>Load the account, hash the new password (PBKDF2-HMAC-SHA512), and apply it through the aggregate</li>
+          <li>Persist, then clear the account&#39;s login brute-force counters so a customer who was locked out can sign in immediately</li>
+          <li>Return <strong>HTTP 204 No Content</strong>. Every rejection (unknown, expired, replayed, mismatched or attempt-capped token, or an unresolvable account) collapses to one generic <code>Auth.InvalidResetToken</code> <strong>HTTP 401</strong></li>
+          </ol>
+          <p>Both endpoints are anonymous by necessity (the caller has lost the credential), carry the <code>auth-ip</code> per-IP rate limit that login and register carry, and are idempotent. They live on their own controller routed to the same <code>Auth</code> prefix, which the Gateway&#39;s <code>/Auth/{**catch-all}</code> route already forwards.</p>
+          <p><strong>No schema change:</strong> the token lifecycle lives entirely in the cache, so expired tokens are reaped by cache TTL rather than by a sweeper and the feature ships without a migration. A cache eviction invalidates outstanding tokens, which costs the user one more request. See <a href="../adr/091-cache-backed-password-reset.html">ADR-091</a>.</p>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/PasswordResetController.cs</code></li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs</code></li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordHandler.cs</code></li>
+          </ul>
+          <hr>
           <h2 id="4-order-status-state-machine">4. Order Status State Machine</h2>
           <pre class="doc-pre"><code class="">                    +------------------------------------------+
                     |                                          |
@@ -1018,6 +1046,41 @@
           <td>If address is provided, AddressLine1 is required</td>
           <td><code>AddressInvariants.cs</code></td>
           </tr>
+          <tr>
+          <td>Reset request anti-enumeration</td>
+          <td><code>POST /Auth/forgot-password</code> answers 202 for every well-formed address: unknown address, throttled address and failed email send are logged server-side and reported as accepted. Only a malformed address returns 400</td>
+          <td><code>ForgotPasswordHandler.cs</code>, <code>ForgotPasswordRequestValidator</code></td>
+          </tr>
+          <tr>
+          <td>Reset token strength</td>
+          <td>256-bit Base64Url token, single-use, SHA-256 hashed at rest, compared in constant time, one active token per address (a new request overwrites the old)</td>
+          <td><code>PasswordResetTokenService</code></td>
+          </tr>
+          <tr>
+          <td>Reset token expiry</td>
+          <td>Tokens expire after <code>PasswordReset:TokenLifetimeMinutes</code> (default 30)</td>
+          <td><code>PasswordResetSettings</code></td>
+          </tr>
+          <tr>
+          <td>Reset attempt cap</td>
+          <td>The token record is discarded after <code>PasswordReset:MaxValidationAttempts</code> wrong guesses (default 5); a wrong guess is rewritten with the remaining lifetime, never a fresh one</td>
+          <td><code>PasswordResetTokenService</code></td>
+          </tr>
+          <tr>
+          <td>Reset request throttle</td>
+          <td>Maximum <code>PasswordReset:MaxRequestsPerEmail</code> requests per address per <code>RequestWindowMinutes</code> (default 3 per hour); over-limit still answers 202 and sends nothing</td>
+          <td><code>PasswordResetTokenService</code></td>
+          </tr>
+          <tr>
+          <td>Reset clears lockout</td>
+          <td>A successful reset clears the account&#39;s login brute-force counters and its reset-request counter</td>
+          <td><code>ResetPasswordHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Reset password strength</td>
+          <td>The new password goes through the same strength rules as registration, so a reset cannot bypass the complexity policy</td>
+          <td><code>ResetPasswordRequestValidator</code></td>
+          </tr>
           </tbody></table></div>
           <hr>
           <h2 id="6-use-cases">6. Use Cases</h2>
@@ -1049,6 +1112,16 @@
           <td>Revoke session</td>
           <td>Any authenticated</td>
           <td>Invalidate refresh token to end session</td>
+          </tr>
+          <tr>
+          <td>Request password reset</td>
+          <td>Anonymous</td>
+          <td>Ask for a reset link by email; always accepted for a well-formed address</td>
+          </tr>
+          <tr>
+          <td>Reset password</td>
+          <td>Anonymous</td>
+          <td>Set a new password by redeeming the single-use token from the reset email</td>
           </tr>
           <tr>
           <td>Browse catalog</td>
@@ -1410,7 +1483,7 @@
           <li>Default: <code>localhost:25</code> with SSL disabled</li>
           </ul>
           <p><strong>Source:</strong> <code>Source/Common/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs</code></p>
-          <p><strong>Note:</strong> While the email service infrastructure is fully implemented, no domain event handlers currently trigger email sending. This may be planned functionality.</p>
+          <p><strong>Consumers:</strong> the forgot-password handler (Section 3.12) sends the reset email through <code>IEmailSender</code>, alongside the Sales domain-event handlers <code>OrderPaidHandler</code> and <code>OrderPaymentFailedSagaHandler</code>. On the reset path delivery is awaited but never fatal: a send failure is logged and the request still answers 202, because reporting it would be an enumeration oracle, and the token stays live so the customer can retry.</p>
           <hr>
           <h2 id="9-authorization-model">9. Authorization Model</h2>
           <div class="table-wrap"><table>
@@ -1424,7 +1497,7 @@
           <tbody><tr>
           <td>Anonymous</td>
           <td>No auth required</td>
-          <td>Catalog browsing (GET categories, products), login, registration, payment webhooks</td>
+          <td>Catalog browsing (GET categories, products), login, registration, password reset (<code>POST /Auth/forgot-password</code>, <code>POST /Auth/reset-password</code>), payment webhooks</td>
           </tr>
           <tr>
           <td>RequireAuthenticated</td>
