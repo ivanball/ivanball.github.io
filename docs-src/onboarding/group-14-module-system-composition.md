@@ -17,7 +17,7 @@ the two data-source attributes ([`UseDataSourceAttribute`](#usedatasourceattribu
 [`MessageBusSettings`](#messagebussettings), [`OutboxSettings`](#outboxsettings),
 [`PersistenceSettings`](#persistencesettings), the JWT/JWKS group, [`SmtpSettings`](#smtpsettings),
 [`PushNotificationSettings`](#pushnotificationsettings), [`NativePushSettings`](#nativepushsettings),
-[`FileStorageSettings`](#filestoragesettings)) and the newer opt-in feature sections
+[`FileStorageSettings`](#filestoragesettings)) and the opt-in feature sections
 ([`SchedulerSettings`](#schedulersettings), [`AuditTrailSettings`](#audittrailsettings),
 [`TenancySettings`](#tenancysettings)); the cross-replica locking pair
 ([`RedisDistributedLock`](#redisdistributedlock), [`InProcessDistributedLock`](#inprocessdistributedlock));
@@ -61,7 +61,7 @@ in its own service the Engagement module is *disabled* in that host's config, ye
 `GetSessionBookmarkCountHandler` still needs Engagement's `IBookmarkCountService`, so the disabled
 Engagement module contributes a stub and the host then *replaces* that stub with a typed gRPC client
 pointed at the real Engagement process
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:321-329`). Application code never
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:342-350`). Application code never
 learns which path it got; the transport choice lives entirely at the composition edge
 ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). `[Rubric §2,
 Design Patterns]` applies here: this is a clean strategy / null-object pairing (real service, disabled
@@ -124,7 +124,7 @@ this method and the log messages above.
 A subtlety worth stating against the source: the loader is **not** called from inside
 `AddApplication()`. Each host's `Program.cs` constructs a [`ModuleLoader`](#moduleloader), hands it a
 logger, calls `DiscoverAndRegister` directly, then registers the loader instance itself as a singleton
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:313-319`). After discovery the
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:335-340`). After discovery the
 loader also drives startup data through `SeedAllAsync` (`ModuleLoader.cs:270-276`), which invokes each
 collected [`IModuleSeeder.SeedAsync`](#imoduleseeder) in registration order.
 [`IModuleSeeder`](#imoduleseeder)
@@ -140,99 +140,118 @@ Service registration itself lives in two static [`DependencyInjection`](#depende
 each using a C# `extension(IServiceCollection services)` block (see
 [primer §4](00-primer.md#4-c-build-and-code-style-conventions) for the `extension(T)` syntax). The
 **Application** root
-(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:21`) exposes `AddApplication()`
-(`DependencyInjection.cs:29`), which fronts [`ApplicationSettings`](#applicationsettings) with its
-[`IApplicationSettings`](#iapplicationsettings) abstraction (`DependencyInjection.cs:31`), registers
-the three core singletons ([`IDomainEventDispatcher`](group-04-events-outbox.md#idomaineventdispatcher),
-[`INavigationMetadataProvider`](group-03-querying-specifications.md#inavigationmetadataprovider),
-[`IEntityQueryPipeline`](group-03-querying-specifications.md#ientityquerypipeline),
-`DependencyInjection.cs:33-35`), and pulls in the framework's own FluentValidation validators by
-assembly (`DependencyInjection.cs:40`). It also owns `ScanModuleApplicationServices<TAssemblyMarker>()`
-(`DependencyInjection.cs:115-179`), the Scrutor convention scan every module's `AddXModule` calls:
-domain-event and integration-event handlers as singletons (`DependencyInjection.cs:119-130`), DTO and
-request mappers scoped (`DependencyInjection.cs:132-142`), command and query handlers scoped
-(`DependencyInjection.cs:144-154`), validators from the module assembly (`DependencyInjection.cs:156`),
-and finally a reflection pass that `TryAdd`s a `CommandRequestValidator<,>` for every command
-implementing `ICommandWithRequest<T>` (`DependencyInjection.cs:160-176`) so an explicit validator still
-wins. The **Infrastructure** root
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:22`) exposes `AddApplication()`
+(`DependencyInjection.cs:30`), which fronts [`ApplicationSettings`](#applicationsettings) with its
+[`IApplicationSettings`](#iapplicationsettings) abstraction (`DependencyInjection.cs:32`), registers
+the core singletons ([`IDomainEventDispatcher`](group-04-events-outbox.md#idomaineventdispatcher) at
+`:34`, [`IEventUpcasterRegistry`](group-05-cqrs-pipeline.md#ieventupcasterregistry) at `:40`,
+[`INavigationMetadataProvider`](group-03-querying-specifications.md#inavigationmetadataprovider) at
+`:42`, [`IEntityQueryPipeline`](group-03-querying-specifications.md#ientityquerypipeline) at `:43`),
+and pulls in the framework's own FluentValidation validators by assembly (`DependencyInjection.cs:48`).
+The upcaster registry is registered unconditionally on purpose: with no upcasters it is an empty
+registry whose operations are the identity, so both delivery paths can depend on it without a null
+check (`DependencyInjection.cs:36-40`,
+[ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html)), and individual
+upcasters accumulate through `AddEventUpcaster<TSource, TTarget, TUpcaster>()`
+(`DependencyInjection.cs:283-290`).
+
+The Application root also owns `ScanModuleApplicationServices<TAssemblyMarker>()`
+(`DependencyInjection.cs:140-213`), the Scrutor convention scan every module's `AddXModule` calls:
+domain-event and integration-event handlers as singletons (`DependencyInjection.cs:144-155`), DTO
+mappers, the opt-in
+[`IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`](group-05-cqrs-pipeline.md#ientitydtoprojectortentity-tentitydto-tidentifiertype)
+projectors and request mappers scoped (`DependencyInjection.cs:157-176`), command and query handlers
+scoped (`DependencyInjection.cs:178-188`), validators from the module assembly
+(`DependencyInjection.cs:190`), and finally a reflection pass that `TryAdd`s a
+`CommandRequestValidator<,>` for every command implementing `ICommandWithRequest<T>`
+(`DependencyInjection.cs:194-210`) so an explicit validator still wins.
+
+The **Infrastructure** root
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:40`) exposes
 `AddInfrastructure(configuration)` (`DependencyInjection.cs:50`), which binds most of the settings
 types in this chapter, registers the three save interceptors as singletons
 (`DependencyInjection.cs:57-63`), the persistence stack (data-source service and resolver, entity
 registry, the scoped and singleton context factories, repositories, unit of work,
 `DependencyInjection.cs:52-109`), Scrutor-scans the framework's own EF entity configurations
-(`DependencyInjection.cs:113-117`), adds caching (`DependencyInjection.cs:119`), and enrolls the two
-outbox hosted services (`DependencyInjection.cs:151-152`). Optional add-ons sit alongside it:
-`AddPushNotifications` (`DependencyInjection.cs:528`), `AddNativePushNotifications`
-(`DependencyInjection.cs:563`), `AddAzureBlobFileStorage` (`DependencyInjection.cs:595`),
-`AddBrokerMessaging` (`DependencyInjection.cs:647`), and the typed-client helper
-`AddTypedServiceClient<TInterface, TImplementation>(serviceName)` (`DependencyInjection.cs:716`) that
-swaps an in-process abstraction for an HTTP transport with JWT forwarding and the standard Polly
-pipeline.
+(`DependencyInjection.cs:113-117`), adds caching (`DependencyInjection.cs:119`), enrolls a startup
+validator that fails the host on a bad upcaster graph (`DependencyInjection.cs:160-161`), and adds the
+two outbox hosted services (`DependencyInjection.cs:164-165`). Optional add-ons sit alongside it:
+`AddPushNotifications` (`DependencyInjection.cs:541`), `AddNativePushNotifications`
+(`DependencyInjection.cs:576`), `AddAzureBlobFileStorage` (`DependencyInjection.cs:608`),
+`AddBrokerMessaging` (`DependencyInjection.cs:660`), and the typed-client helper
+`AddTypedServiceClient<TInterface, TImplementation>(serviceName)` (`DependencyInjection.cs:734`) that
+swaps an in-process abstraction for an HTTP transport.
 
-`AddCaching` (`MMCA.Common.Infrastructure/DependencyInjection.cs:164`) also registers this chapter's
+`AddCaching` (`MMCA.Common.Infrastructure/DependencyInjection.cs:177`) also registers this chapter's
 one cross-replica primitive: an [`IDistributedLock`](group-05-cqrs-pipeline.md#idistributedlock) that
 resolves to [`RedisDistributedLock`](#redisdistributedlock) when the host has an
 `IConnectionMultiplexer` registered, and to the warn-once
 [`InProcessDistributedLock`](#inprocessdistributedlock) otherwise
-(`MMCA.Common.Infrastructure/DependencyInjection.cs:195-209`). The Redis implementation is the
-standard `SET key token NX PX ttl` lock with a compare-and-delete release script
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/RedisDistributedLock.cs:36-37`,
-`RedisDistributedLock.cs:66-72`), handing back a [`RedisLockHandle`](#redislockhandle) that releases
-exactly its own acquisition, once (`RedisDistributedLock.cs:88`); the fallback is exclusive only inside
-one process, which is exactly what its warning says out loud
+(`MMCA.Common.Infrastructure/DependencyInjection.cs:208-222`). The Redis implementation is the
+standard `SET key token NX PX ttl` acquire
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/RedisDistributedLock.cs:66-68`) with a
+compare-and-delete release script (`RedisDistributedLock.cs:36-37`), handing back a
+[`RedisLockHandle`](#redislockhandle) that releases exactly its own acquisition, once
+(`RedisDistributedLock.cs:88-98`); the fallback is exclusive only inside one process, which is exactly
+what its warning says out loud
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/InProcessDistributedLock.cs:75`), and
 its [`InProcessLockHandle`](#inprocesslockhandle) simply removes the key from a
-`ConcurrentDictionary` (`InProcessDistributedLock.cs:79-88`). A multi-replica host that registers no
+`ConcurrentDictionary` (`InProcessDistributedLock.cs:79-91`). A multi-replica host that registers no
 Redis client therefore gets one execution of the guarded section per replica. `[Rubric §29, Resilience]`
 and `[Rubric §12, Performance & Scalability]` both touch this pair: the degradation is deliberate,
 announced, and never silent.
 
 The **order** of these calls is a hard contract in exactly one respect, and it is the reason
-`AddApplicationDecorators()` (`MMCA.Common.Application/DependencyInjection.cs:89`) must come *last*.
+`AddApplicationDecorators()` (`MMCA.Common.Application/DependencyInjection.cs:110`) must come *last*.
 Decorators are registered with **Scrutor's `TryDecorate`**, which wraps *existing* registrations, so
 every module's concrete handlers must already be in the container or there is nothing to wrap. Beyond
 that, the relative position of `AddInfrastructure` and `AddAPI` is not load-bearing. `[Rubric §6, CQRS
 & Event-Driven]` and `[Rubric §1, SOLID]` (open/closed) live here: cross-cutting behavior is added by
 wrapping, not by editing handlers. `AddApplicationDecorators` also encodes the **execution order** via
 `TryDecorate`'s reverse-registration rule (registered innermost first,
-`MMCA.Common.Application/DependencyInjection.cs:94-103`), so the command pipeline ends up
-`FeatureGate -> Logging -> Caching -> Validating -> Transactional -> handler` and the query pipeline
-`FeatureGate -> Logging -> Caching -> handler`
-([ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html)). The decorator types
-themselves (for example
-[`FeatureGateCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#featuregatecommanddecoratortcommand-tresult)
-and [`LoggingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#loggingcommanddecoratortcommand-tresult))
+`MMCA.Common.Application/DependencyInjection.cs:115-128`), so the command pipeline ends up
+`FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Transactional -> handler`
+and the query pipeline `FeatureGate -> Authorization -> Logging -> Caching -> Timeout -> handler`
+([ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html)). The rationale for
+each position is written out in the method's own doc comment
+(`MMCA.Common.Application/DependencyInjection.cs:84-107`): authorization sits outside caching so a
+denied request neither reads nor populates the cache, validation sits outside the transaction so an
+invalid command never opens one, and the timeout budget sits inside validation and outside the
+transaction so it covers the database work and cancels it rather than leaving it open. The decorator
+types themselves (for example
+[`FeatureGateCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#featuregatecommanddecoratortcommand-tresult),
+[`AuthorizationCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#authorizationcommanddecoratortcommand-tresult)
+and [`TimeoutCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#timeoutcommanddecoratortcommand-tresult))
 are documented in the CQRS-pipeline chapter; this chapter owns only the *wiring* of them. An optional
 MiniProfiler pair is registered separately by an opt-in `AddApplicationProfiling()`
-(`MMCA.Common.Application/DependencyInjection.cs:219-225`), never by `AddApplicationDecorators()`.
+(`MMCA.Common.Application/DependencyInjection.cs:297-303`), never by `AddApplicationDecorators()`.
 
 ## Opt-in platform features are composed the same way
 
-Four newer capabilities are registered beside the roots rather than inside them, and they share one
+Four capabilities are registered beside the roots rather than inside them, and they share one
 discipline: **registering a feature is not the same as turning it on.** `AddScheduledJobs(configuration)`
-(`MMCA.Common.Infrastructure/DependencyInjection.cs:304`) binds
+(`MMCA.Common.Infrastructure/DependencyInjection.cs:317`) binds
 [`SchedulerSettings`](#schedulersettings) and enrolls [`ScheduledJobRunner`](#scheduledjobrunner)
 through `TryAddEnumerable` rather than `AddHostedService`, precisely so two modules calling it cannot
-start two runners racing for the same rows (`DependencyInjection.cs:311-315`); individual jobs arrive
-through `AddScheduledJob<TJob>()` (`DependencyInjection.cs:339-345`), each registered scoped so the
+start two runners racing for the same rows (`DependencyInjection.cs:324-328`); individual jobs arrive
+through `AddScheduledJob<TJob>()` (`DependencyInjection.cs:352-357`), each registered scoped so the
 runner can resolve it in a fresh scope per execution. `AddAuditTrail(configuration)`
-(`DependencyInjection.cs:375`) binds [`AuditTrailSettings`](#audittrailsettings), adds the
+(`DependencyInjection.cs:388`) binds [`AuditTrailSettings`](#audittrailsettings), adds the
 [`AuditTrailSaveChangesInterceptor`](group-07-persistence-ef-core.md#audittrailsavechangesinterceptor)
 and the [`AuditTrailReader`](group-07-persistence-ef-core.md#audittrailreader) that projects
 [`AuditTrailEntryDTO`](#audittrailentrydto) rows, and contributes its own retention job
-(`DependencyInjection.cs:377-391`), which only actually runs when the host also enabled the scheduler.
-`AddMultiTenancy(configuration)` (`DependencyInjection.cs:424`) binds
+(`DependencyInjection.cs:390-404`), which only actually runs when the host also enabled the scheduler.
+`AddMultiTenancy(configuration)` (`DependencyInjection.cs:437`) binds
 [`TenancySettings`](#tenancysettings) and registers
 [`TenancySettingsValidator`](#tenancysettingsvalidator) as an `IValidateOptions<TenancySettings>`
-(`DependencyInjection.cs:426-433`); note what it does *not* do, because that is the design:
+(`DependencyInjection.cs:439-446`); note what it does *not* do, because that is the design:
 [`TenantSaveChangesInterceptor`](group-07-persistence-ef-core.md#tenantsavechangesinterceptor) and
 [`ITenantContext`](group-05-cqrs-pipeline.md#itenantcontext) are registered unconditionally by
-`AddInfrastructure` and `AddServices` (`DependencyInjection.cs:63`, `:452`) and stay inert until a
+`AddInfrastructure` and `AddServices` (`DependencyInjection.cs:63`, `:465`) and stay inert until a
 tenant is resolved, so the framework can never sit in the half-wired state where entities carry
 [`ITenantEntity`](group-02-domain-building-blocks.md#itenantentity) but the write-side guard is off
 ([ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)). Finally
-`AddUserDataExportSection<TSection>()` (`MMCA.Common.Application/DependencyInjection.cs:206-212`)
+`AddUserDataExportSection<TSection>()` (`MMCA.Common.Application/DependencyInjection.cs:240-246`)
 accumulates [`IUserDataExportSection`](#iuserdataexportsection) contributors into the one
 `IEnumerable` the export handler fans out over; ADC's Identity module registers two of them
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:42-43`). The
@@ -249,16 +268,21 @@ of these with real runtime machinery, and it reuses the outbox's idioms wholesal
 (`ScheduledJobRunner.cs:69`, `:87`), then loops: reconcile the `ScheduledJobs` rows against the
 registered jobs, claim due rows with a lease, execute, stamp the outcome, and smart-wait until the
 earliest upcoming occurrence capped at `Scheduler:PollingIntervalSeconds`
-(`ScheduledJobRunner.cs:94-126`). A claim attempt returns a [`JobClaim`](#jobclaim) carrying either
-this replica's lock token or `null` when another replica won the row
-(`ScheduledJobRunner.cs:439-447`), which is what makes an occurrence run exactly once across a scaled
-host. The persisted row is [`ScheduledJobEntry`](#scheduledjobentry)
+(`ScheduledJobRunner.cs:94-126`). A claim attempt is a single filtered `ExecuteUpdateAsync` against the
+still-unleased predicate, so two racing replicas both issue it and exactly one matches
+(`ScheduledJobRunner.cs:429-439`); it returns a [`JobClaim`](#jobclaim) carrying either this replica's
+lock token or `null` when another replica won the row (`ScheduledJobRunner.cs:447`), which is what
+makes an occurrence run exactly once across a scaled host. The persisted row is
+[`ScheduledJobEntry`](#scheduledjobentry)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobEntry.cs:20`), deliberately
 not an auditable entity: it is framework bookkeeping with an explicit claim lease instead of a
 concurrency token (`ScheduledJobEntry.cs:10-13`). [`SchedulerMetrics`](#schedulermetrics)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/SchedulerMetrics.cs:16`) publishes the
 `MMCA.Common.Scheduler` meter with a run counter tagged by job and outcome
-(`SchedulerMetrics.cs:28-31`) and a duration histogram (`SchedulerMetrics.cs:39-40`), so
+(`SchedulerMetrics.cs:28-31`) and a duration histogram (`SchedulerMetrics.cs:39-42`), the same shape
+[`BrokerMetrics`](#brokermetrics)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMetrics.cs:18`) uses for the
+`MMCA.Common.Broker` meter's fault and circuit-open counters (`BrokerMetrics.cs:30`, `:42`). So
 `[Rubric §13, Observability & Operability]` is covered by instruments rather than by log scraping.
 
 ## Assembly anchors
@@ -271,7 +295,7 @@ each a trivial `static class AssemblyReference` holding `Assembly` / `AssemblyNa
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:8-12`) beside a non-static `class
 ClassReference` (`AssemblyReference.cs:18`) for the places a generic constraint forbids a static type.
 `AddApplication` uses the Application pair for the common validators
-(`MMCA.Common.Application/DependencyInjection.cs:40`) and `AddInfrastructure` uses the Infrastructure
+(`MMCA.Common.Application/DependencyInjection.cs:48`) and `AddInfrastructure` uses the Infrastructure
 pair to scan entity configurations (`MMCA.Common.Infrastructure/DependencyInjection.cs:113-117`). They
 are deliberately behavior-free; their whole job is to *name an assembly* for the scanning and
 governance tooling.
@@ -290,7 +314,7 @@ concrete class is then usually fronted by an interface singleton so consumers de
 abstraction ([`IConnectionStringSettings`](#iconnectionstringsettings) at `DependencyInjection.cs:71`,
 [`ISmtpSettings`](#ismtpsettings) at `DependencyInjection.cs:85`,
 [`IJwtSettings`](#ijwtsettings) at `DependencyInjection.cs:65`,
-[`IPushNotificationSettings`](#ipushnotificationsettings) at `DependencyInjection.cs:534`).
+[`IPushNotificationSettings`](#ipushnotificationsettings) at `DependencyInjection.cs:547`).
 `[Rubric §13, Observability & Operability]` and `[Rubric §15, Best Practices]` apply: `ValidateOnStart`
 plus DataAnnotations ranges (for example [`OutboxSettings`](#outboxsettings) `BatchSize` is
 `[Range(1, 1000)]` with a default of 50,
@@ -325,12 +349,12 @@ does not bind that way, with a constructor that rejects a reserved `"Default"` k
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/DataSourcesSettings.cs:34-39`);
 [`MessageBusSettings`](#messagebussettings) and its [`MessageBusProvider`](#messagebusprovider) enum
 (`InProcess` / `RabbitMq` / `AzureServiceBus`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:68-84`) that
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:116-132`) that
 `AddBrokerMessaging` switches on, short-circuiting entirely for `InProcess`
-(`MMCA.Common.Infrastructure/DependencyInjection.cs:656-659`) and otherwise `Replace`-ing both
+(`MMCA.Common.Infrastructure/DependencyInjection.cs:669-672`) and otherwise `Replace`-ing both
 [`IMessageBus`](group-04-events-outbox.md#imessagebus) and
 [`IEventBus`](group-04-events-outbox.md#ieventbus) with their broker-backed counterparts
-(`DependencyInjection.cs:676-682`); [`OutboxSettings`](#outboxsettings) (batch size, retries, polling
+(`DependencyInjection.cs:689-695`); [`OutboxSettings`](#outboxsettings) (batch size, retries, polling
 and processing intervals, lease, retention) consumed by the
 [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor);
 [`PersistenceSettings`](#persistencesettings), whose single `CommandTimeoutSeconds` defaults to the 30
@@ -351,11 +375,11 @@ channels, [`SmtpSettings`](#smtpsettings), [`PushNotificationSettings`](#pushnot
 [`FileStorageSettings`](#filestoragesettings)
 ([ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)). The last
 two follow a different discipline on purpose: their `Add*` methods bind the section and then **no-op**
-when it is disabled or incomplete (`MMCA.Common.Infrastructure/DependencyInjection.cs:568-574` and
-`:600-611`), so a host registers them unconditionally and a deployment switches the channel on by
+when it is disabled or incomplete (`MMCA.Common.Infrastructure/DependencyInjection.cs:581-587` and
+`:613-624`), so a host registers them unconditionally and a deployment switches the channel on by
 configuration alone. One binding is deliberately elsewhere: `JwtSettings` is bound by the API layer's
 `AddCommonAuthentication`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:344-349`),
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:536-541`),
 while Infrastructure only registers the `IJwtSettings` facade over the resulting options
 (`MMCA.Common.Infrastructure/DependencyInjection.cs:65`), so a host that skips authentication never
 pays for a JWT section it does not have.
@@ -371,7 +395,7 @@ that never opts in keeps exactly the migrations it had. Their tunables are range
 (`PollingIntervalSeconds` default 30, `LeaseSeconds` default 300, `SchedulerSettings.cs:33-43`;
 `RetentionDays` default 90, `AuditTrailSettings.cs:37-38`), and per-job retiming lives in
 [`ScheduledJobOverrideSettings`](#scheduledjoboverridesettings) bound from `Scheduler:Jobs:{Name}`
-(`SchedulerSettings.cs:60-75`). [`TenancySettings`](#tenancysettings)
+(`SchedulerSettings.cs:60`, `:66-75`). [`TenancySettings`](#tenancysettings)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/TenancySettings.cs:50`) adds the
 collection-binding subtlety: `ResolutionOrder` and `ExcludedPathPrefixes` bind as *empty* lists and the
 framework reads `EffectiveResolutionOrder` / `EffectiveExcludedPathPrefixes` instead
@@ -417,8 +441,9 @@ to map each entity to a physical source; those types are documented in the persi
 ## Shared user use-case bases: composition in the other direction
 
 The chapter's last family is composition at the *handler* level rather than the container level. ADC
-and Store each own an Identity module, and five of their account use cases had drifted into
-line-identical copies, so the workflow was hoisted into abstract bases that each app subclasses:
+and Store each own an Identity module, and seven of their account use cases had drifted into
+line-identical copies (or would have), so the workflow was hoisted into abstract bases that each app
+subclasses:
 [`ChangePasswordHandlerBase<TUser, TCommand>`](#changepasswordhandlerbasetuser-tcommand)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:24`,
 [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html)),
@@ -429,20 +454,34 @@ line-identical copies, so the workflow was hoisted into abstract bases that each
 [`DeleteUserHandlerBase<TUser, TCommand>`](#deleteuserhandlerbasetuser-tcommand)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:38`),
 the erasure workflow behind
-[ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html), and
+[ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html),
 [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs:49`),
-the data-subject access workflow. Each base is generic in the app's `User` aggregate and in the app's
-own command or query record, and reads that record only through the small contracts in this group:
+the data-subject access workflow, and the password-recovery pair
+[`ForgotPasswordHandlerBase<TUser, TCommand>`](#forgotpasswordhandlerbasetuser-tcommand)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:35`)
+and [`ResetPasswordHandlerBase<TUser, TCommand>`](#resetpasswordhandlerbasetuser-tcommand)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:30`),
+which run the token issue-and-redeem flow described in
+[ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) over
+`IPasswordResetTokenService` and answer identically whether or not the address holds an account
+(`ResetPasswordHandlerBase.cs:20-21`).
+
+Each base is generic in the app's `User` aggregate and in the app's own command or query record, and
+reads that record only through the small contracts in this group:
 [`IUserScopedRequest`](#iuserscopedrequest) (`UserId`,
 `MMCA.Common/Source/Core/MMCA.Common.Application/Users/IUserScopedRequest.cs:8`),
 [`IUserScopedCommand<out TRequest>`](#iuserscopedcommandout-trequest) (adds the embedded payload,
 `IUserScopedCommand.cs:13`), and [`IUserOwnedRequest`](#iuserownedrequest) (adds `CurrentUserId` and
 `CurrentUserRole`, `IUserOwnedRequest.cs:8`). The commands stay app-side precisely because the two apps
 disagree on their pipeline attributes: ADC marks the password-change command `ICacheInvalidating` and
-Store does not (`ChangePasswordHandlerBase.cs:16-21`).
+Store does not (`ChangePasswordHandlerBase.cs:17-20`). Note that
+[`IUserScopedCommand<out TRequest>`](#iuserscopedcommandout-trequest) is deliberately *not*
+`ICommandWithRequest<TRequest>`: implementing the latter also opts a command into automatic
+`CommandRequestValidator` registration, which is a per-app decision, so implementing this one alone
+changes no pipeline behavior (`IUserScopedCommand.cs:6-11`).
 
-The export base is the most instructive of the five, because it is where the container-level and
+The export base is the most instructive of the seven, because it is where the container-level and
 handler-level composition meet. It authorizes through
 [`UserOwnershipRule.CheckOwnership`](#userownershiprule)
 (`ExportUserDataHandlerBase.cs:81-90`), reads the account through `GetReadRepository`
@@ -458,7 +497,7 @@ factories
 with the caller-safe default text in [`UserDataExportSectionDefaults`](#userdataexportsectiondefaults)
 (`IUserDataExportSection.cs:105-113`). The result is a
 [`UserDataExportDTO`](group-08-auth.md#userdataexportdto) that is PII by design and is therefore never
-logged or cached (`ExportUserDataHandlerBase.cs:42-45`).
+logged or cached (`ExportUserDataHandlerBase.cs:43-45`).
 
 Around those bases sit the small shared pieces: [`UserOwnershipRule`](#userownershiprule)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserOwnershipRule.cs:21`), the
@@ -468,11 +507,11 @@ privileged-role test passed in already evaluated because each app owns its own r
 [`UserUseCaseLog`](#userusecaselog)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserUseCaseLog.cs:11`), a non-generic
 `[LoggerMessage]` holder so every subclass emits identical text while the log category still comes from
-the subclass's own `ILogger<T>` (`UserUseCaseLog.cs:13-23`);
+the subclass's own `ILogger<T>` (`UserUseCaseLog.cs:13-29`);
 [`SoftDeletedUserValidator<TUser>`](#softdeleteduservalidatortuser)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:19`), which answers
 [`ISoftDeletedUserValidator`](group-08-auth.md#isoftdeleteduservalidator) with one
-query-filter-bypassing existence check; and
+query-filter-bypassing existence check (`SoftDeletedUserValidator.cs:30-33`); and
 [`GetUserPreferencesQuery`](#getuserpreferencesquery)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/GetPreferences/GetUserPreferencesQuery.cs:5`),
 the one request record that *was* byte-identical in both apps and so became shared. `[Rubric §16,
@@ -485,21 +524,21 @@ workflow.
 Reading `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs` top to bottom shows the whole
 chapter cooperating. The host binds and validates [`ApplicationSettings`](#applicationsettings) and
 also reads the section eagerly for the value it must pass around (`Program.cs:170-176`), calls
-`AddApplication()` then `AddInfrastructure(builder.Configuration)` (`Program.cs:287-288`), opts into the
-scheduler and the audit trail (`Program.cs:292`, `:296`), binds
-[`ModulesSettings`](#modulessettings) and calls `AddAPI(modulesSettings)` (`Program.cs:299-308`), then
+`AddApplication()` then `AddInfrastructure(builder.Configuration)` (`Program.cs:308-309`), opts into the
+scheduler and the audit trail (`Program.cs:313`, `:317`), binds
+[`ModulesSettings`](#modulessettings) and calls `AddAPI(modulesSettings)` (`Program.cs:320-329`), then
 constructs a [`ModuleLoader`](#moduleloader) with a Serilog-backed logger and calls
 `DiscoverAndRegister(services, configuration, applicationSettings, modulesSettings, environmentName)`
-before registering the loader as a singleton (`Program.cs:313-319`). Because this is the *Conference*
+before registering the loader as a singleton (`Program.cs:335-340`). Because this is the *Conference*
 service, only the Conference module is `Enabled` in its configuration; every other discovered module
 takes the `RegisterDisabledStubs` path. The host then patches the cross-process edges: it replaces the
 disabled Engagement stub with a real gRPC client (`AddEngagementBookmarkCountClient()`,
-`Program.cs:329`) and calls `AddBrokerMessaging(builder.Configuration, ...)` (`Program.cs:346-347`) so
+`Program.cs:350`) and calls `AddBrokerMessaging(builder.Configuration, ...)` (`Program.cs:371`) so
 [`MessageBusSettings`](#messagebussettings) `Provider` decides whether
 [`IMessageBus`](group-04-events-outbox.md#imessagebus) stays in-process or becomes the
-MassTransit-backed broker. Only then comes `AddApplicationDecorators()` (`Program.cs:349`), last, so
+MassTransit-backed broker. Only then comes `AddApplicationDecorators()` (`Program.cs:375`), last, so
 the decorators wrap the now-registered Conference handlers. Finally
-`app.Services.InitializeDatabaseAsync(applicationSettings, moduleLoader)` (`Program.cs:370`) applies
+`app.Services.InitializeDatabaseAsync(applicationSettings, moduleLoader)` (`Program.cs:396`) applies
 migrations and runs the module seeders the loader collected. The exact same module assemblies, dropped
 into a monolith host with every module `Enabled`, would Kahn-sort into one in-process graph with no
 gRPC clients, which is precisely the reversibility
@@ -2293,22 +2332,25 @@ gRPC clients, which is precisely the reversibility
   [primer §4](00-primer.md#4-c-build-and-code-style-conventions) for the alias convention). No
   externals.
 
-- **Concept introduced: the one request record in this family that could be shared.** Everything else
-  in the shared Users use cases keeps its command record app-side, because ADC and Store disagree on
-  the pipeline markers those records carry: both `DeleteUserCommand` records, for instance, implement
-  `ICacheInvalidating` with a `CachePrefix` built from *their own* `User` type
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:14-18`,
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:14-21`),
-  which is a value no shared record could produce. This query carries **no** markers at all: it is not
-  [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating), not `IQueryCacheable`, not
-  `ICommandWithRequest`. That absence is precisely what made it hoistable, and it is the rule worth
-  taking away: a type moves into the framework when it has no app-specific policy attached to it.
+- **Concept introduced: the one request record in this family that could be shared.** Almost
+  everything else in the shared Users use cases keeps its command record app-side, because ADC and
+  Store disagree on the pipeline markers those records carry: both `DeleteUserCommand` records, for
+  instance, implement `ICacheInvalidating` with a `CachePrefix` built from *their own* `User` type
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:14`,
+  `:17`;
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:17`,
+  `:20`), which is a value no shared record could produce. This query carries **no** markers at all:
+  it is not [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating), not
+  `IQueryCacheable`, not
+  [`ICommandWithRequest<out TRequest>`](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest).
+  That absence is precisely what made it hoistable, and it is the rule worth taking away: a type
+  moves into the framework when it has no app-specific policy attached to it.
 
   `[Rubric §9: API & Contract Design]` assesses whether the contract between layers is explicit and
   minimal. The query is the entire input contract for the read: one identifier, supplied by the
   controller from the authenticated principal rather than by the caller, so there is no way to ask for
   another account's preferences through this shape
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/UserAccountAuthControllerBase.cs:145-151`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/UserAccountAuthControllerBase.cs:145-150`).
 
   `[Rubric §6: CQRS & Event-Driven]` assesses the separation of reads from writes. This is the read
   half of the culture/theme pair; its write counterpart is the app-side `ChangePreferencesCommand`
@@ -2326,8 +2368,8 @@ gRPC clients, which is precisely the reversibility
 - **Why it's built this way**: the query and its
   [`UserPreferencesResponse`](group-08-auth.md#userpreferencesresponse) reply were byte-identical in
   both app Identity modules, so the handler base could be made generic in the `User` aggregate alone
-  rather than also in the query type
-  (`GetUserPreferencesHandlerBase.cs:10-14`). Preferences themselves are the persistence side of
+  rather than also in the query type (`GetUserPreferencesHandlerBase.cs:10-14`). Preferences
+  themselves are the persistence side of
   [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) (culture) and
   [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html) (theme).
 
@@ -2340,7 +2382,7 @@ gRPC clients, which is precisely the reversibility
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/AuthController.cs:34`,
   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AuthController.cs:32`), and
   both architecture suites use it as the *query* specimen when asserting decorator ordering
-  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:27`,
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:28`,
   `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:27`).
 
 ---
@@ -2349,9 +2391,10 @@ gRPC clients, which is precisely the reversibility
 
 > MMCA.Common.Application · `MMCA.Common.Application.Users.UseCases.ChangePassword` · `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:24` · Level 8 · class (abstract)
 
-- **What it is**: the shared password-rotation workflow. Load the account, verify the current password
-  against the stored hash, hash the new one, let the aggregate apply its own invariants, and persist
-  only if the aggregate accepted the change (`ChangePasswordHandlerBase.cs:24`, `:42-70`).
+- **What it is**: the shared password-rotation workflow for an authenticated user. Load the account,
+  verify the current password against the stored hash, hash the new one, let the aggregate apply its
+  own invariants, and persist only if the aggregate accepted the change
+  (`ChangePasswordHandlerBase.cs:24`, `:42-70`).
 
 - **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork),
   [`IPasswordHasher`](group-08-auth.md#ipasswordhasher) and an `ILogger` as primary-constructor
@@ -2368,20 +2411,22 @@ gRPC clients, which is precisely the reversibility
   [`UserUseCaseLog`](#userusecaselog). Externals: `Microsoft.Extensions.Logging` (`:1`).
 
 - **Concept introduced: the generic template-method handler, and the two axes it is generic over.**
-  The prior state was two line-identical handlers, one per app, differing only in log text
-  (`ChangePasswordHandlerBase.cs:11-15`). Hoisting them needed two variation points, and each is a
-  separate generic parameter for a separate reason. `TUser` varies because each app owns its own
+  The two app Identity modules carried line-identical copies of this handler, differing only in log
+  text (`ChangePasswordHandlerBase.cs:11-15`). Hoisting them needed two variation points, and each is
+  a separate generic parameter for a separate reason. `TUser` varies because each app owns its own
   `User` aggregate and the framework must never reference either; the *capability* it needs is named
-  by an interface constraint instead, so the base can call `ChangePassword` without knowing the type.
-  `TCommand` varies because the command record carries app-specific **pipeline** policy: ADC's
-  `ChangePasswordCommand` is
+  by an interface constraint instead, so the base can call `ChangePassword` without knowing the type
+  (`IPasswordChangeableUser.cs:19`). `TCommand` varies because the command record carries
+  app-specific **pipeline** policy: ADC's `ChangePasswordCommand` is
   [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating)
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordCommand.cs:14-15`)
-  and Store's is not
-  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordCommand.cs:12-13`),
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordCommand.cs:15`,
+  `:18`) and Store's is not
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordCommand.cs:13`),
   so a single shared record would have had to pick one behavior. The base reads the command only
   through [`IUserScopedCommand<out TRequest>`](#iuserscopedcommandout-trequest), which is deliberately
-  *not* `ICommandWithRequest<TRequest>`: that marker also opts the command into automatic
+  *not*
+  [`ICommandWithRequest<out TRequest>`](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest):
+  that marker also opts the command into automatic
   [`CommandRequestValidator<TCommand, TRequest>`](group-06-validation.md#commandrequestvalidatortcommand-trequest)
   registration, which is a per-app decision (`IUserScopedCommand.cs:6-11`).
 
@@ -2394,10 +2439,9 @@ gRPC clients, which is precisely the reversibility
   The current password is verified **before** anything is written (`:55`), the failure is an
   `Unauthorized` error with a stable code rather than a message that distinguishes "no such user" from
   "wrong password" at this layer (`:57-58`), and nothing in the handler ever logs the plaintext, the
-  hash or the salt: the success log carries only the user id
-  (`UserUseCaseLog.cs:13-14`). Hashing itself is delegated to
-  [`IPasswordHasher`](group-08-auth.md#ipasswordhasher), whose contract returns a hash and a fresh
-  salt as a tuple (`IPasswordHasher.cs:11`), the shape
+  hash or the salt: the success log carries only the user id (`UserUseCaseLog.cs:13-14`). Hashing
+  itself is delegated to [`IPasswordHasher`](group-08-auth.md#ipasswordhasher), whose contract returns
+  a hash and a fresh salt as a tuple (`IPasswordHasher.cs:11`), the shape
   [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) fixes.
 
   `[Rubric §4: DDD]` assesses whether business rules live in the domain. The handler never mutates
@@ -2409,7 +2453,7 @@ gRPC clients, which is precisely the reversibility
 - **Walkthrough**: two protected members and one method.
   - Primary constructor (`:24-27`): `unitOfWork`, `passwordHasher`, `logger`. The logger is typed as
     the non-generic `ILogger` so a subclass can pass its own `ILogger<TAppHandler>` and keep the log
-    *category* app-specific while the message text stays shared.
+    *category* app-specific while the message text stays shared (`UserUseCaseLog.cs:5-10`).
   - `UnitOfWork` (`:32`): a `protected` pass-through over the captured parameter, exposed so an app
     subclass can enlist further aggregates in the same unit of work.
   - `HandlerName` (`:39`): `protected virtual`, defaulting to `GetType().Name`. This is the detail
@@ -2433,20 +2477,21 @@ gRPC clients, which is precisely the reversibility
   (`ChangePasswordHandlerBase.cs:16-21`).
 
 - **Where it's used**: subclassed once per app, each subclass empty apart from the constructor
-  forwarding (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:17-23`,
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:20`).
-  Both subclasses are picked up as scoped command handlers by
-  `ScanModuleApplicationServices<TAssemblyMarker>()` (see
-  [`DependencyInjection`](#dependencyinjection)) and are then wrapped by the decorator pipeline. The
-  workflow is pinned directly by
+  forwarding
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:17`,
+  `:21`;
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:16`,
+  `:20`). Both subclasses are picked up as scoped command handlers by
+  `ScanModuleApplicationServices<TAssemblyMarker>()` (see [`DependencyInjection`](#dependencyinjection))
+  and are then wrapped by the decorator pipeline. The workflow is pinned directly by
   `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/ChangePasswordHandlerBaseTests.cs:15`,
-  which drives it through a test double subclass (`:123`).
+  which drives it through a test double subclass (`:122-123`).
 
 - **Caveats**: new-password strength is **not** checked here. Both apps' commands additionally
-  implement `ICommandWithRequest<ChangePasswordRequest>` (`ChangePasswordCommand.cs:15` in ADC,
-  `:13` in Store), which routes the payload through the Validating decorator before the handler runs,
-  so the base can assume a syntactically valid request. Neither app's command implements
-  `ITransactional`, so the single `SaveChangesAsync` at `:65` is the whole atomic unit.
+  implement `ICommandWithRequest<ChangePasswordRequest>` (`ChangePasswordCommand.cs:15` in ADC, `:13`
+  in Store), which routes the payload through the Validating decorator before the handler runs, so
+  the base can assume a syntactically valid request. Neither app's command implements `ITransactional`,
+  so the single `SaveChangesAsync` at `:65` is the whole atomic unit.
 
 ---
 
@@ -2477,8 +2522,7 @@ gRPC clients, which is precisely the reversibility
   merge therefore happens in exactly one place, at the call into the aggregate:
   `command.Request.Culture ?? user.PreferredCulture` and the matching line for the theme (`:53-55`).
   The domain interface documents the same contract from its side, so an aggregate author knows that
-  `UpdatePreferences` always receives both values fully resolved
-  (`IUserPreferences.cs:18-25`).
+  `UpdatePreferences` always receives both values fully resolved (`IUserPreferences.cs:18-25`).
 
   `[Rubric §16: Maintainability]` assesses whether a rule has one home. Before the hoist this merge
   existed twice; a change to it (say, adding a third preference) had to be made in two repositories in
@@ -2490,7 +2534,7 @@ gRPC clients, which is precisely the reversibility
   otherwise produce ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) culture,
   [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html) theme).
 
-- **Walkthrough**: same shape as the password base, one method shorter.
+- **Walkthrough**: same shape as the password base, one collaborator shorter.
   - Primary constructor (`:23-25`): `unitOfWork` and `logger`; no hasher, since nothing here is
     credential material.
   - `UnitOfWork` (`:30`) and `HandlerName` (`:37`): the same two protected members, with the same
@@ -2507,24 +2551,24 @@ gRPC clients, which is precisely the reversibility
   [`ChangePasswordHandlerBase<TUser, TCommand>`](#changepasswordhandlerbasetuser-tcommand), and with
   the same asymmetry on the command record: ADC's `ChangePreferencesCommand` is
   [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating)
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePreferences/ChangePreferencesCommand.cs:14-15`)
-  while Store's is not
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePreferences/ChangePreferencesCommand.cs:15`,
+  `:18`) while Store's is not
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ChangePreferences/ChangePreferencesCommand.cs:11-12`),
   so the record stays app-side and only the payload record
   ([`ChangePreferencesRequest`](group-08-auth.md#changepreferencesrequest)) is shared
   (`ChangePreferencesHandlerBase.cs:16-20`).
 
 - **Where it's used**: subclassed by
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePreferences/ChangePreferencesHandler.cs:17-22`
-  and
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ChangePreferences/ChangePreferencesHandler.cs:19`,
-  both empty subclasses that exist only to fix the generic arguments and preserve the class name.
-  Invoked from
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePreferences/ChangePreferencesHandler.cs:17`,
+  `:20` and
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ChangePreferences/ChangePreferencesHandler.cs:16`,
+  `:19`, both empty subclasses that exist only to fix the generic arguments and preserve the class
+  name. Invoked from
   [`UserAccountAuthControllerBase<TChangePasswordCommand, TChangePreferencesCommand>`](group-12-api-hosting-mapping.md#useraccountauthcontrollerbasetchangepasswordcommand-tchangepreferencescommand),
   which builds the app's command through a factory hook and returns `204 No Content` on success
   (`UserAccountAuthControllerBase.cs:125-131`). Covered by
   `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/ChangePreferencesHandlerBaseTests.cs:16`
-  through a test subclass (`:109`).
+  through a test subclass (`:108-109`).
 
 ---
 
@@ -2535,7 +2579,7 @@ gRPC clients, which is precisely the reversibility
 - **What it is**: the shared account-erasure workflow: authorize owner-or-privileged-role, soft-delete
   the account, run the app's tail hook, irreversibly anonymize the personal data in place, save, then
   drain a post-commit queue (`DeleteUserHandlerBase.cs:38`, `:55-119`). It is the most extensible of
-  the five bases: one abstract member and one virtual hook.
+  the seven Users bases: one abstract member and one virtual hook.
 
 - **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) and an `ILogger`
   (`:38-40`); implements
@@ -2583,14 +2627,12 @@ gRPC clients, which is precisely the reversibility
 
   `[Rubric §30: Compliance, Privacy & Data Governance]` assesses whether a data-subject erasure
   request is actually satisfiable. The sequence here is the mechanism behind both apps' published
-  erasure promise: soft-delete, then irreversible anonymization, in one transaction
-  (`:10-15`).
+  erasure promise: soft-delete, then irreversible anonymization, in one transaction (`:10-15`).
 
   `[Rubric §11: Security]` assesses authorization placement. The very first thing the method does,
   before it touches the repository, is the ownership check (`:62-71`), so an unauthorized caller
   cannot even confirm that an account id exists. The privileged-role test is passed in already
-  evaluated because each app owns its own role vocabulary
-  (`UserOwnershipRule.cs:15-19`).
+  evaluated because each app owns its own role vocabulary (`UserOwnershipRule.cs:15-19`).
 
   `[Rubric §1: SOLID]` assesses the template-method shape. The invariant order (authorize, load,
   delete, tail, anonymize, save, post-commit) is fixed by the base; only the two hooks vary.
@@ -2602,8 +2644,8 @@ gRPC clients, which is precisely the reversibility
     `source`.
   - `HandleAsync(TCommand, CancellationToken)` (`:55-119`):
     - Authorization first (`:62-67`) through
-      [`UserOwnershipRule.CheckOwnership`](#userownershiprule), with the code
-      `"User.DeleteForbidden"` and a message the caller sees; a non-null return is the failure
+      [`UserOwnershipRule.CheckOwnership`](#userownershiprule) (`UserOwnershipRule.cs:38`), with the
+      code `"User.DeleteForbidden"` and a message the caller sees; a non-null return is the failure
       (`:68-71`).
     - Load through the write repository (`:73-74`); `Error.NotFound` when absent (`:77`).
     - `IErasableUser erasable = user; erasable.Delete()` (`:88-89`) with the dispatch rationale above;
@@ -2624,31 +2666,146 @@ gRPC clients, which is precisely the reversibility
     cascaded aggregate's error mask the account's own `AlreadyDeleted` error.
 
 - **Why it's built this way**: the hook contract was derived from what the two apps actually needed,
-  and both uses are visible in their overrides. ADC captures the avatar blob name *before*
-  anonymization clears the URL, raises the cross-service `UserDeleted` domain event on the aggregate
-  so its outbox row is written by the very save that commits the erasure, and queues the
-  soft-deleted-user cache marker and the blob deletion as post-commit actions
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:46-88`).
+  and both uses are visible in their overrides. ADC's override
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:46-88`)
+  captures the avatar blob name *before* anonymization clears the URL (`DeleteUserHandler.cs:54`),
+  raises the cross-service `UserDeleted` domain event on the aggregate so its outbox row is written by
+  the very save that commits the erasure (`:62`), and queues the soft-deleted-user cache marker and
+  the blob deletion as post-commit actions (`:68-84`).
   Store instead cascades in the same unit of work, erasing the linked `Customer` that holds its
   name/email/address PII and returning the Customer's own failure untouched so nothing is persisted
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:35-60`).
   One hook covers both because it can do work inline *and* schedule work for after the commit.
 
 - **Where it's used**: subclassed once per app
-  (`MMCA.ADC/.../DeleteUser/DeleteUserHandler.cs:28-34` with `HasDeletePrivilege` returning
-  `UserRole.IsOrganizer(...)` at `:42-43`;
-  `MMCA.Store/.../DeleteUser/DeleteUserHandler.cs:20-23` with `UserRole.IsAdmin(...)` at `:26-27`).
-  Covered directly by
-  `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/DeleteUserHandlerBaseTests.cs:14`,
-  whose fixture user type is named `TestHidingDeleteUser` (`:196`) precisely so the hidden-`Delete()`
-  dispatch rule above is a regression test rather than a comment.
+  (`MMCA.ADC/.../DeleteUser/DeleteUserHandler.cs:28`, `:34`, with `HasDeletePrivilege` returning
+  `UserRole.IsOrganizer(...)` at `:42-43`; `MMCA.Store/.../DeleteUser/DeleteUserHandler.cs:20`, `:23`,
+  with `UserRole.IsAdmin(...)` at `:26-27`). Covered directly by
+  `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/DeleteUserHandlerBaseTests.cs:14`, whose
+  fixture user type is `TestHidingDeleteUser`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/UserUseCaseTestDoubles.cs:96`, closed
+  over at `DeleteUserHandlerBaseTests.cs:195-196`) precisely so the hidden-`Delete()` dispatch rule
+  above is a regression test rather than a comment.
 
 - **Caveats**: post-commit actions run after the erasure has already succeeded, so each one owns its
   own failure handling; the base does not wrap them (`:111-114`, and see the documented expectation at
   `:135-139`). ADC's override wraps its cache-marker action in a try/catch for exactly that reason
-  (`MMCA.ADC/.../DeleteUser/DeleteUserHandler.cs:68-80`). Both apps' `DeleteUserCommand` records are
+  (`MMCA.ADC/.../DeleteUser/DeleteUserHandler.cs:70-79`). Both apps' `DeleteUserCommand` records are
   [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating), so the cache prefix they carry
   is invalidated by the decorator after the handler returns success, outside this class.
+
+---
+
+### ForgotPasswordHandlerBase<TUser, TCommand>
+
+> MMCA.Common.Application · `MMCA.Common.Application.Users.UseCases.ForgotPassword` · `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:35` · Level 8 · class (abstract)
+
+- **What it is**: the shared start-a-password-reset workflow: parse the submitted address, resolve the
+  account behind it, mint a single-use token, and email it. Every outcome returns
+  `Result.Success()` (`ForgotPasswordHandlerBase.cs:35`, `:51-100`).
+
+- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork),
+  [`IPasswordResetTokenService`](group-08-auth.md#ipasswordresettokenservice),
+  [`IEmailSender`](group-10-notifications.md#iemailsender),
+  `IOptions<`[`PasswordResetSettings`](group-08-auth.md#passwordresetsettings)`>` and an `ILogger`
+  (`:35-40`); implements
+  [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
+  over [`Result`](group-01-result-error-handling.md#result) (`:40`). Constraints: `TUser` is only an
+  [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
+  keyed by `UserIdentifierType` (`:41`) with no capability interface at all, because the workflow
+  reads nothing off the aggregate except `Id` (`:72`), and `TCommand` is an
+  [`ICommandWithRequest<out TRequest>`](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest)
+  carrying a [`ForgotPasswordRequest`](group-08-auth.md#forgotpasswordrequest) (`:42`). It also uses
+  the [`Email`](group-02-domain-building-blocks.md#email) value object (`:57`) and
+  [`UserUseCaseLog`](#userusecaselog). Externals: `Microsoft.Extensions.Options`,
+  `Microsoft.Extensions.Logging`, `System.Globalization` and `System.Net.WebUtility` (`:1-4`).
+
+- **Concept introduced: the success-always handler, and anti-enumeration as a return-type decision.**
+  Every other command base in this family reports its failures. This one cannot. A response that
+  differs between "we sent you a reset link" and "no such account" is an account-enumeration oracle:
+  anyone can walk an address list and learn which addresses are registered. So the four ways this
+  workflow can fail to send anything all return `Result.Success()` and differ only in a log line: a
+  malformed address (`:58-62`), an address with no account (`:66-70`), a request the token service
+  throttled (`:73-77`), and an email send that threw (`:90-96`). The class remarks state the rule
+  outright and name the one exception: only the request validator can produce a 400, and it inspects
+  the shape of the address alone (`:20-25`,
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ForgotPasswordRequestValidator.cs:6-16`).
+
+  `[Rubric §11: Security]` assesses whether a public endpoint leaks facts about who holds an account.
+  The leak surface is wider than the HTTP response, and the code closes it in three places. The result
+  is uniform (`:62`, `:70`, `:77`, `:95`). The controller turns every one of them into the same
+  `202 Accepted`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:82-93`).
+  And the rejection log deliberately carries a reason string but no address and no account id, so the
+  log does not become the oracle the response is not
+  (`UserUseCaseLog.cs:34-37`). Only the paths that already proved an account exists log a user id
+  (`UserUseCaseLog.cs:25-32`).
+
+  `[Rubric §29: Resilience & Business Continuity]` assesses what happens when a dependency fails
+  mid-workflow. A send failure is caught, logged with the exception, and swallowed (`:90-96`); the
+  token has already been issued and is still valid, so the user can retry or use the link from a later
+  request. The catch filter excludes `OperationCanceledException` (`:90`) so a cancelled request is
+  not misreported as a delivered reset.
+
+  `[Rubric §3: Clean Architecture]` assesses dependency direction. The workflow lives in the
+  Application layer and reaches the SMTP relay, the token cache and the database only through
+  interfaces; the one thing it genuinely cannot express in the framework, an address-to-account lookup
+  over an app-owned `User` aggregate, is the single abstract member (`:109`).
+
+- **Walkthrough**: two protected properties, the handler method, and four hooks.
+  - Primary constructor (`:35-40`): `unitOfWork`, `tokenService`, `emailSender`, `settings`, `logger`.
+  - `UnitOfWork` (`:45`): exposed so the lookup override can reach a read repository. Both apps use it
+    for exactly that.
+  - `Settings` (`:48`): `settings.Value`, unwrapped once so the body reads
+    `Settings.TokenLifetimeMinutes` rather than `settings.Value...`.
+  - `HandleAsync(TCommand, CancellationToken)` (`:51-100`): null-guard (`:55`); `Email.Create` on the
+    raw string, so a malformed address never reaches the lookup (`:57-62`); `FindUntrackedByEmailAsync`
+    (`:65`); `tokenService.IssueAsync(email.Value, user.Id, ...)` (`:72`), whose failure means the
+    per-email throttle fired; then the send, composed from the three `Compose*` hooks and sent as HTML
+    (`:83-88`); and finally the `PasswordResetRequested` log and success (`:98-99`).
+  - `FindUntrackedByEmailAsync(Email, CancellationToken)` (`:109`): `protected abstract`. The only
+    app-specific step, because each app's `User` stores the address differently.
+  - `ComposeSubject()` (`:113`): `protected virtual`, `"Reset your password"`. Override to localize or
+    rebrand.
+  - `ComposeBody(string? resetLink, string token)` (`:123-134`): `protected virtual`. It carries the
+    link **and** the raw token, because clients without deep linking (the MAUI head) need the token
+    typed into the reset page by hand (`:115-119`). Both the link and the token go through
+    `WebUtility.HtmlEncode` before interpolation into the HTML (`:128`, `:132`), and the expiry is
+    rendered with `CultureInfo.InvariantCulture` (`:125`).
+  - `ComposeResetLink(string email, string token)` (`:144-147`): `protected virtual`. Returns `null`
+    when `PasswordResetSettings.ResetUrl` is blank, so an unconfigured host degrades to a token-only
+    email rather than emailing a broken link; otherwise it appends `?email=...&token=...` with both
+    values `Uri.EscapeDataString`-encoded.
+
+- **Why it's built this way**: the reset token is deliberately not a database row. It lives in the
+  distributed cache, hashed at rest, with the per-email request throttle and the per-token attempt cap
+  enforced by the token service rather than by this handler
+  ([ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html);
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:56`, `:71`,
+  `:79-80`). That split is why the handler's only reaction to a throttled request is a log line: it
+  never learns which limit fired. The command record stays app-side for the same reason it does in the
+  ChangePassword hoist, and the base reads it only through `ICommandWithRequest<ForgotPasswordRequest>`
+  (`:27-31`).
+
+- **Where it's used**: subclassed once per app, each override implementing the address lookup as an
+  untracked `GetAllAsync` filtered on the `Email` value object
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:20`,
+  `:26`, `:29-37`;
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:21`,
+  `:27`, `:34-46`). Reached over HTTP through
+  [`PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>`](group-12-api-hosting-mapping.md#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand),
+  whose `POST forgot-password` action is `[AllowAnonymous]`, rate-limited by the auth-IP policy and
+  `[Idempotent]` (`PasswordResetAuthControllerBase.cs:75-93`). Pinned by six tests in
+  `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/ForgotPasswordHandlerBaseTests.cs:20`
+  through a test subclass (`:190-195`), one per rejection path plus the unconfigured-`ResetUrl`
+  degradation (`:27`, `:42`, `:57`, `:79`, `:92`, `:108`).
+
+- **Caveats**: the anonymous command carries no user identifier, which is why it implements
+  [`ICommandWithRequest<out TRequest>`](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest)
+  rather than [`IUserScopedCommand<out TRequest>`](#iuserscopedcommandout-trequest)
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordCommand.cs:12-13`).
+  Nothing in this workflow writes to the database, so it never calls `SaveChangesAsync`; the unit of
+  work is present only to hand the subclass a read repository.
 
 ---
 
@@ -2656,9 +2813,9 @@ gRPC clients, which is precisely the reversibility
 
 > MMCA.Common.Application · `MMCA.Common.Application.Users.UseCases.GetPreferences` · `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/GetPreferences/GetUserPreferencesHandlerBase.cs:21` · Level 8 · class (abstract)
 
-- **What it is**: the shared preference-read workflow, and the only query handler among the five
-  Users bases. Load the account through the read repository and project its two preference fields into
-  a [`UserPreferencesResponse`](group-08-auth.md#userpreferencesresponse)
+- **What it is**: the shared preference-read workflow, and the only query handler among the Users
+  bases. Load the account through the read repository and project its two preference fields into a
+  [`UserPreferencesResponse`](group-08-auth.md#userpreferencesresponse)
   (`GetUserPreferencesHandlerBase.cs:21`, `:33-45`).
 
 - **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) as its single
@@ -2671,7 +2828,7 @@ gRPC clients, which is precisely the reversibility
   [`Error`](group-01-result-error-handling.md#error). No logger, and no externals beyond the BCL.
 
 - **Concept introduced: one generic parameter is enough when nothing app-specific rides on the
-  request.** This is the contrast case for the three command bases above. Because
+  request.** This is the contrast case for the command bases above. Because
   [`GetUserPreferencesQuery`](#getuserpreferencesquery) carries no pipeline markers, it could be
   shared outright, so the base is generic in the `User` aggregate **only** (`:10-14`). Note also the
   weaker entity constraint: `AuditableBaseEntity<UserIdentifierType>` rather than
@@ -2694,8 +2851,8 @@ gRPC clients, which is precisely the reversibility
 
   `[Rubric §15: Best Practices & Code Quality]` assesses consistency of error shape. The not-found
   path produces the identical `Error.NotFound.WithSource(HandlerName).WithTarget(typeof(TUser).Name)`
-  construction the three command bases use (`:42-43`), so every account use case in both apps reports
-  a missing user the same way.
+  construction the command bases use (`:42-43`), so every account use case in both apps reports a
+  missing user the same way.
 
 - **Walkthrough**: one protected member and one method.
   - Primary constructor (`:21`): `unitOfWork` only.
@@ -2708,26 +2865,136 @@ gRPC clients, which is precisely the reversibility
     (`:44`). A ternary, not a branch chain: the whole method is a load and a projection.
 
 - **Why it's built this way**: the query, the response and the workflow were all identical across the
-  two apps, so this is the cleanest of the five hoists; the only decision it had to make was which
-  repository is correct for a read, and it resolved that in favor of the no-tracking one
-  (`:15-19`). Preferences are read at login to reapply a returning user's culture and theme across
-  devices ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html),
+  two apps, so this is the cleanest of the Users hoists; the only decision it had to make was which
+  repository is correct for a read, and it resolved that in favor of the no-tracking one (`:15-19`).
+  Preferences are read at login to reapply a returning user's culture and theme across devices
+  ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html),
   [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)), which is why the read path
   is worth keeping cheap.
 
 - **Where it's used**: subclassed as an empty, name-preserving class in both apps
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetPreferences/GetUserPreferencesHandler.cs:13-16`,
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/GetPreferences/GetUserPreferencesHandler.cs:13`).
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetPreferences/GetUserPreferencesHandler.cs:13-14`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/GetPreferences/GetUserPreferencesHandler.cs:12-13`).
   Consumed through the closed
   `IQueryHandler<GetUserPreferencesQuery, Result<UserPreferencesResponse>>` interface by
   [`UserAccountAuthControllerBase<TChangePasswordCommand, TChangePreferencesCommand>`](group-12-api-hosting-mapping.md#useraccountauthcontrollerbasetchangepasswordcommand-tchangepreferencescommand)
-  (`UserAccountAuthControllerBase.cs:45`, `:57`, `:149-151`). Pinned by
+  (`UserAccountAuthControllerBase.cs:45`, `:57`, `:149-150`). Pinned by
   `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/GetUserPreferencesHandlerBaseTests.cs:14`
-  through a test subclass (`:88`), and by each app's own handler tests.
+  through a test subclass (`:87-88`), and by each app's own handler tests.
 
 - **Caveats**: the soft-delete global query filter applies to this read like any other, so a
   soft-deleted account resolves to `null` and returns `NotFound` rather than its stored preferences.
   That behavior comes from the persistence layer, not from anything in this class.
+
+---
+
+### ResetPasswordHandlerBase<TUser, TCommand>
+
+> MMCA.Common.Application · `MMCA.Common.Application.Users.UseCases.ResetPassword` · `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:30` · Level 8 · class (abstract)
+
+- **What it is**: the shared complete-a-password-reset workflow: redeem the single-use token, hash the
+  new password, let the aggregate apply its invariants, persist, then clear the account's lockout so
+  the user can sign in immediately with the new credential (`ResetPasswordHandlerBase.cs:30`,
+  `:50-93`).
+
+- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork),
+  [`IPasswordHasher`](group-08-auth.md#ipasswordhasher),
+  [`IPasswordResetTokenService`](group-08-auth.md#ipasswordresettokenservice),
+  [`ILoginProtectionService`](group-08-auth.md#iloginprotectionservice) and an `ILogger` (`:30-35`);
+  implements
+  [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
+  over [`Result`](group-01-result-error-handling.md#result) (`:35`). Constraints: `TUser` is an
+  [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
+  implementing [`IPasswordChangeableUser`](group-08-auth.md#ipasswordchangeableuser) (`:36`), the same
+  capability [`ChangePasswordHandlerBase<TUser, TCommand>`](#changepasswordhandlerbasetuser-tcommand)
+  requires, and `TCommand` is an
+  [`ICommandWithRequest<out TRequest>`](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest)
+  carrying a [`ResetPasswordRequest`](group-08-auth.md#resetpasswordrequest) (`:37`). Also uses
+  [`Error`](group-01-result-error-handling.md#error) and [`UserUseCaseLog`](#userusecaselog).
+  Externals: `Microsoft.Extensions.Logging` (`:1`).
+
+- **Concept introduced: burn the token before the write, not after.** The token is consumed at the top
+  of the method, before anything is saved (`:61-63`), and the comment explains the trade: leaving it
+  live until the write succeeds opens a replay window in which the same token redeems twice, while
+  burning it early costs a user whose aggregate then rejects the change one extra reset request
+  (`:58-60`). Choosing the second cost is the security-over-convenience call, and it is pinned by its
+  own test, `HandleAsync_ConsumesTheTokenBeforeSaving`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/ResetPasswordHandlerBaseTests.cs:111`).
+
+  **Concept introduced: one error for every rejection.** Unlike the authenticated change-password
+  path, which can afford a specific `Auth.InvalidCurrentPassword`, this anonymous endpoint collapses
+  an unknown token, an expired token, a mismatched token, an attempt-capped token and a vanished
+  account into a single `Auth.InvalidResetToken` (`:95-99`, produced at `:67` and `:77`). The private
+  `InvalidToken()` factory exists so there is exactly one construction site and no way for a future
+  edit to make two branches distinguishable by accident.
+
+  `[Rubric §11: Security]` assesses whether an anonymous endpoint leaks account state. Two mechanisms
+  do the work here: the uniform error above, and a rejection log that names only a reason string,
+  never an address or an account id (`:66`, `:75`, and `UserUseCaseLog.cs:34-37`). The
+  matching controller action turns every failure into the same `401`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:99-118`).
+
+  `[Rubric §29: Resilience & Business Continuity]` assesses whether a user can recover unaided. The
+  final `ResetFailedAttemptsAsync` call (`:89`) is the part that makes a reset actually usable: a user
+  who reset the password *because* the brute-force lockout locked them out would otherwise still be
+  locked out with a brand-new credential
+  ([ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html);
+  `ILoginProtectionService.cs:33`).
+
+  `[Rubric §4: DDD]` assesses whether the rules live in the domain. As with the change-password base,
+  the handler hashes and then calls `user.ChangePassword(newHash, newSalt)` (`:80`), returning the
+  aggregate's own result on failure without saving or clearing the lockout (`:81-84`).
+
+- **Walkthrough**: two protected members, the handler method, and one private helper.
+  - Primary constructor (`:30-35`): `unitOfWork`, `passwordHasher`, `tokenService`, `loginProtection`,
+    `logger`. Five collaborators, the widest of the Users bases, because a reset touches the token
+    store, the hasher, the database and the lockout store in one pass.
+  - `UnitOfWork` (`:40`) and `HandlerName` (`:47`): the same two protected members as the other bases,
+    with the same rationale (an app subclass named `ResetPasswordHandler` reports that name as the
+    error `source`, `:42-46`).
+  - `HandleAsync(TCommand, CancellationToken)` (`:50-93`): null-guard (`:54`); redeem the token via
+    `ValidateAndConsumeAsync(request.Email, request.Token, ...)` (`:61-63`) and fail generically on
+    rejection (`:64-68`); take the account id the token resolved to (`:70`) and load it through the
+    **write** repository (`:71-72`), failing with the same generic error if it is gone (`:73-77`);
+    hash the new password (`:79`) and call the aggregate (`:80`); `SaveChangesAsync` (`:86`); clear the
+    lockout (`:89`); log completion and return the aggregate's success result (`:91-92`).
+  - `InvalidToken()` (`:95-99`): the single `Error.Unauthorized("Auth.InvalidResetToken", ...)`
+    construction, stamped with `HandlerName`.
+
+- **Why it's built this way**: the reset half of the recovery vertical had to share the
+  change-password hoist's shape (generic in the aggregate, generic in the command, one virtual
+  `HandlerName`) so that both credential-write paths report errors identically and neither app has to
+  restate the workflow
+  ([ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html)). The one
+  ordering decision it owns, consuming before saving, is documented in the code rather than left to be
+  rediscovered (`:58-60`). New-password strength is not re-checked here because
+  [`ResetPasswordRequestValidator`](group-08-auth.md#resetpasswordrequestvalidator) includes the same
+  `StrongPasswordRules<T>` set the registration and change-password requests use, so a reset cannot be
+  a way around the complexity policy
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ResetPasswordRequestValidator.cs:7-23`).
+
+- **Where it's used**: subclassed once per app as an empty, name-preserving class
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordHandler.cs:18`,
+  `:24-29`;
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordHandler.cs:20`,
+  `:26-31`). Reached over HTTP through the `POST reset-password` action on
+  [`PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>`](group-12-api-hosting-mapping.md#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand)
+  (`PasswordResetAuthControllerBase.cs:99-118`), which answers `204 No Content` on success. Pinned by
+  five tests in
+  `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/ResetPasswordHandlerBaseTests.cs:18`
+  through a test subclass (`:176-181`), covering both generic-error paths, the happy path, the
+  aggregate rejection and the consume-before-save ordering (`:28`, `:48`, `:64`, `:85`, `:111`).
+
+- **Caveats**: the two apps differ on cache policy exactly as they do for change-password: ADC's
+  `ResetPasswordCommand` is
+  [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating) with a prefix built from its
+  own `User` type
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordCommand.cs:15`,
+  `:18`) and Store's is not, which is the reason the command record stays app-side. The lockout clear
+  at `:89` runs after the save and is not part of the transaction: if it throws, the password has
+  already changed. Not determinable from source: whether any deployment configures a
+  `ResetFailedAttemptsAsync` implementation that can fail in a way the caller would notice, since the
+  contract returns a bare `Task` with no result (`ILoginProtectionService.cs:33`).
 
 
 ---

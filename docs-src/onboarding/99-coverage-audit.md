@@ -11,20 +11,20 @@ explained, and lists what could not be determined from source. All counts are re
 
 | Quantity | Count | Source |
 |----------|------:|--------|
-| `.cs` files scanned | 2,810 | `00-inventory.md` |
-|, in-scope | 2,692 | |
-|, generated/excluded | 118 | logged exception §2.1 |
-| Type declaration rows (incl. partial-class fragments) | 3,586 | `00-inventory.md` |
-| **Distinct type nodes (partials collapsed)** | **3,465** | the master checklist |
-| → mapped to a functional group | 3,465 | `classify.ps1` (0 unmapped) |
-| → individually sectioned (named in a chapter) | 1,890 | `verify.ps1` |
-| → rolled up by project (G25 test classes) | 1,575 | logged exception §2.2 |
-| Distinct `###` sections written across 27 chapters | 1,834 | covering the 1,890 (sibling families share a section, §2.3) |
+| `.cs` files scanned | 2,950 | `00-inventory.md` |
+|, in-scope | 2,828 | |
+|, generated/excluded | 122 | logged exception §2.1 |
+| Type declaration rows (incl. partial-class fragments) | 3,797 | `00-inventory.md` |
+| **Distinct type nodes (partials collapsed)** | **3,668** | the master checklist |
+| → mapped to a functional group | 3,668 | `classify.ps1` (0 unmapped) |
+| → individually sectioned (named in a chapter) | 2,001 | `verify.ps1` |
+| → rolled up by project (G25 test classes) | 1,667 | logged exception §2.2 |
+| Distinct `###` sections written across 27 chapters | 1,910 | covering the 2,001 (sibling families share a section, §2.3) |
 | Chapter overviews written | 27 | one per group |
 
-**Cross-check result:** `verify.ps1` confirms **0** of the 1,890 individually-sectioned types are
+**Cross-check result:** `verify.ps1` confirms **0** of the 2,001 individually-sectioned types are
 missing from their group chapter, every one appears as a `###` heading or in a sibling-family
-`File:Line` table. 3,465 = 1,890 individually-sectioned + 1,575 rolled-up. Nothing dropped, nothing
+`File:Line` table. 3,668 = 2,001 individually-sectioned + 1,667 rolled-up. Nothing dropped, nothing
 double-counted (each type maps to exactly one group).
 
 > **Caveat on what `verify.ps1` proves.** Its check is name presence: a type counts as covered when
@@ -905,11 +905,53 @@ double-counted (each type maps to exactly one group).
 >   three numeric properties. The v1.135.0 backlog of sections with corrected citations but unverified
 >   bodies remains open outside the parts re-authored here.
 
+> **Regeneration note (re-verified against current source, 2026-08-23 full drift sweep).** Regenerated
+> at MMCA.Common `0110aee` + MMCA.ADC `96f0919a` (both clean; prior pass `0b19b56` / `018ccc50`).
+> Net change: **+203** distinct nodes (3,465 to **3,668**), 0 removed, 0 regrouped; `classify.ps1`
+> reports 0 unmapped and the per-group counts sum to 3,668. Individually-sectioned types 1,890 to
+> **2,001**, roll-ups 1,575 to **1,667**, `###` sections 1,834 to **1,910**, cycles 30 to **34**.
+> - **Password-reset vertical (G08 +8, G12 +5, G14 +2, [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html)):** the cache-backed
+>   forgot/reset-password flow: `ForgotPasswordHandlerBase<TUser, TCommand>`
+>   (`MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:35`) and its
+>   Reset sibling, `PasswordResetTokenService` (`MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:26`),
+>   `PasswordResetSettings` (`MMCA.Common.Application/Auth/PasswordResetSettings.cs:10`), and
+>   `PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>`
+>   (`MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:43`).
+> - **Event upcasting (G03 +1, G05 +2, [ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html)):** `IEventUpcaster<in TSource, out TTarget>`
+>   and `EventUpcasterRegistry` (`MMCA.Common.Application/Services/EventUpcasterRegistry.cs:30`).
+> - **ADC Conference application (G18 +33):** the session-selection decision-support vertical
+>   (`GetContentSimilarity`, `GetSessionSelectionDashboard`, `GetSpeakerSessionOverlap`,
+>   `GetCategoryDistribution` under `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/`,
+>   incl. `IAiScoringService` at `.../ScoreEventSessions/IAiScoringService.cs:40`), calendar export
+>   (`ExportEventCalendarQuery`/`ExportSessionCalendarQuery`), and new sponsor/category/question
+>   update use-cases; G17 +4, G19 +1, G20 +1, G21 +9, G23/Identity +5, G26/Live +1, G15 +2, G07 +2
+>   ride the same waves.
+> - **Testing growth (G25 +127):** per-`[Fact]` classes rolled up per the standing exception; the
+>   individually-sectioned reusable base set in group-27 now counts 240 types.
+> - **Level-repack fallout (the reason 17 extra parts were re-authored):** `plan.ps1`'s repack moved
+>   174 existing sections across unit boundaries beyond the delta-touched units (G08, G15, G18 p03/p06-p16,
+>   G19, G21, G22). A deterministic heading-vs-membership scan over `parts/` confirms 0 stale sections
+>   remain; the residual duplicate headings in group-23/group-24 are distinct same-name types (two
+>   `OptionState` component states; `UserDeleted` domain event vs integration event), not leftovers.
+> - **Cycles 30 to 34:** four new SCCs, each wholly inside one group: two in G12
+>   (`InsecureJwtMetadataWarningStartupFilter` / `WebApplicationBuilderExtensions` and
+>   `MiddlewarePipelineBuilder` / `WebApplicationExtensions`) and two test-only in G25
+>   (`AnonymousEndpointTestsBaseTests` / `DriftedTests` / `StaleAllowListTests` / `ConformantTests`,
+>   and `EventUpcasterFitnessTests` / `UpcasterTestMap`).
+> - **Outside the type pipeline:** `devops-iac` was re-authored against the 2026-08-22 FinOps
+>   second-stage Bicep changes (`MMCA.ADC/infra/main.bicep`, `foundation.bicep`; ADC PRs #135/#136);
+>   `CONCEPT-MAPS.md` needed no change (27 groups, 15 packages unchanged); the `00-primer.md` ADR
+>   table gained rows 090-096 from the canonical index.
+> - **Authoring pass and verification:** 73 parts re-authored across 16 group chapters (52 approved
+>   units + the 17 repack-fallout units + 3 G18 units + `devops-iac`), authored against real source
+>   with `path:line` citations. `verify.ps1`: **0 missing**, rubric **34/34**. All adversarial
+>   spot-checks (overviews of G03/G05/G07/G08/G12, G08-p02, G15-p04) returned CONFIRMED.
+
 ---
 
 ## 2. Exceptions log (every deliberate omission, with reason)
 
-### 2.1 Generated / scaffolded code, not sectioned (118 files)
+### 2.1 Generated / scaffolded code, not sectioned (122 files)
 EF Core migrations (`/Migrations/`, `.Migrations.SqlServer`), `ModelSnapshot`, `*.Designer.cs`,
 `*.g.cs`, `GlobalUsings.g.cs`, and `AssemblyInfo.cs` are excluded by rule (`Tools/invtool` `IsGenerated`).
 The **mechanisms** that produce them are taught instead: the `DbContext`, the migration workflow, and
@@ -917,10 +959,10 @@ the `.proto`/gRPC contracts (see [group-07](group-07-persistence-ef-core.md),
 [group-13](group-13-grpc-contracts.md), and [devops-testing](devops-testing.md)). The full file list is
 in [`00-inventory.md`](00-inventory.md#generated--excluded-artifacts-no-type-sections-written).
 
-### 2.2 Per-`[Fact]` test classes, rolled up by project (1,460 types)
+### 2.2 Per-`[Fact]` test classes, rolled up by project (1,667 types)
 Per the guide's TESTS note, individual test classes are **not** given per-type sections. The
 [Testing chapter (group-27)](group-27-testing-infrastructure.md) instead:
-- sections the **reusable** test infrastructure in full (the **168** types in `MMCA.Common.Testing`,
+- sections the **reusable** test infrastructure in full (the **240** types in `MMCA.Common.Testing`,
   `.Testing.E2E`, `.Testing.UI`, the shared **`.Testing.Architecture`** rule library + bases, now
   including the six convention/fitness bases added since v1.93.0, the web-vitals collector, the
   localization resx-parity base, the slice-cohesion base, the markup-snapshot helper, the new
@@ -932,7 +974,7 @@ Per the guide's TESTS note, individual test classes are **not** given per-type s
   `DependencyInjectionAssert`, `TestPolling`, `ModuleConformanceTestsBase<TModule>` and the
   `WebVitalsBudget` added at the v1.142.0 pass, and the per-repo architecture-fitness test classes
   plus the `Gallery` harness), and
-- rolls the remaining **1,460** per-suite test classes (including the `MMCA.Common.Benchmarks`
+- rolls the remaining **1,667** per-suite test classes (including the `MMCA.Common.Benchmarks`
   perf-smoke project) into a **per-project table** (purpose + style:
   unit / integration / fitness / E2E / component / performance-smoke).
 Every one of the 1,460 remains individually listed with `file:line` in
@@ -943,16 +985,16 @@ prose section.
 Near-identical families (per-entity `Add*/Remove*/Update*` commands, `*DTOMapper`, `*CreateRequest`,
 `*Validator`, per-type filter strategies, etc.) are taught in one `### A, B, C` section that explains
 the shared shape once. **Every** grouped type is still named and cited individually via the section's
-`File:Line` table, so citation coverage is complete (this is what `verify.ps1` checks). The 1,804
-individually-sectioned types are covered by 1,740 `###` sections; the 64-type difference is family grouping.
+`File:Line` table, so citation coverage is complete (this is what `verify.ps1` checks). The 2,001
+individually-sectioned types are covered by 1,910 `###` sections; the 91-type difference is family grouping.
 
 ---
 
 ## 3. Grouping & ordering verification
 
-- **Every type in exactly one group.** `classify.ps1` assigns all 3,465 nodes via name-level overrides
+- **Every type in exactly one group.** `classify.ps1` assigns all 3,668 nodes via name-level overrides
   (for the grab-bag `MMCA.Common.*Interfaces*/Services` namespaces) + ordered namespace-prefix rules;
-  it reports **0 unmapped** and the per-group counts sum to 3,465. See
+  it reports **0 unmapped** and the per-group counts sum to 3,668. See
   [`00-group-taxonomy.md`](00-group-taxonomy.md).
 - **Within-group ascending Level.** Each chapter's sections were authored from a pre-sorted, Level-
   ascending unit table, so no section precedes a same-group type it depends on (ties broken by name).

@@ -807,6 +807,41 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>Gateway topology owned by configuration (amends 008): the route table moves out of <code>MapForwarder</code> code into YARP <code>ReverseProxy</code> configuration as the single route source, with <code>RouteMapTests</code> as a drift gate in both consumers and the per-destination HTTP version policy (ADR-012 profiles) in cluster config; the AppHost/bicep keep address books, not route tables</td>
           <td><a href="group-16-aspire-orchestration.html">g16</a></td>
           </tr>
+          <tr>
+          <td>090</td>
+          <td>Event upcaster registration extension point (completes 010): <code>IEventUpcaster&lt;TSource, TTarget&gt;</code> in the Application layer plus an <code>EventUpcasterRegistry</code> that chains V1 to V2 to V3 to the terminal contract and re-stamps <code>MessageId</code>/<code>DateOccurred</code> after every hop, so inbox dedup survives upcasting; both delivery paths consult it, and a duplicate/self-map/cycle throws at host start</td>
+          <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-05-cqrs-pipeline.html">g05</a></td>
+          </tr>
+          <tr>
+          <td>091</td>
+          <td>Cache-backed password reset (extends 029/032): the reset credential is one <code>ICacheService</code> record (256-bit token, only its SHA-256 stored, 30-minute TTL, single live token per address, 5 validation attempts, 3 requests per 60 minutes) rather than three columns on the user row, and <code>ForgotPasswordHandlerBase</code> returns success on every path so the endpoint is not an account-enumeration oracle</td>
+          <td><a href="group-08-auth.html">g08</a>/<a href="group-14-module-system-composition.html">g14</a></td>
+          </tr>
+          <tr>
+          <td>092</td>
+          <td>Core Web Vitals budget as a shipped test contract and deploy gate: <code>WebVitalsCollector</code> installs <code>PerformanceObserver</code> hooks as a Playwright init script, <code>WebVitalsBudget</code> defaults to the good band (LCP 2500, FCP 1800, TTFB 800 ms, CLS 0.1, INP 500), a breach throws naming the page, and both apps&#39; assertions ride the chromium <code>e2e-gate</code></td>
+          <td><a href="group-27-testing-infrastructure.html">g27</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>093</td>
+          <td>Container image build posture: eleven four-stage Dockerfiles where the GitHub Packages token is a BuildKit secret (never an <code>ARG</code>/<code>ENV</code>), there is deliberately no separate <code>dotnet build</code> stage (publish re-restores; the RID split made every image compile twice, about 75 s), and <code>PublishReadyToRun=true</code> on the nine service/gateway images only; floating base tag and running as root are recorded as undecided</td>
+          <td><a href="devops-aspire.html">devops-aspire</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>094</td>
+          <td>Client-side entity data-access contract (the calling half of 034): hand-written typed bases in <code>MMCA.Common.UI</code> (<code>AuthenticatedServiceBase</code> + <code>EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;</code>), no generated client; the user-facing Polly retry lives in the client base rather than in ADR-009&#39;s resilience handler, and ADR-017&#39;s <code>Idempotency-Key</code> is minted client-side for creates only and held constant across the retry burst</td>
+          <td><a href="group-15-common-ui-framework.html">g15</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>095</td>
+          <td>Uniqueness under soft delete: <code>SoftDeleteUniqueIndexConvention</code>, registered once in <code>ApplicationDbContext.ConfigureConventions</code>, filters every unique index on a non-owned <code>IAuditableEntity</code> to live rows, so a deleted record stops occupying its unique slot forever; a hand-authored filter wins, <code>HasSoftDeleteFilter</code> is the manual extension point, and Cosmos is a no-op</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a></td>
+          </tr>
+          <tr>
+          <td>096</td>
+          <td>Best-effort side-effect contract: one <code>BestEffort.ExecuteAsync(operation, logger, action, ct)</code> helper awaits the side effect and turns any failure into exactly one Warning plus one <code>besteffort.dispatch.failed</code> increment on its own <code>MMCA.Common.BestEffort</code> meter; caller cancellation is rethrown rather than swallowed, and the operation name stays a low-cardinality constant</td>
+          <td><a href="group-03-querying-specifications.html">g03</a>/<a href="group-22-engagement-module.html">g22</a></td>
+          </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>
           <hr>

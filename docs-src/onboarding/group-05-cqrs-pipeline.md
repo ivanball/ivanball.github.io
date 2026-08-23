@@ -37,9 +37,10 @@ and the cross-cutting pipeline wrapped around it. There are five families:
    consumed by use cases: [`ITenantContext`](#itenantcontext) (which tenant this scope runs as),
    [`IDistributedLock`](#idistributedlock) (mutual exclusion across replicas),
    [`IScheduledJob`](#ischeduledjob) (recurring work on a cron schedule),
-   [`IAuditTrailReader`](#iaudittrailreader) (the recorded change history of one entity), and
+   [`IAuditTrailReader`](#iaudittrailreader) (the recorded change history of one entity),
    [`IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`](#ientitydtoprojectortentity-tentitydto-tidentifiertype)
-   (opt-in projection pushdown on list reads).
+   (opt-in projection pushdown on list reads), and the event-versioning pair
+   [`IEventUpcaster`](#ieventupcaster) / [`IEventUpcasterRegistry`](#ieventupcasterregistry).
 5. **One reusable use case shipped by the framework itself**,
    [`DeleteEntityCommand<TEntity, TIdentifierType>`](#deleteentitycommandtentity-tidentifiertype) and
    [`DeleteEntityHandler<TEntity, TIdentifierType>`](#deleteentityhandlertentity-tidentifiertype),
@@ -49,9 +50,11 @@ This is the central column of `[Rubric §6, CQRS & Event-Driven]` (reads separat
 intent-revealing use cases) and `[Rubric §10, Cross-Cutting Concerns]` (the place those concerns are
 implemented once, uniformly, instead of scattered through handlers). The governing decision is
 [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html), revised 2026-07-19
-for the transactional semantics and again 2026-08-18 for the pipeline order, which now inserts an
+for the transactional semantics and again 2026-08-18 for the pipeline order, which inserts an
 Authorization decorator between FeatureGate and Logging and a Timeout decorator between Validating
-and Transactional.
+and Transactional on both chains. The ADR's own Status block warns that the order printed in its
+Decision section is the pre-2026-08-18 one and points at the later revision, so read the revision, not
+the decision, when you need the current chain.
 
 ## The shape: thin handlers, fat pipeline
 
@@ -83,28 +86,31 @@ call arrives over REST, gRPC, or an integration-event consumer.
 ## How the pipeline is assembled (Scrutor, registration versus execution order)
 
 The wiring lives in `DependencyInjection.cs`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:21`), exposed as
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:22`), exposed as
 `extension(IServiceCollection services)` members (the C# `extension(T)` syntax,
 [primer §4](00-primer.md#c-extensiont-types-read-this-once)). The sequence a host must follow is
 strict and ordered:
 
-1. `AddApplication()` registers the core singletons (settings facade, event dispatcher, navigation
-   metadata, the [`EntityQueryPipeline`](group-03-querying-specifications.md#entityquerypipeline)) and
-   Common's own validators (`DependencyInjection.cs:29-42`).
-2. `ScanModuleApplicationServices<TAssemblyMarker>()` runs **once per module** and uses **Scrutor**
-   assembly scanning to register domain and integration event handlers (singleton), DTO mappers, DTO
-   projectors and request mappers (scoped), and every concrete `ICommandHandler<,>`/`IQueryHandler<,>`
-   (scoped), plus FluentValidation validators (`DependencyInjection.cs:132-204`).
-3. `AddApplicationDecorators()` is called **last** (`DependencyInjection.cs:102-122`). It uses
-   Scrutor's `TryDecorate` to wrap the already-registered handlers. **This ordering is load-bearing**:
+1. `AddApplication()` (`DependencyInjection.cs:30`) registers the core singletons: the settings
+   facade, the domain event dispatcher, the upcaster registry, the navigation metadata provider and
+   the [`EntityQueryPipeline`](group-03-querying-specifications.md#entityquerypipeline)
+   (`DependencyInjection.cs:32-43`), then Common's own validators (`DependencyInjection.cs:48`).
+2. `ScanModuleApplicationServices<TAssemblyMarker>()` (`DependencyInjection.cs:140`) runs **once per
+   module** and uses **Scrutor** assembly scanning to register domain and integration event handlers
+   (singleton, `DependencyInjection.cs:144-155`), DTO mappers, DTO projectors and request mappers
+   (scoped, `DependencyInjection.cs:157-176`), and every concrete
+   `ICommandHandler<,>`/`IQueryHandler<,>` (scoped, `DependencyInjection.cs:178-188`), plus
+   FluentValidation validators (`DependencyInjection.cs:190`).
+3. `AddApplicationDecorators()` (`DependencyInjection.cs:110`) is called **last**. It uses Scrutor's
+   `TryDecorate` to wrap the already-registered handlers. **This ordering is load-bearing**:
    `TryDecorate` can only wrap registrations that already exist, which is why decorators must come
-   after every module's handler scan.
+   after every module's handler scan (`DependencyInjection.cs:54-55`).
 
 The subtle rule is **registration order versus execution order**. `TryDecorate` applies decorators in
 *reverse* registration order, so the **last** one registered becomes the **outermost** wrapper
-(`DependencyInjection.cs:49-51`). The command registrations (`DependencyInjection.cs:107-113`), read
+(`DependencyInjection.cs:57-58`). The command registrations (`DependencyInjection.cs:115-121`), read
 top to bottom, therefore list innermost-first, and the XML doc above them draws the resulting nesting
-(`DependencyInjection.cs:53-63`):
+(`DependencyInjection.cs:63-70`):
 
 ```
 FeatureGateCommandDecorator                    outermost (registered last)
@@ -117,7 +123,7 @@ FeatureGateCommandDecorator                    outermost (registered last)
               -> ConcreteHandler               the actual business logic
 ```
 
-The query side (`DependencyInjection.cs:116-120`, drawn at `DependencyInjection.cs:66-74`) is lighter,
+The query side (`DependencyInjection.cs:124-128`, drawn at `DependencyInjection.cs:76-81`) is lighter,
 since there is nothing to validate or commit on a read:
 
 ```
@@ -133,84 +139,89 @@ Since the 2026-08-18 revision the order is **pinned by a test, not only by the c
 `DecoratorPipelineOrderTestsBase`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:38`) resolves both
 handler types from a real `ServiceCollection` and unwraps the constructed object graph by reflection,
-asserting the two sequences outermost-first. Both expected lists are `protected virtual`
-(`DecoratorPipelineOrderTestsBase.cs:49`, `:61`), so a consumer whose chain differs can override them;
-MMCA.Common subclasses the base against its own registration sequence without overriding either list
-(`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21`). That is
-`[Rubric §14, Testability]` doing governance work: the diagram above cannot silently drift from the
-registrations below it.
+asserting the two sequences outermost-first (`DecoratorPipelineOrderTestsBase.cs:72`, `:76`). Both
+expected lists are `protected virtual` (`DecoratorPipelineOrderTestsBase.cs:49`, `:61`), so a consumer
+whose chain differs can override them; MMCA.Common subclasses the base against its own registration
+sequence without overriding either list
+(`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21`, the real
+registration sequence at `DecoratorPipelineOrderTests.cs:35`). That is `[Rubric §14, Testability]`
+doing governance work: the diagram above cannot silently drift from the registrations below it.
 
-A separate, optional call layers MiniProfiler on top:
-`AddApplicationProfiling()` (`DependencyInjection.cs:245-250`) registers
+A separate, optional call layers MiniProfiler on top: `AddApplicationProfiling()`
+(`DependencyInjection.cs:297-301`) registers
 [`ProfilingCommandDecorator<TCommand, TResult>`](#profilingcommanddecoratortcommand-tresult)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ProfilingCommandDecorator.cs:11`,
 one `MiniProfiler.Current?.Step(...)` around the inner call at `ProfilingCommandDecorator.cs:17`) and
 its read twin [`ProfilingQueryDecorator<TQuery, TResult>`](#profilingquerydecoratortquery-tresult)
 (`.../Decorators/ProfilingQueryDecorator.cs:11`, `:17`). No host in this workspace calls it today: the
 only call sites are the framework's own `DependencyInjectionTests`
-(`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DependencyInjectionTests.cs:148`,
-`:158`), which matches
-[ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html)'s note that the
-profiling pair is opt-in and unwired.
+(`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DependencyInjectionTests.cs:148`, `:158`),
+which matches [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html)'s note
+that the profiling pair is opt-in and unwired.
 
 ## Why this exact order, and what each layer guards
 
 The nesting order is a deliberate cost-and-correctness argument, spelled out in the registration
-XML-doc (`DependencyInjection.cs:76-98`):
+XML-doc (`DependencyInjection.cs:87-105`):
 
 - **Feature-gating is outermost** so a disabled feature is rejected with *zero* downstream work: no
-  permission check, no log scope, no cache touch, no validation, no budget, no transaction.
+  permission check, no log scope, no cache touch, no validation, no budget, no transaction
+  (`DependencyInjection.cs:87-90`).
   [`FeatureGateCommandDecorator<TCommand, TResult>`](#featuregatecommanddecoratortcommand-tresult)
   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:18`)
   and its read twin [`FeatureGateQueryDecorator<TQuery, TResult>`](#featuregatequerydecoratortquery-tresult)
   (`.../Decorators/FeatureGateQueryDecorator.cs:18`) call `IFeatureManager.IsEnabledAsync` only when
   the use case opts in via [`IFeatureGated`](#ifeaturegated) (`FeatureGateCommandDecorator.cs:48-51`,
-  `FeatureGateQueryDecorator.cs:51`) and short-circuit with a `NotFound` failure carrying the code
-  `Feature.Disabled` (`FeatureGateCommandDecorator.cs:55-56`, `FeatureGateQueryDecorator.cs:56`). A
+  `FeatureGateQueryDecorator.cs:48-51`) and short-circuit with a `NotFound` failure carrying the code
+  `Feature.Disabled` (`FeatureGateCommandDecorator.cs:55-56`, `FeatureGateQueryDecorator.cs:55-56`). A
   disabled feature reads as "this does not exist" rather than "you may not", which is the deliberate
   posture of [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html), and it
   is also why the gate stays *outside* authorization: an off feature must answer identically for every
-  caller instead of leaking which permission guards it (`DependencyInjection.cs:79-82`).
+  caller instead of leaking which permission guards it (`DependencyInjection.cs:88-90`).
 - **Authorization sits directly inside the gate and outside caching**, so a denied request neither
-  reads nor populates the cache (`DependencyInjection.cs:83-85`).
+  reads nor populates the cache (`DependencyInjection.cs:91-93`).
   [`AuthorizationCommandDecorator<TCommand, TResult>`](#authorizationcommanddecoratortcommand-tresult)
   (`.../Decorators/AuthorizationCommandDecorator.cs:26`) and
   [`AuthorizationQueryDecorator<TQuery, TResult>`](#authorizationquerydecoratortquery-tresult)
   (`.../Decorators/AuthorizationQueryDecorator.cs:21`) take
   [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) and
-  [`IPermissionRegistry`](group-08-auth.md#ipermissionregistry), pass straight through when the use
-  case does not implement [`IRequiresPermission`](#irequirespermission)
-  (`AuthorizationCommandDecorator.cs:58-59`, `AuthorizationQueryDecorator.cs:53-54`), and otherwise
-  ask the registry whether any of the caller's roles grants the named permission
-  (`AuthorizationCommandDecorator.cs:61`, `AuthorizationQueryDecorator.cs:56`). When none does, the
-  decorator returns a `Forbidden` [`Error`](group-01-result-error-handling.md#error) with the code
-  `Authorization.PermissionDenied` **without invoking the handler**
-  (`AuthorizationCommandDecorator.cs:68-71`, `AuthorizationQueryDecorator.cs:63-66`) and counts the
-  denial on [`CqrsMetrics`](#cqrsmetrics) (`AuthorizationCommandDecorator.cs:65`). This is defense in
+  [`IPermissionRegistry`](group-08-auth.md#ipermissionregistry)
+  (`AuthorizationCommandDecorator.cs:27-29`), pass straight through when the use case does not
+  implement [`IRequiresPermission`](#irequirespermission) (`AuthorizationCommandDecorator.cs:58-59`,
+  `AuthorizationQueryDecorator.cs:53-54`), and otherwise ask the registry whether any of the caller's
+  roles grants the named permission (`AuthorizationCommandDecorator.cs:61`,
+  `AuthorizationQueryDecorator.cs:56`). When none does, the decorator returns a `Forbidden`
+  [`Error`](group-01-result-error-handling.md#error) with the code `Authorization.PermissionDenied`
+  **without invoking the handler** (`AuthorizationCommandDecorator.cs:68-71`,
+  `AuthorizationQueryDecorator.cs:63-66`) and counts the denial on [`CqrsMetrics`](#cqrsmetrics)
+  (`AuthorizationCommandDecorator.cs:65`, `AuthorizationQueryDecorator.cs:60`). This is defense in
   depth beside the endpoint's `[Authorize]` policy rather than a replacement for it
-  (`AuthorizationCommandDecorator.cs:19-22`): the capability check now travels with the use case, so a
+  (`AuthorizationCommandDecorator.cs:19-22`): the capability check travels with the use case, so a
   command reached over gRPC, from a scheduled job, or from another module is checked the same way it
   is over HTTP. That is `[Rubric §11, Security]` moving inward, and it is the pipeline-side surface of
   [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html).
-- **Logging sits just inside authorization** so it measures only enabled, permitted executions.
+- **Logging sits just inside authorization** so it measures only enabled, permitted executions
+  (`DependencyInjection.cs:94`).
   [`LoggingCommandDecorator<TCommand, TResult>`](#loggingcommanddecoratortcommand-tresult)
   (`.../Decorators/LoggingCommandDecorator.cs:14`) opens a source-generated structured-logging scope
   carrying the command name and the `CorrelationId` from
   [`ICorrelationContext`](group-12-api-hosting-mapping.md#icorrelationcontext)
   (`LoggingCommandDecorator.cs:23`, `:25`, `:66-67`), times the whole inner pipeline with
   `Stopwatch.GetTimestamp()`/`Stopwatch.GetElapsedTime` rather than a `Stopwatch` instance (one fewer
-  allocation per command, `LoggingCommandDecorator.cs:29-36`), and separates three outcomes:
-  `completed`, `failed` (a `Result` in a failure state, logged at Warning with an error summary) and
-  `exception` (logged at Error, then rethrown), at `LoggingCommandDecorator.cs:38-58`. Each outcome is
-  also recorded to the [`CqrsMetrics`](#cqrsmetrics) duration histogram tagged `command` and `outcome`
+  allocation per command, `LoggingCommandDecorator.cs:32-36`), and separates three outcomes:
+  `completed` (Information), `failed` (a `Result` in a failure state, Warning with an error summary),
+  and `exception` (Error, then rethrown), at `LoggingCommandDecorator.cs:38-58` with the levels
+  declared at `LoggingCommandDecorator.cs:77-87`. Each outcome is also recorded to the
+  [`CqrsMetrics`](#cqrsmetrics) duration histogram tagged `command` and `outcome`
   (`LoggingCommandDecorator.cs:69-73`). This is the RED (Rate, Errors, Duration) anchor of
   `[Rubric §13, Observability & Operability]`
   ([ADR-041](https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html)). The read side
   [`LoggingQueryDecorator<TQuery, TResult>`](#loggingquerydecoratortquery-tresult)
-  (`.../Decorators/LoggingQueryDecorator.cs:13`) is the same shape against
-  `CqrsMetrics.QueryDuration` (`LoggingQueryDecorator.cs:68`).
+  (`.../Decorators/LoggingQueryDecorator.cs:13`) is the same shape against `CqrsMetrics.QueryDuration`
+  (`LoggingQueryDecorator.cs:67-71`), with one calibration difference: a completed query logs at Debug
+  rather than Information (`LoggingQueryDecorator.cs:73`), because reads are the high-volume half.
 - **Cache invalidation sits outside validation and outside the transaction**, so the cache is only
-  cleared after a valid, committed mutation (`DependencyInjection.cs:89-90`).
+  cleared after a valid, committed mutation (`DependencyInjection.cs:97-98`).
   [`CachingCommandDecorator<TCommand, TResult>`](#cachingcommanddecoratortcommand-tresult)
   (`.../Decorators/CachingCommandDecorator.cs:32`) calls `ICacheService.RemoveByPrefixAsync` only when
   the command opts in via [`ICacheInvalidating`](#icacheinvalidating), its prefix is non-blank, and
@@ -219,21 +230,23 @@ XML-doc (`DependencyInjection.cs:76-98`):
   `RemoveByPrefixAsync("")` would evict the entire cache (`CachingCommandDecorator.cs:73-75`); the
   eviction runs with `CancellationToken.None` and swallows every fault into a warning, because the
   command has already committed and a cache outage must not turn a committed write into a failure
-  (`CachingCommandDecorator.cs:84-104`); and a second, delayed eviction fires after
-  `ReInvalidationDelay` (5 seconds by default, `CachingCommandDecorator.cs:60`) to remove an entry
-  that an in-flight read repopulated with pre-write state (`CachingCommandDecorator.cs:91-96`,
-  `CachingCommandDecorator.cs:113-126`). On the read side,
+  (`CachingCommandDecorator.cs:86-89`, `CachingCommandDecorator.cs:98-103`); and a second, delayed
+  eviction fires after `ReInvalidationDelay` (5 seconds by default, `CachingCommandDecorator.cs:60`)
+  to remove an entry that an in-flight read repopulated with pre-write state
+  (`CachingCommandDecorator.cs:91-96`, `CachingCommandDecorator.cs:113-126`). That follow-up task is
+  held on an internal property rather than dropped, so it is observed and a test can await it
+  deterministically (`CachingCommandDecorator.cs:62-66`). On the read side,
   [`CachingQueryDecorator<TQuery, TResult>`](#cachingquerydecoratortquery-tresult)
   (`.../Decorators/CachingQueryDecorator.cs:34`) serves hits without touching the handler
   (`CachingQueryDecorator.cs:79-84`), stores only non-failure results
   (`CachingQueryDecorator.cs:109-114`), and is **fail-open** throughout: a failed read is logged and
   treated as a miss, a failed populate returns the answer uncached, and only
-  `OperationCanceledException` escapes the guard (`CachingQueryDecorator.cs:116`,
-  `CachingQueryDecorator.cs:162-165`). Both halves are the pipeline's
+  `OperationCanceledException` escapes either guard (`CachingQueryDecorator.cs:116-122`,
+  `CachingQueryDecorator.cs:165-169`). Both halves are the pipeline's
   `[Rubric §12, Performance & Scalability]` story
   ([ADR-026](https://ivanball.github.io/docs/adr/026-caching-strategy.html)).
 - **Validation sits outside the budget and the transaction** so a malformed command never spends its
-  timeout allowance or opens a database transaction (`DependencyInjection.cs:87-88`).
+  timeout allowance or opens a database transaction (`DependencyInjection.cs:95-96`).
   [`ValidatingCommandDecorator<TCommand, TResult>`](#validatingcommanddecoratortcommand-tresult)
   (`.../Decorators/ValidatingCommandDecorator.cs:24`) takes `IEnumerable<IValidator<TCommand>>` and
   keeps the first (`ValidatingCommandDecorator.cs:29`), passes straight through when there is none
@@ -243,12 +256,12 @@ XML-doc (`DependencyInjection.cs:76-98`):
   [`ICommandWithRequest<out TRequest>`](#icommandwithrequestout-trequest) get a validator wired
   automatically: the module scan reflects over the assembly and `TryAdd`s a
   [`CommandRequestValidator<TCommand, TRequest>`](group-06-validation.md#commandrequestvalidatortcommand-trequest)
-  for each (`DependencyInjection.cs:186-201`), with `TryAdd` semantics so an explicit
-  `IValidator<TCommand>` always wins. That whole story belongs to
+  for each (`DependencyInjection.cs:192-205`), with `TryAdd` semantics so an explicit
+  `IValidator<TCommand>` always wins (`DependencyInjection.cs:192-193`). That whole story belongs to
   [G06, Validation](group-06-validation.md) (`[Rubric §24, Forms, Validation & UX Safety]`).
 - **The timeout budget sits inside validation and outside the transaction**, so it covers the database
   work that actually hangs, does not charge the caller for validation, and cancels the transaction
-  rather than leaving it open (`DependencyInjection.cs:91-94`).
+  rather than leaving it open (`DependencyInjection.cs:99-102`).
   [`TimeoutCommandDecorator<TCommand, TResult>`](#timeoutcommanddecoratortcommand-tresult)
   (`.../Decorators/TimeoutCommandDecorator.cs:33`) passes through unless the command implements
   [`IHasTimeout`](#ihastimeout) with a positive budget (`TimeoutCommandDecorator.cs:63-64`), otherwise
@@ -260,13 +273,13 @@ XML-doc (`DependencyInjection.cs:76-98`):
   `Error.Failure("Request.TimedOut", ...)` (`TimeoutCommandDecorator.cs:79-84`) because the framework's
   `ErrorType` taxonomy maps to HTTP status codes and has no member for 408 or 504, so the
   machine-readable code, not the type, is what callers branch on
-  (`TimeoutCommandDecorator.cs:12-17`); the expiry is also counted on
-  [`CqrsMetrics`](#cqrsmetrics) (`TimeoutCommandDecorator.cs:76`). The read twin
+  (`TimeoutCommandDecorator.cs:12-17`); the expiry is also counted on [`CqrsMetrics`](#cqrsmetrics)
+  (`TimeoutCommandDecorator.cs:76`). The read twin
   [`TimeoutQueryDecorator<TQuery, TResult>`](#timeoutquerydecoratortquery-tresult)
   (`.../Decorators/TimeoutQueryDecorator.cs:33`) is line-for-line identical
-  (`TimeoutQueryDecorator.cs:63-84`) but sits **innermost** on the query side, so a cache hit is served
-  without starting a budget at all. This is `[Rubric §29, Resilience & Business Continuity]` expressed
-  per use case rather than per host.
+  (`TimeoutQueryDecorator.cs:63-67`, `:73`, `:76`, `:80`) but sits **innermost** on the query side, so
+  a cache hit is served without starting a budget at all. This is
+  `[Rubric §29, Resilience & Business Continuity]` expressed per use case rather than per host.
 - **Transaction is innermost** (closest to the handler) so the unit-of-work boundary is as tight as
   possible. [`TransactionalCommandDecorator<TCommand, TResult>`](#transactionalcommanddecoratortcommand-tresult)
   (`.../Decorators/TransactionalCommandDecorator.cs:18`) is sixteen lines (18-33): pass through unless
@@ -277,13 +290,13 @@ XML-doc (`DependencyInjection.cs:76-98`):
   call, in [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory)
   (`[Rubric §8, Data Architecture]`), and it is worth reading:
   **a returned failed `Result` rolls the transaction back, exactly like an exception**
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:565-570`);
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:565-571`);
   the call is re-entrant, so a nested transaction joins the ambient one and only the outermost call
-  begins, commits, or rolls back (`DbContextFactory.cs:515-516`); in-process domain event dispatch is
+  begins, commits, or rolls back (`DbContextFactory.cs:508-516`); in-process domain event dispatch is
   deferred until after a successful commit and dropped on rollback (`DbContextFactory.cs:472-475`,
-  `DbContextFactory.cs:581-585`); and a failure of the *commit itself* is never retried, surfacing as
-  `TransactionCommitAmbiguousException` instead (`DbContextFactory.cs:485-490`,
-  `DbContextFactory.cs:542-543`).
+  `DbContextFactory.cs:578-580`); and a failure of the *commit itself* is never retried, surfacing as
+  `TransactionCommitAmbiguousException` instead (`DbContextFactory.cs:488-496`,
+  `DbContextFactory.cs:574-576`).
 
 ## Opt-in by marker interface, pay only for what you use
 
@@ -321,19 +334,20 @@ Adoption is honest about that, and it is uneven. `IQueryCacheable` is wired and 
 exactly one production query implements it today, ADC's `GetNowNextQuery`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextQuery.cs:23`,
 a 30-second TTL at `:38`), plus the reference apps (Helpdesk's `GetTicketByIdQuery`,
-`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/UseCases/GetById/GetTicketByIdQuery.cs:23`,
-and the ECommerce sample's `GetProductByIdQuery`,
+`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/UseCases/GetById/GetTicketByIdQuery.cs:23`
+with a 5-minute TTL at `:29`, and the ECommerce sample's `GetProductByIdQuery`,
 `MMCA.ECommerce/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/GetById/GetProductByIdQuery.cs:23`,
 and `GetOrderByIdQuery`,
 `MMCA.ECommerce/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/GetById/GetOrderByIdQuery.cs:23`).
-MMCA.Store has no
-`IQueryCacheable` query at all; its public reads cache at the HTTP `OutputCache` layer instead
+MMCA.Store has no `IQueryCacheable` query at all; its public reads cache at the HTTP `OutputCache`
+layer instead
 ([ADR-040](https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html)).
 The two newest markers are further back still: no use case in MMCA.ADC, MMCA.Store or MMCA.Helpdesk
 implements `IRequiresPermission` or `IHasTimeout` yet, so both decorators are exercised only by the
-framework's own tests (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Decorators/AuthorizationCommandDecoratorTests.cs`,
-`.../Decorators/TimeoutCommandDecoratorTests.cs`). The capability shipped; the adoption has not
-started.
+framework's own tests
+(`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Decorators/AuthorizationCommandDecoratorTests.cs`,
+`.../Decorators/AuthorizationQueryDecoratorTests.cs`, `.../Decorators/TimeoutCommandDecoratorTests.cs`,
+`.../Decorators/TimeoutQueryDecoratorTests.cs`). The capability shipped; the adoption has not started.
 
 ## Tenant scoping and the two lock tables
 
@@ -344,23 +358,28 @@ is applied where the key is *computed* instead: [`TenantCacheKey`](#tenantcachek
 (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TenantCacheKey.cs:25`) turns a
 key or prefix into `t:{tenantId}:{key}` when [`ITenantContext`](#itenantcontext)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ITenantContext.cs:22`) reports a resolved
-tenant, and returns it untouched when it does not (`TenantCacheKey.cs:37-40`). The scoped form is a
-**prefix, not a suffix**, precisely so prefix eviction keeps working: a command's invalidation can
-only reach its own tenant's entries (`TenantCacheKey.cs:16-18`). Because the query decorator uses the
-same helper for its reads (`CachingQueryDecorator.cs:64`) and the command decorator for its evictions
+tenant, and returns it untouched when it does not (`TenantCacheKey.cs:37-40`, marker constant at
+`TenantCacheKey.cs:28`). The scoped form is a **prefix, not a suffix**, precisely so prefix eviction
+keeps working: a command's invalidation can only reach its own tenant's entries
+(`TenantCacheKey.cs:15-19`). Because the query decorator uses the same helper for its reads
+(`CachingQueryDecorator.cs:63-64`) and the command decorator for its evictions
 (`CachingCommandDecorator.cs:82`), reads and invalidations stay symmetric by construction.
 `ITenantContext` is injected as an optional constructor parameter defaulting to `null`
 (`CachingQueryDecorator.cs:38`, `CachingCommandDecorator.cs:36`), so a single-tenant host keeps
 byte-identical cache keys to the pre-tenancy framework
 ([ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)); the interface itself
-exposes `TenantId` and `IsResolved` (`ITenantContext.cs:28`, `:31`) and refuses to change tenant
-mid-scope, accepting the value it already holds and throwing on a different one
+exposes `TenantId` and `IsResolved` (`ITenantContext.cs:28`, `:31`), treats an unresolved tenant as a
+meaningful state rather than inventing a fallback value (`ITenantContext.cs:10-15`), and refuses to
+change tenant mid-scope, accepting the value it already holds and throwing on a different one
 (`ITenantContext.cs:33-41`).
 
 The read path also guards against **cache stampede**. On a miss,
 [`CachingQueryDecorator<TQuery, TResult>`](#cachingquerydecoratortquery-tresult) takes a per-key lock
 and re-checks the cache inside it, so on expiry of a hot key exactly one caller runs the handler and
-the rest are served the fresh entry (`CachingQueryDecorator.cs:86-96`). The lock table is
+the rest are served the fresh entry (`CachingQueryDecorator.cs:89-96`). The miss counter is
+incremented once, at the point where execution actually falls through to the handler rather than at
+either cache read, so a request that misses the fast path and the double-check is not counted twice
+(`CachingQueryDecorator.cs:98-104`). The lock table is
 [`QueryCacheKeyLocks`](#querycachekeylocks) (`.../Decorators/CachingQueryDecorator.cs:194`), a
 non-generic holder around a [`KeyedSemaphoreStripe`](group-08-auth.md#keyedsemaphorestripe) so that
 every closed generic decorator shares one table rather than one per closed type
@@ -368,7 +387,7 @@ every closed generic decorator shares one table rather than one per closed type
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:142`) does the same job
 for the default `ICacheService.GetOrCreateAsync` implementation, and is deliberately a *separate*
 table: different call sites over different keys, where sharing stripes would only widen the
-unrelated-key collisions striping already tolerates (`ICacheService.cs:135-141`). Both are striped
+unrelated-key collisions striping already tolerates (`ICacheService.cs:134-141`). Both are striped
 rather than one semaphore per key, and both are honest about the limit: the lock is per process, so
 across replicas stampede protection is at most one handler execution per instance, not one
 cluster-wide (`CachingQueryDecorator.cs:186-192`).
@@ -379,15 +398,15 @@ Two small helpers make the short-circuit decorators possible.
 [`ResultFailureFactory`](#resultfailurefactory)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ResultFailureFactory.cs:11`)
 builds a delegate that manufactures a `TResult` failure from an error list, taking a direct cast for
-non-generic `Result` (`ResultFailureFactory.cs:22-25`) and compiling an expression tree once per
-closed `Result<T>` (`ResultFailureFactory.cs:27-41`), and throwing `InvalidOperationException` for
-anything else (`ResultFailureFactory.cs:43-45`). All four short-circuiting decorator families (feature
-gate, authorization, validation, timeout) cache that delegate in a static field but build it
-**lazily, on the first short-circuit**, not in a static constructor: since Scrutor's `TryDecorate` is
+non-generic `Result` (`ResultFailureFactory.cs:22-25`), compiling an expression tree once per closed
+`Result<T>` (`ResultFailureFactory.cs:27-41`), and throwing `InvalidOperationException` for anything
+else (`ResultFailureFactory.cs:43-45`). All four short-circuiting decorator families (feature gate,
+authorization, validation, timeout) cache that delegate in a static field but build it **lazily, on
+the first short-circuit**, not in a static constructor: since Scrutor's `TryDecorate` is
 unconditional, an eager initializer turned an unsupported `TResult` into a
 `TypeInitializationException` at *resolve* time for a handler that never short-circuits
-(`FeatureGateCommandDecorator.cs:36-43`, `AuthorizationCommandDecorator.cs:36-53`,
-`ValidatingCommandDecorator.cs:45-52`, `TimeoutCommandDecorator.cs:41-58`). That repeated remark is a
+(`FeatureGateCommandDecorator.cs:36-43`, `AuthorizationCommandDecorator.cs:46-52`,
+`ValidatingCommandDecorator.cs:45-52`, `TimeoutCommandDecorator.cs:51-58`). That repeated remark is a
 good example of the guide's general rule: read the remarks, they usually record a bug that was paid
 for once.
 
@@ -412,12 +431,12 @@ command/handler pair that deletes *any*
 [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
 (`DeleteEntityHandler.cs:17`) rather than forcing every module to author `DeleteSessionCommand`,
 `DeleteSpeakerCommand`, and so on. The handler resolves the repository from
-[`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), returns a `NotFound`
-[`Error`](group-01-result-error-handling.md#error) stamped with its source and the entity type name
-when the row is missing (`DeleteEntityHandler.cs:25-28`), calls the aggregate's own `Delete()` (which
-enforces invariants and may raise domain events), and saves **only** when that succeeded
-(`DeleteEntityHandler.cs:30-32`). The command itself is a one-property record that implements
-[`ICacheInvalidating`](#icacheinvalidating) with a defaulted `CachePrefix` of
+[`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (`DeleteEntityHandler.cs:25`), returns a
+`NotFound` [`Error`](group-01-result-error-handling.md#error) stamped with its source and the entity
+type name when the row is missing (`DeleteEntityHandler.cs:27-28`), calls the aggregate's own
+`Delete()` (which enforces invariants and may raise domain events), and saves **only** when that
+succeeded (`DeleteEntityHandler.cs:30-32`). The command itself is a one-property record that
+implements [`ICacheInvalidating`](#icacheinvalidating) with a defaulted `CachePrefix` of
 `typeof(TEntity).FullName + ":"` (`DeleteEntityCommand.cs:20`), because the generic controller
 constructs the command itself and cannot supply one; setting it to an empty string is the documented
 opt-out (`DeleteEntityCommand.cs:14-18`), and matches the blank-prefix guard in the caching decorator.
@@ -427,7 +446,7 @@ own handler, *and* it supplies that default cache prefix (`DeleteEntityCommand.c
 
 ## The other Application-layer contracts in this group
 
-Five contracts sit beside the pipeline rather than inside it. They are declared here, in the
+Seven contracts sit beside the pipeline rather than inside it. They are declared here, in the
 Application layer, and implemented in Infrastructure or the composition root, which is what keeps a
 use case that depends on one extractable into its own service.
 
@@ -437,36 +456,40 @@ mutual exclusion on a logical key across every replica of a service. Its single 
 `TryAcquireAsync(key, ttl, wait, cancellationToken)` returns an `IAsyncDisposable` handle or `null`
 when the key was still held after `wait` elapsed (`IDistributedLock.cs:59-63`). The XML doc is
 explicit about the three things that make it safe to use: it is not reentrant
-(`IDistributedLock.cs:20-22`), the TTL is a crash guard rather than a lease you may rely on, so a
+(`IDistributedLock.cs:19-22`), the TTL is a crash guard rather than a lease you may rely on, so a
 paused holder can lose the lock without knowing (`IDistributedLock.cs:37-42`), and release is
 owner-scoped and idempotent (`IDistributedLock.cs:54-57`). No decorator takes it; its in-framework
 caller is the API idempotency filter, which needs its execute-then-store window to be exclusive across
 replicas (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:150`,
+acquisition at `IdempotencyFilter.cs:246-252`,
 [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html)), and the implementation
-([`RedisDistributedLock`](group-14-module-system-composition.md#redisdistributedlock) or the warn-once
-[`InProcessDistributedLock`](group-14-module-system-composition.md#inprocessdistributedlock)) is
-chosen at the composition root ([G14](group-14-module-system-composition.md)).
+([`RedisDistributedLock`](group-14-module-system-composition.md#redisdistributedlock) or the
+[`InProcessDistributedLock`](group-14-module-system-composition.md#inprocessdistributedlock) fallback)
+is chosen at the composition root ([G14](group-14-module-system-composition.md)).
 
 [`IScheduledJob`](#ischeduledjob) (`.../Interfaces/IScheduledJob.cs:36`) is recurring work driven by a
 five-field cron expression parsed by Cronos, with three members: a stable `Name` that doubles as the
 primary key of the persisted job row (`IScheduledJob.cs:44`), a default `CronExpression` a host may
-override per job through `Scheduler:Jobs:{Name}:Cron` (`IScheduledJob.cs:65`, `:68`), and
-`ExecuteAsync` (`IScheduledJob.cs:78`). Four behaviors documented on the interface shape how you
+override per job through `Scheduler:Jobs:{Name}:Cron` (`IScheduledJob.cs:68`, `:63-66`), and
+`ExecuteAsync` (`IScheduledJob.cs:78`). Occurrences are computed against the **UTC** clock, never a
+local or configured time zone, so a schedule never shifts, doubles, or vanishes across a daylight
+saving transition (`IScheduledJob.cs:57-62`). Four behaviors documented on the interface shape how you
 write one: jobs resolve **scoped**, in a fresh DI scope per execution, so they may take a unit of work
 and must hold no state between runs (`IScheduledJob.cs:9-14`); a claim lease in the job store makes an
-occurrence run exactly once across replicas (`IScheduledJob.cs:16-21`); missed occurrences do **not**
+occurrence run exactly once across replicas (`IScheduledJob.cs:15-21`); missed occurrences do **not**
 pile up, so work that must not be skipped has to be idempotent and range-driven rather than
-one-run-per-tick (`IScheduledJob.cs:23-29`); and a thrown exception is caught, logged and stamped as a
-failed outcome without retry inside the occurrence (`IScheduledJob.cs:31-34`). The runner lives in
+one-run-per-tick (`IScheduledJob.cs:22-29`); and a thrown exception is caught, logged, and stamped as
+a failed outcome without retry inside the occurrence (`IScheduledJob.cs:30-34`). The runner lives in
 [`ScheduledJobRunner`](group-14-module-system-composition.md#scheduledjobrunner)
 ([ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html)).
 
 [`IAuditTrailReader`](#iaudittrailreader) (`.../Interfaces/IAuditTrailReader.cs:20`) reads the
 recorded change history of one entity, keyed by the entity's full CLR type name and the invariant
 string form of its primary key (composite keys joined with `|` in model key order), paged and newest
-first (`IAuditTrailReader.cs:22-42`). It is registered only by `AddAuditTrail`, so a host that never
-opted in has nothing to resolve (`IAuditTrailReader.cs:6-7`), and the framework deliberately ships the
-read without an endpoint or page, because who may see an entity's history is an application decision
+first (`IAuditTrailReader.cs:37-42`, ordering note at `IAuditTrailReader.cs:16-18`). It is registered
+only by `AddAuditTrail`, so a host that never opted in has nothing to resolve
+(`IAuditTrailReader.cs:5-8`), and the framework deliberately ships the read without an endpoint or
+page, because who may see an entity's history is an application decision
 (`IAuditTrailReader.cs:10-15`). The implementation is
 [`AuditTrailReader`](group-07-persistence-ef-core.md#audittrailreader) over the rows written by
 [`AuditTrailSaveChangesInterceptor`](group-07-persistence-ef-core.md#audittrailsavechangesinterceptor)
@@ -478,31 +501,59 @@ read without an endpoint or page, because who may see an entity's history is an 
 [`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype):
 a mapper maps rows *after* they materialize, so the query must select whole entities, while a
 projector rewrites the queryable so the provider selects the DTO's columns directly
-(`IEntityDTOProjector.cs:6-16`). Its one method is
+(`IEntityDTOProjector.cs:9-16`). Its one method is
 `IQueryable<TEntityDTO> ProjectTo(IQueryable<TEntity> source)` (`IEntityDTOProjector.cs:62`), and the
-implementation must stay translatable: no materializing inside it
-(`IEntityDTOProjector.cs:56-59`), and no instance sub-mappers, custom mapping methods, or after-map
-hooks, because a projection is an expression tree the database provider has to translate
-(`IEntityDTOProjector.cs:36-41`). Registering one is the whole opt-in: the module scan picks it up
-scoped beside the mappers (`DependencyInjection.cs:155-162`), and
+implementation must stay translatable: no materializing inside it (`IEntityDTOProjector.cs:56-58`),
+and no instance sub-mappers, custom mapping methods, or after-map hooks, because a projection is an
+expression tree the database provider has to translate (`IEntityDTOProjector.cs:36-41`). Registering
+one is the whole opt-in: the module scan picks it up scoped beside the mappers
+(`DependencyInjection.cs:166-170`), and
 [`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype)
 declares a second, longer constructor purely so the container selects the projected path when one is
 registered and the plain path when it is not
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:69-77`,
-`EntityQueryService.cs:84`, gate at `EntityQueryService.cs:489-491`). Because the two paths are chosen
-by registration, a projector that disagrees with its mapper would make a response depend on which one
-happened to be wired, which is why the contract says to pin the equivalence with a test
-(`IEntityDTOProjector.cs:42-46`). That is `[Rubric §12, Performance & Scalability]` again, this time
-on the read path ([ADR-034](https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html)).
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:69-75`,
+`EntityQueryService.cs:84`, gate at `EntityQueryService.cs:489-492`, which also disqualifies tracked
+reads and unsupported includes). Because the two paths are chosen by registration, a projector that
+disagrees with its mapper would make a response depend on which one happened to be wired, which is
+why the contract says to pin the equivalence with a test (`IEntityDTOProjector.cs:42-46`). That is
+`[Rubric §12, Performance & Scalability]` again, this time on the read path
+([ADR-034](https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html)).
+
+[`IEventUpcaster`](#ieventupcaster) (`.../Interfaces/IEventUpcaster.cs:28`) and
+[`IEventUpcasterRegistry`](#ieventupcasterregistry) (`.../Interfaces/IEventUpcasterRegistry.cs:24`)
+are the versioning contracts for integration events, declared in this layer because both delivery
+paths consume them. A breaking event-shape change is a **new event type plus a consumer-side
+upcaster**, never a silent reshape of the existing type
+([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)), and the
+typed `IEventUpcaster<in TSource, out TTarget>` (`IEventUpcaster.cs:67`) is the one an application
+writes: it supplies `SourceType`, `TargetType`, and the non-generic `Upcast` as default interface
+implementations (`IEventUpcaster.cs:72-86`), so the class body is the single typed conversion method
+(`IEventUpcaster.cs:82`). Registration is one call,
+`services.AddEventUpcaster<TSource, TTarget, TUpcaster>()` (`DependencyInjection.cs:283-290`), which
+appends a singleton to an enumerable so several upcasters compose into a chain. The registry
+(`IEventUpcasterRegistry.cs:24`) is the composed view: it probes whether a type has an upcaster
+(`IEventUpcasterRegistry.cs:31`), resolves the terminal (newest) contract by walking the whole chain
+(`IEventUpcasterRegistry.cs:39`), and upcasts an instance hop by hop
+(`IEventUpcasterRegistry.cs:48`). Two properties make it safe to depend on unconditionally: it is
+**always registered**, and with no upcasters its operations are identity
+(`DependencyInjection.cs:36-40`, `IEventUpcasterRegistry.cs:11-15`); and every hop preserves the
+envelope, restamping `MessageId` and `DateOccurred` from the pre-hop instance, so consumer-side inbox
+deduplication keeps working on the id the producer published (`IEventUpcaster.cs:21-26`). A bad
+registration graph (duplicate source, a source mapped onto itself, or a cycle) throws from the
+implementation's constructor and is resolved at host start, so a misconfiguration fails the host
+rather than the first message (`IEventUpcasterRegistry.cs:17-22`). The in-process consumer is the
+[`DomainEventDispatcher`](group-04-events-outbox.md#domaineventdispatcher), the broker-side one is
+[`UpcastingIntegrationEventConsumer<TEvent>`](group-07-persistence-ef-core.md#upcastingintegrationeventconsumertevent)
+([ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html)).
 
 [`ICreateRequest`](#icreaterequest) (`.../Interfaces/ICreateRequest.cs:8`) is the smallest type in the
 group: an empty marker used purely as a generic constraint by
 [`IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>`](group-12-api-hosting-mapping.md#ientityrequestmappertentity-tcreaterequest-tidentifiertype)
-so request-to-entity mapping is type-safe (`ICreateRequest.cs:3-6`). It pairs with
+so request-to-entity mapping is type-safe (`ICreateRequest.cs:3-7`). It pairs with
 [`ICommandWithRequest<out TRequest>`](#icommandwithrequestout-trequest)
 (`.../UseCases/ICommandWithRequest.cs:14`), whose single covariant `Request` property
 (`ICommandWithRequest.cs:17`) is what the module scan looks for when it auto-registers the delegating
-validator described above.
+validator described above (`ICommandWithRequest.cs:4-11`).
 
 ## Where this fits, and the failure-mode contract
 
@@ -531,11 +582,11 @@ whole pipeline survives a module being extracted into its own service unchanged
 The contract to memorize, because the rest of the system relies on it, has four clauses. On a
 **business failure** (a `Result` with `IsFailure`, no exception thrown) the transaction is **rolled
 back**, atomicity over partial persistence, and cache invalidation is skipped
-(`DependencyInjection.cs:95-96`, enforced at `DbContextFactory.cs:565-570` and
+(`DependencyInjection.cs:103-104`, enforced at `DbContextFactory.cs:565-571` and
 `CachingCommandDecorator.cs:76-78`). On an **exception** the transaction also rolls back and the
 exception propagates outward through every decorator, which logs it and tags the metric `exception`
-(`DependencyInjection.cs:97`, `LoggingCommandDecorator.cs:52-58`). On a **short circuit** (feature off,
-permission denied, validation failed, budget expired) the handler is never called at all and the
+(`DependencyInjection.cs:105`, `LoggingCommandDecorator.cs:52-58`). On a **short circuit** (feature
+off, permission denied, validation failed, budget expired) the handler is never called at all and the
 caller gets a typed failure whose `ErrorType` is the decorator's own: `NotFound`, `Forbidden`,
 `Validation`, `Failure` respectively. And on the read side only non-failure results are ever cached
 (`CachingQueryDecorator.cs:109`). Note the revision history here: rollback-on-business-failure is the
@@ -549,12 +600,13 @@ rules of the pipeline.
 ### ICreateRequest
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICreateRequest.cs:8` · Level 0 · interface (marker, empty)
 
-- **What it is**: an empty marker interface for "create" request DTOs, used as a generic type constraint by [IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>](group-12-api-hosting-mapping.md#ientityrequestmappertentity-tcreaterequest-tidentifiertype) to distinguish create-mapping from update-mapping at the type-system level.
+- **What it is**: an empty marker interface for "create" request DTOs, used as a generic type constraint by [IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>](group-12-api-hosting-mapping.md#ientityrequestmappertentity-tcreaterequest-tidentifiertype) to distinguish create-mapping from every other mapping path at the type-system level.
 - **Depends on**: nothing. Same presence-as-signal marker pattern as [ITransactional](#itransactional).
-- **Concept introduced, type-system constraints as documentation and enforcement.** `[Rubric §9, API & Contract Design]` assesses how request contracts are modelled and kept unambiguous; tagging a DTO as "this is a create" lets generic mapper infrastructure (G12) refuse anything that is not a create request on the create-mapping path, catching a wiring mistake at compile time rather than at runtime.
-- **Walkthrough**: the body is empty (`{ }`, lines 9-10); the XML doc on lines 3-7 names the single consumer. All of the type's value is in the hierarchy.
-- **Why it's built this way**: a mapper constrained to `where TCreateRequest : ICreateRequest` makes it impossible to pass an update-request DTO into the create-mapping path, with no runtime check needed.
-- **Where it's used**: implemented by create-request DTOs in every module. Source search finds 6 in `MMCA.ADC/Source` (`EventCreateRequest`, `SessionCreateRequest`, `SpeakerCreateRequest`, `SponsorCreateRequest`, `QuestionCreateRequest`, `ConferenceCategoryCreateRequest`) and 8 in `MMCA.Store/Source` (`ProductCreateRequest`, `ProductVariantCreateRequest`, `CategoryCreateRequest`, `OrderCreateRequest`, `CustomerCreateRequest`, `ShoppingCartCreateRequest`, `ShoppingCartItemCreateRequest`, `InventoryItemCreateRequest`). Consumed as a generic constraint by [IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>](group-12-api-hosting-mapping.md#ientityrequestmappertentity-tcreaterequest-tidentifiertype) (G12).
+- **Concept introduced, type-system constraints as documentation and enforcement.** `[Rubric §9, API & Contract Design]` assesses how request contracts are modelled and kept unambiguous; tagging a DTO as "this is a create" lets generic mapper and controller infrastructure (G12) refuse anything that is not a create request on the create path, catching a wiring mistake at compile time rather than at runtime.
+- **Walkthrough**: the body is empty (`{ }`, `ICreateRequest.cs:9-10`); the XML doc (`ICreateRequest.cs:3-7`) names the constraint site. All of the type's value is in the hierarchy: there is no member to implement, so opting in costs a base-list entry and nothing else.
+- **Why it's built this way**: a mapper constrained to `where TCreateRequest : ICreateRequest` makes it impossible to pass a non-create DTO into the create-mapping path, with no runtime check needed and no reflection.
+- **Where it's used**: as a generic constraint in three framework places, all of them declaring `where TCreateRequest : ICreateRequest`: [IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>](group-12-api-hosting-mapping.md#ientityrequestmappertentity-tcreaterequest-tidentifiertype) (declared at `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOMapper.cs:42-44`, which is the file that hosts both mapper contracts), and the API controller pair `IAggregateRootEntityControllerBase` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/IAggregateRootEntityControllerBase.cs:22`) and `AggregateRootEntityControllerBase` (`.../Controllers/AggregateRootEntityControllerBase.cs:43`). Implemented by create-request DTOs in every module: 7 in `MMCA.ADC/Source` (`EventCreateRequest`, `SessionCreateRequest`, `SpeakerCreateRequest`, `SponsorCreateRequest`, `QuestionCreateRequest`, `ActivityCreateRequest`, `ConferenceCategoryCreateRequest`) and 8 in `MMCA.Store/Source` (`ProductCreateRequest`, `ProductVariantCreateRequest`, `CategoryCreateRequest`, `OrderCreateRequest`, `CustomerCreateRequest`, `ShoppingCartCreateRequest`, `ShoppingCartItemCreateRequest`, `InventoryItemCreateRequest`).
+- **Caveats / not-in-source**: the marker says "create", not "valid". Nothing in the type system checks that a `ICreateRequest` omits an identifier or carries the fields the aggregate factory needs; that is FluentValidation's and the factory's job.
 
 ---
 
@@ -564,10 +616,12 @@ rules of the pipeline.
 - **What it is**: a one-method contract for mutual exclusion on a logical string key across *every replica* of a service. `TryAcquireAsync` hands back an `IAsyncDisposable` handle whose disposal releases the lock, or `null` when the key was still held elsewhere after the caller's wait elapsed.
 - **Depends on**: BCL only (`Task`, `TimeSpan`, `IAsyncDisposable`, `CancellationToken`), no first-party types. Its two implementations live in Infrastructure: [InProcessDistributedLock](group-14-module-system-composition.md#inprocessdistributedlock) and [RedisDistributedLock](group-14-module-system-composition.md#redisdistributedlock). Contrast the per-process [KeyedSemaphoreStripe](group-08-auth.md#keyedsemaphorestripe), which is exactly what this interface exists to outgrow.
 - **Concept introduced, cross-replica mutual exclusion as an Application-layer abstraction.** `[Rubric §12, Performance & Scalability]` assesses whether a design still holds once the service scales out horizontally, and the XML doc opens with precisely that failure (`IDistributedLock.cs:6-13`): a `SemaphoreSlim` (or a striped one) serializes callers *inside one process*, so a service running more than one replica executes an "only one of these at a time" section once per replica. `[Rubric §29, Resilience, Reliability & Business Continuity]` assesses behavior under partial failure; this contract is documented as **best-effort, not a consensus protocol** (`IDistributedLock.cs:23-28`): a holder paused past its time-to-live loses the lock without being told, so the guarded section must stay correct (merely slower, or duplicated) when exclusion is lost. The doc states the usage rule bluntly: take the lock to *collapse duplicate work*, never as the only guard on a correctness invariant that persistence can enforce. `[Rubric §3, Clean Architecture]` assesses whether the core depends on abstractions while technology choices sit at the edge; the contract carries no transport type at all, so the StackExchange.Redis dependency stays in Infrastructure and callers here never see it.
-- **Walkthrough**: line 30 declares the interface; lines 59-63 declare its single member, `Task<IAsyncDisposable?> TryAcquireAsync(string key, TimeSpan ttl, TimeSpan wait, CancellationToken cancellationToken = default)`. Every parameter carries a contract the implementations must honour. `key` is the logical name that callers sharing one backing store have to agree on (line 36). `ttl` is the **crash guard**: how long the lock survives with no explicit release, so a holder that dies mid-section cannot wedge the key; it must sit comfortably above the guarded section's expected duration, because work that outlives the TTL is no longer protected (lines 37-42). `wait` is how long to block for a current holder, and `TimeSpan.Zero` makes the call a single non-blocking attempt (lines 43-46). The token cancels *the wait*, not the work that follows it (line 47). The return contract matters as much as the parameters: `null` means "still held elsewhere after `wait` elapsed", and the handle is meant to be disposed inside an `await using` so release happens even when the guarded work throws (lines 48-53). Release is **owner-scoped and idempotent** (lines 54-58): disposing a handle whose TTL already lapsed is a no-op, not a release of whatever holder now owns the key. Two remarks bound usage further: implementations are singletons and must be safe to call concurrently (line 17), and the lock is **not reentrant**, so a caller that already holds `key` and asks for it again waits for itself and then fails to acquire (lines 20-21).
-- **Why it's built this way**: [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html) records the change that introduced it. The idempotency filter's execute-then-store window used to be guarded only by a process-local striped semaphore, which stops serializing anything the moment a service runs more than one replica, and both deployed apps do. Putting the contract in `MMCA.Common.Application.Interfaces` rather than Infrastructure is what lets the API filter depend on "a lock" while the Redis-versus-process-local decision stays a composition-root concern.
-- **Where it's used**: the Infrastructure composition root registers exactly one implementation inside `AddCaching` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:191-204`), choosing [RedisDistributedLock](group-14-module-system-composition.md#redisdistributedlock) when an `IConnectionMultiplexer` is resolvable and the warn-once [InProcessDistributedLock](group-14-module-system-composition.md#inprocessdistributedlock) otherwise. The one in-framework consumer is [IdempotencyFilter](group-12-api-hosting-mapping.md#idempotencyfilter), which resolves it from request services (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:150`) and spans the double-check plus action plus cache-store window with a 30-second `ttl` and a 5-second `wait`, answering a 409 in-flight-duplicate result instead of executing a second time when that wait expires with nothing cached.
-- **Caveats / not-in-source**: verified by source search across the workspace, no ADC or Store type takes an `IDistributedLock` today; the framework's own idempotency filter is the only production caller. The filter also resolves it with `GetService<IDistributedLock>()` and falls back to the striped-semaphore path when the result is `null`, even though `AddCaching` registers an implementation unconditionally, so that fallback is reachable only in a host that never calls `AddCaching` (or a test building its own provider).
+- **Walkthrough**: line 30 declares the interface; lines 59-63 declare its single member, `Task<IAsyncDisposable?> TryAcquireAsync(string key, TimeSpan ttl, TimeSpan wait, CancellationToken cancellationToken = default)`. Every parameter carries a contract the implementations must honour. `key` is the logical name that callers sharing one backing store have to agree on (`IDistributedLock.cs:36`). `ttl` is the **crash guard**: how long the lock survives with no explicit release, so a holder that dies mid-section cannot wedge the key; it must sit comfortably above the guarded section's expected duration, because work that outlives the TTL is no longer protected (`:37-42`). `wait` is how long to block for a current holder, and `TimeSpan.Zero` makes the call a single non-blocking attempt (`:43-46`). The token cancels *the wait*, not the work that follows it (`:47`). The return contract matters as much as the parameters: `null` means "still held elsewhere after `wait` elapsed", and the handle is meant to be disposed inside an `await using` so release happens even when the guarded work throws (`:48-53`). Release is **owner-scoped and idempotent** (`:54-58`): disposing a handle whose TTL already lapsed is a no-op, not a release of whatever holder now owns the key. Two remarks bound usage further: implementations are singletons and must be safe to call concurrently (`:17`), and the lock is **not reentrant**, so a caller that already holds `key` and asks for it again waits for itself and then fails to acquire (`:20-21`).
+- **Why it's built this way**: [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html) records the change that introduced it. The idempotency filter's execute-then-store window was previously guarded only by a process-local striped semaphore, which stops serializing anything the moment a service runs more than one replica, and both deployed apps do. Putting the contract in `MMCA.Common.Application.Interfaces` rather than Infrastructure is what lets the API filter depend on "a lock" while the Redis-versus-process-local decision stays a composition-root concern.
+- **Where it's used**: the Infrastructure composition root registers exactly one implementation inside `AddCaching` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:208-222`), choosing [RedisDistributedLock](group-14-module-system-composition.md#redisdistributedlock) when an `IConnectionMultiplexer` is resolvable (`:210-217`) and the warn-once [InProcessDistributedLock](group-14-module-system-composition.md#inprocessdistributedlock) otherwise (`:219-221`); the comment above the registration explains the pairing with the cache (`:204-207`). Two production consumers exist today.
+  - The framework's [IdempotencyFilter](group-12-api-hosting-mapping.md#idempotencyfilter) resolves it from request services (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:150`) and spans the double-check plus action plus cache-store window with a 30-second `ttl` (`LockTimeToLive`, `:99`) and a 5-second `wait` (`LockWait`, `:106`), calling `TryAcquireAsync` at `:252`. When that wait expires with nothing cached it answers a 409 in-flight-duplicate result instead of executing a second time (`:263-273`); when the lock call itself *throws*, it records a degraded metric and executes anyway rather than failing the request (`:255-261`).
+  - MMCA.ADC's `SessionScoringProcessor` takes the lock per event around an AI-scoring pass (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/SessionScoringProcessor.cs:175-179`) with a 15-minute `ClaimTimeToLive` (`:85`) and a `ClaimWait` of `TimeSpan.Zero` (`:92`), so a second replica that cannot claim the event simply skips its pass (`:182-189`). The inline rationale (`:162-174`) is a good worked example of both halves of the contract: the handle's disposal releases on every exit path, and the TTL releases for a replica that never reaches an exit path at all.
+- **Caveats / not-in-source**: `MMCA.Store/Source` has no `IDistributedLock` consumer today. The idempotency filter also resolves it with `GetService<IDistributedLock>()` and falls back to the striped-semaphore path when the result is `null` (`IdempotencyFilter.cs:150-155`), even though `AddCaching` registers an implementation unconditionally, so that fallback is reachable only in a host that never calls `AddCaching` (or a test building its own provider). The ADC comment states the other honest limit: a host with no Redis gets the in-process implementation, where "cross-replica" exclusion degrades back to per-replica (`SessionScoringProcessor.cs:172-174`).
 
 ---
 
@@ -577,14 +631,16 @@ rules of the pipeline.
 - **What it is**: the contract for a unit of recurring work driven by a cron schedule: a stable `Name`, a default `CronExpression`, and an `ExecuteAsync` that runs one occurrence.
 - **Depends on**: BCL only (`Task`, `CancellationToken`). Executed by [ScheduledJobRunner](group-14-module-system-composition.md#scheduledjobrunner), persisted as [ScheduledJobEntry](group-14-module-system-composition.md#scheduledjobentry) rows, configured through [SchedulerSettings](group-14-module-system-composition.md#schedulersettings) and [ScheduledJobOverrideSettings](group-14-module-system-composition.md#scheduledjoboverridesettings), and cron-parsed by Cronos (NuGet).
 - **Concept introduced, recurring work as a first-class Application abstraction.** `[Rubric §13, Observability & Operability]` assesses whether operators can see and steer background work; a job here is a named row with a schedule, an outcome and a last error, not an anonymous `Timer`. `[Rubric §7, Microservices Readiness]` and `[Rubric §29, Resilience]` assess behavior under scale-out and partial failure, and the interface's own doc is where the hard rules are written down (`IScheduledJob.cs:8-35`), so read them as contract, not commentary:
-  - **Lifetime**: jobs are resolved **scoped**, in a fresh DI scope per execution, exactly like a request. A job may take scoped dependencies (a unit of work, a repository, a command handler) and must hold no state between runs, because the previous instance is already disposed (lines 9-14).
-  - **Single runner across replicas**: every replica runs a scheduler, but an occurrence executes once, because the persistent job store hands out a claim lease per row and only the claim winner runs (lines 16-21). A replica that dies mid-execution releases its claim implicitly when the lease expires.
-  - **Missed occurrences do not pile up**: after an outage the job runs **once** and its next run is computed from the current instant, not from the backlog (lines 23-29). Work that must not be skipped therefore has to be idempotent and range-driven, processing everything since the last successful run rather than relying on one run per tick.
-  - **Failures are recorded, not fatal**: an exception from `ExecuteAsync` is caught, logged and stamped on the row as a failed outcome while the schedule advances and the loop survives; there is no retry inside an occurrence (lines 31-33).
-- **Walkthrough**: line 44 declares `string Name { get; }`, the stable identity that is also the primary key of the persisted row, so renaming it strands the old row and starts a new schedule, and two registered jobs must never share it (lines 38-43). Line 68 declares `string CronExpression { get; }`, a **five-field** expression (`minute hour day-of-month month day-of-week`) parsed by Cronos, with worked examples on lines 51-56. Two properties of that field are load-bearing: **all times are UTC**, never a local or configured zone, so a schedule never shifts, doubles or vanishes across a daylight-saving transition (lines 57-62), and the value is only the **default**, overridden per job by `Scheduler:Jobs:{Name}:Cron` in configuration whenever that key is present (lines 63-66). Line 78 declares `Task ExecuteAsync(CancellationToken cancellationToken)`, whose token is cancelled on host shutdown; work that ignores it delays shutdown and can outlive its claim lease (lines 73-76).
-- **Why it's built this way**: [ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html) records the design. Keeping the interface in Application (with no EF, no `IHostedService`, no cron library type in its signature) is what lets a module declare recurring work without taking an Infrastructure dependency, and lets the runner, the persistence of job state and the claim protocol all stay replaceable. Registration is deliberately split in two: `AddScheduledJobs(configuration)` enables the runner once per host, while `AddScheduledJob<TJob>()` adds one job. The two are order-free, both use `TryAddEnumerable` so a double call cannot produce two runners racing the same rows, and registering the scheduler is not the same as turning it on: everything stays inert until `Scheduler:Enabled` is true.
-- **Where it's used**: the framework ships exactly one implementation, `AuditTrailCleanupJob` (see [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob)), named `"audit-trail-cleanup"` and scheduled `"0 3 * * *"` (daily at 03:00 UTC). It is registered by `AddAuditTrail` rather than by `AddScheduledJobs`, which keeps the trail and the scheduler independent features.
-- **Caveats / not-in-source**: verified by source search, neither `MMCA.ADC/Source` nor `MMCA.Store/Source` implements `IScheduledJob` today; the retention job is the only job in the workspace. Retention therefore only happens in a host that enables both features: registering the trail without the scheduler records every change and purges nothing, leaving `AuditTrail:RetentionDays` inert.
+  - **Lifetime**: jobs are resolved **scoped**, in a fresh DI scope per execution, exactly like a request. A job may take scoped dependencies (a unit of work, a repository, a command handler) and must hold no state between runs, because the previous instance is already disposed (`:9-14`).
+  - **Single runner across replicas**: every replica runs a scheduler, but an occurrence executes once, because the persistent job store hands out a claim lease per row (the outbox processor's claim idiom) and only the claim winner runs (`:16-21`). A replica that dies mid-execution releases its claim implicitly when the lease expires.
+  - **Missed occurrences do not pile up**: after an outage the job runs **once** and its next run is computed from the current instant, not from the backlog (`:23-29`). Work that must not be skipped therefore has to be idempotent and range-driven, processing everything since the last successful run rather than relying on one run per tick.
+  - **Failures are recorded, not fatal**: an exception from `ExecuteAsync` is caught, logged and stamped on the row as a failed outcome while the schedule advances and the loop survives; there is no retry inside an occurrence (`:31-33`).
+- **Walkthrough**: line 44 declares `string Name { get; }`, the stable identity that is also the primary key of the persisted row, so renaming it strands the old row and starts a new schedule, and two registered jobs must never share it (`:38-43`). Line 68 declares `string CronExpression { get; }`, a **five-field** expression (`minute hour day-of-month month day-of-week`) parsed by Cronos, with worked examples on `:51-56`. Two properties of that field are load-bearing: **all times are UTC**, never a local or configured zone, so a schedule never shifts, doubles or vanishes across a daylight-saving transition (`:57-62`), and the value is only the **default**, overridden per job by `Scheduler:Jobs:{Name}:Cron` in configuration whenever that key is present (`:63-66`). Line 78 declares `Task ExecuteAsync(CancellationToken cancellationToken)`, whose token is cancelled on host shutdown; work that ignores it delays shutdown and can outlive its claim lease (`:73-76`).
+- **Why it's built this way**: [ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html) records the design. Keeping the interface in Application (with no EF, no `IHostedService`, no cron library type in its signature) is what lets a module declare recurring work without taking an Infrastructure dependency, and lets the runner, the persistence of job state and the claim protocol all stay replaceable. Registration is deliberately split in two: `AddScheduledJobs(configuration)` enables the runner once per host (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:317`, registering [ScheduledJobRunner](group-14-module-system-composition.md#scheduledjobrunner) through `TryAddEnumerable` at `:328`), while `AddScheduledJob<TJob>()` adds one job (`:352`). Registering the scheduler is not the same as turning it on: everything stays inert until `Scheduler:Enabled` is true (`:313`).
+- **Where it's used**: two implementations exist in the workspace.
+  - The framework ships `AuditTrailCleanupJob` (see [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob)), named `"audit-trail-cleanup"` and scheduled `"0 3 * * *"`, daily at 03:00 UTC (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:63,67`). It is registered by `AddAuditTrail` rather than by `AddScheduledJobs` (`.../Infrastructure/DependencyInjection.cs:404`), which keeps the trail and the scheduler independent features (`:377-379`).
+  - MMCA.ADC's `SessionScoringSweepJob` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/SessionScoringSweepJob.cs:54`) is named `"conference-session-scoring-sweep"` and runs `"*/5 * * * *"`, every five minutes (`:69,77`), recovering AI-scoring passes interrupted inside a `RecoveryWindow` of 24 hours (`:66`). It is registered by the Conference module (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:54`) and the scheduler itself is turned on in each ADC service host (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:313`, and likewise in the Engagement and Identity service hosts).
+- **Caveats / not-in-source**: `MMCA.Store/Source` implements no `IScheduledJob` today. Retention only happens in a host that enables both features: registering the trail without the scheduler records every change and purges nothing, leaving `AuditTrail:RetentionDays` inert, which is exactly what the `AddAuditTrail` doc warns about (`.../Infrastructure/DependencyInjection.cs:377-380`).
 
 ---
 
@@ -594,10 +650,10 @@ rules of the pipeline.
 - **What it is**: the scoped ambient contract for "which tenant is this scope running as": a nullable `TenantId`, an `IsResolved` flag, and a `SetTenant` that may be called once per scope.
 - **Depends on**: BCL only. Implemented by [TenantContext](group-07-persistence-ef-core.md#tenantcontext) in Infrastructure, populated at the edge by [TenantResolutionMiddleware](group-12-api-hosting-mapping.md#tenantresolutionmiddleware), and consumed by the caching decorators in this group plus the persistence layer (G07). Configured through [TenancySettings](group-14-module-system-composition.md#tenancysettings). Deliberately mirrors [ICorrelationContext](group-12-api-hosting-mapping.md#icorrelationcontext).
 - **Concept introduced, ambient scope state with an honest "unset" value.** `[Rubric §11, Security]` assesses whether data isolation is enforced structurally rather than remembered per query; every tenant-aware read filter, save interceptor and cache key reads this one object, so a handler cannot forget to scope itself. `[Rubric §10, Cross-Cutting Concerns]`: like the correlation id, the value is captured once at the edge and flows implicitly for the rest of the scope. The interesting design decision is the one the doc calls out (`ITenantContext.cs:10-15`): unlike the correlation id there is **no generated fallback**. An unresolved tenant is a meaningful state (a background service, a seeder, an admin flow) and reads as "see everything", so inventing a value would silently scope a system operation to a tenant that does not exist.
-- **Walkthrough**: line 28 declares `string? TenantId { get; }`, null until resolved. Line 31 declares `bool IsResolved { get; }`. Line 41 declares `void SetTenant(string tenantId)`, and its contract is the strict part: it throws `ArgumentException` on a null, empty or whitespace id (line 37) and `InvalidOperationException` when a *different* tenant was already resolved for this scope (lines 38-40), while accepting the value it already holds. The rationale is on lines 16-20: **one scope, one tenant**, because a scope whose tenant changed mid-flight has already read rows under the previous tenant and there is no honest way to reconcile that afterwards. The implementation matches exactly (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TenantContext.cs:20-44`), and its `InvalidOperationException` message tells the caller to start a new scope.
-- **Why it's built this way**: [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) records the multi-tenancy model. Putting the contract in Application, not Infrastructure, is what lets the Application-layer caching decorators scope their keys without referencing EF Core: [CachingCommandDecorator<TCommand, TResult>](#cachingcommanddecoratortcommand-tresult) and [CachingQueryDecorator<TQuery, TResult>](#cachingquerydecoratortquery-tresult) both take it as an **optional** constructor parameter defaulting to `null` (`.../Decorators/CachingCommandDecorator.cs:36`, `.../Decorators/CachingQueryDecorator.cs:38`), so a single-tenant host that never calls `AddMultiTenancy` resolves them unchanged and pays nothing.
-- **Where it's used**: registered scoped in `AddMultiTenancy` in the Infrastructure composition root. Written at the edge by [TenantResolutionMiddleware](group-12-api-hosting-mapping.md#tenantresolutionmiddleware) from a claim or a header, and re-asserted onto a fresh scope by every background path that fans out per tenant (the outbox processor and its cleanup service, [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob), and startup database initialization). Read by [DbContextFactory](group-07-persistence-ef-core.md#dbcontextfactory) for per-tenant routing (also optional) and by both caching decorators through `TenantCacheKey.Scope` (`.../Decorators/TenantCacheKey.cs:37-38`).
-- **Caveats / not-in-source**: verified by source search, neither ADC nor Store resolves or sets `ITenantContext` today. Multi-tenancy is a shipped, tested framework capability that no deployed app has opted into, so every scope in production runs unresolved and the tenant-scoped cache keys and query filters are no-ops there.
+- **Walkthrough**: line 28 declares `string? TenantId { get; }`, null until resolved. Line 31 declares `bool IsResolved { get; }`. Line 41 declares `void SetTenant(string tenantId)`, and its contract is the strict part: it throws `ArgumentException` on a null, empty or whitespace id (`:37`) and `InvalidOperationException` when a *different* tenant was already resolved for this scope (`:38-40`), while accepting the value it already holds (`:34`). The rationale is on `:16-20`: **one scope, one tenant**, because a scope whose tenant changed mid-flight has already read rows under the previous tenant and there is no honest way to reconcile that afterwards. The implementation matches exactly (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TenantContext.cs:11-44`), where `IsResolved` is simply `TenantId is not null` (`:17`), the first `SetTenant` assigns (`:24-26`), a repeat of the same value returns quietly (`:32`), and anything else throws.
+- **Why it's built this way**: [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) records the multi-tenancy model. Putting the contract in Application, not Infrastructure, is what lets the Application-layer caching decorators scope their keys without referencing EF Core: [CachingCommandDecorator<TCommand, TResult>](#cachingcommanddecoratortcommand-tresult) and [CachingQueryDecorator<TQuery, TResult>](#cachingquerydecoratortquery-tresult) both take it as an **optional** primary-constructor parameter defaulting to `null` (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingCommandDecorator.cs:36` and `.../CachingQueryDecorator.cs:38`), so a single-tenant host that never calls `AddMultiTenancy` resolves them unchanged and pays nothing.
+- **Where it's used**: registered scoped in `AddMultiTenancy` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:465`). Written at the edge by [TenantResolutionMiddleware](group-12-api-hosting-mapping.md#tenantresolutionmiddleware) from a claim or a header, and re-asserted onto a fresh scope by every background path that fans out per tenant (the outbox processor and its cleanup service, [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob), and startup database initialization). Read by [DbContextFactory](group-07-persistence-ef-core.md#dbcontextfactory) for per-tenant routing (also optional) and by both caching decorators through `TenantCacheKey.Scope`, which prefixes the key only when a tenant is actually resolved (`.../Decorators/TenantCacheKey.cs:37-40`).
+- **Caveats / not-in-source**: verified by source search, neither `MMCA.ADC/Source` nor `MMCA.Store/Source` resolves or sets `ITenantContext` today. Multi-tenancy is a shipped, tested framework capability that no deployed app has opted into, so every scope in production runs unresolved and the tenant-scoped cache keys and query filters are no-ops there.
 
 ---
 
@@ -605,12 +661,12 @@ rules of the pipeline.
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IAuditTrailReader.cs:20` · Level 1 · interface
 
 - **What it is**: the one-method read surface over the recorded change history of a single entity: one page of changes, newest first.
-- **Depends on**: [AuditTrailEntryDTO](group-14-module-system-composition.md#audittrailentrydto) (its return payload, `using` at line 1). Implemented by [AuditTrailReader](group-07-persistence-ef-core.md#audittrailreader) over the [AuditTrailEntry](group-07-persistence-ef-core.md#audittrailentry) rows written by the audit-trail save interceptor.
+- **Depends on**: [AuditTrailEntryDTO](group-14-module-system-composition.md#audittrailentrydto) (its return payload, `using` at `IAuditTrailReader.cs:1`). Implemented by [AuditTrailReader](group-07-persistence-ef-core.md#audittrailreader) over the [AuditTrailEntry](group-07-persistence-ef-core.md#audittrailentry) rows written by the audit-trail save interceptor.
 - **Concept introduced, shipping the read without shipping the exposure.** `[Rubric §30, Compliance, Privacy & Data Governance]` assesses whether a system can answer "who changed this, and when"; the trail is that answer, and this is how an application asks. `[Rubric §11, Security]` assesses authorization placement, and the doc is explicit about the boundary it draws (`IAuditTrailReader.cs:10-15`): there is deliberately **no shipped endpoint or page** in v1, because who may see an entity's history is an application decision (an admin screen, a support tool, a data-subject request) rather than a framework one. Consumers wrap this in whatever query and authorization their domain calls for. `[Rubric §3, Clean Architecture]`: the contract speaks in strings and DTOs with no EF type in its signature, so the Application layer can offer history without knowing where rows live.
-- **Walkthrough**: lines 37-42 declare the single member, `Task<IReadOnlyList<AuditTrailEntryDTO>> GetForEntityAsync(string entityType, string entityKey, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)`. The two identity parameters are string-typed on purpose, because they must match what the interceptor recorded: `entityType` is the full CLR type name (lines 25-28, for example `typeof(Order).FullName`) and `entityKey` is the invariant string form of the primary key, with composite parts joined by `|` in the model's key order (lines 29-32). Paging is forgiving rather than validating: values below 1 are treated as 1 for both `page` and `pageSize` (lines 33-34). Ordering is part of the contract, not an implementation detail (lines 17-18, 23): newest change first, so the first page is the most recent activity, and the implementation makes that stable by ordering `ChangedOn` descending with the row id descending as the tie-break.
-- **Why it's built this way**: [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html) records the trail. The interface exists at all so the read is testable and swappable, and it returns a DTO rather than the entity so the Application layer never handles a tracked row. The implementation is honest about a v1 limitation worth knowing before you build on it: trail rows are written to whichever database holds the entity that changed, which is what makes the write atomic, but this reader queries exactly one of them, the `Default` database of the engine named by `AuditTrail:DataSource`. For a monolith that is the whole trail; for a database-per-module host it is only the modules living in the default database.
-- **Where it's used**: registered scoped by `AddAuditTrail`, which is opt-in per host: a host that never calls it has no implementation to resolve (`IAuditTrailReader.cs:6-7`). The reader returns an empty list rather than throwing when the trail table is absent from the model, so registering the feature before flipping `AuditTrail:Enabled` is safe.
-- **Caveats / not-in-source**: verified by source search, no ADC or Store type consumes `IAuditTrailReader` today. Framework capability, no application consumer yet.
+- **Walkthrough**: `IAuditTrailReader.cs:37-42` declare the single member, `Task<IReadOnlyList<AuditTrailEntryDTO>> GetForEntityAsync(string entityType, string entityKey, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)`. The two identity parameters are string-typed on purpose, because they must match what the interceptor recorded: `entityType` is the full CLR type name (`:25-28`, for example `typeof(Order).FullName`) and `entityKey` is the invariant string form of the primary key, with composite parts joined by `|` in the model's key order (`:29-32`). Paging is forgiving rather than validating: values below 1 are treated as 1 for both `page` and `pageSize` (`:33-34`). Ordering is part of the contract, not an implementation detail (`:17-18,23`): newest change first, so the first page is the most recent activity, and the implementation makes that stable by ordering `ChangedOn` descending (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailReader.cs:63`) with the row id descending as the tie-break.
+- **Why it's built this way**: [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html) records the trail. The interface exists at all so the read is testable and swappable, and it returns a DTO rather than the entity so the Application layer never handles a tracked row. The implementation is honest about a v1 limitation worth knowing before you build on it (`AuditTrailReader.cs:17-22`): trail rows are written to whichever database holds the entity that changed, which is what makes the write atomic, but this reader queries exactly one of them, the `Default` database of the engine named by `AuditTrail:DataSource` (resolved at `AuditTrailReader.cs:54`). For a monolith, where every source collapses onto `Default`, that is the whole trail; for a database-per-module host it is only the modules living in the default database.
+- **Where it's used**: registered scoped by `AddAuditTrail` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:399`), which is opt-in per host: a host that never calls it has no implementation to resolve (`IAuditTrailReader.cs:6-7`). The reader returns an empty list rather than throwing when the trail table is absent from the model (`AuditTrailReader.cs:27-28`), so registering the feature before flipping `AuditTrail:Enabled` is safe.
+- **Caveats / not-in-source**: verified by source search, no MMCA.ADC or MMCA.Store type consumes `IAuditTrailReader` today. It is a framework capability with no application consumer yet, which also means no shipped authorization decision to inherit: the first consumer owns that entirely.
 
 ---
 
@@ -619,11 +675,49 @@ rules of the pipeline.
 
 - **What it is**: a two-line internal holder for the process-wide stripe table that the default `ICacheService.GetOrCreateAsync<T>` implementation uses to keep concurrent misses on one key from all running the factory.
 - **Depends on**: [KeyedSemaphoreStripe](group-08-auth.md#keyedsemaphorestripe) (`MMCA.Common.Shared.Concurrency`, `using` at `ICacheService.cs:1`). Used only by [ICacheService](group-09-caching.md#icacheservice)'s default interface method.
-- **Concept introduced, cache stampede protection and why the lock table is striped.** `[Rubric §12, Performance & Scalability]` assesses behavior under load, and this is the classic thundering-herd guard: on a cold key, N concurrent readers would otherwise all miss, all call the expensive factory, and all write the same value. The interesting part is the *shape* of the guard. A per-key semaphore table forces a bad choice, spelled out on `ICacheService.cs:135-140`: drop the entry on release and two callers can run concurrently, or never drop it and a parameterized cache key grows the table without bound. Striping sidesteps both by hashing keys onto a fixed number of semaphores ([KeyedSemaphoreStripe](group-08-auth.md#keyedsemaphorestripe) defaults to 256 stripes) and accepting that two unrelated keys occasionally share one. That is a fixed, bounded cost, and the stripes are never disposed because the table outlives every caller.
-- **Walkthrough**: line 142 declares `internal static class CacheKeyLocks`; line 145 declares its only member, `internal static readonly KeyedSemaphoreStripe Locks = new()`. The consuming sequence is the double-checked idiom at `ICacheService.cs:104-124`: a lock-free `GetAsync` fast path returns immediately on a hit (lines 107-110), then the stripe is taken (line 112), then the key is re-read inside the stripe (lines 116-118) so the waiters see what the winner just wrote, and only a still-missing key runs the factory and stores it (lines 120-122). The class doc (lines 127-133) explains the non-generic holder: statics on a generic method's declaring type would already be shared, but a holder keeps the table addressable and matches the sibling [QueryCacheKeyLocks](#querycachekeylocks) in the caching decorator (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:194-197`).
-- **Why it's built this way**: the two tables are separate **on purpose** (`ICacheService.cs:137-140`): these are different call sites over different keys, so sharing stripes would only widen the unrelated-key collisions striping already tolerates. Two limits of the mechanism are documented on the member it guards (`ICacheService.cs:80-97`) and matter more than the class itself. First, **caching there is unconditional**: whatever the factory returns is stored, including a failed [Result](group-01-result-error-handling.md#result), which is exactly why the caching decorators do NOT route through `GetOrCreateAsync` and keep their own read/execute/write sequence. Second, **stampede protection is per process**: the stripe table is process-wide, so with several replicas over one shared cache the factory can still run once per replica; a cluster-wide guarantee would need an [IDistributedLock](#idistributedlock) and is deliberately not attempted here.
-- **Where it's used**: only by the default implementation of `ICacheService.GetOrCreateAsync<T>` (`ICacheService.cs:112`). Backing stores with a native two-level primitive (see [HybridCacheService](group-09-caching.md#hybridcacheservice)) override the method and never touch this table (`ICacheService.cs:92-97`).
+- **Concept introduced, cache stampede protection and why the lock table is striped.** `[Rubric §12, Performance & Scalability]` assesses behavior under load, and this is the classic thundering-herd guard: on a cold key, N concurrent readers would otherwise all miss, all call the expensive factory, and all write the same value. The interesting part is the *shape* of the guard. A per-key semaphore table forces a bad choice, spelled out on `ICacheService.cs:135-140`: drop the entry on release and two callers can run concurrently, or never drop it and a parameterized cache key grows the table without bound. Striping sidesteps both by hashing keys onto a fixed number of semaphores ([KeyedSemaphoreStripe](group-08-auth.md#keyedsemaphorestripe)) and accepting that two unrelated keys occasionally share one. That is a fixed, bounded cost, and the stripes are never disposed because the table outlives every caller.
+- **Walkthrough**: line 142 declares `internal static class CacheKeyLocks`; line 145 declares its only member, `internal static readonly KeyedSemaphoreStripe Locks = new()`. The consuming sequence is the double-checked idiom at `ICacheService.cs:99-124`: a null-check on the factory (`:105`), a lock-free `GetAsync` fast path that returns immediately on a hit (`:107-110`), then the stripe is taken (`:112`), then the key is re-read inside the stripe (`:116-118`) so the waiters see what the winner just wrote, and only a still-missing key runs the factory and stores it (`:120-122`). The class doc (`:127-133`) explains the non-generic holder: statics on a generic method's declaring type would already be shared, but a holder keeps the table addressable and matches the sibling [QueryCacheKeyLocks](#querycachekeylocks) in the caching decorator (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:194`, used at `:89`).
+- **Why it's built this way**: the two tables are separate **on purpose** (`ICacheService.cs:137-140`): these are different call sites over different keys, so sharing stripes would only widen the unrelated-key collisions striping already tolerates. Two limits of the mechanism are documented on the member it guards (`ICacheService.cs:80-97`) and matter more than the class itself. First, **caching there is unconditional**: whatever the factory returns is stored, including a failed [Result](group-01-result-error-handling.md#result) or a null-equivalent value, which is exactly why the caching decorators do NOT route through `GetOrCreateAsync` and keep their own read/execute/write sequence (`:82-86`). Second, **stampede protection is per process**: the stripe table is process-wide, so with several replicas over one shared cache the factory can still run once per replica; a cluster-wide guarantee would need an [IDistributedLock](#idistributedlock) and is deliberately not attempted here (`:88-91`).
+- **Where it's used**: only by the default implementation of `ICacheService.GetOrCreateAsync<T>` (`ICacheService.cs:112`). Backing stores with a native two-level primitive (see [HybridCacheService](group-09-caching.md#hybridcacheservice)) override the method and never touch this table (`:92-97`).
 - **Caveats / not-in-source**: the type is `internal`, so it is not part of the public package surface and cannot be referenced or replaced from a consumer app; it is documented here because the behavior it produces is visible to anyone calling `GetOrCreateAsync`.
+
+---
+
+### IEventUpcaster
+> MMCA.Common.Application · `MMCA.Common.Application.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEventUpcaster.cs:28` · Level 2 · interface (plus its typed generic sibling in the same file)
+
+- **What it is**: the contract for converting one **retired** integration-event contract into its successor, so handlers are written once against the newest shape while older messages (queued at the broker, or sitting unprocessed in an outbox written before the upgrade) keep being delivered. The file declares two interfaces: the non-generic `IEventUpcaster` the framework resolves and indexes by (`:28`), and the typed `IEventUpcaster<in TSource, out TTarget>` application code actually implements (`:67`).
+- **Depends on**: [IIntegrationEvent](group-04-events-outbox.md#iintegrationevent) (`using` at `:2`) as the type of both ends of the conversion, and `System.Diagnostics.CodeAnalysis.SuppressMessage` (BCL). Composed by [IEventUpcasterRegistry](#ieventupcasterregistry) and registered through `AddEventUpcaster<TSource, TTarget, TUpcaster>()`.
+- **Concept introduced, event-schema evolution by additive versioning instead of in-place reshaping.** `[Rubric §6, CQRS & Event-Driven]` assesses whether published event contracts can change without breaking subscribers, and `[Rubric §9, API & Contract Design]` assesses versioning of the contracts a system publishes. The policy behind this type is that a breaking event-shape change (a renamed, removed or retyped field) is a **new event type plus a consumer-side upcaster**, never a silent edit of an existing type ([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)); this interface plus its registration extension point is how that policy is actually expressed in code ([ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html), cited at `:15-19`). The teaching point for a reader new to the pattern: *upcasting is a read-side concern*. Producers are never asked to publish two shapes, and handlers are never asked to accept two shapes. The conversion happens once, at the boundary between "what arrived" and "what the handlers are written for". `[Rubric §7, Microservices Readiness]` also applies, because a broker in front of independently-deployed services is exactly the environment where producer and consumer versions diverge for a while. `[Rubric §16, Maintainability]`: a chain of small pure functions is deletable in the order it was added, which is why the registration docs describe the retirement path (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:275-281`).
+- **Walkthrough**, taking the two interfaces in the order the framework sees them.
+  - The **non-generic** `IEventUpcaster` (`:28`) declares three members: `Type SourceType { get; }` (`:31`), the retired contract it reads; `Type TargetType { get; }` (`:34`), the successor it produces; and `IIntegrationEvent Upcast(IIntegrationEvent integrationEvent)` (`:41`). This is the shape the registry indexes by and walks chains with, so nothing in the framework needs to know the closed generic types.
+  - The **typed** `IEventUpcaster<in TSource, out TTarget> : IEventUpcaster` (`:67`) is what an application implements. Both parameters are constrained `class, IIntegrationEvent` (`:68-69`), and the variance annotations (`in`/`out`) are the natural ones for a converter. Its whole trick is **default interface implementations**: `SourceType => typeof(TSource)` (`:72`), `TargetType => typeof(TTarget)` (`:75`), and an explicit `IIntegrationEvent IEventUpcaster.Upcast(...)` that downcasts and forwards to the typed overload (`:85-86`). An implementer therefore writes exactly one method, `TTarget Upcast(TSource integrationEvent)` (`:82`), and gets the non-generic surface for free.
+  - The `[SuppressMessage]` on CA1033 (`:63-66`) documents why: a default interface implementation of an *inherited* member can only be written as an explicit implementation, so there is no non-explicit form to offer child types.
+  - **Map payload fields only** (`:21-26` and `:58-61`). The framework preserves the envelope: after every hop the registry stamps `MessageId` and `DateOccurred` from the pre-hop instance onto the upcasted one, so consumer-side inbox deduplication keeps working on the id the *producer* published. An upcaster that copies them itself is harmless (the stamp is idempotent) and one that forgets is still correct.
+- **Why it's built this way**: splitting the non-generic index surface from the typed authoring surface is what lets one registry hold heterogeneous upcasters in a single `Dictionary<Type, IEventUpcaster>` while implementers still write strongly typed code with no casts. Registration names both contracts explicitly, `services.AddEventUpcaster<TOld, TNew, TUpcaster>()` (`.../DependencyInjection.cs:283-289`), so the compiler checks the shape at the registration site rather than leaving a mismatch to fail on the first message (`:265-270`); implementations are registered **singleton** through `TryAddEnumerable` because they are pure functions (`:288`). Chains compose: registering V1 to V2 and V2 to V3 delivers a V1 message to the V3 handler (`IEventUpcaster.cs:56`).
+- **Where it's used**: composed by [IEventUpcasterRegistry](#ieventupcasterregistry) and thereby reached from both delivery paths, the in-process [DomainEventDispatcher](group-04-events-outbox.md#domaineventdispatcher) and the broker-side [UpcastingIntegrationEventConsumer<TEvent>](group-07-persistence-ef-core.md#upcastingintegrationeventconsumertevent). Two architecture fitness rules police the shape across every repo, living once in the shared rules package: `EventUpcastersHaveUniqueSourceTypes` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Upcasters.cs:12`), because with two upcasters reading one type the contract a handler receives would depend on DI registration order, and `EventUpcastersIncreaseSchemaVersion` (`:28`), which reads the `SchemaVersion` off both contracts and fails when the target is not strictly higher (`:44-48`). The rules match the interface **by name and arity** (an ordinal comparison against the runtime interface name for `IEventUpcaster` with generic arity 2, `:81-83`) so the rule library keeps its no-compile-dependency idiom. `SchemaVersion` itself is the `virtual int` on [BaseIntegrationEvent](group-04-events-outbox.md#baseintegrationevent) that defaults to 1 (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:32`).
+- **Caveats / not-in-source**: verified by source search, **no `Source/` tree in the workspace contains an `IEventUpcaster` implementation today**, in the framework or in MMCA.ADC, MMCA.Store or MMCA.Helpdesk. Every implementation is a test fixture (for example `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/EventUpcasterRegistryTests.cs:38,44` and the deliberately non-compliant fixtures the fitness rules assert against, `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/UpcasterFixtures/IntegrationEvents/EventUpcasterFixtures.cs:54-78`). The mechanism is fully built and tested and has not yet had to be used on a real contract; the doc comment on the framework's own [OutputCacheEvictionRequested](group-04-events-outbox.md#outputcacheevictionrequested) records this as the shape a future V2 would take (`MMCA.Common/Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:21-23`).
+
+---
+
+### IEventUpcasterRegistry
+> MMCA.Common.Application · `MMCA.Common.Application.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEventUpcasterRegistry.cs:24` · Level 2 · interface
+
+- **What it is**: the composed view of every registered [IEventUpcaster](#ieventupcaster). It answers three questions: does anything upcast this type, what is the newest contract this type ends up as, and give me this instance converted to that contract, walking the whole chain.
+- **Depends on**: [IIntegrationEvent](group-04-events-outbox.md#iintegrationevent) (`using` at `:1`) and [IEventUpcaster](#ieventupcaster). Implemented by `EventUpcasterRegistry` (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EventUpcasterRegistry.cs:30`).
+- **Concept introduced, the empty-registry identity default.** `[Rubric §10, Cross-Cutting Concerns]` assesses how an optional capability is threaded through a pipeline without every call site having to test for its presence. The registry is registered **unconditionally** by `AddApplication()` (`.../Application/DependencyInjection.cs:40`, comment at `:36-39`): with no upcasters registered it is an empty registry whose operations are the identity function, so both delivery paths can depend on it without a null check or a feature flag ([ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html)). `[Rubric §15, Best Practices & Code Quality]` and `[Rubric §13, Observability & Operability]` both apply to the failure model: a misregistration is a programming error, so it throws at composition time naming the offenders rather than returning a `Result` (`EventUpcasterRegistry.cs:14-20`), and a dedicated hosted service makes that happen at host start rather than on the first message.
+- **Walkthrough**: three members on the interface, and the implementation behind each is worth reading.
+  - `bool HasUpcasterFor(Type eventType)` (`:31`) is a dictionary probe (`EventUpcasterRegistry.cs:85-90`).
+  - `Type ResolveTerminalType(Type eventType)` (`:39`) returns the newest contract the type upcasts to, or the type itself when nothing claims it (`EventUpcasterRegistry.cs:93-98`). It is a **precomputed** lookup, not a walk: `BuildTerminalTypes` resolves every chain once in the constructor (`:133-161`), because the chain graph is static once DI is built.
+  - `IIntegrationEvent UpcastToTerminal(IIntegrationEvent integrationEvent)` (`:48`) applies every hop and preserves the envelope at each one (`EventUpcasterRegistry.cs:101-123`). Two details in the loop repay attention: it advances by the upcaster's **declared** `TargetType` rather than the runtime type of what was returned (`:119`, with the comment at `:108-109` noting that the constructor's acyclicity check is what bounds the loop), and a `null` return from an upcaster throws with the offender named (`:112-114`).
+  - **Validation is constructor-time** (`EventUpcasterRegistry.cs:50-82`). A self-mapping upcaster (`:59-63`) and two upcasters claiming one source (`:65-69`) are collected into an `offenders` list, so a misconfigured host sees *all* the problems at once rather than one per restart, then a single `InvalidOperationException` is thrown (`:76-79`). Cycles are caught separately in `BuildTerminalTypes` by walking each chain with a `visited` set and reporting the chain in order (`:143-155`); the comment explains why a repeated type is definitely a cycle and not a diamond (`:126-128`): the duplicate-source check already made the graph functional.
+  - **Envelope preservation** (`EventUpcasterRegistry.cs:169-179`) reads `MessageId` and `DateOccurred` off the pre-hop instance and writes them onto the upcasted one through cached `PropertyInfo` handles, held in a static `ConcurrentDictionary` keyed by the produced type (`:36`) so a chain pays the reflection lookup once per contract. Both properties are `init`-only on `BaseDomainEvent`, which reflection can still set (`:24-25`), and a non-writable property is simply skipped (`Writable`, `:181-182`).
+- **Why it's built this way**: [ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html). Making envelope preservation *the registry's* job rather than the author's is the load-bearing choice: it means consumer-side inbox deduplication stays keyed on the id the producer published **by construction**, so no upcaster author can break deduplication by forgetting to copy a field they were never asked to think about (`EventUpcasterRegistry.cs:22-27`). Precomputing terminal types and caching envelope reflection keeps the per-message cost to dictionary lookups and delegate calls.
+- **Where it's used**: registered singleton by `AddApplication()` (`.../Application/DependencyInjection.cs:40`) and consumed by both delivery paths.
+  - In-process: [DomainEventDispatcher](group-04-events-outbox.md#domaineventdispatcher) holds it as a `Lazy<IEventUpcasterRegistry?>` resolved with `GetService` (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/DomainEventDispatcher.cs:32-33`) and runs the integration branch through it before resolving handlers, so the handlers invoked are the ones written against the newest type (`:62-64`).
+  - Broker-side: [UpcastingIntegrationEventConsumer<TEvent>](group-07-persistence-ef-core.md#upcastingintegrationeventconsumertevent) takes it as a constructor dependency (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/UpcastingIntegrationEventConsumer.cs:32`) and dedups on the **original** message id before any upcasting (`:46-48`), registered per retired type with `RegisterUpcastedIntegrationEventConsumer<TEvent>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:78-90`). That doc is explicit that you must not also register the plain [IntegrationEventConsumer<TEvent>](group-04-events-outbox.md#integrationeventconsumertevent) for the same type: two consumers on one event compete for the same queue and run the handlers twice (`:61-64`).
+  - Startup: [EventUpcasterStartupValidator](group-07-persistence-ef-core.md#eventupcasterstartupvalidator) is an `IHostedService` whose entire job is to resolve the registry and touch one member, turning the constructor validation into a host-start failure (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/EventUpcasterStartupValidator.cs:20,23-30`). It is registered by `AddInfrastructure` through `TryAddEnumerable` (`.../Infrastructure/DependencyInjection.cs:161`) so several modules calling it do not run the validation several times.
+- **Caveats / not-in-source**: because no host registers an upcaster today (see [IEventUpcaster](#ieventupcaster)), every production resolution of this type is the empty-registry identity path; `UpcastToTerminal` returns its argument and `ResolveTerminalType` returns its argument. The chain-walking, cycle detection and envelope preservation described above are exercised only by tests at present.
 
 ---
 
@@ -632,11 +726,11 @@ rules of the pipeline.
 
 - **What it is**: an opt-in, one-method contract that rewrites an entity `IQueryable` into a DTO `IQueryable`, so the database returns only the columns the DTO actually has instead of whole entity rows that are mapped afterwards.
 - **Depends on**: [AuditableBaseEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) and [IBaseDTO<TIdentifierType>](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) as generic constraints (`IEntityDTOProjector.cs:52-54`, `using`s at `:1-2`). It is the pushdown counterpart of [IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype), consumed by [EntityQueryService<TEntity, TEntityDTO, TIdentifierType>](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype) and executed through [IEntityQueryPipeline](group-03-querying-specifications.md#ientityquerypipeline). Implementations are typically Mapperly-generated (Riok.Mapperly, NuGet).
-- **Concept introduced, projection pushdown as an optional, additive read path.** `[Rubric §12, Performance & Scalability]` assesses whether reads pay for data they do not return; the doc states the two costs the entity path incurs (`IEntityDTOProjector.cs:9-16`): the query must select whole entities (every column, plus a join per include the DTO happens to flatten), and every materialized row is mapped in .NET afterwards. A projector removes both by making the provider select the DTO's columns directly. `[Rubric §8, Data Architecture]` assesses how much shaping is pushed to the database. The design point worth internalising is that this is **additive, never required**: registering one for an entity is what switches that entity's list reads onto the projected path, and nothing breaks when none is registered because the query service falls back to materialize-then-map. The remarks then bound what a projection can express (`:36-41`): it is an expression tree the provider must translate, so no instance sub-mappers, no custom mapping methods (`Use = nameof(...)`), no after-map hooks, nothing that would have to run in .NET on a materialized object. A DTO whose shape needs any of those simply does not get a projector.
-- **Walkthrough**: line 51 declares `public interface IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`, constrained to an auditable entity, an `IBaseDTO`, and a `notnull` key (lines 52-54). Line 62 declares the single member, `IQueryable<TEntityDTO> ProjectTo(IQueryable<TEntity> source)`, whose contract is stated in two halves: the input is an entity queryable **already filtered, sorted, and paged** (line 60), and the output must still be a translatable queryable, so an implementation must not materialize inside `ProjectTo` (lines 56-58). The doc carries a worked example (lines 23-35) of the idiomatic shape: a Mapperly `[Mapper]` static partial class exposing `ProjectToDTO`, wrapped by a small `sealed class` implementing this interface. The last remark is the correctness obligation (`:42-46`): a projector MUST produce the same values as the entity's mapper for the same row, because the two paths are chosen by registration, so a divergence would make a response depend on whether a projector happened to be registered. The doc says to pin the equivalence with a test, and the framework's own projector does exactly that.
+- **Concept introduced, projection pushdown as an optional, additive read path.** `[Rubric §12, Performance & Scalability]` assesses whether reads pay for data they do not return; the doc states the two costs the entity path incurs (`IEntityDTOProjector.cs:9-16`): the query must select whole entities (every column, plus a JOIN per include the DTO happens to flatten), and every materialized row is mapped in .NET afterwards. A projector removes both by making the provider select the DTO's columns directly. `[Rubric §8, Data Architecture]` assesses how much shaping is pushed to the database. The design point worth internalising is that this is **additive, never required**: registering one for an entity is what switches that entity's list reads onto the projected path, and nothing breaks when none is registered because the query service falls back to materialize-then-map. The remarks then bound what a projection can express (`:36-41`): it is an expression tree the provider must translate, so no instance sub-mappers, no custom mapping methods (`Use = nameof(...)`), no after-map hooks, nothing that would have to run in .NET on a materialized object. A DTO whose shape needs any of those simply does not get a projector, and its reads keep using the mapper.
+- **Walkthrough**: line 51 declares `public interface IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`, constrained to an auditable entity, an `IBaseDTO`, and a `notnull` key (`:52-54`). Line 62 declares the single member, `IQueryable<TEntityDTO> ProjectTo(IQueryable<TEntity> source)`, whose contract is stated in two halves: the input is an entity queryable **already filtered, sorted, and paged** (`:60`), and the output must still be a translatable queryable, so an implementation must not materialize inside `ProjectTo` (`:56-58`). The doc carries a worked example (`:23-35`) of the idiomatic shape: a Mapperly `[Mapper]` static partial class exposing `ProjectToDTO`, wrapped by a small `sealed class` implementing this interface. The last remark is the correctness obligation (`:42-46`): a projector MUST produce the same values as the entity's mapper for the same row, because the two paths are chosen by registration, so a divergence would make a response depend on whether a projector happened to be registered. The doc says to pin the equivalence with a test, and the framework's own projector does exactly that.
 - **Why it's built this way**: [ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html) records the optional projector on the read contract. The interesting mechanical detail is how "optional" is expressed in DI, because `Microsoft.Extensions.DependencyInjection` has no notion of an optional dependency: a single constructor naming an unregistered service fails to resolve, default value or not. [EntityQueryService<TEntity, TEntityDTO, TIdentifierType>](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype) therefore declares a **second, longer constructor** that takes the projector (`EntityQueryService.cs:69-77`, rationale at `:51-61`); the container picks the longer one when a projector is registered and the shorter one when it is not, with no ambiguity because one parameter set is a strict superset of the other, and existing subclasses keep compiling untouched.
-- **Where it's used**: discovered by convention. `ScanModuleApplicationServices<TAssemblyMarker>()` scans a module assembly for `IEntityDTOProjector<,,>` and registers each as itself plus its interfaces, scoped, beside the DTO mappers (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:158-162`), so a module only has to write the projector class. At read time [EntityQueryService<TEntity, TEntityDTO, TIdentifierType>](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype) holds it as a nullable `DTOProjector` property (`EntityQueryService.cs:84`) and takes the projected branch only when `CanProject` is true (`:303-313`, predicate at `:489-492`). That predicate is three conditions: a projector is registered, the caller did **not** ask for tracking, and the query has no unsupported (cross-source) includes, because those are loaded row by row after materialization by the navigation populator and a projection has no rows to hand it (`:476-483`). Field shaping deliberately does not disqualify (`:484-487`). The framework ships one worked implementation, `PushNotificationDTOProjector` (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/DTOs/PushNotificationDTOProjector.cs:35-45`, see [PushNotificationDTOProjector](group-10-notifications.md#pushnotificationdtoprojector)), registered explicitly by the notification module (`.../Notifications/DependencyInjection.cs:50-52`).
-- **Caveats / not-in-source**: verified by source search, **neither MMCA.ADC nor MMCA.Store registers a projector today**; outside the framework's own notification projector the only implementation in the workspace is MMCA.Helpdesk's `TicketDTOProjector` (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/DTOs/TicketDTOProjector.cs:38-47`), which exists as the reference-app demonstration. Every list read in both production apps therefore still runs the materialize-then-map path. The equivalence obligation is also a convention, not a compiler rule: the framework's projector documents an enum-to-string divergence it had to inline by hand (`PushNotificationDTOProjector.cs:13-20`) and pins it with a test, but nothing stops a new projector from quietly disagreeing with its mapper.
+- **Where it's used**: discovered by convention. `ScanModuleApplicationServices<TAssemblyMarker>()` scans a module assembly for `IEntityDTOProjector<,,>` and registers each as itself plus its interfaces, scoped, beside the DTO mappers (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:166-170`, with the opt-in rationale in the comment at `:163-165`), so a module only has to write the projector class. At read time [EntityQueryService<TEntity, TEntityDTO, TIdentifierType>](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype) holds it as a nullable `DTOProjector` property (`EntityQueryService.cs:84`) and takes the projected branch only when `CanProject` is true (`:303-313`, predicate at `:489-492`). That predicate is three conditions: a projector is registered, the caller did **not** ask for tracking, and the query has no unsupported (cross-source) includes, because those are loaded row by row after materialization by the navigation populator and a projection has no rows to hand it (`:476-482`). Field shaping deliberately does not disqualify, because shaping runs after materialization over whatever object the pipeline produced (`:484-487`). The framework ships one worked implementation, [PushNotificationDTOProjector](group-10-notifications.md#pushnotificationdtoprojector) (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/DTOs/PushNotificationDTOProjector.cs:35-45`), registered explicitly by the notification module (`.../Notifications/DependencyInjection.cs:50-52`).
+- **Caveats / not-in-source**: verified by source search, **neither MMCA.ADC nor MMCA.Store registers a projector today**; outside the framework's own notification projector the only implementation in the workspace is MMCA.Helpdesk's `TicketDTOProjector` (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/DTOs/TicketDTOProjector.cs:38-47`), which exists as the reference-app demonstration. Every list read in both production apps therefore still runs the materialize-then-map path. The equivalence obligation is also a convention, not a compiler rule: the framework's projector documents an enum-to-string divergence it had to inline by hand (the entity's `Status` is an enum, the DTO's is a string, and the instance mapper's `Use = nameof(MapStatusToString)` is not expressible in an expression tree, so the projection inlines a conditional that the provider renders as a SQL `CASE`, `PushNotificationDTOProjector.cs:13-19`) and pins it with a test, but nothing stops a new projector from quietly disagreeing with its mapper.
 
 ---
 
