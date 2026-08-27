@@ -1,7 +1,11 @@
 # ADR-050: JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection
 
 ## Status
-Accepted (2026-07-21).
+Accepted (2026-07-21). **Storage model superseded by
+[ADR-097](097-multi-device-refresh-sessions.md)** (2026-08-26): the single plaintext refresh-token
+column on the user row becomes per-device rows in a hashed `RefreshSessions` table. The rotation,
+reuse-detection and sliding-expiry policy decided below is kept and generalized to a per-user family
+of sessions; read ADR-097 for what ships today.
 
 ## Context
 Identity issues two credentials on every successful sign-in: a short-lived, stateless JWT access

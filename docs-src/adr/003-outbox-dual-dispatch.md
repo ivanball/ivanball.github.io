@@ -4,7 +4,10 @@
 Accepted. Revised 2026-07-19 (integration-event routing via `IMessageBus`, lease-based claims for
 safe scale-out, dead-letter visibility, post-commit dispatch; see Revision below). Revised
 2026-08-01 (explicit exponential retry backoff supersedes polling-interval pacing; see Revision
-below). Revised 2026-08-07 (random jitter on the retry backoff; see Revision below).
+below). Revised 2026-08-07 (random jitter on the retry backoff; see Revision below). Revised
+2026-08-26 (opt-in per-key ordered dispatch, dead letters retained and replayable, a backlog-age
+gauge, type-alias rescue with one transient retry, and the consumer-side inbox on by default for
+broker transports; see Revision below).
 
 ## Context
 Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:
@@ -15,7 +18,7 @@ Domain events must be reliably published after aggregate changes are persisted. 
 Use a dual-dispatch strategy:
 1. **Outbox persistence**: Domain events are serialized into `OutboxMessage` rows within the same database transaction as the aggregate changes. This guarantees at-least-once persistence.
 2. **In-process dispatch**: After `SaveChangesAsync`, events are dispatched immediately in-process via `DomainEventDispatcher` for low-latency handling.
-3. **Background processor**: `OutboxProcessor` (a `BackgroundService`) wakes on an in-memory signal when new entries are written, or after a fallback polling interval (`Outbox:PollingIntervalSeconds`, default 2s; ADC prod sets 300s). Entries become eligible `Outbox:ProcessingDelaySeconds` after creation (default 5s); when a cycle sees pending-but-not-yet-eligible entries it **smart-waits** only until the earliest becomes eligible instead of sleeping the full interval. Eligible entries that throw during dispatch are retried up to 5 times, then dropped from the eligible set (a message whose event type cannot be resolved is dead-lettered immediately on first pickup; see Trade-offs).
+3. **Background processor**: `OutboxProcessor` (a `BackgroundService`) wakes on an in-memory signal when new entries are written, or after a fallback polling interval (`Outbox:PollingIntervalSeconds`, default 2s; ADC prod sets 300s). Entries become eligible `Outbox:ProcessingDelaySeconds` after creation (default 5s); when a cycle sees pending-but-not-yet-eligible entries it **smart-waits** only until the earliest becomes eligible instead of sleeping the full interval. Eligible entries that throw during dispatch are retried up to 5 times, then dropped from the eligible set (a message whose event type cannot be resolved is rescued through `Outbox:TypeAliases` and retried once before being dead-lettered; see the Revision (2026-08-26)).
 
 ## Rationale
 - **Guaranteed delivery**: The outbox table is written atomically with the aggregate changes. Even if the process crashes after persistence, the background processor catches up.
@@ -28,7 +31,9 @@ Use a dual-dispatch strategy:
 - Domain event handlers must be idempotent (this is a good practice regardless).
 - The outbox table grows until processed entries are cleaned up: `OutboxCleanupService` purges rows whose `ProcessedOn` is older than `Outbox:RetentionDays` (default 7; set `0` to disable). See ADR-005.
 - Two distinct failure mechanisms exist. A message whose event **type cannot be resolved** is
-  dead-lettered immediately on first pickup (it can never succeed) and requires manual investigation.
+  dead-lettered (superseded by the Revision (2026-08-26): the alias map is consulted first and the
+  first unresolvable attempt is retried once before the row is abandoned) and requires manual
+  investigation.
   A message that **throws during dispatch** is retried up to `Outbox:MaxRetries` (default 5) times,
   then dropped from the eligible set (it stops being polled once `RetryCount >= MaxRetries`).
 - Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` seconds multiplied by a random jitter factor in `[0.8, 1.2]`, capped at `Outbox:LeaseSeconds` (`MMCA.Common/.../Outbox/OutboxProcessor.cs:562-563,616-630`). At the shipped defaults (base 10s, `MaxRetries` 5, lease 300s, batch 50: `MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,99`) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends **about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range**, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).
@@ -122,3 +127,100 @@ identical across a batch.
    the generator is deliberately pseudorandom: it spaces retries and feeds no security decision.
    The practical consequence for operators is that "150 seconds before dead-lettering" is now an
    expectation (120s to 180s), not a guarantee.
+
+## Revision (2026-08-26)
+Five changes. The dual-dispatch decision is unchanged; what changes is what happens to a message
+that must not overtake its predecessor, to one that never made it out, and to the duplicate a broker
+hands a consumer twice.
+
+1. **Ordered delivery per key, opt-in, with head-of-line semantics.** An event that implements
+   `IHasOrderingKey` (one member, `string? OrderingKey`, typically the aggregate id:
+   `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IHasOrderingKey.cs:24-31`) has that value
+   copied onto its outbox row
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:79`,
+   copied at `:103`), and the processor refuses to claim a keyed row while an EARLIER unprocessed,
+   non-dead-lettered row carries the same key. The guard lives in the claim itself, as a correlated
+   `NOT EXISTS` inside the same `ExecuteUpdateAsync` that takes the lease
+   (`.../Outbox/OutboxProcessor.cs:544-554`, applied at `:473-480`), so a second replica racing the
+   same key loses on the row rather than on a check it made before the race started (`:538-542`);
+   ordering therefore holds across batches and across scaled-out replicas, not merely within one batch
+   (`:439-442`). Within a cycle, the candidate set keeps at most one row per key, so a single batch
+   never dispatches two events of one key in parallel (`:507-520`, reasoning at `:500-505`). This is
+   head-of-line blocking by design: a keyed row that is failing and backing off blocks every later row
+   with the same key, which is why keys must be as narrow as the ordering requirement really is (one
+   key per aggregate serializes that aggregate; a constant key serializes the whole outbox:
+   `IHasOrderingKey.cs:15-22`). A row that exhausts its retries stops blocking, so a poison event
+   cannot freeze its key forever (`OutboxProcessor.cs:443-445`, the `RetryCount` term of the predicate
+   at `:553`). Two costs are recorded in code: a batch containing no keyed row runs exactly the query
+   it always ran, so hosts that never declare a key pay nothing, not even a subquery the optimizer has
+   to prove away (`:470-475`); and the predecessor test is on `OccurredOn` alone, so two rows sharing
+   a key and an exact timestamp do not block each other in SQL (`:448-452`, `:554`). A tie at tick
+   resolution is not an ordering the outbox claims to observe.
+2. **A dead letter is evidence, so it is kept by default and has a way back.** `OutboxCleanupService`
+   no longer deletes dead-lettered rows once `Outbox:DeadLetterRetentionDays` elapses: deletion is the
+   one cleanup action that cannot be undone, so the sweep keeps them and logs one Warning per source
+   per cycle naming how many are past the window
+   (`.../Outbox/OutboxCleanupService.cs:170-179`, message at `:241`, rationale at `:145-153`).
+   `Outbox:PurgeDeadLetters` (default `false`) restores the unconditional purge
+   (`.../Settings/OutboxSettings.cs:118`, reasoning at `:110-117`). The way back is
+   `IOutboxAdministration`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IOutboxAdministration.cs:16`),
+   an operator surface a host exposes from an admin endpoint, a support command or a scheduled job
+   (`:5-14`), registered scoped by the framework
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:177-178`):
+   `ListDeadLettersAsync(dataSource, skip, take)` pages them oldest first across every outbox source
+   the host owns or one named source (`IOutboxAdministration.cs:30-34`, contract at `:18-29`);
+   `ReplayDeadLettersAsync(dataSource, ids)` returns them to the pending pool, with `RetryCount` to
+   zero and the lease cleared, `LastError` deliberately KEPT because the reason is the first thing
+   anyone asks after a replay, and `OccurredOn` untouched so a replayed row keeps its place in its
+   ordering key (`:51-54`, reasoning at `:36-40`); and `CountPendingAsync(dataSource)` counts the
+   tables at the moment of the call, including rows under a claim lease, which is the difference
+   between it and the `outbox.pending.depth` gauge (`:65`, contrast drawn at `:56-61`). Every method
+   returns `Result` (ADR-013): an unreachable or unknown source is a failure an operator screen
+   renders, not an exception (`:11-13`). The projected `OutboxDeadLetter` record deliberately omits
+   the event payload, which can carry personal data (ADR-005) and answers nothing a replay decision
+   depends on (`:80-87`, stated at `:68-72`).
+3. **A new gauge reports how late the backlog already is.** `outbox.oldest_pending.age` (seconds,
+   tagged `data_source`, on the existing `MMCA.Common.Outbox` meter:
+   `.../Outbox/OutboxMetrics.cs:98-102`, meter name at `:19`, published per cycle at `:115-116`) is
+   the age of the oldest row still awaiting dispatch, observed per source at the start of its most
+   recent cycle. Where `outbox.dispatch.lag` (`:57-60`) reports how late the messages that DID arrive
+   were, this one reports how late a stuck backlog is while it is still stuck, which is what an alert
+   on a wedged outbox fires on (`:81-86`). It costs nothing extra: the poll already fetches pending
+   rows ordered by `OccurredOn`, so its first row IS the minimum and no `MIN()` query is ever issued
+   (`:87-90`). It reuses the poll's predicate, so rows under another replica's lease and dead letters
+   are excluded, which makes it deliverable backlog rather than table age (`:90-94`); a source with
+   nothing pending reports `0` rather than dropping out of the series, and a source whose database was
+   unreachable keeps its previous value until its next successful cycle (`:94-97`).
+4. **A renamed or relocated event type is rescued rather than dead-lettered.** `Outbox:TypeAliases`
+   maps a stored `EventType` that no longer resolves (an event class renamed, moved to another
+   namespace, or moved to another assembly between the write and the dispatch) onto the new type's
+   full or assembly-qualified name (`.../Settings/OutboxSettings.cs:140-141`, contract and example at
+   `:120-139`). The map is consulted **only** when resolution fails, so the happy path is unchanged
+   (`.../Outbox/OutboxProcessor.cs:583`, noted at `:580-582`). Aliases are for MOVED contracts, not
+   reshaped ones: a payload whose fields changed needs a new event type and an upcaster (ADR-090,
+   `OutboxSettings.cs:137-138`). Beside it, the first unresolvable attempt is now treated as transient
+   and retried through the normal backoff, because the assembly declaring the type may simply not be
+   loaded yet (a lazily resolved module assembly, a host still coming up) and a name that resolves one
+   cycle later was never a dead letter (`OutboxProcessor.cs:705-719`, reasoning at `:692-698`). Only
+   the second attempt is terminal (`:721-726`), which is also the point at which the operator has had
+   a Warning naming the alias setting (`:716`, message at `:828`). A host that set `Outbox:MaxRetries`
+   to 1 asked for no retries at all and gets none (`:709-711`).
+5. **The consumer-side inbox is on by default wherever redelivery is possible.**
+   `MessageBus:EnableInbox` is now three-valued (`.../Settings/MessageBusSettings.cs:84`): an explicit
+   setting wins in both directions (`:78-81`), and left unset it resolves ON for a broker provider and
+   OFF for the in-process one, which has no redelivery to dedup (`:92`, reasoning at `:66-69`). Broker
+   delivery is at-least-once by contract, so with the inbox off every redelivery became a duplicate
+   side effect unless each handler happened to be idempotent on its own (`:69-75`); a host that must
+   not query the table yet sets `false` explicitly and still gets its one startup Warning
+   (`.../Persistence/Inbox/InboxDisabledWarningService.cs:13-16`, message at `:35`). The inbox row
+   also stops being a separate write: `TryBeginAsync` STAGES it in the scope's unit of work unsaved
+   (`.../Persistence/Inbox/EfInboxStore.cs:61-68`), so a handler that saves on that same scope commits
+   the row in the same transaction as its own mutations, and the window where a crash between "handler
+   committed" and "inbox written" reprocessed the whole event is closed by construction rather than by
+   asking every handler to be idempotent (`:16-22`; `CompleteAsync` writes only if nothing else did,
+   `:71-89`). A handler failure abandons the staged row before rethrowing, so the retry does not see
+   its own abandoned attempt as a duplicate (`.../Services/IntegrationEventConsumer.cs:69`, rethrow at
+   `:76`, detach at `EfInboxStore.cs:106-109`). ADR-021 owns the inbox contract; this is the
+   outbox-side consequence, and it makes the delivery story symmetric: the outbox guarantees the event
+   leaves, the inbox guarantees it lands once.
