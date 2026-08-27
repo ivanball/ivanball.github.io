@@ -2,17 +2,17 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://ivanball.github.io/</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/resume.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/platform.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
@@ -32,12 +32,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/index.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -52,7 +52,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html</loc>
-    <lastmod>2026-08-18</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -62,7 +62,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html</loc>
-    <lastmod>2026-07-27</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -102,12 +102,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/013-result-pattern.html</loc>
-    <lastmod>2026-08-18</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -142,7 +142,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -287,7 +287,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html</loc>
-    <lastmod>2026-08-14</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -512,12 +512,17 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/095-soft-delete-unique-indexes.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html</loc>
     <lastmod>2026-08-23</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html</loc>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

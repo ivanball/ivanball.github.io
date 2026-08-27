@@ -6,7 +6,9 @@ event dispatch; see Revision below). Revised 2026-08-18 (**the pipeline order ch
 Authorization decorator was inserted between FeatureGate and Logging, and a Timeout decorator between
 Validating and Transactional, on both the command and the query chain; the order is now pinned by a
 shipped conformance test. The order stated in the Decision below is the pre-2026-08-18 one: read the
-Revision (2026-08-18) at the end for the current chain).
+Revision (2026-08-26) at the end for the current chain). Revised 2026-08-26 (a Validating decorator
+joins the **query** chain, and the registration sequence gains a sealed composition path plus a
+fitness hook).
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -168,6 +170,72 @@ The trade-off list above gains one entry by construction: the chain is now seven
 command that declares every marker, and two of the seven were inserted between existing neighbours, so
 the "placing it wrong can silently change semantics" warning is no longer hypothetical. The caching
 and transactional placements from the original record are unchanged.
+
+## Revision (2026-08-26)
+**One decorator joins the query chain, and the registration sequence stops being a rule consumers
+have to remember.** The query line in the Revision (2026-08-18) above is superseded; the shipped
+execution order (outermost to innermost) is now:
+
+- **Commands:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout ->
+  Transactional -> Handler
+- **Queries:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Handler
+
+1. **Validation is no longer command-only.** `ValidatingQueryDecorator<TQuery, TResult>`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingQueryDecorator.cs:33-36`)
+   is the twin of the command decorator: the same validator resolution, the first registered
+   `IValidator<TQuery>` winning (`:38`), the same aggregation of every failure into one `Result`
+   failure (`:73-82`, errors built at `:78`), and the same pass-through when a query has no validator,
+   so a query type that registers none pays a null check (`:67-70`, twin note at `:12-18`). Queries
+   carrying paging, filter or sort input therefore reject a malformed request the way commands do
+   instead of pushing the bad values into the data source (`:15-17`). The failure is built through the
+   same reflection-built factory as the command side (`:61-62`), lazily on the first short-circuit
+   rather than in a static initializer, because Scrutor decorates unconditionally and an eager
+   initializer would turn an unsupported `TResult` into a `TypeInitializationException` at resolve
+   time for a query that never fails validation (`:44-55`).
+2. **Its placement is the interesting part: inside Caching, outside Timeout.** The registration sits
+   between the caching and timeout decorators
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:132`, chain diagram at
+   `:74-83`). Validation sits **inside** caching deliberately, which is the opposite of the command
+   side's outside-the-transaction placement and follows from what a cache hit means: an entry can only
+   exist because the same query already passed validation when that entry was first produced, so
+   re-validating on a hit spends work to reach a conclusion already reached (`:97-101`, restated at
+   `ValidatingQueryDecorator.cs:24-26`). It sits **outside** the timeout for the mirror of the
+   command-side reason, so a caller is not charged a slice of its execution budget for validating its
+   own bad input (`ValidatingQueryDecorator.cs:26-28`, `DependencyInjection.cs:104-107`).
+3. **`AddMmcaApplicationPipeline(pipeline => ...)` is the composition path, and it seals.**
+   (`DependencyInjection.cs:375-384`.) It runs `AddApplication()`, then the caller's handler
+   registrations through a small builder (module scans, a `ModuleLoader` run, cross-service client
+   registrations that replace a handler's dependencies:
+   `.../MMCA.Common.Application/MmcaApplicationPipelineBuilder.cs`, argument contract at
+   `DependencyInjection.cs:341-349`), then `AddApplicationDecorators()`, in that order (`:379-383`,
+   equivalence spelled out at `:355-363`). Closing the pipeline registers a private marker type on the
+   service collection (`:138`, marker at `:462`, `:475-476`, probe at `:464-473`), and any later
+   `AddApplicationDecorators`, `ScanModuleApplicationServices` or second `AddMmcaApplicationPipeline`
+   **throws** naming the mistake (`:478-487`, guards at `:117`, `:175`, `:377`). That converts the one
+   load-bearing ordering rule of this record (decorators last, because `TryDecorate` only wraps
+   registrations that already exist) from a documented convention whose violation is silent (a handler
+   registered afterwards runs with no feature gate, no authorization, no validation, no timeout and no
+   transaction, and nothing fails at startup to say so: `:357-362`) into a startup exception.
+   Registrations that are not handlers stay outside the call: their order relative to the decorators
+   does not matter (`:364-366`).
+4. **`VerifyDecoratorPipeline()` is the fitness hook.** (`DependencyInjection.cs:412-452`.) Never
+   called automatically, it asserts that the pipeline was closed at all (`:414-419`) and that every
+   registered `ICommandHandler<,>` / `IQueryHandler<,>` entry is wrapped, throwing with each unwrapped
+   registration named (`:439-451`, formatting at `:490-501`). The check is registration-shape only: it
+   reads `ServiceDescriptor` entries and never builds a provider, so a fitness test does not have to
+   register a double for every decorator dependency (`:398-402`). What it can see is a consequence of
+   how Scrutor works: decoration rewrites a handler's descriptor into a factory over a keyed copy of
+   the original, so a surviving implementation type on the effective (last non-keyed) registration is
+   proof nothing wrapped it (`:403-410`, the effective-descriptor pass at `:421-437`, the predicate at
+   `:439-440`). The outermost decorator's type cannot be read back at all after decoration, since it
+   exists only inside a closure (`:409-410`), which is why this complements rather than replaces
+   `DecoratorPipelineOrderTestsBase`: that base resolves the real object graph to assert the *order*,
+   this one asserts *coverage* without a provider.
+
+The trade-off list gains nothing new in kind: a command that declares every marker is now seven
+decorators deep and a query six, and the "registration order is the reverse of execution order"
+foot-gun is unchanged, but its worst outcome (a handler that quietly runs undecorated) is now a throw
+rather than a silence.
 
 ## Related
 ADR-013 (Result, the short-circuit currency of the pipeline, and the `Failure` error type the timeout

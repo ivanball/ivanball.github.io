@@ -5,7 +5,10 @@ Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inb
 being off is no longer silent: a broker-connected host running `NoOpInboxStore` logs a startup
 warning, `MessageBus:EnableInbox=true` becomes the stated recommendation for any such host, and the
 `InboxMessages` entity is confirmed to be part of the relational model unconditionally. See the
-Revision (2026-08-18) at the end).
+Revision (2026-08-18) at the end). Revised 2026-08-26 (**the inbox is no longer opt-in for a broker
+transport**: it resolves ON unless a host explicitly turns it off, and its row is staged into the
+handler's own unit of work so it commits atomically with the handler's mutations. See the Revision
+(2026-08-26) at the end).
 
 ## Context
 ADR-003 makes integration-event delivery **at-least-once**: the outbox guarantees a published event
@@ -28,14 +31,18 @@ and skips redeliveries.
 - **Every event carries a `MessageId`.** `BaseDomainEvent` stamps a unique `MessageId`; it is the
   dedup key (the same id the outbox serializes and the broker carries).
 - **`IInboxStore` with two implementations.** `EfInboxStore` (active) records processed messages in
-  an `InboxMessages` table; `NoOpInboxStore` (default) never dedups. The switch is the
+  an `InboxMessages` table; `NoOpInboxStore` never dedups. The switch is the
   `MessageBus:EnableInbox` flag (default `false`): `AddBrokerMessaging` registers `EfInboxStore` when
-  set and `NoOpInboxStore` otherwise.
+  set and `NoOpInboxStore` otherwise. (**Superseded by the Revision (2026-08-26)**: the setting is
+  now `bool?` and resolves ON for a broker transport when unset, so `NoOpInboxStore` is reached only
+  by an explicit opt-out.)
 - **Check before, record after.** The generic `IntegrationEventConsumer<TEvent>` calls
   `AlreadyProcessedAsync(MessageId)` first and skips the handlers (acking the message) when it is a
   duplicate; it calls `MarkProcessedAsync(MessageId, eventType)` only **after** all handlers succeed.
   A handler that throws rethrows, so MassTransit applies its retry/dead-letter policy and the message
-  stays un-recorded (eligible for redelivery).
+  stays un-recorded (eligible for redelivery). (**Superseded by the Revision (2026-08-26)**: the
+  consume path is now `TryBeginAsync` -> handlers -> `CompleteAsync`, with the row STAGED at the
+  start and persisted by whichever save comes first.)
 - **The inbox lives in the consumer's own database.** Rows are written to the host's outbox data
   source (`Outbox:DataSource` / `Outbox:DatabaseName`), so each service dedups in its own database,
   consistent with database-per-service (ADR-006). Every relational source gets an `InboxMessages`
@@ -49,7 +56,10 @@ and skips redeliveries.
 The delivery guarantee is therefore **at-least-once-with-dedup**, not exactly-once: a crash between a
 handler's commit and the inbox write reprocesses the event exactly once more, so **handlers must
 still be idempotent** for that narrow window. The inbox removes the routine-duplicate burden; it does
-not make handlers free to be non-idempotent.
+not make handlers free to be non-idempotent. (**Narrowed by the Revision (2026-08-26)**: a handler
+that saves to the same physical source now commits the inbox row in its own transaction, so that
+window is closed for it; it remains open for a handler that writes nothing or writes to a different
+source, and handlers must still be idempotent.)
 
 In production `EnableInbox: true` is set on all four ADC service hosts
 (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:28`,
@@ -97,10 +107,14 @@ repos.
 
 ## Trade-offs
 - **Not exactly-once.** The crash-after-handler-before-inbox window reprocesses once, so handlers must
-  stay idempotent for it; the inbox narrows the duplicate window, it does not close it.
+  stay idempotent for it; the inbox narrows the duplicate window, it does not close it. (The
+  Revision (2026-08-26) closes it for the common case, a handler saving to the same physical source,
+  and leaves it open otherwise.)
 - **Opt-in per service.** A broker-consuming service that forgets `EnableInbox` gets no dedup (and no
   `InboxMessages` table), the same audit-the-inventory caveat as ADR-005 / ADR-017 / ADR-020.
-  Enabling it also requires the migration that creates the table.
+  Enabling it also requires the migration that creates the table. (**Superseded**: the Revision
+  (2026-08-18) removed the migration claim, and the Revision (2026-08-26) removed the opt-in itself
+  for broker hosts, so forgetting the flag is no longer a way to lose dedup.)
 - **A second housekeeping table.** Each consumer database carries an `InboxMessages` table and its
   retention purge, in addition to the outbox.
 - **Dedup is keyed on `MessageId`, not payload.** Dedup is per-message-identity (the intended
@@ -123,30 +137,30 @@ What changed is that the default is now loud.
 
 1. **A broker-connected host with no inbox says so at startup.** `AddBrokerMessaging` returns early
    for `MessageBusProvider.InProcess`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:669-672`), which is
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:682-685`), which is
    what scopes this to hosts that actually talk to a broker: in-process dispatch never redelivers, so
    there is nothing to warn about. Past that early return, the `EnableInbox` branch
-   (`:699-711`) registers `EfInboxStore` as scoped (`:701`) when the flag is set, and on the `else`
-   branch registers `NoOpInboxStore` as a singleton (`:705`) **plus** an `IHostedService` whose only
-   job is to emit one `Warning` line naming the consequence and the fix (`:710`). The service is
+   (`:715-727`) registers `EfInboxStore` as scoped (`:717`) when the flag is set, and on the `else`
+   branch registers `NoOpInboxStore` as a singleton (`:721`) **plus** an `IHostedService` whose only
+   job is to emit one `Warning` line naming the consequence and the fix (`:726`). The service is
    `InboxDisabledWarningService`
-   (`.../Persistence/Inbox/InboxDisabledWarningService.cs:18-19`), and it evaluates nothing at
-   runtime: `StartAsync` logs unconditionally (`:22-26`), because the condition was already decided by
-   which DI branch registered it. Its message text is at `:31-34`. The type is `internal`, so it is a
+   (`.../Persistence/Inbox/InboxDisabledWarningService.cs:20-21`), and it evaluates nothing at
+   runtime: `StartAsync` logs unconditionally (`:24-28`), because the condition was already decided by
+   which DI branch registered it. Its message text is at `:33-36`. The type is `internal`, so it is a
    framework behavior rather than a public extension point.
 2. **`MessageBus:EnableInbox=true` is now the stated recommendation, not a neutral option.** The
    setting is still `bool` with no initializer, so the default is still `false`
-   (`.../Settings/MessageBusSettings.cs:76`), but its own documentation now says "RECOMMENDED true for
+   (`.../Settings/MessageBusSettings.cs:84`), but its own documentation now says "RECOMMENDED true for
    any broker-connected host" (`:65-73`). The Trade-offs entry above ("a broker-consuming service that
    forgets `EnableInbox` gets no dedup") therefore keeps its substance and loses its silence: the
    inventory audit it asks for is now performed by the host at every boot.
 3. **The `InboxMessages` table is part of the relational model unconditionally.**
    `ApplicationDbContext.OnModelCreating` calls `ConfigureInbox(modelBuilder)` with no flag check
-   (`.../Persistence/DbContexts/ApplicationDbContext.cs:320`, body at `:514-528`, including the unique
-   `IX_InboxMessages_MessageId` at `:520-522`), and it is configured inline in the base context rather
+   (`.../Persistence/DbContexts/ApplicationDbContext.cs:347`, body at `:556-570`, including the unique
+   `IX_InboxMessages_MessageId` at `:562-564`), and it is configured inline in the base context rather
    than as an `IEntityTypeConfiguration`. `SQLServerDbContext` and `SqliteDbContext` reach it through
    `base.OnModelCreating`; `CosmosDbContext` deliberately does not call the base (`CosmosDbContext.cs:89`,
-   documented at `ApplicationDbContext.cs:510-513`), so the guarantee is **relational engines only**,
+   documented at `ApplicationDbContext.cs:551-555`), so the guarantee is **relational engines only**,
    consistent with the "Cosmos hosts skip it" statement in the Decision above.
 
 **So the Trade-offs entry above overstated the cost of enabling.** It said that enabling the inbox
@@ -156,6 +170,79 @@ already create, so flipping `EnableInbox` is a configuration change and a restar
 Every service enumerated in the Decision above is past that point already (ADC's four per-service
 migration projects each carry an `AddInboxMessages` migration; Store's per-service projects create the
 table in `InitialCreate`). The settings documentation says the same thing
-(`MessageBusSettings.cs:60-64`), and notes that the `false` default exists only so an existing host
+(`MessageBusSettings.cs:58-64`), and notes that the `false` default exists only so an existing host
 does not start querying a table it has not migrated yet. Cosmos hosts remain the exception, as the
 Decision above already states.
+
+## Revision (2026-08-26)
+**Two changes, and the first one reverses this record's central choice.** The inbox is no longer
+opt-in where redelivery is possible, and its row is no longer a separate write.
+
+1. **`EnableInbox` becomes three-valued, and unset resolves ON for a broker.**
+   `MessageBusSettings.EnableInbox` is now `bool?` with no initializer
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:84`), and every
+   framework component reads the resolved posture instead:
+   `IsInboxEnabled => EnableInbox ?? Provider != MessageBusProvider.InProcess` (`:92`). An explicit
+   value still wins in both directions (`:78-81`); left unset the transport decides, ON for RabbitMQ
+   and Azure Service Bus, OFF for the in-process provider that has no redelivery to dedup (`:66-69`).
+   The reason the default flipped is written where the setting lives: broker delivery is
+   at-least-once by contract, so an ack lost to a network blip, a redelivery after a lease expiry, or
+   an outbox row republished after a crash all hand the same event to the same handlers twice, and
+   with the inbox off each of those becomes a duplicate side effect (a second email, a second charge
+   attempt, a double decrement) unless every handler happens to be idempotent on its own (`:69-75`).
+   The registration branch is unchanged in shape and only its condition moved: `AddBrokerMessaging`
+   still returns early for `MessageBusProvider.InProcess`
+   (`.../MMCA.Common.Infrastructure/DependencyInjection.cs:682`), so this scopes to broker hosts, and
+   past it `settings.IsInboxEnabled` (`:715`) selects the scoped `EfInboxStore` (`:717`) or the
+   singleton `NoOpInboxStore` plus the startup-warning hosted service (`:721`, `:726`). Reaching
+   `InboxDisabledWarningService` therefore now means a **deliberate opt-out** rather than an
+   unnoticed default, and its Warning says so, naming the setting, the consequence and the fact that
+   the `InboxMessages` table is already part of the model
+   (`.../Persistence/Inbox/InboxDisabledWarningService.cs:13-16`, message text at `:35`). **The
+   Trade-offs entry "a broker-consuming service that forgets `EnableInbox` gets no dedup" no longer
+   describes a reachable state**: forgetting the flag now yields dedup, and only writing
+   `false` removes it.
+2. **The inbox row is staged into the handler's own unit of work.** The consume path is
+   `TryBeginAsync` -> handlers -> `CompleteAsync`, with `Abandon` on the failure branch
+   (`.../Persistence/Inbox/IInboxStore.cs:9-14`); all three are default interface members over the
+   original `AlreadyProcessedAsync`/`MarkProcessedAsync` pair (`:38-39`, `:48-49`, `:63`), so
+   `NoOpInboxStore` and any hand-written implementation keep working unchanged.
+   `EfInboxStore.TryBeginAsync` re-checks and then **stages** an `InboxMessage` into the same scoped
+   `ApplicationDbContext` the handlers write through, tracked in a small per-message dictionary
+   (`.../Persistence/Inbox/EfInboxStore.cs:61-68`, staging at `:116-127`, the dictionary and its
+   one-entry-in-practice rationale at `:44-49`). A handler's own `SaveChangesAsync` therefore commits
+   the inbox row **in the same transaction as its mutations**, which closes the window this record's
+   Decision called out: a crash after the handler committed can no longer reprocess work whose save
+   carried the row. `CompleteAsync` then writes only if nothing else did, keying on the entry still
+   being `Added` (`:71-84`), and falls back to the old write-after-handlers path for a caller that
+   skipped `TryBeginAsync` (`:86-88`), which is also the path an event whose handlers write nothing
+   takes. `IntegrationEventConsumer<TEvent>` is where the three calls sit: the duplicate check and
+   skip (`.../Services/IntegrationEventConsumer.cs:49-53`), the handler loop, and the final
+   `CompleteAsync` (`:90`).
+   - **The failure path discards the staged row first.** A throwing handler triggers
+     `inbox.Abandon(messageId)` before the rethrow that lets MassTransit apply its retry policy
+     (`IntegrationEventConsumer.cs:69`, rethrow at `:76`). `Abandon` detaches a still-`Added` entry
+     rather than leaving it staged, because the context is cached for the whole scope and a surviving
+     `Added` row would be re-attempted by any later save on it (`EfInboxStore.cs:106-109`). The one
+     case this design loses to a pure after-the-fact inbox is made loud rather than silent: when an
+     earlier handler already committed the row and a later handler then fails, the redelivery is
+     skipped as a duplicate, so the handlers that had not run never will, and `Abandon` returns
+     `false` after logging a Warning saying exactly that (`:97-104`, message at `:169-172`).
+   - **Unique-index duplicate absorption is preserved, on both saves.** A concurrent duplicate that
+     races past the check fails its insert, and `SaveStagedAsync` detaches the rejected entry, then
+     re-queries rather than sniffing provider-specific error codes (so the check holds for SQL Server
+     and SQLite alike) and absorbs the rejection only when the row really is there, rethrowing
+     anything else so a genuine write failure cannot ack an unrecorded message
+     (`EfInboxStore.cs:140-157`). When it is the **handler's** save that hits the index, the
+     `DbUpdateException` surfaces to the handler, its mutations roll back, and the broker redelivers
+     into the skip path (`:30-36`).
+   - **Atomicity holds where the handler writes to the same physical source** the store resolves (the
+     `Outbox:DataSource` / `Outbox:DatabaseName` pair, which is the single database of a monolith and
+     of a service that owns one). A handler writing to a different source is back to two
+     transactions and its row is persisted by `CompleteAsync`, so delivery there stays
+     at-least-once, which is the contract handlers are written against anyway (`:23-29`).
+
+**What this record still says is right.** Dedup is keyed on `MessageId`, the rows live in the
+consumer's own database, the unique index is the concurrency guard, retention rides
+`OutboxCleanupService`, and handlers must stay idempotent: the crash window is closed only for a
+handler whose own save carried the row.

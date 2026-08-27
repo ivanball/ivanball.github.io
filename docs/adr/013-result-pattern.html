@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-013: Result Pattern over Exceptions for Flow Control · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented).">
+  <meta name="description" content="Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented). Revised 2026-08-26 (ErrorType.Unexpected,…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/013-result-pattern.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-013: Result Pattern over Exceptions for Flow Control">
-  <meta property="og:description" content="Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented).">
+  <meta property="og:description" content="Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented). Revised 2026-08-26 (ErrorType.Unexpected,…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/013-result-pattern.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-013: Result Pattern over Exceptions for Flow Control">
-  <meta name="twitter:description" content="Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented).">
+  <meta name="twitter:description" content="Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented). Revised 2026-08-26 (ErrorType.Unexpected,…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"013 · Result Pattern over Exceptions for Flow Control","item":"https://ivanball.github.io/docs/adr/013-result-pattern.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 96 ADRs</summary>
+        <summary>All 97 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -196,6 +196,7 @@
         <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
         <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
         <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
           </ol>
         </nav>
       </details>
@@ -204,7 +205,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-013-result-pattern-over-exceptions-for-flow-control">ADR-013: Result Pattern over Exceptions for Flow Control</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented).</p>
+          <p>Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented).
+          Revised 2026-08-26 (<code>ErrorType.Unexpected</code>, severity-ranked status selection for aggregated
+          failures, and the full combinator surface).</p>
           <h2 id="context">Context</h2>
           <p>Operations at every layer fail in <em>expected</em> ways: input is invalid, a domain invariant is broken, a
           requested entity is missing, a uniqueness conflict occurs, the caller lacks permission. There are two
@@ -220,13 +223,58 @@
           <li>A <code>Result</code> is either success or failure; a failure carries one or more <code>Error</code> records (<code>Code</code>,
           <code>Message</code>, <code>Type</code> of type <code>ErrorType</code>, optional <code>Source</code> / <code>Target</code>).</li>
           <li><code>ErrorType</code> is a <strong>transport-agnostic</strong> category: <code>Validation</code>, <code>Invariant</code>, <code>NotFound</code>, <code>Conflict</code>,
-          <code>Unauthorized</code>, <code>Forbidden</code>, <code>UnprocessableEntity</code>, <code>Failure</code>. The domain never names an HTTP status.</li>
+          <code>Unauthorized</code>, <code>Forbidden</code>, <code>UnprocessableEntity</code>, <code>Failure</code>, <code>Unexpected</code>. The domain never names
+          an HTTP status. <code>Unexpected</code> is the one category reserved for a genuine server-side fault (the
+          request was well formed and permitted, the server could not complete it,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:36-41</code>): it maps to HTTP 500
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:30</code>) and to gRPC
+          <code>Internal</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:45</code>), and it
+          is explicitly not for business-rule violations, which is what keeps the other eight categories
+          caller-fixable (<code>ErrorType.cs:38-39</code>, factory at <code>.../Shared/Abstractions/Error.cs:114-115</code>).</li>
           <li>Domain factory methods and mutators return <code>Result&lt;T&gt;</code>; application command/query handlers thread
-          results through the <code>Match()</code>, <code>Map()</code>, and <code>BindAsync()</code> combinators instead of <code>try</code>/<code>catch</code>.</li>
-          <li>The transport mapping lives only at the edge. <code>ApiControllerBase.HandleFailure()</code> maps the first
-          error&#39;s <code>ErrorType</code> to an HTTP status via a <code>FrozenDictionary</code> and returns an RFC 9457 ProblemDetails
-          body carrying all errors. gRPC does the equivalent over the wire (<code>GrpcResultExceptionInterceptor</code>,
-          ADR-007), so callers keep programming against <code>Result&lt;T&gt;</code> across a process boundary.</li>
+          results through combinators instead of <code>try</code>/<code>catch</code>. The surface is:<ul>
+          <li><strong>Lifting without naming a factory.</strong> An <code>Error</code> converts implicitly to a failed <code>Result</code>
+          (<code>.../Shared/Abstractions/Result.cs:43</code>) or <code>Result&lt;T&gt;</code> (<code>:233-237</code>), and a value converts
+          implicitly to a successful <code>Result&lt;T&gt;</code> (<code>:249</code>), so a guard clause writes <code>return someError;</code> and
+          a happy path writes <code>return theValue;</code>. <code>Result.FromError</code> is the named alternate for the
+          non-generic conversion (<code>:49-53</code>); the inherited <code>Result.Failure&lt;T&gt;</code> / <code>Result.Success&lt;T&gt;</code>
+          factories are the named alternates on the generic type (<code>:229-232</code>, <code>:245-248</code>).</li>
+          <li><strong>On <code>Result&lt;T&gt;</code>:</strong> <code>Match</code> (<code>:260-268</code>) / <code>MatchAsync</code> (<code>:355-365</code>), exactly one branch running
+          in both; <code>Map</code> (<code>:276-280</code>), <code>Bind</code> (<code>:302-306</code>) / <code>BindAsync</code> (<code>:289-293</code>), <code>Tap</code> (a side effect
+          on the success value, returning the same instance, <code>:314-324</code>) and <code>Ensure</code> (fail the chain with a
+          supplied <code>Error</code> when the value does not satisfy a predicate, <code>:334-345</code>).</li>
+          <li><strong>On the non-generic <code>Result</code>:</strong> <code>Match</code> (<code>:155-161</code>), <code>Bind</code> (<code>:187-191</code>) and <code>OnFailure</code>
+          (<code>:169-179</code>), so a valueless step composes the same way instead of forcing an <code>IsFailure</code> check.</li>
+          <li><strong>On a pending <code>Task&lt;Result&lt;T&gt;&gt;</code>:</strong> <code>ResultExtensions</code>
+          (<code>.../Shared/Abstractions/ResultExtensions.cs:10</code>) carries <code>BindAsync</code> over both a <code>Task</code>-returning
+          and a synchronous binder (<code>:20-29</code>, <code>:39-48</code>), <code>MapAsync</code> (<code>:58-67</code>), <code>TapAsync</code> (<code>:77-91</code>) and
+          <code>MatchAsync</code> (<code>:102-113</code>), so an asynchronous pipeline composes end to end without an intermediate
+          <code>await</code> and its temporary local between every step. Each awaits the incoming task once and
+          delegates to the same instance combinator, so the short-circuit behavior is identical (<code>:3-9</code>).</li>
+          <li>Every combinator short-circuits: a failed result never invokes the delegate it was handed
+          (<code>Result.cs:279</code>, <code>:292</code>, <code>:305</code>, <code>:339-342</code>).</li>
+          </ul>
+          </li>
+          <li>The transport mapping lives only at the edge. <code>ApiControllerBase.HandleFailure()</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35-60</code>) maps an
+          <code>ErrorType</code> to an HTTP status through a <code>FrozenDictionary</code> (<code>ErrorHttpMapping.cs:20-31</code>, resolved at
+          <code>ApiControllerBase.cs:48</code>) and returns an RFC 9457 ProblemDetails body carrying <strong>all</strong> errors
+          (<code>:50-58</code>, projection at <code>ErrorHttpMapping.cs:112-120</code>). gRPC does the equivalent over the wire
+          (<code>GrpcResultExceptionInterceptor</code>, ADR-007) from a mirrored table (<code>Validation</code>/<code>Invariant</code>/<code>Failure</code>
+          to <code>InvalidArgument</code>, <code>NotFound</code> to <code>NotFound</code>, <code>Conflict</code> to <code>Aborted</code>, <code>Unauthorized</code> to
+          <code>Unauthenticated</code>, <code>Forbidden</code> to <code>PermissionDenied</code>, <code>UnprocessableEntity</code> to <code>FailedPrecondition</code>,
+          <code>Unexpected</code> to <code>Internal</code>: <code>ResultGrpcExtensions.cs:34-46</code>), so callers keep programming against
+          <code>Result&lt;T&gt;</code> across a process boundary.</li>
+          <li><strong>A failure carrying several errors takes the status of the most severe one, never of the first.</strong>
+          <code>Result.Combine</code> aggregates errors in evaluation order (<code>Result.cs:124-145</code>), so a positional rule
+          let an incidental validation failure downgrade a real 403 or 500 to a 400. <code>ErrorHttpMapping</code> ranks
+          the categories instead (<code>ErrorHttpMapping.cs:49-60</code>, rationale at <code>:33-48</code>), most to least severe:
+          <code>Unexpected</code> (500) &gt; <code>Unauthorized</code> (401) &gt; <code>Forbidden</code> (403) &gt; <code>Conflict</code> (409) &gt; <code>NotFound</code> (404) &gt;
+          <code>UnprocessableEntity</code> (422) &gt; <code>Invariant</code> / <code>Validation</code> / <code>Failure</code> (400, one shared rank at
+          <code>:57-59</code>). Ties keep the earliest error (<code>:84-92</code>, strict <code>&gt;</code> at <code>:87</code>), an unmapped category ranks
+          lowest so it can never silently outrank a real 403 or 500 (<code>:101-102</code>), and only the <em>status</em> is
+          ranked: every error still travels in the ProblemDetails <code>errors</code> array (<code>:69-73</code>). The scan is
+          index-based rather than a LINQ <code>MaxBy</code> because it runs on every failure response (<code>:82-83</code>).</li>
           <li>Exceptions are reserved for the genuinely exceptional: programming errors (null-argument guards) and
           infrastructure faults (DB / transaction failures) that should abort the request rather than be
           modeled as a business outcome.</li>
@@ -266,7 +314,13 @@
           <li><strong>Category, not status code, at the core.</strong> <code>ErrorType</code> keeps Domain and Application transport-
           agnostic; only the API (or gRPC interceptor) translates it, so the same handler serves REST and gRPC.</li>
           <li><strong>Composable.</strong> The railway-oriented combinators chain steps without an <code>IsFailure</code> check at every
-          line, and short-circuit on the first failure.</li>
+          line, and short-circuit on the first failure. The implicit conversions are what keep the ceremony
+          proportional: a guard clause returns the <code>Error</code> itself (<code>Result.cs:37-43</code>), so the cheapest thing
+          to write is also the correct one.</li>
+          <li><strong>An aggregate answers with its worst problem.</strong> Ranking the categories makes the status independent
+          of the order invariants happen to be evaluated in, which is the one thing a caller cannot see and
+          the one thing <code>Result.Combine</code> makes arbitrary (<code>ErrorHttpMapping.cs:34-37</code>, restated on the enum
+          itself at <code>ErrorType.cs:5-8</code>).</li>
           <li><strong>Cheap and predictable.</strong> No throw/catch on the common &quot;won&#39;t do it&quot; path.</li>
           <li><strong>One wire contract for both channels.</strong> Whether a request ends in a <code>Result.Failure</code> mapped by
           <code>HandleFailure()</code> or an escaped exception caught by the handler chain, the client receives the same
@@ -279,8 +333,15 @@
           <li>Two error channels coexist (Result for expected, exceptions for exceptional). The boundary is a
           judgment call: &quot;could a well-behaved caller reasonably trigger this?&quot; then return a <code>Result</code>,
           otherwise throw.</li>
-          <li>The <code>ErrorType</code> to HTTP mapping is one-directional and first-error-wins for the <em>status code</em> (all
-          errors still serialize into the ProblemDetails body).</li>
+          <li>The <code>ErrorType</code> to HTTP mapping is one-directional, and one status has to stand for a whole list.
+          Severity ranking removes the ordering dependency but not the collapse: a failure carrying a 403 and
+          a 400 answers 403, and the 400 is visible only to a client that reads the <code>errors</code> array
+          (<code>ErrorHttpMapping.cs:69-73</code>). The three 400-mapped categories share one rank (<code>:57-59</code>), so among
+          them the earliest error still wins.</li>
+          <li><strong>The two transports rank differently.</strong> HTTP picks the most severe error&#39;s status
+          (<code>ApiControllerBase.cs:47-48</code>); the gRPC <code>ToRpcException</code> path still takes the <strong>first</strong> error&#39;s type
+          (<code>ResultGrpcExtensions.cs:110-112</code>), with all errors travelling in the trailers (<code>:118-124</code>), so an
+          aggregate failure can answer with a different category depending on which edge a caller reached.</li>
           <li>The exception-handler registration order is load-bearing. Because ASP.NET Core stops at the first
           handler that reports the exception handled, a mis-ordered registration (for example the catch-all
           <code>GlobalExceptionHandler</code> ahead of a specific handler) would swallow the more precise status;

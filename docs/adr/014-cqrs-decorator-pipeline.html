@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 96 ADRs</summary>
+        <summary>All 97 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -196,6 +196,7 @@
         <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
         <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
         <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
           </ol>
         </nav>
       </details>
@@ -209,7 +210,9 @@
           Authorization decorator was inserted between FeatureGate and Logging, and a Timeout decorator between
           Validating and Transactional, on both the command and the query chain; the order is now pinned by a
           shipped conformance test. The order stated in the Decision below is the pre-2026-08-18 one: read the
-          Revision (2026-08-18) at the end for the current chain).</p>
+          Revision (2026-08-26) at the end for the current chain). Revised 2026-08-26 (a Validating decorator
+          joins the <strong>query</strong> chain, and the registration sequence gains a sealed composition path plus a
+          fitness hook).</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -370,6 +373,72 @@
           command that declares every marker, and two of the seven were inserted between existing neighbours, so
           the &quot;placing it wrong can silently change semantics&quot; warning is no longer hypothetical. The caching
           and transactional placements from the original record are unchanged.</p>
+          <h2 id="revision-2026-08-26">Revision (2026-08-26)</h2>
+          <p><strong>One decorator joins the query chain, and the registration sequence stops being a rule consumers
+          have to remember.</strong> The query line in the Revision (2026-08-18) above is superseded; the shipped
+          execution order (outermost to innermost) is now:</p>
+          <ul>
+          <li><strong>Commands:</strong> FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt;
+          Transactional -&gt; Handler</li>
+          <li><strong>Queries:</strong> FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Handler</li>
+          </ul>
+          <ol>
+          <li><strong>Validation is no longer command-only.</strong> <code>ValidatingQueryDecorator&lt;TQuery, TResult&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingQueryDecorator.cs:33-36</code>)
+          is the twin of the command decorator: the same validator resolution, the first registered
+          <code>IValidator&lt;TQuery&gt;</code> winning (<code>:38</code>), the same aggregation of every failure into one <code>Result</code>
+          failure (<code>:73-82</code>, errors built at <code>:78</code>), and the same pass-through when a query has no validator,
+          so a query type that registers none pays a null check (<code>:67-70</code>, twin note at <code>:12-18</code>). Queries
+          carrying paging, filter or sort input therefore reject a malformed request the way commands do
+          instead of pushing the bad values into the data source (<code>:15-17</code>). The failure is built through the
+          same reflection-built factory as the command side (<code>:61-62</code>), lazily on the first short-circuit
+          rather than in a static initializer, because Scrutor decorates unconditionally and an eager
+          initializer would turn an unsupported <code>TResult</code> into a <code>TypeInitializationException</code> at resolve
+          time for a query that never fails validation (<code>:44-55</code>).</li>
+          <li><strong>Its placement is the interesting part: inside Caching, outside Timeout.</strong> The registration sits
+          between the caching and timeout decorators
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:132</code>, chain diagram at
+          <code>:74-83</code>). Validation sits <strong>inside</strong> caching deliberately, which is the opposite of the command
+          side&#39;s outside-the-transaction placement and follows from what a cache hit means: an entry can only
+          exist because the same query already passed validation when that entry was first produced, so
+          re-validating on a hit spends work to reach a conclusion already reached (<code>:97-101</code>, restated at
+          <code>ValidatingQueryDecorator.cs:24-26</code>). It sits <strong>outside</strong> the timeout for the mirror of the
+          command-side reason, so a caller is not charged a slice of its execution budget for validating its
+          own bad input (<code>ValidatingQueryDecorator.cs:26-28</code>, <code>DependencyInjection.cs:104-107</code>).</li>
+          <li><strong><code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code> is the composition path, and it seals.</strong>
+          (<code>DependencyInjection.cs:375-384</code>.) It runs <code>AddApplication()</code>, then the caller&#39;s handler
+          registrations through a small builder (module scans, a <code>ModuleLoader</code> run, cross-service client
+          registrations that replace a handler&#39;s dependencies:
+          <code>.../MMCA.Common.Application/MmcaApplicationPipelineBuilder.cs</code>, argument contract at
+          <code>DependencyInjection.cs:341-349</code>), then <code>AddApplicationDecorators()</code>, in that order (<code>:379-383</code>,
+          equivalence spelled out at <code>:355-363</code>). Closing the pipeline registers a private marker type on the
+          service collection (<code>:138</code>, marker at <code>:462</code>, <code>:475-476</code>, probe at <code>:464-473</code>), and any later
+          <code>AddApplicationDecorators</code>, <code>ScanModuleApplicationServices</code> or second <code>AddMmcaApplicationPipeline</code>
+          <strong>throws</strong> naming the mistake (<code>:478-487</code>, guards at <code>:117</code>, <code>:175</code>, <code>:377</code>). That converts the one
+          load-bearing ordering rule of this record (decorators last, because <code>TryDecorate</code> only wraps
+          registrations that already exist) from a documented convention whose violation is silent (a handler
+          registered afterwards runs with no feature gate, no authorization, no validation, no timeout and no
+          transaction, and nothing fails at startup to say so: <code>:357-362</code>) into a startup exception.
+          Registrations that are not handlers stay outside the call: their order relative to the decorators
+          does not matter (<code>:364-366</code>).</li>
+          <li><strong><code>VerifyDecoratorPipeline()</code> is the fitness hook.</strong> (<code>DependencyInjection.cs:412-452</code>.) Never
+          called automatically, it asserts that the pipeline was closed at all (<code>:414-419</code>) and that every
+          registered <code>ICommandHandler&lt;,&gt;</code> / <code>IQueryHandler&lt;,&gt;</code> entry is wrapped, throwing with each unwrapped
+          registration named (<code>:439-451</code>, formatting at <code>:490-501</code>). The check is registration-shape only: it
+          reads <code>ServiceDescriptor</code> entries and never builds a provider, so a fitness test does not have to
+          register a double for every decorator dependency (<code>:398-402</code>). What it can see is a consequence of
+          how Scrutor works: decoration rewrites a handler&#39;s descriptor into a factory over a keyed copy of
+          the original, so a surviving implementation type on the effective (last non-keyed) registration is
+          proof nothing wrapped it (<code>:403-410</code>, the effective-descriptor pass at <code>:421-437</code>, the predicate at
+          <code>:439-440</code>). The outermost decorator&#39;s type cannot be read back at all after decoration, since it
+          exists only inside a closure (<code>:409-410</code>), which is why this complements rather than replaces
+          <code>DecoratorPipelineOrderTestsBase</code>: that base resolves the real object graph to assert the <em>order</em>,
+          this one asserts <em>coverage</em> without a provider.</li>
+          </ol>
+          <p>The trade-off list gains nothing new in kind: a command that declares every marker is now seven
+          decorators deep and a query six, and the &quot;registration order is the reverse of execution order&quot;
+          foot-gun is unchanged, but its worst outcome (a handler that quietly runs undecorated) is now a throw
+          rather than a silence.</p>
           <h2 id="related">Related</h2>
           <p>ADR-013 (Result, the short-circuit currency of the pipeline, and the <code>Failure</code> error type the timeout
           decorator reuses because the taxonomy has no timeout member), ADR-003 (handlers raise domain events
@@ -397,6 +466,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-07-19">Revision (2026-07-19)</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
+            <li><a href="#revision-2026-08-26">Revision (2026-08-26)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
