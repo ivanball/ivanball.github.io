@@ -41,9 +41,17 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    stable `.WithErrorCode("<Area>.<Field>.<Rule>")` codes so validation errors localize through the same
    mechanism.
 
-4. **The ProblemDetails `title` is a machine marker and is never localized.** The UI error parser
-   (`ServiceExceptionHelper`) branches on `title` (`"Operation failed"` / `"Domain Exception"` /
-   `"Validation Exception"`); only the human-facing `message`/`detail` is translated.
+4. **Only the human-facing `message` is localized; every machine field crosses the wire verbatim.**
+   `ErrorHttpMapping.BuildErrorsExtension` localizes `Message` by the stable `Code` and leaves
+   `Code`, `Type`, `Source` and `Target` untranslated
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69`,
+   localization at `:65`), and `ProblemDetailsResultReader` reads those machine fields back on the
+   client (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:342-354`).
+   Updated 2026-08-27: the client no longer branches on the ProblemDetails `title` at all. The
+   removed `ServiceExceptionHelper` matched three fixed English title strings, which coupled the
+   client to wording that could never be translated without breaking it; the reader matches the
+   structured `errors` array instead, so the only reason `title` stayed English is gone
+   ([ADR-013](013-result-pattern.md)).
 
 5. **One culture cookie is the single source of truth across SSR + Server + WASM.** UI hosts run
    `UseRequestLocalization([en-US, es])` with a `CookieRequestCultureProvider` so SSR prerender renders in
@@ -116,15 +124,27 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    the shared `Common.Error.Load/Save/Delete` templates no longer append raw `ex.Message` (neither
    localizable nor safe to surface).
 
-   **Carve-out (2026-07-09): a `DomainInvariantViolationException` message IS shown verbatim.**
-   `ErrorMessages.LoadError/SaveError/DeleteError` return that exception's `Message` in place of the
-   generic template, and the new `ErrorMessages.ActionError(ex, localizedFallback)` does the same for
-   pages whose fallback is a whole-sentence snackbar key. This does not weaken the raw-text rule:
-   `ServiceExceptionHelper` mints that exception type exclusively from the API's Problem Details
-   errors, whose text is curated domain wording already localized server-side to the request culture
-   (Decision 3, carried by the Decision 5 `Accept-Language` forwarding), so the user sees the actual
-   business rule ("This action is only available while the event is live.") instead of a generic
-   failure toast. All other exception types keep the generic localized message.
+   **Carve-out (2026-07-09, narrowed 2026-08-27): a server message is shown verbatim, and the
+   channel that carries it is now the `Result`.** The rule the carve-out exists for is unchanged:
+   text the API produced is curated domain wording already localized server-side to the request
+   culture (Decision 3, carried by the Decision 5 `Accept-Language` forwarding), so showing it
+   verbatim gives the user the actual business rule ("This action is only available while the event
+   is live.") instead of a generic failure toast, while raw exception text stays suppressed.
+
+   What changed is where that text arrives. UI HTTP services no longer throw for a server answer,
+   so the wording reaches the page inside a failed `Result` and is rendered by
+   `ResultUiExtensions.LocalizedErrorMessage` / `NotifyOnFailure` / `OnFailureSetError`, or by the
+   shared `ErrorSummary` component, each resolving every message as a resource key **with
+   pass-through** so an already-translated server message renders as-is and a client-side message
+   that happens to be a key gets translated
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:17-23`, the lookup
+   at `:325-334`). `ErrorMessages.LoadError` / `SaveError` / `DeleteError` / `ActionError` keep
+   their `DomainInvariantViolationException` branch
+   (`.../MMCA.Common.UI/Pages/Common/ErrorMessages.cs:58-84`), but its scope is now narrow and the
+   type says so: the helpers remain for the exceptions a page can still raise on its own behalf (a
+   JS-interop failure, a mapping bug, a callback the page supplied), and the exception branch is
+   kept only for consumers that still raise that type from their own code (`:16-23`). All other
+   exception types keep the generic localized message.
 
    `NavItem` gained an optional `TitleResource` type: when set, the
    shared `NavMenu` treats `Title`/`Group` as resource keys resolved per circuit at render time, so

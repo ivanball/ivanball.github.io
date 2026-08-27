@@ -11,6 +11,15 @@ rejection with a named trigger rather than as an omission. The framework half sh
 (`MMCA.Common/CHANGELOG.md`) and both consumer gateways were wired to it in the same wave, so the
 adoption statements below describe what each gateway does today.
 
+**Revised 2026-08-27 (v1.163.0):** the framework now ships a **dedicated gateway package**,
+`MMCA.Common.Gateway`, beside the `MMCA.Common.Aspire` edge kit this record originally described.
+Three things change below: the one-package constraint in the Context is retired, a composition entry
+point (`AddMmcaGateway`) joins the Decision, and the declines gain a companion list of
+**delegations**, behaviors the gateway deliberately leaves to a layer better placed to perform them,
+recorded so an audit reads them as decisions rather than as gaps. Both consumer gateways reference
+the package in package mode (`MMCA.ADC/Directory.Packages.props:106`,
+`MMCA.Store/Directory.Packages.props:14`, both pinned at 1.164.1).
+
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
 three jobs: the route-to-service map, CORS, and forwarding the caller's `Authorization` header. Nothing
@@ -50,14 +59,26 @@ Gateway's readiness endpoint reported only that the Gateway process was up. Azur
 routed to it and it forwarded to services that were not answering, converting a downstream outage into
 a wall of 502s from a replica the platform believed was ready.
 
-One packaging constraint shapes where the fix can live. A YARP host references `MMCA.Common.Aspire` and
-nothing else in the framework: it has no controllers, so it does not take `MMCA.Common.API`, where
-`CorrelationIdMiddleware` and `AddCommonRateLimiting` live. Anything the edge owns has to be reachable
-from the Aspire package alone.
+One packaging constraint shapes where the fix can live. A YARP host has no controllers, so it does not
+take `MMCA.Common.API`, where `CorrelationIdMiddleware` and `AddCommonRateLimiting` live. At the time
+of writing it referenced `MMCA.Common.Aspire` and nothing else in the framework, so anything the edge
+owned had to be reachable from the Aspire package alone.
+
+**That constraint is retired (2026-08-27).** A gateway host now takes two framework packages,
+`MMCA.Common.Aspire` for the host-level kit above and `MMCA.Common.Gateway` for the YARP-level
+composition below (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/MMCA.ADC.Gateway.csproj:3-4`,
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:26-27`). The split is along a
+real boundary rather than a packaging convenience: the Aspire kit registers **host** middleware and
+health checks that any ASP.NET Core process could use, while the Gateway package registers YARP's own
+extension points (config filters, transforms, per-route limiter policies) and therefore has to
+reference YARP, which a service host has no reason to carry.
 
 ## Decision
 Ship a **gateway edge kit** in a `Gateway` namespace inside `MMCA.Common.Aspire`, owning exactly three
-responsibilities, and record three more as deliberately declined.
+responsibilities, and record three more as deliberately declined. A fourth section, added 2026-08-27
+with the `MMCA.Common.Gateway` package, records what the edge **delegates**: behaviors it does not
+perform because another layer already performs them better, which is a different statement from
+declining to own a behavior nobody performs.
 
 ### What the edge owns
 
@@ -144,6 +165,28 @@ a perfectly healthy Gateway and makes the outage worse. `/alive` answers "is thi
 else. That is [ADR-025](025-startup-warmup-readiness.md)'s split, applied to a dependency rather than
 to a startup task.
 
+**4. One call composes the YARP-level extension points (2026-08-27).** `AddMmcaGateway` has two
+overloads on `IReverseProxyBuilder`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:47` taking
+`IConfiguration`, `:68` taking a `GatewaySettings` instance), and both funnel into one `Wire` method
+(`:86`) that registers, in order: the named per-route rate-limiter policies (`:88`), the cluster
+profile config filter that owns each cluster's `HttpRequest` version policy (`:91`), the health-check
+defaults filter (`:92`), and the trace-header transform (`:93`). Filter order carries no meaning and
+the type says so: the two filters own disjoint parts of a cluster and neither reads what the other
+wrote (`:37-41`). Settings bind from the `"MmcaGateway"` section (`GatewaySettings.cs:15`) through
+`ValidateDataAnnotations().ValidateOnStart()` (`GatewayReverseProxyExtensions.cs:54-57`), the same
+ADR-070 contract the rate-limit settings honor, and the per-route policies are additionally validated
+at registration with `Validator.ValidateObject`
+(`RateLimiting/GatewayRoutePolicyExtensions.cs:51`, reasoning at `:33-36`), for the same
+closed-over-copy reason recorded below.
+
+**It registers services and maps nothing, and it does not load the route table.** The host still
+calls `MapReverseProxy()` and `UseRateLimiter()` itself (`GatewayReverseProxyExtensions.cs:42-45`),
+and `LoadFromConfig` stays the host's call because which section owns the routes, and whether they
+come from configuration at all, is a host decision (`:15-20`). That keeps
+[ADR-089](089-gateway-topology-owned-by-configuration.md)'s "the route table is the consumer's data"
+intact: this package supplies behavior around the table, never the table.
+
 ### What the edge declines
 
 **Edge JWT pre-validation is deferred, and the deferral is the decision.** The obvious next move is to
@@ -168,9 +211,98 @@ partly retired there with its Redis option. It is accepted here rather than solv
 exists to bound a flood, not to meter a quota, and an approximate ceiling that needs no network call
 and cannot fail is the right shape for the one process the whole fleet sits behind.
 
-**The kit adds no authorization, no request rewriting and no response shaping.** Everything that
+**The kit adds no authorization, no path or body rewriting and no response shaping.** Everything that
 depends on knowing who the caller is or what the payload means stays behind the proxy, which is what
 keeps the Gateway a transport concern and keeps ADR-008's extraction reversible.
+
+**Narrowed 2026-08-27.** This originally read "no request rewriting", and the Gateway package now
+adds exactly one request transform: `GatewayTraceHeaderTransformProvider` removes and re-adds
+`X-MMCA-Route` and `X-MMCA-Cluster` on every proxied request
+(`.../MMCA.Common.Gateway/Transforms/GatewayTraceHeaderTransformProvider.cs:60-71`, header names
+defaulted at `GatewaySettings.cs:193`, `:196`). The exception is deliberate and narrow: it stamps
+**which route and cluster YARP selected**, a fact only the proxy knows and one a downstream cannot
+reconstruct, which is the same argument that made correlation an edge responsibility. It reads
+nothing from the request and changes nothing a downstream parses. The decline that stands is the one
+that matters: no path rewriting, no body rewriting, no response shaping, and nothing that depends on
+the payload's meaning. ADR-089 anticipated this exact tension and left it open
+(`089-gateway-topology-owned-by-configuration.md`, the "nothing prevents one from appearing" residual
+in its Trade-offs); this is the answer, and the answer is one transform with a stated reason rather
+than an open door.
+
+### What the edge delegates (2026-08-27)
+
+Three behaviors a reader expects to find in a reverse proxy are absent on purpose, because a layer
+better placed to perform them already does. They are recorded here so an inventory of the gateway
+reads them as decisions rather than as omissions.
+
+**Bearer validation is delegated to the backends; the gateway forwards.** This is the same decision
+as the JWT decline above, stated from the delegation side, and the `MMCA.Common.Gateway` package
+does not revisit it: nothing in it calls `AddAuthentication`, `AddJwtBearer`, `AddAuthorization` or
+`RequireAuthorization`, and neither consumer gateway host does either
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs`,
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs`). The `Authorization` header travels on
+YARP's default request-header copy rather than through a transform of its own: the one transform the
+package installs touches two headers and no others
+(`Transforms/GatewayTraceHeaderTransformProvider.cs:60-71`), and neither gateway's
+`appsettings.json` declares a `Transforms` block. Store states the posture in the host itself
+(`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:12-13`, "services validate JWTs themselves;
+the gateway just forwards the Authorization header transparently") and again in its project file
+(`MMCA.Store.Gateway.csproj:6-7`, "no JWT middleware"). The backends validate through JWKS discovery
+against the authority (`AddForwardedJwtBearer`,
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:445`,
+the single `AddJwtBearer` at `:475-476`, `Authority` at `:478`), served by `MapJwksEndpoint`
+(`.../MMCA.Common.API/Startup/JwksEndpointExtensions.cs:20`). Adding validation at the edge would
+give the gateway issuer and key-discovery configuration it does not have, which is the coupling the
+decline above rejects: an Identity outage would become a Gateway outage.
+
+**Load balancing is delegated to Azure Container Apps ingress.** No `LoadBalancingPolicy` appears
+anywhere in the framework, in either consumer gateway's configuration, or in either repository's
+bicep. It is not needed, because **every cluster fronts exactly one destination**: an Aspire
+service-discovery name (`http://identity`, `http://conference`) that ACA ingress resolves and
+balances across the replicas behind it. ADC declares five clusters with one destination each
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:163-166`, `:172-175`, `:181-184`,
+`:190-193`, `:195-198`) and Store three (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:84-92`,
+`:93-101`, `:102-106`), resolved through `AddServiceDiscoveryDestinationResolver`
+(ADC `Program.cs:108`, Store `Program.cs:127`) against the bicep address book
+(`MMCA.ADC/infra/main.bicep:1718-1721`). The shape is not incidental: both repositories **pin it as
+an invariant**, asserting that each cluster contains a single destination
+(`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:229-231`,
+`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:270-272`). A second destination in
+a cluster would be the gateway balancing across replicas the platform is already balancing across,
+with two schedulers holding different opinions about which instance is healthy.
+
+**Proxy-hop retries are delegated to client-side resilience.** The gateway retries nothing: no retry
+configuration, no Polly pipeline and no `IForwarderHttpClientFactory` appears in the package or in
+either host. Retries live in the client the user is waiting on, where
+`EntityServiceBase` runs a Polly exponential-backoff-with-jitter policy
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:15-16`, executed at
+`:229` and `:255`), while the server-to-server budget is deliberately one attempt
+(`.../MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:28`, the up-to-16x storm argument at
+`:21-27`). The decisive reason is [ADR-017](017-request-idempotency.md): the `Idempotency-Key` is
+minted client-side and held constant across that client's own attempts, and it appears nowhere in
+the gateway package or either gateway host. A proxy-hop retry would therefore be a replay with
+nothing attached to make it safe, on a write the proxy cannot inspect to know whether replaying it
+is harmless. Retrying where the key is is the only version that is correct.
+
+**Active destination probing is available and off by default, and both consumers turn it on.** The
+package can apply YARP health-check defaults to any cluster that declares none
+(`Configuration/GatewayHealthCheckDefaultsConfigFilter.cs`, additive-only: an existing block is kept
+verbatim, `:30-31`, class doc at `:9-14`). **Passive** checking is the default that is on
+(`GatewaySettings.cs:147`, `TransportFailureRate` at `:151`, 60 second reactivation at `:154`),
+because YARP watches the forwarded responses it is already making, so it costs no extra traffic
+(`:141-143`). **Active** probing is opt-in (`Enabled` defaults to `false`, `:165`, reasoning at
+`:157-161`: an extra probe per destination per interval is real traffic and real cost, and passive
+checks already eject a destination failing the requests the gateway cares about); when enabled it
+probes `/alive` (`:182-183`) on the `ConsecutiveFailures` policy (`:168-169`) every 10 seconds
+(`:172`) under a 5 second budget (`:175`). `/alive` rather than `/health` is its own decision:
+readiness on a downstream flips during that downstream's rolling deployment, and ejecting a
+destination for that is the gateway reacting to a healthy deployment as if it were an outage
+(`:177-181`). Both consumers enable it at a 30 second interval
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:35-40`,
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:24-29`) and both pin the effective
+result (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:229`,
+`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/MmcaGatewayTests.cs:121-142`), so the default is
+off and the deployed answer is on.
 
 ## Rationale
 - **The edge is the only place that sees a request exactly once.** That is what makes ensure-at-the-edge
@@ -220,6 +352,27 @@ keeps the Gateway a transport concern and keeps ADR-008's extraction reversible.
   the API type are separate, in separate packages, each declaring the literal. A rename in one is a
   silent break, the same duplicated-literal cost ADR-041 already records for the meter names in this
   same Aspire package.
+- **Two different `/alive` probes now exist, and they answer different questions.** The Aspire kit's
+  `AddGatewayDownstreamHealthChecks` probes `/alive` under a 2 second budget and feeds the
+  **Gateway's own readiness**, so a downstream outage takes the Gateway out of ACA's rotation. The
+  Gateway package's active health check probes the same path under a 5 second default and feeds
+  **YARP destination ejection**, so a failing destination stops receiving forwards. Same path, same
+  word "health", different mechanism and different consequence, and a reader who conflates them will
+  misdiagnose the next incident. They are also tuned differently on purpose: the readiness probe is
+  the tighter budget because it gates traffic to the whole process.
+- **`AddMmcaGateway`'s configuration overload closes over an eagerly-bound copy too**
+  (`GatewayReverseProxyExtensions.cs:59`), so the per-route limiter policies never see an
+  `IOptionsMonitor` reload, exactly as the Aspire kit's limiter does not. The two halves of the
+  package differ here, which is worth knowing: the config filters resolve `IOptions<GatewaySettings>`
+  per construction (`Configuration/GatewayClusterProfileConfigFilter.cs:29`,
+  `Configuration/GatewayHealthCheckDefaultsConfigFilter.cs:19`), so a settings change reaches them at
+  the next configuration reload while a limit change is still a restart.
+- **The delegations are correct today because of facts nothing enforces framework-side.** Load
+  balancing is safely delegated only while each cluster has one destination, and proxy-hop retries
+  are safely absent only while the idempotency key is minted client-side. Both consumers pin the
+  first with a test; nothing pins the second beyond the fact that no gateway code mints a key. A
+  future gateway that added a second destination to a cluster, or a retry, would invalidate a
+  recorded decision without failing a build.
 - **Nothing gates adoption.** A gateway that never calls the three registrations behaves exactly as
   before, and no fitness function names a gateway host. Both consumer gateways do call all three
   today (ADC `Program.cs:65`, `:71`, `:112`; Store `Program.cs:74`, `:79`, `:136`), but that is a

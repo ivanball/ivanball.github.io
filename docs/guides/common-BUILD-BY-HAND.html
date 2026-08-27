@@ -920,12 +920,21 @@ app.UseCommonMiddlewarePipeline();
           logic and no DbContext: it calls the API through a typed <code>SupportApiClient</code> registered with
           <code>AddHttpClient&lt;SupportApiClient&gt;(...)</code>, whose base address (<code>https+http://web</code>, from config) is
           resolved by the service-discovery handler that <code>AddServiceDefaults()</code> installs. Because Blazor Server
-          runs the calls <strong>server-side</strong>, there is no browser CORS and no token to forward. On a failed response
-          the client calls <code>ServiceExceptionHelper.ThrowIfDomainExceptionAsync</code> to surface the RFC 9457
-          ProblemDetails message (e.g. &quot;Comments cannot be added to a closed order.&quot;) before the generic
-          <code>EnsureSuccessStatusCode</code> fallback: the same pattern <code>MMCA.Common.UI</code>&#39;s <code>EntityServiceBase</code> uses, so
-          pages show a meaningful error. <code>Program.cs</code> is the standard Razor-components host plus
-          <code>AddServiceDefaults()</code> / <code>MapDefaultEndpoints()</code>.</p>
+          runs the calls <strong>server-side</strong>, there is no browser CORS and no token to forward.</p>
+          <p><strong>The client returns <code>Result</code> and throws nothing for a server answer.</strong> Every method wraps its call
+          in <code>HttpResultExecutor.ExecuteAsync</code> (<code>MMCA.Common.UI.Services</code>) and hands the response to
+          <code>ProblemDetailsResultReader.ReadAsync</code> (<code>MMCA.Common.Shared.Http</code>): a 2xx is a success, and anything
+          else is parsed back out of the RFC 9457 body into the errors the server described, with the original
+          <code>ErrorType</code> preserved, so the page can show &quot;Comments cannot be added to a closed order.&quot; and can
+          tell a 404 apart from a 403 without reading message text. The executor covers the other half, the
+          calls that never got a response at all (connection, DNS, socket, client timeout), turning them into
+          failures coded <code>Http.TransportFailure</code> and <code>Http.Timeout</code> rather than exceptions; the caller&#39;s own
+          cancellation still propagates. This is the same pattern <code>MMCA.Common.UI</code>&#39;s <code>EntityServiceBase</code> uses.</p>
+          <p>Neither type is registered: both are static classes, so the client needs only the <code>using</code> directives
+          (<code>MMCA.Common.Shared.Abstractions</code>, <code>MMCA.Common.Shared.Http</code>, <code>MMCA.Common.UI.Services</code>) and the
+          pages need <code>@using MMCA.Common.UI.Common</code> in <code>_Imports.razor</code> for the <code>TryGetValue</code> /
+          <code>LocalizedErrorMessage</code> helpers they branch with. <code>Program.cs</code> is the standard Razor-components host
+          plus <code>AddServiceDefaults()</code> / <code>MapDefaultEndpoints()</code>.</p>
           <p>Two wiring details in the layout are easy to miss because nothing fails loudly without them:</p>
           <ul>
           <li><strong><code>&lt;MmcaThemeProviders /&gt;</code> owns the Mud providers.</strong> Drop that one framework component at the top of
