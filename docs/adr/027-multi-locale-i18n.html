@@ -242,9 +242,17 @@
           stable <code>.WithErrorCode(&quot;&lt;Area&gt;.&lt;Field&gt;.&lt;Rule&gt;&quot;)</code> codes so validation errors localize through the same
           mechanism.</p>
           </li>
-          <li><p><strong>The ProblemDetails <code>title</code> is a machine marker and is never localized.</strong> The UI error parser
-          (<code>ServiceExceptionHelper</code>) branches on <code>title</code> (<code>&quot;Operation failed&quot;</code> / <code>&quot;Domain Exception&quot;</code> /
-          <code>&quot;Validation Exception&quot;</code>); only the human-facing <code>message</code>/<code>detail</code> is translated.</p>
+          <li><p><strong>Only the human-facing <code>message</code> is localized; every machine field crosses the wire verbatim.</strong>
+          <code>ErrorHttpMapping.BuildErrorsExtension</code> localizes <code>Message</code> by the stable <code>Code</code> and leaves
+          <code>Code</code>, <code>Type</code>, <code>Source</code> and <code>Target</code> untranslated
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69</code>,
+          localization at <code>:65</code>), and <code>ProblemDetailsResultReader</code> reads those machine fields back on the
+          client (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:342-354</code>).
+          Updated 2026-08-27: the client no longer branches on the ProblemDetails <code>title</code> at all. The
+          removed <code>ServiceExceptionHelper</code> matched three fixed English title strings, which coupled the
+          client to wording that could never be translated without breaking it; the reader matches the
+          structured <code>errors</code> array instead, so the only reason <code>title</code> stayed English is gone
+          (<a href="013-result-pattern.html">ADR-013</a>).</p>
           </li>
           <li><p><strong>One culture cookie is the single source of truth across SSR + Server + WASM.</strong> UI hosts run
           <code>UseRequestLocalization([en-US, es])</code> with a <code>CookieRequestCultureProvider</code> so SSR prerender renders in
@@ -313,15 +321,26 @@
           <code>[Obsolete]</code> because fragment composition cannot translate (Spanish gender agreement breaks), and
           the shared <code>Common.Error.Load/Save/Delete</code> templates no longer append raw <code>ex.Message</code> (neither
           localizable nor safe to surface).</p>
-          <p><strong>Carve-out (2026-07-09): a <code>DomainInvariantViolationException</code> message IS shown verbatim.</strong>
-          <code>ErrorMessages.LoadError/SaveError/DeleteError</code> return that exception&#39;s <code>Message</code> in place of the
-          generic template, and the new <code>ErrorMessages.ActionError(ex, localizedFallback)</code> does the same for
-          pages whose fallback is a whole-sentence snackbar key. This does not weaken the raw-text rule:
-          <code>ServiceExceptionHelper</code> mints that exception type exclusively from the API&#39;s Problem Details
-          errors, whose text is curated domain wording already localized server-side to the request culture
-          (Decision 3, carried by the Decision 5 <code>Accept-Language</code> forwarding), so the user sees the actual
-          business rule (&quot;This action is only available while the event is live.&quot;) instead of a generic
-          failure toast. All other exception types keep the generic localized message.</p>
+          <p><strong>Carve-out (2026-07-09, narrowed 2026-08-27): a server message is shown verbatim, and the
+          channel that carries it is now the <code>Result</code>.</strong> The rule the carve-out exists for is unchanged:
+          text the API produced is curated domain wording already localized server-side to the request
+          culture (Decision 3, carried by the Decision 5 <code>Accept-Language</code> forwarding), so showing it
+          verbatim gives the user the actual business rule (&quot;This action is only available while the event
+          is live.&quot;) instead of a generic failure toast, while raw exception text stays suppressed.</p>
+          <p>What changed is where that text arrives. UI HTTP services no longer throw for a server answer,
+          so the wording reaches the page inside a failed <code>Result</code> and is rendered by
+          <code>ResultUiExtensions.LocalizedErrorMessage</code> / <code>NotifyOnFailure</code> / <code>OnFailureSetError</code>, or by the
+          shared <code>ErrorSummary</code> component, each resolving every message as a resource key <strong>with
+          pass-through</strong> so an already-translated server message renders as-is and a client-side message
+          that happens to be a key gets translated
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:17-23</code>, the lookup
+          at <code>:325-334</code>). <code>ErrorMessages.LoadError</code> / <code>SaveError</code> / <code>DeleteError</code> / <code>ActionError</code> keep
+          their <code>DomainInvariantViolationException</code> branch
+          (<code>.../MMCA.Common.UI/Pages/Common/ErrorMessages.cs:58-84</code>), but its scope is now narrow and the
+          type says so: the helpers remain for the exceptions a page can still raise on its own behalf (a
+          JS-interop failure, a mapping bug, a callback the page supplied), and the exception branch is
+          kept only for consumers that still raise that type from their own code (<code>:16-23</code>). All other
+          exception types keep the generic localized message.</p>
           <p><code>NavItem</code> gained an optional <code>TitleResource</code> type: when set, the
           shared <code>NavMenu</code> treats <code>Title</code>/<code>Group</code> as resource keys resolved per circuit at render time, so
           module nav menus follow the active culture. MudBlazor&#39;s own component chrome localizes through

@@ -351,33 +351,88 @@ The command returns plain `Result`, so success maps to `204 No Content`; a comma
 refreshed DTO maps to `Ok(result.Value)` the way `ChangeStatusAsync` does.
 
 **A method on the typed client** (`SupportApiClient` in the UI host), which runs server-side and
-reaches the API through Aspire service discovery, so there is no CORS and no token:
+reaches the API through Aspire service discovery, so there is no CORS and no token. The client
+**returns a `Result` and throws nothing for a server answer**, so the method signature says it can
+fail:
 
 ```csharp
-public async Task TransferOrderAsync(int id, int requesterUserId, CancellationToken cancellationToken = default)
-{
-    using var response = await httpClient
-        .PutAsJsonAsync(string.Create(CultureInfo.InvariantCulture, $"/Orders/{id}/transfer"), new { RequesterUserId = requesterUserId }, cancellationToken)
-        .ConfigureAwait(false);
-    await ServiceExceptionHelper.ThrowIfDomainExceptionAsync(response, cancellationToken).ConfigureAwait(false);
-    response.EnsureSuccessStatusCode();
-}
+public Task<Result> TransferOrderAsync(int id, int requesterUserId, CancellationToken cancellationToken = default) =>
+    HttpResultExecutor.ExecuteAsync(
+        async () =>
+        {
+            using var response = await httpClient
+                .PutAsJsonAsync(string.Create(CultureInfo.InvariantCulture, $"/Orders/{id}/transfer"), new { RequesterUserId = requesterUserId }, cancellationToken)
+                .ConfigureAwait(false);
+
+            return await ProblemDetailsResultReader.ReadAsync(response, cancellationToken).ConfigureAwait(false);
+        },
+        cancellationToken);
 ```
 
-`ThrowIfDomainExceptionAsync` is the half that matters: it reads the ProblemDetails body so the page
-surfaces the domain message instead of a bare 400.
+The two halves are what make the signature honest.
+`ProblemDetailsResultReader` (`MMCA.Common.Shared.Http`) converts the **response**: a 2xx is a
+success, and anything else is parsed back out of the RFC 9457 body into the errors the server
+described, with the original `ErrorType` preserved. `HttpResultExecutor` (`MMCA.Common.UI.Services`)
+converts the **absence of a response**: a refused connection, a DNS failure, a dropped socket or a
+client timeout becomes a failure coded `Http.TransportFailure` or `Http.Timeout` instead of an
+exception. Your own cancellation still propagates, so a disposed component is never reported back
+as an error to render.
+
+A method that returns a value reads the same way, with the generic overload:
+
+```csharp
+public Task<Result<OrderDTO>> GetOrderAsync(int id, CancellationToken cancellationToken = default) =>
+    HttpResultExecutor.ExecuteAsync(
+        async () =>
+        {
+            using var response = await httpClient
+                .GetAsync(new Uri(string.Create(CultureInfo.InvariantCulture, $"Orders/{id}"), UriKind.Relative), cancellationToken)
+                .ConfigureAwait(false);
+
+            return await ProblemDetailsResultReader.ReadAsync<OrderDTO>(response, cancellationToken: cancellationToken).ConfigureAwait(false);
+        },
+        cancellationToken);
+```
+
+Neither type needs registering: both are static, so the client just needs
+`using MMCA.Common.Shared.Abstractions;` (for `Result`), `using MMCA.Common.Shared.Http;` and
+`using MMCA.Common.UI.Services;`. The host still registers only
+`AddHttpClient<SupportApiClient>(...)`.
 
 **The page plus its resource pair.** Add a panel to `OrderDetail.razor` shaped like the Status one (a
 `MudNumericField` for the new requester id and a button), with a `@code` handler shaped like
-`ChangeStatusAsync`: call `Api.TransferOrderAsync(Id, _transferRequesterUserId)`, `Snackbar` the
-outcome, reload. Every new `L[...]` key needs an entry in **both** `OrderDetail.resx` and
-`OrderDetail.es.resx`; a key missing from one language renders as the raw key name, not a fallback.
+`ChangeStatusAsync`. Because the client returns a `Result`, the handler **branches instead of
+catching**:
+
+```csharp
+var result = await Api.TransferOrderAsync(Id, _transferRequesterUserId);
+if (result.IsSuccess)
+{
+    Snackbar.Add(L["Snackbar.Transferred"], Severity.Success);
+    await LoadAsync();
+}
+else
+{
+    Snackbar.Add(L["Snackbar.TransferFailed", result.LocalizedErrorMessage(L) ?? string.Empty], Severity.Error);
+}
+```
+
+`LocalizedErrorMessage` comes from `ResultUiExtensions` (`@using MMCA.Common.UI.Common` in
+`_Imports.razor`); it composes the failure's distinct messages, most severe first, resolving each as
+a resource key with pass-through, so a message the API already translated renders as-is. For a
+result that carries a value, `result.TryGetValue(out var dto)` unwraps it inside the same
+conditional. A form that wants an inline block rather than a snackbar can drop the shared
+`<ErrorSummary Result="_result" Localizer="L" />` component into its markup instead, which renders
+nothing when there is nothing to say.
+
+Every new `L[...]` key needs an entry in **both** `OrderDetail.resx` and `OrderDetail.es.resx`; a
+key missing from one language renders as the raw key name, not a fallback.
 
 Two conventions pay off here without extra work. The command's `ICacheInvalidating` prefix means the
 page's reload after a transfer reads fresh data, not a stale cache entry. And transferring a closed
 order exercises the whole error pipeline end to end: the invariant fails, `HandleFailure` maps it to
-RFC 9457 ProblemDetails, `ThrowIfDomainExceptionAsync` extracts it, and the snackbar shows "A closed
-order cannot be transferred to another requester."
+RFC 9457 ProblemDetails, `ProblemDetailsResultReader` reads it back into a failed `Result` with its
+category intact, and the snackbar shows "A closed order cannot be transferred to another requester."
 
 ---
 

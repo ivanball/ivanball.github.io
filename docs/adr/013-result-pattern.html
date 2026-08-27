@@ -207,7 +207,11 @@
           <h2 id="status">Status</h2>
           <p>Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented).
           Revised 2026-08-26 (<code>ErrorType.Unexpected</code>, severity-ranked status selection for aggregated
-          failures, and the full combinator surface).</p>
+          failures, and the full combinator surface).
+          Revised 2026-08-27 (v1.164.0): the <strong>UI layer deviation is retired</strong>. <code>MMCA.Common.UI</code> services
+          return <code>Result</code> end to end instead of throwing, the severity ranking is hoisted into
+          <code>MMCA.Common.Shared</code> so the HTTP and gRPC edges classify one aggregate identically, and the round
+          trip back into <code>Result</code> is a shipped reader rather than a per-service convention.</p>
           <h2 id="context">Context</h2>
           <p>Operations at every layer fail in <em>expected</em> ways: input is invalid, a domain invariant is broken, a
           requested entity is missing, a uniqueness conflict occurs, the caller lacks permission. There are two
@@ -220,9 +224,10 @@
           <p>Model expected failures as values using <code>Result</code> / <code>Result&lt;T&gt;</code> (<code>MMCA.Common.Shared.Abstractions</code>),
           not exceptions.</p>
           <ul>
-          <li>A <code>Result</code> is either success or failure; a failure carries one or more <code>Error</code> records (<code>Code</code>,
-          <code>Message</code>, <code>Type</code> of type <code>ErrorType</code>, optional <code>Source</code> / <code>Target</code>).</li>
-          <li><code>ErrorType</code> is a <strong>transport-agnostic</strong> category: <code>Validation</code>, <code>Invariant</code>, <code>NotFound</code>, <code>Conflict</code>,
+          <li><p>A <code>Result</code> is either success or failure; a failure carries one or more <code>Error</code> records (<code>Code</code>,
+          <code>Message</code>, <code>Type</code> of type <code>ErrorType</code>, optional <code>Source</code> / <code>Target</code>).</p>
+          </li>
+          <li><p><code>ErrorType</code> is a <strong>transport-agnostic</strong> category: <code>Validation</code>, <code>Invariant</code>, <code>NotFound</code>, <code>Conflict</code>,
           <code>Unauthorized</code>, <code>Forbidden</code>, <code>UnprocessableEntity</code>, <code>Failure</code>, <code>Unexpected</code>. The domain never names
           an HTTP status. <code>Unexpected</code> is the one category reserved for a genuine server-side fault (the
           request was well formed and permitted, the server could not complete it,
@@ -230,9 +235,11 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:30</code>) and to gRPC
           <code>Internal</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:45</code>), and it
           is explicitly not for business-rule violations, which is what keeps the other eight categories
-          caller-fixable (<code>ErrorType.cs:38-39</code>, factory at <code>.../Shared/Abstractions/Error.cs:114-115</code>).</li>
-          <li>Domain factory methods and mutators return <code>Result&lt;T&gt;</code>; application command/query handlers thread
-          results through combinators instead of <code>try</code>/<code>catch</code>. The surface is:<ul>
+          caller-fixable (<code>ErrorType.cs:38-39</code>, factory at <code>.../Shared/Abstractions/Error.cs:114-115</code>).</p>
+          </li>
+          <li><p>Domain factory methods and mutators return <code>Result&lt;T&gt;</code>; application command/query handlers thread
+          results through combinators instead of <code>try</code>/<code>catch</code>. The surface is:</p>
+          <ul>
           <li><strong>Lifting without naming a factory.</strong> An <code>Error</code> converts implicitly to a failed <code>Result</code>
           (<code>.../Shared/Abstractions/Result.cs:43</code>) or <code>Result&lt;T&gt;</code> (<code>:233-237</code>), and a value converts
           implicitly to a successful <code>Result&lt;T&gt;</code> (<code>:249</code>), so a guard clause writes <code>return someError;</code> and
@@ -255,7 +262,7 @@
           (<code>Result.cs:279</code>, <code>:292</code>, <code>:305</code>, <code>:339-342</code>).</li>
           </ul>
           </li>
-          <li>The transport mapping lives only at the edge. <code>ApiControllerBase.HandleFailure()</code>
+          <li><p>The transport mapping lives only at the edge. <code>ApiControllerBase.HandleFailure()</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35-60</code>) maps an
           <code>ErrorType</code> to an HTTP status through a <code>FrozenDictionary</code> (<code>ErrorHttpMapping.cs:20-31</code>, resolved at
           <code>ApiControllerBase.cs:48</code>) and returns an RFC 9457 ProblemDetails body carrying <strong>all</strong> errors
@@ -264,28 +271,44 @@
           to <code>InvalidArgument</code>, <code>NotFound</code> to <code>NotFound</code>, <code>Conflict</code> to <code>Aborted</code>, <code>Unauthorized</code> to
           <code>Unauthenticated</code>, <code>Forbidden</code> to <code>PermissionDenied</code>, <code>UnprocessableEntity</code> to <code>FailedPrecondition</code>,
           <code>Unexpected</code> to <code>Internal</code>: <code>ResultGrpcExtensions.cs:34-46</code>), so callers keep programming against
-          <code>Result&lt;T&gt;</code> across a process boundary.</li>
-          <li><strong>A failure carrying several errors takes the status of the most severe one, never of the first.</strong>
-          <code>Result.Combine</code> aggregates errors in evaluation order (<code>Result.cs:124-145</code>), so a positional rule
-          let an incidental validation failure downgrade a real 403 or 500 to a 400. <code>ErrorHttpMapping</code> ranks
-          the categories instead (<code>ErrorHttpMapping.cs:49-60</code>, rationale at <code>:33-48</code>), most to least severe:
-          <code>Unexpected</code> (500) &gt; <code>Unauthorized</code> (401) &gt; <code>Forbidden</code> (403) &gt; <code>Conflict</code> (409) &gt; <code>NotFound</code> (404) &gt;
-          <code>UnprocessableEntity</code> (422) &gt; <code>Invariant</code> / <code>Validation</code> / <code>Failure</code> (400, one shared rank at
-          <code>:57-59</code>). Ties keep the earliest error (<code>:84-92</code>, strict <code>&gt;</code> at <code>:87</code>), an unmapped category ranks
-          lowest so it can never silently outrank a real 403 or 500 (<code>:101-102</code>), and only the <em>status</em> is
-          ranked: every error still travels in the ProblemDetails <code>errors</code> array (<code>:69-73</code>). The scan is
-          index-based rather than a LINQ <code>MaxBy</code> because it runs on every failure response (<code>:82-83</code>).</li>
-          <li>Exceptions are reserved for the genuinely exceptional: programming errors (null-argument guards) and
+          <code>Result&lt;T&gt;</code> across a process boundary.</p>
+          </li>
+          <li><p><strong>A failure carrying several errors takes the status of the most severe one, never of the first,
+          and both edges rank it the same way.</strong> <code>Result.Combine</code> aggregates errors in evaluation order
+          (<code>Result.cs:124-145</code>), so a positional rule let an incidental validation failure downgrade a real
+          403 or 500 to a 400. The ranking is one table in the Shared layer,
+          <code>ErrorTypeSeverity</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:30</code>),
+          most to least severe: <code>Unexpected</code> (70) &gt; <code>Unauthorized</code> (60) &gt; <code>Forbidden</code> (50) &gt; <code>Conflict</code> (40) &gt;
+          <code>NotFound</code> (30) &gt; <code>UnprocessableEntity</code> (20) &gt; <code>Invariant</code> / <code>Validation</code> / <code>Failure</code> (one shared
+          rank of 10, <code>:39-47</code>), with the reasoning for each rank written onto the type itself (<code>:16-25</code>).
+          <code>MostSevere</code> keeps the earliest error on a tie (<code>:69-96</code>, strict <code>&gt;</code> at <code>:88</code>) and an unmapped
+          category ranks lowest, so a category added to <code>ErrorType</code> without a rank can never silently
+          outrank a real 403 or 500 (<code>:57</code>, stated at <code>:50-53</code>). The scan is index-based rather than a LINQ
+          <code>MaxBy</code> because it runs on every failure response (<code>:83-84</code>).</p>
+          <p><strong>It lives in Shared rather than in one presentation package because two edges consume it.</strong> HTTP
+          resolves the status from <code>ErrorTypeSeverity.MostSevere</code>
+          (<code>.../MMCA.Common.API/Middleware/ErrorHttpMapping.cs:50-51</code>, called from
+          <code>ApiControllerBase.HandleFailure</code> at <code>ApiControllerBase.cs:48</code>) and gRPC&#39;s <code>ToRpcException</code> does
+          the same (<code>.../MMCA.Common.Grpc/ResultGrpcExtensions.cs:115-116</code>, argued at <code>:100-107</code>). Only the
+          <em>status</em> is ranked: every error still travels in the ProblemDetails <code>errors</code> array
+          (<code>ErrorHttpMapping.cs:61-69</code>) and in the gRPC trailers as <code>error-{i}-code</code> / <code>-message</code> / <code>-type</code>
+          (<code>ResultGrpcExtensions.cs:127-129</code>). Ranking in one place is what makes the two transports agree;
+          the previous arrangement, with the table inside <code>MMCA.Common.API</code>, left gRPC classifying an
+          aggregate by its first error while HTTP classified it by its worst.</p>
+          </li>
+          <li><p>Exceptions are reserved for the genuinely exceptional: programming errors (null-argument guards) and
           infrastructure faults (DB / transaction failures) that should abort the request rather than be
-          modeled as a business outcome.</li>
-          <li>When an exception does escape to the HTTP edge, the API layer converges it onto the same RFC 9457
+          modeled as a business outcome.</p>
+          </li>
+          <li><p>When an exception does escape to the HTTP edge, the API layer converges it onto the same RFC 9457
           ProblemDetails shape via an ordered <code>IExceptionHandler</code> chain, so both channels (Result and
           exception) return one wire contract. <code>AddCommonExceptionHandlers()</code> first registers <code>AddProblemDetails</code>
           (which stamps a <code>requestId</code> extension from the request&#39;s trace identifier), then registers the handlers
           in a load-bearing order; ASP.NET Core runs them in registration order and stops at the first handler
           that reports the exception handled, so most-specific-first placement is the mechanism, not a comment
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:135-147</code>, registrations at
-          lines 140-144):<ul>
+          lines 140-144):</p>
+          <ul>
           <li><code>OperationCanceledExceptionHandler</code> (registered first) maps a client-disconnect
           <code>OperationCanceledException</code> to the non-standard HTTP 499 Client Closed Request, so monitoring can
           tell an abandoned request apart from a server fault
@@ -307,6 +330,72 @@
           </ul>
           </li>
           </ul>
+          <h3 id="the-client-half-the-ui-layer-returns-result-too-2026-08-27">The client half: the UI layer returns <code>Result</code> too (2026-08-27)</h3>
+          <p>Until v1.164.0 this record held everywhere except the one layer a user actually sees. A UI service
+          called the API, pulled the domain wording out of the ProblemDetails body, and <strong>rethrew it</strong> as a
+          <code>DomainInvariantViolationException</code> for the page to catch: the pattern was inverted at the last hop,
+          and every page paid for it with a <code>try</code>/<code>catch</code> around a call whose failure was entirely expected.
+          That deviation is retired. Every HTTP-typed client service in <code>MMCA.Common.UI</code> now returns
+          <code>Result</code> / <code>Result&lt;T&gt;</code>, and <code>ServiceExceptionHelper</code> is deleted rather than deprecated.</p>
+          <p>Two halves make a service method honestly typed, and they are deliberately separate types:</p>
+          <ul>
+          <li><strong><code>ProblemDetailsResultReader</code> converts a response.</strong>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:58</code>.) It is the
+          exact reverse of <code>ApiControllerBase.HandleFailure</code>: <code>ReadAsync(response, ct)</code> answers a valueless
+          <code>Result</code> (<code>:223</code>) and <code>ReadAsync&lt;T&gt;(response, options, ct)</code> deserializes a 2xx body or parses the
+          failure (<code>:257</code>), with the pure <code>ParseProblemDetails(status, body)</code> core testable against captured
+          payloads (<code>:153</code>). It understands four payload shapes (<code>:20-49</code>): the <strong>MMCA error array</strong>, where
+          <code>code</code>, <code>message</code>, <code>type</code>, <code>source</code> and <code>target</code> all round-trip and <code>type</code> parses straight back
+          into <code>ErrorType</code> (<code>:319-354</code>, the parse at <code>:403-408</code>), the ASP.NET Core <strong>validation dictionary</strong>
+          (<code>:356-382</code>), <strong>plain ProblemDetails</strong> with no <code>errors</code> extension, and a <strong>non-JSON or empty
+          body</strong>, each of the last three synthesizing one error coded <code>Http.{status}</code> (<code>:410-414</code>). Property
+          lookup is case-insensitive on purpose, because a hand-built PascalCase payload would otherwise
+          silently lose every field (<code>:438-443</code>). It lives in <code>MMCA.Common.Shared</code> and uses nothing beyond
+          the BCL, because the consumer is <code>MMCA.Common.UI</code>, which references Shared only (<code>:14-19</code>).</li>
+          <li><strong><code>HttpResultExecutor</code> converts the absence of one.</strong>
+          (<code>.../MMCA.Common.UI/Services/HttpResultExecutor.cs:31</code>.) It does not make the request: it takes
+          the caller&#39;s whole send-and-read operation as a <code>Func&lt;Task&lt;Result&gt;&gt;</code> / <code>Func&lt;Task&lt;Result&lt;T&gt;&gt;&gt;</code> and
+          wraps it (<code>:52</code>, <code>:87</code>), so the two halves compose without either knowing the other&#39;s shape. A
+          refused connection, a DNS failure, a dropped socket, an unreadable body (<code>HttpRequestException</code>,
+          <code>IOException</code>, <code>JsonException</code>) becomes a failed <code>Result</code> coded <code>Http.TransportFailure</code>
+          (<code>:121-127</code>, code at <code>:34</code>), and an <code>HttpClient</code> timeout becomes <code>Http.Timeout</code> (<code>:129-130</code>, code
+          at <code>:37</code>). Anything else is a genuine programming fault and keeps travelling as an exception
+          (<code>:118-119</code>). The exception&#39;s own text goes on <code>Error.Source</code>, never on <code>Message</code>, because it is
+          diagnostic detail that is neither localizable nor safe to render (<code>:124-127</code>).</li>
+          </ul>
+          <p><strong><code>OperationCanceledException</code> is the one exception that still crosses the boundary, and that is the
+          decision, not an omission.</strong> When the caller&#39;s own token is why the operation stopped, the
+          cancellation is rethrown (<code>HttpResultExecutor.cs:65-68</code>, <code>:100-103</code>, argued at <code>:17-23</code>): a disposed
+          component or a superseded grid fetch owns its own cancellation and must not have it handed back as
+          an error to render. A client timeout raises the same exception type with the token <em>not</em> cancelled,
+          and that one does become a failure (<code>:69-72</code>). The token is also checked before the call, so an
+          already-abandoned request never reaches the network (<code>:59</code>, <code>:94</code>).</p>
+          <p><strong>Pages branch; they do not catch.</strong> <code>ResultUiExtensions</code>
+          (<code>.../MMCA.Common.UI/Common/ResultUiExtensions.cs:63</code>) is the page-side idiom, written once so no
+          page hand-rolls it: <code>TryGetValue</code> unwraps inside a conditional the way <code>Dictionary.TryGetValue</code>
+          does, deciding the failing branch on <code>IsFailure</code> rather than on the value so a value-type default is
+          not mistaken for success (<code>:82-97</code>, the overload handing the errors back at <code>:116</code>);
+          <code>OnFailureSetError</code> pushes the composed message into a page field (<code>:226</code>) and <code>NotifyOnFailure</code>
+          raises it as exactly one snackbar, never one per error (<code>:265</code>); and <code>HasErrorType</code> with
+          <code>IsNotFound</code> / <code>IsUnauthorized</code> lets a page turn a 404 into an empty state and a 401 into a redirect
+          instead of an alert (<code>:303-323</code>). Messages are localized as resource keys <strong>with pass-through</strong>, so
+          one call site handles both an API error the server already translated and a client-side error whose
+          <code>Message</code> is a key (<code>:17-23</code>, <code>:325-334</code>, ADR-027), and they are deduplicated and ordered by the
+          same <code>ErrorTypeSeverity</code> rank the edges use, so a real 403 leads and an incidental validation
+          message never buries it (<code>:145-159</code>, the ordering at <code>:155</code>). The shared <code>ErrorSummary</code> component
+          renders the same list as one deduplicating <code>MudAlert</code>, taking a failed <code>Result</code> and the
+          <code>MudForm.Errors</code> shape together and rendering nothing at all when there is nothing to say
+          (<code>.../MMCA.Common.UI/Components/ErrorSummary.razor:8</code>, both shapes merged at <code>:81-102</code>, one message
+          inline and several as a list so a screen reader announces them as several items, <code>:15-29</code>).</p>
+          <p><strong>A component that shows a retry needs the failure, not an exception.</strong>
+          <code>MobileInfiniteScrollList</code> takes <code>FetchPageResult</code>, a delegate returning
+          <code>Task&lt;Result&lt;(IReadOnlyList&lt;TItem&gt; Items, int TotalItems)&gt;&gt;</code>
+          (<code>.../MMCA.Common.UI/Components/MobileInfiniteScrollList.razor.cs:37</code>), and renders the failure&#39;s
+          localized message beside its inline retry affordance (<code>:294</code>). The tuple-returning <code>FetchPage</code> it
+          replaces is <code>[Obsolete]</code> with the reason in its own message (<code>:46-48</code>): once services stopped
+          throwing for a server answer, a tuple delegate had no way to carry a failure at all. Exactly one of
+          the two must be supplied, checked at parameter-set time (<code>:111-118</code>), and the obsolete path is
+          lifted into a success so both feed one code path (<code>:130-136</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Failures are in the signature.</strong> A method that can fail returns <code>Result&lt;T&gt;</code>, so the caller cannot
@@ -326,6 +415,16 @@
           <code>HandleFailure()</code> or an escaped exception caught by the handler chain, the client receives the same
           RFC 9457 ProblemDetails body (carrying the shared <code>requestId</code> extension), so consumers parse one error
           shape regardless of which channel produced it.</li>
+          <li><strong>The layer with the most expected failures had the least Result.</strong> A UI service call fails for
+          every reason this record was written about: the input was rejected, the record is gone, the caller
+          signed out. Converting the response back into an exception at the last hop meant the one layer
+          whose whole job is rendering failure was the one layer that had to catch, and it made a
+          business-rule violation and a dropped socket arrive the same way. Returning <code>Result</code> there closes
+          the round trip: the category the domain produced is the category the page branches on.</li>
+          <li><strong>Ranking in Shared rather than at each edge is what makes &quot;the same aggregate&quot; mean something.</strong>
+          A ranking table copied into two presentation packages is two tables, and the gRPC edge proved it
+          by classifying by position while HTTP classified by severity. One table in the layer both edges
+          already reference removes the possibility rather than the habit.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -333,15 +432,32 @@
           <li>Two error channels coexist (Result for expected, exceptions for exceptional). The boundary is a
           judgment call: &quot;could a well-behaved caller reasonably trigger this?&quot; then return a <code>Result</code>,
           otherwise throw.</li>
-          <li>The <code>ErrorType</code> to HTTP mapping is one-directional, and one status has to stand for a whole list.
-          Severity ranking removes the ordering dependency but not the collapse: a failure carrying a 403 and
-          a 400 answers 403, and the 400 is visible only to a client that reads the <code>errors</code> array
-          (<code>ErrorHttpMapping.cs:69-73</code>). The three 400-mapped categories share one rank (<code>:57-59</code>), so among
-          them the earliest error still wins.</li>
-          <li><strong>The two transports rank differently.</strong> HTTP picks the most severe error&#39;s status
-          (<code>ApiControllerBase.cs:47-48</code>); the gRPC <code>ToRpcException</code> path still takes the <strong>first</strong> error&#39;s type
-          (<code>ResultGrpcExtensions.cs:110-112</code>), with all errors travelling in the trailers (<code>:118-124</code>), so an
-          aggregate failure can answer with a different category depending on which edge a caller reached.</li>
+          <li>One status still has to stand for a whole list. Severity ranking removes the ordering dependency
+          but not the collapse: a failure carrying a 403 and a 400 answers 403, and the 400 is visible only
+          to a client that reads the <code>errors</code> array (<code>ErrorHttpMapping.cs:61-69</code>). The three 400-mapped
+          categories share one rank (<code>ErrorTypeSeverity.cs:45-47</code>), so among them the earliest error still
+          wins.</li>
+          <li><strong>The reverse mapping is lossy on 400, and only on 400.</strong> A client reading an MMCA error array
+          gets the original <code>ErrorType</code> verbatim, because the edge writes <code>Type</code> as a field
+          (<code>ErrorHttpMapping.cs:61-69</code>) and the reader parses it back (<code>ProblemDetailsResultReader.cs:346</code>,
+          <code>:403-408</code>). Every other payload shape (a validation dictionary, a plain ProblemDetails, a
+          non-JSON body) has to derive the category from the status code, and the forward map sends
+          <code>Validation</code>, <code>Invariant</code> <strong>and</strong> <code>Failure</code> all to 400, so the reverse can only pick one: it picks
+          <code>Validation</code> (<code>:96-106</code>, admitted twice at <code>:50-56</code> and <code>:121-124</code>, pinned by
+          <code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Http/ProblemDetailsResultReaderTests.cs:228</code>).
+          A client that needs <code>Invariant</code> distinguished from <code>Validation</code> must call an endpoint that emits
+          the error array, which every <code>ApiControllerBase</code> failure does but an escaped exception handled by
+          the handler chain does not.</li>
+          <li><strong>The UI&#39;s Result surface is a breaking change for every consumer page.</strong> Retiring the deviation
+          moved <code>MMCA.Common.UI</code>&#39;s public API by 41 removals and 98 additions in one release, so every page
+          that wrapped a service call in <code>try</code>/<code>catch</code> had to be rewritten to branch. That is the cost of
+          having deferred the conversion: the deviation was cheap to keep and expensive to remove, and it
+          grew with every page added while it stood.</li>
+          <li><strong><code>MobileInfiniteScrollList</code> carries two fetch parameters during the sweep.</strong> The obsolete tuple
+          path still compiles and still shows a Retry button; what it cannot do is name the reason, because
+          an exception&#39;s text is neither translatable nor safe to render, so it falls back to a generic
+          string (<code>MobileInfiniteScrollList.razor.cs:285-290</code>). The <code>[Obsolete]</code> marker is the migration
+          mechanism rather than a warning (<code>:45</code>), and the parameter goes away once every consumer is swept.</li>
           <li>The exception-handler registration order is load-bearing. Because ASP.NET Core stops at the first
           handler that reports the exception handled, a mis-ordered registration (for example the catch-all
           <code>GlobalExceptionHandler</code> ahead of a specific handler) would swallow the more precise status;
@@ -349,8 +465,15 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:140-144</code>).</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-007 (Result over the wire via gRPC), ADR-014 (the decorator pipeline returns <code>Result.Failure</code> to
-          short-circuit a command before it reaches the handler).</p>
+          <p><a href="007-grpc-extraction.html">ADR-007</a> (Result over the wire via gRPC, the second edge the shared severity
+          ranking now serves),
+          <a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator pipeline returns <code>Result.Failure</code> to
+          short-circuit a command before it reaches the handler),
+          <a href="094-client-entity-data-access.html">ADR-094</a> (the client base hierarchy whose dispatch method now ends
+          in a <code>Result</code> instead of a rethrow, and which owns the retry and idempotency behavior around it),
+          <a href="027-multi-locale-i18n.html">ADR-027</a> (the localization contract the page-side helpers honor: an API
+          message arrives already translated, a client-side one is a resource key, and pass-through lookup
+          serves both from one call site).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

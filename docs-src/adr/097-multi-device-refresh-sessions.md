@@ -5,6 +5,12 @@ Accepted (2026-08-26). Supersedes the storage model of [ADR-050](050-jwt-refresh
 (one plaintext refresh-token column on the user row); the rotation and reuse-detection policy that
 record decided is kept and generalized to a per-device set.
 
+**Revised 2026-08-27 (v1.164.0):** the model gains the parts that make a per-device session
+*visible* and *finite*. An access token now names the session that issued it (a `sid` claim), a user
+can list and revoke their own devices through two endpoints and a shared page, and a retention sweep
+ages the table out. Three of this record's original trade-offs are retired as a result, and the
+sweep introduces one of its own. Every addition is additive: no consumer signature changes.
+
 ## Context
 ADR-050 stores a user's refresh token as a single nullable `RefreshToken` string plus its
 `RefreshTokenExpiry` on the app's `User` aggregate. That model settles rotation and reuse detection
@@ -73,8 +79,8 @@ chained on rotation.
   `POST auth/revoke` carries no body, so it cannot name the device it is called from and deliberately
   signs out everywhere
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:143-160`, call
-  at `:155`); a consumer wanting per-device sign-out calls `RevokeTokenAsync` from its own action,
-  which the endpoint's own documentation says (`:133-142`).
+  at `:155`). Since 2026-08-27 a **third** scope ships beside those two, revoke-by-session-id, so a
+  consumer no longer has to write its own action for per-device sign-out.
 - **A configurable cap bounds the table without ever failing a login.**
   `RefreshSessions:MaxActiveSessionsPerUser`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:31`, default 10,
@@ -144,6 +150,109 @@ chained on rotation.
   `:212`), so a validator reading the published JWKS document (ADR-004) selects the right key by name
   instead of trying each in turn (`:208-211`, the same id on the validation key at `:232-234`).
 
+### The session becomes visible and finite (2026-08-27)
+
+- **An access token names the session that issued it, through a claim nothing validates.**
+  `AuthClaimTypes.SessionId` is `sid`
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:38`, the additive-and-never-validated
+  contract at `:27-37`), read back through `ClaimsPrincipalExtensions.FindSessionId`, which returns
+  `Guid?` and answers null for an absent or unparsable claim rather than throwing
+  (`.../Shared/Auth/ClaimsPrincipalExtensions.cs:56-60`). Its only job is to let a request say which
+  of the caller's own devices it came from.
+
+  **`TokenService` is untouched, and that is the design.** Neither it nor `ITokenService` gains a
+  parameter, an overload or an obsoletion (`.../MMCA.Common.Infrastructure/Services/TokenService.cs:77-114`,
+  the contract at `.../MMCA.Common.Application/Interfaces/Infrastructure/ITokenService.cs:17-22`).
+  Instead a private pass-through decorator nested in `AuthenticationServiceBase`,
+  `SessionStampingTokenService` (`.../Application/Auth/AuthenticationServiceBase.cs:761`), appends the
+  claim when an ambient session id is armed and forwards untouched when it is not (`:780-790`), and
+  the base exposes it to subclasses as the `TokenService` property (`:82`, field at `:67`).
+  `CreateAccessTokenForSession` arms, mints and disarms (`:544-555`). The abstract
+  `CreateAccessToken(TUser)` hook every consumer already overrides (`:523`) keeps its signature, so
+  every existing subclass emits `sid` with no edit at all (`:530-534`, `:756-760`).
+- **The session is created before the token is minted, because a token cannot name an id that does
+  not exist yet.** The ordering is explicit in the code and explained there
+  (`AuthenticationServiceBase.cs:490-492`): `OpenSessionAsync` returns the new row's id
+  (`:629-655`, the `IssuedSession` record at `:749`), `SaveChangesAsync` runs at `:498`, and only then
+  does `:501` mint. Login reaches it at `:189` and registration at `:269`. On refresh the rotation
+  mints against the **successor's** id, not the session it just revoked (`:336`, rotation at
+  `:662-690`, argued at `:332-334`), so the `sid` in a freshly refreshed token names a live row.
+- **Two endpoints put the device list and the per-device revoke in the framework.** Both are on
+  `AuthControllerBase` and both are `[Authorize]`:
+  - `GET auth/my-sessions` (`AuthControllerBase.cs:173-177`) returns
+    `IReadOnlyList<RefreshSessionSummaryResponse>` (`:175`) for the caller's own live sessions,
+    passing the caller's own `sid` straight into the application layer (`:185`).
+  - `POST auth/revoke/{sessionId:guid}` (`:205-211`) answers 204, or 404 as ProblemDetails when the
+    id names nothing the caller owns. It is explicitly `[NonIdempotent]` (`:206`), so a replayed
+    request cannot be served a cached 204 and report success for a revoke that never ran.
+
+  `RefreshSessionSummaryResponse` carries exactly six fields:
+  `SessionId`, `CreatedAt`, `ExpiresAt`, `IpAddress`, `UserAgent`, `IsCurrent`
+  (`.../MMCA.Common.Shared/Auth/RefreshSessionSummaryResponse.cs:23-29`). `TokenHash` and
+  `ReplacedByTokenHash` are deliberately absent, because returning either would hand a caller a
+  queryable index of credentials at rest for no gain (`:5-11`). **`IsCurrent` is computed
+  server-side from the caller's own `sid`**, never supplied by the client
+  (`AuthenticationServiceBase.cs:427`, the whole projection at `:407-431`, which filters to sessions
+  live at `now` (`:418`) and orders newest first (`:419-420`)).
+- **Revoking a session you do not own is indistinguishable from revoking one that does not exist,
+  and revoking one already revoked is a success.** `RevokeSessionByIdAsync` (`:445-469`) resolves
+  through the user-scoped `IRefreshSessionStore.FindByIdAsync`
+  (`.../Application/Auth/IRefreshSessionStore.cs:57-60`), whose EF implementation puts the user in
+  the predicate rather than in a post-read check
+  (`.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:77-83`), so another account's id
+  returns the same `Auth.SessionNotFound` as a random one (`:453-457`). An **already-revoked** row
+  returns `Result.Success()` and writes nothing (`:460-463`): a double click, or a session the cap
+  evicted between rendering the list and clicking the button, leaves the caller's request already
+  satisfied, and reporting an error for that would be reporting a failure to reach a state the
+  caller is already in (`:438-443`).
+- **The device list ships as a page, not as a sample.** `/profile/sessions`
+  (`.../MMCA.Common.UI/Pages/Auth/Sessions.razor:1`, `[Authorize]` at `:5`, code-behind at
+  `Sessions.razor.cs:25`) renders a table of Device, IP, signed-in and expiry columns (`:36-86`)
+  over `IAuthUIService.GetSessionsAsync` / `RevokeSessionAsync`, both of which return `Result`
+  (`.../MMCA.Common.UI/Services/Auth/AuthUIService.cs:205-216`, `:219-231`) rather than throwing
+  ([ADR-013](013-result-pattern.md)). Any host using the shared router gets the route with **zero
+  registration**, because the router's `AppAssembly` *is* `MMCA.Common.UI`
+  (`.../MMCA.Common.UI/Routes.razor:7`); `AdditionalAssemblies` (`:8`) is the separate mechanism that
+  discovers a consumer module's own pages. Nav entry at `Layout/NavMenu.razor:139`, route constant at
+  `Common/RoutePaths.cs:16`, 23 localized keys in both `SharedResource.resx` and its `.es` sibling.
+
+  Three of its choices are decisions rather than styling. The current device is marked with a **text**
+  chip, not a colour (`Sessions.razor:48-54`), for WCAG 1.4.1. The current row offers **no revoke
+  button at all**, only a hint (`:62-69`), because ending your own session would leave the app signed
+  in until the access token expired, which reads as a broken sign-out. And a load failure renders
+  **inline** through `ErrorSummary` with a retry button (`:16`, `:24-28`) rather than as a snackbar,
+  because once a toast expires an empty table and a failed load look identical (`:14-15`); a failed
+  reload clears the list rather than leaving stale rows a user could act on (`Sessions.razor.cs:87-90`).
+- **A retention sweep ages the table out.** `RefreshSessionCleanupService`
+  (`.../MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:48-52`) is a plain
+  `BackgroundService` that waits one full interval before its first sweep, so cleanup never competes
+  with startup or migration work (`:74-93`, reasoning at `:76-77`). It deletes rows that **stopped
+  being usable** more than `RetentionDays` ago, in one set-based `ExecuteDeleteAsync` with no batching
+  (`:120-124`, cutoff at `:104`). The predicate ages each row from the instant it stopped being
+  usable: its revocation if it was revoked, otherwise its expiry, which is the wording the setting
+  itself uses (`RefreshSessionSettings.cs:52-54`). That is a conditional, not the later of the two: a
+  row revoked minutes ago survives even if it expired long before (`:97-100`), and a row revoked 31
+  days ago is deleted even if its `ExpiresAt` is still in the future.
+
+  `RetentionDays` defaults to 30 with `[Range(0, 3650)]`
+  (`RefreshSessionSettings.cs:68-69`), swept every `CleanupIntervalHours` (default 6,
+  `[Range(1, 168)]`, `:76-77`). Zero disables the sweep and logs that it did
+  (`RefreshSessionCleanupService.cs:68-72`), as does `Enabled` being false (`:62-66`). Every sweep
+  logs its count **including zero**, deliberately, because a log that speaks only when it deleted
+  something gives an operator no evidence that retention is running at all (`:147-148`, argued at
+  `:126-127`):
+
+  ```text
+  Purged {Count} refresh sessions that stopped being usable more than {RetentionDays} days ago
+  ```
+
+  Registration is gated on `Enabled` alone, not on `DataSourceName`
+  (`.../MMCA.Common.Infrastructure/DependencyInjection.cs:156-159`): registering unconditionally would
+  start a sweep in every service of a modular host, all but one of which has no table to sweep
+  (`:153-155`). `DataSourceName` is used only to resolve the source at sweep time, as the fallback
+  when the entity registry has no entry (`RefreshSessionCleanupService.cs:136-139`), and a source that
+  does not map the table warns once per sweep instead of failing with a translation error (`:114-118`).
+
 ## Rationale
 - **A credential at rest is a credential.** Hashing is what turns a database read from "mint tokens
   for every signed-in user" into "hold a list of digests". The unsalted digest is the deliberate part:
@@ -180,6 +289,28 @@ chained on rotation.
   rotation at `:507`, replay revoking the family at `:552`, expiry and unknown tokens failing alone at
   `:573` and `:596`, per-device and all-device sign-out at `:645`, `:661` and `:677`), and the mapping
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Auth/RefreshSessionModelBuilderExtensionsTests.cs:14`).
+- **The 2026-08-27 additions are pinned at five layers**, which is what lets the trade-offs above be
+  stated as facts: the claim and the projection
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Auth/RefreshSessionManagementTests.cs:26`,
+  successor-not-predecessor `sid` at `:82`, a token with no `sid` still refreshing at `:104`,
+  only-the-caller's-row-is-current at `:157`, no token material in the response at `:183`, another
+  user's session answering not-found at `:244`, already-revoked succeeding without a write at `:260`);
+  the claim reader
+  (`.../MMCA.Common.Shared.Tests/Auth/ClaimsPrincipalExtensionsTests.cs:12`); the endpoints, including
+  reflection theories that pin the two route templates and the `[Authorize]` attribute
+  (`.../MMCA.Common.API.Tests/Controllers/AuthControllerBaseTests.cs:18`, routes at `:305-308`,
+  authorization at `:315-318`, the non-idempotent declaration at `:328`); the sweep, whose predicate
+  semantics are settled by a test rather than by prose
+  (`.../MMCA.Common.Infrastructure.Tests/Persistence/Auth/RefreshSessionCleanupServiceTests.cs:33`,
+  `PurgeSweep_MeasuresARevokedRowFromItsRevocationNotItsExpiry` at `:124`, the zero-count log at
+  `:155`, registration gating at `:182` and `:194`), with ownership scoping pinned against real SQLite
+  (`.../Persistence/Auth/EFRefreshSessionStoreFindByIdTests.cs:20`, another user's session at `:40`,
+  the tracked-instance requirement at `:74`); and the page
+  (`.../MMCA.Common.UI.Tests/Pages/Auth/SessionsTests.cs:27`, the current row offering no revoke at
+  `:140`, a failed reload not leaving stale rows at `:204`, a not-found revoke reading as
+  already-signed-out at `:238`). A WCAG 2.1 AA scan of the page runs in the out-of-solution gallery
+  suite (`.../MMCA.Common.UI.E2E.Tests/SessionsPageE2ETests.cs:13`), which means it runs in the
+  `ui-e2e` CI job and **not** in a local `dotnet test --solution MMCA.Common.slnx`.
 
 ## Trade-offs
 - **This is a breaking change with a data migration attached.** `IAuthUser` loses `RefreshToken`,
@@ -196,10 +327,41 @@ chained on rotation.
   and now signs out every device rather than one (`AuthenticationServiceBase.cs:484-491`). This is
   ADR-050's aggressive-by-design trade-off with a wider blast radius, kept deliberately: the
   alternative is a grace window in which a genuinely stolen token works.
-- **Nothing ages the table out.** Revoked and expired rows are kept, and the framework ships no
-  retention sweep for `RefreshSessions` the way it does for the outbox and the audit trail; the code
-  says as much, naming a sweep "the consumer schedules" (`AuthenticationServiceBase.cs:581-582`). A
-  consumer that wants them tidied schedules its own job (ADR-074). The cap bounds only the *live* set.
+- **"Nothing ages the table out" is retired (2026-08-27).** `RefreshSessionCleanupService` ships the
+  sweep, so a consumer no longer schedules its own. The cap still bounds only the *live* set; the
+  sweep is what bounds the dead one.
+- **The retention window is also the reuse-detection window, and the shorter one wins.** Reuse
+  detection works because a replayed token lands on a **revoked row**; delete that row and the same
+  replay lands on nothing, which is the branch that deliberately fails alone. So retention silently
+  caps how long a stolen token remains detectable as theft rather than as an unknown value. Both the
+  setting and the service say so (`RefreshSessionSettings.cs:55-62`,
+  `RefreshSessionCleanupService.cs:24-32`, cross-referenced from
+  `AuthenticationServiceBase.cs:706-712`). The 30-day default is comfortably longer than the 7-day
+  `Jwt:RefreshTokenExpirationDays` it has to outlive, but the two settings are independent and
+  nothing fails a build when an operator sets retention below the refresh lifetime: it just quietly
+  starts deleting rows whose tokens could still come back.
+- **"Nothing in the framework reads `IpAddress` and `UserAgent`" is retired (2026-08-27).**
+  `GET auth/my-sessions` returns both and `/profile/sessions` renders them. They remain
+  informational, never part of a validation decision, which is the property that keeps a mobile client
+  changing networks signed in.
+- **The `sid` claim is stamped by a decorator, so a subclass can opt out of it by accident.** A
+  consumer whose `CreateAccessToken` override mints from its own injected `ITokenService` rather than
+  from the base's `TokenService` property produces a perfectly valid token that simply carries no
+  `sid` (`AuthenticationServiceBase.cs:76-80`). Nothing fails; the device list just marks no row as
+  current for that consumer (`:171`-style behavior is pinned by
+  `GetSessionsAsync_WithNoCurrentSessionId_MarksNothingCurrent`). That is the price of making the
+  claim additive instead of changing an abstract signature every consumer implements, and the trade
+  was taken deliberately.
+- **Nothing validates `sid`, by design, so it is a hint and not an authorization input.** It is
+  documented as additive and never validated (`AuthClaimTypes.cs:27-37`) and the reader answers null
+  rather than throwing on a malformed value (`ClaimsPrincipalExtensions.cs:56-60`). A future
+  temptation to authorize on it would need its own record: today a token whose session was revoked
+  still validates until it expires, which is exactly ADR-047's revocation-gap posture.
+- **The sessions page revokes without a confirmation step.** One click on a row's revoke button signs
+  that device out; there is no dialog, and the only guard is the in-flight disable
+  (`Sessions.razor:54`, `:74`, `:90`). The action is low-harm and recoverable (the user signs in
+  again) and a confirm on every row would make the common case, tidying up old devices, tedious. It
+  is still a destructive action with no undo.
 - **Two gates have to agree, and only a scaffold says when they do not.** `RefreshSessions:Enabled`
   drives the runtime model (`ApplicationDbContext.cs:296-298`) and `EnableRefreshSessions` drives the
   design-time one (`DesignTimeDbContextOptions.cs:73`); a mismatch produces no startup error, just a
@@ -209,10 +371,6 @@ chained on rotation.
   cap (`:584-591`), where the previous model wrote one column. The reads are index-covered
   (`RefreshSessionModelBuilderExtensions.cs:70-71`), but the refresh endpoint is no longer a
   single-row update.
-- **`IpAddress` and `UserAgent` are captured and nothing in the framework reads them.** No shipped
-  endpoint lists a user's devices (`AuthControllerBase.cs` maps login, register, refresh and revoke
-  only, `:67-160`), so today the two columns exist for a support query and for the screen a consumer
-  may build (`RefreshSession.cs:84-88`).
 - **The hash is confirmable, by design.** Anyone holding both a database read and a candidate token
   can verify the pairing, since the digest is deterministic and unsalted (`RefreshSession.cs:160-164`).
   That is the accepted cost of lookup-by-hash and it holds only because the input is high-entropy
@@ -237,4 +395,14 @@ and replays),
 [ADR-057](057-expand-contract-schema-evolution-gate.md) (the gate the column drop has to be marked
 for),
 [ADR-048](048-primitive-identifier-type-aliases.md) (the identifier alias the sessions and the `sub`
-reader are typed against).
+reader are typed against),
+[ADR-013](013-result-pattern.md) (the `Result`-returning UI client the sessions page branches on, and
+the `ErrorSummary` component it renders a failed load through),
+[ADR-074](074-recurring-job-scheduler.md) (the scheduler a consumer would have used for its own
+retention job before the framework shipped one, and the same two-part `Enabled` plus `DataSourceName`
+gate the scheduler table uses),
+[ADR-020](020-permission-based-authorization.md) (why these two endpoints are `[Authorize]` and
+self-scoped rather than permission-gated: a user listing and revoking their own devices needs no
+permission, and the ownership scope is enforced in the query),
+[ADR-063](063-accessibility-conformance-gate.md) (the WCAG gate the sessions page is scanned under,
+and the reason the current-device marker is text rather than colour).

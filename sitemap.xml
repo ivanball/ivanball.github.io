@@ -172,7 +172,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html</loc>
-    <lastmod>2026-08-01</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -477,12 +477,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/089-gateway-topology-owned-by-configuration.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -507,7 +507,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/094-client-entity-data-access.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -792,7 +792,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-BUILD-BY-HAND.html</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -807,7 +807,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-08-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

@@ -417,27 +417,72 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <p>The command returns plain <code>Result</code>, so success maps to <code>204 No Content</code>; a command that returns the
           refreshed DTO maps to <code>Ok(result.Value)</code> the way <code>ChangeStatusAsync</code> does.</p>
           <p><strong>A method on the typed client</strong> (<code>SupportApiClient</code> in the UI host), which runs server-side and
-          reaches the API through Aspire service discovery, so there is no CORS and no token:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task <span class="hljs-title">TransferOrderAsync</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> id, <span class="hljs-built_in">int</span> requesterUserId, CancellationToken cancellationToken = <span class="hljs-literal">default</span></span>)</span>
-{
-    <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> response = <span class="hljs-keyword">await</span> httpClient
-        .PutAsJsonAsync(<span class="hljs-built_in">string</span>.Create(CultureInfo.InvariantCulture, <span class="hljs-string">$&quot;/Orders/<span class="hljs-subst">{id}</span>/transfer&quot;</span>), <span class="hljs-keyword">new</span> { RequesterUserId = requesterUserId }, cancellationToken)
-        .ConfigureAwait(<span class="hljs-literal">false</span>);
-    <span class="hljs-keyword">await</span> ServiceExceptionHelper.ThrowIfDomainExceptionAsync(response, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
-    response.EnsureSuccessStatusCode();
-}</code></pre>
-          <p><code>ThrowIfDomainExceptionAsync</code> is the half that matters: it reads the ProblemDetails body so the page
-          surfaces the domain message instead of a bare 400.</p>
+          reaches the API through Aspire service discovery, so there is no CORS and no token. The client
+          <strong>returns a <code>Result</code> and throws nothing for a server answer</strong>, so the method signature says it can
+          fail:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> Task&lt;Result&gt; <span class="hljs-title">TransferOrderAsync</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> id, <span class="hljs-built_in">int</span> requesterUserId, CancellationToken cancellationToken = <span class="hljs-literal">default</span></span>)</span> =&gt;
+    HttpResultExecutor.ExecuteAsync(
+        <span class="hljs-keyword">async</span> () =&gt;
+        {
+            <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> response = <span class="hljs-keyword">await</span> httpClient
+                .PutAsJsonAsync(<span class="hljs-built_in">string</span>.Create(CultureInfo.InvariantCulture, <span class="hljs-string">$&quot;/Orders/<span class="hljs-subst">{id}</span>/transfer&quot;</span>), <span class="hljs-keyword">new</span> { RequesterUserId = requesterUserId }, cancellationToken)
+                .ConfigureAwait(<span class="hljs-literal">false</span>);
+
+            <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> ProblemDetailsResultReader.ReadAsync(response, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+        },
+        cancellationToken);</code></pre>
+          <p>The two halves are what make the signature honest.
+          <code>ProblemDetailsResultReader</code> (<code>MMCA.Common.Shared.Http</code>) converts the <strong>response</strong>: a 2xx is a
+          success, and anything else is parsed back out of the RFC 9457 body into the errors the server
+          described, with the original <code>ErrorType</code> preserved. <code>HttpResultExecutor</code> (<code>MMCA.Common.UI.Services</code>)
+          converts the <strong>absence of a response</strong>: a refused connection, a DNS failure, a dropped socket or a
+          client timeout becomes a failure coded <code>Http.TransportFailure</code> or <code>Http.Timeout</code> instead of an
+          exception. Your own cancellation still propagates, so a disposed component is never reported back
+          as an error to render.</p>
+          <p>A method that returns a value reads the same way, with the generic overload:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> Task&lt;Result&lt;OrderDTO&gt;&gt; GetOrderAsync(<span class="hljs-built_in">int</span> id, CancellationToken cancellationToken = <span class="hljs-literal">default</span>) =&gt;
+    HttpResultExecutor.ExecuteAsync(
+        <span class="hljs-keyword">async</span> () =&gt;
+        {
+            <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> response = <span class="hljs-keyword">await</span> httpClient
+                .GetAsync(<span class="hljs-keyword">new</span> Uri(<span class="hljs-built_in">string</span>.Create(CultureInfo.InvariantCulture, <span class="hljs-string">$&quot;Orders/<span class="hljs-subst">{id}</span>&quot;</span>), UriKind.Relative), cancellationToken)
+                .ConfigureAwait(<span class="hljs-literal">false</span>);
+
+            <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> ProblemDetailsResultReader.ReadAsync&lt;OrderDTO&gt;(response, cancellationToken: cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+        },
+        cancellationToken);</code></pre>
+          <p>Neither type needs registering: both are static, so the client just needs
+          <code>using MMCA.Common.Shared.Abstractions;</code> (for <code>Result</code>), <code>using MMCA.Common.Shared.Http;</code> and
+          <code>using MMCA.Common.UI.Services;</code>. The host still registers only
+          <code>AddHttpClient&lt;SupportApiClient&gt;(...)</code>.</p>
           <p><strong>The page plus its resource pair.</strong> Add a panel to <code>OrderDetail.razor</code> shaped like the Status one (a
           <code>MudNumericField</code> for the new requester id and a button), with a <code>@code</code> handler shaped like
-          <code>ChangeStatusAsync</code>: call <code>Api.TransferOrderAsync(Id, _transferRequesterUserId)</code>, <code>Snackbar</code> the
-          outcome, reload. Every new <code>L[...]</code> key needs an entry in <strong>both</strong> <code>OrderDetail.resx</code> and
-          <code>OrderDetail.es.resx</code>; a key missing from one language renders as the raw key name, not a fallback.</p>
+          <code>ChangeStatusAsync</code>. Because the client returns a <code>Result</code>, the handler <strong>branches instead of
+          catching</strong>:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> Api.TransferOrderAsync(Id, _transferRequesterUserId);
+<span class="hljs-keyword">if</span> (result.IsSuccess)
+{
+    Snackbar.Add(L[<span class="hljs-string">&quot;Snackbar.Transferred&quot;</span>], Severity.Success);
+    <span class="hljs-keyword">await</span> LoadAsync();
+}
+<span class="hljs-keyword">else</span>
+{
+    Snackbar.Add(L[<span class="hljs-string">&quot;Snackbar.TransferFailed&quot;</span>, result.LocalizedErrorMessage(L) ?? <span class="hljs-built_in">string</span>.Empty], Severity.Error);
+}</code></pre>
+          <p><code>LocalizedErrorMessage</code> comes from <code>ResultUiExtensions</code> (<code>@using MMCA.Common.UI.Common</code> in
+          <code>_Imports.razor</code>); it composes the failure&#39;s distinct messages, most severe first, resolving each as
+          a resource key with pass-through, so a message the API already translated renders as-is. For a
+          result that carries a value, <code>result.TryGetValue(out var dto)</code> unwraps it inside the same
+          conditional. A form that wants an inline block rather than a snackbar can drop the shared
+          <code>&lt;ErrorSummary Result=&quot;_result&quot; Localizer=&quot;L&quot; /&gt;</code> component into its markup instead, which renders
+          nothing when there is nothing to say.</p>
+          <p>Every new <code>L[...]</code> key needs an entry in <strong>both</strong> <code>OrderDetail.resx</code> and <code>OrderDetail.es.resx</code>; a
+          key missing from one language renders as the raw key name, not a fallback.</p>
           <p>Two conventions pay off here without extra work. The command&#39;s <code>ICacheInvalidating</code> prefix means the
           page&#39;s reload after a transfer reads fresh data, not a stale cache entry. And transferring a closed
           order exercises the whole error pipeline end to end: the invariant fails, <code>HandleFailure</code> maps it to
-          RFC 9457 ProblemDetails, <code>ThrowIfDomainExceptionAsync</code> extracts it, and the snackbar shows &quot;A closed
-          order cannot be transferred to another requester.&quot;</p>
+          RFC 9457 ProblemDetails, <code>ProblemDetailsResultReader</code> reads it back into a failed <code>Result</code> with its
+          category intact, and the snackbar shows &quot;A closed order cannot be transferred to another requester.&quot;</p>
           <hr>
           <h2 id="then-what">Then what</h2>
           <ul>

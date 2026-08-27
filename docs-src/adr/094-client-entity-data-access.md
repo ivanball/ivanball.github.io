@@ -69,18 +69,24 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/EntityServiceBaseIdempotencyRetryTests.cs:91`),
   no key on reads, updates or deletes (`:112,123,134`), and the 501-not-retried / 429-retried edges
   (`:146,158`).
-- **Domain errors are extracted before the generic throw.** `SendRequestAsync` calls
-  `ServiceExceptionHelper.ThrowIfDomainExceptionAsync` on any non-success response and only then
-  `EnsureSuccessStatusCode` (`EntityServiceBase.cs:210-213`). The helper
-  (`.../MMCA.Common.UI/Services/ServiceExceptionHelper.cs:17`) matches the ProblemDetails titles
-  `Domain Exception`, `Validation Exception` and `Operation failed` (`:49-56`) and rethrows them as
-  `DomainInvariantViolationException` carrying the server's own message, so a page shows the business
-  reason rather than "500". A non-JSON body (a bare 401 challenge, an HTML error page) is left to the
-  caller (`:33-38`).
+- **The dispatch returns a `Result`; it does not throw** (2026-08-27, v1.164.0). `SendRequestAsync`
+  wraps the whole send-and-read in `HttpResultExecutor.ExecuteAsync` and hands the response to
+  `ProblemDetailsResultReader`, in both the value-returning overload
+  (`EntityServiceBase.cs:216`, composition at `:223-232`) and the body-less one (`:244`, at
+  `:251-258`). The reader turns a non-success response back into the errors the server described,
+  with the original `ErrorType` preserved when the payload carries the MMCA error array, and the
+  executor turns a call that never got a response (connection, DNS, socket, timeout) into a failure
+  of its own. A page therefore branches on a `Result` instead of catching, and sees the business
+  reason rather than "500" without any exception being minted to carry it
+  ([ADR-013](013-result-pattern.md)). This replaces the earlier arrangement, in which the client
+  pulled the domain wording out of the ProblemDetails body and **rethrew** it as a
+  `DomainInvariantViolationException` before falling back to `EnsureSuccessStatusCode`: that helper
+  is deleted, not deprecated. `ChildEntityServiceBase` was converted in the same pass
+  (`.../MMCA.Common.UI/Services/ChildEntityServiceBase.cs:37`, `:53`, `:71`).
 - **Join entities use `ChildEntityServiceBase`**
   (`.../MMCA.Common.UI/Services/ChildEntityServiceBase.cs:17`), the many-to-many sibling: `PostAsync`
-  (`:24`) and `DeleteByIdAsync` (`:39`, `false` on 404). It shares the bearer helper and the
-  domain-error extraction but deliberately issues its calls directly, **outside** `RetryPolicy` and
+  (`:24`) and `DeleteByIdAsync` (`:39`, `false` on 404). It shares the bearer helper and the same
+  `Result` dispatch but deliberately issues its calls directly, **outside** `RetryPolicy` and
   with no idempotency key.
 - **Non-CRUD services take the root directly and reuse the same policy.** Services whose endpoints are
   not entity CRUD derive from `AuthenticatedServiceBase` itself and call the inherited `RetryPolicy`
@@ -162,9 +168,12 @@ handoff and the `InteractiveAuto` registration) and carries the same count.
   key; if the client minted a new one per attempt, a retried create would produce a second record,
   which is precisely the failure the filter exists to prevent. Setting the header on the client that
   serves every attempt makes the invariant structural rather than a rule to remember.
-- **Extracting the domain error before `EnsureSuccessStatusCode` is what makes failures speakable.**
-  The API already returns a specific business reason; without extraction the UI would surface a
-  generic status-code exception and throw that reason away.
+- **Returning the domain error is what makes failures speakable.** The API already returns a
+  specific business reason; a client that answered with a generic status-code exception would throw
+  that reason away. The original design extracted the reason and rethrew it, which preserved the
+  wording but kept the failure in the exception channel; returning a `Result` preserves the wording
+  **and** the category, so a page can turn a 404 into an empty state and a 401 into a redirect
+  instead of pattern-matching on message text ([ADR-013](013-result-pattern.md)).
 - **The list page is repeated nineteen times, so it is worth a base class.** Paging, cancellation,
   filter and sort extraction, viewport switching, error state and state restoration are identical
   across every list in both apps; nineteen hand-rolled copies is nineteen chances to get the
