@@ -524,6 +524,30 @@
           hop is needed for discovery (the gateway still routes <code>/.well-known/*</code> so the canonical issuer
           origin serves the discovery doc for clients).</li>
           </ul>
+          <h2 id="update-2026-08-29-aspire-local-health-gating-for-http2-only-endpoints-and-the-downstream-probe-negotiates-its-version">Update (2026-08-29): Aspire-local health gating for Http2-only endpoints, and the downstream probe negotiates its version</h2>
+          <p>Two v1.167.0 framework additions close the last two operational gaps this profile family carried.</p>
+          <p><strong>1. Profile A resources are now health-gated locally.</strong> Aspire&#39;s stock <code>WithHttpHealthCheck</code> probes
+          over HTTP/1.1, which an <code>Http2</code>-only cleartext endpoint refuses with <code>HTTP_1_1_REQUIRED</code>, so until
+          now the five Profile A resources (ADC Identity/Conference/Engagement, Store Catalog/Identity)
+          carried no Aspire health check at all and every <code>WaitFor</code> on them waited only for process start.
+          <code>MMCA.Common.Aspire.Hosting</code> now ships <code>WithH2cHealthCheck(path = &quot;/health/ready&quot;)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs</code>): an
+          AppHost-side health check that issues the same GET over HTTP/2 exact version against the resource&#39;s
+          existing endpoint, exactly the profile the gateway&#39;s downstream probe already speaks. Both AppHosts
+          chain it on their Profile A resources, so startup ordering is readiness-based across the whole
+          graph. Production is untouched: ACA <code>httpGet</code> probes keep targeting the dedicated Http1-only probe
+          listener (the 2026-07-25/28 updates above). The alternative design, surfacing the <code>HealthProbe:Port</code>
+          listener as an Aspire endpoint, was rejected because the explicit Kestrel listeners it activates
+          override the <code>ASPNETCORE_URLS</code> binding Aspire injects locally and collide on the fixed cleartext
+          port; the extension&#39;s XML docs record the rejection.</p>
+          <p><strong>2. The gateway downstream probe negotiates its HTTP version per downstream.</strong>
+          <code>GatewayDownstreamHealthCheckOptions.ProbeVersion</code> (<code>DownstreamProbeVersion.Auto</code> default) tries
+          HTTP/2 exact first and, on a protocol refusal (not on a transient failure), retries HTTP/1.1 inside
+          the same check, latching the answering version for the life of the process. The Profile A
+          downstreams latch HTTP/2; the mixed-endpoint hosts (ADC Notification, Store Sales), whose cleartext
+          <code>Http1AndHttp2</code> default endpoint never negotiates h2 without ALPN, latch HTTP/1.1 after a one-time
+          fallback. The per-downstream <code>ProbeOverHttp2</code> opt-out both gateways used to carry is obsolete, and
+          each gateway registers all its downstreams in a single <code>AddGatewayDownstreamHealthChecks</code> call.</p>
           <h3 id="when-to-use-which">When to use which</h3>
           <ul>
           <li><strong>Any service that hosts an inbound gRPC server reachable over cleartext h2c (especially a
@@ -593,6 +617,7 @@
             <li><a href="#update-2026-08-14-stores-sales-runs-the-mixed-endpoint-profile-too-so-no-pure-profile-b-host-remains">Update (2026-08-14): Store&#39;s Sales runs the mixed-endpoint profile too, so no pure Profile B host remains</a></li>
             <li><a href="#context">Context</a></li>
             <li><a href="#decision">Decision</a></li>
+            <li><a href="#update-2026-08-29-aspire-local-health-gating-for-http2-only-endpoints-and-the-downstream-probe-negotiates-its-version">Update (2026-08-29): Aspire-local health gating for Http2-only endpoints, and the downstream probe negotiates its version</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
