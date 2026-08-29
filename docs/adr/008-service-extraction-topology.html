@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 97 ADRs</summary>
+        <summary>All 98 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -197,6 +197,7 @@
         <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
         <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
         <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
           </ol>
         </nav>
       </details>
@@ -283,6 +284,24 @@
           pinned to <code>https://localhost:6001</code>), with its combined <code>MMCA.Store.WebAPI</code> host likewise deleted.
           Store&#39;s cross-service topology differs in transport detail (see ADR-012: both apps now run Profile A),
           but the extraction shape is identical.</p>
+          <p><strong>Why ADC extracted, said plainly.</strong> The four hosts
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.{Identity,Conference,Engagement,Notification}.Service</code>) exist
+          first of all to demonstrate and continuously exercise the extraction path end to end, because
+          &quot;build the monolith now, extract a service later&quot; is the framework&#39;s core promise and a promise
+          nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
+          conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
+          six deployables still ship in a single pipeline run from one template
+          (<code>MMCA.ADC/infra/main.bicep:1036</code>, <code>:1250</code>, <code>:1379</code>, <code>:1508</code>, <code>:1674</code>, <code>:1777</code>, deployed together at
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1129</code>), so the independent-deploy benefit this record lists is
+          available rather than taken. What ADC does buy with the split is proof under load that the path
+          works: transport stays out of Domain, Application and Shared under a build gate
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MicroserviceExtractionTests.cs:3</code>), and the
+          genuine cross-process flows (outbox to broker to consumer, and a real gRPC read) run nightly against
+          real containers (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:6-10</code>, cadence at <code>:25-31</code>). A
+          consumer adopting this topology should extract on an observable constraint (a module that must scale
+          or fail apart from the rest, or an owner who must deploy on their own clock) and stay a modular
+          monolith until then; ADC deliberately runs ahead of its own constraints so that consumers do not have
+          to discover the path for themselves.</p>
           <h2 id="related">Related</h2>
           <p>ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database
           per service), and ADR-007 (gRPC cross-service calls) are the facet decisions that sit under this extraction.</p>

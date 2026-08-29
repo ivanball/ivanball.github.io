@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-005: Soft-Delete vs. Right-to-Erasure · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted. Updated 2026-06-27 (documented the [Pii] → IAnonymizable build-time guard and PiiRedactor). Updated 2026-08-26 (DeletedOn/DeletedBy stamps,…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html">
+  <title>ADR-098: Aspire for Orchestration, Not for Testing or Production Dashboards · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as decisions rather than as gaps. Nothing in any repo…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-005: Soft-Delete vs. Right-to-Erasure">
-  <meta property="og:description" content="Accepted. Updated 2026-06-27 (documented the [Pii] → IAnonymizable build-time guard and PiiRedactor). Updated 2026-08-26 (DeletedOn/DeletedBy stamps,…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html">
+  <meta property="og:title" content="ADR-098: Aspire for Orchestration, Not for Testing or Production Dashboards">
+  <meta property="og:description" content="Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as decisions rather than as gaps. Nothing in any repo…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-005: Soft-Delete vs. Right-to-Erasure">
-  <meta name="twitter:description" content="Accepted. Updated 2026-06-27 (documented the [Pii] → IAnonymizable build-time guard and PiiRedactor). Updated 2026-08-26 (DeletedOn/DeletedBy stamps,…">
+  <meta name="twitter:title" content="ADR-098: Aspire for Orchestration, Not for Testing or Production Dashboards">
+  <meta name="twitter:description" content="Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as decisions rather than as gaps. Nothing in any repo…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"005 · Soft-Delete vs. Right-to-Erasure","item":"https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"098 · Aspire for Orchestration, Not for Testing or Production Dashboards","item":"https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">005 · Soft-Delete vs. Right-to-Erasure</span>
+        <span class="current">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -104,7 +104,7 @@
         <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
         <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
         <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
-        <li><a href="005-soft-delete-vs-erasure.html" aria-current="page">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
         <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
         <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
         <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
@@ -197,56 +197,183 @@
         <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
         <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
         <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
-        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html" aria-current="page">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-005-soft-delete-vs-right-to-erasure">ADR-005: Soft-Delete vs. Right-to-Erasure</h1>
+          <h1 id="adr-098-aspire-for-orchestration-not-for-testing-or-production-dashboards">ADR-098: Aspire for Orchestration, Not for Testing or Production Dashboards</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted. Updated 2026-06-27 (documented the <code>[Pii]</code> → <code>IAnonymizable</code> build-time guard and <code>PiiRedactor</code>).
-          Updated 2026-08-26 (<code>DeletedOn</code>/<code>DeletedBy</code> stamps, the <code>DeleteChildren</code> cascade helper, and a
-          hard-delete fitness rule).</p>
+          <p>Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as
+          decisions rather than as gaps. Nothing in any repo changes: both parts describe what the four repos
+          already do, and the value of writing them down is that a reader (or a new module author) stops
+          treating each absence as an oversight to be closed.</p>
           <h2 id="context">Context</h2>
-          <p>The framework&#39;s default deletion model is <strong>soft-delete</strong>: <code>AuditableBaseEntity.Delete()</code> sets <code>IsDeleted = true</code> and EF Core global query filters exclude the row from normal queries. The row (including any personal data it holds) stays in the database indefinitely, which is exactly what audit, referential integrity, and &quot;undelete&quot; (BR-135) require.</p>
-          <p>This conflicts with data-subject <strong>erasure</strong> rights (GDPR Art. 17 right-to-be-forgotten, CCPA deletion): when a person requests deletion, their personal data must actually be removed or anonymized, not merely hidden. Soft-delete alone is therefore non-compliant for personal data, and a consumer app&#39;s published privacy policy (e.g. a &quot;we delete your data within 30 days&quot; promise) cannot be honored by soft-delete.</p>
-          <p>A second source of retained personal data is the <strong>outbox</strong>: processed <code>OutboxMessage</code> rows hold serialized event payloads that may contain personal data and were previously never purged (ADR-003).</p>
-          <h2 id="decision">Decision</h2>
-          <p>Separate the two concerns and provide an extension point for each, rather than overloading soft-delete:</p>
+          <p>Aspire is used on exactly two surfaces here.</p>
+          <p><strong>Orchestration.</strong> Each app has an AppHost that composes the local stack from one file: ADC&#39;s
+          provisions a persistent SQL Server container, one database per service, Redis and the RabbitMQ
+          broker, then the four services, the Gateway and the Blazor UI
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:1-9</code>, SQL at <code>:14-15</code>, the four databases at
+          <code>:32-35</code>, Redis at <code>:39-40</code>, the broker at <code>:60</code>); <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14</code>
+          is the same shape over its three services. Service discovery and health-based startup ordering come from Aspire&#39;s resource
+          model rather than from hand-written wiring.</p>
+          <p><strong>Service defaults.</strong> Every host calls <code>AddServiceDefaults</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39</code>), which wires OpenTelemetry, the
+          default health checks, warm-up readiness (ADR-025), service discovery and the Polly HTTP defaults
+          (ADR-009), with <code>MapDefaultEndpoints</code> (<code>:336</code>) adding <code>/health</code> and <code>/alive</code>.</p>
+          <p>Aspire offers two further things this workspace does <strong>not</strong> use, and both read from the outside like
+          an unfinished adoption:</p>
           <ol>
-          <li><strong>Soft-delete stays the default</strong> for lifecycle/state management (hide + retain + undelete). It is explicitly <em>not</em> a privacy mechanism. Three things make the lifecycle half complete rather than merely a flag:<ul>
-          <li><strong>The deletion is stamped like any other audit fact.</strong> <code>IAuditableEntity</code> carries <code>DeletedOn</code> and <code>DeletedBy</code> beside <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditableEntity.cs:26,29</code>, implemented at <code>.../Entities/AuditableBaseEntity.cs:39,45</code>), so &quot;when was this deleted, and by whom&quot; is answerable from the row rather than from an audit-trail lookup (ADR-075). The domain does not write them: the clock and the current user live in infrastructure, so <code>AuditSaveChangesInterceptor</code> stamps them from the <code>IsDeleted</code> <strong>transition</strong> (<code>.../MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:92-106</code>, called at <code>:64</code> and <code>:72</code>, prior value read at <code>:84-85</code>) and clears them on the reverse one (<code>Undelete</code>, BR-135, <code>AuditableBaseEntity.cs:89</code>). Driving it from the transition rather than from the value is what keeps a later update to an already-deleted row from re-stamping it, exactly as <code>CreatedOn/By</code> survive every update (<code>AuditSaveChangesInterceptor.cs:13-19</code>, <code>:99-102</code>; the domain-side note at <code>AuditableBaseEntity.cs:60-64</code>).</li>
-          <li><strong>Cascading to children is a framework helper, not a loop per aggregate.</strong> <code>AuditableAggregateRootEntity.DeleteChildren&lt;TChild, TChildId&gt;(children)</code> (<code>.../Domain/Entities/AuditableAggregateRootEntity.cs:144-162</code>) deletes every still-active child and aggregates the failures into one <code>Result</code> via <code>Result.Combine</code> (ADR-013, <code>:161</code>). Already-deleted children are skipped rather than reported, so re-deleting a parent is idempotent with respect to its children instead of surfacing an <code>AlreadyDeleted</code> error a caller cannot act on (<code>:152-155</code>, reasoning at <code>:123-125</code>). An aggregate composes it as <code>Result.Combine(DeleteChildren&lt;OrderLine, OrderLineIdentifierType&gt;(_lines), base.Delete())</code>, so a failing child aborts the whole cascade before the root is touched (<code>:126-133</code>).</li>
-          <li><strong>A hard delete is a reviewable exception, enforced by a fitness rule.</strong> <code>ArchitectureRules.HardDeletesOnlyInAllowedTypes</code> (<code>.../Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.SoftDelete.cs:62</code>, surfaced through <code>.../Bases/SoftDeleteEnforcementTestsBase.cs:17,29-31</code>, whose <code>AllowedHardDeleteTypes</code> is empty by default and therefore bans hard deletes outright until a repo names its exceptions, <code>:27</code>) fails the build when EF Core&#39;s erasing members (<code>DbSet.Remove</code>/<code>RemoveRange</code>, <code>DbContext.Remove</code>/<code>RemoveRange</code>, <code>ExecuteDelete</code>/<code>ExecuteDeleteAsync</code>: <code>ArchitectureRules.SoftDelete.cs:10-11</code>, scoped to the entity-set declaring types at <code>:18-24</code>) are called from a type outside the repo&#39;s allowlist, which is the short list of places where erasing a row IS the requirement: retention purge jobs, outbox and audit-trail cleanup, and the erasure handlers below (<code>:26-34</code>, <code>SoftDeleteEnforcementTestsBase.cs:21-26</code>). Neither NetArchTest nor reflection can see a call inside a method body, so the rule reads IL through the Mono.Cecil that NetArchTest already carries and matches callees by full name, which keeps the testing package&#39;s zero-reference stance toward EF Core (<code>ArchitectureRules.SoftDelete.cs:36-43</code>, the callee test at <code>:124</code>). It sees only direct calls: a hard delete reached through a repo-owned interface is caught at the implementing type, so that implementation goes on the allowlist and the abstraction stays usable (<code>:51-56</code>).</li>
-          </ul>
-          </li>
-          <li><strong>Erasure is an explicit, additive capability.</strong> Aggregates that store personal data implement <code>IAnonymizable</code> (<code>MMCA.Common.Domain.Interfaces</code>). An application-layer erasure handler loads the aggregate, calls <code>Anonymize()</code> (idempotent, returns <code>Result</code>), and saves: overwriting personal fields in place so foreign keys and the audit trail survive. Fields that must remain retrievable are persisted through the AES-256-GCM <code>EncryptedStringConverter</code>.</li>
-          <li><strong>Outbox retention is bounded.</strong> <code>OutboxCleanupService</code> purges processed outbox rows older than <code>Outbox:RetentionDays</code> (default 7; set <code>0</code> to disable) across every relational data source, so event payloads are not retained indefinitely.</li>
-          <li><strong>A build-time guard backs the per-entity opt-in.</strong> Domain properties holding data-subject personal data are marked <code>[Pii]</code> (<code>MMCA.Common.Domain.Attributes.PiiAttribute</code>, property-targeted). A fitness function (<code>ArchitectureRules.EntitiesWithPiiImplementAnonymizable</code>, surfaced through <code>PiiConventionTestsBase</code>) <strong>fails the build</strong> if any Domain entity declaring a <code>[Pii]</code> property does not implement <code>IAnonymizable</code>, so &quot;this aggregate holds personal data but has no erasure path&quot; is caught by tooling, not by review. The companion <code>PiiRedactor</code> (<code>MMCA.Common.Domain.Privacy</code>) masks the same <code>[Pii]</code>-marked members when an entity is written to a log or telemetry attribute, so personal data does not leak through diagnostics.</li>
+          <li><code>DistributedApplicationTestingBuilder</code> (the <code>Aspire.Hosting.Testing</code> package), which boots the
+          whole app model in a test process. It appears in none of the four .NET repos.</li>
+          <li>The Azure Container Apps Aspire dashboard, the hosted version of the local dashboard, for looking
+          at a deployed environment. No ACA dashboard resource or property exists in ADC&#39;s infrastructure.</li>
           </ol>
-          <p>The framework provides the <strong>extension points</strong> (<code>IAnonymizable</code>, <code>OutboxCleanupService</code>, <code>PiiRedactor</code>) and a <strong>build-time guard</strong> (the <code>[Pii]</code> → <code>IAnonymizable</code> fitness rule); each consumer app owns the <strong>policy</strong>: which properties are <code>[Pii]</code>, the erasure orchestration/endpoint (data-subject request handling), and any data-subject access/export endpoint, because the personal-data model lives in the consumer (e.g. ADC&#39;s <code>User</code>).</p>
+          <p>Neither absence is an accident, but until now neither had a record, which is exactly how an
+          incidental gap and a deliberate choice become indistinguishable.</p>
+          <h2 id="decision">Decision</h2>
+          <h3 id="1-integration-testing-stays-webapplicationfactory-plus-testcontainers">1. Integration testing stays <code>WebApplicationFactory</code> plus Testcontainers</h3>
+          <p>The tiers that exist keep their shape, and <code>DistributedApplicationTestingBuilder</code> stays out of them.</p>
+          <ul>
+          <li><strong>Per-service tier: one in-process host, real SQL, mocked cross-service edges.</strong> Seven fixtures
+          subclass the framework&#39;s <code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/SqlServerIntegrationTestFixtureBase.cs:27</code>): four
+          in ADC (<code>Tests/Integration/MMCA.ADC.Identity.IntegrationTests/Infrastructure/IdentityIntegrationTestFixture.cs:22</code>,
+          and the Conference / Engagement / Notification siblings at <code>:17</code> each) and three in Store
+          (Catalog <code>:16</code>, Identity <code>:15</code>, Sales <code>:17</code>).</li>
+          <li><strong>Cross-service tier: three real hosts, a real broker, real containers.</strong> ADC&#39;s <code>CrossServiceFixture</code>
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:23</code>)
+          extends the shared <code>CrossServiceFixtureBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:41</code>) and runs against
+          Testcontainers SQL Server and RabbitMQ
+          (<code>MMCA.ADC.CrossService.IntegrationTests.csproj:13-14</code>), exercising the outbox to broker to
+          consumer round-trip and a genuine Conference to Engagement gRPC read; Store has the equivalent
+          (<code>MMCA.Store/Tests/Integration/MMCA.Store.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:29</code>).</li>
+          <li><strong>The deferral is already on the record and stays.</strong> The rework plan that produced these tiers
+          states it in one line: Aspire&#39;s testing builder is deferred to the Playwright E2E lane, as too
+          heavy for the integration tier and overlapping E2E
+          (<code>Website/docs-src/guides/adc-IntegrationTestReworkPlan.md:50-51</code>).</li>
+          </ul>
+          <p>Two properties of the hosts make the choice load-bearing rather than a preference.</p>
+          <p><strong>Hosts snapshot their configuration at configure time.</strong> Each host reads its connection string,
+          <code>MessageBus</code> provider and JWT settings from <code>builder.Configuration</code> <strong>before</strong> <code>builder.Build()</code>,
+          which is before a <code>WebApplicationFactory</code>&#39;s <code>ConfigureAppConfiguration</code> deltas apply, so in-memory
+          config injected through the factory arrives too late and <strong>process environment variables are the only
+          override channel these hosts honour</strong> (<code>CrossServiceFixtureBase.cs:26-38</code>, the same contract stated on
+          the per-service base at <code>SqlServerIntegrationTestFixtureBase.cs:16-24</code>). The consequence is
+          concrete: the one genuinely per-host key is the connection string, so hosts must be booted strictly
+          sequentially with the environment mutated between boots (<code>CrossServiceFixtureBase.cs:32-38</code>). A
+          harness that owns the app model has to own that channel too, and the fixtures that already own it are
+          the ones being replaced.</p>
+          <p><strong>The AppHost is not a local test dependency.</strong> <code>dotnet run</code> on the AppHost stalls in a
+          non-interactive shell on a developer box and has to be launched interactively
+          (<code>MMCA.ADC/CLAUDE.md:13</code>). In CI, where Docker is available, it does come up, and that is precisely
+          the E2E lane (<code>MMCA.ADC/.github/workflows/e2e.yml:3-5</code>). So an app-model integration tier would be a
+          CI-only tier duplicating the coverage of a CI-only tier that already exists, while removing the fast
+          loop the current fixtures give.</p>
+          <p><strong>One sanctioned exception is allowed, and it is small on purpose:</strong> a nightly AppHost smoke test that
+          brings the app model up and asserts the Gateway&#39;s <code>/health</code>, on the existing non-gating cross-service
+          nightly (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:25-31</code>, never in <code>deploy.needs</code> by
+          design at <code>:17-22</code>). Its job is to catch a broken AppHost composition without putting the app model
+          in the gating path. The implementation is the ADC nightly AppHost smoke test (an out-of-slnf test
+          project on <code>cross-service-tests.yml</code>, <code>continue-on-error</code> while its headless behavior on the CI
+          runner is unproven); anything beyond that single boot-and-probe is a reversal of this record, not an
+          extension of it.</p>
+          <h3 id="2-production-observability-is-workspace-based-app-insights-not-the-aca-aspire-dashboard">2. Production observability is workspace-based App Insights, not the ACA Aspire dashboard</h3>
+          <ul>
+          <li><strong>The sink is workspace-based Application Insights</strong>, backed by the existing Log Analytics
+          workspace, with telemetry landing in the workspace tables under its PerGB2018 pricing and retention
+          (<code>MMCA.ADC/infra/main.bicep:191-208</code>, the workspace binding at <code>:206</code>); hosts export to it through
+          <code>UseAzureMonitor</code> whenever the injected connection string is present (<code>:196-198</code>, <code>:214-217</code>).</li>
+          <li><strong>The stream is deliberately thinned, and each cut is priced in the template.</strong> Head-based trace
+          sampling keeps 25% (<code>Telemetry__TracesSampleRatio</code> = <code>0.25</code>, <code>:223-226</code>); the OpenTelemetry logging
+          provider ships <code>Warning</code> and above while Serilog still writes <code>Information</code> to container stdout
+          (<code>:234-237</code>); the two highest-volume instrument groups (<code>http.client.*</code> gauges and the <code>dotnet.*</code>
+          runtime instruments, measured at about 65% of AppMetrics ingestion) are switched off (<code>:245-252</code>);
+          and the metric export interval is stretched from the 60-second default to 300 seconds, cutting
+          roughly 80% of the remaining datapoints while five-minute alert windows keep the same signal
+          (<code>:260-263</code>).</li>
+          <li><strong>What an operator actually reads is alerts and a workbook, not a live console.</strong> SLO rules ship as
+          code (<code>main.bicep:331</code>, <code>:388</code>, <code>:447</code>, and the Gateway availability alert at <code>:521</code>, all wired to
+          the unconditional action group at <code>:271-279</code>), and a saved Azure Monitor workbook visualizes the
+          same SLOs per service (<code>:555-567</code>), which is the deployed-environment view (ADR-062, ADR-041).</li>
+          <li><strong>The ACA Aspire dashboard is not provisioned</strong>, and that is the decision rather than a to-do. It is
+          ephemeral (no retention behind it), full fidelity (it would be looking at the very stream this
+          template thins), and it has no alert or saved-query surface, so it cannot be the thing that pages
+          anyone. It stays what it is here: the development-time console the AppHost opens.</li>
+          </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>Right tool per concern</strong>: soft-delete answers &quot;is this record active?&quot;; erasure answers &quot;has this person&#39;s data been removed?&quot;. Conflating them (e.g. hard-deleting inside <code>Delete()</code>) would break audit, undelete, and referential integrity.</li>
-          <li><strong>Audit-preserving</strong>: anonymize-in-place keeps the row and its audit fields, satisfying both erasure and accountability obligations simultaneously.</li>
-          <li><strong>Idempotent + Result-based</strong>: matches the framework&#39;s domain conventions and tolerates retried erasure requests.</li>
-          <li><strong>Bounded retention</strong>: the cleanup service closes the &quot;outbox grows forever / retains PII forever&quot; gap noted in ADR-003 without changing delivery semantics.</li>
+          <li><strong>Test at the boundary that ships.</strong> A service is deployed as its own container app
+          (<code>MMCA.ADC/infra/main.bicep:1036</code>, <code>:1250</code>, <code>:1379</code>, <code>:1508</code>), configured entirely through
+          environment variables. <code>WebApplicationFactory</code> plus an environment-variable override channel is a
+          closer model of that than an app model the deployment does not use: production topology comes from
+          Bicep (<code>MMCA.ADC/.github/workflows/deploy.yml:1129</code>), not from the AppHost.</li>
+          <li><strong>The cheapest tier that could have failed.</strong> The per-service tier needs no Docker at all, because
+          <code>AddBrokerMessaging</code> returns early on the default <code>InProcess</code> provider, which is what an absent
+          <code>MessageBus</code> section resolves to
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:687</code>, the early return
+          at <code>:693-699</code>), and only the
+          genuinely cross-process flows pay for containers, on a nightly rather than in the deploy chain
+          (<code>cross-service-tests.yml:12-22</code>). Booting the whole app model to assert a validation error would
+          invert that.</li>
+          <li><strong>Two absences with one cause.</strong> Both parts of this record decline an Aspire feature whose value is
+          highest during development and lowest in the lane it would be added to: the testing builder
+          duplicates the E2E lane, and the dashboard duplicates a workbook while undoing a cost decision.</li>
+          <li><strong>Cost is the binding observability constraint at this size.</strong> The thinning above is rubric section
+          31 work with measured numbers attached, and a full-fidelity dashboard component is the one addition
+          that would make those measurements moot.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li>Erasure is opt-in per entity, but the opt-in is <strong>guarded</strong>: an aggregate exposing a <code>[Pii]</code>-marked property that does not implement <code>IAnonymizable</code> fails the architecture fitness test, so the &quot;holds personal data but is not erasable&quot; gap surfaces at build time rather than in a manual personal-data inventory. The residual risk shifts to <em>marking</em>: an entity that holds personal data on an <strong>unmarked</strong> property is invisible to the guard, so consumers still own the discipline of applying <code>[Pii]</code> to genuine data-subject fields.</li>
-          <li>Anonymization is irreversible by design and is not the same operation as undelete.</li>
-          <li>The framework cannot, on its own, make a consumer compliant: the consumer must still wire the erasure handler, the data-subject request flow, and access/export. This ADR provides the extension points, not the policy.</li>
-          <li>The default 7-day outbox retention is a <strong>behavior change</strong>: consumers upgrading the framework begin purging processed outbox rows older than 7 days unless they set <code>Outbox:RetentionDays = 0</code>.</li>
-          <li>The <code>DeletedOn</code>/<code>DeletedBy</code> stamps are <strong>two new nullable columns on every auditable table</strong>, so adopting the framework version that introduced them costs one scaffolded migration per consumer database. They are additive (expand only, no ADR-057 override needed) and they are not backfilled: rows soft-deleted before the migration keep null stamps forever, so the pair answers &quot;who deleted this&quot; only from that point on.</li>
-          <li>The fitness rule turns &quot;we soft-delete, mostly&quot; into a <strong>reviewed inventory</strong>, not into a guarantee. It sees direct IL calls in the assemblies the repo&#39;s architecture map registers, so raw SQL, a stored procedure, or a delete issued from an unmapped assembly is invisible to it, and an allowlist entry covers every erasing call in the named type rather than the one that was reviewed.</li>
+          <li><strong>Nothing below the E2E lane tests the AppHost&#39;s own wiring.</strong> A bad reference or a missing
+          environment injection in <code>Program.cs</code> is caught by the E2E gate or by a developer, and the E2E gate
+          is ui-scoped and can legitimately skip (ADR-092 records the same property for the vitals budget).
+          The nightly AppHost smoke test exists precisely to close this, and being nightly and non-gating,
+          it closes it a day late by design.</li>
+          <li><strong>The environment-variable channel is global and order-sensitive.</strong> Hosts must boot strictly
+          sequentially and every pushed variable has to be restored on disposal
+          (<code>SqlServerIntegrationTestFixtureBase.cs:17-24</code>, <code>CrossServiceFixtureBase.cs:32-38</code>), which is
+          fragile in a way an in-memory configuration source would not be. It is the price of the hosts
+          reading configuration at configure time, and it is paid in test infrastructure rather than in
+          production code.</li>
+          <li><strong>Sampling means a reported request may have no trace.</strong> At 0.25, three of four traces are dropped
+          at the head, so an operator investigating a specific user report will often find the request counted
+          and not traced (<code>main.bicep:223-226</code>).</li>
+          <li><strong>The <code>Warning</code> floor moves <code>Information</code> logs off the queryable path.</strong> They exist in container
+          stdout only (<code>:228-233</code>), so the correlation-id story (ADR-041) is complete only for what the floor
+          admits.</li>
+          <li><strong>A 300-second export interval delays metric-driven signal.</strong> Alert rules use five-minute windows,
+          so the design holds, but a metric change is not visible in near real time (<code>:254-263</code>).</li>
+          <li><strong>Neither absence is enforced.</strong> Nothing fails a build if a project adds <code>Aspire.Hosting.Testing</code> or
+          a dashboard resource: unlike the pins of ADR-016 or the fitness rules of ADR-015, this record is a
+          convention, and its only guard is review.</li>
+          <li><strong>Store carries the same posture with less of it written down here.</strong> The fixtures and the AppHost
+          are cited above, but the observability half is grounded in ADC&#39;s template; Store&#39;s is not restated
+          and may differ in detail.</li>
           </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="041-observability-and-telemetry.html">ADR-041</a> (the shared Aspire OpenTelemetry baseline and the
+          sampling / metric-toggle knobs this record&#39;s production half configures),
+          <a href="062-slo-alerting-as-code.html">ADR-062</a> (the alert rules and the workbook that are the deployed-environment
+          view instead of a dashboard),
+          <a href="025-startup-warmup-readiness.html">ADR-025</a> (the readiness gate <code>AddServiceDefaults</code> wires, which is
+          what makes health-based startup ordering meaningful),
+          <a href="008-service-extraction-topology.html">ADR-008</a> (the four extracted hosts these tiers and this
+          orchestration exist to run),
+          <a href="006-database-per-service.html">ADR-006</a> (why the fixtures provision one throwaway database per service
+          rather than one for the app),
+          <a href="030-startup-sole-migrator.html">ADR-030</a> (each host applying its own migrations at boot, which is what
+          lets a fixture start against an empty database),
+          <a href="081-cost-baseline-deploy-gate.html">ADR-081</a> (the cost posture the telemetry thinning belongs to),
+          <a href="092-web-vitals-budget-gate.html">ADR-092</a> (the E2E lane this record defers app-model coverage to, and
+          the record of that lane&#39;s skip behavior).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/005-soft-delete-vs-erasure.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/098-aspire-orchestration-not-testing-or-dashboards.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">
@@ -258,6 +385,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>
