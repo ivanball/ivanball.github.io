@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-067: Shared Blazor Application Shell and IUIModule Composition · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-07).">
+  <meta name="description" content="Accepted (2026-08-07). Revised 2026-08-29: records the component-vendor choice (MudBlazor) that the Context already scoped to this ADR, and the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-067: Shared Blazor Application Shell and IUIModule Composition">
-  <meta property="og:description" content="Accepted (2026-08-07).">
+  <meta property="og:description" content="Accepted (2026-08-07). Revised 2026-08-29: records the component-vendor choice (MudBlazor) that the Context already scoped to this ADR, and the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-067: Shared Blazor Application Shell and IUIModule Composition">
-  <meta name="twitter:description" content="Accepted (2026-08-07).">
+  <meta name="twitter:description" content="Accepted (2026-08-07). Revised 2026-08-29: records the component-vendor choice (MudBlazor) that the Context already scoped to this ADR, and the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"067 · Shared Blazor Application Shell and IUIModule Composition","item":"https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -206,7 +206,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-067-shared-blazor-application-shell-and-iuimodule-composition">ADR-067: Shared Blazor Application Shell and IUIModule Composition</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-07).</p>
+          <p>Accepted (2026-08-07). Revised 2026-08-29: records the component-vendor choice (MudBlazor) that the
+          Context already scoped to this ADR, and the <code>IToastService</code> / <code>IAppDialogService</code> facades that keep
+          the vendor out of call sites.</p>
           <h2 id="context">Context</h2>
           <p>ADR-059 decided how a module plugs into the <strong>server</strong>: an <code>IModule</code> implementation is discovered by
           reflection, registered in topological order, and a host composes an application out of those modules
@@ -225,48 +227,71 @@
           <p>Ship the application shell in the framework package and let each module plug into it by implementing
           <code>IUIModule</code>, resolved from DI as <code>IEnumerable&lt;IUIModule&gt;</code>.</p>
           <ul>
-          <li><strong>The contract is four members, two of them defaulted.</strong> <code>NavItems</code>, <code>Assembly</code>,
+          <li><p><strong>The contract is four members, two of them defaulted.</strong> <code>NavItems</code>, <code>Assembly</code>,
           <code>AppBarComponentTypes</code> and <code>LayoutComponentTypes</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IUIModule.cs:13,16,19,22</code>); the
           last two default to <code>[]</code>, so a module that only contributes pages and navigation is two properties.
           A <code>NavItem</code> is a record of title, href, icon, optional <code>RequiredRole</code> / <code>RequiredClaim</code>, a
           <code>NavSection</code>, an optional collapsible <code>Group</code>, and an optional <code>TitleResource</code> that turns the title
-          and group into resource keys (<code>MMCA.Common.UI/Common/NavItem.cs:17</code>, ADR-027).</li>
-          <li><strong>The router discovers module pages at runtime from the registrations.</strong> <code>Routes.razor</code> injects
+          and group into resource keys (<code>MMCA.Common.UI/Common/NavItem.cs:17</code>, ADR-027).</p>
+          </li>
+          <li><p><strong>The router discovers module pages at runtime from the registrations.</strong> <code>Routes.razor</code> injects
           <code>IEnumerable&lt;IUIModule&gt;</code> (<code>MMCA.Common.UI/Routes.razor:4</code>) and hands
           <code>UIModules.Select(m =&gt; m.Assembly)</code> to the <code>Router</code>&#39;s <code>AdditionalAssemblies</code>, with <code>AppAssembly</code>
           pinned to the shell&#39;s own assembly and <code>NotFoundPage</code> to the shipped 404 page (<code>:7-9</code>). Nothing in
-          the shell names a module.</li>
-          <li><strong>The shell ships the routable pages every app needs.</strong> Home <code>/</code> (<code>MMCA.Common.UI/Pages/Home.razor:1</code>),
+          the shell names a module.</p>
+          </li>
+          <li><p><strong>The shell ships the routable pages every app needs.</strong> Home <code>/</code> (<code>MMCA.Common.UI/Pages/Home.razor:1</code>),
           Login <code>/login</code> and Register <code>/register</code> (<code>Pages/Auth/Login.razor:1</code>, <code>Pages/Auth/Register.razor:1</code>),
           the OAuth return page <code>/auth/oauth-complete</code> (<code>Pages/Auth/OAuthComplete.razor:1</code>), <code>/not-found</code>
           (<code>Pages/NotFound.razor:1</code>), <code>/forbidden</code> (<code>Pages/Forbidden.razor:1</code>), and the notification surfaces
           <code>/notifications</code>, <code>/notifications/inbox</code>, <code>/notifications/send</code>
-          (<code>Pages/Notifications/NotificationList.razor:1</code>, <code>NotificationInbox.razor:1</code>, <code>NotificationSend.razor:1</code>).</li>
-          <li><strong>Unauthenticated and unauthorized both resolve inside the shell.</strong> <code>AuthorizeRouteView</code> sends an
+          (<code>Pages/Notifications/NotificationList.razor:1</code>, <code>NotificationInbox.razor:1</code>, <code>NotificationSend.razor:1</code>).</p>
+          </li>
+          <li><p><strong>Unauthenticated and unauthorized both resolve inside the shell.</strong> <code>AuthorizeRouteView</code> sends an
           anonymous visitor through <code>RedirectToLogin</code> and an authenticated-but-unauthorized one to the
-          dedicated <code>Forbidden</code> page rather than a bare alert (<code>Routes.razor:11-29</code>).</li>
-          <li><strong>The nav menu is assembled from the registrations, trimmed per user.</strong> <code>NavMenu</code> injects the same
+          dedicated <code>Forbidden</code> page rather than a bare alert (<code>Routes.razor:11-29</code>).</p>
+          </li>
+          <li><p><strong>The nav menu is assembled from the registrations, trimmed per user.</strong> <code>NavMenu</code> injects the same
           enumeration (<code>MMCA.Common.UI/Layout/NavMenu.razor:8</code>), flattens every module&#39;s <code>NavItems</code>, drops
           items whose <code>RequiredRole</code> or <code>RequiredClaim</code> the current principal does not carry, and splits the
-          remainder into the General, My Account and Administration sections (<code>:196-204</code>).</li>
-          <li><strong>Two component extension points render module-supplied types.</strong> <code>MainLayout</code> reads
+          remainder into the General, My Account and Administration sections (<code>:196-204</code>).</p>
+          </li>
+          <li><p><strong>Two component extension points render module-supplied types.</strong> <code>MainLayout</code> reads
           <code>AppBarComponentTypes</code> and <code>LayoutComponentTypes</code> off the registrations
           (<code>MMCA.Common.UI/Layout/MainLayout.razor:98-99</code>) and renders them through <code>DynamicComponent</code> in the
           top app bar (<code>:41-44</code>, mirrored on the mobile top row at <code>NavMenu.razor:41-43</code>) and at the root of
           the layout (<code>:80-83</code>), so a module can add an icon with a badge or a drawer without touching the
-          layout.</li>
-          <li><strong>Registration is one call.</strong> <code>AddUIModule&lt;TModule&gt;()</code> runs the Scrutor scan for the module&#39;s entity
+          layout.</p>
+          </li>
+          <li><p><strong>Registration is one call.</strong> <code>AddUIModule&lt;TModule&gt;()</code> runs the Scrutor scan for the module&#39;s entity
           services and then registers the descriptor as a singleton <code>IUIModule</code>
           (<code>MMCA.Common.UI/DependencyInjection.cs:152-162</code>); modules with extra services register the
           descriptor directly with <code>AddSingleton&lt;IUIModule, TModule&gt;()</code> after their own registrations
           (<code>MMCA.Common.UI/Notifications/DependencyInjection.cs:39</code>,
-          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:69</code>).</li>
-          <li><strong>Blazor Web heads feed the same enumeration to the endpoint side.</strong> <code>MapRazorComponents&lt;App&gt;()</code>
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:69</code>).</p>
+          </li>
+          <li><p><strong>MudBlazor is the single component vendor, and the framework&#39;s own contracts sit in front of it.</strong>
+          The shell, its pages and every module UI render MudBlazor components; nothing here mixes in a second
+          component library. Where a vendor type would otherwise leak into page and helper code, a framework
+          contract stands in its place: <code>IToastService</code> and <code>IAppDialogService</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IToastService.cs</code>,
+          <code>IAppDialogService.cs</code>, namespace <code>MMCA.Common.UI.Common.Interfaces</code>). <code>IToastService</code> carries the
+          five severities every component library exposes and is fire-and-forget by design (during SSR
+          pre-render there is no toast host, so the call is a silent no-op); <code>IAppDialogService</code> is one
+          <code>ConfirmAsync</code>, where dismissing the prompt counts as declining, so a caller only ever branches on
+          <code>true</code>. <code>AddUIShared</code> TryAdd-registers <code>MudToastService</code> and <code>MudAppDialogService</code> over MudBlazor&#39;s
+          <code>ISnackbar</code> and <code>IDialogService</code> (<code>MMCA.Common.UI/DependencyInjection.cs:91-92</code>), so the vendor type
+          appears in exactly one implementation per contract, and the framework helpers that raise a toast or
+          ask a question (<code>ResultUiExtensions.NotifyOnFailure</code>, <code>ListPageActions.DeleteWithConfirmationAsync</code>)
+          take the facade. Richer, entity-specific dialogs stay component-side (<code>DeleteConfirmation</code>).</p>
+          </li>
+          <li><p><strong>Blazor Web heads feed the same enumeration to the endpoint side.</strong> <code>MapRazorComponents&lt;App&gt;()</code>
           takes the module assemblies from <code>GetServices&lt;IUIModule&gt;()</code> in addition to the shell assemblies
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:186-200</code>, which also de-duplicates, and
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:201-212</code>), so the router&#39;s view and the
-          endpoint&#39;s view of the routable assemblies come from one source.</li>
+          endpoint&#39;s view of the routable assemblies come from one source.</p>
+          </li>
           </ul>
           <p>Adoption today is every module UI in both apps plus the framework&#39;s own and its test host: ADC
           Conference, Identity and Engagement
@@ -304,6 +329,19 @@
           heads never make.</li>
           <li><strong>Nav trimming belongs in one place.</strong> Role and claim gating computed once in <code>NavMenu</code> gives every
           module the same behavior, instead of each module re-implementing <code>AuthorizeView</code> around its links.</li>
+          <li><strong>Why MudBlazor.</strong> It is MIT-licensed with no per-developer or per-deployment cost, which suits a
+          framework meant to be adopted by a new app for the price of a package reference. It is Material
+          Design aligned, so it agrees with the touch-target and breakpoint contract the responsive guide
+          already states rather than fighting it. And its component set matches what these apps actually are:
+          data-dense internal-tool surfaces built out of grids, dialogs, drawers and forms. The commercial
+          suites (Telerik, Syncfusion) buy grid-export depth, a large widget catalog and a support contract,
+          which earn their licence on export-heavy or reporting-heavy products; no app in this workspace is
+          one, so that spend would buy capability nobody uses.</li>
+          <li><strong>The facades are what keep the vendor replaceable.</strong> Because notifications and confirmation go
+          through <code>IToastService</code> / <code>IAppDialogService</code>, a vendor change is the shell components plus two
+          implementations, not every call site that raises a toast or asks the user a question. The same
+          boundary is why a bUnit test answers a confirmation with a stub instead of driving a rendered
+          dialog.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -325,6 +363,11 @@
           derive it from the same <code>IUIModule</code> registrations, but the duplication is real.</li>
           <li><strong>The reference seed does not demonstrate the pattern.</strong> Helpdesk&#39;s hand-rolled shell means an
           adopter following it gets the framework&#39;s components but not this composition model.</li>
+          <li><strong>One vendor is also one upstream ceiling, and the facades cover two surfaces only.</strong> A MudBlazor
+          limitation is the framework&#39;s limitation until upstream moves (ADR-063 records the accepted
+          <code>MudTablePager</code> combobox exception to the WCAG 2.1 AA gate). Components still reference MudBlazor
+          types directly, so <code>IToastService</code> / <code>IAppDialogService</code> shrink a vendor swap to a bounded project
+          rather than making it a configuration change.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-059 (the server-side <code>IModule</code> contract this mirrors in the presentation layer), ADR-056 (the

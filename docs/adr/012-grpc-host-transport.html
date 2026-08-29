@@ -552,8 +552,59 @@
           the same check, latching the answering version for the life of the process. The Profile A
           downstreams latch HTTP/2; the mixed-endpoint hosts (ADC Notification, Store Sales), whose cleartext
           <code>Http1AndHttp2</code> default endpoint never negotiates h2 without ALPN, latch HTTP/1.1 after a one-time
-          fallback. The per-downstream <code>ProbeOverHttp2</code> opt-out both gateways used to carry is obsolete, and
-          each gateway registers all its downstreams in a single <code>AddGatewayDownstreamHealthChecks</code> call.</p>
+          fallback. The per-downstream <code>ProbeOverHttp2</code> opt-out both gateways used to carry was obsoleted by
+          this change and <strong>removed in v1.168.0</strong>: <code>ProbeVersion</code> (and its per-downstream
+          <code>DownstreamProbeVersion</code>) is the API, with no compatibility facade left behind. Each gateway
+          registers all its downstreams in a single <code>AddGatewayDownstreamHealthChecks</code> call.</p>
+          <h2 id="update-2026-08-29-east-west-grpc-clients-state-their-own-circuit-breaker-v11680">Update (2026-08-29): east-west gRPC clients state their own circuit breaker (v1.168.0)</h2>
+          <p>The health checks above are the <strong>gateway&#39;s</strong> view of a downstream. An east-west call
+          (<code>AddTypedGrpcClient</code>, <code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs</code>)
+          addresses a peer directly and never passes the gateway, so none of those active probes apply to it:
+          the client-side circuit breaker is the only thing on that path that notices a peer going bad. It is
+          therefore stated explicitly rather than left at the standard resilience handler&#39;s library defaults.</p>
+          <p>The values live in <code>GrpcResilienceDefaults</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs</code>):</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Knob</th>
+          <th>Value</th>
+          <th>Why</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>FailureRatio</code></td>
+          <td>0.5</td>
+          <td>An in-cluster peer is healthy or hard-down; a tighter ratio trips on ordinary replica-rollover blips</td>
+          </tr>
+          <tr>
+          <td><code>MinimumThroughput</code></td>
+          <td>10</td>
+          <td>Keeps one failed call against a low-traffic service from opening the breaker</td>
+          </tr>
+          <tr>
+          <td><code>BreakDuration</code></td>
+          <td>10 s</td>
+          <td>About one container-replica restart, so recovery is not gated on the breaker</td>
+          </tr>
+          </tbody></table></div>
+          <p>Attempt timeout, total request timeout, sampling duration and the one-retry budget are re-exposed
+          from <code>HttpResilienceDefaults</code>, so the east-west path cannot drift from the outbound-HTTP path that
+          <code>MMCA.Common.Aspire</code>&#39;s <code>ConfigureHttpClientDefaults</code> applies.</p>
+          <p><strong>Keep-alive stays as configured, with no per-service knob.</strong> The typed client forces its primary
+          handler to a <code>SocketsHttpHandler</code> (the global HTTP defaults can wrap the primary handler in a way
+          that defeats HTTP/2 negotiation), and re-applies the connection hygiene from the same
+          <code>HttpResilienceDefaults</code>: <code>KeepAlivePingDelay</code> 60 s, <code>KeepAlivePingTimeout</code> 30 s,
+          <code>KeepAlivePingPolicy.WithActiveRequests</code>, plus the pooled-connection lifetime that makes an ACA
+          replica rollover pick up new DNS. Socket-level pings do not count as user traffic to the ACA
+          platform, and these in-cluster defaults are sufficient at current scale, so the values stay a single
+          framework constant rather than a per-service setting.</p>
+          <p><strong>A gRPC-status-aware retry predicate is deliberately deferred.</strong> Retries stay at the HTTP level,
+          where the standard handler already classifies transient faults. Adding a predicate over
+          <code>StatusCode.Unavailable</code> / <code>DeadlineExceeded</code> would put a second retry authority on the same call,
+          and the failure modes seen so far (a peer restarting, a cold replica) are already covered by the
+          one-retry budget plus the breaker. Revisit it when a real failure mode needs status-level
+          discrimination, not before.</p>
           <h3 id="when-to-use-which">When to use which</h3>
           <ul>
           <li><strong>Any service that hosts an inbound gRPC server reachable over cleartext h2c (especially a
@@ -624,6 +675,7 @@
             <li><a href="#context">Context</a></li>
             <li><a href="#decision">Decision</a></li>
             <li><a href="#update-2026-08-29-aspire-local-health-gating-for-http2-only-endpoints-and-the-downstream-probe-negotiates-its-version">Update (2026-08-29): Aspire-local health gating for Http2-only endpoints, and the downstream probe negotiates its version</a></li>
+            <li><a href="#update-2026-08-29-east-west-grpc-clients-state-their-own-circuit-breaker-v11680">Update (2026-08-29): east-west gRPC clients state their own circuit breaker (v1.168.0)</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>

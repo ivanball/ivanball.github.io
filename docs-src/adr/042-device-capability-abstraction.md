@@ -1,7 +1,9 @@
 # ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)
 
 ## Status
-Accepted (2026-07-10, amended 2026-07-17, 2026-07-23 and 2026-08-14).
+Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14 and 2026-08-29). The 2026-08-29
+amendment adds the `UseMmcaMauiErrorHandling` last-chance handlers and records the hybrid head's
+missing ASP.NET Core pipeline as a known constraint.
 
 ## Context
 The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
@@ -76,6 +78,18 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   The payoff of Blazor Hybrid: web URLs and app routes are identical, so no translation table
   exists anywhere.
 
+- **A head installs the process-wide last-chance error handlers with one call** (2026-08-29).
+  `UseMmcaMauiErrorHandling(onUnhandled?)`
+  (`Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:76`) registers
+  `MauiErrorHandlingInitializer` as an `IMauiInitializeService`, which hooks
+  `AppDomain.UnhandledException` and `TaskScheduler.UnobservedTaskException` and reports what they
+  catch to the app's `ILogger` plus the optional crash-reporter callback. It is an initializer rather
+  than a builder-time hook for the same reason `DeviceCapabilitiesInitializer` is one: the handlers
+  need a logger, and the container that supplies it only exists once the app is built. The logger is
+  resolved with `GetService`, so a head that configured no logging still gets the handlers and the
+  callback; the two events are process-wide statics behind a static once-guard, so a head that calls
+  the extension twice still reports each crash once.
+
 - **Shared components adapt, never branch on platform.** `ExternalLink` renders a real new-tab
   anchor on web heads and intercepts the click into the system browser where
   `IExternalLinkService.InterceptsLinks` is true, because `target="_blank"` silently dead-ends
@@ -105,6 +119,19 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   `UseMauiDeviceCapabilities()` silently loses haptics rather than failing fast). Accepted for
   decoration-grade capabilities; feature waves that depend on a capability assert `IsSupported` in
   their UI and surface the gap visibly.
+- **The hybrid head has no ASP.NET Core request pipeline** (recorded explicitly 2026-08-29). Inside a
+  `BlazorWebView` there is no Kestrel, no middleware and no mapped endpoints, so anything the web
+  heads get from the server side is simply absent: a request to a server route is resolved by the
+  Blazor `Router` instead, matches no `@page`, and renders the shell's NotFound page. The culture
+  endpoint is the worked example (`/culture/set`, mapped by `MapCultureEndpoint()` on the web heads;
+  `Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureApplier.cs:10` and
+  `MauiCultureStore.cs:8` document the consequence), which is why culture switching resolves through
+  the per-head `ICultureApplier` rather than a redirect. The same constraint is why unhandled-exception
+  reporting arrives as `UseMmcaMauiErrorHandling` above and not as middleware. Accepted, not a defect:
+  the head's whole value is that it renders the same components with no web server, and adding a local
+  pipeline for endpoint parity would reintroduce exactly the dependency it exists to avoid. The
+  practical rule for adopters is that any capability a web head implements as an endpoint needs a
+  per-head service contract here before a hybrid head can use it.
 - Biometrics, speech-to-text, and the external-auth broker now ship native MAUI implementations,
   all three registered by `AddMauiDeviceCapabilities()`
   (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:45`, `:46`, `:60`). The residual

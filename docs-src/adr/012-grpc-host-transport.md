@@ -369,8 +369,47 @@ HTTP/2 exact first and, on a protocol refusal (not on a transient failure), retr
 the same check, latching the answering version for the life of the process. The Profile A
 downstreams latch HTTP/2; the mixed-endpoint hosts (ADC Notification, Store Sales), whose cleartext
 `Http1AndHttp2` default endpoint never negotiates h2 without ALPN, latch HTTP/1.1 after a one-time
-fallback. The per-downstream `ProbeOverHttp2` opt-out both gateways used to carry is obsolete, and
-each gateway registers all its downstreams in a single `AddGatewayDownstreamHealthChecks` call.
+fallback. The per-downstream `ProbeOverHttp2` opt-out both gateways used to carry was obsoleted by
+this change and **removed in v1.168.0**: `ProbeVersion` (and its per-downstream
+`DownstreamProbeVersion`) is the API, with no compatibility facade left behind. Each gateway
+registers all its downstreams in a single `AddGatewayDownstreamHealthChecks` call.
+
+## Update (2026-08-29): east-west gRPC clients state their own circuit breaker (v1.168.0)
+
+The health checks above are the **gateway's** view of a downstream. An east-west call
+(`AddTypedGrpcClient`, `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs`)
+addresses a peer directly and never passes the gateway, so none of those active probes apply to it:
+the client-side circuit breaker is the only thing on that path that notices a peer going bad. It is
+therefore stated explicitly rather than left at the standard resilience handler's library defaults.
+
+The values live in `GrpcResilienceDefaults`
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs`):
+
+| Knob | Value | Why |
+|------|-------|-----|
+| `FailureRatio` | 0.5 | An in-cluster peer is healthy or hard-down; a tighter ratio trips on ordinary replica-rollover blips |
+| `MinimumThroughput` | 10 | Keeps one failed call against a low-traffic service from opening the breaker |
+| `BreakDuration` | 10 s | About one container-replica restart, so recovery is not gated on the breaker |
+
+Attempt timeout, total request timeout, sampling duration and the one-retry budget are re-exposed
+from `HttpResilienceDefaults`, so the east-west path cannot drift from the outbound-HTTP path that
+`MMCA.Common.Aspire`'s `ConfigureHttpClientDefaults` applies.
+
+**Keep-alive stays as configured, with no per-service knob.** The typed client forces its primary
+handler to a `SocketsHttpHandler` (the global HTTP defaults can wrap the primary handler in a way
+that defeats HTTP/2 negotiation), and re-applies the connection hygiene from the same
+`HttpResilienceDefaults`: `KeepAlivePingDelay` 60 s, `KeepAlivePingTimeout` 30 s,
+`KeepAlivePingPolicy.WithActiveRequests`, plus the pooled-connection lifetime that makes an ACA
+replica rollover pick up new DNS. Socket-level pings do not count as user traffic to the ACA
+platform, and these in-cluster defaults are sufficient at current scale, so the values stay a single
+framework constant rather than a per-service setting.
+
+**A gRPC-status-aware retry predicate is deliberately deferred.** Retries stay at the HTTP level,
+where the standard handler already classifies transient faults. Adding a predicate over
+`StatusCode.Unavailable` / `DeadlineExceeded` would put a second retry authority on the same call,
+and the failure modes seen so far (a peer restarting, a cold replica) are already covered by the
+one-retry budget plus the breaker. Revisit it when a real failure mode needs status-level
+discrimination, not before.
 
 ### When to use which
 - **Any service that hosts an inbound gRPC server reachable over cleartext h2c (especially a

@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23 and 2026-08-14).">
+  <meta name="description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14 and 2026-08-29). The 2026-08-29 amendment adds the UseMmcaMauiErrorHandling…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)">
-  <meta property="og:description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23 and 2026-08-14).">
+  <meta property="og:description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14 and 2026-08-29). The 2026-08-29 amendment adds the UseMmcaMauiErrorHandling…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)">
-  <meta name="twitter:description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23 and 2026-08-14).">
+  <meta name="twitter:description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14 and 2026-08-29). The 2026-08-29 amendment adds the UseMmcaMauiErrorHandling…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"042 · Device Capability Abstraction (MAUI Blazor Hybrid)","item":"https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -206,7 +206,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-042-device-capability-abstraction-maui-blazor-hybrid">ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-10, amended 2026-07-17, 2026-07-23 and 2026-08-14).</p>
+          <p>Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14 and 2026-08-29). The 2026-08-29
+          amendment adds the <code>UseMmcaMauiErrorHandling</code> last-chance handlers and records the hybrid head&#39;s
+          missing ASP.NET Core pipeline as a known constraint.</p>
           <h2 id="context">Context</h2>
           <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
           (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
@@ -278,6 +280,18 @@
           The payoff of Blazor Hybrid: web URLs and app routes are identical, so no translation table
           exists anywhere.</p>
           </li>
+          <li><p><strong>A head installs the process-wide last-chance error handlers with one call</strong> (2026-08-29).
+          <code>UseMmcaMauiErrorHandling(onUnhandled?)</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:76</code>) registers
+          <code>MauiErrorHandlingInitializer</code> as an <code>IMauiInitializeService</code>, which hooks
+          <code>AppDomain.UnhandledException</code> and <code>TaskScheduler.UnobservedTaskException</code> and reports what they
+          catch to the app&#39;s <code>ILogger</code> plus the optional crash-reporter callback. It is an initializer rather
+          than a builder-time hook for the same reason <code>DeviceCapabilitiesInitializer</code> is one: the handlers
+          need a logger, and the container that supplies it only exists once the app is built. The logger is
+          resolved with <code>GetService</code>, so a head that configured no logging still gets the handlers and the
+          callback; the two events are process-wide statics behind a static once-guard, so a head that calls
+          the extension twice still reports each crash once.</p>
+          </li>
           <li><p><strong>Shared components adapt, never branch on platform.</strong> <code>ExternalLink</code> renders a real new-tab
           anchor on web heads and intercepts the click into the system browser where
           <code>IExternalLinkService.InterceptsLinks</code> is true, because <code>target=&quot;_blank&quot;</code> silently dead-ends
@@ -310,6 +324,19 @@
           <code>UseMauiDeviceCapabilities()</code> silently loses haptics rather than failing fast). Accepted for
           decoration-grade capabilities; feature waves that depend on a capability assert <code>IsSupported</code> in
           their UI and surface the gap visibly.</li>
+          <li><strong>The hybrid head has no ASP.NET Core request pipeline</strong> (recorded explicitly 2026-08-29). Inside a
+          <code>BlazorWebView</code> there is no Kestrel, no middleware and no mapped endpoints, so anything the web
+          heads get from the server side is simply absent: a request to a server route is resolved by the
+          Blazor <code>Router</code> instead, matches no <code>@page</code>, and renders the shell&#39;s NotFound page. The culture
+          endpoint is the worked example (<code>/culture/set</code>, mapped by <code>MapCultureEndpoint()</code> on the web heads;
+          <code>Source/Presentation/MMCA.Common.UI.Maui/Globalization/MauiCultureApplier.cs:10</code> and
+          <code>MauiCultureStore.cs:8</code> document the consequence), which is why culture switching resolves through
+          the per-head <code>ICultureApplier</code> rather than a redirect. The same constraint is why unhandled-exception
+          reporting arrives as <code>UseMmcaMauiErrorHandling</code> above and not as middleware. Accepted, not a defect:
+          the head&#39;s whole value is that it renders the same components with no web server, and adding a local
+          pipeline for endpoint parity would reintroduce exactly the dependency it exists to avoid. The
+          practical rule for adopters is that any capability a web head implements as an endpoint needs a
+          per-head service contract here before a hybrid head can use it.</li>
           <li>Biometrics, speech-to-text, and the external-auth broker now ship native MAUI implementations,
           all three registered by <code>AddMauiDeviceCapabilities()</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:45</code>, <code>:46</code>, <code>:60</code>). The residual

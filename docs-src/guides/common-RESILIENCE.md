@@ -50,6 +50,45 @@ This is the framework's own analog of the consumer cloud drill below, proving th
 measured baseline centrally; the consumer drill proves it against production-grade backups and real cloud
 RTO targets (orders of magnitude larger, hence the per-app template below rather than a shared number).
 
+## Caching is fail-open (configurable, never load-bearing)
+
+The cache is an optimization, never the system of record, so nothing about it can turn a cache
+problem into a failed request. A miss, an unreachable cache, or a populate that outlives its lock
+timeout all degrade the same way: the request falls through to the real handler, runs uncached, and
+still answers correctly. There is no stale-serving tier (nothing like FusionCache's fail-safe, which
+keeps returning an expired entry while the backing store is unreachable). That absence is the
+deliberate half of the tradeoff, not a gap.
+
+`CacheSettings` (`Source/Core/MMCA.Common.Infrastructure/Settings/CacheSettings.cs`, bound from the
+`Cache` section) makes the policy configurable per host without changing that posture. The section is
+optional: every default is the same value `CacheOptions` states in code, so a host that configures
+nothing gets the framework policy.
+
+| Key | Default | What it sets |
+|-----|---------|--------------|
+| `Cache:DefaultDuration` | 30 s (`CacheOptions.DefaultDuration`) | Absolute TTL for an entry whose caller supplies no expiration |
+| `Cache:LocalCacheDuration` | unset (built-in 30 s ceiling) | Ceiling on the in-process L1 copy of a two-level entry, so a replica that never sees an invalidation still re-reads L2 within the window; ignored by the single-level cache services, which have no L1 |
+| `Cache:PopulateLockTimeout` | infinite | How long a request that missed waits for the per-key populate lock before giving up and running the query itself, uncached |
+
+Why fail-open rather than stale-serve:
+
+- **Correctness is not a framework-level tradeoff to make silently.** How stale a value may be is a
+  per-read business judgment, and a framework that served known-expired entries during an outage would
+  change what every consumer's queries return at the worst possible moment. Falling through to the
+  handler is the one behavior that is correct for every caller.
+- **A cache outage degrades to load, not to errors.** The database sees the traffic it would have seen
+  with no cache configured, which is a capacity question the mechanisms above (timeouts, retries,
+  circuit breakers, rate limiting) already answer, rather than a correctness one.
+- **The pathological case has its own bounded knob.** `PopulateLockTimeout` is stampede protection by
+  default (waiters block until the one request holding the lock has populated the entry). A finite
+  value trades some of that protection for a latency bound: once it elapses the waiter proceeds
+  uncached instead of queueing behind a slow populate or a wedged handler. The cost is several
+  concurrent executions of the same query, which is the cheaper failure of the two.
+
+The decisions behind this behavior are [ADR-026](../adr/026-caching-strategy.md) (caching strategy)
+and [ADR-077](../adr/077-hybridcache-substrate.md) (the HybridCache substrate); this section is the
+availability posture they imply.
+
 ## Baseline SLO / error-budget template (consumers fill in)
 
 Adopt and tune per app; ADC's filled-in version lives in `infra/DISASTER-RECOVERY.md` + the SLO

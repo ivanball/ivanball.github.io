@@ -91,8 +91,9 @@
         <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
         <span aria-hidden="true">/</span>
         <span class="current">Common · Resilience &amp; Business Continuity (rubric §29)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>All guides</summary>
@@ -209,6 +210,59 @@
           <p>This is the framework&#39;s own analog of the consumer cloud drill below, proving the <em>procedure</em> and a
           measured baseline centrally; the consumer drill proves it against production-grade backups and real cloud
           RTO targets (orders of magnitude larger, hence the per-app template below rather than a shared number).</p>
+          <h2 id="caching-is-fail-open-configurable-never-load-bearing">Caching is fail-open (configurable, never load-bearing)</h2>
+          <p>The cache is an optimization, never the system of record, so nothing about it can turn a cache
+          problem into a failed request. A miss, an unreachable cache, or a populate that outlives its lock
+          timeout all degrade the same way: the request falls through to the real handler, runs uncached, and
+          still answers correctly. There is no stale-serving tier (nothing like FusionCache&#39;s fail-safe, which
+          keeps returning an expired entry while the backing store is unreachable). That absence is the
+          deliberate half of the tradeoff, not a gap.</p>
+          <p><code>CacheSettings</code> (<code>Source/Core/MMCA.Common.Infrastructure/Settings/CacheSettings.cs</code>, bound from the
+          <code>Cache</code> section) makes the policy configurable per host without changing that posture. The section is
+          optional: every default is the same value <code>CacheOptions</code> states in code, so a host that configures
+          nothing gets the framework policy.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Key</th>
+          <th>Default</th>
+          <th>What it sets</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>Cache:DefaultDuration</code></td>
+          <td>30 s (<code>CacheOptions.DefaultDuration</code>)</td>
+          <td>Absolute TTL for an entry whose caller supplies no expiration</td>
+          </tr>
+          <tr>
+          <td><code>Cache:LocalCacheDuration</code></td>
+          <td>unset (built-in 30 s ceiling)</td>
+          <td>Ceiling on the in-process L1 copy of a two-level entry, so a replica that never sees an invalidation still re-reads L2 within the window; ignored by the single-level cache services, which have no L1</td>
+          </tr>
+          <tr>
+          <td><code>Cache:PopulateLockTimeout</code></td>
+          <td>infinite</td>
+          <td>How long a request that missed waits for the per-key populate lock before giving up and running the query itself, uncached</td>
+          </tr>
+          </tbody></table></div>
+          <p>Why fail-open rather than stale-serve:</p>
+          <ul>
+          <li><strong>Correctness is not a framework-level tradeoff to make silently.</strong> How stale a value may be is a
+          per-read business judgment, and a framework that served known-expired entries during an outage would
+          change what every consumer&#39;s queries return at the worst possible moment. Falling through to the
+          handler is the one behavior that is correct for every caller.</li>
+          <li><strong>A cache outage degrades to load, not to errors.</strong> The database sees the traffic it would have seen
+          with no cache configured, which is a capacity question the mechanisms above (timeouts, retries,
+          circuit breakers, rate limiting) already answer, rather than a correctness one.</li>
+          <li><strong>The pathological case has its own bounded knob.</strong> <code>PopulateLockTimeout</code> is stampede protection by
+          default (waiters block until the one request holding the lock has populated the entry). A finite
+          value trades some of that protection for a latency bound: once it elapses the waiter proceeds
+          uncached instead of queueing behind a slow populate or a wedged handler. The cost is several
+          concurrent executions of the same query, which is the cheaper failure of the two.</li>
+          </ul>
+          <p>The decisions behind this behavior are <a href="../adr/026-caching-strategy.html">ADR-026</a> (caching strategy)
+          and <a href="../adr/077-hybridcache-substrate.html">ADR-077</a> (the HybridCache substrate); this section is the
+          availability posture they imply.</p>
           <h2 id="baseline-slo--error-budget-template-consumers-fill-in">Baseline SLO / error-budget template (consumers fill in)</h2>
           <p>Adopt and tune per app; ADC&#39;s filled-in version lives in <code>infra/DISASTER-RECOVERY.md</code> + the SLO
           metric-alerts in <code>infra/main.bicep</code>.</p>
@@ -304,7 +358,17 @@ az sql db delete <span class="hljs-literal">-g</span> &lt;rg&gt; <span class="hl
           <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-RESILIENCE.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
-
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#what-the-framework-provides-and-verifies-in-repo">What the framework provides (and verifies in-repo)</a></li>
+            <li><a href="#caching-is-fail-open-configurable-never-load-bearing">Caching is fail-open (configurable, never load-bearing)</a></li>
+            <li><a href="#baseline-slo--error-budget-template-consumers-fill-in">Baseline SLO / error-budget template (consumers fill in)</a></li>
+            <li><a href="#restore-drill-runbook-reference">Restore-drill runbook (reference)</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>
