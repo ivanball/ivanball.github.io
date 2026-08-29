@@ -350,9 +350,15 @@ carried no Aspire health check at all and every `WaitFor` on them waited only fo
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs`): an
 AppHost-side health check that issues the same GET over HTTP/2 exact version against the resource's
 existing endpoint, exactly the profile the gateway's downstream probe already speaks. Both AppHosts
-chain it on their Profile A resources, so startup ordering is readiness-based across the whole
-graph. Production is untouched: ACA `httpGet` probes keep targeting the dedicated Http1-only probe
-listener (the 2026-07-25/28 updates above). The alternative design, surfacing the `HealthProbe:Port`
+chain it on their Profile A resources, probing **`/alive` (liveness), not `/health/ready`**: service
+readiness includes the warm-up gate, whose OIDC metadata task fetches through the gateway, and the
+gateway `WaitFor`s the services, so a readiness startup gate is a cycle (each service retries
+against the not-yet-started gateway until warm-up fails open at ~90s). Liveness proves what a
+`WaitFor` needs, a live Kestrel serving the real protocol, without pulling cross-resource readiness
+into the startup order; the mixed-endpoint hosts' stock gates moved to `/alive` for the same
+reason, and only the UI resources, which nothing `WaitFor`s, gate on `/health/ready`. Production is
+untouched: ACA `httpGet` probes keep targeting the dedicated Http1-only probe listener (the
+2026-07-25/28 updates above). The alternative design, surfacing the `HealthProbe:Port`
 listener as an Aspire endpoint, was rejected because the explicit Kestrel listeners it activates
 override the `ASPNETCORE_URLS` binding Aspire injects locally and collide on the fixed cleartext
 port; the extension's XML docs record the rejection.
