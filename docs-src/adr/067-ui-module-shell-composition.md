@@ -1,7 +1,9 @@
 # ADR-067: Shared Blazor Application Shell and IUIModule Composition
 
 ## Status
-Accepted (2026-08-07).
+Accepted (2026-08-07). Revised 2026-08-29: records the component-vendor choice (MudBlazor) that the
+Context already scoped to this ADR, and the `IToastService` / `IAppDialogService` facades that keep
+the vendor out of call sites.
 
 ## Context
 ADR-059 decided how a module plugs into the **server**: an `IModule` implementation is discovered by
@@ -61,6 +63,21 @@ Ship the application shell in the framework package and let each module plug int
   descriptor directly with `AddSingleton<IUIModule, TModule>()` after their own registrations
   (`MMCA.Common.UI/Notifications/DependencyInjection.cs:39`,
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:69`).
+- **MudBlazor is the single component vendor, and the framework's own contracts sit in front of it.**
+  The shell, its pages and every module UI render MudBlazor components; nothing here mixes in a second
+  component library. Where a vendor type would otherwise leak into page and helper code, a framework
+  contract stands in its place: `IToastService` and `IAppDialogService`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IToastService.cs`,
+  `IAppDialogService.cs`, namespace `MMCA.Common.UI.Common.Interfaces`). `IToastService` carries the
+  five severities every component library exposes and is fire-and-forget by design (during SSR
+  pre-render there is no toast host, so the call is a silent no-op); `IAppDialogService` is one
+  `ConfirmAsync`, where dismissing the prompt counts as declining, so a caller only ever branches on
+  `true`. `AddUIShared` TryAdd-registers `MudToastService` and `MudAppDialogService` over MudBlazor's
+  `ISnackbar` and `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:91-92`), so the vendor type
+  appears in exactly one implementation per contract, and the framework helpers that raise a toast or
+  ask a question (`ResultUiExtensions.NotifyOnFailure`, `ListPageActions.DeleteWithConfirmationAsync`)
+  take the facade. Richer, entity-specific dialogs stay component-side (`DeleteConfirmation`).
+
 - **Blazor Web heads feed the same enumeration to the endpoint side.** `MapRazorComponents<App>()`
   takes the module assemblies from `GetServices<IUIModule>()` in addition to the shell assemblies
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:186-200`, which also de-duplicates, and
@@ -103,6 +120,19 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   heads never make.
 - **Nav trimming belongs in one place.** Role and claim gating computed once in `NavMenu` gives every
   module the same behavior, instead of each module re-implementing `AuthorizeView` around its links.
+- **Why MudBlazor.** It is MIT-licensed with no per-developer or per-deployment cost, which suits a
+  framework meant to be adopted by a new app for the price of a package reference. It is Material
+  Design aligned, so it agrees with the touch-target and breakpoint contract the responsive guide
+  already states rather than fighting it. And its component set matches what these apps actually are:
+  data-dense internal-tool surfaces built out of grids, dialogs, drawers and forms. The commercial
+  suites (Telerik, Syncfusion) buy grid-export depth, a large widget catalog and a support contract,
+  which earn their licence on export-heavy or reporting-heavy products; no app in this workspace is
+  one, so that spend would buy capability nobody uses.
+- **The facades are what keep the vendor replaceable.** Because notifications and confirmation go
+  through `IToastService` / `IAppDialogService`, a vendor change is the shell components plus two
+  implementations, not every call site that raises a toast or asks the user a question. The same
+  boundary is why a bUnit test answers a confirmation with a stub instead of driving a rendered
+  dialog.
 
 ## Trade-offs
 - **`Assembly` is required even when it carries no route.** A host-only module that contributes only a
@@ -123,6 +153,11 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   derive it from the same `IUIModule` registrations, but the duplication is real.
 - **The reference seed does not demonstrate the pattern.** Helpdesk's hand-rolled shell means an
   adopter following it gets the framework's components but not this composition model.
+- **One vendor is also one upstream ceiling, and the facades cover two surfaces only.** A MudBlazor
+  limitation is the framework's limitation until upstream moves (ADR-063 records the accepted
+  `MudTablePager` combobox exception to the WCAG 2.1 AA gate). Components still reference MudBlazor
+  types directly, so `IToastService` / `IAppDialogService` shrink a vendor swap to a bounded project
+  rather than making it a configuration change.
 
 ## Related
 ADR-059 (the server-side `IModule` contract this mirrors in the presentation layer), ADR-056 (the
