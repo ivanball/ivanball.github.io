@@ -23,7 +23,7 @@ architecture-fitness rules, with no database needed.
 |---|---|---|
 | `mmca-app` | the whole solution | anywhere; it creates the solution directory |
 | `mmca-module` | a business module across all five layers, both test projects, a migrations project | your solution root |
-| `mmca-command` | one write-side slice: command record + handler | your module's `UseCases` folder |
+| `mmca-command` | one write-side slice: command record + validator + handler | your module's `UseCases` folder |
 | `mmca-query` | one read-side slice: cacheable query record + handler | your module's `UseCases` folder |
 
 `mmca-app` also lays down `build/add-module.ps1` inside the solution it generates (its own section
