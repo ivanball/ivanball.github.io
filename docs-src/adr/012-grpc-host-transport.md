@@ -338,6 +338,34 @@ Use when no service needs to **serve** gRPC on cleartext (consumer-only / one-di
   hop is needed for discovery (the gateway still routes `/.well-known/*` so the canonical issuer
   origin serves the discovery doc for clients).
 
+## Update (2026-08-29): Aspire-local health gating for Http2-only endpoints, and the downstream probe negotiates its version
+
+Two v1.167.0 framework additions close the last two operational gaps this profile family carried.
+
+**1. Profile A resources are now health-gated locally.** Aspire's stock `WithHttpHealthCheck` probes
+over HTTP/1.1, which an `Http2`-only cleartext endpoint refuses with `HTTP_1_1_REQUIRED`, so until
+now the five Profile A resources (ADC Identity/Conference/Engagement, Store Catalog/Identity)
+carried no Aspire health check at all and every `WaitFor` on them waited only for process start.
+`MMCA.Common.Aspire.Hosting` now ships `WithH2cHealthCheck(path = "/health/ready")`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs`): an
+AppHost-side health check that issues the same GET over HTTP/2 exact version against the resource's
+existing endpoint, exactly the profile the gateway's downstream probe already speaks. Both AppHosts
+chain it on their Profile A resources, so startup ordering is readiness-based across the whole
+graph. Production is untouched: ACA `httpGet` probes keep targeting the dedicated Http1-only probe
+listener (the 2026-07-25/28 updates above). The alternative design, surfacing the `HealthProbe:Port`
+listener as an Aspire endpoint, was rejected because the explicit Kestrel listeners it activates
+override the `ASPNETCORE_URLS` binding Aspire injects locally and collide on the fixed cleartext
+port; the extension's XML docs record the rejection.
+
+**2. The gateway downstream probe negotiates its HTTP version per downstream.**
+`GatewayDownstreamHealthCheckOptions.ProbeVersion` (`DownstreamProbeVersion.Auto` default) tries
+HTTP/2 exact first and, on a protocol refusal (not on a transient failure), retries HTTP/1.1 inside
+the same check, latching the answering version for the life of the process. The Profile A
+downstreams latch HTTP/2; the mixed-endpoint hosts (ADC Notification, Store Sales), whose cleartext
+`Http1AndHttp2` default endpoint never negotiates h2 without ALPN, latch HTTP/1.1 after a one-time
+fallback. The per-downstream `ProbeOverHttp2` opt-out both gateways used to carry is obsolete, and
+each gateway registers all its downstreams in a single `AddGatewayDownstreamHealthChecks` call.
+
 ### When to use which
 - **Any service that hosts an inbound gRPC server reachable over cleartext h2c (especially a
   bidirectional pair) → Profile A.** Cleartext h2c prior knowledge requires an `Http2`-only endpoint;
