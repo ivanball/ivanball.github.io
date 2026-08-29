@@ -11,7 +11,9 @@ on Store having no such file is restated, and the ADC `MassTransit.Azure.Service
 rebased onto its current lines. Amended (2026-08-14): every `Directory.Packages.props` citation is
 rebased onto its current lines, and the versions are restated per repo (Common is on MassTransit
 8.5.10 and `SixLabors.ImageSharp` 3.1.12; Store and ADC still declare
-`MassTransit.Azure.ServiceBus.Core` 8.5.5).
+`MassTransit.Azure.ServiceBus.Core` 8.5.5). Amended (2026-08-28): a **Transport exit options**
+section records the three candidates for an eventual move off MassTransit v8 and the one place a
+candidate would be tried. Nothing about the pin, the gate or the dependency set changes.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -53,7 +55,7 @@ Two related governance questions had no recorded answer:
    MSBuild targets fail outright), each mirrored as a dependabot major-update ignore so the bump is
    never even proposed
    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-60`,
-   `MMCA.Common/Directory.Packages.props:73-81,84-91`, `MMCA.Common/.github/dependabot.yml:56-65`).
+   `MMCA.Common/Directory.Packages.props:83-90`, `MMCA.Common/.github/dependabot.yml:57-60`).
    MassTransit is the original instance; ImageSharp is what showed the rule generalizes.
 
    The assertions run in MMCA.Common only, the one repo that subclasses the base
@@ -65,7 +67,7 @@ Two related governance questions had no recorded answer:
    8.5.5 for the Service Bus emulator test tier, carrying a comment that points back to Common's v8
    pin (`MMCA.ADC/Directory.Packages.props:56-61`, `MMCA.Store/Directory.Packages.props:81-86`).
    Common's own three MassTransit entries are on 8.5.10
-   (`MMCA.Common/Directory.Packages.props:79-81`), so the app-side entry trails within v8 rather than
+   (`MMCA.Common/Directory.Packages.props:88-90`), so the app-side entry trails within v8 rather than
    tracking Common patch for patch; what the pin governs, and what the fitness function reads, is the
    major.
    They still do not subclass the test: its default list also names the two package ids they do not
@@ -97,6 +99,58 @@ Two related governance questions had no recorded answer:
   deliberately excluded because `MMCA.Common.*` bumps happen solely through this ADR's lockstep sweep
   and MassTransit must stay v8 (`MMCA.ADC/.github/dependabot.yml:1-4`,
   `MMCA.Store/.github/dependabot.yml:1-8`, the latter added 2026-07-29), plus review.
+
+## Transport exit options
+The pin has a horizon. MassTransit v8 is the free major and its community support ends at the end of
+2026 (a maintainer statement about the package, not something this repository can assert), so
+"stay on v8" is a decision with an expiry rather than a permanent one. Nothing changes today; the
+candidates are recorded now so the eventual move is a comparison and not a scramble.
+
+What makes any of them a bounded change is where MassTransit actually sits. The whole
+`using MassTransit` surface is **six files, all inside `MMCA.Common.Infrastructure`**:
+`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:3`,
+`Services/BrokerMessageBus.cs:1`, `Services/IntegrationEventConsumer.cs:1`,
+`Services/IntegrationEventConsumerExtensions.cs:1`, `Services/UpcastingIntegrationEventConsumer.cs:1`
+and `Services/FaultIntegrationEventConsumer.cs:1`. Application, Domain and Shared never reference it:
+`IMessageBus` is the Application-layer abstraction
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28`) and
+`BrokerMessageBus` is its only broker implementation (`BrokerMessageBus.cs:24`), which is the
+boundary ADR-008's `MicroserviceExtractionTests` already keep enforced.
+
+Three candidates, **none adopted and none evaluated against a running broker here**:
+
+1. **The OpenTransit community fork of MassTransit v8.** Cheapest on paper, a package id swap under
+   the same API. No repo in this workspace references it, and the part that would decide it is Azure
+   Service Bus parity, since production runs Service Bus while local runs RabbitMQ
+   (`DependencyInjection.cs:844`, `:874`). Its release status and its parity are external facts this
+   record cannot verify and does not assert.
+2. **A commercial MassTransit v9 license.** The straight-line option: the pin exists only because v9
+   demands `MT_LICENSE` at startup and every broker-enabled host crashes without it
+   (`MMCA.Common/Directory.Packages.props:83-87`). A license retires the gate rather than routing
+   around it, at a recurring cost.
+3. **A direct `Azure.Messaging.ServiceBus` implementation of `IMessageBus`.** The largest and the
+   most owned. Publishing is one class (`BrokerMessageBus.cs:24`), but the consume side is where the
+   library earns its keep: three consumers ride `IConsumer<T>` (`IntegrationEventConsumer.cs:29`,
+   `UpcastingIntegrationEventConsumer.cs:35`, `FaultIntegrationEventConsumer.cs:28`) and the
+   transport wiring supplies exponential in-process retry plus second-level delayed redelivery
+   (`DependencyInjection.cs:865-869`, the two-level argument at `:817-831`), all of which would be
+   hand-written. It also drops RabbitMQ, which the local Aspire stack provisions.
+
+The trial point is the same for all three and it is additive: a new case in the `MessageBusProvider`
+switch inside `ConfigureBrokerTransport`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:837`, switch at `:842`,
+enum at `Settings/MessageBusSettings.cs:132`), so a candidate ships **beside** RabbitMQ and Service
+Bus instead of replacing either, and a consumer opts in by configuration. The two artifacts that move
+with a decision are the pin
+(`MMCA.Common/Directory.Packages.props:83-90`, the three entries at `:88-90`) and the fitness
+function that reads it
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-22`,
+the major ceiling at `:24-37`), plus the dependabot ignore they are paired with.
+
+A proving ground already exists: ADC's nightly runs an Azure Service Bus emulator smoke against its
+real integration-event contracts, advisory by design so it can never gate a deploy
+(`MMCA.ADC/.github/workflows/cross-service-tests.yml:145-172`, the non-gating rationale at
+`:126-129`). Any transport candidate has somewhere to be exercised that is not production.
 
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker

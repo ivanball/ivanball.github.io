@@ -81,6 +81,25 @@ pinned to `https://localhost:6001`), with its combined `MMCA.Store.WebAPI` host 
 Store's cross-service topology differs in transport detail (see ADR-012: both apps now run Profile A),
 but the extraction shape is identical.
 
+**Why ADC extracted, said plainly.** The four hosts
+(`MMCA.ADC/Source/Services/MMCA.ADC.{Identity,Conference,Engagement,Notification}.Service`) exist
+first of all to demonstrate and continuously exercise the extraction path end to end, because
+"build the monolith now, extract a service later" is the framework's core promise and a promise
+nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
+conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
+six deployables still ship in a single pipeline run from one template
+(`MMCA.ADC/infra/main.bicep:1036`, `:1250`, `:1379`, `:1508`, `:1674`, `:1777`, deployed together at
+`MMCA.ADC/.github/workflows/deploy.yml:1129`), so the independent-deploy benefit this record lists is
+available rather than taken. What ADC does buy with the split is proof under load that the path
+works: transport stays out of Domain, Application and Shared under a build gate
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MicroserviceExtractionTests.cs:3`), and the
+genuine cross-process flows (outbox to broker to consumer, and a real gRPC read) run nightly against
+real containers (`MMCA.ADC/.github/workflows/cross-service-tests.yml:6-10`, cadence at `:25-31`). A
+consumer adopting this topology should extract on an observable constraint (a module that must scale
+or fail apart from the rest, or an owner who must deploy on their own clock) and stay a modular
+monolith until then; ADC deliberately runs ahead of its own constraints so that consumers do not have
+to discover the path for themselves.
+
 ## Related
 ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database
 per service), and ADR-007 (gRPC cross-service calls) are the facet decisions that sit under this extraction.
