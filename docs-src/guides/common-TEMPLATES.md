@@ -5,7 +5,8 @@
 a new app by hand meant 12 projects and roughly 5,300 lines before a line of business logic, several
 of them load-bearing in ways nothing tells you about until much later. See
 [ADR-065](../adr/065-scaffolding-templates.md) for the reasoning,
-[Getting Started](common-GETTING-STARTED.md) for the six-step path from nothing to a running app, and
+[Getting Started](common-GETTING-STARTED.md) for the six-step path from nothing to a running app,
+[Small Apps](common-SMALL-APPS.md) for the `--database sqlite --no-aspire` floor, and
 [Building by Hand](common-BUILD-BY-HAND.md) for what the generated code actually does, phase by phase.
 
 ```powershell
@@ -45,6 +46,8 @@ below): it drives `mmca-module` and then performs every wire-up `dotnet new` can
 | `--no-status` | off | generate the module with no status axis (1.3.0) |
 | `--no-description` | off | generate the module with no long-text property (1.4.0) |
 | `--no-owner` | off | generate the module with no owning-user property (1.4.0) |
+| `--database` | `sqlserver` | relational engine for the sample module: `sqlserver` or `sqlite` |
+| `--no-aspire` | off | generate the solution with no Aspire AppHost |
 | `-f, --framework-version` | the version the pack was cut against | the `MMCA.Common.*` version to pin |
 | `--local-mmca` | off | emit a `local.props` that builds against `../MMCA.Common/Source` instead of the published packages |
 | `--no-restore` | off | skip the restore after generation |
@@ -136,6 +139,43 @@ read plus invalidating commands, both keyed through one `*CacheKeys` type), an i
 through the outbox, `en-US` and `es` resource pairs, a REST controller, and two Blazor pages. The
 child entity and the status axis are optional: see the shape options below.
 
+That is twelve projects. Two of them are decided by the solution-shape options below: the AppHost
+disappears under `--no-aspire`, and the migrations project is named for the engine
+(`Contoso.Support.Migrations.Sqlite.Orders` under `--database sqlite`).
+
+### Shaping the solution
+
+Two options decide the shape of the **solution** rather than of the module. They compose with each
+other and with all six module options, and `--database sqlite --no-aspire` together are the
+small-app floor that [Small Apps](common-SMALL-APPS.md) is written about.
+
+| Option | Default | What changes |
+|---|---|---|
+| `--database sqlserver\|sqlite` | `sqlserver` | The relational engine. Under `sqlite`: entity configurations inherit `EntityTypeConfigurationSqlite`, the migrations project becomes `<App>.Migrations.Sqlite.<Module>` against `Microsoft.EntityFrameworkCore.Sqlite`, the design-time factory becomes `DesignTimeSqliteDbContextFactory` over `SqliteDbContext`, the API host asks for a database rather than for SQL Server specifically (`AddInfrastructureHealthChecks(requireDatabase: true)`), the app is configured single-tenant, and the whole database is one file beside the host. |
+| `--no-aspire` | off | No orchestration project: no AppHost, no `Aspire.Hosting.*` pins, and the UI host reaches the API at the fixed dev address `https://localhost:60801` instead of through service discovery. Both hosts keep `AddServiceDefaults()` and `MapDefaultEndpoints()`, so telemetry, `/health` + `/alive` and the resilience pipeline are all still there and adding an AppHost later is additive. |
+
+```powershell
+dotnet new mmca-app -n Contoso.Notes --module Notes --aggregate Note --database sqlite --no-aspire
+```
+
+Three properties are worth knowing before you pick:
+
+- **`--database` is a swap, not a removal.** Unlike the four module-shape flags, which take an axis
+  away, this one exchanges one engine's code for another's. Everything above the configuration base
+  is untouched: the same module, handlers, controller and tests build against either engine, which
+  is the point of the framework's data-source routing
+  ([ADR-018](../adr/018-polyglot-persistence.md)).
+- **`--database sqlite` drops the checked-in sample migration**, for the same reason any shape flag
+  does and for a second one: those migrations are SQL Server DDL and their model snapshot names
+  `SQLServerDbContext`. Run `dotnet ef migrations add InitialCreate` against the generated
+  `.Migrations.Sqlite.<Module>` project with `--context SqliteDbContext`. The SQLite database itself
+  is created at startup without it, so the app runs before you do.
+- **Neither option reaches `mmca-module` or the slice templates.** They declare no engine symbol, so
+  a module added to a SQLite solution is scaffolded SQL-Server-shaped: its migrations project is
+  named `.Migrations.SqlServer.<Module>` and `build/add-module.ps1` writes a
+  `SQLServerMigrationsAssembly` entry. Both are hand-editable, and it is a known gap rather than a
+  design decision.
+
 ### Dropping the Blazor UI host
 
 There is no `--ui` flag: a conditional big enough to remove a host cannot be expressed without
@@ -155,12 +195,12 @@ does not**, so do them together:
 
 The API host, the module, the migrations project, and all three test projects are unaffected.
 
-### The two one-time fixups
+### The one-time fixup
 
-The scaffold deliberately does not hand these over, because renaming invalidates them and no fixed
+One thing the scaffold deliberately does not hand over, because renaming invalidates it and no fixed
 value is right for every name you could pick.
 
-**1. Using-directive and alias order.** `using Contoso.Support.Orders.Shared;` sorts above
+**Using-directive and alias order.** `using Contoso.Support.Orders.Shared;` sorts above
 `MMCA.Common.*`, but `using Zeta.App.Orders.Shared;` sorts below it. `SA1210` has no notion of
 blank-line-separated groups, so no checked-in order survives both, and `SA1211` is the same story for
 the identifier-alias file, whose aliases sort differently depending on the aggregate and child names
@@ -180,28 +220,28 @@ analyzer stays at error severity throughout. Every `mmca-command` / `mmca-query`
 the same using skew, so either re-run the format command after scaffolding, or leave the block until
 you have stopped scaffolding and then delete the whole thing.
 
-**2. Your integration-event wire contract.** Integration events cross service boundaries over the
-broker, so a renamed, removed, or retyped property breaks consumers in another service.
-`IntegrationEventContractTestsBase` fails the build on a silent reshape, but only against a contract
-**you** froze: one inherited from a sample module guarantees nothing, and its frozen literal lists
-members alphabetically, so `{ RequesterUserId, TicketId }` stops being correct the moment `Ticket`
-becomes `Order`. Add the subclass to your `ArchitectureTests.cs`:
+**Why the pack does not run that command for you.** A `dotnet new` run-script post action needs
+`--allow-scripts yes` on the command line and **prompts** otherwise, which would stall the pack's own
+smoke job and every adopter's scripted generation; it would also run before the solution has been
+built. A post action was evaluated on that basis and deliberately not added. The `.editorconfig`
+delta plus the command above is the supported answer.
 
-```csharp
-public sealed class IntegrationEventContractTests : IntegrationEventContractTestsBase
-{
-    protected override IArchitectureMap Map { get; } = new SupportArchitectureMap();
+### Your integration-event contract ships frozen
 
-    // Frozen wire contract. Update DELIBERATELY when evolving an integration event
-    // (version it per ADR-010; never a silent reshape).
-    protected override IReadOnlyList<string> ExpectedContract =>
-    [
-        // paste the actual value from the failing run
-    ];
-}
-```
+This used to be a second fixup: a subclass to paste in, run once, and fill from the failure. It is
+now emitted by the template, holding **your** event under the names you scaffolded with, and it
+passes on arrival.
 
-then run it once and paste what the failure prints:
+What made that possible is that `IntegrationEventContractTestsBase` compares each event's member
+list as a **set** rather than a sequence. JSON carries no member order, so reordering two properties
+changes nothing a consumer can observe, and the aggregate's own id moving position in the literal is
+no longer a difference. Everything observable is still a failure: a missing member, an extra member,
+a changed type, and any change to the set of events itself.
+
+`build/add-module.ps1` appends each new module's integration event to `ExpectedContract` as one of
+its wire-ups, so adding a second module does not turn your next test run red either. When you evolve
+an event on purpose, version it ([ADR-010](../adr/010-integration-event-schema-versioning.md)) and
+update the literal in the same commit; the failure prints the live value to paste:
 
 ```powershell
 dotnet test --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
@@ -234,6 +274,11 @@ All six behave exactly as they do for `mmca-app`, and they are per module: a sol
 flat, status-less catalog module beside one whose aggregate owns a growing child collection and a
 guarded lifecycle. The one difference is that `--title` here does not reach UI resources, because
 `mmca-module` generates no Blazor pages.
+
+`mmca-module` declares no engine option, so the module it generates is always SQL-Server-shaped: on a
+`--database sqlite` solution its migrations project arrives named `.Migrations.SqlServer.<Module>`
+and its `appsettings.json` wire-up names `SQLServerMigrationsAssembly`. Rename both by hand, or start
+a multi-module app on SQL Server.
 
 **If your solution came from `mmca-app`, use `build/add-module.ps1` instead** (below): it runs this
 template and then applies every wire-up the template can only print.
@@ -291,8 +336,11 @@ dotnet ef migrations add InitialCreate `
 ## `build/add-module.ps1`
 
 Since **1.4.0** every solution `mmca-app` generates ships this script, and it is the supported way to
-add a second module. It runs `mmca-module` with your shape options passed through, then performs all
-seven printed wire-ups:
+add a second module. It runs `mmca-module` with your shape options passed through, then performs the
+seven printed wire-ups plus an eighth of its own: the new module's integration event is appended to
+`ExpectedContract` in your architecture tests, so the frozen wire contract stays green. The
+orchestration step is skipped rather than failed when the solution has no AppHost (a `--no-aspire`
+app), where a `DataSources` entry is the whole database wire-up.
 
 ```powershell
 pwsh build/add-module.ps1 -Name Orders -Aggregate Order -Child Item -EventVerb Placed
@@ -335,9 +383,8 @@ describe the scaffolded entities, and you would delete and regenerate it anyway.
 degrades to printing the command on its own when the `dotnet-ef` tool is not installed, rather than
 failing a run whose other steps landed.
 
-Two things it deliberately does not do: the Blazor UI pages for the new module, and re-freezing the
-`IntegrationEventContractTests` list once the new module has integration events of its own. It prints
-both reminders when it finishes. The
+Two things it deliberately does not do: the Blazor UI pages for the new module, and that module's
+page-level localization resources. It prints both reminders when it finishes. The
 [ecommerce sample guide](common-ECOMMERCE-SAMPLE.md) is a worked two-module run.
 
 ---
@@ -399,9 +446,13 @@ cannot drift from the app whose CI keeps it building.
 That also means the seed's green CI is **not** the template's gate. The seed builds in local-source
 mode against `MMCA.Common@main`, while a generated app builds in package mode against a released
 version, and a source-mode build can pass where package-mode Release fails on an analyzer. A separate
-`template-smoke` job generates two solutions whose names share no substring with the seed, sweeps for
-residual tokens, builds package-mode, runs the tests, and adds a second module **through
-`build/add-module.ps1`**, so the wire-ups are covered by the same code path adopters run.
+`template-smoke` job generates **three** solutions whose names share no substring with the seed,
+sweeps each for residual and for missing tokens, builds package-mode and runs the tests. The three
+are shapes rather than names: one with every module axis turned off plus a `--title` rename, one
+fully default (which is what makes the absence sweeps non-vacuous), and one solution shape,
+`--database sqlite --no-aspire`. Only the first goes on to add a second module **through
+`build/add-module.ps1`** and scaffold slices, so the wire-ups are covered by the same code path
+adopters run without paying for three full runs of it.
 
 To work on the templates:
 

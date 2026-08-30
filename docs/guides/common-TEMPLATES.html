@@ -111,6 +111,7 @@
         <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
         <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
         <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-SMALL-APPS.html">Common · Small Apps: the lowest floor MMCA.Common has</a></li>
         <li><a href="common-TEMPLATES.html" aria-current="page">Common · Templates: scaffolding an MMCA app</a></li>
         <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
         <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
@@ -129,7 +130,8 @@
           a new app by hand meant 12 projects and roughly 5,300 lines before a line of business logic, several
           of them load-bearing in ways nothing tells you about until much later. See
           <a href="../adr/065-scaffolding-templates.html">ADR-065</a> for the reasoning,
-          <a href="common-GETTING-STARTED.html">Getting Started</a> for the six-step path from nothing to a running app, and
+          <a href="common-GETTING-STARTED.html">Getting Started</a> for the six-step path from nothing to a running app,
+          <a href="common-SMALL-APPS.html">Small Apps</a> for the <code>--database sqlite --no-aspire</code> floor, and
           <a href="common-BUILD-BY-HAND.html">Building by Hand</a> for what the generated code actually does, phase by phase.</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
 dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order
@@ -228,6 +230,16 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           <td><code>--no-owner</code></td>
           <td>off</td>
           <td>generate the module with no owning-user property (1.4.0)</td>
+          </tr>
+          <tr>
+          <td><code>--database</code></td>
+          <td><code>sqlserver</code></td>
+          <td>relational engine for the sample module: <code>sqlserver</code> or <code>sqlite</code></td>
+          </tr>
+          <tr>
+          <td><code>--no-aspire</code></td>
+          <td>off</td>
+          <td>generate the solution with no Aspire AppHost</td>
           </tr>
           <tr>
           <td><code>-f, --framework-version</code></td>
@@ -330,6 +342,51 @@ Tests/
           read plus invalidating commands, both keyed through one <code>*CacheKeys</code> type), an integration event
           through the outbox, <code>en-US</code> and <code>es</code> resource pairs, a REST controller, and two Blazor pages. The
           child entity and the status axis are optional: see the shape options below.</p>
+          <p>That is twelve projects. Two of them are decided by the solution-shape options below: the AppHost
+          disappears under <code>--no-aspire</code>, and the migrations project is named for the engine
+          (<code>Contoso.Support.Migrations.Sqlite.Orders</code> under <code>--database sqlite</code>).</p>
+          <h3 id="shaping-the-solution">Shaping the solution</h3>
+          <p>Two options decide the shape of the <strong>solution</strong> rather than of the module. They compose with each
+          other and with all six module options, and <code>--database sqlite --no-aspire</code> together are the
+          small-app floor that <a href="common-SMALL-APPS.html">Small Apps</a> is written about.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Option</th>
+          <th>Default</th>
+          <th>What changes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>--database sqlserver|sqlite</code></td>
+          <td><code>sqlserver</code></td>
+          <td>The relational engine. Under <code>sqlite</code>: entity configurations inherit <code>EntityTypeConfigurationSqlite</code>, the migrations project becomes <code>&lt;App&gt;.Migrations.Sqlite.&lt;Module&gt;</code> against <code>Microsoft.EntityFrameworkCore.Sqlite</code>, the design-time factory becomes <code>DesignTimeSqliteDbContextFactory</code> over <code>SqliteDbContext</code>, the API host asks for a database rather than for SQL Server specifically (<code>AddInfrastructureHealthChecks(requireDatabase: true)</code>), the app is configured single-tenant, and the whole database is one file beside the host.</td>
+          </tr>
+          <tr>
+          <td><code>--no-aspire</code></td>
+          <td>off</td>
+          <td>No orchestration project: no AppHost, no <code>Aspire.Hosting.*</code> pins, and the UI host reaches the API at the fixed dev address <code>https://localhost:60801</code> instead of through service discovery. Both hosts keep <code>AddServiceDefaults()</code> and <code>MapDefaultEndpoints()</code>, so telemetry, <code>/health</code> + <code>/alive</code> and the resilience pipeline are all still there and adding an AppHost later is additive.</td>
+          </tr>
+          </tbody></table></div>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Notes <span class="hljs-literal">--module</span> Notes <span class="hljs-literal">--aggregate</span> Note <span class="hljs-literal">--database</span> sqlite <span class="hljs-literal">--no-aspire</span></code></pre>
+          <p>Three properties are worth knowing before you pick:</p>
+          <ul>
+          <li><strong><code>--database</code> is a swap, not a removal.</strong> Unlike the four module-shape flags, which take an axis
+          away, this one exchanges one engine&#39;s code for another&#39;s. Everything above the configuration base
+          is untouched: the same module, handlers, controller and tests build against either engine, which
+          is the point of the framework&#39;s data-source routing
+          (<a href="../adr/018-polyglot-persistence.html">ADR-018</a>).</li>
+          <li><strong><code>--database sqlite</code> drops the checked-in sample migration</strong>, for the same reason any shape flag
+          does and for a second one: those migrations are SQL Server DDL and their model snapshot names
+          <code>SQLServerDbContext</code>. Run <code>dotnet ef migrations add InitialCreate</code> against the generated
+          <code>.Migrations.Sqlite.&lt;Module&gt;</code> project with <code>--context SqliteDbContext</code>. The SQLite database itself
+          is created at startup without it, so the app runs before you do.</li>
+          <li><strong>Neither option reaches <code>mmca-module</code> or the slice templates.</strong> They declare no engine symbol, so
+          a module added to a SQLite solution is scaffolded SQL-Server-shaped: its migrations project is
+          named <code>.Migrations.SqlServer.&lt;Module&gt;</code> and <code>build/add-module.ps1</code> writes a
+          <code>SQLServerMigrationsAssembly</code> entry. Both are hand-editable, and it is a known gap rather than a
+          design decision.</li>
+          </ul>
           <h3 id="dropping-the-blazor-ui-host">Dropping the Blazor UI host</h3>
           <p>There is no <code>--ui</code> flag: a conditional big enough to remove a host cannot be expressed without
           <code>#if</code> regions that would either break the reference app&#39;s own build or leave it compiling the
@@ -347,10 +404,10 @@ Tests/
           touched.</li>
           </ol>
           <p>The API host, the module, the migrations project, and all three test projects are unaffected.</p>
-          <h3 id="the-two-one-time-fixups">The two one-time fixups</h3>
-          <p>The scaffold deliberately does not hand these over, because renaming invalidates them and no fixed
+          <h3 id="the-one-time-fixup">The one-time fixup</h3>
+          <p>One thing the scaffold deliberately does not hand over, because renaming invalidates it and no fixed
           value is right for every name you could pick.</p>
-          <p><strong>1. Using-directive and alias order.</strong> <code>using Contoso.Support.Orders.Shared;</code> sorts above
+          <p><strong>Using-directive and alias order.</strong> <code>using Contoso.Support.Orders.Shared;</code> sorts above
           <code>MMCA.Common.*</code>, but <code>using Zeta.App.Orders.Shared;</code> sorts below it. <code>SA1210</code> has no notion of
           blank-line-separated groups, so no checked-in order survives both, and <code>SA1211</code> is the same story for
           the identifier-alias file, whose aliases sort differently depending on the aggregate and child names
@@ -365,24 +422,24 @@ Tests/
           analyzer stays at error severity throughout. Every <code>mmca-command</code> / <code>mmca-query</code> slice arrives with
           the same using skew, so either re-run the format command after scaffolding, or leave the block until
           you have stopped scaffolding and then delete the whole thing.</p>
-          <p><strong>2. Your integration-event wire contract.</strong> Integration events cross service boundaries over the
-          broker, so a renamed, removed, or retyped property breaks consumers in another service.
-          <code>IntegrationEventContractTestsBase</code> fails the build on a silent reshape, but only against a contract
-          <strong>you</strong> froze: one inherited from a sample module guarantees nothing, and its frozen literal lists
-          members alphabetically, so <code>{ RequesterUserId, TicketId }</code> stops being correct the moment <code>Ticket</code>
-          becomes <code>Order</code>. Add the subclass to your <code>ArchitectureTests.cs</code>:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">IntegrationEventContractTests</span> : <span class="hljs-title">IntegrationEventContractTestsBase</span>
-{
-    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> SupportArchitectureMap();
-
-    <span class="hljs-comment">// Frozen wire contract. Update DELIBERATELY when evolving an integration event</span>
-    <span class="hljs-comment">// (version it per ADR-010; never a silent reshape).</span>
-    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IReadOnlyList&lt;<span class="hljs-built_in">string</span>&gt; ExpectedContract =&gt;
-    [
-        <span class="hljs-comment">// paste the actual value from the failing run</span>
-    ];
-}</code></pre>
-          <p>then run it once and paste what the failure prints:</p>
+          <p><strong>Why the pack does not run that command for you.</strong> A <code>dotnet new</code> run-script post action needs
+          <code>--allow-scripts yes</code> on the command line and <strong>prompts</strong> otherwise, which would stall the pack&#39;s own
+          smoke job and every adopter&#39;s scripted generation; it would also run before the solution has been
+          built. A post action was evaluated on that basis and deliberately not added. The <code>.editorconfig</code>
+          delta plus the command above is the supported answer.</p>
+          <h3 id="your-integration-event-contract-ships-frozen">Your integration-event contract ships frozen</h3>
+          <p>This used to be a second fixup: a subclass to paste in, run once, and fill from the failure. It is
+          now emitted by the template, holding <strong>your</strong> event under the names you scaffolded with, and it
+          passes on arrival.</p>
+          <p>What made that possible is that <code>IntegrationEventContractTestsBase</code> compares each event&#39;s member
+          list as a <strong>set</strong> rather than a sequence. JSON carries no member order, so reordering two properties
+          changes nothing a consumer can observe, and the aggregate&#39;s own id moving position in the literal is
+          no longer a difference. Everything observable is still a failure: a missing member, an extra member,
+          a changed type, and any change to the set of events itself.</p>
+          <p><code>build/add-module.ps1</code> appends each new module&#39;s integration event to <code>ExpectedContract</code> as one of
+          its wire-ups, so adding a second module does not turn your next test run red either. When you evolve
+          an event on purpose, version it (<a href="../adr/010-integration-event-schema-versioning.html">ADR-010</a>) and
+          update the literal in the same commit; the failure prints the live value to paste:</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
   <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-class</span> <span class="hljs-string">&quot;*IntegrationEventContract*&quot;</span></code></pre>
           <hr>
@@ -452,6 +509,10 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
           flat, status-less catalog module beside one whose aggregate owns a growing child collection and a
           guarded lifecycle. The one difference is that <code>--title</code> here does not reach UI resources, because
           <code>mmca-module</code> generates no Blazor pages.</p>
+          <p><code>mmca-module</code> declares no engine option, so the module it generates is always SQL-Server-shaped: on a
+          <code>--database sqlite</code> solution its migrations project arrives named <code>.Migrations.SqlServer.&lt;Module&gt;</code>
+          and its <code>appsettings.json</code> wire-up names <code>SQLServerMigrationsAssembly</code>. Rename both by hand, or start
+          a multi-module app on SQL Server.</p>
           <p><strong>If your solution came from <code>mmca-app</code>, use <code>build/add-module.ps1</code> instead</strong> (below): it runs this
           template and then applies every wire-up the template can only print.</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Orders <span class="hljs-literal">--app</span> Contoso.Shop <span class="hljs-literal">--aggregate</span> Order <span class="hljs-literal">--child</span> Item</code></pre>
@@ -495,8 +556,11 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
           <hr>
           <h2 id="buildadd-moduleps1"><code>build/add-module.ps1</code></h2>
           <p>Since <strong>1.4.0</strong> every solution <code>mmca-app</code> generates ships this script, and it is the supported way to
-          add a second module. It runs <code>mmca-module</code> with your shape options passed through, then performs all
-          seven printed wire-ups:</p>
+          add a second module. It runs <code>mmca-module</code> with your shape options passed through, then performs the
+          seven printed wire-ups plus an eighth of its own: the new module&#39;s integration event is appended to
+          <code>ExpectedContract</code> in your architecture tests, so the frozen wire contract stays green. The
+          orchestration step is skipped rather than failed when the solution has no AppHost (a <code>--no-aspire</code>
+          app), where a <code>DataSources</code> entry is the whole database wire-up.</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Orders <span class="hljs-literal">-Aggregate</span> Order <span class="hljs-literal">-Child</span> Item <span class="hljs-literal">-EventVerb</span> Placed</code></pre>
           <div class="table-wrap"><table>
           <thead>
@@ -579,9 +643,8 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
           describe the scaffolded entities, and you would delete and regenerate it anyway. The script also
           degrades to printing the command on its own when the <code>dotnet-ef</code> tool is not installed, rather than
           failing a run whose other steps landed.</p>
-          <p>Two things it deliberately does not do: the Blazor UI pages for the new module, and re-freezing the
-          <code>IntegrationEventContractTests</code> list once the new module has integration events of its own. It prints
-          both reminders when it finishes. The
+          <p>Two things it deliberately does not do: the Blazor UI pages for the new module, and that module&#39;s
+          page-level localization resources. It prints both reminders when it finishes. The
           <a href="common-ECOMMERCE-SAMPLE.html">ecommerce sample guide</a> is a worked two-module run.</p>
           <hr>
           <h2 id="mmca-command-and-mmca-query"><code>mmca-command</code> and <code>mmca-query</code></h2>
@@ -661,9 +724,13 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <p>That also means the seed&#39;s green CI is <strong>not</strong> the template&#39;s gate. The seed builds in local-source
           mode against <code>MMCA.Common@main</code>, while a generated app builds in package mode against a released
           version, and a source-mode build can pass where package-mode Release fails on an analyzer. A separate
-          <code>template-smoke</code> job generates two solutions whose names share no substring with the seed, sweeps for
-          residual tokens, builds package-mode, runs the tests, and adds a second module <strong>through
-          <code>build/add-module.ps1</code></strong>, so the wire-ups are covered by the same code path adopters run.</p>
+          <code>template-smoke</code> job generates <strong>three</strong> solutions whose names share no substring with the seed,
+          sweeps each for residual and for missing tokens, builds package-mode and runs the tests. The three
+          are shapes rather than names: one with every module axis turned off plus a <code>--title</code> rename, one
+          fully default (which is what makes the absence sweeps non-vacuous), and one solution shape,
+          <code>--database sqlite --no-aspire</code>. Only the first goes on to add a second module <strong>through
+          <code>build/add-module.ps1</code></strong> and scaffold slices, so the wire-ups are covered by the same code path
+          adopters run without paying for three full runs of it.</p>
           <p>To work on the templates:</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">git clone https://github.com/ivanball/MMCA.Helpdesk
 <span class="hljs-built_in">cd</span> MMCA.Helpdesk

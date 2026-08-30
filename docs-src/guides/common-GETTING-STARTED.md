@@ -21,6 +21,12 @@ them is optional depth.
 > cannot retrofit one. Take the [build-by-hand walkthrough](common-BUILD-BY-HAND.md) instead. It is
 > also where to read *what* the scaffold handed you and why, once you want to change it.
 
+> **No Docker, or nothing to orchestrate yet?** Add `--database sqlite --no-aspire` and the same
+> command produces a two-host app over a single database file: no container, no server, no AppHost,
+> and the whole framework otherwise intact. That shape has its own guide,
+> [Small Apps](common-SMALL-APPS.md), including what is deliberately off in it and which switch to
+> flip when an assumption stops holding. The rest of this page describes the full shape.
+
 ---
 
 ## Before you start
@@ -31,6 +37,16 @@ them is optional depth.
 
 No credentials, tokens, or extra feeds. `MMCA.Templates` and every `MMCA.Common.*` package restore
 from nuget.org (see [ADR-053](../adr/053-dual-registry-package-publishing.md)).
+
+> **One reference instead of six.** A standard application host takes the framework's core six
+> packages (Shared, Domain, Application, Infrastructure, API, Aspire). The `MMCA.Common`
+> **metapackage** bundles exactly those, so a hand-wired host can take one `PackageReference` and one
+> version pin instead of six of each. It carries dependencies and no assembly, and it releases at the
+> same version as everything else, so it is one more entry in the same lockstep sweep
+> ([ADR-101](../adr/101-common-metapackage.md), [ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md)).
+> The specialised packages (UI, UI.Web, Grpc, Gateway, Aspire.Hosting, the `Testing.*` set) stay
+> separate and are added per project. The scaffold below still emits the explicit six, so this is
+> something to reach for when you are wiring a host yourself.
 
 ---
 
@@ -78,7 +94,7 @@ dotnet test  --solution Contoso.Support.slnx
 That is a warning-free build with `TreatWarningsAsErrors` and all five analyzers at error severity,
 and a passing test run including the architecture-fitness rules, with **no database needed**. If it
 is not green, that is a template bug rather than yours: the pack is generated from the reference app
-whose CI keeps it building, and a separate smoke job builds two generated solutions in package mode
+whose CI keeps it building, and a separate smoke job builds three generated solutions in package mode
 on every change.
 
 Getting a green baseline **first** is the point of this step. It is the line you bisect against
@@ -122,10 +138,10 @@ The app runs **issuer-less**: with no Identity module it registers a bare auth s
 controller is `[AllowAnonymous]`, so nothing blocks you on day one. Adding real RS256/JWKS auth is
 under [Then what](#then-what) below.
 
-## 6. The two one-time fixups
+## 6. The one-time fixup
 
-The scaffold deliberately does not hand these over, because renaming invalidates them and no fixed
-value is right for every name you could pick. Both are covered in full in the
+The scaffold deliberately does not hand this one over, because renaming invalidates it and no fixed
+value is right for every name you could pick. It is covered in full in the
 [templates guide](common-TEMPLATES.md).
 
 **Using-directive and alias order.** `using Contoso.Support.Orders.Shared;` sorts above
@@ -140,12 +156,13 @@ scaffolding:
 dotnet format analyzers Contoso.Support.slnx --diagnostics SA1210 SA1211 --severity info
 ```
 
-**Your integration-event wire contract.** Integration events cross service boundaries, so a renamed
-or retyped property breaks consumers elsewhere. `IntegrationEventContractTestsBase` fails the build
-on a silent reshape, but only against a contract **you** froze: its frozen literal lists members
-alphabetically, so one inherited from a sample module is wrong the moment your aggregate is not
-called `Ticket`. Add the subclass to `ArchitectureTests.cs`, run it once, and paste in what the
-failure prints:
+**Your integration-event wire contract ships frozen.** Integration events cross service boundaries,
+so a renamed or retyped property breaks consumers elsewhere, and `IntegrationEventContractTestsBase`
+fails the build on a silent reshape. The subclass is emitted by the template holding **your** event
+under the names you scaffolded with, and it passes on arrival: member lists are compared as a set, so
+nothing about the order of your properties has to be fixed up first. Evolve an event on purpose,
+version it ([ADR-010](../adr/010-integration-event-schema-versioning.md)), and update the literal in
+the same commit. The failure prints the live value to paste:
 
 ```powershell
 dotnet test --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
@@ -472,6 +489,8 @@ category intact, and the snackbar shows "A closed order cannot be transferred to
 - **[Templates](common-TEMPLATES.md)**: every parameter of all four templates, dropping the Blazor UI
   host, and how the pack is built. [ADR-065](../adr/065-scaffolding-templates.md) explains why it is
   derived from the reference app rather than maintained beside it.
+- **[Small apps](common-SMALL-APPS.md)**: the same scaffold with `--database sqlite --no-aspire`, the
+  lowest floor the framework has, plus the honest list of what that shape gives up.
 - **[Build by hand](common-BUILD-BY-HAND.md)**: the same solution, phase by phase, for retrofitting
   an existing solution or for understanding what you were handed.
 - **[MMCA.Helpdesk](https://github.com/ivanball/MMCA.Helpdesk)**: the runnable reference app. It *is*

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 98 ADRs</summary>
+        <summary>All 101 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -198,6 +198,9 @@
         <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
         <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
         <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
           </ol>
         </nav>
       </details>
@@ -213,7 +216,11 @@
           Revision (2026-08-18) at the end). Revised 2026-08-26 (<strong>the inbox is no longer opt-in for a broker
           transport</strong>: it resolves ON unless a host explicitly turns it off, and its row is staged into the
           handler&#39;s own unit of work so it commits atomically with the handler&#39;s mutations. See the Revision
-          (2026-08-26) at the end).</p>
+          (2026-08-26) at the end). See also
+          <a href="100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a> (2026-08-29, v1.170.0), which applies this
+          record&#39;s three-valued resolution rule to the <strong>producer</strong> side: <code>MessageBus:EnableOutbox</code> is <code>bool?</code>
+          and resolves from the transport the same way <code>EnableInbox</code> does here, so the two settings now read
+          identically. Nothing about the inbox contract changes.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 makes integration-event delivery <strong>at-least-once</strong>: the outbox guarantees a published event
           is not lost, and the MassTransit broker redelivers on consumer failure. At-least-once means a

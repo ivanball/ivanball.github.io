@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 98 ADRs</summary>
+        <summary>All 101 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -198,6 +198,9 @@
         <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
         <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
         <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
           </ol>
         </nav>
       </details>
@@ -218,7 +221,11 @@
           8.5.10 and <code>SixLabors.ImageSharp</code> 3.1.12; Store and ADC still declare
           <code>MassTransit.Azure.ServiceBus.Core</code> 8.5.5). Amended (2026-08-28): a <strong>Transport exit options</strong>
           section records the three candidates for an eventual move off MassTransit v8 and the one place a
-          candidate would be tried. Nothing about the pin, the gate or the dependency set changes.</p>
+          candidate would be tried. Nothing about the pin, the gate or the dependency set changes. See also
+          <a href="101-common-metapackage.html">ADR-101</a> (2026-08-29, v1.170.0): the <code>MMCA.Common</code> metapackage releases at
+          the same version off the same tag like every other package, so it is one more entry a consumer sweeps
+          in the same pass, and pinning six dependencies at its own version is only safe because of the lockstep
+          rule decided here.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>FACTS.md</code> for the authoritative
           list and count) consumed by three downstream repos: the two

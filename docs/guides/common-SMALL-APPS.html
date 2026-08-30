@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Small Apps: the lowest floor MMCA.Common has · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Two mmca-app options decide the shape of the solution rather than the shape of the sample module, and together they are the smallest thing the…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-SMALL-APPS.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Small Apps: the lowest floor MMCA.Common has">
+  <meta property="og:description" content="Two mmca-app options decide the shape of the solution rather than the shape of the sample module, and together they are the smallest thing the…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-SMALL-APPS.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Small Apps: the lowest floor MMCA.Common has">
+  <meta name="twitter:description" content="Two mmca-app options decide the shape of the solution rather than the shape of the sample module, and together they are the smallest thing the…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Small Apps: the lowest floor MMCA.Common has","item":"https://ivanball.github.io/docs/guides/common-SMALL-APPS.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Common · Small Apps: the lowest floor MMCA.Common has</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-BUILD-BY-HAND.html">Common · Building on MMCA.Common by Hand</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-ECOMMERCE-SAMPLE.html">Common · Build MMCA.ECommerce: a Two-Module Store from the Templates</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-SMALL-APPS.html" aria-current="page">Common · Small Apps: the lowest floor MMCA.Common has</a></li>
+        <li><a href="common-TEMPLATES.html">Common · Templates: scaffolding an MMCA app</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="small-apps-the-lowest-floor-mmcacommon-has">Small Apps: the lowest floor MMCA.Common has</h1>
+          <p>Two <code>mmca-app</code> options decide the shape of the <strong>solution</strong> rather than the shape of the sample
+          module, and together they are the smallest thing the framework generates:</p>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
+dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Notes <span class="hljs-literal">--module</span> Notes <span class="hljs-literal">--aggregate</span> Note <span class="hljs-literal">--database</span> sqlite <span class="hljs-literal">--no-aspire</span></code></pre>
+          <p>That is two hosts, one module, one database file, and <code>dotnet run</code>. No Docker, no SQL Server, no
+          orchestrator, and no broker. Everything else is the same framework the two production applications
+          run on: the same <code>Result</code> pipeline, the same CQRS decorators, the same soft delete, audit stamping,
+          health endpoints and OpenAPI document, and the same extraction path when the app outgrows its own
+          shape.</p>
+          <p>This guide is the positioning of that shape: what it costs, what it does not, and which switch to
+          flip when one of its assumptions stops holding. For the full-shape path (SQL Server, Aspire, six
+          steps from nothing to a running app) read <a href="common-GETTING-STARTED.html">Getting Started</a> instead; for
+          every parameter of every template, the <a href="common-TEMPLATES.html">templates guide</a>.</p>
+          <hr>
+          <h2 id="why-this-shape-exists">Why this shape exists</h2>
+          <p>The default <code>mmca-app</code> output is a twelve-project solution: five module layers, a REST API host, a
+          Blazor UI host, an Aspire AppHost, a migrations project, and three test projects. It assumes Docker
+          is running, because the AppHost provisions SQL Server as a container, and it assumes you want an
+          orchestrator.</p>
+          <p>Those assumptions are right for an application that will grow modules, be deployed to Container Apps,
+          and eventually extract a service. They are the wrong first question for an internal tool, a workshop
+          sample, a proof of concept, or the app someone wants to read on a plane. Until this release the
+          framework had one answer for all of them, and it started with &quot;install Docker Desktop&quot;.</p>
+          <p><code>--database sqlite --no-aspire</code> removes the two assumptions and nothing else:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th></th>
+          <th>Default shape</th>
+          <th>Small-app shape</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Projects</td>
+          <td>12</td>
+          <td>11 (no AppHost)</td>
+          </tr>
+          <tr>
+          <td>Database</td>
+          <td>SQL Server in a container</td>
+          <td>one SQLite file beside the host</td>
+          </tr>
+          <tr>
+          <td>Startup</td>
+          <td><code>dotnet run</code> the AppHost</td>
+          <td><code>dotnet run</code> each host</td>
+          </tr>
+          <tr>
+          <td>Prerequisites</td>
+          <td>.NET 10 SDK, Docker Desktop, <code>dotnet-ef</code></td>
+          <td>.NET 10 SDK (<code>dotnet-ef</code> only when you generate migrations)</td>
+          </tr>
+          <tr>
+          <td>Service discovery</td>
+          <td>Aspire resolves <code>web</code> for the UI</td>
+          <td>the UI&#39;s <code>Api:BaseAddress</code> names the API&#39;s dev URL</td>
+          </tr>
+          <tr>
+          <td>Messaging</td>
+          <td>in-process, with the outbox running</td>
+          <td>in-process, outbox off (see below)</td>
+          </tr>
+          <tr>
+          <td>Tenants</td>
+          <td>two, one of them database-per-tenant</td>
+          <td>one (<code>acme</code>)</td>
+          </tr>
+          </tbody></table></div>
+          <p>The two options are independent and compose with each other and with every module-shape flag, so
+          <code>--database sqlite</code> on its own is an Aspire solution whose one data source happens to be a file (the
+          AppHost declares it with <code>WithSqliteDataSource</code> and has no container to wait for), and <code>--no-aspire</code>
+          on its own is a two-host SQL Server solution you start yourself.</p>
+          <hr>
+          <h2 id="the-five-minute-path">The five-minute path</h2>
+          <h3 id="1-scaffold">1. Scaffold</h3>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
+dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Notes <span class="hljs-literal">--module</span> Notes <span class="hljs-literal">--aggregate</span> Note <span class="hljs-literal">--database</span> sqlite <span class="hljs-literal">--no-aspire</span>
+<span class="hljs-built_in">cd</span> Contoso.Notes</code></pre>
+          <p>Add <code>--flat</code> if the aggregate owns no child collection; the four module-shape flags all still apply
+          (see the <a href="common-TEMPLATES.html#shaping-the-sample-module">templates guide</a>).</p>
+          <h3 id="2-build-and-test-before-you-change-anything">2. Build and test before you change anything</h3>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build Contoso.Notes.slnx
+dotnet test  <span class="hljs-literal">--solution</span> Contoso.Notes.slnx</code></pre>
+          <p>Warning-free under all five analyzers with <code>TreatWarningsAsErrors</code>, and a passing run of the domain,
+          application and architecture-fitness tests, with no database. That green line is what you bisect
+          against later.</p>
+          <h3 id="3-run-the-api">3. Run the API</h3>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosts/Contoso.Notes.Web</code></pre>
+          <p>The host listens on <code>https://localhost:60801</code> (and <code>http://localhost:60802</code>), from its own
+          <code>Properties/launchSettings.json</code>. On startup it creates <code>notes.db</code> beside the host: the SQLite source
+          is created with EF <code>EnsureCreated</code> regardless of the configured <code>DatabaseInitStrategy</code>, so there is
+          no migrate step between scaffolding and a working API. Read the
+          <a href="#four-limitations-worth-knowing-before-you-start">limitations</a> before you rely on that for a second
+          schema version.</p>
+          <p><code>GET /health</code> and <code>/alive</code> are live, the health check gates readiness on the SQLite connection, and
+          the API root <code>/</code> has no page and returns 404 by design.</p>
+          <h3 id="4-call-it-with-the-tenant-header">4. Call it, with the tenant header</h3>
+          <p>The generated app has tenancy enabled with one tenant, <code>acme</code>, and resolution is claim first then the
+          <code>X-Tenant-Id</code> header. It runs issuer-less, so no request carries a claim: <strong>send the header on every
+          write.</strong></p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">curl -k -X POST https://localhost:60801/Notes \
+  -H <span class="hljs-string">&quot;Content-Type: application/json&quot;</span> \
+  -H <span class="hljs-string">&quot;X-Tenant-Id: acme&quot;</span> \
+  -d <span class="hljs-string">&#x27;{&quot;title&quot;:&quot;First note&quot;,&quot;description&quot;:&quot;Written by curl&quot;,&quot;requesterUserId&quot;:1}&#x27;</span>
+
+curl -k -H <span class="hljs-string">&quot;X-Tenant-Id: acme&quot;</span> https://localhost:60801/Notes</code></pre>
+          <p>Expect 201 then 200, with audit fields stamped, soft-deleted rows filtered out, and the <code>Note</code>
+          aggregate&#39;s creation integration event dispatched in process.</p>
+          <h3 id="5-browse-the-ui">5. Browse the UI</h3>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosts/UI/Contoso.Notes.UI.Web</code></pre>
+          <p>In a second terminal, with the API already up: the UI&#39;s first page render calls it. The Blazor host
+          reads the API address from <code>Api:BaseAddress</code> in its own <code>appsettings.json</code>, fixed at the API&#39;s
+          development URL, and sends <code>X-Tenant-Id</code> from <code>Api:TenantId</code> (default <code>acme</code>) on every call, so the
+          browser path needs no header from you. Change the API&#39;s port in <code>launchSettings.json</code> and change
+          <code>Api:BaseAddress</code> with it.</p>
+          <h3 id="6-generate-a-migration-when-the-schema-starts-moving">6. Generate a migration when the schema starts moving</h3>
+          <p>The scaffold ships the migrations project (<code>Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes</code>)
+          and its design-time factory, and drops the sample migration, because that migration was SQL Server
+          DDL against a different shape. Generate your own against the shape you asked for:</p>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
+  <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
+  <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
+  <span class="hljs-literal">--context</span> SqliteDbContext</code></pre>
+          <p><code>--context SqliteDbContext</code> because there is exactly one concrete context class per engine; module
+          contexts are abstract and only declare their <code>DbSet</code>s
+          (<a href="../adr/006-database-per-service.html">ADR-006</a>).</p>
+          <hr>
+          <h2 id="what-you-get-anyway">What you get anyway</h2>
+          <p>Nothing in the framework is disabled by this shape. The application code is identical to the
+          SQL-Server-plus-Aspire output: the engine is a configuration-base choice plus a connection string,
+          which is what <a href="../adr/018-polyglot-persistence.html">ADR-018</a> exists to make true.</p>
+          <ul>
+          <li><strong>The <code>Result</code> pattern end to end</strong> (<a href="../adr/013-result-pattern.html">ADR-013</a>): expected failures
+          are values with a transport-agnostic <code>ErrorType</code>, mapped to RFC 9457 ProblemDetails at the edge and
+          read back into typed errors by the UI&#39;s own client, which returns <code>Result</code> and throws nothing for a
+          server answer (<a href="../adr/094-client-entity-data-access.html">ADR-094</a>).</li>
+          <li><strong>The CQRS decorator pipeline</strong> (<a href="../adr/014-cqrs-decorator-pipeline.html">ADR-014</a>): feature gate,
+          authorization, logging, caching, validation, timeout and transaction, in that order, wrapped around
+          convention-scanned handlers, with the ordering sealed so a late registration throws instead of
+          going unwrapped.</li>
+          <li><strong>Soft delete with filtered unique indexes</strong> (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>,
+          <a href="../adr/095-soft-delete-unique-indexes.html">ADR-095</a>) and audit fields stamped by the context on
+          every save.</li>
+          <li><strong>Optimistic concurrency</strong> (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>): the <code>RowVersion</code>
+          round trip and its 409 / 412 answers.</li>
+          <li><strong>Health, telemetry and resilience.</strong> Both hosts still call <code>AddServiceDefaults()</code> and
+          <code>MapDefaultEndpoints()</code>, so OpenTelemetry, <code>/health</code> + <code>/alive</code>, warm-up readiness
+          (<a href="../adr/025-startup-warmup-readiness.html">ADR-025</a>) and the standard HTTP resilience handler
+          (<a href="../adr/009-resilience-and-recovery-objectives.html">ADR-009</a>) are all present with no orchestrator
+          above them. That is what makes adding an AppHost later additive.</li>
+          <li><strong>The architecture fitness functions</strong> (<a href="../adr/015-architecture-fitness-functions.html">ADR-015</a>),
+          including your own frozen integration-event wire contract, which the template now emits already
+          passing.</li>
+          <li><strong>The generic entity surface</strong> (<a href="../adr/034-generic-entity-query-layer.html">ADR-034</a>): list, paged,
+          lookup, by-id, CSV export, sparse fieldsets, dynamic filters, sort and pagination, inherited by
+          every entity. Aggregates you add later can also take the generic write side
+          (<a href="../adr/099-generic-write-side-entity-commands.html">ADR-099</a>) and skip the create, update and
+          delete handlers entirely; the scaffolded module keeps its hand-written ones, because they are what
+          the reference app exists to show you.</li>
+          <li><strong>Multi-tenancy, audit trail and the scheduled-job runner</strong>, all switched on in the generated
+          <code>appsettings.json</code> and all running against the one SQLite file.</li>
+          </ul>
+          <hr>
+          <h2 id="what-is-deliberately-off">What is deliberately off</h2>
+          <ul>
+          <li><strong>The transactional outbox.</strong> With in-process messaging (the default, since no <code>MessageBus:Provider</code>
+          is configured) the outbox resolves off: events are dispatched inside the process that raised them,
+          no <code>OutboxMessages</code> rows are written, and neither <code>OutboxProcessor</code> nor <code>OutboxCleanupService</code>
+          starts. The host says so once at startup, naming what that costs (a failed handler is not retried,
+          and a crash between the commit and the dispatch loses the event) and the setting that restores it.
+          The table stays part of the model, so turning it on is a restart and never a migration
+          (<a href="../adr/100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a>).</li>
+          <li><strong>A broker.</strong> No RabbitMQ, no Azure Service Bus, and therefore no consumer-side inbox either: there
+          is no redelivery to deduplicate (<a href="../adr/021-consumer-inbox-idempotency.html">ADR-021</a>).</li>
+          <li><strong>An Identity module.</strong> The app runs issuer-less: it registers a bare authentication scheme and the
+          generated controller is <code>[AllowAnonymous]</code>, so nothing blocks the first call. Permission-gated
+          commands are denied rather than allowed if you declare one without registering a registry, and the
+          framework logs that misconfiguration the first time a permission is actually checked.</li>
+          <li><strong>A second tenant.</strong> The SQL Server output demonstrates both isolation modes (shared schema and
+          database per tenant); the SQLite output configures one tenant, because database per tenant needs a
+          second server-backed database.</li>
+          <li><strong>Redis, output caching at the edge, and a gateway.</strong> All configuration-gated in the framework and
+          unconfigured here: caching falls back to the in-memory store
+          (<a href="../adr/026-caching-strategy.html">ADR-026</a>).</li>
+          </ul>
+          <hr>
+          <h2 id="four-limitations-worth-knowing-before-you-start">Four limitations worth knowing before you start</h2>
+          <p><strong>1. Writes need the <code>X-Tenant-Id</code> header.</strong> The generated app enables tenancy with
+          <code>RequireTenant: false</code>, so an unresolved caller reads across tenants, but a <strong>write</strong> with no tenant
+          resolved throws rather than inserting an untenanted row (the column is not nullable), and that
+          exception is unmapped, so it reaches the caller as a <strong>500</strong> rather than a 400. Send
+          <code>X-Tenant-Id: acme</code> on every write, as the quickstart above does and as the UI host already does.
+          Removing the header requirement means either giving the app a real issuer whose tokens carry a
+          <code>tenant_id</code> claim, or turning tenancy off in <code>appsettings.json</code>.</p>
+          <p><strong>2. The SQLite database is created, not migrated, at startup.</strong> Every SQLite source in use is
+          created with <code>EnsureCreated</code> before the configured <code>DatabaseInitStrategy</code> runs, and <code>Migrate</code> applies
+          pending migrations to <strong>SQL Server sources only</strong>. The generated <code>.Migrations.Sqlite.&lt;Module&gt;</code> project
+          is real and <code>dotnet ef</code> works against it, but nothing applies those migrations at boot today: a
+          second schema version needs <code>dotnet ef database update</code> (or a delete of the file while the schema is
+          still disposable). Startup migration application for SQLite sources is a follow-up.</p>
+          <p><strong>3. <code>mmca-module</code> is not engine-aware yet.</strong> Adding a second module to a SQLite app scaffolds a
+          migrations project named <code>.Migrations.SqlServer.&lt;Module&gt;</code>, and <code>build/add-module.ps1</code> writes a
+          <code>SQLServerMigrationsAssembly</code> entry into <code>appsettings.json</code>. Both are wrong for this shape and both
+          are hand-editable. Small apps usually start (and often stay) single-module; if you know a second
+          module is coming, that is one of the signals to start on SQL Server instead.</p>
+          <p><strong>4. It is a development shape, not a deployment posture.</strong> One file, one process writing to it, and
+          <code>Migrate</code> semantics that do not cover it. Nothing here says a SQLite host cannot be deployed, only
+          that this guide does not describe how, and that the framework&#39;s deployment story
+          (<a href="../adr/030-startup-sole-migrator.html">ADR-030</a>,
+          <a href="../adr/093-container-image-posture.html">ADR-093</a>) is written for the SQL Server shape.</p>
+          <hr>
+          <h2 id="when-to-flip-each-switch">When to flip each switch</h2>
+          <p>Each of these is additive: the code you have written does not change, and the change is confined to
+          configuration or to a host project.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Signal</th>
+          <th>Switch</th>
+          <th>What it costs</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>More than one writer process, or a real deployment target</td>
+          <td><strong>SQL Server</strong>: <code>--database sqlserver</code> on a new scaffold, or swap the entity configuration bases and connection string on an existing one</td>
+          <td>A container or a server, and the migrations project&#39;s provider. The module code is unchanged: the engine is a configuration-base choice (<a href="../adr/018-polyglot-persistence.html">ADR-018</a>).</td>
+          </tr>
+          <tr>
+          <td>A third process to start, or you want the dashboard, service discovery and health-based startup ordering</td>
+          <td><strong>Aspire</strong>: add an AppHost project that references the two hosts, and replace the UI&#39;s fixed <code>Api:BaseAddress</code> with <code>WithReference</code></td>
+          <td>One project. Both hosts already call <code>AddServiceDefaults()</code>, which is the half that would have been a rewrite (<a href="../adr/098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a>).</td>
+          </tr>
+          <tr>
+          <td>An event must survive a crash, or a handler failure must be retried</td>
+          <td><strong>The outbox</strong>: <code>MessageBus:EnableOutbox=true</code></td>
+          <td>A restart. Two background services and a poll loop start; the table is already in the model, so there is no migration (<a href="../adr/100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a>).</td>
+          </tr>
+          <tr>
+          <td>A second process must consume your events</td>
+          <td><strong>A broker</strong>: configure <code>MessageBus:Provider</code></td>
+          <td>The broker itself. The outbox then resolves ON automatically and the inbox with it; explicitly disabling the outbox under a broker is refused at startup (<a href="../adr/003-outbox-dual-dispatch.html">ADR-003</a>, <a href="../adr/021-consumer-inbox-idempotency.html">ADR-021</a>).</td>
+          </tr>
+          <tr>
+          <td>Real users, roles, or a per-user tenant claim</td>
+          <td><strong>An Identity module</strong>: copy MMCA.Store&#39;s or MMCA.ADC&#39;s and rename the namespaces, set <code>Authentication:JwtBearer:Authority</code>, switch the controller to <code>[Authorize]</code></td>
+          <td>The module and its database. It also retires limitation 1 above, because the tenant then arrives as a claim (<a href="../adr/004-authentication-dual-fetch.html">ADR-004</a>, <a href="../adr/020-permission-based-authorization.html">ADR-020</a>).</td>
+          </tr>
+          <tr>
+          <td>One module needs its own scaling, deploy cadence, or database</td>
+          <td><strong>Extraction</strong>: a service host, a gateway, per-service databases and JWKS discovery</td>
+          <td>Host wiring only. Domain, Application, Shared, Infrastructure and API code do not change, which is the promise the whole shape exists to keep (<a href="../adr/008-service-extraction-topology.html">ADR-008</a>). Extract on an observable constraint, not on principle.</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="where-to-look-next">Where to look next</h2>
+          <ul>
+          <li><strong><a href="common-GETTING-STARTED.html">Getting started</a></strong>: the full-shape path, in six steps, with Aspire
+          and SQL Server.</li>
+          <li><strong><a href="common-TEMPLATES.html">Templates</a></strong>: every parameter of all four templates, including the two
+          solution-shape options this guide is about.</li>
+          <li><strong><a href="common-BUILD-BY-HAND.html">Building by hand</a></strong>: what the generated code does, phase by phase, and
+          the route for retrofitting a solution the template cannot create.</li>
+          <li><strong><a href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk</a></strong>: the reference app the template is
+          staged from, so what you generated is that repository under your own names.</li>
+          <li><strong>The ADRs</strong> (<a href="../adr/index.html">index</a>): the reasoning behind every pattern above.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-SMALL-APPS.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-this-shape-exists">Why this shape exists</a></li>
+            <li><a href="#the-five-minute-path">The five-minute path</a></li>
+            <li><a href="#what-you-get-anyway">What you get anyway</a></li>
+            <li><a href="#what-is-deliberately-off">What is deliberately off</a></li>
+            <li><a href="#four-limitations-worth-knowing-before-you-start">Four limitations worth knowing before you start</a></li>
+            <li><a href="#when-to-flip-each-switch">When to flip each switch</a></li>
+            <li><a href="#where-to-look-next">Where to look next</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

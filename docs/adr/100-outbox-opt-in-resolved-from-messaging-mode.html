@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-100: The Outbox Is Resolved from the Messaging Mode, Not Always On · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-29, framework v1.170.0). Amends ADR-003 (the outbox runs when the transport needs it, rather than in every host unconditionally) and…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-100: The Outbox Is Resolved from the Messaging Mode, Not Always On">
+  <meta property="og:description" content="Accepted (2026-08-29, framework v1.170.0). Amends ADR-003 (the outbox runs when the transport needs it, rather than in every host unconditionally) and…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-100: The Outbox Is Resolved from the Messaging Mode, Not Always On">
+  <meta name="twitter:description" content="Accepted (2026-08-29, framework v1.170.0). Amends ADR-003 (the outbox runs when the transport needs it, rather than in every host unconditionally) and…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"100 · The Outbox Is Resolved from the Messaging Mode, Not Always On","item":"https://ivanball.github.io/docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 101 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html" aria-current="page">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-100-the-outbox-is-resolved-from-the-messaging-mode-not-always-on">ADR-100: The Outbox Is Resolved from the Messaging Mode, Not Always On</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-29, framework v1.170.0). Amends <a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox
+          runs when the transport needs it, rather than in every host unconditionally) and follows the
+          three-valued resolution precedent <a href="021-consumer-inbox-idempotency.html">ADR-021</a> set for the inbox. The
+          EF model is unchanged: the <code>OutboxMessages</code> table stays mapped on every relational source either way,
+          so this is a configuration decision and never a migration.</p>
+          <h2 id="context">Context</h2>
+          <p>ADR-003 gives every host a transactional outbox: domain and integration events are written to
+          <code>OutboxMessages</code> in the same transaction as the aggregate changes, <code>OutboxProcessor</code> publishes them,
+          and <code>OutboxCleanupService</code> ages the table out. That is the correct and only workable arrangement when
+          the publish crosses a process boundary, because the alternative is a broker call inside a database
+          transaction.</p>
+          <p>A single-process application takes no such hop. Its <code>IEventBus</code> dispatches every event inside the
+          process that raised it, so the store-and-forward round trip buys it two hosted services, a poll loop
+          and a table it reads to find rows it wrote a millisecond earlier. On a small application, where the
+          whole point of the shape is that a developer can run it with <code>dotnet run</code> against one file, those are
+          the background services printing log lines about work that never had to happen.</p>
+          <p>ADR-021 had already answered the same question on the consumer side. <code>MessageBus:EnableInbox</code> became
+          <code>bool?</code> and <code>IsInboxEnabled</code> resolves an unset value from the transport, ON for a broker and OFF for
+          in-process, which has no redelivery to dedup
+          (<code>Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:102</code>). The outbox had no such
+          resolution: it ran in every host, including the one that had nothing to forward to.</p>
+          <p>The reverse posture is a real hazard rather than a symmetrical option. A broker deployment publishes
+          integration events <strong>exclusively</strong> through the outbox: <code>BrokerEventBus</code> writes the rows and
+          <code>OutboxProcessor</code> publishes them, so a host with a broker configured and the outbox switched off has
+          no delivery channel at all and drops every cross-service event silently.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Make the outbox a three-valued setting resolved from the transport, gate the components that cost
+          something, keep the schema, and refuse the one combination that cannot work.</p>
+          <ol>
+          <li><p><strong><code>MessageBus:EnableOutbox</code> is <code>bool?</code> and defaults to unset.</strong>
+          <code>MessageBusSettings.EnableOutbox</code> (<code>Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:128</code>)
+          carries the explicit override; <code>IsOutboxEnabled</code> (<code>:136</code>) is the resolved posture every framework
+          component reads: <code>EnableOutbox ?? Provider != MessageBusProvider.InProcess</code>. That is character for
+          character the inbox rule one property above it (<code>:102</code>). An explicit value wins in both
+          directions, so a monolith that wants at-least-once delivery across a crash sets
+          <code>MessageBus:EnableOutbox=true</code> and gets the full outbox back (<code>:119-126</code>).</p>
+          </li>
+          <li><p><strong>Resolution happens once, at registration.</strong> <code>AddInfrastructure</code> binds the section, and on the
+          enabled path registers <code>OutboxProcessor</code> and <code>OutboxCleanupService</code>; on the disabled path it
+          registers neither and adds <code>OutboxDisabledNoticeService</code> instead
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:201-213</code>, reasoning at
+          <code>:195-200</code>).</p>
+          </li>
+          <li><p><strong>The row writes are gated at both write points</strong>, not only the background services:
+          <code>InProcessEventBus</code> takes its direct-dispatch branch when the outbox is off, with no rows, no save
+          and no processor to retry (<code>Source/Core/MMCA.Common.Infrastructure/Services/InProcessEventBus.cs:42</code>,
+          branch at <code>:80-84</code>, documented at <code>:69-73</code>), and <code>DomainEventSaveChangesInterceptor</code> captures and
+          dispatches in-process without writing rows
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:54</code>,
+          contract at <code>:41-44</code>). Both fall back to the outbox path when no options are resolvable, so a
+          container that binds neither keeps the previous behavior. This is the same branch a context
+          without outbox support (Cosmos) already took, reached by a second condition rather than a new one.</p>
+          </li>
+          <li><p><strong>A broker with the outbox explicitly disabled fails at startup.</strong>
+          <code>EnsureOutboxAvailableForProvider</code> throws when the provider is anything other than <code>InProcess</code> and
+          <code>EnableOutbox</code> is explicitly <code>false</code> (<code>DependencyInjection.cs:876-879</code>). The message names the
+          mechanism (<code>BrokerEventBus</code> writes the rows, <code>OutboxProcessor</code> publishes them), the consequence
+          (every cross-service event dropped silently) and the fix. Leaving the setting unset under a broker
+          resolves to enabled, so only a deliberate <code>false</code> reaches the throw.</p>
+          </li>
+          <li><p><strong>Being off is never silent.</strong> <code>OutboxDisabledNoticeService</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxDisabledNoticeService.cs:21</code>)
+          logs one startup line naming exactly what is not running and what it costs: no rows are written,
+          neither background service is present, an event whose handler fails is not retried, and a crash
+          between the commit and the dispatch loses it, with <code>MessageBus:EnableOutbox=true</code> given as the
+          restore path and the absence of any migration stated (<code>:36</code>). It is the mirror of the inbox&#39;s
+          <code>InboxDisabledWarningService</code> (ADR-021).</p>
+          </li>
+          <li><p><strong>The EF model does not change.</strong> <code>OutboxMessage</code> is configured in <code>OnModelCreating</code> for every
+          relational provider
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:528-531</code>),
+          independent of the setting. Flipping the flag in either direction is a configuration change and a
+          restart, with no migration in any consumer.</p>
+          </li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The outbox is a transport decision, not a persistence one.</strong> Whether an event must survive a
+          process boundary is exactly the question <code>MessageBus:Provider</code> already answers, so deriving the
+          outbox from it puts the default where the information is instead of asking every host to restate
+          it.</li>
+          <li><strong>One resolution rule, already proven.</strong> ADR-021 introduced null-means-resolve-from-transport for
+          the inbox and it held: an explicit value still wins, and reaching the degraded path becomes a
+          deliberate opt-out that says so in the log. Repeating the rule verbatim means an operator learns it
+          once and there are two settings, not two mental models.</li>
+          <li><strong>The dangerous direction is refused, not documented.</strong> Broker plus disabled outbox has no correct
+          behavior, so it is a startup failure rather than a paragraph in a guide. The other three
+          combinations are all meaningful.</li>
+          <li><strong>Keeping the table mapped is what makes the flag cheap.</strong> Removing the entity from the model when
+          the outbox is off would make every flip a schema move, and a table drop is precisely the
+          contract-phase change ADR-057&#39;s expand/contract gate exists to stop shipping alongside the code
+          that stopped using it. An unused empty table costs nothing; a migration pair costs a release.</li>
+          <li><strong>It makes the small-app floor honest.</strong> A <code>dotnet new mmca-app --database sqlite --no-aspire</code>
+          application starts with no broker, so the poll loop it used to run had nothing to publish and no
+          peer to publish to. Under this record it does not start one, and the developer reading its startup
+          log is told that in one line.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The default for an in-process host changed.</strong> A host on <code>InProcess</code> messaging (or with no
+          <code>MessageBus</code> section at all, which resolves to the same provider) no longer runs the durable outbox
+          unless it sets <code>MessageBus:EnableOutbox=true</code>. For a monolith that relied on the outbox to retry a
+          failed in-process handler, or to survive a crash between commit and dispatch, that guarantee is
+          gone until the flag is set. The startup notice is the only thing that tells an operator, and a log
+          line is weaker than a compile error.</li>
+          <li><strong>Two hosts with the same code can behave differently.</strong> The same module, deployed as a monolith
+          and as an extracted service, gets synchronous dispatch in one and store-and-forward in the other.
+          That was already true of the delivery path (ADR-003 chose it deliberately); what is new is that the
+          durability of a <strong>domain</strong> event now varies with the transport too.</li>
+          <li><strong>The resolved posture is not visible in configuration.</strong> An operator reading <code>appsettings.json</code>
+          sees nothing about the outbox on either path, and has to know the resolution rule or read the
+          startup log. The same cost ADR-021 accepted for the inbox.</li>
+          <li><strong>An empty <code>OutboxMessages</code> table ships in every database.</strong> Correct for the flip-back property,
+          slightly confusing for anyone reading the schema of an application that has never written a row to
+          it.</li>
+          <li><strong>Nothing gates the setting against deployment topology.</strong> A host that adds a broker later and
+          leaves an explicit <code>EnableOutbox=false</code> in place fails at startup, which is the good case; a host
+          that sets it <code>true</code> with no broker simply pays for the outbox, and nothing objects.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox itself: the dual-dispatch contract, the processor,
+          the retry and dead-letter policy, all unchanged for a host that runs it),
+          <a href="021-consumer-inbox-idempotency.html">ADR-021</a> (the consumer-side sibling whose three-valued resolution
+          this record copies),
+          <a href="006-database-per-service.html">ADR-006</a> (the per-source outbox tables this setting leaves mapped),
+          <a href="057-expand-contract-schema-evolution-gate.html">ADR-057</a> (the schema-shape gate that keeping the entity
+          mapped avoids entirely),
+          <a href="008-service-extraction-topology.html">ADR-008</a> (extraction is what turns the transport, and therefore
+          the resolved outbox posture, from in-process to broker),
+          <a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> (the per-service integration tier
+          that needs no Docker because the default provider is <code>InProcess</code>, the same default this record reads).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/100-outbox-opt-in-resolved-from-messaging-mode.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

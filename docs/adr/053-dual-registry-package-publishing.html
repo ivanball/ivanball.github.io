@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 98 ADRs</summary>
+        <summary>All 101 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -198,6 +198,9 @@
         <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
         <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
         <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
           </ol>
         </nav>
       </details>
@@ -210,7 +213,10 @@
           tense, to record the <code>MMCA.</code> ID prefix reservation as then-pending, to scope the
           &quot;documented install path&quot; claim to what is actually updated, and to split the packaging metadata
           between <code>Directory.Build.props</code> and the per-package csproj files. Amended (2026-07-28): that
-          reservation has been granted, so the Decision now records it as done rather than pending.</p>
+          reservation has been granted, so the Decision now records it as done rather than pending. See also
+          <a href="101-common-metapackage.html">ADR-101</a> (2026-08-29, v1.170.0): the <code>MMCA.Common</code> metapackage joins the
+          set published to both registries from the same tag, with no workflow change; it shortens the install
+          line this record made credential-free from six references to one.</p>
           <h2 id="context">Context</h2>
           <p>The fifteen <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release. That
           was the right default while the framework had exactly one consumer group (this account&#39;s own
