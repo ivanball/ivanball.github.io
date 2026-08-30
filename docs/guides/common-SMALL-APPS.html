@@ -175,7 +175,7 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <tr>
           <td>Prerequisites</td>
           <td>.NET 10 SDK, Docker Desktop, <code>dotnet-ef</code></td>
-          <td>.NET 10 SDK (<code>dotnet-ef</code> only when you generate migrations)</td>
+          <td>.NET 10 SDK and <code>dotnet-ef</code> (the first migration is required before the first run)</td>
           </tr>
           <tr>
           <td>Service discovery</td>
@@ -211,17 +211,34 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Notes.slnx</co
           <p>Warning-free under all five analyzers with <code>TreatWarningsAsErrors</code>, and a passing run of the domain,
           application and architecture-fitness tests, with no database. That green line is what you bisect
           against later.</p>
-          <h3 id="3-run-the-api">3. Run the API</h3>
+          <h3 id="3-create-the-first-migration-before-the-first-run">3. Create the first migration, before the first run</h3>
+          <p>This step is required rather than tidy-up. The scaffold ships the migrations project
+          (<code>Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes</code>) and its design-time factory but no
+          migration, because the sample one is SQL Server DDL against a different shape. The generated
+          <code>DataSources:Notes</code> entry names a <code>SqliteMigrationsAssembly</code>, and a SQLite source that names one is
+          <strong>migrated</strong> at startup rather than created outright, so an empty migrations assembly leaves you with
+          an empty file and a first request that fails on a missing table.</p>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
+  <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
+  <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
+  <span class="hljs-literal">--context</span> SqliteDbContext</code></pre>
+          <p><code>--context SqliteDbContext</code> because there is exactly one concrete context class per engine; module
+          contexts are abstract and only declare their <code>DbSet</code>s
+          (<a href="../adr/006-database-per-service.html">ADR-006</a>). <code>dotnet ef</code> is a global tool rather than part of the
+          SDK: install it with <code>dotnet tool install --global dotnet-ef</code> if the command is not found. The
+          design-time factory in that project opens no connection for <code>migrations add</code>, so this needs no
+          running database, and every later schema change is the same two steps: add the migration, restart the
+          host.</p>
+          <h3 id="4-run-the-api">4. Run the API</h3>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosts/Contoso.Notes.Web</code></pre>
           <p>The host listens on <code>https://localhost:60801</code> (and <code>http://localhost:60802</code>), from its own
-          <code>Properties/launchSettings.json</code>. On startup it creates <code>notes.db</code> beside the host: the SQLite source
-          is created with EF <code>EnsureCreated</code> regardless of the configured <code>DatabaseInitStrategy</code>, so there is
-          no migrate step between scaffolding and a working API. Read the
-          <a href="#four-limitations-worth-knowing-before-you-start">limitations</a> before you rely on that for a second
-          schema version.</p>
+          <code>Properties/launchSettings.json</code>. On startup it applies the migrations to <code>notes.db</code> beside the host,
+          under the generated <code>DatabaseInitStrategy: &quot;Migrate&quot;</code>. <code>EnsureCreated</code> is what a SQLite source gets
+          only when no migrations assembly is configured for it, which is not the shape this scaffold
+          generates.</p>
           <p><code>GET /health</code> and <code>/alive</code> are live, the health check gates readiness on the SQLite connection, and
           the API root <code>/</code> has no page and returns 404 by design.</p>
-          <h3 id="4-call-it-with-the-tenant-header">4. Call it, with the tenant header</h3>
+          <h3 id="5-call-it-with-the-tenant-header">5. Call it, with the tenant header</h3>
           <p>The generated app has tenancy enabled with one tenant, <code>acme</code>, and resolution is claim first then the
           <code>X-Tenant-Id</code> header. It runs issuer-less, so no request carries a claim: <strong>send the header on every
           write.</strong></p>
@@ -233,24 +250,13 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Notes.slnx</co
 curl -k -H <span class="hljs-string">&quot;X-Tenant-Id: acme&quot;</span> https://localhost:60801/Notes</code></pre>
           <p>Expect 201 then 200, with audit fields stamped, soft-deleted rows filtered out, and the <code>Note</code>
           aggregate&#39;s creation integration event dispatched in process.</p>
-          <h3 id="5-browse-the-ui">5. Browse the UI</h3>
+          <h3 id="6-browse-the-ui">6. Browse the UI</h3>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosts/UI/Contoso.Notes.UI.Web</code></pre>
           <p>In a second terminal, with the API already up: the UI&#39;s first page render calls it. The Blazor host
           reads the API address from <code>Api:BaseAddress</code> in its own <code>appsettings.json</code>, fixed at the API&#39;s
           development URL, and sends <code>X-Tenant-Id</code> from <code>Api:TenantId</code> (default <code>acme</code>) on every call, so the
           browser path needs no header from you. Change the API&#39;s port in <code>launchSettings.json</code> and change
           <code>Api:BaseAddress</code> with it.</p>
-          <h3 id="6-generate-a-migration-when-the-schema-starts-moving">6. Generate a migration when the schema starts moving</h3>
-          <p>The scaffold ships the migrations project (<code>Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes</code>)
-          and its design-time factory, and drops the sample migration, because that migration was SQL Server
-          DDL against a different shape. Generate your own against the shape you asked for:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
-  <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
-  <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
-  <span class="hljs-literal">--context</span> SqliteDbContext</code></pre>
-          <p><code>--context SqliteDbContext</code> because there is exactly one concrete context class per engine; module
-          contexts are abstract and only declare their <code>DbSet</code>s
-          (<a href="../adr/006-database-per-service.html">ADR-006</a>).</p>
           <hr>
           <h2 id="what-you-get-anyway">What you get anyway</h2>
           <p>Nothing in the framework is disabled by this shape. The application code is identical to the
@@ -282,8 +288,10 @@ curl -k -H <span class="hljs-string">&quot;X-Tenant-Id: acme&quot;</span> https:
           lookup, by-id, CSV export, sparse fieldsets, dynamic filters, sort and pagination, inherited by
           every entity. Aggregates you add later can also take the generic write side
           (<a href="../adr/099-generic-write-side-entity-commands.html">ADR-099</a>) and skip the create, update and
-          delete handlers entirely; the scaffolded module keeps its hand-written ones, because they are what
-          the reference app exists to show you.</li>
+          delete handlers entirely, including the shapes that used to need their own handler (a delete that
+          has to load its children or refuse, two verbs over one request shape, a response that is not the
+          aggregate&#39;s DTO); the scaffolded module keeps its hand-written ones, because they are what the
+          reference app exists to show you.</li>
           <li><strong>Multi-tenancy, audit trail and the scheduled-job runner</strong>, all switched on in the generated
           <code>appsettings.json</code> and all running against the one SQLite file.</li>
           </ul>
@@ -311,29 +319,39 @@ curl -k -H <span class="hljs-string">&quot;X-Tenant-Id: acme&quot;</span> https:
           (<a href="../adr/026-caching-strategy.html">ADR-026</a>).</li>
           </ul>
           <hr>
-          <h2 id="four-limitations-worth-knowing-before-you-start">Four limitations worth knowing before you start</h2>
+          <h2 id="adding-a-second-module">Adding a second module</h2>
+          <p><code>mmca-module</code> takes <code>--database sqlserver|sqlite</code>, and a solution generated by <code>mmca-app</code> adds its
+          modules through <code>build/add-module.ps1</code>, which reads the engine off the API host&#39;s own
+          <code>appsettings.json</code>: the key spelling inside the top-level <code>ConnectionStrings</code> section
+          (<code>SQLServerConnectionString</code> or <code>SqliteConnectionString</code>) is the detection, and it is the same file
+          the script writes the new data source into, so the two cannot disagree. The existing
+          <code>&lt;App&gt;.Migrations.&lt;Engine&gt;.&lt;Module&gt;</code> folder is cross-checked against that reading, and a
+          disagreement stops the run rather than adding a project half the solution cannot compile against.
+          <code>-Database sqlserver|sqlite</code> overrides both, which is the answer for a solution that has grown a
+          second engine.</p>
+          <p>So a second module on a SQLite app is SQLite-shaped end to end: its EF configurations inherit
+          <code>EntityTypeConfigurationSqlite</code>, its migrations project is <code>&lt;App&gt;.Migrations.Sqlite.&lt;Module&gt;</code> over
+          <code>Microsoft.EntityFrameworkCore.Sqlite</code> with a <code>DesignTimeSqliteDbContextFactory</code>, and its
+          <code>DataSources</code> entry names its own file plus its own <code>SqliteMigrationsAssembly</code>. Each module gets its
+          own file rather than sharing one, which is database per module on this engine too: the framework
+          tables a source carries (its own <code>OutboxMessages</code> among them) stay inside it. The script creates the
+          module&#39;s first migration as its last step; <code>-SkipMigration</code> defers it, which is a deliberate decision
+          on this engine for the reason step 3 gives, since the host migrates that source at startup instead of
+          creating it.</p>
+          <hr>
+          <h2 id="two-limitations-worth-knowing-before-you-start">Two limitations worth knowing before you start</h2>
           <p><strong>1. Writes need the <code>X-Tenant-Id</code> header.</strong> The generated app enables tenancy with
           <code>RequireTenant: false</code>, so an unresolved caller reads across tenants, but a <strong>write</strong> with no tenant
-          resolved throws rather than inserting an untenanted row (the column is not nullable), and that
-          exception is unmapped, so it reaches the caller as a <strong>500</strong> rather than a 400. Send
-          <code>X-Tenant-Id: acme</code> on every write, as the quickstart above does and as the UI host already does.
-          Removing the header requirement means either giving the app a real issuer whose tokens carry a
-          <code>tenant_id</code> claim, or turning tenancy off in <code>appsettings.json</code>.</p>
-          <p><strong>2. The SQLite database is created, not migrated, at startup.</strong> Every SQLite source in use is
-          created with <code>EnsureCreated</code> before the configured <code>DatabaseInitStrategy</code> runs, and <code>Migrate</code> applies
-          pending migrations to <strong>SQL Server sources only</strong>. The generated <code>.Migrations.Sqlite.&lt;Module&gt;</code> project
-          is real and <code>dotnet ef</code> works against it, but nothing applies those migrations at boot today: a
-          second schema version needs <code>dotnet ef database update</code> (or a delete of the file while the schema is
-          still disposable). Startup migration application for SQLite sources is a follow-up.</p>
-          <p><strong>3. <code>mmca-module</code> is not engine-aware yet.</strong> Adding a second module to a SQLite app scaffolds a
-          migrations project named <code>.Migrations.SqlServer.&lt;Module&gt;</code>, and <code>build/add-module.ps1</code> writes a
-          <code>SQLServerMigrationsAssembly</code> entry into <code>appsettings.json</code>. Both are wrong for this shape and both
-          are hand-editable. Small apps usually start (and often stay) single-module; if you know a second
-          module is coming, that is one of the signals to start on SQL Server instead.</p>
-          <p><strong>4. It is a development shape, not a deployment posture.</strong> One file, one process writing to it, and
-          <code>Migrate</code> semantics that do not cover it. Nothing here says a SQLite host cannot be deployed, only
-          that this guide does not describe how, and that the framework&#39;s deployment story
-          (<a href="../adr/030-startup-sole-migrator.html">ADR-030</a>,
+          resolved is refused rather than inserting an untenanted row (the column is not nullable). The refusal
+          reaches the caller as a <strong>400</strong> carrying RFC 9457 ProblemDetails titled &quot;Tenant write rejected&quot;,
+          whose detail names what to do (supply the configured tenant claim or header) and deliberately echoes
+          back neither the entity type nor any tenant id. Send <code>X-Tenant-Id: acme</code> on every write, as the
+          quickstart above does and as the UI host already does. Removing the header requirement means either
+          giving the app a real issuer whose tokens carry a <code>tenant_id</code> claim, or turning tenancy off in
+          <code>appsettings.json</code>.</p>
+          <p><strong>2. It is a development shape, not a deployment posture.</strong> One file, and one process writing to it.
+          Nothing here says a SQLite host cannot be deployed, only that this guide does not describe how, and
+          that the framework&#39;s deployment story (<a href="../adr/030-startup-sole-migrator.html">ADR-030</a>,
           <a href="../adr/093-container-image-posture.html">ADR-093</a>) is written for the SQL Server shape.</p>
           <hr>
           <h2 id="when-to-flip-each-switch">When to flip each switch</h2>
@@ -405,7 +423,8 @@ curl -k -H <span class="hljs-string">&quot;X-Tenant-Id: acme&quot;</span> https:
             <li><a href="#the-five-minute-path">The five-minute path</a></li>
             <li><a href="#what-you-get-anyway">What you get anyway</a></li>
             <li><a href="#what-is-deliberately-off">What is deliberately off</a></li>
-            <li><a href="#four-limitations-worth-knowing-before-you-start">Four limitations worth knowing before you start</a></li>
+            <li><a href="#adding-a-second-module">Adding a second module</a></li>
+            <li><a href="#two-limitations-worth-knowing-before-you-start">Two limitations worth knowing before you start</a></li>
             <li><a href="#when-to-flip-each-switch">When to flip each switch</a></li>
             <li><a href="#where-to-look-next">Where to look next</a></li>
             </ul>

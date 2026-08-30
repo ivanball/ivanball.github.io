@@ -259,7 +259,8 @@
           per physical (engine, name) source.</li>
           <li><strong>Configuration drives routing.</strong> <code>DataSourceResolver</code> builds a per-engine logical-to-physical map
           from the engine-specific connection strings (<code>SQLServerConnectionString</code> / <code>CosmosConnectionString</code> /
-          <code>SqliteConnectionString</code>, plus <code>CosmosDatabaseName</code> and per-source <code>SQLServerMigrationsAssembly</code>).
+          <code>SqliteConnectionString</code>, plus <code>CosmosDatabaseName</code> and a per-source migrations assembly for each
+          relational engine, <code>SQLServerMigrationsAssembly</code> and <code>SqliteMigrationsAssembly</code>).
           Logical names with no entry for an engine collapse onto that engine&#39;s <code>Default</code>; engines never
           collapse into each other. <code>EntityDataSourceRegistry</code> (and the <code>DataSourceService</code> facade) eagerly map
           every entity to its physical source up front, so routing never depends on a model already being built.</li>

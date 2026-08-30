@@ -40,7 +40,7 @@ framework had one answer for all of them, and it started with "install Docker De
 | Projects | 12 | 11 (no AppHost) |
 | Database | SQL Server in a container | one SQLite file beside the host |
 | Startup | `dotnet run` the AppHost | `dotnet run` each host |
-| Prerequisites | .NET 10 SDK, Docker Desktop, `dotnet-ef` | .NET 10 SDK (`dotnet-ef` only when you generate migrations) |
+| Prerequisites | .NET 10 SDK, Docker Desktop, `dotnet-ef` | .NET 10 SDK and `dotnet-ef` (the first migration is required before the first run) |
 | Service discovery | Aspire resolves `web` for the UI | the UI's `Api:BaseAddress` names the API's dev URL |
 | Messaging | in-process, with the outbox running | in-process, outbox off (see below) |
 | Tenants | two, one of them database-per-tenant | one (`acme`) |
@@ -76,23 +76,46 @@ Warning-free under all five analyzers with `TreatWarningsAsErrors`, and a passin
 application and architecture-fitness tests, with no database. That green line is what you bisect
 against later.
 
-### 3. Run the API
+### 3. Create the first migration, before the first run
+
+This step is required rather than tidy-up. The scaffold ships the migrations project
+(`Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes`) and its design-time factory but no
+migration, because the sample one is SQL Server DDL against a different shape. The generated
+`DataSources:Notes` entry names a `SqliteMigrationsAssembly`, and a SQLite source that names one is
+**migrated** at startup rather than created outright, so an empty migrations assembly leaves you with
+an empty file and a first request that fails on a missing table.
+
+```powershell
+dotnet ef migrations add InitialCreate `
+  --project Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
+  --startup-project Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
+  --context SqliteDbContext
+```
+
+`--context SqliteDbContext` because there is exactly one concrete context class per engine; module
+contexts are abstract and only declare their `DbSet`s
+([ADR-006](../adr/006-database-per-service.md)). `dotnet ef` is a global tool rather than part of the
+SDK: install it with `dotnet tool install --global dotnet-ef` if the command is not found. The
+design-time factory in that project opens no connection for `migrations add`, so this needs no
+running database, and every later schema change is the same two steps: add the migration, restart the
+host.
+
+### 4. Run the API
 
 ```powershell
 dotnet run --project Source/Hosts/Contoso.Notes.Web
 ```
 
 The host listens on `https://localhost:60801` (and `http://localhost:60802`), from its own
-`Properties/launchSettings.json`. On startup it creates `notes.db` beside the host: the SQLite source
-is created with EF `EnsureCreated` regardless of the configured `DatabaseInitStrategy`, so there is
-no migrate step between scaffolding and a working API. Read the
-[limitations](#four-limitations-worth-knowing-before-you-start) before you rely on that for a second
-schema version.
+`Properties/launchSettings.json`. On startup it applies the migrations to `notes.db` beside the host,
+under the generated `DatabaseInitStrategy: "Migrate"`. `EnsureCreated` is what a SQLite source gets
+only when no migrations assembly is configured for it, which is not the shape this scaffold
+generates.
 
 `GET /health` and `/alive` are live, the health check gates readiness on the SQLite connection, and
 the API root `/` has no page and returns 404 by design.
 
-### 4. Call it, with the tenant header
+### 5. Call it, with the tenant header
 
 The generated app has tenancy enabled with one tenant, `acme`, and resolution is claim first then the
 `X-Tenant-Id` header. It runs issuer-less, so no request carries a claim: **send the header on every
@@ -110,7 +133,7 @@ curl -k -H "X-Tenant-Id: acme" https://localhost:60801/Notes
 Expect 201 then 200, with audit fields stamped, soft-deleted rows filtered out, and the `Note`
 aggregate's creation integration event dispatched in process.
 
-### 5. Browse the UI
+### 6. Browse the UI
 
 ```powershell
 dotnet run --project Source/Hosts/UI/Contoso.Notes.UI.Web
@@ -121,23 +144,6 @@ reads the API address from `Api:BaseAddress` in its own `appsettings.json`, fixe
 development URL, and sends `X-Tenant-Id` from `Api:TenantId` (default `acme`) on every call, so the
 browser path needs no header from you. Change the API's port in `launchSettings.json` and change
 `Api:BaseAddress` with it.
-
-### 6. Generate a migration when the schema starts moving
-
-The scaffold ships the migrations project (`Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes`)
-and its design-time factory, and drops the sample migration, because that migration was SQL Server
-DDL against a different shape. Generate your own against the shape you asked for:
-
-```powershell
-dotnet ef migrations add InitialCreate `
-  --project Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
-  --startup-project Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
-  --context SqliteDbContext
-```
-
-`--context SqliteDbContext` because there is exactly one concrete context class per engine; module
-contexts are abstract and only declare their `DbSet`s
-([ADR-006](../adr/006-database-per-service.md)).
 
 ---
 
@@ -172,8 +178,10 @@ which is what [ADR-018](../adr/018-polyglot-persistence.md) exists to make true.
   lookup, by-id, CSV export, sparse fieldsets, dynamic filters, sort and pagination, inherited by
   every entity. Aggregates you add later can also take the generic write side
   ([ADR-099](../adr/099-generic-write-side-entity-commands.md)) and skip the create, update and
-  delete handlers entirely; the scaffolded module keeps its hand-written ones, because they are what
-  the reference app exists to show you.
+  delete handlers entirely, including the shapes that used to need their own handler (a delete that
+  has to load its children or refuse, two verbs over one request shape, a response that is not the
+  aggregate's DTO); the scaffolded module keeps its hand-written ones, because they are what the
+  reference app exists to show you.
 - **Multi-tenancy, audit trail and the scheduled-job runner**, all switched on in the generated
   `appsettings.json` and all running against the one SQLite file.
 
@@ -203,33 +211,45 @@ which is what [ADR-018](../adr/018-polyglot-persistence.md) exists to make true.
 
 ---
 
-## Four limitations worth knowing before you start
+## Adding a second module
+
+`mmca-module` takes `--database sqlserver|sqlite`, and a solution generated by `mmca-app` adds its
+modules through `build/add-module.ps1`, which reads the engine off the API host's own
+`appsettings.json`: the key spelling inside the top-level `ConnectionStrings` section
+(`SQLServerConnectionString` or `SqliteConnectionString`) is the detection, and it is the same file
+the script writes the new data source into, so the two cannot disagree. The existing
+`<App>.Migrations.<Engine>.<Module>` folder is cross-checked against that reading, and a
+disagreement stops the run rather than adding a project half the solution cannot compile against.
+`-Database sqlserver|sqlite` overrides both, which is the answer for a solution that has grown a
+second engine.
+
+So a second module on a SQLite app is SQLite-shaped end to end: its EF configurations inherit
+`EntityTypeConfigurationSqlite`, its migrations project is `<App>.Migrations.Sqlite.<Module>` over
+`Microsoft.EntityFrameworkCore.Sqlite` with a `DesignTimeSqliteDbContextFactory`, and its
+`DataSources` entry names its own file plus its own `SqliteMigrationsAssembly`. Each module gets its
+own file rather than sharing one, which is database per module on this engine too: the framework
+tables a source carries (its own `OutboxMessages` among them) stay inside it. The script creates the
+module's first migration as its last step; `-SkipMigration` defers it, which is a deliberate decision
+on this engine for the reason step 3 gives, since the host migrates that source at startup instead of
+creating it.
+
+---
+
+## Two limitations worth knowing before you start
 
 **1. Writes need the `X-Tenant-Id` header.** The generated app enables tenancy with
 `RequireTenant: false`, so an unresolved caller reads across tenants, but a **write** with no tenant
-resolved throws rather than inserting an untenanted row (the column is not nullable), and that
-exception is unmapped, so it reaches the caller as a **500** rather than a 400. Send
-`X-Tenant-Id: acme` on every write, as the quickstart above does and as the UI host already does.
-Removing the header requirement means either giving the app a real issuer whose tokens carry a
-`tenant_id` claim, or turning tenancy off in `appsettings.json`.
+resolved is refused rather than inserting an untenanted row (the column is not nullable). The refusal
+reaches the caller as a **400** carrying RFC 9457 ProblemDetails titled "Tenant write rejected",
+whose detail names what to do (supply the configured tenant claim or header) and deliberately echoes
+back neither the entity type nor any tenant id. Send `X-Tenant-Id: acme` on every write, as the
+quickstart above does and as the UI host already does. Removing the header requirement means either
+giving the app a real issuer whose tokens carry a `tenant_id` claim, or turning tenancy off in
+`appsettings.json`.
 
-**2. The SQLite database is created, not migrated, at startup.** Every SQLite source in use is
-created with `EnsureCreated` before the configured `DatabaseInitStrategy` runs, and `Migrate` applies
-pending migrations to **SQL Server sources only**. The generated `.Migrations.Sqlite.<Module>` project
-is real and `dotnet ef` works against it, but nothing applies those migrations at boot today: a
-second schema version needs `dotnet ef database update` (or a delete of the file while the schema is
-still disposable). Startup migration application for SQLite sources is a follow-up.
-
-**3. `mmca-module` is not engine-aware yet.** Adding a second module to a SQLite app scaffolds a
-migrations project named `.Migrations.SqlServer.<Module>`, and `build/add-module.ps1` writes a
-`SQLServerMigrationsAssembly` entry into `appsettings.json`. Both are wrong for this shape and both
-are hand-editable. Small apps usually start (and often stay) single-module; if you know a second
-module is coming, that is one of the signals to start on SQL Server instead.
-
-**4. It is a development shape, not a deployment posture.** One file, one process writing to it, and
-`Migrate` semantics that do not cover it. Nothing here says a SQLite host cannot be deployed, only
-that this guide does not describe how, and that the framework's deployment story
-([ADR-030](../adr/030-startup-sole-migrator.md),
+**2. It is a development shape, not a deployment posture.** One file, and one process writing to it.
+Nothing here says a SQLite host cannot be deployed, only that this guide does not describe how, and
+that the framework's deployment story ([ADR-030](../adr/030-startup-sole-migrator.md),
 [ADR-093](../adr/093-container-image-posture.md)) is written for the SQL Server shape.
 
 ---
