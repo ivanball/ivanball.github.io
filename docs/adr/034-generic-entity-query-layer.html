@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 98 ADRs</summary>
+        <summary>All 101 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -198,6 +198,9 @@
         <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
         <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
         <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
           </ol>
         </nav>
       </details>
@@ -208,7 +211,13 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also
           covers <code>long</code>/<code>long?</code> via <code>LongFilterStrategy</code>. Amended (2026-07-25): the keyed
-          by-id fast path is named <code>TryGetFastPathIncludes</code> in code; citations rebased.</p>
+          by-id fast path is named <code>TryGetFastPathIncludes</code> in code; citations rebased.
+          <strong>Extended by <a href="099-generic-write-side-entity-commands.html">ADR-099</a></strong> (2026-08-29, v1.170.0): the write
+          half this record left at create and delete gains a generic update, through an
+          <code>IEntityUpdateApplier</code> the module implements, an <code>UpdateEntityCommand</code> / <code>UpdateEntityHandler</code> pair,
+          an <code>AddEntityCrud</code> registration for all three verbs, and a <code>CrudEntityControllerBase</code> carrying the
+          PUT. The PUT ships on a <strong>new derived base</strong> rather than on <code>AggregateRootEntityControllerBase</code>, whose
+          generic arity is deliberately unchanged; everything below is untouched.</p>
           <h2 id="context">Context</h2>
           <p>Every module exposes many entities, and most of them need the same read and write
           surface: list, page, look up for a dropdown, fetch by id, create, delete. Hand

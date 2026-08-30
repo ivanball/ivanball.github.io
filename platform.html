@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">16</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">98</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">101</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">119</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -408,7 +408,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>98 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>101 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -511,6 +511,9 @@
           <a class="adr" href="docs/adr/096-best-effort-side-effects.html"><span class="adr-num">096</span><span><span class="adr-title">Best-Effort Side-Effect Contract</span><span class="adr-sum">Accepted (2026-08-23).</span></span></a>
           <a class="adr" href="docs/adr/097-multi-device-refresh-sessions.html"><span class="adr-num">097</span><span><span class="adr-title">Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</span><span class="adr-sum">Accepted (2026-08-26). Supersedes the storage model of ADR-050 (one plaintext refresh-token column on the user row); the rotation and reuse-detection…</span></span></a>
           <a class="adr" href="docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html"><span class="adr-num">098</span><span><span class="adr-title">Aspire for Orchestration, Not for Testing or Production Dashboards</span><span class="adr-sum">Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as decisions rather than as gaps. Nothing in any repo…</span></span></a>
+          <a class="adr" href="docs/adr/099-generic-write-side-entity-commands.html"><span class="adr-num">099</span><span><span class="adr-title">Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Extends ADR-034, which gave every entity a generic read surface plus create and delete, by completing the…</span></span></a>
+          <a class="adr" href="docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html"><span class="adr-num">100</span><span><span class="adr-title">The Outbox Is Resolved from the Messaging Mode, Not Always On</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Amends ADR-003 (the outbox runs when the transport needs it, rather than in every host unconditionally) and…</span></span></a>
+          <a class="adr" href="docs/adr/101-common-metapackage.html"><span class="adr-num">101</span><span><span class="adr-title">An MMCA.Common Metapackage for the Core Six</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Extends ADR-053 (the metapackage ships to both registries from the same tag, through the same workflow) and…</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -536,9 +539,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">160 documents</span>
+            <span class="kicker kicker--accent">164 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 98 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 17 guides and specifications.</p>
+            <p>Every collection indexed in one place: 101 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 18 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->

@@ -5,7 +5,10 @@ Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context stat
 tense, to record the `MMCA.` ID prefix reservation as then-pending, to scope the
 "documented install path" claim to what is actually updated, and to split the packaging metadata
 between `Directory.Build.props` and the per-package csproj files. Amended (2026-07-28): that
-reservation has been granted, so the Decision now records it as done rather than pending.
+reservation has been granted, so the Decision now records it as done rather than pending. See also
+[ADR-101](101-common-metapackage.md) (2026-08-29, v1.170.0): the `MMCA.Common` metapackage joins the
+set published to both registries from the same tag, with no workflow change; it shortens the install
+line this record made credential-free from six references to one.
 
 ## Context
 The fifteen `MMCA.Common.*` packages have shipped to GitHub Packages since the first release. That

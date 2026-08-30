@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 98 ADRs</summary>
+        <summary>All 101 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -198,6 +198,9 @@
         <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
         <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
         <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
           </ol>
         </nav>
       </details>
@@ -212,7 +215,13 @@
           below). Revised 2026-08-07 (random jitter on the retry backoff; see Revision below). Revised
           2026-08-26 (opt-in per-key ordered dispatch, dead letters retained and replayable, a backlog-age
           gauge, type-alias rescue with one transient retry, and the consumer-side inbox on by default for
-          broker transports; see Revision below).</p>
+          broker transports; see Revision below). <strong>Amended by
+          <a href="100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a></strong> (2026-08-29, v1.170.0): the outbox is no
+          longer unconditional. <code>MessageBus:EnableOutbox</code> is <code>bool?</code> and resolves from the transport exactly as
+          the inbox does, ON for a broker and OFF for <code>InProcess</code>, so a single-process host dispatches events
+          directly and runs neither background service; a broker with the outbox explicitly disabled is refused
+          at startup; and the <code>OutboxMessages</code> table stays mapped either way, so the flag is never a migration.
+          Everything below describes the outbox a host that runs it gets, unchanged.</p>
           <h2 id="context">Context</h2>
           <p>Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:</p>
           <ol>

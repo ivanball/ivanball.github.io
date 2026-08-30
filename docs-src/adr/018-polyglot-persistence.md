@@ -10,7 +10,10 @@ trial (ADC's Conference `Session` to Cosmos DB and `Room` to SQLite, with its ch
 and tested locally, then deliberately reverted to all-SQL-Server while every framework extension point was kept.
 Moving an aggregate to another engine later is a config-base-class change plus connection strings (and
 one AppHost helper line), not a rewrite. This ADR records the decision and the extension point, because the
-machinery is load-bearing and already in production.
+machinery is load-bearing and already in production. Revised 2026-08-29 (v1.170.0): a request for an
+engine the host configures **nowhere** is served from the engine it does configure, so the
+"engines never collapse into each other" rule in Decision item 4 now has one bounded exception. See
+the Revision at the end.
 
 ## Context
 ADR-006 (database-per-service) splits storage along the **Name** axis: several physically separate
@@ -98,3 +101,48 @@ per entity configuration.
 ADR-006 (database-per-service: the **Name** axis this ADR's **Engine** axis is orthogonal to; they share
 `DataSourceKey`), ADR-002 (navigation populators bridge the relationships the degrade convention strips
 across sources), ADR-003 (the outbox is the cross-source, and now cross-engine, consistency mechanism).
+
+## Revision (2026-08-29): engine substitution for a single-engine host
+
+Decision item 4 says engines never collapse into each other, and that held while every host in this
+workspace configured SQL Server. A host that configures **only** SQLite (or only Cosmos) broke on it,
+because the engine choice for the framework's own tables is not made by that host: `Outbox:DataSource`,
+`Scheduler:DataSource` and `AuditTrail:DataSource` all default to `SQLServer`. Honoring that default
+literally handed the scheduler, the outbox, the audit trail, the refresh-session store and
+`DbContextFactory`'s transaction coordination a physical source with an empty connection string, and
+the first query each ran failed with "The ConnectionString property has not been initialized"
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:100-110`). The
+host built, started, and reported healthy first.
+
+The rule is now: **a request naming an engine the host configures nowhere is served from the engine the
+host does configure.**
+
+- The resolver records which engines carry a connection string anywhere, top-level or on a named
+  `DataSources` entry, while it builds the per-engine maps (`DataSourceResolver.cs:59-67`).
+- The substitute is the first configured engine in a fixed preference order, `SQLServer` then `Sqlite`
+  then `CosmosDB` (`:23`, selected at `:69-72`). Relational first because every table the framework
+  owns is relational, and SQL Server ahead of SQLite so a host that configures SQL Server at all keeps
+  exactly the routing it had.
+- `ResolveLogical` maps the requested engine through `SubstituteUnconfiguredEngine` before it looks
+  anything up (`:88`, the substitution at `:119-120`), which returns the request unchanged whenever
+  the host configures that engine.
+- A host that configures no database at all substitutes nothing (`:34-39`): there is nothing to
+  substitute to, and its startup validation is what fails, not its first query.
+- A substitute other than SQL Server is announced once at startup, naming the engine and the framework
+  tables it now serves (`:74-80`, message at `:390`).
+
+**Nothing moves for a host that configures the requested engine**, so a SQL-Server-only host and a
+genuine polyglot host that configures two engines resolve exactly as this record describes; only a
+request that could not have been served at all is redirected (`:111-115`). The pinned tests cover both
+directions (`Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/DataSourceResolverTests.cs`).
+
+The companion change is that startup validation stopped assuming SQL Server. A `[Required]` annotation
+on `SQLServerConnectionString` encoded "SQL Server is the only engine a host can boot on" and failed a
+SQLite-only host whose every entity resolved to a configured database. It is replaced by
+`ConnectionStringSettingsValidator`
+(`Source/Core/MMCA.Common.Infrastructure/Settings/ConnectionStringSettingsValidator.cs:30`), registered
+with `ValidateOnStart`, which accepts a connection string for **any** supported engine, either
+top-level or on a named `DataSources` entry (`:50`, `:56-71`). The rule is not weakened for the hosts
+that do run on SQL Server: a host with no connection string anywhere still fails to start, with a
+message naming both configuration shapes (`:38-43`), because silently booting one trades a clear
+startup failure for a failure on the first query.

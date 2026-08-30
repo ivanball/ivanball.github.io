@@ -13,7 +13,11 @@ rebased onto its current lines, and the versions are restated per repo (Common i
 8.5.10 and `SixLabors.ImageSharp` 3.1.12; Store and ADC still declare
 `MassTransit.Azure.ServiceBus.Core` 8.5.5). Amended (2026-08-28): a **Transport exit options**
 section records the three candidates for an eventual move off MassTransit v8 and the one place a
-candidate would be tried. Nothing about the pin, the gate or the dependency set changes.
+candidate would be tried. Nothing about the pin, the gate or the dependency set changes. See also
+[ADR-101](101-common-metapackage.md) (2026-08-29, v1.170.0): the `MMCA.Common` metapackage releases at
+the same version off the same tag like every other package, so it is one more entry a consumer sweeps
+in the same pass, and pinning six dependencies at its own version is only safe because of the lockstep
+rule decided here.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative

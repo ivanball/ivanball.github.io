@@ -7,7 +7,13 @@ safe scale-out, dead-letter visibility, post-commit dispatch; see Revision below
 below). Revised 2026-08-07 (random jitter on the retry backoff; see Revision below). Revised
 2026-08-26 (opt-in per-key ordered dispatch, dead letters retained and replayable, a backlog-age
 gauge, type-alias rescue with one transient retry, and the consumer-side inbox on by default for
-broker transports; see Revision below).
+broker transports; see Revision below). **Amended by
+[ADR-100](100-outbox-opt-in-resolved-from-messaging-mode.md)** (2026-08-29, v1.170.0): the outbox is no
+longer unconditional. `MessageBus:EnableOutbox` is `bool?` and resolves from the transport exactly as
+the inbox does, ON for a broker and OFF for `InProcess`, so a single-process host dispatches events
+directly and runs neither background service; a broker with the outbox explicitly disabled is refused
+at startup; and the `OutboxMessages` table stays mapped either way, so the flag is never a migration.
+Everything below describes the outbox a host that runs it gets, unchanged.
 
 ## Context
 Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:

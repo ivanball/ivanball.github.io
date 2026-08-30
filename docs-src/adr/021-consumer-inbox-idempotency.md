@@ -8,7 +8,11 @@ warning, `MessageBus:EnableInbox=true` becomes the stated recommendation for any
 Revision (2026-08-18) at the end). Revised 2026-08-26 (**the inbox is no longer opt-in for a broker
 transport**: it resolves ON unless a host explicitly turns it off, and its row is staged into the
 handler's own unit of work so it commits atomically with the handler's mutations. See the Revision
-(2026-08-26) at the end).
+(2026-08-26) at the end). See also
+[ADR-100](100-outbox-opt-in-resolved-from-messaging-mode.md) (2026-08-29, v1.170.0), which applies this
+record's three-valued resolution rule to the **producer** side: `MessageBus:EnableOutbox` is `bool?`
+and resolves from the transport the same way `EnableInbox` does here, so the two settings now read
+identically. Nothing about the inbox contract changes.
 
 ## Context
 ADR-003 makes integration-event delivery **at-least-once**: the outbox guarantees a published event

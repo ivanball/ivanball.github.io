@@ -4,6 +4,12 @@
 Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also
 covers `long`/`long?` via `LongFilterStrategy`. Amended (2026-07-25): the keyed
 by-id fast path is named `TryGetFastPathIncludes` in code; citations rebased.
+**Extended by [ADR-099](099-generic-write-side-entity-commands.md)** (2026-08-29, v1.170.0): the write
+half this record left at create and delete gains a generic update, through an
+`IEntityUpdateApplier` the module implements, an `UpdateEntityCommand` / `UpdateEntityHandler` pair,
+an `AddEntityCrud` registration for all three verbs, and a `CrudEntityControllerBase` carrying the
+PUT. The PUT ships on a **new derived base** rather than on `AggregateRootEntityControllerBase`, whose
+generic arity is deliberately unchanged; everything below is untouched.
 
 ## Context
 Every module exposes many entities, and most of them need the same read and write

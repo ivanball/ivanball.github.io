@@ -111,6 +111,7 @@
         <li><a href="common-GETTING-STARTED.html" aria-current="page">Common · Getting Started: Build a New App on MMCA.Common</a></li>
         <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
         <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-SMALL-APPS.html">Common · Small Apps: the lowest floor MMCA.Common has</a></li>
         <li><a href="common-TEMPLATES.html">Common · Templates: scaffolding an MMCA app</a></li>
         <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
         <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
@@ -140,6 +141,13 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           cannot retrofit one. Take the <a href="common-BUILD-BY-HAND.html">build-by-hand walkthrough</a> instead. It is
           also where to read <em>what</em> the scaffold handed you and why, once you want to change it.</p>
           </blockquote>
+          <blockquote>
+          <p><strong>No Docker, or nothing to orchestrate yet?</strong> Add <code>--database sqlite --no-aspire</code> and the same
+          command produces a two-host app over a single database file: no container, no server, no AppHost,
+          and the whole framework otherwise intact. That shape has its own guide,
+          <a href="common-SMALL-APPS.html">Small Apps</a>, including what is deliberately off in it and which switch to
+          flip when an assumption stops holding. The rest of this page describes the full shape.</p>
+          </blockquote>
           <hr>
           <h2 id="before-you-start">Before you start</h2>
           <ul>
@@ -149,6 +157,17 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           </ul>
           <p>No credentials, tokens, or extra feeds. <code>MMCA.Templates</code> and every <code>MMCA.Common.*</code> package restore
           from nuget.org (see <a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>).</p>
+          <blockquote>
+          <p><strong>One reference instead of six.</strong> A standard application host takes the framework&#39;s core six
+          packages (Shared, Domain, Application, Infrastructure, API, Aspire). The <code>MMCA.Common</code>
+          <strong>metapackage</strong> bundles exactly those, so a hand-wired host can take one <code>PackageReference</code> and one
+          version pin instead of six of each. It carries dependencies and no assembly, and it releases at the
+          same version as everything else, so it is one more entry in the same lockstep sweep
+          (<a href="../adr/101-common-metapackage.html">ADR-101</a>, <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).
+          The specialised packages (UI, UI.Web, Grpc, Gateway, Aspire.Hosting, the <code>Testing.*</code> set) stay
+          separate and are added per project. The scaffold below still emits the explicit six, so this is
+          something to reach for when you are wiring a host yourself.</p>
+          </blockquote>
           <hr>
           <h2 id="1-install-the-template-pack">1. Install the template pack</h2>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates</code></pre>
@@ -179,7 +198,7 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           <p>That is a warning-free build with <code>TreatWarningsAsErrors</code> and all five analyzers at error severity,
           and a passing test run including the architecture-fitness rules, with <strong>no database needed</strong>. If it
           is not green, that is a template bug rather than yours: the pack is generated from the reference app
-          whose CI keeps it building, and a separate smoke job builds two generated solutions in package mode
+          whose CI keeps it building, and a separate smoke job builds three generated solutions in package mode
           on every change.</p>
           <p>Getting a green baseline <strong>first</strong> is the point of this step. It is the line you bisect against
           later.</p>
@@ -210,9 +229,9 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           <p>The app runs <strong>issuer-less</strong>: with no Identity module it registers a bare auth scheme and the
           controller is <code>[AllowAnonymous]</code>, so nothing blocks you on day one. Adding real RS256/JWKS auth is
           under <a href="#then-what">Then what</a> below.</p>
-          <h2 id="6-the-two-one-time-fixups">6. The two one-time fixups</h2>
-          <p>The scaffold deliberately does not hand these over, because renaming invalidates them and no fixed
-          value is right for every name you could pick. Both are covered in full in the
+          <h2 id="6-the-one-time-fixup">6. The one-time fixup</h2>
+          <p>The scaffold deliberately does not hand this one over, because renaming invalidates it and no fixed
+          value is right for every name you could pick. It is covered in full in the
           <a href="common-TEMPLATES.html">templates guide</a>.</p>
           <p><strong>Using-directive and alias order.</strong> <code>using Contoso.Support.Orders.Shared;</code> sorts above
           <code>MMCA.Common.*</code>, but <code>using Zeta.App.Orders.Shared;</code> sorts below it, so no checked-in order survives
@@ -222,12 +241,13 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           constructor with a single statement). Sort them, then delete the whole block once you have stopped
           scaffolding:</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers Contoso.Support.slnx <span class="hljs-literal">--diagnostics</span> SA1210 SA1211 <span class="hljs-literal">--severity</span> info</code></pre>
-          <p><strong>Your integration-event wire contract.</strong> Integration events cross service boundaries, so a renamed
-          or retyped property breaks consumers elsewhere. <code>IntegrationEventContractTestsBase</code> fails the build
-          on a silent reshape, but only against a contract <strong>you</strong> froze: its frozen literal lists members
-          alphabetically, so one inherited from a sample module is wrong the moment your aggregate is not
-          called <code>Ticket</code>. Add the subclass to <code>ArchitectureTests.cs</code>, run it once, and paste in what the
-          failure prints:</p>
+          <p><strong>Your integration-event wire contract ships frozen.</strong> Integration events cross service boundaries,
+          so a renamed or retyped property breaks consumers elsewhere, and <code>IntegrationEventContractTestsBase</code>
+          fails the build on a silent reshape. The subclass is emitted by the template holding <strong>your</strong> event
+          under the names you scaffolded with, and it passes on arrival: member lists are compared as a set, so
+          nothing about the order of your properties has to be fixed up first. Evolve an event on purpose,
+          version it (<a href="../adr/010-integration-event-schema-versioning.html">ADR-010</a>), and update the literal in
+          the same commit. The failure prints the live value to paste:</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
   <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-class</span> <span class="hljs-string">&quot;*IntegrationEventContract*&quot;</span></code></pre>
           <hr>
@@ -518,6 +538,8 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <li><strong><a href="common-TEMPLATES.html">Templates</a></strong>: every parameter of all four templates, dropping the Blazor UI
           host, and how the pack is built. <a href="../adr/065-scaffolding-templates.html">ADR-065</a> explains why it is
           derived from the reference app rather than maintained beside it.</li>
+          <li><strong><a href="common-SMALL-APPS.html">Small apps</a></strong>: the same scaffold with <code>--database sqlite --no-aspire</code>, the
+          lowest floor the framework has, plus the honest list of what that shape gives up.</li>
           <li><strong><a href="common-BUILD-BY-HAND.html">Build by hand</a></strong>: the same solution, phase by phase, for retrofitting
           an existing solution or for understanding what you were handed.</li>
           <li><strong><a href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk</a></strong>: the runnable reference app. It <em>is</em>
@@ -546,7 +568,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
             <li><a href="#3-build-and-test-before-you-change-anything">3. Build and test before you change anything</a></li>
             <li><a href="#4-create-the-first-migration">4. Create the first migration</a></li>
             <li><a href="#5-run-it">5. Run it</a></li>
-            <li><a href="#6-the-two-one-time-fixups">6. The two one-time fixups</a></li>
+            <li><a href="#6-the-one-time-fixup">6. The one-time fixup</a></li>
             <li><a href="#what-you-were-handed">What you were handed</a></li>
             <li><a href="#add-your-next-feature">Add your next feature</a></li>
             <li><a href="#surface-the-slice-at-the-edge">Surface the slice at the edge</a></li>
