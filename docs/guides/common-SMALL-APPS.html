@@ -288,8 +288,10 @@ curl -k -H <span class="hljs-string">&quot;X-Tenant-Id: acme&quot;</span> https:
           lookup, by-id, CSV export, sparse fieldsets, dynamic filters, sort and pagination, inherited by
           every entity. Aggregates you add later can also take the generic write side
           (<a href="../adr/099-generic-write-side-entity-commands.html">ADR-099</a>) and skip the create, update and
-          delete handlers entirely; the scaffolded module keeps its hand-written ones, because they are what
-          the reference app exists to show you.</li>
+          delete handlers entirely, including the shapes that used to need their own handler (a delete that
+          has to load its children or refuse, two verbs over one request shape, a response that is not the
+          aggregate&#39;s DTO); the scaffolded module keeps its hand-written ones, because they are what the
+          reference app exists to show you.</li>
           <li><strong>Multi-tenancy, audit trail and the scheduled-job runner</strong>, all switched on in the generated
           <code>appsettings.json</code> and all running against the one SQLite file.</li>
           </ul>

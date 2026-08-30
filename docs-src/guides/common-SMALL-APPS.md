@@ -178,8 +178,10 @@ which is what [ADR-018](../adr/018-polyglot-persistence.md) exists to make true.
   lookup, by-id, CSV export, sparse fieldsets, dynamic filters, sort and pagination, inherited by
   every entity. Aggregates you add later can also take the generic write side
   ([ADR-099](../adr/099-generic-write-side-entity-commands.md)) and skip the create, update and
-  delete handlers entirely; the scaffolded module keeps its hand-written ones, because they are what
-  the reference app exists to show you.
+  delete handlers entirely, including the shapes that used to need their own handler (a delete that
+  has to load its children or refuse, two verbs over one request shape, a response that is not the
+  aggregate's DTO); the scaffolded module keeps its hand-written ones, because they are what the
+  reference app exists to show you.
 - **Multi-tenancy, audit trail and the scheduled-job runner**, all switched on in the generated
   `appsettings.json` and all running against the one SQLite file.
 

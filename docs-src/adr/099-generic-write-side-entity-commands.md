@@ -5,7 +5,12 @@ Accepted (2026-08-29, framework v1.170.0). Extends
 [ADR-034](034-generic-entity-query-layer.md), which gave every entity a generic read surface plus
 create and delete, by completing the write half: a generic update command, its handler, a one-call DI
 registration for all three verbs, and a controller base carrying the PUT. Additive throughout; no
-existing controller, handler or registration changes.
+existing controller, handler or registration changes. Revised 2026-08-30 (framework v1.172.0): five
+surface extensions complete the record by closing the shapes that still forced a hand-written handler
+(a mutation context carrying side data plus an idempotent-no-op short circuit, a payload-returning
+mutate base, attempt-scope parity on the mutate path, an extensible `DeleteEntityHandler`, and a
+verb-discriminated command with a command-aware applier). Still additive: every existing subclass,
+command and applier compiles and behaves exactly as before. See the Revision at the end.
 
 ## Context
 ADR-034 records the read side of the generic resource layer and stops one verb short. Its
@@ -180,3 +185,158 @@ sealed-pipeline guard `AddEntityCrud` respects),
 the edge),
 [ADR-026](026-caching-strategy.md) (the prefix-keyed invalidation the command's `CachePrefix` drives),
 [ADR-001](001-manual-dto-mapping.md) (the `IEntityDTOMapper` the handler projects through).
+
+## Revision (2026-08-30): the five surfaces that complete the write side
+
+The decision above shipped the generic update and left the bases where it found them. Reading real
+write handlers against those bases surfaced five shapes that still forced a hand-written copy of the
+load-mutate-save workflow, and in every case the reason was a missing extension point rather than a
+case the generic path was wrong for: a value derived before the mutation, an idempotent no-op, a
+fresh-scope retry, a delete that has to load its children or refuse, and a command that carries more
+than its request. All five are additive.
+
+**1. A mutation context on every write handler.** `MutationContext`
+(`Source/Core/MMCA.Common.Application/UseCases/MutationContext.cs:31`) is a per-command side channel:
+a typed bag (`Set` at `:56`, `TryGet` at `:69`, `GetOrDefault` at `:93`, `Contains` at `:99`) plus
+`SkipSave()` (`:49`) and the `SaveSkipped` flag it sets (`:39`).
+`MutateEntityHandlerCore` creates one per run (`MutateEntityHandlerBase.cs:96`) and threads it through
+`LoadAsync` (`:170`), `MutateAsync` (`:134`), `LogMutated` (`:198`) and `OnMutatedAsync` (`:225`), each
+of them a new overload that forwards to the context-free one by default, so a handler that needs
+neither keeps overriding what it always overrode and never sees the context. It exists because the
+workflow answers with the mutated aggregate, so a value the mutation computed on the way (the
+pre-mutation state, the blob the write is about to orphan) had nowhere to go except handler instance
+state, which a scoped handler must not carry between calls (`MutationContext.cs:12-17`).
+`SkipSave()` is read in the workflow itself (`MutateEntityHandlerBase.cs:295-296`): the command
+returns the loaded aggregate as a success, with no save, no `LogMutated` and no `OnMutatedAsync`,
+because an already-satisfied request (remove an avatar that is not there) is a success and must not
+log a mutation that did not happen. The one behavioral note for anyone writing a new handler is that
+`MutateAsync(entity, command, token)` is now `virtual` rather than `abstract`: a handler overrides
+exactly one of the two overloads, and overriding neither throws at the call site naming the type
+(`:117-119`).
+
+**2. A payload-returning mutate base.**
+`MutateEntityPayloadHandlerBase<TCommand, TEntity, TIdentifierType, TResultPayload>` (`:383`) is the
+third mutate flavor beside the bare-`Result` one (`:315`) and the refreshed-DTO one (`:338`), for a
+command whose response is a purpose-built envelope rather than the aggregate's DTO. `TResultPayload`
+is unconstrained, and the subclass builds the answer in `BuildResult(entity, command, context)`
+(`:414`), called only on success (`:399-401`), reading both the mutated aggregate and whatever the
+mutation wrote into the context. That pair is the point: a pre-mutation value reaches the response
+without handler instance state. It is a sibling type rather than a fourth type parameter on the DTO
+flavor because generic types overload by arity alone and a four-parameter `MutateEntityHandlerBase`
+already exists (`:376-377`).
+
+**3. Attempt-scope parity on the mutate path.** `MutateCoreAsync(attemptUnitOfWork, command, token)`
+(`:253`) and its context-taking overload (`:269`) take the unit of work as a parameter, exactly as the
+create workflow's `CreateCoreAsync` already did
+(`Source/Core/MMCA.Common.Application/UseCases/CreateEntityHandlerBase.cs:76`). A handler whose write
+can lose a unique-key race overrides `HandleAsync`, wraps the workflow in a retry loop and runs each
+attempt against a fresh DI scope's unit of work, instead of reimplementing load-stamp-mutate-save
+around the base. The parameter is load-bearing rather than cosmetic: the ambient context still tracks
+the failed attempt, so a retry on the injected unit of work would never persist (`:245-249`).
+
+**4. `DeleteEntityHandler` is opened.** `HandleAsync` is `virtual`
+(`Source/Core/MMCA.Common.Application/UseCases/DeleteEntityHandler.cs:66`) and the workflow is split
+into `Includes` (`:57`), `AsTracking` (`:63`), `LoadAsync` (`:100`), the `Result`-returning pre-delete
+hook `OnDeletingAsync` (`:125`), `LogDeleted` (`:137`), `HandlerName` (`:49`) and a protected
+`UnitOfWork` (`:42`). The two things a real delete outgrows are both structural: the child collections
+the aggregate's own `Delete()` cascade has to see, because an unloaded collection leaves its rows live
+under a soft-deleted parent (`:54-56`), and an invariant that spans more than the aggregate, which
+`OnDeletingAsync` refuses before `Delete()` is called and before anything is saved (`:75-77`). With no
+`Includes` the load is the same bare by-id query the handler always issued (`:110-112`), so an
+existing consumer sees no change. Events stay the aggregate's, as before (`:23-25`).
+
+**5. A verb-discriminated command and a command-aware applier.** Two related shapes, both about a
+command that the three-parameter form cannot express.
+
+- *Two verbs over one request DTO.* The generic path keys the handler and its applier on (entity,
+  request, identifier), so an aggregate with two mutations that take the same request shape (an
+  inventory item increased or decreased by one `Quantity` payload) cannot close the command twice.
+  `UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType, TApplier>`
+  (`Source/Core/MMCA.Common.Application/UseCases/UpdateEntityCommand.cs:102`) derives from the
+  three-parameter command (`:106`) and adds the applier type as a phantom discriminator (`:116`,
+  rationale at `:73-80`). `UpdateEntityHandler<TEntity, TEntityDTO, TIdentifierType, TUpdateRequest,
+  TApplier>` (`UpdateEntityHandler.cs:115`) injects that applier by its concrete type (`:117`), which
+  the module scan registers alongside its interfaces, and reports a `HandlerName` naming the verb so
+  two verbs produce distinguishable `NotFound` failures (`:133`). Registration is one
+  `AddEntityUpdateVerb<...>()` per verb (`DependencyInjection.cs:380`), `TryAdd` like `AddEntityCrud`
+  (`:388`) and bridging the verb's command to `IValidator<TUpdateRequest>` (`:394`). The wire shape
+  does not move: same route, same request DTO.
+- *A command carrying state beside the request.* `UpdateEntityCommand<TEntity, TUpdateRequest,
+  TIdentifierType>` is no longer sealed (`UpdateEntityCommand.cs:46`, rationale at `:26-35`), so a
+  module derives a positional record that adds a route-derived child id, a server-decided flag or a
+  second concurrency token while inheriting `Id`, `Request`, `RowVersion`, the `ICommandWithRequest`
+  validator bridge and the `CachePrefix` default (`:63`). Those belong on the command rather than
+  smuggled into the request DTO, where a caller could set them, so the applier has to see the command:
+  `IEntityUpdateCommandApplier<TEntity, TUpdateRequest, TIdentifierType, TCommand>`
+  (`IEntityUpdateCommandApplier.cs:38`) takes the whole command and the mutation context (`:56-60`)
+  and still answers with a bare `Result` for the same reason the request-only applier does (`:29-32`).
+  `UpdateEntityCommandHandler<TCommand, ...>` (`UpdateEntityHandler.cs:185`) runs it on the shared
+  workflow, delegating through the context-aware `MutateAsync` (`:218-223`), and
+  `AddEntityUpdate<TCommand, ...>()` registers the pair (`DependencyInjection.cs:431`).
+- Both helpers call `ThrowIfPipelineSealed` (`:386`, `:437`) like `AddEntityCrud`, and both call the
+  new `AddCommandRequestValidator<TCommand, TRequest>()` (`:464`): the explicit form of the bridge the
+  module scan applies by reflection, for a command the scan cannot see because it is a closed generic
+  constructed at registration time. It is `TryAdd` (`:467`), so an explicit `IValidator<TCommand>`
+  still wins, and registering it with no `IValidator<TRequest>` present is harmless.
+- Post-load, pre-mutate work needs no new hook. A subclass that has to stamp `SetOriginalRowVersion`
+  on a tracked child row (ADR-035's second token, which the base's root-stamping `RowVersion` hook
+  cannot reach) overrides `MutateAsync`, does its work against
+  `UnitOfWork.GetRepository<TEntity, TIdentifierType>()` and awaits `base.MutateAsync(...)`, which is
+  now documented on the handler itself (`UpdateEntityHandler.cs:22-32`).
+
+The behavior is pinned in
+`Tests/Core/MMCA.Common.Application.Tests/UseCases/WriteSideExtensionsTests.cs`, whose classes map one
+to one onto the five: `MutationContextTests` (`:14`), `MutationContextHandlerTests` (`:73`),
+`MutateAttemptScopeTests` (`:183`), `DeleteEntityHandlerExtensionTests` (`:237`),
+`VerbDiscriminatedUpdateTests` (`:331`), `DerivedUpdateCommandTests` (`:412`) and
+`WriteSideRegistrationTests` (`:493`).
+
+### Where the generic path stops
+
+The extensions widen the shape the framework serves; they do not make the generic path the answer for
+every write. It covers a write whose shape is: load one aggregate, run its guarded methods, save.
+Four kinds of handler stay hand-written by design, and the boundary is where a write stops being that
+shape rather than where a handler happens to be long.
+
+- **Domain-verb state machines.** An order that pays, cancels and delivers
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Pay/PayOrderHandler.cs:13`)
+  is a transition set, not a field assignment: what a verb is allowed to do depends on the state the
+  aggregate is in, and expressing that as a request DTO the caller fills in would put the state
+  machine on the wire.
+- **Sagas and payment flows.** A handler that talks to a payment provider between the load and the
+  save
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:21`)
+  runs work that is not a mutation, with its own compensation and its own idempotency, inside a
+  workflow whose entire contract is load-mutate-save.
+- **The auth verticals.** Password change, reset, external login and session revocation
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:17`)
+  mint tokens, hash credentials and send mail. Their side effects, not their aggregate writes, are the
+  reason they exist.
+- **Multi-aggregate orchestration.** The generic workflow loads exactly one aggregate by id. A write
+  that has to touch two roots is outside it by construction, and pretending otherwise would hide a
+  transaction boundary inside a base class.
+
+Nothing in the framework opts a consumer in, which is unchanged from the original decision: adoption
+stays per aggregate, per verb, and partial, and `TryAdd` keeps a hand-written handler in place. What
+shipped in v1.172.0 is the framework surface. Consumer adoption of these five is carried on
+`feature/write-side-generics-adoption` in MMCA.ADC and MMCA.Store and is on neither app's `main`, so
+nothing about either deployed application changed with this release.
+
+### What these cost
+
+- **The context is a string-keyed, untyped bag.** A key typo reads as absent and a type mismatch reads
+  as absent (`MutationContext.cs:73`), so a writer and a reader that disagree fail quietly rather than
+  at compile time. It is also deliberately not thread-safe (`:26-29`).
+- **`MutateAsync` moved from `abstract` to `virtual`**, which trades a compile error for a runtime
+  throw when a new handler overrides neither overload (`MutateEntityHandlerBase.cs:117-119`).
+- **`SkipSave` returns success on a command that wrote nothing.** A caller reading a 2xx as proof a
+  write happened is now wrong, and the response is deliberately indistinguishable from one that did
+  write.
+- **Three mutate bases now exist** where there were two, and choosing between them is a reader's
+  problem before it is a writer's.
+- **The verb discriminator is a phantom type parameter.** It buys two commands over one request DTO at
+  the price of a type name that carries an applier name into log lines and failure sources
+  (`UpdateEntityHandler.cs:133`).
+- **A `virtual HandleAsync` on `DeleteEntityHandler` allows a subclass to replace the workflow
+  entirely**, not just extend it, and `Includes` is a string collection resolved at query time, so a
+  renamed navigation property fails on a request rather than in a build.
