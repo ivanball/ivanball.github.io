@@ -360,9 +360,18 @@
           directly instead of calling the aggregate&#39;s guarded methods, which would skip the invariants and
           raise no events. No fitness rule checks it today; the interface makes the right thing easy, not the
           wrong thing impossible.</li>
-          <li><strong>Nothing in the framework opts an existing consumer in.</strong> ADC and Store keep their hand-written
-          create, update and delete handlers; the generic write side is what a new aggregate can start from,
-          not a migration anyone is asked to run.</li>
+          <li><strong>Nothing in the framework opts a consumer in: every registration is a line the module writes.</strong>
+          Adoption is per aggregate and partial. ADC&#39;s Conference module registers it for <code>Category</code>,
+          <code>Activity</code> and <code>Sponsor</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:140-142</code>),
+          Store&#39;s Catalog for <code>Product</code> (one call per field-scoped update request) and <code>Category</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:67-71</code>),
+          and Store&#39;s Identity for <code>Customer</code>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:65-67</code>),
+          each call placed after the convention scan so <code>TryAdd</code> leaves the hand-written handlers those
+          modules keep (the create verbs, and Catalog&#39;s <code>DeleteCategoryHandler</code>) exactly where they were. An
+          aggregate whose lifecycle is guarded rather than plain CRUD keeps its own handlers, and no
+          migration is asked of anyone.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="034-generic-entity-query-layer.html">ADR-034</a> (the read side plus create and delete this record

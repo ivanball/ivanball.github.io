@@ -168,13 +168,17 @@ Three properties are worth knowing before you pick:
 - **`--database sqlite` drops the checked-in sample migration**, for the same reason any shape flag
   does and for a second one: those migrations are SQL Server DDL and their model snapshot names
   `SQLServerDbContext`. Run `dotnet ef migrations add InitialCreate` against the generated
-  `.Migrations.Sqlite.<Module>` project with `--context SqliteDbContext`. The SQLite database itself
-  is created at startup without it, so the app runs before you do.
-- **Neither option reaches `mmca-module` or the slice templates.** They declare no engine symbol, so
-  a module added to a SQLite solution is scaffolded SQL-Server-shaped: its migrations project is
-  named `.Migrations.SqlServer.<Module>` and `build/add-module.ps1` writes a
-  `SQLServerMigrationsAssembly` entry. Both are hand-editable, and it is a known gap rather than a
-  design decision.
+  `.Migrations.Sqlite.<Module>` project with `--context SqliteDbContext`, and run it **before the
+  first run of the API host**. The generated `DataSources` entry names a `SqliteMigrationsAssembly`,
+  and a SQLite source that names one is migrated at startup rather than created outright, so an empty
+  migrations assembly leaves the host with an empty database file and a first request that fails on a
+  missing table. The generated README says the same thing in its own "Before the first run" section.
+- **`--database` reaches `mmca-module`, `--no-aspire` does not, and neither reaches the slice
+  templates.** A module is not engine-neutral (its EF configurations inherit an engine-specific
+  configuration base and its migrations project references an engine-specific provider), so
+  `mmca-module` declares the engine option in its own right and `build/add-module.ps1` passes it
+  through. Only the app owns an orchestration project, so `--no-aspire` stays `mmca-app`'s alone;
+  `mmca-command` and `mmca-query` carry no engine coupling at all.
 
 ### Dropping the Blazor UI host
 
@@ -269,16 +273,21 @@ dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice
 | `--no-status` | off | generate the module with no status axis (1.3.0) |
 | `--no-description` | off | generate the module with no long-text property (1.4.0) |
 | `--no-owner` | off | generate the module with no owning-user property (1.4.0) |
+| `--database` | `sqlserver` | relational engine for this module: `sqlserver` or `sqlite` (1.7.0) |
 
-All six behave exactly as they do for `mmca-app`, and they are per module: a solution can hold a
-flat, status-less catalog module beside one whose aggregate owns a growing child collection and a
-guarded lifecycle. The one difference is that `--title` here does not reach UI resources, because
-`mmca-module` generates no Blazor pages.
+The six shape options behave exactly as they do for `mmca-app`, and they are per module: a solution
+can hold a flat, status-less catalog module beside one whose aggregate owns a growing child
+collection and a guarded lifecycle. The one difference is that `--title` here does not reach UI
+resources, because `mmca-module` generates no Blazor pages.
 
-`mmca-module` declares no engine option, so the module it generates is always SQL-Server-shaped: on a
-`--database sqlite` solution its migrations project arrives named `.Migrations.SqlServer.<Module>`
-and its `appsettings.json` wire-up names `SQLServerMigrationsAssembly`. Rename both by hand, or start
-a multi-module app on SQL Server.
+`--database` is the seventh, and it is not a shape option: it **must match the engine the surrounding
+solution was generated with**, because the engine decides which configuration base the module's EF
+configurations inherit and which provider package its migrations project references, and a module
+built for the other engine does not compile in the solution it was added to. Under
+`--database sqlite` the migrations project arrives named `.Migrations.Sqlite.<Module>` against
+`Microsoft.EntityFrameworkCore.Sqlite`, with a `DesignTimeSqliteDbContextFactory` over
+`SqliteDbContext`, and the wire-up instructions it prints name `SqliteMigrationsAssembly`.
+`build/add-module.ps1` detects the solution's engine and passes this flag for you.
 
 **If your solution came from `mmca-app`, use `build/add-module.ps1` instead** (below): it runs this
 template and then applies every wire-up the template can only print.
@@ -317,7 +326,7 @@ compile.
 5. **Host.** `services.AddErrorResources<<Module>ErrorResources>();` next to the existing ones.
    `ModuleLoader` discovers the `IModule` itself, so nothing else needs registering.
 6. **Database.** An AppHost database resource plus a `DataSources` entry per module in the Web
-   host's appsettings, the top-level `SQLServerMigrationsAssembly` pin deleted, and a top-level
+   host's appsettings, the top-level migrations-assembly pin deleted, and a top-level
    `"Outbox": { "DatabaseName": "<FirstModule>" }` pin (IEventBus writes handler-published
    integration events to one configured outbox source per host). The
    [ecommerce sample guide](common-ECOMMERCE-SAMPLE.md) walks each edit.
@@ -330,6 +339,11 @@ dotnet ef migrations add InitialCreate `
   --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing `
   --context SQLServerDbContext
 ```
+
+Every path and context name above carries the engine, so on a `--database sqlite` module the project
+is `Contoso.Support.Migrations.Sqlite.Billing` and the context is `SqliteDbContext`. There the
+migration is required before the next run of the API host rather than optional: a SQLite source that
+names a migrations assembly is migrated at startup instead of created outright.
 
 ---
 
@@ -357,17 +371,29 @@ pwsh build/add-module.ps1 -Name Orders -Aggregate Order -Child Item -EventVerb P
 | `-NoStatus` | `--no-status` | no status axis |
 | `-NoOwner` | `--no-owner` | no owning-user property |
 | `-NoDescription` | `--no-description` | no long-text property |
+| `-Database` | `--database` | override the engine the solution is read to be running on: `sqlserver` or `sqlite` (1.7.0) |
 | `-SkipMigration` | | print the `dotnet ef migrations add` command instead of running it |
 
 Run it with `-?` for the full help, and run it **from the solution root**: it refuses to run anywhere
 else, and everything else it discovers there at run time (the solution file, which is also the app's
-root namespace, the modules already present, and the web host, AppHost and architecture-test projects
-by glob). Nothing about the app that generated it is baked in, which is why it ships `copyOnly`,
+root namespace, the modules already present, the relational engine the solution runs on, and the web
+host, AppHost and architecture-test projects by glob). Nothing about the app that generated it is
+baked in, which is why it ships `copyOnly`,
 verbatim, with no token replacement at all: the flag names it passes through have to survive whatever
 `--title` / `--event-verb` / `--child` values your solution was generated with.
 
-Three properties worth knowing before you run it:
+Four properties worth knowing before you run it:
 
+- **The engine is detected, so `-Database` is the exception rather than the rule.** The script reads
+  it off the API host's own `appsettings.json`, from the key spelling inside the top-level
+  `ConnectionStrings` section (`SQLServerConnectionString` or `SqliteConnectionString`). That file
+  was picked over the alternatives because it is the file the script also **writes**: detecting from
+  the same place the new data source is written into is what makes the two impossible to disagree.
+  The existing `<App>.Migrations.<Engine>.<Module>` folder is then cross-checked against that
+  reading, and a disagreement stops the run rather than adding a project half the solution cannot
+  compile against. Pass `-Database` when a solution has grown a second engine and the detection can
+  no longer answer for the module you are adding; either way the preflight summary echoes the engine
+  and says whether it was read or passed.
 - **It fails fast rather than half-applying.** A `Name` already under `Source/Modules` is refused
   before anything is generated, and a `.slnx` count other than one, a missing host project, or an
   ambiguous architecture map all stop the run at preflight.
@@ -381,7 +407,9 @@ Three properties worth knowing before you run it:
 `-SkipMigration` is worth passing when the module is about to be reshaped: the migration would
 describe the scaffolded entities, and you would delete and regenerate it anyway. The script also
 degrades to printing the command on its own when the `dotnet-ef` tool is not installed, rather than
-failing a run whose other steps landed.
+failing a run whose other steps landed. On a SQLite solution it warns in both of those cases that the
+migration is required before the next run of the API host, since the host migrates a SQLite source
+that names a migrations assembly instead of creating it outright.
 
 Two things it deliberately does not do: the Blazor UI pages for the new module, and that module's
 page-level localization resources. It prints both reminders when it finishes. The
@@ -450,9 +478,21 @@ version, and a source-mode build can pass where package-mode Release fails on an
 sweeps each for residual and for missing tokens, builds package-mode and runs the tests. The three
 are shapes rather than names: one with every module axis turned off plus a `--title` rename, one
 fully default (which is what makes the absence sweeps non-vacuous), and one solution shape,
-`--database sqlite --no-aspire`. Only the first goes on to add a second module **through
-`build/add-module.ps1`** and scaffold slices, so the wire-ups are covered by the same code path
-adopters run without paying for three full runs of it.
+`--database sqlite --no-aspire`.
+
+**Two of the three go on to add a second module through `build/add-module.ps1`**, for reasons neither
+subsumes. The first proves the **wire-ups**: every edit the script makes, the child rename, the
+module-only axes, the slices, and the refused rerun, on the default engine. The sqlite case proves
+the **engine reaches the second module**, because `--database` is declared twice, once per
+`template.json`, staged by two separate passes, so a module added to a sqlite solution can come out
+SQL-Server-shaped with every one of the first case's assertions still green. It asserts what a second
+sqlite module has to be: a `.Migrations.Sqlite.<Module>` project with a `DesignTimeSqliteDbContextFactory`
+and no SQL Server residue in any of its files, two `DataSources` entries pinned to their own
+`SqliteMigrationsAssembly` values and pointing at **separate** files (one shared file would collide
+the two modules' outbox tables), the outbox pinned to the first module, a migration created against
+`SqliteDbContext`, and a green Release build and test run of the two-module solution. That run is
+deliberately thin (no slices, no child rename, no rerun check) to keep the third case's wall clock
+down, and only the first case scaffolds slices.
 
 To work on the templates:
 

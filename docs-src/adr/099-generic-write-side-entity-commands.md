@@ -152,9 +152,18 @@ Ship the generic write side as four additive pieces plus a registration helper.
   directly instead of calling the aggregate's guarded methods, which would skip the invariants and
   raise no events. No fitness rule checks it today; the interface makes the right thing easy, not the
   wrong thing impossible.
-- **Nothing in the framework opts an existing consumer in.** ADC and Store keep their hand-written
-  create, update and delete handlers; the generic write side is what a new aggregate can start from,
-  not a migration anyone is asked to run.
+- **Nothing in the framework opts a consumer in: every registration is a line the module writes.**
+  Adoption is per aggregate and partial. ADC's Conference module registers it for `Category`,
+  `Activity` and `Sponsor`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:140-142`),
+  Store's Catalog for `Product` (one call per field-scoped update request) and `Category`
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:67-71`),
+  and Store's Identity for `Customer`
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:65-67`),
+  each call placed after the convention scan so `TryAdd` leaves the hand-written handlers those
+  modules keep (the create verbs, and Catalog's `DeleteCategoryHandler`) exactly where they were. An
+  aggregate whose lifecycle is guarded rather than plain CRUD keeps its own handlers, and no
+  migration is asked of anyone.
 
 ## Related
 [ADR-034](034-generic-entity-query-layer.md) (the read side plus create and delete this record
