@@ -285,9 +285,10 @@
           consumer no longer has to write its own action for per-device sign-out.</li>
           <li><strong>A configurable cap bounds the table without ever failing a login.</strong>
           <code>RefreshSessions:MaxActiveSessionsPerUser</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:31</code>, default 10,
-          <code>[Range(1, 1000)]</code> at <code>:30</code>, reasoning at <code>:23-29</code>; the base property falls back to the same 10 for
-          an unbound options instance, <code>AuthenticationServiceBase.cs:96-105</code>, constant at <code>:57</code>) is enforced
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:35</code>, default 10,
+          <code>[Range(1, 1000)]</code> at <code>:34</code>, reasoning at <code>:27-33</code>; <code>AuthenticationServiceBase</code> requires
+          <code>IOptions&lt;RefreshSessionSettings&gt;</code> and reads the cap straight off it, so the bound settings are the
+          one source of the value, <code>AuthenticationServiceBase.cs:55,112</code>) is enforced
           before a new session is staged: while the user is at or over the cap, the oldest live session is
           revoked with reason <code>SessionCapExceeded</code> (<code>:584-597</code>, the eviction loop at <code>:593-596</code>). Ordering is
           <code>CreatedAt</code> then <code>Id</code> (<code>:589-590</code>, matched by the store&#39;s own ordering,

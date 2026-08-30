@@ -246,7 +246,9 @@
           the existing <code>AddNotificationControllers</code> application part, <code>[Authorize]</code> for any signed-in
           user and feature-gated with the same <code>Notification.PushNotifications</code> flag as the rest of the
           pipeline. Ownership is stamped server-side from the current user; installation ids are
-          client-generated GUIDs (not enumerable). DELETE is idempotent (unknown id = success).</li>
+          client-generated GUIDs (not enumerable). DELETE is idempotent and owner-scoped:
+          <code>IPushDeviceRegistrar.DeleteAsync(userId, installationId, ct)</code> takes the owning user, and an
+          unknown id and another user&#39;s id both answer success without deleting anything.</li>
           <li><strong>Client orchestration behind two UI capability contracts</strong> (ADR-042 pattern):
           <code>IPushRegistrationService</code> (register after sign-in, unregister BEFORE sign-out - the delete
           call is authenticated) and <code>IPushDeviceTokenProvider</code> (the platform token extension point). UI.Maui
@@ -263,9 +265,12 @@
           consolidate later without touching callers.</li>
           <li>The handler&#39;s third leg is fire-and-forget: no per-device delivery tracking. The hub&#39;s
           telemetry is the observability surface; the inbox remains the recovery path.</li>
-          <li>Anyone holding an installation id could delete that registration through the authenticated
-          DELETE. Ids are client-generated GUIDs stored only on the device, so this is not enumerable;
-          re-registration on next launch self-heals.</li>
+          <li>A delete verifies ownership before it acts: the registrar reads the installation and checks
+          the <code>user:{id}</code> tag <code>UpsertAsync</code> stamped on it
+          (<code>AzureNotificationHubDeviceRegistrar.cs:68-74</code>), so an id belonging to someone else deletes
+          nothing. That costs an extra hub round trip per delete, and the response cannot tell a caller
+          which case it hit: an unknown id and a foreign one both answer success, deliberately, so the
+          endpoint is not an existence oracle for other users&#39; installation ids.</li>
           <li>Consumers must update PRIVACY.md/store data-safety forms (push tokens are device identifiers)
           BEFORE store metadata mentions push. Credential provisioning (Firebase service account, APNs
           key) is a manual runbook step per app; until done, the hub rejects sends and the client

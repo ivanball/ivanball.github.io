@@ -23,9 +23,9 @@ That gap is small for an application with four aggregates and expensive for the 
 targets: a first module scaffolded from the template, where the aggregate is a title, a description,
 a status and a child collection, and the update handler is the same twelve lines every time. The
 shared load-mutate-save machinery already existed
-(`Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:34`, whose
-`MutateCoreAsync` at `:135` loads the aggregate, stamps the caller's concurrency token at `:146`, runs
-the mutation and saves at `:152`), so what was missing was not the workflow but a command and a
+(`Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:51`, whose
+`MutateCoreAsync` at `:270` loads the aggregate, stamps the caller's concurrency token at `:290`, runs
+the mutation and saves at `:302`), so what was missing was not the workflow but a command and a
 handler generic enough to close over any aggregate, plus somewhere for the module to say which
 aggregate method a request maps to.
 
@@ -55,19 +55,22 @@ Ship the generic write side as four additive pieces plus a registration helper.
 
 2. **One generic update command.**
    `UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`
-   (`Source/Core/MMCA.Common.Application/UseCases/UpdateEntityCommand.cs:32`) carries the id, the
-   request and the caller's last-observed `RowVersion` (`:33-35`). `TEntity` is a type parameter the
-   command never otherwise uses: it distinguishes update handlers for two aggregates that share an
-   identifier type, and it supplies the default cache prefix.
-   - It implements `ICommandWithRequest<TUpdateRequest>` (`:36`), so the framework's validator bridge
+   (`Source/Core/MMCA.Common.Application/UseCases/UpdateEntityCommand.cs:46`) carries the id, the
+   request and the caller's last-observed `RowVersion` (`:47-49`). That token is a non-nullable
+   `byte[]` taken from the request's `If-Match` header rather than from the body (`:42-45`, ADR-035):
+   an update request carries no token of its own, and a conditional write that states no precondition
+   never reaches the handler. `TEntity` is a type parameter the command never otherwise uses: it
+   distinguishes update handlers for two aggregates that share an identifier type, and it supplies
+   the default cache prefix.
+   - It implements `ICommandWithRequest<TUpdateRequest>` (`:50`), so the framework's validator bridge
      registers a `CommandRequestValidator<TCommand, TRequest>`
      (`Source/Core/MMCA.Common.Application/Validation/CommandRequestValidator.cs:19`) for it
      automatically (`Source/Core/MMCA.Common.Application/DependencyInjection.cs:247-259`). A module
      writes `IValidator<TUpdateRequest>` and nothing else; the command is validated before the
      transaction opens, by the same Validating decorator every hand-written command goes through
      (ADR-014).
-   - It implements `ICacheInvalidating` (`:36`) with a `CachePrefix` defaulting to
-     `typeof(TEntity).FullName + ":"` (`:45`), the aggregate-prefix convention consumers already key
+   - It implements `ICacheInvalidating` (`:50`) with a `CachePrefix` defaulting to
+     `typeof(TEntity).FullName + ":"` (`:63`), the aggregate-prefix convention consumers already key
      cached reads under, because the generic controller constructs the command itself and cannot
      supply one. Setting it to an empty string opts out.
 
@@ -107,14 +110,15 @@ Ship the generic write side as four additive pieces plus a registration helper.
 
 6. **PUT ships on a new derived controller base, not on the shipped one.**
    `CrudEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest, TUpdateRequest>`
-   (`Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:54`) inherits
-   `AggregateRootEntityControllerBase` and adds `[HttpPut("{id}")]` (`:88`). A controller offering
+   (`Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:53`) inherits
+   `AggregateRootEntityControllerBase` and adds `[HttpPut("{id}")]` (`:87`). A controller offering
    only create and delete keeps inheriting the four-parameter base; one that also offers update
-   inherits this and gains the action (`:23-28`). The action is `[Idempotent]` (`:89`, ADR-017) and
-   `[SupportsIfMatch]` (`:90`, ADR-035), so both routes a concurrency token can travel are honoured:
-   a body implementing `IConcurrencyAware` carries `RowVersion` straight into the command (`:102`),
-   and the header fills it when the body left it empty, answering a failed precondition with 412
-   rather than 409. On success the refreshed token is emitted as a weak `ETag` through the inherited
+   inherits this and gains the action (`:23-28`). The action is `[Idempotent]` (`:88`, ADR-017) and
+   `[SupportsIfMatch]` (`:89`, ADR-035), so the PUT is conditional: the filter decodes the caller's
+   `If-Match` header, refuses a request that states no precondition with 428, and the action reads
+   the decoded token with `SupportsIfMatchAttribute.RequiredToken(HttpContext)` and hands it to the
+   command (`:102`). A failed precondition is answered with 412 rather than 409. The request body
+   carries no token. On success the refreshed token is emitted as a weak `ETag` through the inherited
    `SetConcurrencyETag` (`:111`), so a client can condition its next write without re-reading.
 
 ## Rationale
@@ -175,8 +179,8 @@ Ship the generic write side as four additive pieces plus a registration helper.
 completes; its `AggregateRootEntityControllerBase` is what `CrudEntityControllerBase` derives from),
 [ADR-083](083-crud-lifecycle-event-taxonomy.md) (the events the aggregate raises, which is why the
 generic handler raises none),
-[ADR-035](035-optimistic-concurrency.md) (the `RowVersion` round trip and the `If-Match` to 412
-rewrite the PUT honours),
+[ADR-035](035-optimistic-concurrency.md) (the `RowVersion` token, the required `If-Match`
+precondition and the 412 the PUT honours),
 [ADR-017](017-request-idempotency.md) (the `[Idempotent]` filter on the PUT, matching the generic
 create),
 [ADR-014](014-cqrs-decorator-pipeline.md) (the decorator chain the command runs through, and the

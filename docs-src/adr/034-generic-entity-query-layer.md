@@ -80,12 +80,13 @@ contract, supplied by two controller bases over a shared query pipeline.
 
 6. **Pagination and the `X-Pagination` header.** The paged route clamps the
    requested page size with `Math.Min(pageSize, MaxPageSize)`
-   (`EntityControllerBase.cs:155`), where `MaxPageSize` reads
-   `IApplicationSettings.MaxPageSize` and falls back to 500
-   (`EntityControllerBase.cs:57`, default at
-   `Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17`). The
-   pagination metadata is serialized into the `X-Pagination` response header
-   (`EntityControllerBase.cs:172`).
+   (`EntityControllerBase.cs:168`), where `MaxPageSize` resolves
+   `IOptions<ApplicationSettings>` from the request's services and falls back to
+   500 (`EntityControllerBase.cs:58`, resolution at `:62`, default at
+   `Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17`). It
+   is read per request rather than captured in the constructor so a configuration
+   change takes effect without a restart. The pagination metadata is serialized
+   into the `X-Pagination` response header (`EntityControllerBase.cs:187`).
 
 7. **A last-resort safety ceiling.** Independent of the API page-size clamp,
    `EntityQueryPipeline.MaxUnboundedResultLimit = 1000`
@@ -113,7 +114,7 @@ contract, supplied by two controller bases over a shared query pipeline.
   touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:111`,
   invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:266`),
   and `MaxUnboundedResultLimit` (`EntityQueryPipeline.cs:23`) plus the `MaxPageSize`
-  clamp (`EntityControllerBase.cs:155`) bound the result size.
+  clamp (`EntityControllerBase.cs:168`) bound the result size.
 - **Composes with manual DTO mapping (ADR-001).** Entities are projected to DTOs by
   an injected `IEntityDTOMapper` (`EntityQueryService.cs:35`, property at `:90`) via
   `DTOMapper.MapToDTOs` (`EntityQueryService.cs:324`); a `DTOToEntityPropertyMap`

@@ -211,11 +211,10 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23).</p>
           <h2 id="context">Context</h2>
-          <p>Authorization started as pure role-based access control (RBAC). Endpoints declared the role they
-          required with <code>[Authorize(Policy = ...)]</code> against named policies: <code>RequireOrganizer</code>, <code>RequireAttendee</code>,
-          and <code>RequireAdmin</code> each call <code>RequireRole(...)</code>, while <code>RequireAuthenticated</code> calls
-          <code>RequireAuthenticatedUser()</code>. That couples every role-guarded endpoint to a role <em>name</em>, and it has two
-          concrete failure modes:</p>
+          <p>The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
+          <code>[Authorize(Policy = &quot;RequireOrganizer&quot;)]</code> against a named policy that calls <code>RequireRole(...)</code>, and a
+          framework offering that model ships one such policy per role name it expects its hosts to use. That
+          couples every guarded endpoint to a role <em>name</em>, and it has two concrete failure modes:</p>
           <ul>
           <li><strong>Reshaping who-can-do-what means editing endpoints.</strong> Splitting a coarse role into a narrower one
           (for example, a content editor who may curate the session catalog but not manage events, rooms, or
@@ -224,11 +223,12 @@
           <li><strong>The capability a route needs is implicit.</strong> &quot;Requires Organizer&quot; does not say <em>which</em> capability
           the route exercises, so the same capability guarded in several places drifts.</li>
           </ul>
-          <p>We wanted endpoints to depend on <strong>capabilities</strong> (fine-grained permissions) rather than role names,
-          with the role-to-capability mapping declared in one place, without discarding the existing role
-          policies or forcing every consumer to adopt the new model.</p>
+          <p>Endpoints should depend on <strong>capabilities</strong> (fine-grained permissions) rather than role names, with
+          the role-to-capability mapping declared in one place, and a host should be free to invent whatever
+          roles its domain needs without the framework having an opinion on their names.</p>
           <h2 id="decision">Decision</h2>
-          <p>Add a <strong>permission (capability) layer over RBAC</strong>, opt-in and backward-compatible.</p>
+          <p>Authorize on <strong>capabilities resolved from roles</strong>: a permission layer over RBAC, and the framework&#39;s
+          one authorization model. Nothing is pre-registered per role name.</p>
           <ul>
           <li><strong>A central registry maps roles to permissions.</strong> <code>IPermissionRegistry</code> / <code>PermissionRegistry</code>
           (<code>MMCA.Common.Shared.Auth</code>) answer &quot;does any of these roles grant this permission?&quot; from an
@@ -244,28 +244,42 @@
           authorization policy named <code>perm:{permission}</code>: <code>PermissionPolicyProvider</code> materializes that policy
           (<code>RequireAuthenticatedUser()</code> + a <code>PermissionRequirement</code>) the first time it is requested, so there
           is no per-permission named-policy registration. Every non-<code>perm:</code> policy name falls through to
-          <code>DefaultAuthorizationPolicyProvider</code>, leaving the named role policies untouched.</li>
+          <code>DefaultAuthorizationPolicyProvider</code> (<code>PermissionPolicyProvider.cs:35-38</code>), so a policy a host
+          registers itself still resolves the usual way; the framework registers none.</li>
           <li><strong>Two grant sources.</strong> <code>PermissionAuthorizationHandler</code> succeeds when the principal carries the
           permission directly (an explicit <code>AuthClaimTypes.Permission</code> claim, <code>&quot;permission&quot;</code>) <strong>or</strong> holds a
           role the registry grants it (roles gathered from <code>ClaimTypes.Role</code>, <code>&quot;role&quot;</code>, or <code>&quot;roles&quot;</code> so it
           works whether or not inbound-claim mapping is on). Baking permissions into the token is therefore
           optional: role-derived resolution is the default.</li>
-          <li><strong>Inert until adopted.</strong> <code>AddAuthorizationPolicies()</code> always wires the handler, the policy provider,
-          and an empty shared registry, so any host that configures authentication gets the mechanism for
-          free, but it grants nothing beyond explicit claims until a host calls <code>AddPermissions(...)</code>. The
-          existing role policies keep working unchanged.</li>
+          <li><strong>Grants are the host&#39;s to declare.</strong> <code>AddAuthorizationPolicies()</code>
+          (<code>MMCA.Common.API/Authorization/AuthorizationExtensions.cs:23</code>) wires the handler, the policy
+          provider, and an empty shared registry, so any host that configures authentication gets the
+          mechanism for free; it grants nothing beyond explicit claims until a host calls
+          <code>AddPermissions(...)</code>.</li>
+          <li><strong>Framework-owned endpoints state a capability too.</strong> The notification endpoints that ship in
+          <code>MMCA.Common.API</code> carry <code>[HasPermission(NotificationPermissions.Manage)]</code>
+          (<code>Controllers/Notifications/NotificationsController.cs:29</code>, the <code>notifications:manage</code> constant at
+          <code>MMCA.Common.Shared/Notifications/NotificationPermissions.cs:10</code>), so which of a host&#39;s roles may
+          broadcast is a grant that host makes rather than a role name the framework picked. ADC grants it to
+          <code>Organizer</code> alone (<code>MMCA.ADC.Notification.API/DependencyInjection.cs:38</code>).</li>
           </ul>
-          <p>Adoption is asymmetric and that is intentional: ADC&#39;s Conference module defines nine capabilities
-          (<code>ConferencePermissions.cs:12-36</code>, enumerated in <code>All</code> at <code>:39-50</code>), including a curation subset
-          (<code>ContentManagement</code> at <code>:57-64</code>: sessions, speakers, categories, sponsors, activities) granted to a
-          new <code>RoleNames.ContentEditor</code>; its Engagement module defines three
+          <p>Adoption is asymmetric and that is intentional: a module declares as many capabilities as its own
+          surface needs. ADC&#39;s Conference module defines nine (<code>ConferencePermissions.cs:12-36</code>, enumerated in
+          <code>All</code> at <code>:39-50</code>), including a curation subset (<code>ContentManagement</code> at <code>:57-64</code>: sessions, speakers,
+          categories, sponsors, activities) granted to <code>RoleNames.ContentEditor</code>
+          (<code>MMCA.ADC.Conference.API/DependencyInjection.cs:50</code>); its Engagement module defines three
           (<code>engagement:live:manage</code> gating the conference-day live-poll management endpoints,
           <code>engagement:checkin:manage</code> gating QR badge check-in and the attendance rollup, and
           <code>engagement:points:view-overview</code> gating the organizer points rollup, at
           <code>EngagementPermissions.cs:16</code>, <code>:23</code>, <code>:30</code>), each granted to <code>Organizer</code> and <code>Admin</code>; and its
-          Identity module defines <code>identity:users:read</code>; MMCA.Store
-          has not adopted it and still authorizes by role policy only. The registry, handler, policy provider,
-          and the ADC grant tables (Conference and Engagement) are all covered by tests.</p>
+          Identity module defines <code>identity:users:read</code>. MMCA.Store defines nine of its own across three
+          modules: four in Catalog (<code>CatalogPermissions.cs:12-21</code>), three in Sales
+          (<code>SalesPermissions.cs:12-18</code>) and two in Identity (<code>IdentityPermissions.cs:12-15</code>), each module
+          granting its whole set to <code>RoleNames.Admin</code> from its own <code>AddPermissions(...)</code> call
+          (<code>MMCA.Store.Catalog.API/DependencyInjection.cs:41</code>, <code>MMCA.Store.Sales.API/DependencyInjection.cs:40</code>,
+          <code>MMCA.Store.Identity.API/DependencyInjection.cs:42</code>). The registry, handler and policy provider are
+          covered by framework tests, and the ADC grant tables (Conference and Engagement) by dedicated grant
+          tests.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Capabilities decouple endpoints from roles.</strong> A route says what it <em>does</em>
@@ -275,10 +289,9 @@
           indirection earn its keep.</li>
           <li><strong>One place to read and change policy.</strong> Grants live in module registration, not scattered across
           controllers; the registry is immutable and thread-safe once built.</li>
-          <li><strong>Additive and safe to ignore.</strong> Per-module union means no module needs to know another&#39;s
-          permissions, and the empty-registry default plus the fallback provider make the feature a no-op for
-          consumers that never opt in, satisfying the framework&#39;s non-breaking <code>[C-&gt;A]</code> rollout rule
-          (ADR-016).</li>
+          <li><strong>Grants compose per module.</strong> The per-module union means no module needs to know another&#39;s
+          permissions, and a module that declares none contributes nothing, so a host takes the model on
+          module by module rather than in one sweep.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -288,9 +301,11 @@
           <li><strong>Another indirection to keep honest.</strong> A capability check is only as good as its grant; a missing
           or wrong <code>Grant(...)</code> silently denies or over-permits. The registry tests are the mitigation, but
           the mapping is declared in code and is not enforced by a fitness rule.</li>
-          <li><strong>Opt-in per endpoint.</strong> A route that should check a capability but still uses a role policy gets
-          none of the benefit, the same audit-the-inventory caveat as ADR-005 (<code>IAnonymizable</code>) and ADR-017
-          (<code>[Idempotent]</code>).</li>
+          <li><strong>Opt-in per endpoint.</strong> A route that should state a capability but carries a bare <code>[Authorize]</code> is
+          authenticated-only, and nothing flags it: the same audit-the-inventory caveat as ADR-005
+          (<code>IAnonymizable</code>) and ADR-017 (<code>[Idempotent]</code>). Some routes are deliberately in that category (a
+          signed-in user managing their own device installations, <code>DevicesController.cs:24</code>), which is what
+          makes the inventory a judgement call rather than a rule a test could assert.</li>
           <li><strong>Grants must be registered before the host is built.</strong> The registry is built once on first
           resolve; an <code>AddPermissions(...)</code> call after it has been materialized is not seen. Permission
           strings are also stringly-typed, mitigated by exposing them as constants (for example

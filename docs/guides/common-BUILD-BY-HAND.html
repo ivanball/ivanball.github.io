@@ -535,13 +535,14 @@
 <span class="hljs-keyword">global</span> <span class="hljs-keyword">using</span> OrderIdentifierType = <span class="hljs-built_in">int</span>;
 <span class="hljs-keyword">global</span> <span class="hljs-keyword">using</span> OrderCommentIdentifierType = <span class="hljs-built_in">int</span>;</code></pre>
           <p>The read model implements <code>IBaseDTO&lt;TId&gt;</code> (the framework read-side contract) and carries its children.
-          It also implements <strong><code>IConcurrencyAware</code></strong>, exposing the <code>RowVersion</code> the client echoes back on an
-          update so a conflicting concurrent edit surfaces as 409 instead of silently last-write-winning (see
+          It also implements <strong><code>IConcurrencyAware</code></strong>, exposing the <code>RowVersion</code> the controller emits as the
+          response <code>ETag</code>. The client hands that tag straight back as the <code>If-Match</code> precondition of its next
+          write, so a conflicting concurrent edit surfaces as 412 instead of silently last-write-winning (see
           <a href="../adr/035-optimistic-concurrency.html">ADR-035</a>):</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">OrderDTO</span> : <span class="hljs-title">IBaseDTO</span>&lt;<span class="hljs-title">OrderIdentifierType</span>&gt;, <span class="hljs-title">IConcurrencyAware</span>
 {
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> OrderIdentifierType Id { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
-    <span class="hljs-keyword">public</span> <span class="hljs-built_in">byte</span>[]? RowVersion { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }               <span class="hljs-comment">// ADR-035: echoed back on update</span>
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">byte</span>[] RowVersion { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }       <span class="hljs-comment">// ADR-035: served as the response ETag</span>
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> OrderStatus Status { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }     <span class="hljs-comment">// the enum itself; serialized by name</span>
@@ -554,12 +555,12 @@
 <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-keyword">class</span> <span class="hljs-title">OrderOpenedIntegrationEvent</span>(<span class="hljs-params">OrderIdentifierType OrderId, <span class="hljs-built_in">int</span> RequesterUserId</span>)
     : BaseIntegrationEvent</span>;</code></pre>
           <p>Plain request bodies (e.g. <code>OrderUpdateRequest</code>, <code>AddCommentRequest</code>) live in Shared too. Name the
-          update body with the <strong><code>*UpdateRequest</code></strong> suffix and have it implement <code>IConcurrencyAware</code>: that exact
-          pairing is what the <code>ConcurrencyConventionTestsBase</code> fitness rule looks for (Phase 6), so an update
-          request that skips the token fails the build rather than quietly losing a concurrent edit.</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">OrderUpdateRequest</span> : <span class="hljs-title">IConcurrencyAware</span>
+          update body with the <strong><code>*UpdateRequest</code></strong> suffix and give it <strong>no</strong> concurrency token: the precondition
+          travels in the <code>If-Match</code> header alone, and a token in the body would give the same check a second,
+          competing source. The <code>ConcurrencyConventionTestsBase</code> fitness rule (Phase 6) keys off that suffix and
+          fails an <code>*UpdateRequest</code> that implements <code>IConcurrencyAware</code>.</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">OrderUpdateRequest</span>
 {
-    <span class="hljs-keyword">public</span> <span class="hljs-built_in">byte</span>[]? RowVersion { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }               <span class="hljs-comment">// the token the client last read</span>
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
     <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
 }</code></pre>
@@ -704,9 +705,30 @@
           <p>The reference app&#39;s controller goes further: <code>GET {id}/details</code>, <code>PUT {id}</code>, <code>PUT {id}/status</code>,
           <code>DELETE {id}</code>, and <code>POST|PUT|DELETE {id}/comments[/{commentId}]</code>, each one the same three lines: call
           the handler, <code>HandleFailure</code> on failure, else return the success shape. <code>PUT {id}</code> also closes the
-          ADR-035 loop by forwarding the request&#39;s <code>RowVersion</code> onto the command
-          (<code>new UpdateOrderCommand(id, request.Title, request.Description) { RowVersion = request.RowVersion }</code>),
-          which is what turns a stale write into a 409 instead of an overwrite.</p>
+          ADR-035 loop, and the token reaches the command from the <code>If-Match</code> header rather than the body: mark
+          the action <strong><code>[SupportsIfMatch]</code></strong> and read the decoded token with
+          <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code>. The filter refuses a request that states no
+          precondition with 428 before the action runs, answers 400 to a malformed tag, and rewrites a conflict
+          outcome to 412, which is what turns a stale write into a refusal instead of an overwrite:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// updateHandler is ICommandHandler&lt;UpdateOrderCommand, Result&lt;OrderDTO&gt;&gt;, injected into the</span>
+<span class="hljs-comment">// controller&#x27;s primary constructor beside createHandler.</span>
+[<span class="hljs-meta">HttpPut(<span class="hljs-string">&quot;{id}&quot;</span>)</span>]
+[<span class="hljs-meta">SupportsIfMatch</span>]
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task&lt;ActionResult&lt;OrderDTO&gt;&gt; UpdateAsync(
+    OrderIdentifierType id, OrderUpdateRequest request, CancellationToken cancellationToken)
+{
+    <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> updateHandler.HandleAsync(
+        <span class="hljs-keyword">new</span> UpdateOrderCommand(id, request.Title, request.Description)
+        {
+            RowVersion = SupportsIfMatchAttribute.RequiredToken(HttpContext),
+        },
+        cancellationToken);
+    <span class="hljs-keyword">return</span> result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value);
+}</code></pre>
+          <p>The command&#39;s <code>RowVersion</code> is a non-nullable <code>byte[]</code>, because a conditional write with no
+          precondition never reaches a handler. A plain-CRUD update can skip the hand-written command entirely
+          and construct the framework&#39;s generic <code>UpdateEntityCommand&lt;TEntity, TUpdateRequest, TId&gt;(id, request, SupportsIfMatchAttribute.RequiredToken(HttpContext))</code>, whose third positional parameter is the same
+          token; the mutation then lives on the aggregate behind an <code>IEntityUpdateApplier</code>.</p>
           <h3 id="what-the-pipeline-does-for-you">What the pipeline does for you</h3>
           <p>Once <code>AddApplicationDecorators()</code> runs (Phase 5), every handler is wrapped by the Scrutor decorator
           chain (outermost first). See <a href="../adr/014-cqrs-decorator-pipeline.html">ADR-014</a>:</p>
@@ -807,13 +829,19 @@ handler.Invocations.Should().Be(<span class="hljs-number">2</span>);</code></pre
     <span class="hljs-function"><span class="hljs-keyword">public</span> SQLServerDbContext <span class="hljs-title">CreateDbContext</span>(<span class="hljs-params"><span class="hljs-built_in">string</span>[] <span class="hljs-keyword">args</span></span>)</span> =&gt;
         DesignTimeDbContextHelper.CreateSqlServer(<span class="hljs-keyword">args</span>, options =&gt;
         {
+            <span class="hljs-keyword">var</span> connectionString = Environment.GetEnvironmentVariable(<span class="hljs-string">&quot;SUPPORT_ORDERS_SQL&quot;</span>)
+                ?? <span class="hljs-string">&quot;Server=localhost;Database=Support;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True&quot;</span>;
+
             options.DataSourceName = <span class="hljs-string">&quot;Orders&quot;</span>;
-            <span class="hljs-comment">// A placeholder top-level string keeps the helper happy; migrations add/script never connect.</span>
-            options.ConnectionStrings = <span class="hljs-keyword">new</span> ConnectionStringSettings { SQLServerConnectionString = <span class="hljs-string">&quot;Server=design-time-unused;&quot;</span> };
+            <span class="hljs-comment">// The top-level string and the &quot;Orders&quot; entry carry the SAME value on purpose: the</span>
+            <span class="hljs-comment">// resolver collapses a logical name onto Default when the two connections match, which</span>
+            <span class="hljs-comment">// is exactly what the host does at run time. The scaffolded model therefore matches the</span>
+            <span class="hljs-comment">// running one, including the framework tables that live only on Default (ScheduledJobs).</span>
+            <span class="hljs-comment">// Migrations add/script never connect; the string only matters for apply/database update.</span>
+            options.ConnectionStrings = <span class="hljs-keyword">new</span> ConnectionStringSettings { SQLServerConnectionString = connectionString };
             options.DataSources[<span class="hljs-string">&quot;Orders&quot;</span>] = <span class="hljs-keyword">new</span> DataSourceEntrySettings
             {
-                SQLServerConnectionString = Environment.GetEnvironmentVariable(<span class="hljs-string">&quot;SUPPORT_ORDERS_SQL&quot;</span>)
-                    ?? <span class="hljs-string">&quot;Server=localhost;Database=Support_Orders;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True&quot;</span>,
+                SQLServerConnectionString = connectionString,
                 SQLServerMigrationsAssembly = <span class="hljs-keyword">typeof</span>(DesignTimeSQLServerDbContextFactory).Assembly.GetName().Name!,
             };
             options.AddConfigurationAssembly(<span class="hljs-keyword">typeof</span>(Contoso.Support.Orders.Infrastructure.AssemblyReference).Assembly);
@@ -825,14 +853,20 @@ handler.Invocations.Should().Be(<span class="hljs-number">2</span>);</code></pre
   <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
           <p>At runtime the host applies migrations via the framework&#39;s <code>InitializeDatabaseAsync(...)</code> driven by
-          <code>ApplicationSettings.DatabaseInitStrategy</code>: <code>Migrate</code> (production, the host is the sole migrator),
-          <code>EnsureCreated</code> (quick local), or <code>None</code> (throws if migrations are pending, a safety check).</p>
+          <code>ApplicationSettings.DatabaseInitStrategy</code>. It takes two values: <code>Migrate</code> (the default, and the host
+          is the sole migrator) or <code>None</code> (throws if migrations are pending, a safety check). Anything else
+          fails startup before a single source is created, so a misspelled strategy is a loud configuration
+          error rather than a database created the wrong way.</p>
           <blockquote>
-          <p><strong>Monolith collapse:</strong> with no <code>DataSources</code> section in config, every entity collapses onto one
-          physical database (one context, FK constraints intact) and behaves exactly like a classic
-          single-DB monolith. The same configurations and migrations later route to separate databases when
-          you add <code>DataSources</code> entries in the extraction phase. This collapse is what makes &quot;monolith now,
-          services later&quot; free. See <a href="../adr/006-database-per-service.html">ADR-006</a>.</p>
+          <p><strong>Monolith collapse:</strong> while every logical source resolves to the same connection, every entity
+          collapses onto one physical database (one context, FK constraints intact) and behaves exactly like
+          a classic single-DB monolith. Two configuration shapes reach that state: a top-level
+          <code>ConnectionStrings</code> section and no <code>DataSources</code> at all, or <code>DataSources</code> entries that all name the
+          same database (one distinct connection per engine seeds <code>Default</code>, so the framework-owned tables
+          route with no top-level key). The same configurations and migrations later route to separate
+          databases when you give each <code>DataSources</code> entry its own connection in the extraction phase. This
+          collapse is what makes &quot;monolith now, services later&quot; free. See
+          <a href="../adr/006-database-per-service.html">ADR-006</a>.</p>
           </blockquote>
           <hr>
           <h2 id="phase-5-compose-the-monolith-host-and-run-it">Phase 5: Compose the monolith host and run it</h2>
@@ -854,10 +888,11 @@ services.AddOptions&lt;ApplicationSettings&gt;().Bind(builder.Configuration.GetS
     .ValidateDataAnnotations().ValidateOnStart();
 <span class="hljs-keyword">var</span> applicationSettings = builder.Configuration.GetSection(ApplicationSettings.SectionName).Get&lt;ApplicationSettings&gt;()!;
 
-<span class="hljs-comment">// Health checks. SQL is REQUIRED: a host that cannot resolve its own connection string should fail</span>
-<span class="hljs-comment">// fast rather than report healthy and take traffic it cannot serve. Redis/RabbitMQ checks are tagged</span>
-<span class="hljs-comment">// optional upstream, so they report on /health without gating readiness.</span>
-builder.AddInfrastructureHealthChecks(requireSqlServer: <span class="hljs-literal">true</span>);
+<span class="hljs-comment">// Health checks. The database is REQUIRED: a host that cannot resolve its own connection string</span>
+<span class="hljs-comment">// should fail fast rather than report healthy and take traffic it cannot serve. The flag is</span>
+<span class="hljs-comment">// engine-agnostic because an application picks its engine from configuration. Redis/RabbitMQ checks</span>
+<span class="hljs-comment">// are tagged optional upstream, so they report on /health without gating readiness.</span>
+builder.AddInfrastructureHealthChecks(requireDatabase: <span class="hljs-literal">true</span>);
 
 <span class="hljs-comment">// Cross-cutting edge.</span>
 services.AddCommonCors(builder.Configuration);
@@ -872,7 +907,11 @@ services.AddCommonResponseCompression();
 <span class="hljs-keyword">var</span> jwtAuthority = builder.Configuration[<span class="hljs-string">&quot;Authentication:JwtBearer:Authority&quot;</span>];
 <span class="hljs-keyword">if</span> (!<span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(jwtAuthority))
 {
-    services.AddForwardedJwtBearer(authority: jwtAuthority, audience: builder.Configuration[<span class="hljs-string">&quot;Jwt:Audience&quot;</span>] ?? <span class="hljs-string">&quot;support&quot;</span>);
+    services.AddForwardedJwtBearer(
+        authority: jwtAuthority,
+        audience: builder.Configuration[<span class="hljs-string">&quot;Jwt:Audience&quot;</span>] ?? <span class="hljs-string">&quot;support&quot;</span>,
+        configuration: builder.Configuration,
+        environment: builder.Environment);
 }
 <span class="hljs-keyword">else</span>
 {
@@ -893,7 +932,16 @@ services.AddErrorResources&lt;OrdersErrorResources&gt;();
 
 <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> loggerFactory = LoggerFactory.Create(logging =&gt; logging.AddConsole());
 <span class="hljs-keyword">var</span> moduleLoader = <span class="hljs-keyword">new</span> ModuleLoader { Logger = loggerFactory.CreateLogger&lt;ModuleLoader&gt;() };
-moduleLoader.DiscoverAndRegister(services, builder.Configuration, applicationSettings, modulesSettings, builder.Environment.EnvironmentName);
+<span class="hljs-comment">// The host NAMES the module assemblies discovery scans, one marker type per module. That is what</span>
+<span class="hljs-comment">// makes discovery deterministic: a referenced assembly no code path has touched yet is not loaded,</span>
+<span class="hljs-comment">// so an ambient scan would silently miss it.</span>
+moduleLoader.DiscoverAndRegister(
+    services,
+    builder.Configuration,
+    applicationSettings,
+    modulesSettings,
+    builder.Environment.EnvironmentName,
+    [<span class="hljs-meta">typeof(OrdersModule).Assembly</span>]);
 services.AddSingleton(moduleLoader);
 
 services.AddBrokerMessaging(builder.Configuration);  <span class="hljs-comment">// InProcessMessageBus until a broker is configured</span>
@@ -910,12 +958,14 @@ app.MapDefaultEndpoints();             <span class="hljs-comment">// /health, /a
 <span class="hljs-comment">// purpose (ADR-019): the partition keys off the authenticated principal.</span>
 app.UseCommonMiddlewarePipeline();
 <span class="hljs-keyword">await</span> app.RunAsync();</code></pre>
-          <p>Modules are discovered by <code>ModuleLoader</code> and registered in topological dependency order (Kahn&#39;s
-          algorithm) from their <code>IModule</code> implementations. <code>OrdersModule</code> is a leaf (no dependencies); its
+          <p>Modules are discovered by <code>ModuleLoader</code> in the assemblies the host names and registered in
+          topological dependency order (Kahn&#39;s algorithm) from their <code>IModule</code> implementations. Adding a module
+          means adding its marker assembly to that list. <code>OrdersModule</code> is a leaf (no dependencies); its
           <code>Register(...)</code> calls <code>AddOrdersModule</code>, which wires the Application (handler/validator/mapper scan),
           Infrastructure, and API layers. Disabled peers get stub registrations so cross-module interfaces still
-          resolve. See <a href="../adr/008-service-extraction-topology.html">ADR-008</a>. Monolith config: no <code>DataSources</code>
-          section (one DB) and no <code>MessageBus:Provider</code>, so the framework selects the <code>InProcessMessageBus</code>.</p>
+          resolve. See <a href="../adr/008-service-extraction-topology.html">ADR-008</a>. Monolith config: one database
+          (every logical source on the same connection) and no <code>MessageBus:Provider</code>, so the framework selects
+          the <code>InProcessMessageBus</code>.</p>
           <h3 id="the-blazor-ui-host">The Blazor UI host</h3>
           <p><code>Source/Hosts/UI/Contoso.Support.UI.Web</code> is a <strong>Blazor Server + MudBlazor</strong> front end. It holds no domain
           logic and no DbContext: it calls the API through a typed <code>SupportApiClient</code> registered with
@@ -955,9 +1005,10 @@ app.UseCommonMiddlewarePipeline();
           <code>IStringLocalizer&lt;YourPage&gt; L</code> and render <code>@L[&quot;Key&quot;]</code>; put <code>YourPage.resx</code> + <code>YourPage.es.resx</code>
           next to the page (see <code>MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.resx</code> and its <code>es</code> sibling).
           Snackbar/confirmation text uses whole-sentence keys (<code>Snackbar.Created</code> = &quot;Order created
-          successfully.&quot;); never compose sentences from fragments (the obsoleted
-          <code>ErrorMessages.Success(entity, action)</code> shows why: Spanish gender agreement breaks). Always add
-          the <code>en</code> and <code>es</code> values in the same commit, or the completeness gate below fails the build.</li>
+          successfully.&quot;); never compose sentences from fragments, which is why the framework offers no
+          helper that stitches an entity name onto an action word: Spanish gender agreement breaks the
+          moment the two halves are chosen independently. Always add the <code>en</code> and <code>es</code> values in the same
+          commit, or the completeness gate below fails the build.</li>
           <li><strong>Wire request localization + the culture switcher.</strong> API-layer hosts get it for free from
           <code>UseCommonMiddlewarePipeline()</code> (which calls <code>UseCommonRequestLocalization()</code>) plus
           <code>MapCultureEndpoint()</code>; a UI host that deliberately does not reference <code>MMCA.Common.API</code> inlines
@@ -973,15 +1024,25 @@ app.UseCommonMiddlewarePipeline();
           HTTP edge then returns localized ProblemDetails messages while domain code stays culture-agnostic.</li>
           <li><strong>Subclass the two i18n fitness gates</strong> in your architecture-test project (Phase 6):
           <code>LocalizationResourceTestsBase</code> (every base <code>.resx</code> must have a complete, non-empty <code>es</code> sibling)
-          and <code>LocalizedTextConventionTestsBase</code> (no hard-coded snackbar/title/<code>&lt;PageTitle&gt;</code>/breadcrumb/
-          <code>NavItem</code> literals; mark deliberate literals such as brand names with an <code>i18n: allow</code> comment).</li>
+          and <code>LocalizedTextConventionTestsBase</code> (no hard-coded snackbar/title/<code>&lt;PageTitle&gt;</code>/breadcrumb
+          literals, and every <code>NavItem</code> row states the resource type its title resolves against; mark
+          deliberate literals such as brand names with an <code>i18n: allow</code> comment).</li>
           <li><strong>Verify visually with the pseudo-locale.</strong> In Development, pick <code>qps-Ploc</code> in the culture
           switcher: every properly externalized string renders with a <code>[!!</code> sentinel and ~40% padding, so a
           hard-coded literal or a clipped layout is immediately visible without translating anything.</li>
           </ol>
           <p>MudBlazor&#39;s own component chrome (pager, pickers, filter menus) localizes automatically through the
-          framework&#39;s <code>ResxMudLocalizer</code>; nav menu items localize by giving each <code>NavItem</code> a <code>TitleResource</code>
-          (its <code>Title</code>/<code>Group</code> then act as resource keys resolved at render time).</p>
+          framework&#39;s <code>ResxMudLocalizer</code>. Nav menu items localize through <code>NavItem</code>&#39;s fourth positional
+          parameter, <code>TitleResource</code>: the resource type its <code>Title</code> and <code>Group</code> are resolved against at render
+          time, per circuit, so the menu follows the active culture.</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> IReadOnlyList&lt;NavItem&gt; NavItems { <span class="hljs-keyword">get</span>; } =
+[
+    <span class="hljs-keyword">new</span>(<span class="hljs-string">&quot;Nav.Orders&quot;</span>, OrdersRoutePaths.Orders, Icons.Material.Filled.Receipt, <span class="hljs-keyword">typeof</span>(OrdersUIModule)),
+    <span class="hljs-keyword">new</span>(<span class="hljs-string">&quot;Nav.Admin&quot;</span>, OrdersRoutePaths.Admin, Icons.Material.Filled.Settings, <span class="hljs-keyword">typeof</span>(OrdersUIModule),
+        RoleNames.Admin, Section: NavSection.Admin),
+];</code></pre>
+          <p>A key the resource type does not declare renders as the raw string, which keeps a not-yet-translated
+          entry legible instead of blank.</p>
           <h3 id="the-aspire-apphost">The Aspire AppHost</h3>
           <p><code>Source/Hosting/Contoso.Support.AppHost</code> orchestrates the local stack. For the monolith it is small:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">using</span> MMCA.Common.Aspire.Hosting;
@@ -991,7 +1052,7 @@ app.UseCommonMiddlewarePipeline();
 <span class="hljs-keyword">var</span> db = sql.AddDatabase(<span class="hljs-string">&quot;support&quot;</span>, <span class="hljs-string">&quot;Support&quot;</span>);
 
 <span class="hljs-keyword">var</span> web = builder.AddProject&lt;Projects.Contoso_Support_Web&gt;(<span class="hljs-string">&quot;web&quot;</span>)
-    .WithSQLServerDataSource(db, <span class="hljs-string">&quot;Orders&quot;</span>)   <span class="hljs-comment">// injects ConnectionStrings__SQLServerConnectionString (collapses to one DB)</span>
+    .WithSQLServerDataSource(db, <span class="hljs-string">&quot;Orders&quot;</span>)   <span class="hljs-comment">// injects DataSources__Orders__SQLServerConnectionString</span>
     .WaitFor(sql)                    <span class="hljs-comment">// wait on the SQL server, NOT the database (see warning below)</span>
     .WithExternalHttpEndpoints();
 
@@ -1135,7 +1196,7 @@ builder.AddProject&lt;Projects.Contoso_Support_UI_Web&gt;(<span class="hljs-stri
           <tr>
           <td>Policy gates</td>
           <td><code>ConcurrencyConventionTestsBase</code> (ADR-035), <code>FrameworkVersionConsistencyTestsBase</code> (ADR-016), <code>PiiConventionTestsBase</code> (ADR-005)</td>
-          <td>an <code>*UpdateRequest</code> with no <code>RowVersion</code>, a half-finished version sweep, unmarked personal data</td>
+          <td>an <code>*UpdateRequest</code> that implements <code>IConcurrencyAware</code> (the token belongs in <code>If-Match</code>, not the body), a half-finished version sweep, unmarked personal data</td>
           </tr>
           <tr>
           <td>i18n (ADR-027)</td>
@@ -1216,14 +1277,37 @@ services.AddBrokerMessaging(builder.Configuration, x =&gt; x.RegisterIntegration
           wraps calls in the standard Polly pipeline. Failures cross the wire as <code>Result</code> via
           <code>GrpcResultExceptionInterceptor</code>. See <a href="../adr/007-grpc-extraction.html">ADR-007</a>.</p>
           <h3 id="8c-a-yarp-gateway">8c. A YARP gateway</h3>
-          <p><code>Source/Hosts/Contoso.Support.Gateway</code> is a pure reverse proxy (no DbContext, no controllers). It maps
-          URL prefixes to backend services. The route map here is the source of truth for which service owns
-          which endpoint:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">app.MapForwarder(<span class="hljs-string">&quot;/Orders/{**catch-all}&quot;</span>, <span class="hljs-string">&quot;http://orders&quot;</span>, http2Config);
-app.MapForwarder(<span class="hljs-string">&quot;/Auth/{**catch-all}&quot;</span>, <span class="hljs-string">&quot;http://identity&quot;</span>, http2Config);
-app.MapForwarder(<span class="hljs-string">&quot;/.well-known/{**catch-all}&quot;</span>, <span class="hljs-string">&quot;http://identity&quot;</span>, http2Config);   <span class="hljs-comment">// JWKS, routed through the gateway</span></code></pre>
-          <p>Set <code>ForwardHttp2 = true</code> (and <code>RequestVersionExact</code>) on the gRPC/JWKS routes so the proxy speaks
-          HTTP/2 to the Http2-only services. See <a href="../adr/012-grpc-host-transport.html">ADR-012</a>.</p>
+          <p><code>Source/Hosts/Contoso.Support.Gateway</code> is a pure reverse proxy (no DbContext, no controllers). The
+          route table is <strong>configuration</strong>, not code: <code>appsettings.json</code>&#39;s <code>ReverseProxy</code> section owns every
+          route pattern and every cluster, so repointing a route is an edit rather than a redeploy of
+          hand-written forwarders. That section is the source of truth for which service owns which endpoint:</p>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-attr">&quot;ReverseProxy&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;Routes&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;orders&quot;</span><span class="hljs-punctuation">:</span>              <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;ClusterId&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;orders&quot;</span><span class="hljs-punctuation">,</span>   <span class="hljs-attr">&quot;Match&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Path&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;/Orders/{**catch-all}&quot;</span> <span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;identity-auth&quot;</span><span class="hljs-punctuation">:</span>       <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;ClusterId&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;identity&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;Match&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Path&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;/Auth/{**catch-all}&quot;</span> <span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;identity-well-known&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;ClusterId&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;identity&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;Match&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Path&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;/.well-known/{**catch-all}&quot;</span> <span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;Clusters&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;identity&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+      <span class="hljs-attr">&quot;Destinations&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;identity&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Address&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;http://identity&quot;</span> <span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;HttpRequest&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Version&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;2.0&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;VersionPolicy&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;RequestVersionExact&quot;</span> <span class="hljs-punctuation">}</span>
+    <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span></code></pre>
+          <p>The host loads that section and layers the framework&#39;s gateway package on top:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">builder.Services.AddReverseProxy()
+    .LoadFromConfig(builder.Configuration.GetSection(<span class="hljs-string">&quot;ReverseProxy&quot;</span>))
+    .AddMmcaGateway(builder.Configuration)              <span class="hljs-comment">// MMCA.Common.Gateway</span>
+    .AddServiceDiscoveryDestinationResolver();          <span class="hljs-comment">// &quot;identity&quot; is a service name, not a DNS host</span></code></pre>
+          <p>Which clusters speak HTTP/2 is expressed as the cluster&#39;s own request profile: the pair
+          <code>Version: &quot;2.0&quot;</code> + <code>VersionPolicy: &quot;RequestVersionExact&quot;</code> is h2c prior knowledge, which is what the
+          Http2-only cleartext services (gRPC, JWKS) require. A cluster that must stay on HTTP/1.1 (a SignalR
+          hub, a WebSocket upgrade path) states nothing and keeps YARP&#39;s defaults. Cross-cutting values that
+          would otherwise be copied into every cluster live once in the <code>MmcaGateway</code> section as
+          <code>ClusterRequestDefaults</code>, with <code>ClusterRequestOverrides</code> keyed by cluster id for the one cluster whose
+          profile genuinely differs; resolution is per property and most-specific-wins, so a cluster that states
+          only a version still inherits the shared activity timeout. See
+          <a href="../adr/012-grpc-host-transport.html">ADR-012</a>.</p>
           <h3 id="8d-the-apphost-grows-up">8d. The AppHost grows up</h3>
           <p>Now wire the distributed topology with the <code>MMCA.Common.Aspire.Hosting</code> extensions:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> sql = builder.AddSqlServer(<span class="hljs-string">&quot;sql&quot;</span>).WithLifetime(ContainerLifetime.Persistent);

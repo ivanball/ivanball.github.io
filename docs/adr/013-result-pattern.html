@@ -392,14 +392,14 @@
           (<code>.../MMCA.Common.UI/Components/ErrorSummary.razor:8</code>, both shapes merged at <code>:81-102</code>, one message
           inline and several as a list so a screen reader announces them as several items, <code>:15-29</code>).</p>
           <p><strong>A component that shows a retry needs the failure, not an exception.</strong>
-          <code>MobileInfiniteScrollList</code> takes <code>FetchPageResult</code>, a delegate returning
+          <code>MobileInfiniteScrollList</code> takes one page fetcher, <code>FetchPageResult</code>, a required delegate returning
           <code>Task&lt;Result&lt;(IReadOnlyList&lt;TItem&gt; Items, int TotalItems)&gt;&gt;</code>
-          (<code>.../MMCA.Common.UI/Components/MobileInfiniteScrollList.razor.cs:37</code>), and renders the failure&#39;s
-          localized message beside its inline retry affordance (<code>:294</code>). The tuple-returning <code>FetchPage</code> it
-          replaces is <code>[Obsolete]</code> with the reason in its own message (<code>:46-48</code>): once services stopped
-          throwing for a server answer, a tuple delegate had no way to carry a failure at all. Exactly one of
-          the two must be supplied, checked at parameter-set time (<code>:111-118</code>), and the obsolete path is
-          lifted into a success so both feed one code path (<code>:130-136</code>).</p>
+          (<code>.../MMCA.Common.UI/Components/MobileInfiniteScrollList.razor.cs:36-38</code>), and renders the failure&#39;s
+          localized message beside its inline retry affordance (<code>:258-266</code>, the message read from the failed
+          <code>Result</code> at <code>:261</code>). A tuple-returning delegate is not offered beside it: a tuple has no way to carry
+          a failure at all, so the component would be left showing a Retry button that cannot name what it is
+          retrying. The delegate is checked at initialization, so a call site that omits it throws instead of
+          rendering as a load failure that can never succeed (<code>:93-105</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Failures are in the signature.</strong> A method that can fail returns <code>Result&lt;T&gt;</code>, so the caller cannot
@@ -457,11 +457,11 @@
           that wrapped a service call in <code>try</code>/<code>catch</code> had to be rewritten to branch. That is the cost of
           having deferred the conversion: the deviation was cheap to keep and expensive to remove, and it
           grew with every page added while it stood.</li>
-          <li><strong><code>MobileInfiniteScrollList</code> carries two fetch parameters during the sweep.</strong> The obsolete tuple
-          path still compiles and still shows a Retry button; what it cannot do is name the reason, because
-          an exception&#39;s text is neither translatable nor safe to render, so it falls back to a generic
-          string (<code>MobileInfiniteScrollList.razor.cs:285-290</code>). The <code>[Obsolete]</code> marker is the migration
-          mechanism rather than a warning (<code>:45</code>), and the parameter goes away once every consumer is swept.</li>
+          <li><strong>An exception reaching a page still costs it the reason.</strong> Where a failed <code>Result</code> carries a
+          localized message the page can render, an exception that escapes a consumer-supplied fetcher falls
+          back to a generic resource string, because its own text is neither translatable nor safe to render
+          (<code>MobileInfiniteScrollList.razor.cs:247-266</code>, the fallback at <code>:265</code>). Returning <code>Result</code> is what
+          makes the specific message available at all; nothing forces a call site to produce one.</li>
           <li>The exception-handler registration order is load-bearing. Because ASP.NET Core stops at the first
           handler that reports the exception handled, a mis-ordered registration (for example the catch-all
           <code>GlobalExceptionHandler</code> ahead of a specific handler) would swallow the more precise status;

@@ -191,7 +191,9 @@
           </ul>
           <h2 id="databases">Databases</h2>
           <ul>
-          <li><strong>SQLite in-memory</strong> for the fast bulk tier (no Docker, CI-friendly; <code>DatabaseInitStrategy=EnsureCreated</code>).</li>
+          <li><strong>SQLite in-memory</strong> for the fast bulk tier (no Docker, CI-friendly). A SQLite source with no
+          migrations assembly has its schema created at startup by <code>InitializeDatabasesAsync</code>, independent
+          of the migration-oriented <code>DatabaseInitStrategy</code> (whose values are <code>Migrate</code> and <code>None</code>).</li>
           <li><strong>MsSql Testcontainers</strong> for a tagged SQL-fidelity subset (soft-delete filters, rowversion
           concurrency, outbox, <code>ef migrations has-pending-model-changes</code> drift check: the #8 gaps).</li>
           <li>No <code>SQLServerDbContext</code> split: per-service DB routing is config-only via <code>DataSources</code>.</li>

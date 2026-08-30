@@ -31,33 +31,40 @@ rather than by absence.
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModule.cs:7,12,17,23,28,34`). A leaf
   module is therefore two members: `TicketsModule` implements exactly `Name` and `Register`
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/TicketsModule.cs:13-19`).
-- **Discovery is a reflection scan that defaults to the whole AppDomain.** `ModuleLoader` scans
-  `moduleAssemblies ?? AppDomain.CurrentDomain.GetAssemblies()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:86`), keeps every
+- **Discovery is a reflection scan over the assemblies the host names.** `moduleAssemblies` is a
+  required parameter of `DiscoverAndRegister`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:58-64`), with the reason
+  written onto the parameter itself (`:48-53`): an ambient scan sees only assemblies already loaded,
+  so a module assembly that is referenced but not yet touched by any code path would be silently
+  absent from discovery. `ModuleLoader` scans what it is given (`ModuleLoader.cs:71-84`), keeps every
   concrete non-abstract, non-interface `IModule` type and instantiates each through
-  `Activator.CreateInstance` (`ModuleLoader.cs:101-104`), and does the same for `IModuleSeeder`,
-  keyed case-insensitively by `ModuleName` (`ModuleLoader.cs:106-109`,
+  `Activator.CreateInstance` (`ModuleLoader.cs:86-89`), and does the same for `IModuleSeeder`,
+  keyed case-insensitively by `ModuleName` (`ModuleLoader.cs:91-94`,
   `MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModuleSeeder.cs:8-19`). An assembly that
-  throws from `GetTypes()` is logged and skipped, not fatal (`ModuleLoader.cs:89-98,353-354`). An
-  overload taking the assemblies explicitly exists and its own documentation calls it the preferred
-  host call (`ModuleLoader.cs:61-79`), but **every host in the three application repos uses the
-  AppDomain overload today**: Store
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:247`,
-  `MMCA.Store.Identity.Service/Program.cs:223`, `MMCA.Store.Sales.Service/Program.cs:231`), ADC
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:264`,
-  `MMCA.ADC.Conference.Service/Program.cs:339`, `MMCA.ADC.Engagement.Service/Program.cs:238`,
-  `MMCA.ADC.Notification.Service/Program.cs:213`) and Helpdesk
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:100`). Only the unit tests pass assemblies
-  explicitly (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:41-48`).
+  throws from `GetTypes()` is logged and skipped, not fatal (`ModuleLoader.cs:74-83,338-339`).
+- **A host names one marker assembly per module it runs.** `AddModuleHost` takes that list as its
+  first parameter and hands it to the loader it builds
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:51-53,84-90`),
+  which is how the service hosts pass it: Store
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114-116`,
+  `MMCA.Store.Identity.Service/Program.cs:109-111`, `MMCA.Store.Sales.Service/Program.cs:122-124`) and
+  ADC (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:244-246`,
+  `MMCA.ADC.Conference.Service/Program.cs:306-308`, `MMCA.ADC.Engagement.Service/Program.cs:205-207`,
+  `MMCA.ADC.Notification.Service/Program.cs:183-185`) each name the single assembly of the one module
+  that host enables, so an extracted service's scan surface equals its own module. Helpdesk calls
+  `DiscoverAndRegister` directly with its one module assembly
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:104-112`), and the unit tests name their
+  own assembly the same way
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:41-48`).
 - **Registration order is a Kahn topological sort over the declared names.** The loader sorts before
-  it registers anything (`ModuleLoader.cs:112`); the sort builds an in-degree map plus a reverse
+  it registers anything (`ModuleLoader.cs:97`); the sort builds an in-degree map plus a reverse
   adjacency list, seeds a queue with the zero-in-degree modules, and drains it
-  (`ModuleLoader.cs:286-336`), so a dependency's DI registrations are always in the container before
+  (`ModuleLoader.cs:271-321`), so a dependency's DI registrations are always in the container before
   a dependent's `Register` runs. A declared name that no discovered module supplies is skipped while
-  building the graph and never blocks the sort (`ModuleLoader.cs:301-302`).
+  building the graph and never blocks the sort (`ModuleLoader.cs:286-287`).
 - **A cycle is a startup failure that names the cycle.** If fewer modules come out of the sort than
   went in, the remainder is circular and the loader throws `InvalidOperationException` listing them
-  (`ModuleLoader.cs:328-333`); `ModuleLoaderTests.cs:71-83` asserts both the message and the member
+  (`ModuleLoader.cs:313-317`); `ModuleLoaderTests.cs:71-83` asserts both the message and the member
   names.
 - **Enablement is configuration, and absence means off.** `ModulesSettings` binds the `Modules`
   section as a name-to-`ModuleSettings` dictionary
@@ -69,7 +76,7 @@ rather than by absence.
   pins that behavior.
 - **Disabled means stubs, not absence.** For a disabled module the loader calls
   `RegisterDisabledStubs` and never calls `Register`, snapshots the descriptors that call appended so
-  they can be validated later, and records the name (`ModuleLoader.cs:116-128`). The stubs are
+  they can be validated later, and records the name (`ModuleLoader.cs:101-113`). The stubs are
   null-object implementations of the owning module's cross-module contracts, shipped in that module's
   `*.Shared` project: `DisabledProductVariantService` answers `false` for existence checks, `null` for
   the SKU lookup and an empty dictionary for the batch price query
@@ -90,11 +97,11 @@ rather than by absence.
 - **`Dependencies` declares the graph; `RequiresDependencies` decides whether a gap is fatal.** The
   loader computes the module's disabled dependencies, then narrows them to "unsatisfied" by removing
   any name the consumer listed under `Modules:{Module}:RemoteDependencies`
-  (`ModuleLoader.cs:146-152`, `ModulesSettings.cs:30-32`,
+  (`ModuleLoader.cs:131-136`, `ModulesSettings.cs:30-32`,
   `ModuleSettings.cs:38`). With `RequiresDependencies = true` an unsatisfied dependency throws at
-  startup with remediation text naming the three options (`ModuleLoader.cs:154-162`); with the
+  startup with remediation text naming the three options (`ModuleLoader.cs:139-147`); with the
   default `false` the loader logs a warning and the module runs against the stub
-  (`ModuleLoader.cs:164-167,347-348`). Only the strict branch is under test:
+  (`ModuleLoader.cs:149-152,332-333`). Only the strict branch is under test:
   `ModuleLoaderTests.cs:87-97` asserts that a `RequiresDependencies = true` module with an
   unsatisfied disabled dependency throws, and `ModuleLoaderTests.cs:118-128` asserts that the same
   strictness passes once that dependency is declared under `RemoteDependencies`. The default `false`
@@ -102,7 +109,7 @@ rather than by absence.
 - **Per-module configuration arrives by naming convention.** Immediately before `Register`, the
   loader adds `modules.{name}.json` and, when the host passes an environment name,
   `modules.{name}.{environment}.json`, both optional and reload-on-change
-  (`ModuleLoader.cs:186-193`), so a module can carry its own configuration file without a host edit.
+  (`ModuleLoader.cs:171-178`), so a module can carry its own configuration file without a host edit.
 - **Composition also shapes the HTTP surface, seeding and health.** `AddAPI(modulesSettings)`
   installs `ModuleControllerFeatureProvider`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:44,62-66`), which removes
@@ -110,14 +117,14 @@ rather than by absence.
   token for a disabled module, so those endpoints are never mapped instead of mapping and then
   failing with a 500
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:33-53,60-82`).
-  Seeders run only for enabled modules and in registration order (`ModuleLoader.cs:133-136,270-276`),
+  Seeders run only for enabled modules and in registration order (`ModuleLoader.cs:118-121,255-261`),
   invoked from startup database initialization
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:32-35,98`).
   `AddModuleHealthChecks` publishes one `module-{Name}` check per module, Healthy when enabled and
   Degraded when disabled (`DependencyInjection.cs:179-207`).
 - **A remote-dependency validator exists but is not wired.** `ValidateRemoteDependencies` re-resolves
   every service type a disabled dependency's stub registered, throwing when it no longer resolves and
-  warning when it still resolves to the stub type (`ModuleLoader.cs:216-261`). It is exercised only by
+  warning when it still resolves to the stub type (`ModuleLoader.cs:201-246`). It is exercised only by
   unit tests (`ModuleLoaderTests.cs:132-177`); **no host calls it today**, so a forgotten gRPC client
   registration is still a silent stub at the first request rather than a startup failure.
 
@@ -166,17 +173,18 @@ Engagement's `IBookmarkCountService` as a gRPC client
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale
-- **Reflection discovery keeps hosts out of the module registry business.** A host calls one method
-  and gets whatever modules its assembly graph contains; adding a module is a project reference plus
-  a configuration entry, not an edit to a hand-maintained list in every host
-  (`ModuleLoader.cs:86,101-104`).
+- **Reflection discovery keeps hosts out of the module registration business.** A host names the
+  assemblies and gets whatever `IModule` types they contain: no per-module registration call, no
+  ordering to get right, and no hand-maintained handler list to keep in step with the module
+  (`ModuleLoader.cs:86-89`). Naming the assemblies is what makes the set discovery sees a property of
+  the composition root rather than of whatever the runtime happened to load (`ModuleLoader.cs:48-53`).
 - **Topological order replaces registration luck.** Cross-module registration depends on ordering,
   and declaring `Dependencies` makes that ordering explicit and machine-checked instead of implicit
-  in the order the host happens to call things (`ModuleLoader.cs:112,286-336`).
+  in the order the host happens to call things (`ModuleLoader.cs:97,271-321`).
 - **Null-object stubs are what make extraction a hosting change.** Because a disabled module still
   puts its contract type in the container, the dependent module's Application and Domain code has no
   branch for "peer not present", which is precisely why a module's non-hosting layers are identical
-  in-process and extracted (`ModuleLoader.cs:123`, `CatalogModule.cs:24-25`). The host then
+  in-process and extracted (`ModuleLoader.cs:108`, `CatalogModule.cs:24-25`). The host then
   overwrites the stub with a real cross-process adapter (`Sales.Service/Program.cs:240-241`).
 - **Two strictness levels, chosen per module.** A module that genuinely cannot function without a
   peer opts into `RequiresDependencies = true` and fails fast (`SalesModule.cs:32`,
@@ -185,18 +193,21 @@ Engagement's `IBookmarkCountService` as a gRPC client
 - **`RemoteDependencies` keeps strictness usable after extraction.** Without it, every strict module
   would have to be relaxed to run in its own service, losing the check in the very topology that
   needs it most; instead the operator states the dependency is satisfied out of process
-  (`ModuleSettings.cs:11-38`, `ModuleLoader.cs:150-152`).
+  (`ModuleSettings.cs:11-38`, `ModuleLoader.cs:135-136`).
 - **Composition lives in configuration, so one build serves N deployments.** The same assemblies run
   as a combined host or as a set of single-module services with no code change; the only difference
   is the `Modules` section each host reads (`ModulesSettings.cs:10`, plus the per-service
   `appsettings.json` blocks cited above).
 
 ## Trade-offs
-- **The AppDomain scan is the fragile default and the one everybody uses.** The loader's own
-  documentation warns that the AppDomain scan sees only assemblies already loaded, so a referenced
-  but untouched module assembly is silently absent from discovery (`ModuleLoader.cs:61-65`), and no
-  host passes assemblies explicitly today. A missing module surfaces as "disabled" (absence equals
-  disabled, `ModulesSettings.cs:18-19`), not as an error.
+- **The composition root has to name every module assembly.** Discovery scans exactly the list it is
+  handed (`ModuleLoader.cs:58-64`), so adding a module to a host is a third edit beside the project
+  reference and the `Modules` configuration entry: the assembly list in that host's `Program.cs`
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114-116`). An assembly left out
+  of the list contributes nothing, and the module surfaces as "disabled" (absence equals disabled,
+  `ModulesSettings.cs:18-19`), not as an error. The trade is deliberate: an ambient scan would make
+  the same omission depend on whether some code path happened to load the assembly first
+  (`ModuleLoader.cs:48-53`).
 - **Stubs degrade silently by design.** A stub answers success-shaped defaults: an always-open live
   window (`DisabledEventLiveValidationService.cs:26,35-42`), a passing bookmark validation
   (`DisabledSessionBookmarkValidationService.cs:33-34`), zero counts
@@ -212,7 +223,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   so a data-subject export assembled while a module is disabled reads as a complete document.
   A wrongly disabled module therefore produces plausible wrong answers rather than an error, and the
   only startup signal is a Degraded `module-{Name}` health check plus a log line
-  (`DependencyInjection.cs:200-207`, `ModuleLoader.cs:338-339,347-348`).
+  (`DependencyInjection.cs:200-207`, `ModuleLoader.cs:323-324,332-333`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** ADC Conference consumes
   Engagement's `IBookmarkCountService` over gRPC without listing Engagement in `Dependencies`
   (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:350`), so neither the
@@ -228,11 +239,11 @@ Engagement's `IBookmarkCountService` as a gRPC client
   declaration is still unchecked.
 - **The one guard against a forgotten cross-process rewire is unadopted.** `ValidateRemoteDependencies`
   was written for exactly the "typo'd or forgotten `AddTypedGrpcClient`" failure
-  (`ModuleLoader.cs:202-215`), and no host calls it, so that failure still shows up as a stub no-op at
+  (`ModuleLoader.cs:187-200`), and no host calls it, so that failure still shows up as a stub no-op at
   request time.
 - **Names are strings, matched case-insensitively across three places.** The module dictionary, the
   configuration lookup and the seeder lookup all key on `Name`
-  (`ModuleLoader.cs:20,109,288-294`), so renaming a module without updating every dependent's
+  (`ModuleLoader.cs:20,94,273-279`), so renaming a module without updating every dependent's
   `Dependencies` list and every host's `Modules` section yields a module treated as disabled with, at
   worst, a warning.
 - **Controller filtering does not read "disabled" the way the loader does.** The provider builds its
@@ -252,7 +263,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   controllers are found by a `.{ModuleName}.` substring test on the assembly name or namespace
   (`ModuleControllerFeatureProvider.cs:60-82`), so a project that does not follow the
   `MMCA.{Repo}.{Module}.{Layer}` convention keeps its endpoints mapped while its services are absent.
-- **Every module is constructed by `Activator.CreateInstance`** (`ModuleLoader.cs:103`), so a module
+- **Every module is constructed by `Activator.CreateInstance`** (`ModuleLoader.cs:88`), so a module
   type needs a public parameterless constructor and cannot take injected dependencies; anything a
   module needs at registration time has to arrive through the `Register` parameters.
 

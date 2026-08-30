@@ -288,10 +288,11 @@
           checked-in file (<code>OpenApiContractTestsBase.cs:16</code>), so a new controller can never leave a stale
           snapshot behind, and the assertions are deliberately coarse: a path-count floor plus presence (not
           exact casing) of the pinned resources (<code>OpenApiContractTestsBase.cs:79</code>).</li>
-          <li><strong>Hosts extend the base where they have more to prove.</strong> ADC Conference adds a 409
-          stale-<code>RowVersion</code> conflict test on top of the inherited 400/404 facts, reusing the inherited shape
-          assertion (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:40</code>,
-          <code>:67</code>).</li>
+          <li><strong>Hosts extend the base where they have more to prove.</strong> ADC Conference adds a 412
+          stale-precondition test on top of the inherited 400/404 facts, driving two editors through the
+          same <code>If-Match</code> tag and reusing the inherited shape assertion
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:40</code>,
+          <code>:69</code>).</li>
           </ul>
           <p>Adoption today is real but <strong>partial, and uneven per suite</strong>. The OpenAPI guard is the only one with
           full coverage of the extracted REST hosts: all four ADC services

@@ -71,7 +71,7 @@ recipient policy both behind abstractions.
   `MapNotificationHub()` maps `NotificationHub` at the configured `HubPath` just when it is true
   (`SignalRExtensions.cs:25`). `AddPushNotifications` binds the section but registers SignalR,
   `SignalRPushNotificationSender` and `SignalRLiveChannelPublisher` unconditionally
-  (`DependencyInjection.cs:541-564`), so the opt-in registration, not the flag, is what decides whether
+  (`DependencyInjection.cs:615-632`), so the opt-in registration, not the flag, is what decides whether
   a send goes through SignalR; with `Enabled: false` the sender is still wired and simply has no hub
   endpoint for clients to connect to.
 
@@ -124,10 +124,10 @@ unchanged: this closes a documentation gap so the asymmetry reads as deliberate 
    single implementation, `SmtpEmailSender`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:12`), and it is
    TryAdd-registered in the same block as the push-sender defaults
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:485`, beside
-   `IPushNotificationSender` at `:486`, `ILiveChannelPublisher` at `:487`, `INativePushSender` at `:491`
-   and `IPushDeviceRegistrar` at `:492`). That block is `AddServices()` (`:455`), which
-   `AddInfrastructure` (`:50`) always calls (`:167`), so every host gets it. Unlike the two push
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:559`, beside
+   `IPushNotificationSender` at `:560`, `ILiveChannelPublisher` at `:561`, `INativePushSender` at `:565`
+   and `IPushDeviceRegistrar` at `:566`). That block is `AddServices()` (`:529`), which
+   `AddInfrastructure` (`:49`) always calls (`:205`), so every host gets it. Unlike the two push
    abstractions it has no null default and no opt-in `Add*` counterpart: the real SMTP sender is always
    the registration, inert only because nothing resolves it.
 2. **It sits outside the inbox / SignalR / native model.** An email creates no `PushNotification` audit

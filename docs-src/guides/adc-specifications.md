@@ -2343,7 +2343,7 @@ A user is uniquely identified by their **email address**. Each email corresponds
 
 | Property | Value |
 |---|---|
-| Format | JWT (RS256 in production via JWKS; HS256 only as a legacy / no-RSA-key fallback) |
+| Format | JWT, RS256 (the `Jwt:SigningAlgorithm` default), validated across services via JWKS. RSA keys are required in every deployed environment; HS256 is the framework's single-process monolith option and ADC does not use it. |
 | Lifetime | 1 hour (BR-12, unchanged) |
 | Storage (MAUI) | SecureStorage |
 | Storage (Web) | In-memory (JavaScript variable). NOT localStorage: reduces XSS exposure. |

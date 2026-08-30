@@ -226,8 +226,9 @@
           <em>(The TCP-probe half of this bullet was superseded on 2026-07-27: Store replaced those probes with
           the dedicated Http1-only probe listener. The Kestrel and ingress halves still hold. See the
           2026-07-28 update below.)</em></li>
-          <li>Gateway forwards HTTP/2 (<code>ForwardHttp2=true</code>, <code>VersionPolicy=RequestVersionExact</code>); Catalog/Identity
-          routes carry HTTP/2, Sales routes stay HTTP/1.1.</li>
+          <li>The gateway clusters fronting Catalog and Identity declare <code>Version</code> 2 with
+          <code>VersionPolicy=RequestVersionExact</code>, so their routes carry HTTP/2; the Sales cluster states no
+          version pair, so its routes stay HTTP/1.1.</li>
           <li>Sales (no gRPC server) stays <code>Http1AndHttp2</code> with <code>transport: &#39;http&#39;</code>.
           <em>(The &quot;no gRPC server&quot; half was superseded on 2026-08-14: Sales serves one inbound gRPC contract
           from a dedicated <code>Http2</code>-only named endpoint. Its default endpoint and <code>transport: &#39;http&#39;</code> ingress
@@ -488,9 +489,11 @@
           each host invokes as <code>builder.ConfigureEndpointsWithHealthProbe(HttpProtocols.Http2)</code>. The
           cleartext endpoint is HTTP/2-only (h2c prior knowledge), so peer gRPC clients negotiate without
           TLS/ALPN.</li>
-          <li><strong>Gateway:</strong> <code>ForwardHttp2 = true</code> → YARP forwards REST as HTTP/2 (<code>HttpVersion.Version20</code>,
-          <code>VersionPolicy = RequestVersionExact</code>). <code>RequestVersionOrLower</code> would silently downgrade to HTTP/1.1,
-          which the Http2-only backend rejects with <code>HTTP_1_1_REQUIRED</code>, so the policy must be <em>exact</em>. In Azure
+          <li><strong>Gateway:</strong> the cluster fronting the host declares <code>Version</code> 2 with
+          <code>VersionPolicy = RequestVersionExact</code> in its <code>ReverseProxy</code> configuration
+          (<a href="089-gateway-topology-owned-by-configuration.html">ADR-089</a>), so YARP forwards REST as HTTP/2 with
+          h2c prior knowledge. <code>RequestVersionOrLower</code> would silently downgrade to HTTP/1.1, which the
+          Http2-only backend rejects with <code>HTTP_1_1_REQUIRED</code>, so the policy must be <em>exact</em>. In Azure
           Container Apps, ingress must be <code>transport: http2</code>.</li>
           <li><strong>JWKS discovery (local):</strong> <code>WithJwksDiscovery(identity, gateway)</code>. The default JwtBearer metadata
           backchannel is HTTP/1.1 and <strong>cannot</strong> reach the Http2-only Identity endpoint directly, so the
@@ -508,7 +511,7 @@
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:286</code>, <code>:294</code>). So &quot;serves no
           inbound gRPC&quot; no longer holds for the host, only for its default endpoint.</li>
           </ul>
-          <h3 id="profile-b-http1andhttp2--httpsalpn--forwardhttp2false--direct-jwks-stores-original-choice-now-retained-only-as-the-default-endpoint-half-of-the-mixed-endpoint-profile">Profile B: <code>Http1AndHttp2</code> + HTTPS/ALPN + <code>ForwardHttp2=false</code> + direct JWKS (Store&#39;s original choice; now retained only as the default-endpoint half of the mixed-endpoint profile)</h3>
+          <h3 id="profile-b-http1andhttp2--httpsalpn--no-cluster-version-pair--direct-jwks-stores-original-choice-now-retained-only-as-the-default-endpoint-half-of-the-mixed-endpoint-profile">Profile B: <code>Http1AndHttp2</code> + HTTPS/ALPN + no cluster version pair + direct JWKS (Store&#39;s original choice; now retained only as the default-endpoint half of the mixed-endpoint profile)</h3>
           <p>Use when no service needs to <strong>serve</strong> gRPC on cleartext (consumer-only / one-directional gRPC).</p>
           <ul>
           <li><strong>Kestrel:</strong> <code>ConfigureEndpointDefaults(o =&gt; o.Protocols = HttpProtocols.Http1AndHttp2)</code> (also
@@ -520,8 +523,10 @@
           defaults to HTTP/1.1 (no ALPN); the <strong>HTTPS</strong> endpoint negotiates HTTP/1.1 <strong>or</strong> HTTP/2 via ALPN.
           gRPC clients use the HTTPS endpoint
           (the AppHost selects the <code>https</code> launch profile) so they get HTTP/2 through ALPN.</li>
-          <li><strong>Gateway:</strong> <code>ForwardHttp2 = false</code> (default) → YARP forwards REST as HTTP/1.1, which the
-          <code>Http1AndHttp2</code> backends accept on cleartext. In ACA, envoy ingress is plain HTTP/1.1.</li>
+          <li><strong>Gateway:</strong> the cluster fronting the host states no version pair, so YARP keeps its own
+          negotiating default, which resolves to HTTP/1.1 against a cleartext <code>Http1AndHttp2</code> endpoint (there
+          is no ALPN there to negotiate h2). The backends accept it on cleartext. In ACA, envoy ingress is
+          plain HTTP/1.1.</li>
           <li><strong>JWKS discovery:</strong> <code>WithJwksDiscovery(identity)</code> with <strong>no gateway argument</strong>. The default
           JwtBearer backchannel reaches Identity&#39;s HTTPS endpoint and ALPN negotiates HTTP/2, so no gateway
           hop is needed for discovery (the gateway still routes <code>/.well-known/*</code> so the canonical issuer
@@ -612,9 +617,11 @@
           <ul>
           <li><strong>Any service that hosts an inbound gRPC server reachable over cleartext h2c (especially a
           bidirectional pair) → Profile A.</strong> Cleartext h2c prior knowledge requires an <code>Http2</code>-only endpoint;
-          that in turn forces <code>ForwardHttp2=true</code> and gateway-routed JWKS.</li>
+          that in turn forces the HTTP/2 exact version pair on the gateway cluster fronting it, and
+          gateway-routed JWKS.</li>
           <li><strong>Only consumer-only / one-directional gRPC, with gRPC riding the HTTPS/ALPN endpoint → Profile B.</strong>
-          Keep <code>Http1AndHttp2</code>, <code>ForwardHttp2=false</code>, and direct <code>WithJwksDiscovery(identity)</code>.</li>
+          Keep <code>Http1AndHttp2</code>, leave the gateway cluster&#39;s version pair unstated, and use direct
+          <code>WithJwksDiscovery(identity)</code>.</li>
           <li>A service whose default endpoint must stay HTTP/1.1-capable must keep <code>Http1AndHttp2</code> on that
           endpoint, whether the reason is the <strong>HTTP/1.1 Upgrade</strong> handshake (SignalR WebSockets, ADC&#39;s
           Notification) or an HTTP/1.1 REST and webhook surface behind an <code>http</code>-transport ingress (Store&#39;s
@@ -639,7 +646,8 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Two profiles to keep straight.</strong> A service that gains an inbound gRPC edge must migrate from
-          Profile B to Profile A <em>and</em> flip <code>ForwardHttp2</code> and the JWKS wiring together, or it breaks.</li>
+          Profile B to Profile A <em>and</em> move its gateway cluster onto the HTTP/2 exact version pair and its
+          JWKS wiring together, or it breaks.</li>
           <li><strong>ACA ingress coupling.</strong> Profile A requires <code>transport: http2</code> on the container app ingress;
           Profile B uses default HTTP/1.1 ingress. The Bicep must match the chosen profile.</li>
           <li><strong>Mixed profiles within one app are possible but sharp-edged</strong> (ADC&#39;s Notification and Store&#39;s Sales

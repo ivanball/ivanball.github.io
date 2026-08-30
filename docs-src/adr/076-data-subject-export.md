@@ -99,27 +99,29 @@ what the sections already are, and the format version makes it evolvable as a re
 ### The API surface is a shipped controller base the app subclasses
 The endpoint ships from the framework assembly as the abstract
 `DataExportControllerBase<TQuery>`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:60`),
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:59`),
 **not** as a concrete controller registered into the MVC application parts. That is a deliberate
 departure from the `AddNotificationControllers` precedent for package-assembly controllers
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:19-23`), and the
 base's own remarks record why: the query type is app-owned, so "this ships as an abstract base with a
 `CreateQuery` factory rather than as a concrete controller added through an application part: a
-concrete controller could not construct a type it cannot see" (`DataExportControllerBase.cs:44-49`).
+concrete controller could not construct a type it cannot see" (`DataExportControllerBase.cs:44-47`).
 There is no `AddDsarControllers()` registration; the unit of opt-in is the subclass itself. An app
 declares a controller carrying its own `[Route]`, passes its query type, and implements the abstract
-`CreateQuery(userId, currentUserId, currentUserRole)` factory (`:120-123`); the action template
-`{userId}/export` is fixed on the base (`:78`), so a subclass routed at `Users` serves the same
+`CreateQuery(userId, currentUserId, currentUserRole)` factory (`:119-122`); the action template
+`{userId}/export` is fixed on the base (`:77`), so a subclass routed at `Users` serves the same
 `/Users/{userId}/export` path the hand-written controllers do.
 
-The base carries `[Authorize(Policy = AuthorizationPolicies.RequireAuthenticated)]` (`:58`) and
-`[FeatureGate(PrivacyFeatures.DataExport)]` (`:59`), so a host that has not turned the feature on
-answers 404 rather than 403 ([ADR-031](031-feature-flag-management.md)), and the endpoint does not
-exist for an app that never subclasses. Authorization is defence in depth rather than the real gate:
-the handler independently enforces owner-or-privileged-role. The action serializes the package itself
-and returns `File(payload, ExportContentType, BuildFileName(...))` (`:110`) rather than an
-`ObjectResult`, because content negotiation would render the document inline and the point of the
-endpoint is a saved file.
+The base carries a bare `[Authorize]` (`:57`) and `[FeatureGate(PrivacyFeatures.DataExport)]` (`:58`),
+so a host that has not turned the feature on answers 404 rather than 403
+([ADR-031](031-feature-flag-management.md)), and the endpoint does not exist for an app that never
+subclasses. An authenticated caller is all the attribute asks for, and that is the right ask: the
+caller this endpoint exists for is the data subject, who holds no capability beyond owning the account
+([ADR-020](020-permission-based-authorization.md)). Authorization at the edge is defence in depth
+rather than the real gate: the handler independently enforces owner-or-privileged-role. The action
+serializes the package itself and returns `File(payload, ExportContentType, BuildFileName(...))`
+(`:109`) rather than an `ObjectResult`, because content negotiation would render the document inline
+and the point of the endpoint is a saved file.
 
 **No consumer has adopted the base yet.** Neither ADC's nor Store's `UsersController` references
 `DataExportControllerBase`: each still owns a standalone action that reimplements the dispatch. ADC's

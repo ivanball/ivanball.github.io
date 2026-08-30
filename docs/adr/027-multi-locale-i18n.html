@@ -321,10 +321,13 @@
           markup, literal breadcrumb labels, and <code>NavItem</code> rows that carry no <code>TitleResource</code>; deliberate
           literals (brand names) are exempted per line with an <code>i18n: allow</code> marker. Snackbar text uses
           <strong>whole-sentence keys in the page&#39;s own resource pair</strong> (<code>Snackbar.Created</code> = &quot;Event created
-          successfully.&quot; / &quot;Evento creado correctamente.&quot;): <code>ErrorMessages.Success(entity, action)</code> is
-          <code>[Obsolete]</code> because fragment composition cannot translate (Spanish gender agreement breaks), and
-          the shared <code>Common.Error.Load/Save/Delete</code> templates no longer append raw <code>ex.Message</code> (neither
-          localizable nor safe to surface).</p>
+          successfully.&quot; / &quot;Evento creado correctamente.&quot;). The framework deliberately offers no
+          <code>Success(entity, action)</code> helper that composes a sentence from an entity noun and a verb:
+          fragment composition cannot translate, because Spanish agreement makes the verb depend on the
+          noun (&quot;Evento creado&quot; against &quot;Sesion creada&quot;), so one shared template cannot serve both nouns.
+          The shared <code>Common.Error.Load/Save/Delete</code> templates take the entity noun alone and never append
+          raw <code>ex.Message</code>, which is neither localizable nor safe to surface
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/ErrorMessages.cs:49-65</code>).</p>
           <p><strong>Carve-out (2026-07-09, narrowed 2026-08-27): a server message is shown verbatim, and the
           channel that carries it is now the <code>Result</code>.</strong> The rule the carve-out exists for is unchanged:
           text the API produced is curated domain wording already localized server-side to the request
@@ -338,16 +341,18 @@
           pass-through</strong> so an already-translated server message renders as-is and a client-side message
           that happens to be a key gets translated
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:17-23</code>, the lookup
-          at <code>:325-334</code>). <code>ErrorMessages.LoadError</code> / <code>SaveError</code> / <code>DeleteError</code> / <code>ActionError</code> keep
-          their <code>DomainInvariantViolationException</code> branch
-          (<code>.../MMCA.Common.UI/Pages/Common/ErrorMessages.cs:58-84</code>), but its scope is now narrow and the
-          type says so: the helpers remain for the exceptions a page can still raise on its own behalf (a
-          JS-interop failure, a mapping bug, a callback the page supplied), and the exception branch is
-          kept only for consumers that still raise that type from their own code (<code>:16-23</code>). All other
-          exception types keep the generic localized message.</p>
-          <p><code>NavItem</code> gained an optional <code>TitleResource</code> type: when set, the
-          shared <code>NavMenu</code> treats <code>Title</code>/<code>Group</code> as resource keys resolved per circuit at render time, so
-          module nav menus follow the active culture. MudBlazor&#39;s own component chrome localizes through
+          at <code>:325-334</code>). <code>ErrorMessages.LoadError</code> / <code>SaveError</code> / <code>DeleteError</code> cover the narrow
+          remainder, and the type says so: they are for the exceptions a page can still raise on its own
+          behalf (a JS-interop failure, a mapping bug, a callback the page supplied), never for a server
+          answer (<code>.../MMCA.Common.UI/Pages/Common/ErrorMessages.cs:14-22</code>). Every one of them renders the
+          localized template for its entity noun; the exception&#39;s own <code>Message</code> reaches the resource as a
+          second format argument that the shipped templates deliberately ignore, because raw exception text
+          is neither localizable nor safe to surface (<code>:49-65</code>).</p>
+          <p><code>NavItem</code> carries a required <code>TitleResource</code> type in positional slot 4
+          (<code>.../MMCA.Common.UI/Common/NavItem.cs:16</code>): the shared <code>NavMenu</code> treats <code>Title</code> and <code>Group</code> as
+          resource keys resolved against it per circuit at render time, so module nav menus follow the
+          active culture, and a key the resource type does not declare renders as the raw string rather
+          than as a blank entry (<code>:9-14</code>). MudBlazor&#39;s own component chrome localizes through
           <code>ResxMudLocalizer</code> over the <code>MudTranslations</code> resource pair (all built-in keys of the pinned
           MudBlazor version, en + es), registered in <code>AddUIShared</code> and covered by the same completeness gate.</p>
           </li>

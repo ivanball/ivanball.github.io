@@ -283,12 +283,13 @@
           </li>
           <li><p><strong>Pagination and the <code>X-Pagination</code> header.</strong> The paged route clamps the
           requested page size with <code>Math.Min(pageSize, MaxPageSize)</code>
-          (<code>EntityControllerBase.cs:155</code>), where <code>MaxPageSize</code> reads
-          <code>IApplicationSettings.MaxPageSize</code> and falls back to 500
-          (<code>EntityControllerBase.cs:57</code>, default at
-          <code>Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17</code>). The
-          pagination metadata is serialized into the <code>X-Pagination</code> response header
-          (<code>EntityControllerBase.cs:172</code>).</p>
+          (<code>EntityControllerBase.cs:168</code>), where <code>MaxPageSize</code> resolves
+          <code>IOptions&lt;ApplicationSettings&gt;</code> from the request&#39;s services and falls back to
+          500 (<code>EntityControllerBase.cs:58</code>, resolution at <code>:62</code>, default at
+          <code>Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17</code>). It
+          is read per request rather than captured in the constructor so a configuration
+          change takes effect without a restart. The pagination metadata is serialized
+          into the <code>X-Pagination</code> response header (<code>EntityControllerBase.cs:187</code>).</p>
           </li>
           <li><p><strong>A last-resort safety ceiling.</strong> Independent of the API page-size clamp,
           <code>EntityQueryPipeline.MaxUnboundedResultLimit = 1000</code>
@@ -318,7 +319,7 @@
           touched (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:111</code>,
           invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:266</code>),
           and <code>MaxUnboundedResultLimit</code> (<code>EntityQueryPipeline.cs:23</code>) plus the <code>MaxPageSize</code>
-          clamp (<code>EntityControllerBase.cs:155</code>) bound the result size.</li>
+          clamp (<code>EntityControllerBase.cs:168</code>) bound the result size.</li>
           <li><strong>Composes with manual DTO mapping (ADR-001).</strong> Entities are projected to DTOs by
           an injected <code>IEntityDTOMapper</code> (<code>EntityQueryService.cs:35</code>, property at <code>:90</code>) via
           <code>DTOMapper.MapToDTOs</code> (<code>EntityQueryService.cs:324</code>); a <code>DTOToEntityPropertyMap</code>

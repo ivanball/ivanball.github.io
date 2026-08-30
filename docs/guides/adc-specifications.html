@@ -4720,7 +4720,7 @@
           </thead>
           <tbody><tr>
           <td>Format</td>
-          <td>JWT (RS256 in production via JWKS; HS256 only as a legacy / no-RSA-key fallback)</td>
+          <td>JWT, RS256 (the <code>Jwt:SigningAlgorithm</code> default), validated across services via JWKS. RSA keys are required in every deployed environment; HS256 is the framework&#39;s single-process monolith option and ADC does not use it.</td>
           </tr>
           <tr>
           <td>Lifetime</td>

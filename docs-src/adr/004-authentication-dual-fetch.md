@@ -16,8 +16,12 @@ the public issuer URL.
 
 ## Decision
 Validate cross-service tokens with **asymmetric (RS256) signatures plus JWKS / OIDC discovery**,
-keeping the symmetric (HS256) shared-secret path as the in-process monolith default. The signing
-mode is a single configuration switch (`JwtSettings.SigningAlgorithm`, default `HS256`).
+keeping the symmetric (HS256) shared-secret path as the in-process monolith option. The signing
+mode is a single configuration switch (`JwtSettings.SigningAlgorithm`), and it defaults to `RS256`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:30`, reasoning at `:24-29`):
+a host that never sets the key gets the algorithm that survives extraction. A single-process monolith
+opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice requires
+(`.../Settings/JwtSigningAlgorithm.cs:14-19`).
 
 **Issuer side (Identity service).**
 - Identity signs access tokens with its RSA private key (RS256) and publishes only the matching
@@ -48,7 +52,7 @@ mode is a single configuration switch (`JwtSettings.SigningAlgorithm`, default `
   (`AddCommonAuthentication` → `BuildValidationParameters`) pins `[RS256]` for the asymmetric path or
   `[HS256]` for the symmetric one.
 - `AddCommonAuthentication(configuration)` remains the in-process path: HS256 with the shared Base64
-  secret (monolith default), or RS256 validating against a locally configured public-key PEM (no
+  secret (the monolith option), or RS256 validating against a locally configured public-key PEM (no
   JWKS fetch). It requires `RsaPublicKeyPem` when RS256 is selected and directs extracted services to
   `AddForwardedJwtBearer` instead.
 
@@ -76,8 +80,11 @@ mode is a single configuration switch (`JwtSettings.SigningAlgorithm`, default `
 - **Origin-aligned issuer.** Deriving the issuer from the discovery document rather than pinning it
   keeps validation working when the internal hostname and the public issuer differ, which is the
   normal case behind a gateway.
-- **HS256 stays the monolith default.** A single-process deployment needs no asymmetric keys or JWKS
-  endpoint; the algorithm switch lets the same code run either way.
+- **RS256 is the default, HS256 the monolith option.** A single-process deployment whose issuer and
+  validators live in one host can share the symmetric key and skip RSA key management entirely, so the
+  algorithm switch lets the same code run either way. The default is the asymmetric one because it is
+  the choice whose token format does not change when that host is later extracted, and because a host
+  that never thought about the setting should not be the one holding a key that mints tokens.
 
 ## Trade-offs
 - **More moving parts than a shared secret.** RS256 needs key generation, distribution of the public

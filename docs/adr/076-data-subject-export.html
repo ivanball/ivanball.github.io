@@ -295,26 +295,28 @@
           <h3 id="the-api-surface-is-a-shipped-controller-base-the-app-subclasses">The API surface is a shipped controller base the app subclasses</h3>
           <p>The endpoint ships from the framework assembly as the abstract
           <code>DataExportControllerBase&lt;TQuery&gt;</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:60</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:59</code>),
           <strong>not</strong> as a concrete controller registered into the MVC application parts. That is a deliberate
           departure from the <code>AddNotificationControllers</code> precedent for package-assembly controllers
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:19-23</code>), and the
           base&#39;s own remarks record why: the query type is app-owned, so &quot;this ships as an abstract base with a
           <code>CreateQuery</code> factory rather than as a concrete controller added through an application part: a
-          concrete controller could not construct a type it cannot see&quot; (<code>DataExportControllerBase.cs:44-49</code>).
+          concrete controller could not construct a type it cannot see&quot; (<code>DataExportControllerBase.cs:44-47</code>).
           There is no <code>AddDsarControllers()</code> registration; the unit of opt-in is the subclass itself. An app
           declares a controller carrying its own <code>[Route]</code>, passes its query type, and implements the abstract
-          <code>CreateQuery(userId, currentUserId, currentUserRole)</code> factory (<code>:120-123</code>); the action template
-          <code>{userId}/export</code> is fixed on the base (<code>:78</code>), so a subclass routed at <code>Users</code> serves the same
+          <code>CreateQuery(userId, currentUserId, currentUserRole)</code> factory (<code>:119-122</code>); the action template
+          <code>{userId}/export</code> is fixed on the base (<code>:77</code>), so a subclass routed at <code>Users</code> serves the same
           <code>/Users/{userId}/export</code> path the hand-written controllers do.</p>
-          <p>The base carries <code>[Authorize(Policy = AuthorizationPolicies.RequireAuthenticated)]</code> (<code>:58</code>) and
-          <code>[FeatureGate(PrivacyFeatures.DataExport)]</code> (<code>:59</code>), so a host that has not turned the feature on
-          answers 404 rather than 403 (<a href="031-feature-flag-management.html">ADR-031</a>), and the endpoint does not
-          exist for an app that never subclasses. Authorization is defence in depth rather than the real gate:
-          the handler independently enforces owner-or-privileged-role. The action serializes the package itself
-          and returns <code>File(payload, ExportContentType, BuildFileName(...))</code> (<code>:110</code>) rather than an
-          <code>ObjectResult</code>, because content negotiation would render the document inline and the point of the
-          endpoint is a saved file.</p>
+          <p>The base carries a bare <code>[Authorize]</code> (<code>:57</code>) and <code>[FeatureGate(PrivacyFeatures.DataExport)]</code> (<code>:58</code>),
+          so a host that has not turned the feature on answers 404 rather than 403
+          (<a href="031-feature-flag-management.html">ADR-031</a>), and the endpoint does not exist for an app that never
+          subclasses. An authenticated caller is all the attribute asks for, and that is the right ask: the
+          caller this endpoint exists for is the data subject, who holds no capability beyond owning the account
+          (<a href="020-permission-based-authorization.html">ADR-020</a>). Authorization at the edge is defence in depth
+          rather than the real gate: the handler independently enforces owner-or-privileged-role. The action
+          serializes the package itself and returns <code>File(payload, ExportContentType, BuildFileName(...))</code>
+          (<code>:109</code>) rather than an <code>ObjectResult</code>, because content negotiation would render the document inline
+          and the point of the endpoint is a saved file.</p>
           <p><strong>No consumer has adopted the base yet.</strong> Neither ADC&#39;s nor Store&#39;s <code>UsersController</code> references
           <code>DataExportControllerBase</code>: each still owns a standalone action that reimplements the dispatch. ADC&#39;s
           <code>GET /Users/{userId}/export</code>
