@@ -186,4 +186,4 @@ joins, and whose invariant-over-discipline posture it applies to this record's o
 [ADR-050](050-jwt-refresh-token-rotation.md) (the refresh-token rotation that makes replay-caching a
 token response actively harmful, which is why the auth endpoints declare `[NonIdempotent]`),
 [ADR-035](035-optimistic-concurrency.md) (the mirror-image concern, two distinct edits racing, whose
-own 2026-08-18 revision adds the `If-Match` precondition surface at the same edge).
+`If-Match` precondition surface sits at the same edge).

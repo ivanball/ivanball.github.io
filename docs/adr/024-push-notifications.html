@@ -277,7 +277,7 @@
           <code>MapNotificationHub()</code> maps <code>NotificationHub</code> at the configured <code>HubPath</code> just when it is true
           (<code>SignalRExtensions.cs:25</code>). <code>AddPushNotifications</code> binds the section but registers SignalR,
           <code>SignalRPushNotificationSender</code> and <code>SignalRLiveChannelPublisher</code> unconditionally
-          (<code>DependencyInjection.cs:541-564</code>), so the opt-in registration, not the flag, is what decides whether
+          (<code>DependencyInjection.cs:615-632</code>), so the opt-in registration, not the flag, is what decides whether
           a send goes through SignalR; with <code>Enabled: false</code> the sender is still wired and simply has no hub
           endpoint for clients to connect to.</li>
           </ul>
@@ -331,10 +331,10 @@
           single implementation, <code>SmtpEmailSender</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:12</code>), and it is
           TryAdd-registered in the same block as the push-sender defaults
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:485</code>, beside
-          <code>IPushNotificationSender</code> at <code>:486</code>, <code>ILiveChannelPublisher</code> at <code>:487</code>, <code>INativePushSender</code> at <code>:491</code>
-          and <code>IPushDeviceRegistrar</code> at <code>:492</code>). That block is <code>AddServices()</code> (<code>:455</code>), which
-          <code>AddInfrastructure</code> (<code>:50</code>) always calls (<code>:167</code>), so every host gets it. Unlike the two push
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:559</code>, beside
+          <code>IPushNotificationSender</code> at <code>:560</code>, <code>ILiveChannelPublisher</code> at <code>:561</code>, <code>INativePushSender</code> at <code>:565</code>
+          and <code>IPushDeviceRegistrar</code> at <code>:566</code>). That block is <code>AddServices()</code> (<code>:529</code>), which
+          <code>AddInfrastructure</code> (<code>:49</code>) always calls (<code>:205</code>), so every host gets it. Unlike the two push
           abstractions it has no null default and no opt-in <code>Add*</code> counterpart: the real SMTP sender is always
           the registration, inert only because nothing resolves it.</li>
           <li><strong>It sits outside the inbox / SignalR / native model.</strong> An email creates no <code>PushNotification</code> audit

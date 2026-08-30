@@ -8,8 +8,8 @@ A Container App can hold a credential two ways: as a literal value in the app's 
 collection, or as a reference to a Key Vault secret that the platform resolves at runtime through an
 identity attached to the app. Both deployed consumers need many credentials: a per-service SQL
 connection string (one per database, ADR-006), the Service Bus connection string, the Redis
-connection string, RSA signing keys or the HS256 fallback, SMTP, plus per-app extras (OAuth client
-secrets and an Anthropic key in ADC; Stripe secret and webhook keys in Store).
+connection string, the RSA signing pair, SMTP, plus per-app extras (OAuth client secrets and an
+Anthropic key in ADC; Stripe secret and webhook keys in Store).
 
 The literal form turns the deployment template into the distribution mechanism for every one of those
 values and leaves a readable copy in each app's own configuration, where rotation means editing every
@@ -37,8 +37,8 @@ its way to the same model.
 - **The vault is referenced, not created; the deployment writes the values into it.** The template
   declares the vault as `existing` (`MMCA.ADC/infra/main.bicep:951-953`,
   `MMCA.Store/infra/main.bicep:860-862`) and then writes secret child resources: fourteen in ADC
-  (`MMCA.ADC/infra/main.bicep:955-1024`) and eleven in Store
-  (`MMCA.Store/infra/main.bicep:864-918`).
+  (`MMCA.ADC/infra/main.bicep:910-979`) and ten in Store
+  (`MMCA.Store/infra/main.bicep:816-865`).
 - **Every Container App secret entry is a `keyVaultUrl` reference bound to that identity.** ADC
   Identity (`MMCA.ADC/infra/main.bicep:1052-1067`), Conference (`:1259-1266`), Engagement
   (`:1388-1392`), Notification (`:1527-1535`); Store Identity
@@ -47,13 +47,16 @@ its way to the same model.
   UI apps declare `secrets: []`
   (`MMCA.ADC/infra/main.bicep:1681`, `:1787`; `MMCA.Store/infra/main.bicep:1372`, `:1461`).
 - **Containers consume secrets only through `secretRef`.** The SQL connection string
-  (`MMCA.ADC/infra/main.bicep:1089`, `MMCA.Store/infra/main.bicep:1281`), the broker connection string
-  (`MMCA.ADC/infra/main.bicep:1588`, `MMCA.Store/infra/main.bicep:1301`), the RSA private key and its
-  HS256 fallback (`MMCA.ADC/infra/main.bicep:1170`, `:1177`; `MMCA.Store/infra/main.bicep:1067`,
-  `:1074`), SMTP (`MMCA.ADC/infra/main.bicep:1180`, `:1608`; `MMCA.Store/infra/main.bicep:1077`,
-  `:1328`), the OAuth client secrets (`MMCA.ADC/infra/main.bicep:1183`, `:1187`), the Anthropic key
-  (`:1323`), the native-push hub connection string (`:1606`), and the two Stripe keys
-  (`MMCA.Store/infra/main.bicep:1324-1325`).
+  (`MMCA.ADC/infra/main.bicep:1044`, `MMCA.Store/infra/main.bicep:955`), the broker connection string
+  (`MMCA.ADC/infra/main.bicep:1086`, `MMCA.Store/infra/main.bicep:977`), the RSA signing pair (the
+  private key the issuer signs with, the public key its in-process validation and its JWKS endpoint
+  publish: `MMCA.ADC/infra/main.bicep:1117-1118`, `:1121`; `MMCA.Store/infra/main.bicep:1008-1009`,
+  `:1012`), SMTP (`MMCA.ADC/infra/main.bicep:1123`, `:1551`; `MMCA.Store/infra/main.bicep:1014`,
+  `:1262`), the OAuth client secrets (`MMCA.ADC/infra/main.bicep:1126`, `:1130`, `:1136`), the
+  Anthropic key (`:1270`), the native-push hub connection string (`:1549`), and the two Stripe keys
+  (`MMCA.Store/infra/main.bicep:1258-1259`). RSA is the only signing key material either template
+  provisions: production signs with RS256 (ADR-004), and no HS256 secret exists in either vault or
+  either app.
 - **A second, host-side path reads the same vault as a configuration source.** Alongside the
   platform-resolved references, both templates set `KeyVault__Uri` and `AZURE_CLIENT_ID` on every app
   whose host calls `AddCommonKeyVaultConfiguration`
@@ -82,12 +85,12 @@ its way to the same model.
   `MMCA.Store/infra/main.bicep:135-138`), and the per-database SQL strings are composed from a shared
   base (`MMCA.ADC/infra/main.bicep:152-159`, `MMCA.Store/infra/main.bicep:127-133`). All of them are
   written straight into vault secrets, so the assembled value never appears in app configuration.
-- **An unconfigured optional secret gets a placeholder, not a missing entry.** Optional values are
-  written as the literal `unused` when their parameter is empty (`MMCA.ADC/infra/main.bicep:993`,
-  `:998`, `:1003`, `:1008`, `:1013`, `:1018`, `:1023`; `MMCA.Store/infra/main.bicep:892`, `:897`,
-  `:902`, `:907`, `:912`, `:917`), while the app-side reference is conditional (for example
-  `hasSmtpPassword` at `MMCA.ADC/infra/main.bicep:1064` and `hasStripe` at
-  `MMCA.Store/infra/main.bicep:1255-1258`), so the vault entry always exists but an unconfigured
+- **An unconfigured optional secret gets a placeholder, not a missing entry.** Five ADC values and
+  three Store values are written as the literal `unused` when their parameter is empty
+  (`MMCA.ADC/infra/main.bicep:958`, `:963`, `:968`, `:973`, `:978`;
+  `MMCA.Store/infra/main.bicep:854`, `:859`, `:864`), while the app-side reference is conditional
+  (for example `hasSmtpPassword` at `MMCA.ADC/infra/main.bicep:1015` and `hasStripe` at
+  `MMCA.Store/infra/main.bicep:1191`), so the vault entry always exists but an unconfigured
   feature is simply absent from the app.
 - **The two role assignments are bootstrapped out of band, deliberately.** The deploy identity holds
   Key Vault Secrets Officer to write the values; the apps hold Key Vault Secrets User to read them;

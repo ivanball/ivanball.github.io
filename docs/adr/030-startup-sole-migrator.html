@@ -213,17 +213,23 @@
           <h2 id="context">Context</h2>
           <p>Under database-per-service (ADR-006), each service owns its own database and its own migrations project,
           so <em>something</em> must apply pending migrations on every deploy. The framework&#39;s
-          <code>DatabaseInitializationExtensions</code> offers three strategies via <code>ApplicationSettings.DatabaseInitStrategy</code>,
-          acting per physical SQL Server source:</p>
+          <code>DatabaseInitializationExtensions</code> offers two strategies via <code>ApplicationSettings.DatabaseInitStrategy</code>,
+          acting per physical data source:</p>
           <ul>
-          <li><code>&quot;Migrate&quot;</code>: auto-apply pending EF Core migrations (the code documents this as <strong>development/testing</strong>).</li>
-          <li><code>&quot;EnsureCreated&quot;</code>: legacy <code>EnsureCreated</code> for every source in use.</li>
-          <li><code>&quot;None&quot;</code>, the <strong>production</strong> guard: validate that no SQL Server source has unapplied migrations and
+          <li><code>&quot;Migrate&quot;</code>, the default: auto-apply pending EF Core migrations (the code documents this as
+          <strong>development/testing</strong>).</li>
+          <li><code>&quot;None&quot;</code>, the <strong>production</strong> guard: validate that no migrated source has unapplied migrations and
           throw a per-source breakdown if any is behind.</li>
           </ul>
+          <p>Any other value is a configuration mistake and stops startup before a single source is created
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:47</code>, the
+          check itself at <code>:182-195</code>). The setting governs migrations only: a source no migrations pipeline owns
+          (Cosmos, or SQLite with no migrations assembly declared) is created with EF&#39;s <code>EnsureCreated</code> ahead of
+          the strategy switch, because it has no migration to apply and nothing else would ever create it
+          (<code>:70-87</code>); a tenant&#39;s own copy of such a source is created the same way under <code>&quot;Migrate&quot;</code> (<code>:152-164</code>).</p>
           <p>The framework&#39;s own comments mark <code>&quot;None&quot;</code> as the production strategy and <code>&quot;Migrate&quot;</code> as dev/test. Both
-          production apps deliberately diverge from that default, and the divergence was bought with an incident, so
-          it deserves to be recorded.</p>
+          production apps deliberately diverge from that recommendation, and the divergence was bought with an
+          incident, so it deserves to be recorded.</p>
           <h2 id="decision">Decision</h2>
           <p>In Azure Container Apps, <strong>every service host runs <code>ApplicationSettings__DatabaseInitStrategy = Migrate</code>
           in production and is the sole migrator of its own database</strong>: it applies its pending EF Core migrations
@@ -245,8 +251,8 @@
           <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:226</code>, ADC <code>deploy.yml:272</code>) so a
           model that has drifted from its migrations fails the build, but that gate only <em>detects</em>; it never
           applies anything. The container does the applying.</li>
-          <li><strong>This overrides the framework&#39;s documented &quot;None for production&quot; default</strong>, accepting auto-migrate-on-
-          boot in prod as the price of one fewer moving part.</li>
+          <li><strong>This overrides the framework&#39;s documented &quot;None for production&quot; recommendation</strong>, accepting
+          auto-migrate-on-boot in prod as the price of one fewer moving part.</li>
           <li><strong>It came from a real incident.</strong> A previous <code>sqlcmd</code> migration backstop in <code>deploy.yml</code> <em>raced</em> the
           container&#39;s own startup <code>Migrate()</code> on a fresh per-service database, creating a table without its
           <code>__EFMigrationsHistory</code> row and wedging Store&#39;s first per-service deploy. The fix (recorded inline in
@@ -288,9 +294,9 @@
           <ol>
           <li><strong>Seeding runs after the strategy switch, unconditionally.</strong> <code>InitializeDatabaseAsync</code> ends with
           <code>moduleLoader.SeedAllAsync(...)</code> placed <em>outside</em> the <code>DatabaseInitStrategy</code> switch
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:98</code>,
-          switch at <code>:74-89</code>). Every enabled module&#39;s <code>IModuleSeeder</code> therefore runs on every boot, in every
-          environment, under all three strategies including the production <code>&quot;None&quot;</code> guard: choosing <code>&quot;None&quot;</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:111</code>,
+          switch at <code>:92-102</code>). Every enabled module&#39;s <code>IModuleSeeder</code> therefore runs on every boot, in every
+          environment, under both strategies including the production <code>&quot;None&quot;</code> guard: choosing <code>&quot;None&quot;</code>
           opts out of applying migrations, not out of seeding. <code>ModuleLoader.SeedAllAsync</code> just walks its
           seeder list in module registration order and awaits each one
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:270-276</code>; the list is

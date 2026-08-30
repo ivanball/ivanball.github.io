@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-035: Optimistic Concurrency via RowVersion Round-Trip · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision). Revised 2026-08-18: the same…">
+  <meta name="description" content="Accepted (2026-07-02).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-035: Optimistic Concurrency via RowVersion Round-Trip">
-  <meta property="og:description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision). Revised 2026-08-18: the same…">
+  <meta property="og:description" content="Accepted (2026-07-02).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-035: Optimistic Concurrency via RowVersion Round-Trip">
-  <meta name="twitter:description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision). Revised 2026-08-18: the same…">
+  <meta name="twitter:description" content="Accepted (2026-07-02).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"035 · Optimistic Concurrency via RowVersion Round-Trip","item":"https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -209,13 +209,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-035-optimistic-concurrency-via-rowversion-round-trip">ADR-035: Optimistic Concurrency via RowVersion Round-Trip</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of <code>SetOriginalRowVersion</code> was added (see Decision).
-          Revised 2026-08-18: the same token gains an <strong>HTTP-native transport</strong>. <code>GetByIdAsync</code> emits a weak
-          <code>ETag</code> derived from the DTO&#39;s <code>RowVersion</code>, a <code>[SupportsIfMatch]</code> filter parses <code>If-Match</code> into the
-          existing <code>IConcurrencyAware</code> contract (body value wins when both are present), and a conflict whose
-          token arrived in the header is rewritten to <strong>412 Precondition Failed</strong> while a body-carried token
-          keeps the 409 this record chose. No new concurrency mechanism: one token, a second way to carry it.
-          See the Revision (2026-08-18) at the end.</p>
+          <p>Accepted (2026-07-02).</p>
           <h2 id="context">Context</h2>
           <p>Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
           case fetches the tracked entity, applies the request, and calls <code>SaveChangesAsync</code>. With one shared
@@ -229,53 +223,130 @@
           inbox) dedups the broker redelivering the <strong>same</strong> integration event. Both answer &quot;I saw this one
           action more than once.&quot; Optimistic concurrency answers the opposite question: &quot;two <strong>distinct</strong>
           actions targeted the same row, which one is stale?&quot; We wanted a first-class, framework-wide mechanism
-          that turns a conflicting concurrent edit into a <code>409 Conflict</code> the caller can react to, rather than a
-          silent overwrite, and that a new mutable request cannot forget to opt into.</p>
+          that turns a conflicting concurrent edit into a status the caller can react to, rather than a silent
+          overwrite.</p>
+          <p>HTTP has described that exchange since long before this framework: a response <code>ETag</code> naming the
+          version the client holds, and an <code>If-Match</code> request header making the next write conditional on it.
+          A design that invents its own carrier for the same value leaves a generic REST tool, a mobile HTTP
+          stack, anything not generated from our DTOs, unable to participate in a check the protocol already
+          standardizes.</p>
           <h2 id="decision">Decision</h2>
           <p>Give every auditable entity a database-managed <code>RowVersion</code> concurrency token, round-trip it through
-          the client on updates, and stamp the client&#39;s last-seen value as EF&#39;s original value so a stale
-          update fails as a conflict.</p>
+          the client as an HTTP entity tag, and stamp the client&#39;s last-seen value as EF&#39;s original value so a
+          stale update fails inside the UPDATE statement.</p>
           <ul>
-          <li><strong>A <code>RowVersion</code> token on the audit base.</strong> <code>AuditableBaseEntity&lt;TId&gt;</code> carries a <code>byte[] RowVersion</code>
-          property with a private setter, so every aggregate root and child entity inherits it. EF configures
-          it on <strong>every</strong> non-owned <code>IAuditableEntity</code> in <code>ConfigureConcurrencyTokens</code>: SQL Server maps it to
-          a server-generated <code>rowversion</code> (<code>IsRowVersion</code>), other relational providers map it as a plain
-          application-managed token (<code>IsConcurrencyToken</code>). EF then includes the token in every UPDATE/DELETE
-          <code>WHERE</code> clause and raises <code>DbUpdateConcurrencyException</code> when it matches no row.</li>
-          <li><strong><code>IConcurrencyAware</code> round-trips the token through the client.</strong> Read DTOs expose the current
-          <code>RowVersion</code> so a client can echo it back, and each <code>*UpdateRequest</code> implements <code>IConcurrencyAware</code>
-          to carry the client&#39;s last-observed value. A null or empty <code>RowVersion</code> (creation, or a legacy
-          client that never read one) skips the check by design.</li>
-          <li><strong><code>SetOriginalRowVersion</code> is the persistence extension point.</strong> <code>IWriteRepository.SetOriginalRowVersion</code>
-          applies the client-supplied token as the tracked entity&#39;s <strong>original</strong> <code>RowVersion</code> value; the
-          <code>EFRepository</code> implementation writes it to <code>Entry(entity).Property(nameof(RowVersion)).OriginalValue</code>
-          and no-ops when the value is null or empty. The update handler calls it right after loading the
-          entity (before applying the request), so EF compares the client&#39;s token against the row&#39;s current
-          token inside the UPDATE statement, atomically, with no read-then-check race.</li>
-          <li><strong>Child entities get the same protection through the <code>IRowVersioned</code> overload (2026-07-16
-          amendment).</strong> The original method is typed to the repository&#39;s aggregate root (<code>TEntity</code>), so a
-          child edit (e.g. a <code>ProductVariant</code> under a <code>Product</code>) could not receive the token. A second
-          overload, <code>SetOriginalRowVersion(IRowVersioned childEntity, byte[]? rowVersion)</code>, accepts any
-          tracked auditable entity (<code>AuditableBaseEntity&lt;TId&gt;</code> implements the new
-          <code>MMCA.Common.Domain.Interfaces.IRowVersioned</code>), stamping the child&#39;s original token with the same
-          null-or-empty no-op contract. Update handlers that mutate children through the aggregate&#39;s
-          repository call it per child after loading.</li>
-          <li><strong>A conflict maps to <code>409 Conflict</code> at the edge.</strong> <code>DbUpdateConcurrencyException</code> is a
-          <code>DbUpdateException</code>, and <code>DbUpdateExceptionHandler</code> translates any <code>DbUpdateException</code> into a
-          <code>409 Conflict</code> RFC 9457 ProblemDetails, with a generic detail message so the database schema is not
-          leaked (the full exception is logged, not returned). This is the same edge that already returns 409
-          for unique-constraint and foreign-key violations. (The parallel <code>Result</code>-based path,
-          <code>ErrorType.Conflict</code>, maps to 409 through <code>ErrorHttpMapping</code> for handlers that model a conflict as a
-          <code>Result</code> rather than let the exception propagate.)</li>
-          <li><strong>A fitness function enforces the opt-in build-wide.</strong> <code>ArchitectureRules.UpdateRequestsAreConcurrencyAware</code>
-          scans module Application assemblies for types whose simple name ends in <code>UpdateRequest</code> and flags any
-          that do not implement <code>IConcurrencyAware</code>. <code>ConcurrencyConventionTestsBase</code> exposes it as a single
-          <code>[Fact]</code>, and <strong>both</strong> consumers subclass it (<code>MMCA.ADC.Architecture.Tests</code> and
-          <code>MMCA.Store.Architecture.Tests</code> each supply their own <code>IArchitectureMap</code>). A module with no mutable
-          aggregate is legitimately vacuous.</li>
-          <li><strong>Adopted per database via an <code>AddRowVersionToAllEntities</code> migration.</strong> Each consumer added the
-          <code>RowVersion</code> column to every table in one migration (<code>AddRowVersionToAllEntities</code> in both ADC and
-          Store), typed <code>rowversion</code> with an empty-byte default, so existing rows get a token on first write.</li>
+          <li><p><strong>A <code>RowVersion</code> token on the audit base.</strong> <code>AuditableBaseEntity&lt;TIdentifierType&gt;</code> carries a
+          <code>byte[] RowVersion</code> property with a private setter
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:53</code>), so every
+          aggregate root and child entity inherits it, and the base implements <code>IRowVersioned</code> (<code>:13</code>,
+          declared in <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs</code>) so a child
+          row can be reached without a second generic parameter. EF configures the property on <strong>every</strong>
+          non-owned <code>IAuditableEntity</code> in <code>ConfigureConcurrencyTokens</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:501</code>,
+          called from <code>OnModelCreating</code> at <code>:335</code>): SQL Server maps it to a server-generated <code>rowversion</code>
+          (<code>IsRowVersion</code>, <code>:514</code>), other relational providers map it as a plain application-managed token
+          (<code>IsConcurrencyToken</code>, <code>:518</code>). EF then includes the token in every UPDATE/DELETE <code>WHERE</code> clause
+          and raises <code>DbUpdateConcurrencyException</code> when it matches no row.</p>
+          </li>
+          <li><p><strong>A read carries the token; a write does not.</strong> <code>IConcurrencyAware</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IConcurrencyAware.cs:15</code>) declares a
+          <strong>non-nullable</strong> <code>byte[] RowVersion</code> (<code>:19</code>) and is implemented by read DTOs, so a row served to a
+          client can be rendered with its version. An update request implements nothing of the kind: the
+          precondition travels in the header alone (<code>:9-14</code>).</p>
+          </li>
+          <li><p><strong>The read emits a weak <code>ETag</code>.</strong> <code>EntityControllerBase.GetByIdAsync</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:415</code>) calls
+          <code>SetConcurrencyETag(result.Value)</code> (<code>:436</code>), which renders the served row&#39;s token as
+          <code>W/&quot;&lt;base64&gt;&quot;</code> (<code>:471</code>, written to the response at <code>:479</code>, formatted by <code>ConcurrencyETag.Format</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:40</code>). Weak is the honest
+          strength: the tag identifies the row&#39;s version, not a byte-exact representation, and the same row
+          legitimately serializes differently under a <code>fields=</code> projection. Those shaped responses are seen
+          through rather than skipped: <code>ReadRowVersion</code> (<code>:488</code>) reads the typed property when the payload is
+          the DTO and falls back to a dictionary lookup keyed by JSON name when it is a projection
+          (<code>:493-496</code>). The property is resolved once per closed controller type (<code>:445</code>), and a DTO type
+          with no token makes the method a no-op (<code>:473-474</code>). It is <code>protected</code> so a hand-written read
+          action can emit the same header instead of re-implementing the format, which is where the two
+          would drift and a precondition would quietly stop working.</p>
+          </li>
+          <li><p><strong><code>[SupportsIfMatch]</code> decodes the header, and nothing else carries the token.</strong>
+          <code>SupportsIfMatchAttribute</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:49</code>) is a
+          sealed <code>Attribute</code> implementing <code>IAsyncActionFilter</code> directly, so unlike <code>[Idempotent]</code> (a
+          <code>ServiceFilterAttribute</code> resolving from DI, ADR-017) it is self-contained and needs no registration
+          by a host. Before the action runs it parses <code>If-Match</code> with <code>ConcurrencyETag.TryParse</code>
+          (<code>ConcurrencyETag.cs:62</code>) and places the decoded bytes in <code>HttpContext.Items</code> under <code>TokenItemKey</code>
+          (<code>:57</code>, written at <code>:122</code>). The action reads them back through
+          <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code> (<code>:68</code>) and passes the token to its command,
+          as the generic PUT does
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:89</code> for
+          the attribute, <code>:102</code> for the read). No bound argument is written to, so no request model has to
+          loosen its immutability to receive a token.</p>
+          </li>
+          <li><p><strong>Three status codes, one problem-details shape.</strong></p>
+          <ul>
+          <li><strong>A request that states no precondition is <code>428 Precondition Required</code></strong> and the action never
+          runs (<code>SupportsIfMatchAttribute.cs:109-114</code>). A blank header and <code>*</code> are both no precondition:
+          the wildcard names no particular version, so honouring it would be a last-write-wins write
+          wearing a conditional request&#39;s clothes.</li>
+          <li><strong>A malformed tag is <code>400 Bad Request</code></strong> (<code>:116-120</code>): a precondition the server cannot read is a
+          client error, and running the write would ignore a precondition the caller did state.</li>
+          <li><strong>A stale token is <code>412 Precondition Failed</code></strong>, produced after the action by
+          <code>RewriteConflictToPreconditionFailed</code> (<code>:130</code>). A <code>DbUpdateConcurrencyException</code> is answered in
+          the filter rather than left to the global handler (<code>:132-138</code>), and an already-produced 409
+          result has its status and its <code>ProblemDetails.Status</code> rewritten in place with the body otherwise
+          untouched (<code>:141-158</code>).</li>
+          </ul>
+          <p>All three are RFC 9457 problem details built by one helper (<code>:204</code>) through the registered
+          <code>ProblemDetailsFactory</code>, so they carry the same <code>traceId</code>/<code>requestId</code> diagnostics as every other
+          problem response on the surface, and each carries the standard <code>errors</code> extension with a stable
+          code: <code>Concurrency.PreconditionRequired</code> (<code>:162</code>), <code>Concurrency.MalformedIfMatch</code> (<code>:174</code>),
+          <code>Concurrency.PreconditionFailed</code> (<code>:186</code>).</p>
+          </li>
+          <li><p><strong><code>SetOriginalRowVersion</code> is the persistence extension point.</strong>
+          <code>IWriteRepository.SetOriginalRowVersion(TEntity, byte[])</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:406</code>)
+          applies the caller&#39;s token as the tracked entity&#39;s <strong>original</strong> <code>RowVersion</code>; the <code>EFRepository</code>
+          implementation writes it to <code>Entry(entity).Property(nameof(RowVersion)).OriginalValue</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:74</code>).
+          The shared write workflow calls it right after loading the aggregate and before the mutation runs
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:290-291</code>), so
+          EF compares the client&#39;s token against the row&#39;s current value inside the UPDATE statement,
+          atomically, with no read-then-check race.</p>
+          </li>
+          <li><p><strong>Child entities are reached by the <code>IRowVersioned</code> overload.</strong> The first overload is typed to the
+          repository&#39;s aggregate root (<code>TEntity</code>), so a child edit (a <code>ProductVariant</code> under a <code>Product</code>)
+          cannot receive a token through it. A second overload,
+          <code>SetOriginalRowVersion(IRowVersioned childEntity, byte[] rowVersion)</code> (<code>IRepository.cs:417</code>,
+          implemented at <code>EFRepository.cs:85</code>), accepts any tracked auditable entity instead, and an update
+          handler that mutates children through the aggregate&#39;s repository stamps each child itself. Both
+          overloads reject a null token (<code>EFRepository.cs:77</code>, <code>:88</code>): there is no value that means &quot;skip
+          the check&quot;.</p>
+          </li>
+          <li><p><strong>A fitness function keeps the token out of the body.</strong>
+          <code>ArchitectureRules.UpdateRequestsAreNotConcurrencyAware</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:24</code>)
+          scans module Application assemblies for types whose simple name ends in <code>UpdateRequest</code> and flags
+          any that <strong>does</strong> implement <code>IConcurrencyAware</code>, because a token in the body would give the same
+          check a second, competing source. <code>ConcurrencyConventionTestsBase</code> exposes it as a single <code>[Fact]</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ConcurrencyConventionTestsBase.cs:14</code>),
+          and <strong>both</strong> consumers subclass it
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/ConcurrencyConventionTests.cs:3</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/ConcurrencyConventionTests.cs:3</code>, each
+          supplying its own <code>IArchitectureMap</code>). A module with no mutable aggregate is legitimately vacuous.</p>
+          </li>
+          <li><p><strong>The UI speaks the same format.</strong> <code>ConcurrencyETag</code> lives in <code>MMCA.Common.Shared.Http</code> rather than
+          in the API package precisely so both ends of the exchange can use it: the API reads an <code>If-Match</code>
+          value with it and the UI writes one. <code>EntityServiceBase.UpdateAsync</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:166</code>) passes
+          <code>ConcurrencyTagOf(entity)</code> (<code>:184</code>) as the write&#39;s <code>If-Match</code> (<code>:174</code>), and the request client sets
+          the header (<code>:309</code>), so a Blazor page conditions its writes with no per-page code.</p>
+          </li>
+          <li><p><strong>Every table carries the column.</strong> The token exists in the database or it does not exist at all:
+          each database&#39;s migrations add the <code>RowVersion</code> column to every table, typed <code>rowversion</code> in SQL
+          Server, alongside the audit columns of the same base
+          (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs:34</code>,
+          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/20260606053146_InitialCreate.cs</code>).</p>
+          </li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -284,119 +355,77 @@
           private, populated by EF). The token stays invisible to the aggregate&#39;s behavior, so concurrency is
           a persistence concern, not a domain one.</li>
           <li><strong>Round-trip over a server-side reload.</strong> Reloading and re-saving on the server hides the collision
-          (both writes succeed against the freshest row). Forcing the client to echo the token it last read
+          (both writes succeed against the freshest row). Forcing the client to echo the version it last read
           is what makes a competing edit a real conflict instead of a silent overwrite.</li>
-          <li><strong>One extension point over a per-handler compare.</strong> <code>SetOriginalRowVersion</code> plus EF&#39;s <code>WHERE</code>-clause check does
-          the comparison in the database, atomically with the UPDATE. A hand-rolled &quot;read the current token,
-          compare, then save&quot; would reintroduce the exact race it is meant to close.</li>
-          <li><strong>Invariant over discipline (ADR-015).</strong> The <code>*UpdateRequest</code> naming convention is enforced
-          mechanically in both consumers, so a newly added mutable request cannot ship without the token by an
-          author simply forgetting. This is the same posture the framework prefers elsewhere.</li>
-          <li><strong>Reuse the existing 409 edge.</strong> <code>DbUpdateExceptionHandler</code> already funnels every <code>DbUpdateException</code>
-          to 409, so concurrency conflicts inherit the same translation, logging, and schema-safe message as
-          constraint violations with no new middleware.</li>
+          <li><strong>One extension point over a per-handler compare.</strong> <code>SetOriginalRowVersion</code> plus EF&#39;s <code>WHERE</code>-clause
+          check does the comparison in the database, atomically with the UPDATE. A hand-rolled &quot;read the
+          current token, compare, then save&quot; would reintroduce the exact race it is meant to close.</li>
+          <li><strong>The header is the one transport.</strong> HTTP already defines <code>ETag</code> and <code>If-Match</code> for precisely this
+          exchange, so a generic REST client participates without knowing a framework DTO, and the
+          precondition stays out of the write contract. A token in the request body would be a second,
+          competing source for the same check: two places to populate, a precedence rule to define, and a
+          silent divergence whenever a caller fills one and not the other. One carrier means one answer.</li>
+          <li><strong>Required rather than optional.</strong> A conditional write whose precondition is missing is refused,
+          not quietly downgraded to last-write-wins. A token the caller may omit makes the guarantee a
+          property of the caller rather than of the endpoint: the type says the field is there, and whether
+          the row is actually protected depends on whether someone remembered to fill it.</li>
+          <li><strong>412 rather than 409.</strong> RFC 9110 reserves 412 for a precondition the client stated in a
+          conditional request header, which is exactly what <code>If-Match</code> is. 409 stays the answer for a
+          conflict the client did not condition on, which <code>DbUpdateExceptionHandler</code> still produces for any
+          other <code>DbUpdateException</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:33</code>, with
+          a generic detail message so the schema is not leaked and the full exception logged rather than
+          returned). Answering 409 for a failed precondition would make <code>If-Match</code> a decorative alias for an
+          ordinary state conflict.</li>
+          <li><strong>Invariant over discipline (ADR-015).</strong> The <code>*UpdateRequest</code> naming convention is checked
+          mechanically in both consumers, so a newly added mutable request cannot reintroduce a body token by
+          an author simply reaching for the interface. This is the same posture the framework prefers
+          elsewhere.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Opt-in at the caller, not just the type.</strong> A null or empty <code>RowVersion</code> skips the check, so a
-          client that never echoes the token still gets last-write-wins. The fitness function guarantees the
-          request <strong>type</strong> carries the field; it cannot guarantee a given caller populates it.</li>
-          <li><strong>The 409 is coarse.</strong> <code>DbUpdateExceptionHandler</code> maps all <code>DbUpdateException</code>s to one 409 with a
-          generic message, so from the status and body alone a client cannot tell a concurrency conflict from
-          a unique-constraint or foreign-key violation. That is deliberate (no schema leak), but it means
-          retry logic treats the three the same.</li>
+          <li><strong>The rewrite keys on the conflict outcome, not on its cause.</strong> The filter turns any 409 produced
+          under an <code>If-Match</code> request into a 412, including a unique-constraint or foreign-key violation that
+          <code>DbUpdateExceptionHandler</code> funnels to the same 409. The response keeps its original problem details
+          and error codes, so the cause is still readable in the body, but one class of conflict wears a
+          status code naming a precondition the client did not actually violate. The alternative, a dedicated
+          concurrency error code threaded through the <code>Result</code> channel, was not worth a parallel failure path.</li>
+          <li><strong>The attribute cannot be configured.</strong> Being its own filter with no DI means no host can adjust
+          its behavior, and a future need for a service (a policy, a logger, a metric) forces either a
+          rewrite to <code>ServiceFilterAttribute</code> or a static dependency.</li>
+          <li><strong>An absent <code>ETag</code> carries no signal.</strong> A DTO without a <code>RowVersion</code> property produces no header at
+          all, so a client cannot distinguish &quot;this resource has no concurrency control&quot; from &quot;this
+          deployment does not emit one&quot;. The no-op is the correct behavior and it says nothing.</li>
+          <li><strong>Nothing here decides conditional GET.</strong> The <code>ETag</code> exists to be echoed back on the next write:
+          there is no <code>If-None-Match</code> handling and no 304 path, and the read-side caching answer remains
+          <a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a>&#39;s output cache. An <code>ETag</code> on a
+          response does invite a client to try, and the attempt is simply ignored.</li>
+          <li><strong>Opt-in per action.</strong> <code>[SupportsIfMatch]</code> has to be applied, and no fitness rule requires it
+          anywhere, so a conditional write exists exactly where someone annotated one. The inverse rule
+          covers what an update request must <strong>not</strong> carry, not which actions are guarded.</li>
+          <li><strong>Enforcement is bound to a naming convention.</strong> The rule keys on the <code>UpdateRequest</code> suffix. A
+          mutable request that does not follow that suffix is outside its scope.</li>
           <li><strong>Cross-engine asymmetry.</strong> SQL Server gets a server-generated <code>rowversion</code>; SQLite and other
           relational providers get an application-managed <code>IsConcurrencyToken</code> over the same <code>byte[]</code> (EF
           sends the value on INSERT rather than expecting the database to generate it). Cosmos has its own
           ETag concurrency mechanism that is not routed through this property.</li>
-          <li><strong>Enforcement is bound to a naming convention.</strong> The rule keys on the <code>UpdateRequest</code> suffix. A
-          mutable request that does not follow that suffix is outside the rule&#39;s scope.</li>
-          <li><strong>Adoption is a per-database migration.</strong> <code>AddRowVersionToAllEntities</code> adds the column to every
-          existing table; a new database, or a table added later, must carry the column for the token to
-          exist there.</li>
-          </ul>
-          <h2 id="revision-2026-08-18">Revision (2026-08-18)</h2>
-          <p>This record chose a <strong>body</strong> round-trip: the client echoes <code>RowVersion</code> on the update request. HTTP has
-          had a standard way to say the same thing since long before this framework, <code>ETag</code> plus <code>If-Match</code>, and
-          a client that speaks it (a generic REST tool, a mobile HTTP stack, anything not generated from our
-          DTOs) had no way to participate. The revision adds that transport. <strong>It is the same token, the same
-          <code>SetOriginalRowVersion</code> extension point and the same database comparison</strong>: nothing about the mechanism
-          in the Decision changes.</p>
-          <h3 id="the-read-emits-a-weak-etag">The read emits a weak ETag</h3>
-          <p><code>EntityControllerBase.GetByIdAsync</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:383-404</code>) calls
-          <code>SetConcurrencyETag(result.Value)</code> (<code>:402</code>), which emits <code>W/&quot;&lt;base64&gt;&quot;</code> over the DTO&#39;s <code>RowVersion</code>
-          bytes (<code>:429-438</code>, formatted by <code>.../Concurrency/ConcurrencyETag.cs:39-44</code>). Weak is the honest
-          strength: the tag identifies the row&#39;s version, not a byte-exact representation, and the same row can
-          legitimately serialize differently under a <code>fields=</code> projection. Those shaped responses are handled
-          rather than skipped, through a dictionary lookup for the token (<code>:446-455</code>).</p>
-          <p>Emission is silent when there is nothing to emit: a DTO type with no <code>RowVersion</code> property leaves the
-          cached property reflection null and the method no-ops (<code>:411-415</code>, <code>:431-432</code>), and a null or empty
-          token does the same (<code>:434-435</code>).</p>
-          <h3 id="supportsifmatch-is-the-attribute-and-the-filter"><code>[SupportsIfMatch]</code> is the attribute and the filter</h3>
-          <p><code>SupportsIfMatchAttribute</code> (<code>.../Concurrency/SupportsIfMatchAttribute.cs:47</code>) is a sealed
-          <code>Attribute</code> that implements <code>IAsyncActionFilter</code> directly, so unlike <code>[Idempotent]</code> (a
-          <code>ServiceFilterAttribute</code> resolving from DI, ADR-017) it is self-contained and takes no services. On an
-          action carrying it, the <code>If-Match</code> header is parsed and written into <strong>every</strong> bound argument
-          implementing <code>IConcurrencyAware</code> (<code>:120-128</code>), which is why no new contract was needed: the round-trip
-          interface this record already defined (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IConcurrencyAware.cs:13</code>,
-          <code>RowVersion</code> at <code>:20</code>, shipped 2026-06-14) is exactly the shape a header value needs to land in.</p>
-          <p>Three parsing decisions are worth naming. <strong>The body wins.</strong> An argument that already carries a
-          non-empty <code>RowVersion</code> is left alone (<code>:151-154</code>, documented at <code>:24-28</code>), so a client that populates
-          the request model keeps this record&#39;s original behavior and its 409, and the header only fills a gap.
-          <strong>A malformed <code>If-Match</code> is a 400</strong>, short-circuiting the action with ProblemDetails (<code>:114-118</code>,
-          <code>:210-219</code>), because an unparseable precondition is a client error and executing the write would
-          silently ignore a stated precondition. <strong><code>*</code> and blank are treated as no precondition</strong> (<code>:103-112</code>),
-          a deliberate simplification of RFC 9110&#39;s &quot;if any current representation exists&quot;.</p>
-          <h3 id="412-for-a-header-sourced-conflict-409-for-a-body-sourced-one">412 for a header-sourced conflict, 409 for a body-sourced one</h3>
-          <p>The split is implemented in the filter itself, not in <code>DbUpdateExceptionHandler</code>:
-          <code>RewriteConflictToPreconditionFailed</code> (<code>:178-207</code>) runs only when the filter actually applied a header
-          token, tracked by a local <code>headerSourced</code> flag set when at least one argument took its value from the
-          header (<code>:69</code>, <code>:78-81</code>, <code>:130-135</code>). It rewrites both a <code>DbUpdateConcurrencyException</code> (<code>:180-187</code>)
-          and an already-produced 409 result (<code>:191-202</code>), and it publishes
-          <code>HttpContext.Items[&quot;MMCA.Common.API.Concurrency.IfMatchApplied&quot;]</code> (<code>:54</code>, <code>:132</code>) so anything
-          downstream can tell which transport was used.</p>
-          <p>The reason the two codes differ is that they answer different questions. A body-carried token is part
-          of the request payload, and a stale one is a state conflict: 409, exactly as this record decided. A
-          header-carried token is a <strong>precondition</strong> the client attached to the request, and HTTP has a status
-          code that means &quot;the precondition you stated did not hold&quot;: 412. Mapping both to 409 would have made
-          <code>If-Match</code> a decorative alias for the body field.</p>
-          <h3 id="what-this-revision-costs">What this revision costs</h3>
-          <ul>
-          <li><strong>The rewrite keys on the outcome, not on the cause.</strong> Any 409 produced under an <code>If-Match</code> request
-          becomes a 412, including a unique-constraint or foreign-key violation, which <code>DbUpdateExceptionHandler</code>
-          funnels to the same 409 this record already noted as coarse. The source acknowledges it (<code>:33-38</code>).
-          So the coarse-409 trade-off below is not fixed, it is inherited, and one of its cases now wears a
-          status code that names a precondition the client did not actually violate.</li>
-          <li><strong>Body precedence is silent.</strong> A client that sends both a header and a populated request field, with
-          different values, gets the body value and no warning. That is the right default (the payload is more
-          specific) and it is undiscoverable at runtime.</li>
-          <li><strong>The attribute cannot be configured.</strong> Being its own filter with no DI means no host can adjust its
-          behavior, and a future need for a service (a policy, a logger, a metric) forces either a rewrite to
-          <code>ServiceFilterAttribute</code> or a static dependency.</li>
-          <li><strong>An absent ETag is ambiguous.</strong> A DTO without a <code>RowVersion</code> property produces no header at all, so
-          a client cannot distinguish &quot;this resource has no concurrency control&quot; from &quot;this deployment does not
-          support it&quot;. The no-op is the correct behavior and it carries no signal.</li>
-          <li><strong>Nothing here decides conditional GET.</strong> The ETag exists to be echoed back on the next write; this
-          revision adds no <code>If-None-Match</code> handling and no 304 path, and the read-side caching answer remains
-          <a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a>&#39;s output cache. An ETag on a response
-          does invite a client to try, and it will simply be ignored.</li>
-          <li><strong>Opt-in per action, again.</strong> <code>[SupportsIfMatch]</code> has to be applied, and no fitness rule requires it
-          anywhere, so the header transport exists exactly where someone remembered it. The
-          <code>UpdateRequestsAreConcurrencyAware</code> gate covers the request <strong>type</strong>, not the annotation.</li>
+          <li><strong>Adoption is a schema step per database.</strong> Every table needs the <code>RowVersion</code> column for the token
+          to exist there, so a new database, or a table introduced outside the migrations that carry it, has
+          no version to condition on.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-017 (HTTP request idempotency, which dedups retries of the <strong>same</strong> request, the mirror-image
-          concern to two <strong>distinct</strong> edits racing here, and whose own 2026-08-18 revision adds the
-          declared-intent gate at this same edge), ADR-021 (consumer-side inbox, which dedups broker
-          redeliveries of the <strong>same</strong> event, likewise distinct from concurrency), ADR-006 (the one-shared-
-          context-per-engine model over which the <code>RowVersion</code> token is configured uniformly), ADR-015 (the
-          fitness-function-over-discipline enforcement this reuses), ADR-005 (soft-delete and audit fields live
-          on the same <code>AuditableBaseEntity</code> base that carries <code>RowVersion</code>),
-          <a href="034-generic-entity-query-layer.html">ADR-034</a> (the generic entity controller whose <code>GetByIdAsync</code> now
-          emits the ETag, and whose <code>fields=</code> shaping the emitter has to see through),
-          <a href="013-result-pattern.html">ADR-013</a> (the ProblemDetails edge the malformed-<code>If-Match</code> 400 and the rewritten
-          412 both speak).</p>
+          concern to two <strong>distinct</strong> edits racing here, and whose declared-intent gate sits at this same
+          edge), ADR-021 (consumer-side inbox, which dedups broker redeliveries of the <strong>same</strong> event,
+          likewise distinct from concurrency), ADR-006 (the one-shared-context-per-engine model over which the
+          <code>RowVersion</code> token is configured uniformly), ADR-015 (the fitness-function-over-discipline
+          enforcement this reuses), ADR-005 (soft-delete and audit fields live on the same
+          <code>AuditableBaseEntity</code> base that carries <code>RowVersion</code>),
+          <a href="034-generic-entity-query-layer.html">ADR-034</a> (the generic entity controller whose <code>GetByIdAsync</code>
+          emits the <code>ETag</code>, and whose <code>fields=</code> shaping the emitter has to see through),
+          <a href="099-generic-write-side-entity-commands.html">ADR-099</a> (the generic PUT that carries
+          <code>[SupportsIfMatch]</code> and hands the decoded token to <code>UpdateEntityCommand</code>),
+          <a href="013-result-pattern.html">ADR-013</a> (the ProblemDetails edge the 428, the 400 and the 412 all speak).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -412,7 +441,6 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
-            <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

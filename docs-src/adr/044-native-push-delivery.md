@@ -40,7 +40,9 @@ may not exist when the code ships.
   the existing `AddNotificationControllers` application part, `[Authorize]` for any signed-in
   user and feature-gated with the same `Notification.PushNotifications` flag as the rest of the
   pipeline. Ownership is stamped server-side from the current user; installation ids are
-  client-generated GUIDs (not enumerable). DELETE is idempotent (unknown id = success).
+  client-generated GUIDs (not enumerable). DELETE is idempotent and owner-scoped:
+  `IPushDeviceRegistrar.DeleteAsync(userId, installationId, ct)` takes the owning user, and an
+  unknown id and another user's id both answer success without deleting anything.
 - **Client orchestration behind two UI capability contracts** (ADR-042 pattern):
   `IPushRegistrationService` (register after sign-in, unregister BEFORE sign-out - the delete
   call is authenticated) and `IPushDeviceTokenProvider` (the platform token extension point). UI.Maui
@@ -56,9 +58,12 @@ may not exist when the code ships.
   consolidate later without touching callers.
 - The handler's third leg is fire-and-forget: no per-device delivery tracking. The hub's
   telemetry is the observability surface; the inbox remains the recovery path.
-- Anyone holding an installation id could delete that registration through the authenticated
-  DELETE. Ids are client-generated GUIDs stored only on the device, so this is not enumerable;
-  re-registration on next launch self-heals.
+- A delete verifies ownership before it acts: the registrar reads the installation and checks
+  the `user:{id}` tag `UpsertAsync` stamped on it
+  (`AzureNotificationHubDeviceRegistrar.cs:68-74`), so an id belonging to someone else deletes
+  nothing. That costs an extra hub round trip per delete, and the response cannot tell a caller
+  which case it hit: an unknown id and a foreign one both answer success, deliberately, so the
+  endpoint is not an existence oracle for other users' installation ids.
 - Consumers must update PRIVACY.md/store data-safety forms (push tokens are device identifiers)
   BEFORE store metadata mentions push. Credential provisioning (Firebase service account, APNs
   key) is a manual runbook step per app; until done, the hub rejects sends and the client

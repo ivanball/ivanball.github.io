@@ -57,7 +57,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -97,12 +97,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/012-grpc-host-transport.html</loc>
-    <lastmod>2026-08-29</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/013-result-pattern.html</loc>
-    <lastmod>2026-08-27</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -122,7 +122,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/017-request-idempotency.html</loc>
-    <lastmod>2026-08-18</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -137,7 +137,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/020-permission-based-authorization.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -157,7 +157,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/024-push-notifications.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -167,12 +167,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/026-caching-strategy.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html</loc>
-    <lastmod>2026-08-27</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -187,7 +187,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -212,7 +212,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html</loc>
-    <lastmod>2026-08-18</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -257,7 +257,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/044-native-push-delivery.html</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -327,12 +327,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -342,7 +342,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/061-runtime-secret-management.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -372,7 +372,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/067-ui-module-shell-composition.html</loc>
-    <lastmod>2026-08-29</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -387,7 +387,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -417,12 +417,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/076-data-subject-export.html</loc>
-    <lastmod>2026-08-18</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -482,7 +482,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/089-gateway-topology-owned-by-configuration.html</loc>
-    <lastmod>2026-08-27</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -522,7 +522,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html</loc>
-    <lastmod>2026-08-27</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -792,7 +792,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/adc-IntegrationTestReworkPlan.html</loc>
-    <lastmod>2026-07-27</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -802,7 +802,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/adc-specifications.html</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -812,7 +812,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-BUILD-BY-HAND.html</loc>
-    <lastmod>2026-08-27</lastmod>
+    <lastmod>2026-08-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

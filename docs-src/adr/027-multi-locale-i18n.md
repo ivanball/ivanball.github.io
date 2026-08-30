@@ -119,10 +119,13 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    markup, literal breadcrumb labels, and `NavItem` rows that carry no `TitleResource`; deliberate
    literals (brand names) are exempted per line with an `i18n: allow` marker. Snackbar text uses
    **whole-sentence keys in the page's own resource pair** (`Snackbar.Created` = "Event created
-   successfully." / "Evento creado correctamente."): `ErrorMessages.Success(entity, action)` is
-   `[Obsolete]` because fragment composition cannot translate (Spanish gender agreement breaks), and
-   the shared `Common.Error.Load/Save/Delete` templates no longer append raw `ex.Message` (neither
-   localizable nor safe to surface).
+   successfully." / "Evento creado correctamente."). The framework deliberately offers no
+   `Success(entity, action)` helper that composes a sentence from an entity noun and a verb:
+   fragment composition cannot translate, because Spanish agreement makes the verb depend on the
+   noun ("Evento creado" against "Sesion creada"), so one shared template cannot serve both nouns.
+   The shared `Common.Error.Load/Save/Delete` templates take the entity noun alone and never append
+   raw `ex.Message`, which is neither localizable nor safe to surface
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/ErrorMessages.cs:49-65`).
 
    **Carve-out (2026-07-09, narrowed 2026-08-27): a server message is shown verbatim, and the
    channel that carries it is now the `Result`.** The rule the carve-out exists for is unchanged:
@@ -138,17 +141,19 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    pass-through** so an already-translated server message renders as-is and a client-side message
    that happens to be a key gets translated
    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:17-23`, the lookup
-   at `:325-334`). `ErrorMessages.LoadError` / `SaveError` / `DeleteError` / `ActionError` keep
-   their `DomainInvariantViolationException` branch
-   (`.../MMCA.Common.UI/Pages/Common/ErrorMessages.cs:58-84`), but its scope is now narrow and the
-   type says so: the helpers remain for the exceptions a page can still raise on its own behalf (a
-   JS-interop failure, a mapping bug, a callback the page supplied), and the exception branch is
-   kept only for consumers that still raise that type from their own code (`:16-23`). All other
-   exception types keep the generic localized message.
+   at `:325-334`). `ErrorMessages.LoadError` / `SaveError` / `DeleteError` cover the narrow
+   remainder, and the type says so: they are for the exceptions a page can still raise on its own
+   behalf (a JS-interop failure, a mapping bug, a callback the page supplied), never for a server
+   answer (`.../MMCA.Common.UI/Pages/Common/ErrorMessages.cs:14-22`). Every one of them renders the
+   localized template for its entity noun; the exception's own `Message` reaches the resource as a
+   second format argument that the shipped templates deliberately ignore, because raw exception text
+   is neither localizable nor safe to surface (`:49-65`).
 
-   `NavItem` gained an optional `TitleResource` type: when set, the
-   shared `NavMenu` treats `Title`/`Group` as resource keys resolved per circuit at render time, so
-   module nav menus follow the active culture. MudBlazor's own component chrome localizes through
+   `NavItem` carries a required `TitleResource` type in positional slot 4
+   (`.../MMCA.Common.UI/Common/NavItem.cs:16`): the shared `NavMenu` treats `Title` and `Group` as
+   resource keys resolved against it per circuit at render time, so module nav menus follow the
+   active culture, and a key the resource type does not declare renders as the raw string rather
+   than as a blank entry (`:9-14`). MudBlazor's own component chrome localizes through
    `ResxMudLocalizer` over the `MudTranslations` resource pair (all built-in keys of the pinned
    MudBlazor version, en + es), registered in `AddUIShared` and covered by the same completeness gate.
 

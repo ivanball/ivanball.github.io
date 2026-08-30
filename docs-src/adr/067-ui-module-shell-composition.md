@@ -30,9 +30,10 @@ Ship the application shell in the framework package and let each module plug int
   `AppBarComponentTypes` and `LayoutComponentTypes`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IUIModule.cs:13,16,19,22`); the
   last two default to `[]`, so a module that only contributes pages and navigation is two properties.
-  A `NavItem` is a record of title, href, icon, optional `RequiredRole` / `RequiredClaim`, a
-  `NavSection`, an optional collapsible `Group`, and an optional `TitleResource` that turns the title
-  and group into resource keys (`MMCA.Common.UI/Common/NavItem.cs:17`, ADR-027).
+  A `NavItem` is a record of title, href, icon and a required `TitleResource` that makes the title
+  and group resource keys, followed by optional `RequiredRole` / `RequiredClaim`, a `NavSection` and
+  an optional collapsible `Group` (`MMCA.Common.UI/Common/NavItem.cs:16`, ADR-027). The resource type
+  is positional rather than optional so a nav entry cannot be declared with a literal title.
 - **The router discovers module pages at runtime from the registrations.** `Routes.razor` injects
   `IEnumerable<IUIModule>` (`MMCA.Common.UI/Routes.razor:4`) and hands
   `UIModules.Select(m => m.Assembly)` to the `Router`'s `AdditionalAssemblies`, with `AppAssembly`

@@ -229,9 +229,9 @@
           targets: a first module scaffolded from the template, where the aggregate is a title, a description,
           a status and a child collection, and the update handler is the same twelve lines every time. The
           shared load-mutate-save machinery already existed
-          (<code>Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:34</code>, whose
-          <code>MutateCoreAsync</code> at <code>:135</code> loads the aggregate, stamps the caller&#39;s concurrency token at <code>:146</code>, runs
-          the mutation and saves at <code>:152</code>), so what was missing was not the workflow but a command and a
+          (<code>Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:51</code>, whose
+          <code>MutateCoreAsync</code> at <code>:270</code> loads the aggregate, stamps the caller&#39;s concurrency token at <code>:290</code>, runs
+          the mutation and saves at <code>:302</code>), so what was missing was not the workflow but a command and a
           handler generic enough to close over any aggregate, plus somewhere for the module to say which
           aggregate method a request maps to.</p>
           <p>Two constraints shaped the answer.</p>
@@ -257,20 +257,23 @@
           </li>
           <li><p><strong>One generic update command.</strong>
           <code>UpdateEntityCommand&lt;TEntity, TUpdateRequest, TIdentifierType&gt;</code>
-          (<code>Source/Core/MMCA.Common.Application/UseCases/UpdateEntityCommand.cs:32</code>) carries the id, the
-          request and the caller&#39;s last-observed <code>RowVersion</code> (<code>:33-35</code>). <code>TEntity</code> is a type parameter the
-          command never otherwise uses: it distinguishes update handlers for two aggregates that share an
-          identifier type, and it supplies the default cache prefix.</p>
+          (<code>Source/Core/MMCA.Common.Application/UseCases/UpdateEntityCommand.cs:46</code>) carries the id, the
+          request and the caller&#39;s last-observed <code>RowVersion</code> (<code>:47-49</code>). That token is a non-nullable
+          <code>byte[]</code> taken from the request&#39;s <code>If-Match</code> header rather than from the body (<code>:42-45</code>, ADR-035):
+          an update request carries no token of its own, and a conditional write that states no precondition
+          never reaches the handler. <code>TEntity</code> is a type parameter the command never otherwise uses: it
+          distinguishes update handlers for two aggregates that share an identifier type, and it supplies
+          the default cache prefix.</p>
           <ul>
-          <li>It implements <code>ICommandWithRequest&lt;TUpdateRequest&gt;</code> (<code>:36</code>), so the framework&#39;s validator bridge
+          <li>It implements <code>ICommandWithRequest&lt;TUpdateRequest&gt;</code> (<code>:50</code>), so the framework&#39;s validator bridge
           registers a <code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code>
           (<code>Source/Core/MMCA.Common.Application/Validation/CommandRequestValidator.cs:19</code>) for it
           automatically (<code>Source/Core/MMCA.Common.Application/DependencyInjection.cs:247-259</code>). A module
           writes <code>IValidator&lt;TUpdateRequest&gt;</code> and nothing else; the command is validated before the
           transaction opens, by the same Validating decorator every hand-written command goes through
           (ADR-014).</li>
-          <li>It implements <code>ICacheInvalidating</code> (<code>:36</code>) with a <code>CachePrefix</code> defaulting to
-          <code>typeof(TEntity).FullName + &quot;:&quot;</code> (<code>:45</code>), the aggregate-prefix convention consumers already key
+          <li>It implements <code>ICacheInvalidating</code> (<code>:50</code>) with a <code>CachePrefix</code> defaulting to
+          <code>typeof(TEntity).FullName + &quot;:&quot;</code> (<code>:63</code>), the aggregate-prefix convention consumers already key
           cached reads under, because the generic controller constructs the command itself and cannot
           supply one. Setting it to an empty string opts out.</li>
           </ul>
@@ -312,14 +315,15 @@
           </li>
           <li><p><strong>PUT ships on a new derived controller base, not on the shipped one.</strong>
           <code>CrudEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest, TUpdateRequest&gt;</code>
-          (<code>Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:54</code>) inherits
-          <code>AggregateRootEntityControllerBase</code> and adds <code>[HttpPut(&quot;{id}&quot;)]</code> (<code>:88</code>). A controller offering
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:53</code>) inherits
+          <code>AggregateRootEntityControllerBase</code> and adds <code>[HttpPut(&quot;{id}&quot;)]</code> (<code>:87</code>). A controller offering
           only create and delete keeps inheriting the four-parameter base; one that also offers update
-          inherits this and gains the action (<code>:23-28</code>). The action is <code>[Idempotent]</code> (<code>:89</code>, ADR-017) and
-          <code>[SupportsIfMatch]</code> (<code>:90</code>, ADR-035), so both routes a concurrency token can travel are honoured:
-          a body implementing <code>IConcurrencyAware</code> carries <code>RowVersion</code> straight into the command (<code>:102</code>),
-          and the header fills it when the body left it empty, answering a failed precondition with 412
-          rather than 409. On success the refreshed token is emitted as a weak <code>ETag</code> through the inherited
+          inherits this and gains the action (<code>:23-28</code>). The action is <code>[Idempotent]</code> (<code>:88</code>, ADR-017) and
+          <code>[SupportsIfMatch]</code> (<code>:89</code>, ADR-035), so the PUT is conditional: the filter decodes the caller&#39;s
+          <code>If-Match</code> header, refuses a request that states no precondition with 428, and the action reads
+          the decoded token with <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code> and hands it to the
+          command (<code>:102</code>). A failed precondition is answered with 412 rather than 409. The request body
+          carries no token. On success the refreshed token is emitted as a weak <code>ETag</code> through the inherited
           <code>SetConcurrencyETag</code> (<code>:111</code>), so a client can condition its next write without re-reading.</p>
           </li>
           </ol>
@@ -383,8 +387,8 @@
           completes; its <code>AggregateRootEntityControllerBase</code> is what <code>CrudEntityControllerBase</code> derives from),
           <a href="083-crud-lifecycle-event-taxonomy.html">ADR-083</a> (the events the aggregate raises, which is why the
           generic handler raises none),
-          <a href="035-optimistic-concurrency.html">ADR-035</a> (the <code>RowVersion</code> round trip and the <code>If-Match</code> to 412
-          rewrite the PUT honours),
+          <a href="035-optimistic-concurrency.html">ADR-035</a> (the <code>RowVersion</code> token, the required <code>If-Match</code>
+          precondition and the 412 the PUT honours),
           <a href="017-request-idempotency.html">ADR-017</a> (the <code>[Idempotent]</code> filter on the PUT, matching the generic
           create),
           <a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator chain the command runs through, and the

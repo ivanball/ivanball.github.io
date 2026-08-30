@@ -233,7 +233,8 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Notes.slnx</co
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosts/Contoso.Notes.Web</code></pre>
           <p>The host listens on <code>https://localhost:60801</code> (and <code>http://localhost:60802</code>), from its own
           <code>Properties/launchSettings.json</code>. On startup it applies the migrations to <code>notes.db</code> beside the host,
-          under the generated <code>DatabaseInitStrategy: &quot;Migrate&quot;</code>. <code>EnsureCreated</code> is what a SQLite source gets
+          under the generated <code>DatabaseInitStrategy: &quot;Migrate&quot;</code> (the strategy takes <code>Migrate</code> or <code>None</code>, and
+          anything else fails startup). A SQLite source is created outright by EF instead, without migrations,
           only when no migrations assembly is configured for it, which is not the shape this scaffold
           generates.</p>
           <p><code>GET /health</code> and <code>/alive</code> are live, the health check gates readiness on the SQLite connection, and
@@ -274,8 +275,9 @@ curl -k -H <span class="hljs-string">&quot;X-Tenant-Id: acme&quot;</span> https:
           <li><strong>Soft delete with filtered unique indexes</strong> (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>,
           <a href="../adr/095-soft-delete-unique-indexes.html">ADR-095</a>) and audit fields stamped by the context on
           every save.</li>
-          <li><strong>Optimistic concurrency</strong> (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>): the <code>RowVersion</code>
-          round trip and its 409 / 412 answers.</li>
+          <li><strong>Optimistic concurrency</strong> (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>): the read serves its
+          <code>RowVersion</code> as an <code>ETag</code>, the write states it as an <code>If-Match</code> precondition, and a guarded endpoint
+          answers 428 with no header, 400 with a malformed one, and 412 with a stale one.</li>
           <li><strong>Health, telemetry and resilience.</strong> Both hosts still call <code>AddServiceDefaults()</code> and
           <code>MapDefaultEndpoints()</code>, so OpenTelemetry, <code>/health</code> + <code>/alive</code>, warm-up readiness
           (<a href="../adr/025-startup-warmup-readiness.html">ADR-025</a>) and the standard HTTP resilience handler

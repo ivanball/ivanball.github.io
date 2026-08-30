@@ -234,9 +234,10 @@
           <code>AppBarComponentTypes</code> and <code>LayoutComponentTypes</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IUIModule.cs:13,16,19,22</code>); the
           last two default to <code>[]</code>, so a module that only contributes pages and navigation is two properties.
-          A <code>NavItem</code> is a record of title, href, icon, optional <code>RequiredRole</code> / <code>RequiredClaim</code>, a
-          <code>NavSection</code>, an optional collapsible <code>Group</code>, and an optional <code>TitleResource</code> that turns the title
-          and group into resource keys (<code>MMCA.Common.UI/Common/NavItem.cs:17</code>, ADR-027).</p>
+          A <code>NavItem</code> is a record of title, href, icon and a required <code>TitleResource</code> that makes the title
+          and group resource keys, followed by optional <code>RequiredRole</code> / <code>RequiredClaim</code>, a <code>NavSection</code> and
+          an optional collapsible <code>Group</code> (<code>MMCA.Common.UI/Common/NavItem.cs:16</code>, ADR-027). The resource type
+          is positional rather than optional so a nav entry cannot be declared with a literal title.</p>
           </li>
           <li><p><strong>The router discovers module pages at runtime from the registrations.</strong> <code>Routes.razor</code> injects
           <code>IEnumerable&lt;IUIModule&gt;</code> (<code>MMCA.Common.UI/Routes.razor:4</code>) and hands

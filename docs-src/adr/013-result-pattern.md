@@ -180,14 +180,14 @@ renders the same list as one deduplicating `MudAlert`, taking a failed `Result` 
 inline and several as a list so a screen reader announces them as several items, `:15-29`).
 
 **A component that shows a retry needs the failure, not an exception.**
-`MobileInfiniteScrollList` takes `FetchPageResult`, a delegate returning
+`MobileInfiniteScrollList` takes one page fetcher, `FetchPageResult`, a required delegate returning
 `Task<Result<(IReadOnlyList<TItem> Items, int TotalItems)>>`
-(`.../MMCA.Common.UI/Components/MobileInfiniteScrollList.razor.cs:37`), and renders the failure's
-localized message beside its inline retry affordance (`:294`). The tuple-returning `FetchPage` it
-replaces is `[Obsolete]` with the reason in its own message (`:46-48`): once services stopped
-throwing for a server answer, a tuple delegate had no way to carry a failure at all. Exactly one of
-the two must be supplied, checked at parameter-set time (`:111-118`), and the obsolete path is
-lifted into a success so both feed one code path (`:130-136`).
+(`.../MMCA.Common.UI/Components/MobileInfiniteScrollList.razor.cs:36-38`), and renders the failure's
+localized message beside its inline retry affordance (`:258-266`, the message read from the failed
+`Result` at `:261`). A tuple-returning delegate is not offered beside it: a tuple has no way to carry
+a failure at all, so the component would be left showing a Retry button that cannot name what it is
+retrying. The delegate is checked at initialization, so a call site that omits it throws instead of
+rendering as a load failure that can never succeed (`:93-105`).
 
 ## Rationale
 - **Failures are in the signature.** A method that can fail returns `Result<T>`, so the caller cannot
@@ -244,11 +244,11 @@ lifted into a success so both feed one code path (`:130-136`).
   that wrapped a service call in `try`/`catch` had to be rewritten to branch. That is the cost of
   having deferred the conversion: the deviation was cheap to keep and expensive to remove, and it
   grew with every page added while it stood.
-- **`MobileInfiniteScrollList` carries two fetch parameters during the sweep.** The obsolete tuple
-  path still compiles and still shows a Retry button; what it cannot do is name the reason, because
-  an exception's text is neither translatable nor safe to render, so it falls back to a generic
-  string (`MobileInfiniteScrollList.razor.cs:285-290`). The `[Obsolete]` marker is the migration
-  mechanism rather than a warning (`:45`), and the parameter goes away once every consumer is swept.
+- **An exception reaching a page still costs it the reason.** Where a failed `Result` carries a
+  localized message the page can render, an exception that escapes a consumer-supplied fetcher falls
+  back to a generic resource string, because its own text is neither translatable nor safe to render
+  (`MobileInfiniteScrollList.razor.cs:247-266`, the fallback at `:265`). Returning `Result` is what
+  makes the specific message available at all; nothing forces a call site to produce one.
 - The exception-handler registration order is load-bearing. Because ASP.NET Core stops at the first
   handler that reports the exception handled, a mis-ordered registration (for example the catch-all
   `GlobalExceptionHandler` ahead of a specific handler) would swallow the more precise status;

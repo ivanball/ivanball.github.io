@@ -445,15 +445,16 @@ global using OrderCommentIdentifierType = int;
 ```
 
 The read model implements `IBaseDTO<TId>` (the framework read-side contract) and carries its children.
-It also implements **`IConcurrencyAware`**, exposing the `RowVersion` the client echoes back on an
-update so a conflicting concurrent edit surfaces as 409 instead of silently last-write-winning (see
+It also implements **`IConcurrencyAware`**, exposing the `RowVersion` the controller emits as the
+response `ETag`. The client hands that tag straight back as the `If-Match` precondition of its next
+write, so a conflicting concurrent edit surfaces as 412 instead of silently last-write-winning (see
 [ADR-035](../adr/035-optimistic-concurrency.md)):
 
 ```csharp
 public record class OrderDTO : IBaseDTO<OrderIdentifierType>, IConcurrencyAware
 {
     public required OrderIdentifierType Id { get; init; }
-    public byte[]? RowVersion { get; init; }               // ADR-035: echoed back on update
+    public required byte[] RowVersion { get; init; }       // ADR-035: served as the response ETag
     public required string Title { get; init; }
     public required string Description { get; init; }
     public required OrderStatus Status { get; init; }     // the enum itself; serialized by name
@@ -468,14 +469,14 @@ public sealed record class OrderOpenedIntegrationEvent(OrderIdentifierType Order
 ```
 
 Plain request bodies (e.g. `OrderUpdateRequest`, `AddCommentRequest`) live in Shared too. Name the
-update body with the **`*UpdateRequest`** suffix and have it implement `IConcurrencyAware`: that exact
-pairing is what the `ConcurrencyConventionTestsBase` fitness rule looks for (Phase 6), so an update
-request that skips the token fails the build rather than quietly losing a concurrent edit.
+update body with the **`*UpdateRequest`** suffix and give it **no** concurrency token: the precondition
+travels in the `If-Match` header alone, and a token in the body would give the same check a second,
+competing source. The `ConcurrencyConventionTestsBase` fitness rule (Phase 6) keys off that suffix and
+fails an `*UpdateRequest` that implements `IConcurrencyAware`.
 
 ```csharp
-public sealed record class OrderUpdateRequest : IConcurrencyAware
+public sealed record class OrderUpdateRequest
 {
-    public byte[]? RowVersion { get; init; }               // the token the client last read
     public required string Title { get; init; }
     public required string Description { get; init; }
 }
@@ -653,9 +654,35 @@ public sealed class OrdersController(
 The reference app's controller goes further: `GET {id}/details`, `PUT {id}`, `PUT {id}/status`,
 `DELETE {id}`, and `POST|PUT|DELETE {id}/comments[/{commentId}]`, each one the same three lines: call
 the handler, `HandleFailure` on failure, else return the success shape. `PUT {id}` also closes the
-ADR-035 loop by forwarding the request's `RowVersion` onto the command
-(`new UpdateOrderCommand(id, request.Title, request.Description) { RowVersion = request.RowVersion }`),
-which is what turns a stale write into a 409 instead of an overwrite.
+ADR-035 loop, and the token reaches the command from the `If-Match` header rather than the body: mark
+the action **`[SupportsIfMatch]`** and read the decoded token with
+`SupportsIfMatchAttribute.RequiredToken(HttpContext)`. The filter refuses a request that states no
+precondition with 428 before the action runs, answers 400 to a malformed tag, and rewrites a conflict
+outcome to 412, which is what turns a stale write into a refusal instead of an overwrite:
+
+```csharp
+// updateHandler is ICommandHandler<UpdateOrderCommand, Result<OrderDTO>>, injected into the
+// controller's primary constructor beside createHandler.
+[HttpPut("{id}")]
+[SupportsIfMatch]
+public async Task<ActionResult<OrderDTO>> UpdateAsync(
+    OrderIdentifierType id, OrderUpdateRequest request, CancellationToken cancellationToken)
+{
+    var result = await updateHandler.HandleAsync(
+        new UpdateOrderCommand(id, request.Title, request.Description)
+        {
+            RowVersion = SupportsIfMatchAttribute.RequiredToken(HttpContext),
+        },
+        cancellationToken);
+    return result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value);
+}
+```
+
+The command's `RowVersion` is a non-nullable `byte[]`, because a conditional write with no
+precondition never reaches a handler. A plain-CRUD update can skip the hand-written command entirely
+and construct the framework's generic `UpdateEntityCommand<TEntity, TUpdateRequest, TId>(id, request,
+SupportsIfMatchAttribute.RequiredToken(HttpContext))`, whose third positional parameter is the same
+token; the mutation then lives on the aggregate behind an `IEntityUpdateApplier`.
 
 ### What the pipeline does for you
 
@@ -788,13 +815,19 @@ public sealed class DesignTimeSQLServerDbContextFactory : IDesignTimeDbContextFa
     public SQLServerDbContext CreateDbContext(string[] args) =>
         DesignTimeDbContextHelper.CreateSqlServer(args, options =>
         {
+            var connectionString = Environment.GetEnvironmentVariable("SUPPORT_ORDERS_SQL")
+                ?? "Server=localhost;Database=Support;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True";
+
             options.DataSourceName = "Orders";
-            // A placeholder top-level string keeps the helper happy; migrations add/script never connect.
-            options.ConnectionStrings = new ConnectionStringSettings { SQLServerConnectionString = "Server=design-time-unused;" };
+            // The top-level string and the "Orders" entry carry the SAME value on purpose: the
+            // resolver collapses a logical name onto Default when the two connections match, which
+            // is exactly what the host does at run time. The scaffolded model therefore matches the
+            // running one, including the framework tables that live only on Default (ScheduledJobs).
+            // Migrations add/script never connect; the string only matters for apply/database update.
+            options.ConnectionStrings = new ConnectionStringSettings { SQLServerConnectionString = connectionString };
             options.DataSources["Orders"] = new DataSourceEntrySettings
             {
-                SQLServerConnectionString = Environment.GetEnvironmentVariable("SUPPORT_ORDERS_SQL")
-                    ?? "Server=localhost;Database=Support_Orders;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True",
+                SQLServerConnectionString = connectionString,
                 SQLServerMigrationsAssembly = typeof(DesignTimeSQLServerDbContextFactory).Assembly.GetName().Name!,
             };
             options.AddConfigurationAssembly(typeof(Contoso.Support.Orders.Infrastructure.AssemblyReference).Assembly);
@@ -812,14 +845,20 @@ dotnet ef migrations add InitialCreate `
 ```
 
 At runtime the host applies migrations via the framework's `InitializeDatabaseAsync(...)` driven by
-`ApplicationSettings.DatabaseInitStrategy`: `Migrate` (production, the host is the sole migrator),
-`EnsureCreated` (quick local), or `None` (throws if migrations are pending, a safety check).
+`ApplicationSettings.DatabaseInitStrategy`. It takes two values: `Migrate` (the default, and the host
+is the sole migrator) or `None` (throws if migrations are pending, a safety check). Anything else
+fails startup before a single source is created, so a misspelled strategy is a loud configuration
+error rather than a database created the wrong way.
 
-> **Monolith collapse:** with no `DataSources` section in config, every entity collapses onto one
-> physical database (one context, FK constraints intact) and behaves exactly like a classic
-> single-DB monolith. The same configurations and migrations later route to separate databases when
-> you add `DataSources` entries in the extraction phase. This collapse is what makes "monolith now,
-> services later" free. See [ADR-006](../adr/006-database-per-service.md).
+> **Monolith collapse:** while every logical source resolves to the same connection, every entity
+> collapses onto one physical database (one context, FK constraints intact) and behaves exactly like
+> a classic single-DB monolith. Two configuration shapes reach that state: a top-level
+> `ConnectionStrings` section and no `DataSources` at all, or `DataSources` entries that all name the
+> same database (one distinct connection per engine seeds `Default`, so the framework-owned tables
+> route with no top-level key). The same configurations and migrations later route to separate
+> databases when you give each `DataSources` entry its own connection in the extraction phase. This
+> collapse is what makes "monolith now, services later" free. See
+> [ADR-006](../adr/006-database-per-service.md).
 
 ---
 
@@ -845,10 +884,11 @@ services.AddOptions<ApplicationSettings>().Bind(builder.Configuration.GetSection
     .ValidateDataAnnotations().ValidateOnStart();
 var applicationSettings = builder.Configuration.GetSection(ApplicationSettings.SectionName).Get<ApplicationSettings>()!;
 
-// Health checks. SQL is REQUIRED: a host that cannot resolve its own connection string should fail
-// fast rather than report healthy and take traffic it cannot serve. Redis/RabbitMQ checks are tagged
-// optional upstream, so they report on /health without gating readiness.
-builder.AddInfrastructureHealthChecks(requireSqlServer: true);
+// Health checks. The database is REQUIRED: a host that cannot resolve its own connection string
+// should fail fast rather than report healthy and take traffic it cannot serve. The flag is
+// engine-agnostic because an application picks its engine from configuration. Redis/RabbitMQ checks
+// are tagged optional upstream, so they report on /health without gating readiness.
+builder.AddInfrastructureHealthChecks(requireDatabase: true);
 
 // Cross-cutting edge.
 services.AddCommonCors(builder.Configuration);
@@ -863,7 +903,11 @@ services.AddCommonResponseCompression();
 var jwtAuthority = builder.Configuration["Authentication:JwtBearer:Authority"];
 if (!string.IsNullOrWhiteSpace(jwtAuthority))
 {
-    services.AddForwardedJwtBearer(authority: jwtAuthority, audience: builder.Configuration["Jwt:Audience"] ?? "support");
+    services.AddForwardedJwtBearer(
+        authority: jwtAuthority,
+        audience: builder.Configuration["Jwt:Audience"] ?? "support",
+        configuration: builder.Configuration,
+        environment: builder.Environment);
 }
 else
 {
@@ -884,7 +928,16 @@ services.AddErrorResources<OrdersErrorResources>();
 
 using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
 var moduleLoader = new ModuleLoader { Logger = loggerFactory.CreateLogger<ModuleLoader>() };
-moduleLoader.DiscoverAndRegister(services, builder.Configuration, applicationSettings, modulesSettings, builder.Environment.EnvironmentName);
+// The host NAMES the module assemblies discovery scans, one marker type per module. That is what
+// makes discovery deterministic: a referenced assembly no code path has touched yet is not loaded,
+// so an ambient scan would silently miss it.
+moduleLoader.DiscoverAndRegister(
+    services,
+    builder.Configuration,
+    applicationSettings,
+    modulesSettings,
+    builder.Environment.EnvironmentName,
+    [typeof(OrdersModule).Assembly]);
 services.AddSingleton(moduleLoader);
 
 services.AddBrokerMessaging(builder.Configuration);  // InProcessMessageBus until a broker is configured
@@ -903,12 +956,14 @@ app.UseCommonMiddlewarePipeline();
 await app.RunAsync();
 ```
 
-Modules are discovered by `ModuleLoader` and registered in topological dependency order (Kahn's
-algorithm) from their `IModule` implementations. `OrdersModule` is a leaf (no dependencies); its
+Modules are discovered by `ModuleLoader` in the assemblies the host names and registered in
+topological dependency order (Kahn's algorithm) from their `IModule` implementations. Adding a module
+means adding its marker assembly to that list. `OrdersModule` is a leaf (no dependencies); its
 `Register(...)` calls `AddOrdersModule`, which wires the Application (handler/validator/mapper scan),
 Infrastructure, and API layers. Disabled peers get stub registrations so cross-module interfaces still
-resolve. See [ADR-008](../adr/008-service-extraction-topology.md). Monolith config: no `DataSources`
-section (one DB) and no `MessageBus:Provider`, so the framework selects the `InProcessMessageBus`.
+resolve. See [ADR-008](../adr/008-service-extraction-topology.md). Monolith config: one database
+(every logical source on the same connection) and no `MessageBus:Provider`, so the framework selects
+the `InProcessMessageBus`.
 
 ### The Blazor UI host
 
@@ -954,9 +1009,10 @@ mechanical steps, and MMCA.Helpdesk is the worked example for each:
    `IStringLocalizer<YourPage> L` and render `@L["Key"]`; put `YourPage.resx` + `YourPage.es.resx`
    next to the page (see `MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.resx` and its `es` sibling).
    Snackbar/confirmation text uses whole-sentence keys (`Snackbar.Created` = "Order created
-   successfully."); never compose sentences from fragments (the obsoleted
-   `ErrorMessages.Success(entity, action)` shows why: Spanish gender agreement breaks). Always add
-   the `en` and `es` values in the same commit, or the completeness gate below fails the build.
+   successfully."); never compose sentences from fragments, which is why the framework offers no
+   helper that stitches an entity name onto an action word: Spanish gender agreement breaks the
+   moment the two halves are chosen independently. Always add the `en` and `es` values in the same
+   commit, or the completeness gate below fails the build.
 2. **Wire request localization + the culture switcher.** API-layer hosts get it for free from
    `UseCommonMiddlewarePipeline()` (which calls `UseCommonRequestLocalization()`) plus
    `MapCultureEndpoint()`; a UI host that deliberately does not reference `MMCA.Common.API` inlines
@@ -972,15 +1028,29 @@ mechanical steps, and MMCA.Helpdesk is the worked example for each:
    HTTP edge then returns localized ProblemDetails messages while domain code stays culture-agnostic.
 4. **Subclass the two i18n fitness gates** in your architecture-test project (Phase 6):
    `LocalizationResourceTestsBase` (every base `.resx` must have a complete, non-empty `es` sibling)
-   and `LocalizedTextConventionTestsBase` (no hard-coded snackbar/title/`<PageTitle>`/breadcrumb/
-   `NavItem` literals; mark deliberate literals such as brand names with an `i18n: allow` comment).
+   and `LocalizedTextConventionTestsBase` (no hard-coded snackbar/title/`<PageTitle>`/breadcrumb
+   literals, and every `NavItem` row states the resource type its title resolves against; mark
+   deliberate literals such as brand names with an `i18n: allow` comment).
 5. **Verify visually with the pseudo-locale.** In Development, pick `qps-Ploc` in the culture
    switcher: every properly externalized string renders with a `[!!` sentinel and ~40% padding, so a
    hard-coded literal or a clipped layout is immediately visible without translating anything.
 
 MudBlazor's own component chrome (pager, pickers, filter menus) localizes automatically through the
-framework's `ResxMudLocalizer`; nav menu items localize by giving each `NavItem` a `TitleResource`
-(its `Title`/`Group` then act as resource keys resolved at render time).
+framework's `ResxMudLocalizer`. Nav menu items localize through `NavItem`'s fourth positional
+parameter, `TitleResource`: the resource type its `Title` and `Group` are resolved against at render
+time, per circuit, so the menu follows the active culture.
+
+```csharp
+public IReadOnlyList<NavItem> NavItems { get; } =
+[
+    new("Nav.Orders", OrdersRoutePaths.Orders, Icons.Material.Filled.Receipt, typeof(OrdersUIModule)),
+    new("Nav.Admin", OrdersRoutePaths.Admin, Icons.Material.Filled.Settings, typeof(OrdersUIModule),
+        RoleNames.Admin, Section: NavSection.Admin),
+];
+```
+
+A key the resource type does not declare renders as the raw string, which keeps a not-yet-translated
+entry legible instead of blank.
 
 ### The Aspire AppHost
 
@@ -994,7 +1064,7 @@ var sql = builder.AddSqlServer("sql").WithLifetime(ContainerLifetime.Persistent)
 var db = sql.AddDatabase("support", "Support");
 
 var web = builder.AddProject<Projects.Contoso_Support_Web>("web")
-    .WithSQLServerDataSource(db, "Orders")   // injects ConnectionStrings__SQLServerConnectionString (collapses to one DB)
+    .WithSQLServerDataSource(db, "Orders")   // injects DataSources__Orders__SQLServerConnectionString
     .WaitFor(sql)                    // wait on the SQL server, NOT the database (see warning below)
     .WithExternalHttpEndpoints();
 
@@ -1139,7 +1209,7 @@ feature appears:
 | Structure (start here) | `LayerDependencyTestsBase`, `DomainPurityTestsBase`, `ModuleIsolationTestsBase`, `SharedLayerTestsBase` | the layer dependency flow, a Domain that reaches for infrastructure, cross-module internal references |
 | Extraction | `MicroserviceExtractionTestsBase`, `IntegrationEventContractTestsBase`, `EventConventionTestsBase` | MassTransit/gRPC leaking out of the edges; an integration event reshaped instead of versioned |
 | Conventions | `NamingConventionTestsBase`, `HandlerConventionTestsBase`, `ControllerConventionTestsBase`, `EntityConventionTestsBase`, `ImmutabilityTestsBase`, `SliceCohesionTestsBase`, `SpecificationConventionTestsBase` | factory-name, handler, controller, and entity drift away from the framework shape |
-| Policy gates | `ConcurrencyConventionTestsBase` (ADR-035), `FrameworkVersionConsistencyTestsBase` (ADR-016), `PiiConventionTestsBase` (ADR-005) | an `*UpdateRequest` with no `RowVersion`, a half-finished version sweep, unmarked personal data |
+| Policy gates | `ConcurrencyConventionTestsBase` (ADR-035), `FrameworkVersionConsistencyTestsBase` (ADR-016), `PiiConventionTestsBase` (ADR-005) | an `*UpdateRequest` that implements `IConcurrencyAware` (the token belongs in `If-Match`, not the body), a half-finished version sweep, unmarked personal data |
 | i18n (ADR-027) | `LocalizationResourceTestsBase`, `LocalizedTextConventionTestsBase` | a base `.resx` with no complete `es` sibling; a hard-coded user-visible literal |
 
 Two things to know before you copy the list wholesale:
@@ -1232,18 +1302,45 @@ wraps calls in the standard Polly pipeline. Failures cross the wire as `Result` 
 
 ### 8c. A YARP gateway
 
-`Source/Hosts/Contoso.Support.Gateway` is a pure reverse proxy (no DbContext, no controllers). It maps
-URL prefixes to backend services. The route map here is the source of truth for which service owns
-which endpoint:
+`Source/Hosts/Contoso.Support.Gateway` is a pure reverse proxy (no DbContext, no controllers). The
+route table is **configuration**, not code: `appsettings.json`'s `ReverseProxy` section owns every
+route pattern and every cluster, so repointing a route is an edit rather than a redeploy of
+hand-written forwarders. That section is the source of truth for which service owns which endpoint:
 
-```csharp
-app.MapForwarder("/Orders/{**catch-all}", "http://orders", http2Config);
-app.MapForwarder("/Auth/{**catch-all}", "http://identity", http2Config);
-app.MapForwarder("/.well-known/{**catch-all}", "http://identity", http2Config);   // JWKS, routed through the gateway
+```json
+"ReverseProxy": {
+  "Routes": {
+    "orders":              { "ClusterId": "orders",   "Match": { "Path": "/Orders/{**catch-all}" } },
+    "identity-auth":       { "ClusterId": "identity", "Match": { "Path": "/Auth/{**catch-all}" } },
+    "identity-well-known": { "ClusterId": "identity", "Match": { "Path": "/.well-known/{**catch-all}" } }
+  },
+  "Clusters": {
+    "identity": {
+      "Destinations": { "identity": { "Address": "http://identity" } },
+      "HttpRequest": { "Version": "2.0", "VersionPolicy": "RequestVersionExact" }
+    }
+  }
+}
 ```
 
-Set `ForwardHttp2 = true` (and `RequestVersionExact`) on the gRPC/JWKS routes so the proxy speaks
-HTTP/2 to the Http2-only services. See [ADR-012](../adr/012-grpc-host-transport.md).
+The host loads that section and layers the framework's gateway package on top:
+
+```csharp
+builder.Services.AddReverseProxy()
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+    .AddMmcaGateway(builder.Configuration)              // MMCA.Common.Gateway
+    .AddServiceDiscoveryDestinationResolver();          // "identity" is a service name, not a DNS host
+```
+
+Which clusters speak HTTP/2 is expressed as the cluster's own request profile: the pair
+`Version: "2.0"` + `VersionPolicy: "RequestVersionExact"` is h2c prior knowledge, which is what the
+Http2-only cleartext services (gRPC, JWKS) require. A cluster that must stay on HTTP/1.1 (a SignalR
+hub, a WebSocket upgrade path) states nothing and keeps YARP's defaults. Cross-cutting values that
+would otherwise be copied into every cluster live once in the `MmcaGateway` section as
+`ClusterRequestDefaults`, with `ClusterRequestOverrides` keyed by cluster id for the one cluster whose
+profile genuinely differs; resolution is per property and most-specific-wins, so a cluster that states
+only a version still inherits the shared activity timeout. See
+[ADR-012](../adr/012-grpc-host-transport.md).
 
 ### 8d. The AppHost grows up
 

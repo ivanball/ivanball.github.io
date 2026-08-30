@@ -1,12 +1,10 @@
 # ADR-070: Fail-Fast Configuration Contract
 
 ## Status
-Accepted (2026-08-07). Revised 2026-08-14 (source citations re-anchored; the consumer-repo facade
-claim narrowed to production code, with the controller-test exception recorded). Revised 2026-08-23
+Accepted (2026-08-07). Revised 2026-08-14 (source citations re-anchored). Revised 2026-08-23
 (inventory re-counted after the password-reset vertical and the opt-in feature waves: twelve validated
 chains in the Infrastructure package and sixteen framework registrations in all, six framework
-bindings deliberately off the chain, a custom `IValidateOptions<T>` now in use, and the
-Application-layer "no `IOptions`" invariant recorded as no longer holding).
+bindings deliberately off the chain, and a custom `IValidateOptions<T>` in use).
 
 ## Context
 Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
@@ -27,8 +25,8 @@ options pipeline is a Microsoft.Extensions.Options concern, and a layer that is 
 hosting concerns taking an `IOptions<T>` constructor parameter drags that pipeline into it.
 
 ## Decision
-**Bind every settings section through a validating chain that runs at startup, and expose a settings
-type through a read-only interface when it must be read above Infrastructure.**
+**Bind every settings section through a validating chain that runs at startup, and read the bound
+value through `IOptions<T>` of the concrete settings class.**
 
 - **One binding shape, used everywhere.**
   `AddOptions<T>().Bind(configuration.GetSection(T.SectionName)).ValidateDataAnnotations().ValidateOnStart()`
@@ -63,21 +61,23 @@ type through a read-only interface when it must be read above Infrastructure.**
   Modules may add their own sections on the same chain, as Store's Sales module does for Stripe.
 - **Validation is data annotations, extended by `IValidatableObject` where a rule spans fields.**
   `JwtSettings` marks `Issuer` and `Audience` `[Required]`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:34-39`) and implements
-  `IValidatableObject` (`:16`) so key material is checked conditionally on the selected algorithm: HS256
-  demands a `SecretForKey` of at least 32 characters, RS256 demands `RsaPrivateKeyPem` (`:51-66`).
-  `ValidateDataAnnotations()` invokes that method, so a host configured for RS256 with no private key
-  fails to boot rather than failing to sign its first token.
-- **Read-only interface facades over `IOptions`.** Five settings types are additionally registered as
-  singletons that resolve `IOptions<T>.Value` and hand back an interface: `IApplicationSettings`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:32`), `IJwtSettings`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:65`),
-  `IConnectionStringSettings` (`:71`), `ISmtpSettings` (`:85`), and `IPushNotificationSettings` (`:547-548`).
-  The interfaces declare `get`/`init` members only
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ISmtpSettings.cs:6-28`), so a consumer can
-  read a setting and cannot rebind it. The interface for `IJwtSettings` lives in a file named
-  `IJwSettings.cs` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/IJwSettings.cs:10`); the
-  type name, not the filename, is the contract.
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:52-58`) and implements
+  `IValidatableObject` (`:16`) so key material is checked conditionally on the selected algorithm:
+  RS256 (the default) demands `RsaPrivateKeyPem`, HS256 demands a `SecretForKey` of at least 32
+  characters (`:70-85`). `ValidateDataAnnotations()` invokes that method, so a host configured for
+  RS256 with no private key fails to boot rather than failing to sign its first token.
+- **`IOptions<T>` of the concrete settings class is the one resolution surface.** Code that needs a
+  bound section takes it at the point of use: `TokenService` takes `IOptions<JwtSettings>`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:56`), `SmtpEmailSender`
+  takes `IOptions<SmtpSettings>` (`.../Services/SmtpEmailSender.cs:13`), `RepositoryFactory` takes
+  `IOptions<ApplicationSettings>`
+  (`.../Persistence/Repositories/Factory/RepositoryFactory.cs:15`), and `EntityControllerBase` resolves
+  the same options per request in its `MaxPageSize` and `MaxExportRows` accessors
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:62` and `:82`).
+  Settings classes declare `get`/`init` members only
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/SmtpSettings.cs:18-37`), so the value a
+  consumer reads is one it cannot rebind, and there is no second type per section to keep in step with
+  the class the chain binds and validates.
 - **Six recorded exceptions in the framework, on one shared reason: an absent section is a working
   default, not a misconfiguration.** `CacheKeyPrefixOptions` is bound with a bare `services.Configure`
   and no validation, because an absent section must leave cache keys exactly as callers write them (a
@@ -106,65 +106,49 @@ type through a read-only interface when it must be read above Infrastructure.**
   section has no invalid value, and the reason belongs in a comment beside the binding rather than left
   to be inferred from its absence.
 
-**Adoption of the facade half is partial, and this ADR settles the direction rather than claiming the
-state.** Only five of the framework's settings types have a facade; the rest are consumed as `IOptions<T>`
-at the point of use, which inside Infrastructure and API is where they belong: `OutboxProcessor`
+**Every layer reads a bound section the same way.** Inside Infrastructure and API that is a constructor
+or per-request `IOptions<T>`: `OutboxProcessor`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:57`),
 `BrokerEventBus` (`.../Services/BrokerEventBus.cs:34`), `LoginProtectionService`
 (`.../Auth/LoginProtectionService.cs:21`), `RsaJwksProvider` (`.../Auth/RsaJwksProvider.cs:15`),
 `SQLServerDbContext` (`.../Persistence/DbContexts/SQLServerDbContext.cs:37`), and `IdempotencyFilter`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:432`). The facades are
-consumed only inside the framework: `EntityControllerBase` resolves `IApplicationSettings` per request at
-two sites, its `MaxPageSize` and `MaxExportRows` accessors
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:61` and `:81`),
-`RepositoryFactory` takes it in its constructor
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:14`),
-`TokenService` takes `IJwtSettings` (`.../Services/TokenService.cs:47`), and `SmtpEmailSender` takes
-`ISmtpSettings` (`.../Services/SmtpEmailSender.cs:12`). No consumer repo's production code resolves a
-facade: nothing under `Source/` in ADC, Store, or Helpdesk references `IApplicationSettings`,
-`IJwtSettings`, or `ISmtpSettings`. The only consumer references are in controller tests, and they exist
-because of `EntityControllerBase`: Store registers a stand-in `IApplicationSettings` in six API test
-fixtures so `MaxPageSize` resolves (for example
-`MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.API.Tests/Controllers/ShoppingCartsControllerTests.cs:44`),
-and eight ADC Conference controller tests name it only in a comment recording that an empty provider yields
-the default (for example
-`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Controllers/SponsorsControllerTests.cs:41`);
-Helpdesk has no reference of either kind.
-Where consumer code reads a setting it injects `IOptions<T>` directly (Store's Sales Infrastructure
-in `StripeClientFactory.cs:21`, `StripePaymentService.cs:62`, `StripeWebhookRegistrationService.cs:29`,
-`PaymentReconciliationService.cs:35-36`; ADC's web host in its `/client-config` minimal-API handler,
-`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:145`, and its calendar component in
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Components/AddToCalendarButton.razor:7`).
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:428`). Consumer code
+reads its own sections the same way: Store's Sales Infrastructure in `StripeClientFactory.cs:21`,
+`StripePaymentService.cs:62`, `StripeWebhookRegistrationService.cs:29` and
+`PaymentReconciliationService.cs:35-36`, and ADC's web host in its `/client-config` minimal-API handler
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:145`).
 
-The Application layer no longer keeps clear of the options pipeline. Seven Application-layer files take
-an `IOptions<T>` constructor dependency today, and the framework itself supplies the first: the shared
+The Application layer names the options pipeline too, and the framework supplies three of those
+injections itself: `AuthenticationServiceBase<TUser>` takes `IOptions<RefreshSessionSettings>`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:55`), the shared
 `ForgotPasswordHandlerBase` takes `IOptions<PasswordResetSettings>`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:39`).
-ADC adds four: its Identity `ForgotPasswordHandler`
-(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24`),
-and in Engagement `PointsAwarder`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:39`),
+and `CachingQueryDecorator` takes an optional `IOptions<QueryCachePipelineSettings>`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:46`).
+ADC adds five: its Identity `AuthenticationService`
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:50`) and
+`ForgotPasswordHandler` (`.../Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24`), and in
+Engagement `PointsAwarder`
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/Services/PointsAwarder.cs:31`),
 `GetLeaderboardHandler` (`.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs:30`) and
-`RecordRoomCheckInHandler` (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:28`).
-Store adds two: `CreateCheckoutSessionCommandValidator`
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionCommandValidator.cs:23`)
-and its Identity `ForgotPasswordHandler`
-(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:25`).
+`RecordRoomCheckInHandler` (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:30`).
+Store adds three: its Identity `AuthenticationService`
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:29`)
+and `ForgotPasswordHandler` (`.../Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:25`), and
+`CreateCheckoutSessionCommandValidator`
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionCommandValidator.cs:23`).
 Only Helpdesk's Application layer names no `IOptions` at all.
 
-The settled direction is therefore narrower than "never use `IOptions`": the **fail-fast chain is
-mandatory for every section** other than the exceptions recorded above, and the **facade is the required
-form only when a settings type must be read above Infrastructure**. Below that boundary `IOptions<T>` at
-the point of consumption stays correct, and the direct injections in Infrastructure, API and the hosts
-listed above are conformant, not debt. The seven Application-layer injections are the part that is not:
-each reads a settings section above Infrastructure without a facade, so by this ADR's own rule each is
-owed one. `PasswordResetSettings` is the load-bearing case, because the framework's own base class takes
-it and both consumer handlers forward their `IOptions<PasswordResetSettings>` straight into that base
-constructor (ADC at `.../MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:26`,
-Store at `.../MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:27`):
-a facade there removes three of the seven at once. The remaining four injections read three
-consumer-owned sections (`PointsSettings` twice, `CheckInSettings`, `CheckoutRedirectSettings`), so those
-facades are the consumers' to add.
+The contract is therefore one rule rather than two: the **fail-fast chain is mandatory for every
+section** other than the exceptions recorded above, and **`IOptions<T>` at the point of consumption is
+how every layer reads the result**, Application included. The injections listed above are conformant,
+not debt. `PasswordResetSettings` shows what the single surface buys: the framework's own base class
+takes it and both consumer handlers forward their `IOptions<PasswordResetSettings>` straight into that
+base constructor (ADC at
+`.../MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:26`, Store at
+`.../MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:27`), so
+what the handler reads is the one instance the host bound and validated at boot, with nothing in
+between to fall out of step with it.
 
 ## Rationale
 - **A boot failure is cheaper than a first-use failure.** A host that will not start is caught by the
@@ -177,10 +161,11 @@ facades are the consumers' to add.
 - **Validation belongs on the settings type.** Annotations plus `IValidatableObject` keep the rule next
   to the property it constrains, so `JwtSettings` can express "RS256 requires a private key" once instead
   of every host re-checking it.
-- **A facade keeps the options pipeline out of layers that should not name it.** `EntityControllerBase`
-  and `RepositoryFactory` need one number each; taking `IApplicationSettings` rather than
-  `IOptions<ApplicationSettings>` keeps `Microsoft.Extensions.Options` out of their signatures, and the
-  `init`-only members make the setting unwritable at the point of use.
+- **One options surface, validated once.** A read-only alias interface per settings class would be a
+  second type to keep in step with the class the chain binds, and a second way for a reader to ask the
+  same question. `IOptions<T>` of the concrete class is the one surface a consumer sees, the `init`-only
+  members are what make the value unwritable at the point of use, and the validation that ran at boot
+  covers every reader because there is only one bound instance to read.
 - **One shape makes the contract auditable.** Because the chain is textually identical in all sixteen
   framework registrations and all sixteen host registrations, a grep for `ValidateOnStart` is a complete
   inventory of what a host validates at boot.
@@ -196,9 +181,10 @@ facades are the consumers' to add.
   required value never reaches the warm-up and readiness machinery of ADR-025: it terminates at host build.
   That is the intended trade (no half-configured replica serves traffic), but it means a configuration
   mistake takes the whole rollout rather than one code path.
-- **Two ways to read a setting coexist.** Five types have a facade and the rest do not, and no consumer
-  repo's production code uses a facade at all, so a reader encounters both forms. The boundary above sets which is correct
-  where, but it does not make the codebase look uniform today.
+- **The options pipeline reaches every layer.** With `IOptions<T>` as the one surface,
+  `Microsoft.Extensions.Options` appears in Application-layer constructor signatures as readily as in
+  Infrastructure ones. The alternative buys that purity with an alias type per settings class, and this
+  record takes the pipeline over the second type.
 - **Data annotations are the vocabulary.** Anything richer needs `IValidatableObject` or a custom
   `IValidateOptions<T>`, and both escape hatches are in use once each. `JwtSettings` is the only settings
   type implementing the former
@@ -211,10 +197,9 @@ facades are the consumers' to add.
   `IDataSourceResolver`, which no annotation can reach. The cost of the second form is that the rule
   leaves the settings type and has to be registered separately, so a host that binds the section without
   also registering the validator validates less than it appears to.
-- **A facade is a snapshot.** Each facade is a singleton resolved from `IOptions<T>.Value`, so it captures
-  the bound instance once and never observes a configuration reload. `IOptions<T>` itself has the same
-  property; a section that genuinely needs reload would have to move to `IOptionsMonitor<T>`, and none
-  does today.
+- **A bound value is a snapshot.** `IOptions<T>` captures the instance built at binding time and never
+  observes a configuration reload. A section that genuinely needs reload would have to move to
+  `IOptionsMonitor<T>`, and none does today.
 
 ## Related
 ADR-025 (startup warm-up and readiness gating: this contract decides what happens *before* a host reaches

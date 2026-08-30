@@ -108,7 +108,8 @@ dotnet run --project Source/Hosts/Contoso.Notes.Web
 
 The host listens on `https://localhost:60801` (and `http://localhost:60802`), from its own
 `Properties/launchSettings.json`. On startup it applies the migrations to `notes.db` beside the host,
-under the generated `DatabaseInitStrategy: "Migrate"`. `EnsureCreated` is what a SQLite source gets
+under the generated `DatabaseInitStrategy: "Migrate"` (the strategy takes `Migrate` or `None`, and
+anything else fails startup). A SQLite source is created outright by EF instead, without migrations,
 only when no migrations assembly is configured for it, which is not the shape this scaffold
 generates.
 
@@ -164,8 +165,9 @@ which is what [ADR-018](../adr/018-polyglot-persistence.md) exists to make true.
 - **Soft delete with filtered unique indexes** ([ADR-005](../adr/005-soft-delete-vs-erasure.md),
   [ADR-095](../adr/095-soft-delete-unique-indexes.md)) and audit fields stamped by the context on
   every save.
-- **Optimistic concurrency** ([ADR-035](../adr/035-optimistic-concurrency.md)): the `RowVersion`
-  round trip and its 409 / 412 answers.
+- **Optimistic concurrency** ([ADR-035](../adr/035-optimistic-concurrency.md)): the read serves its
+  `RowVersion` as an `ETag`, the write states it as an `If-Match` precondition, and a guarded endpoint
+  answers 428 with no header, 400 with a malformed one, and 412 with a stale one.
 - **Health, telemetry and resilience.** Both hosts still call `AddServiceDefaults()` and
   `MapDefaultEndpoints()`, so OpenTelemetry, `/health` + `/alive`, warm-up readiness
   ([ADR-025](../adr/025-startup-warmup-readiness.md)) and the standard HTTP resilience handler

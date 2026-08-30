@@ -53,12 +53,12 @@ The alternative considered was a payload discriminator: one keyspace, with each 
 skipping a foreign shape. It lost because it makes the failure unlikely rather than impossible, and because
 the detection code is exercised only during the migration window it was written for. A disjoint keyspace
 needs no detection: a reader that cannot see the other format cannot mis-read it. The cost of the split is
-that entries written before the switch become invisible and age out on their TTL (the 30-second ADR-026
-default for decorator entries, longer only where a caller asked for longer): a cold cache for seconds, not
-a correctness problem. Prefix eviction is the one operation that must span both formats, so it runs a
-**dual pattern**, with and without the `hc:` segment, for as long as legacy entries can exist. That is not
-cosmetic: the 24-hour idempotency records of [ADR-017](017-request-idempotency.md) outlive any deploy
-window, and a single-pattern eviction would leave them unreachable until the next day.
+that a key belongs to exactly one substrate: entries another `ICacheService` implementation wrote are
+invisible here and age out on their own TTL (the 30-second ADR-026 default for decorator entries, longer
+only where a caller asked for longer, and 24 hours for the idempotency records of
+[ADR-017](017-request-idempotency.md)). A host that changes substrate therefore starts cold, which is a
+cost rather than a correctness problem. Prefix eviction follows the same rule: it scans the `hc:` keyspace
+and nothing else, so what this substrate writes is exactly what it evicts.
 
 ### `ICacheService` gains a default `GetOrCreateAsync`
 `ICacheService`
@@ -99,9 +99,12 @@ not because the type is split across hand-written files.
   into a shared internal `RedisPrefixScanner`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/RedisPrefixScanner.cs`) that both services
   call, so both evict through one implementation and the existing Redis-tier tests over
-  `DistributedCacheService` prove the extraction is behavior-identical. The delete is a caller-supplied
-  callback: hybrid keys go through `hybrid.RemoveAsync`, which also evicts the calling replica's L1 copy,
-  legacy keys through a raw delete.
+  `DistributedCacheService` prove the extraction is behavior-identical. The scan pattern is the
+  caller's prefix qualified into this keyspace, `{namespace}hc:{prefix}*`
+  (`HybridCacheService.cs:162-181`), this service's own keyspace and no other. The
+  delete is a caller-supplied callback, and here it is `hybrid.RemoveAsync` rather than a raw key delete,
+  because a raw delete would clear L2 and leave the calling replica's L1 copy serving the value it just
+  invalidated.
 
 ### The caching decorators keep their own stampede logic
 `CachingQueryDecorator` deliberately does **not** route through `GetOrCreateAsync`. It caches only
@@ -166,10 +169,9 @@ stays on the memory substrate).
 - **`AddCommonHybridCache` overwrites a host's own `ICacheService`.** `RemoveAll<ICacheService>()` is what
   makes the call order-independent, and it is also indiscriminate: a host that registered a custom
   implementation loses it silently. Deliberate, and a sharp edge for anyone who had one.
-- **The migration window pays for two formats.** Legacy entries stay resident in Redis until their TTL
-  expires while the new keyspace fills, so peak memory is briefly the sum of both.
-- **Dual-pattern prefix eviction doubles the SCAN work.** Every prefix invalidation scans twice for as long
-  as the legacy pattern is retained, and nothing in this record schedules its removal.
+- **A key belongs to exactly one substrate, so changing substrate costs a cold cache.** Entries another
+  `ICacheService` implementation wrote are invisible here, and neither a read nor a prefix eviction reaches
+  them: they age out on their own TTL, and until they do Redis holds both keyspaces at once.
 - **Fail-soft turns a broken cache into database load, quietly.** A warning log per fault is the only
   signal; the endpoint keeps answering while the database absorbs the traffic the cache used to.
 - **The counter path gets none of the benefit.** `IncrementAsync` opting out of L1 leaves ADR-029's hot
@@ -183,12 +185,12 @@ stays on the memory substrate).
 ## Related
 [ADR-026](026-caching-strategy.md) (amended by this record: its Tier 1 substrate gains a third
 implementation, its 30-second default TTL becomes the local-cache bound as well, its prefix-invalidation
-model gains a dual pattern, and its `IncrementAsync` storage-format trade-off is the specific case this
-keyspace decision generalizes), [ADR-014](014-cqrs-decorator-pipeline.md) (the caching decorators, which
-keep their own stampede protection and their cache-only-success rule and take the L1 win through
-`GetAsync`), [ADR-029](029-authentication-brute-force-protection.md) (the brute-force and rate-limit
+model gains a second and disjoint keyspace, and its `IncrementAsync` storage-format trade-off is the
+specific case this keyspace decision generalizes), [ADR-014](014-cqrs-decorator-pipeline.md) (the caching
+decorators, which keep their own stampede protection and their cache-only-success rule and take the L1 win
+through `GetAsync`), [ADR-029](029-authentication-brute-force-protection.md) (the brute-force and rate-limit
 counters that force `IncrementAsync` to bypass L1 on both legs), [ADR-017](017-request-idempotency.md) (the
-24-hour idempotency records the dual-pattern eviction keeps reachable through the migration window),
+24-hour idempotency records, the longest-lived entries this substrate's prefix eviction has to reach),
 [ADR-040](040-authenticated-output-caching-for-public-reads.md) (the Tier 2 output-cache edge, untouched by
 this record: its own store, its own tag eviction), [ADR-038](038-supply-chain-provenance.md) (the lock-file
 and vulnerability-audit obligations a new package pin carries, out-of-slnx projects included),

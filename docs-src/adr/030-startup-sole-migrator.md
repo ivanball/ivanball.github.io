@@ -6,17 +6,24 @@ Accepted (2026-06-27).
 ## Context
 Under database-per-service (ADR-006), each service owns its own database and its own migrations project,
 so *something* must apply pending migrations on every deploy. The framework's
-`DatabaseInitializationExtensions` offers three strategies via `ApplicationSettings.DatabaseInitStrategy`,
-acting per physical SQL Server source:
+`DatabaseInitializationExtensions` offers two strategies via `ApplicationSettings.DatabaseInitStrategy`,
+acting per physical data source:
 
-- `"Migrate"`: auto-apply pending EF Core migrations (the code documents this as **development/testing**).
-- `"EnsureCreated"`: legacy `EnsureCreated` for every source in use.
-- `"None"`, the **production** guard: validate that no SQL Server source has unapplied migrations and
+- `"Migrate"`, the default: auto-apply pending EF Core migrations (the code documents this as
+  **development/testing**).
+- `"None"`, the **production** guard: validate that no migrated source has unapplied migrations and
   throw a per-source breakdown if any is behind.
 
+Any other value is a configuration mistake and stops startup before a single source is created
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:47`, the
+check itself at `:182-195`). The setting governs migrations only: a source no migrations pipeline owns
+(Cosmos, or SQLite with no migrations assembly declared) is created with EF's `EnsureCreated` ahead of
+the strategy switch, because it has no migration to apply and nothing else would ever create it
+(`:70-87`); a tenant's own copy of such a source is created the same way under `"Migrate"` (`:152-164`).
+
 The framework's own comments mark `"None"` as the production strategy and `"Migrate"` as dev/test. Both
-production apps deliberately diverge from that default, and the divergence was bought with an incident, so
-it deserves to be recorded.
+production apps deliberately diverge from that recommendation, and the divergence was bought with an
+incident, so it deserves to be recorded.
 
 ## Decision
 In Azure Container Apps, **every service host runs `ApplicationSettings__DatabaseInitStrategy = Migrate`
@@ -39,8 +46,8 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:226`, ADC `deploy.yml:272`) so a
   model that has drifted from its migrations fails the build, but that gate only *detects*; it never
   applies anything. The container does the applying.
-- **This overrides the framework's documented "None for production" default**, accepting auto-migrate-on-
-  boot in prod as the price of one fewer moving part.
+- **This overrides the framework's documented "None for production" recommendation**, accepting
+  auto-migrate-on-boot in prod as the price of one fewer moving part.
 - **It came from a real incident.** A previous `sqlcmd` migration backstop in `deploy.yml` *raced* the
   container's own startup `Migrate()` on a fresh per-service database, creating a table without its
   `__EFMigrationsHistory` row and wedging Store's first per-service deploy. The fix (recorded inline in
@@ -81,9 +88,9 @@ trade-off it carries.
 
 1. **Seeding runs after the strategy switch, unconditionally.** `InitializeDatabaseAsync` ends with
    `moduleLoader.SeedAllAsync(...)` placed *outside* the `DatabaseInitStrategy` switch
-   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:98`,
-   switch at `:74-89`). Every enabled module's `IModuleSeeder` therefore runs on every boot, in every
-   environment, under all three strategies including the production `"None"` guard: choosing `"None"`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:111`,
+   switch at `:92-102`). Every enabled module's `IModuleSeeder` therefore runs on every boot, in every
+   environment, under both strategies including the production `"None"` guard: choosing `"None"`
    opts out of applying migrations, not out of seeding. `ModuleLoader.SeedAllAsync` just walks its
    seeder list in module registration order and awaits each one
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:270-276`; the list is

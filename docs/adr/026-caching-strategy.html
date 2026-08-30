@@ -511,10 +511,10 @@
           documented in Trade-offs (a Redis <code>INCR</code> string read back by the hash-shaped
           <code>StackExchangeRedisCache</code> path) is a class of bug, not one occurrence: two serialization formats
           must never share one keyspace. The hybrid substrate therefore writes under a disjoint
-          <code>{prefix}hc:{key}</code> keyspace, so a rolling deploy cannot produce a cross-format read, and prefix
-          eviction runs both patterns through the migration window. The non-atomic read-modify-write
-          <code>IncrementAsync</code> position is unchanged, and the hybrid implementation bypasses L1 on both legs
-          precisely to keep it unchanged.</li>
+          <code>{prefix}hc:{key}</code> keyspace, so a cross-format read cannot happen at all, and prefix eviction scans
+          that one keyspace: what this substrate writes is exactly what it evicts. The non-atomic
+          read-modify-write <code>IncrementAsync</code> position is unchanged, and the hybrid implementation bypasses L1
+          on both legs precisely to keep it unchanged.</li>
           <li><strong>Nothing in Tier 2 moves.</strong> The output-cache edge, its policies and its Redis-backed store are
           untouched by ADR-077.</li>
           </ol>

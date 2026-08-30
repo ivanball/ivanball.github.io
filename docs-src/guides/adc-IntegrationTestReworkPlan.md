@@ -64,7 +64,9 @@ folder is now fully superseded and **safe to delete** (the last Phase 5 step):
 
 ## Databases
 
-- **SQLite in-memory** for the fast bulk tier (no Docker, CI-friendly; `DatabaseInitStrategy=EnsureCreated`).
+- **SQLite in-memory** for the fast bulk tier (no Docker, CI-friendly). A SQLite source with no
+  migrations assembly has its schema created at startup by `InitializeDatabasesAsync`, independent
+  of the migration-oriented `DatabaseInitStrategy` (whose values are `Migrate` and `None`).
 - **MsSql Testcontainers** for a tagged SQL-fidelity subset (soft-delete filters, rowversion
   concurrency, outbox, `ef migrations has-pending-model-changes` drift check: the #8 gaps).
 - No `SQLServerDbContext` split: per-service DB routing is config-only via `DataSources`.
