@@ -1,7 +1,7 @@
 # ADR-096: Best-Effort Side-Effect Contract
 
 ## Status
-Accepted (2026-08-23).
+Accepted (2026-08-23). Revised 2026-08-31.
 
 ## Context
 A command that has already committed often has follow-up work attached to it: evict the output-cache
@@ -56,9 +56,10 @@ documented exception.
   promptly instead of being recorded as a spurious side-effect failure. A cancellation that is not the
   caller's (an inner timeout) is a genuine failure of the side effect and is swallowed like any other.
 - **Post-commit work passes `CancellationToken.None` on purpose.** The write has committed, so its
-  follow-up must outlive a caller that has already walked away
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/OutputCacheEvictionExtensions.cs:34-40`;
-  the ADC broadcasts take the parameter's default for the same reason,
+  follow-up must outlive a caller that has already walked away: the framework's own output-cache
+  eviction helper passes it explicitly
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:78-92`,
+  the token at `:90`; the ADC broadcasts take the parameter's default for the same reason,
   `.../SubmitQuestionHandler.cs:122-124`).
 - **The contract is pinned by tests.** `BestEffortTests` covers the transparent success path, token
   passthrough, one-Warning-per-failure, the `operation`-tagged increment observed through a
@@ -66,24 +67,26 @@ documented exception.
   and argument validation
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/BestEffortTests.cs:15-141`).
 
-Adoption today is **seven production call sites across two apps**. Six are in ADC Engagement: the
+Adoption today is **seven call sites**, six of them in ADC Engagement: the
 live-channel drain worker, whose operation name is the prefix `live-channel-publish:` plus the work
 item's event name and whose own catch turns the rethrown cancellation into a quiet stop
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:36`,
 `:45-58`, `:60-65`); three session-question broadcasts, `session-question-submit-broadcast`
 (`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34`, call at `:131`),
-`session-question-moderation-broadcast` (`.../UseCases/Moderate/ModerateQuestionHandler.cs:30`, call at
-`:136`) and `session-question-upvote-broadcast`
+`session-question-moderation-broadcast` (`.../UseCases/Moderate/ModerateQuestionHandler.cs:31`, call at
+`:138`) and `session-question-upvote-broadcast`
 (`.../DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:45`, call at `:52`); the poll-results
 broadcast `livepoll-results-broadcast`
 (`.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:44`, call at `:51`); and the
 cross-host cache eviction `bookmark-cache-evict-broadcast`
 (`.../UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:56`, call at
-`:68-80`). The seventh is Store Catalog's `TryEvictByTagAsync` extension, whose operation name is the
-prefix `catalog.output-cache-evict:` plus the tag
-(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/OutputCacheEvictionExtensions.cs:18`,
-`:30-41`); four controllers evict through it (`Controllers/CategoriesController.cs:157`,
-`ProductsController.cs:222`, `ProductVariantsController.cs:129`, `ProductImagesController.cs:281`).
+`:68-80`). The seventh is the framework's own multi-tag eviction helper,
+`OutputCacheEvictionExtensions.TryEvictTagsAsync`, whose operation name is the constant prefix
+`output-cache-evict:` plus the tag being evicted
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:34`,
+`:78-92`). Store Catalog reaches it from four controllers, each naming its own low-cardinality cache
+tag: `catalog:categories` from `Controllers/CategoriesController.cs:168`, and `catalog:products` from
+`ProductsController.cs:242`, `ProductVariantsController.cs:140` and `ProductImagesController.cs:208`.
 
 Two swallows deliberately stay hand-rolled, and both say so in code. Store's `AddVariantHandler`
 publishes `ProductVariantChanged` after the commit and catches around it, logging at **Error** with
@@ -92,11 +95,12 @@ inventory record, and an operator needs those ids to create it by hand. Routing 
 would both downgrade an unrecoverable loss to Warning and drop the ids, which is why that one site
 stays as it is while every other swallow in the repo uses the helper
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/AddVariant/AddVariantHandler.cs:81-95`,
-catch at `:97-108`). The framework's own `OutputCacheEvictionHandler` hand-rolls the same
-swallow-log-count shape against `cache.eviction.failed` on the `MMCA.Common.OutputCache` meter
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:51-62`),
-because `BestEffort` lives in Application and the API package cannot reach it without a layer-crossing
-reference or a duplicated meter name (recorded in ADR-026, `026-caching-strategy.md:412-417`).
+the post-commit publish at `:97-108` and its catch at `:111-115`). The framework's own
+`OutputCacheEvictionHandler` hand-rolls the same swallow-log-count shape against
+`cache.eviction.failed` on the `MMCA.Common.OutputCache` meter
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:51-62`): it is
+the one documented non-reuse of this helper inside the framework, and ADR-026 records the rationale
+(`026-caching-strategy.md:412-417`).
 
 ## Rationale
 - **One policy beats five local leniencies.** Each feature record is still right about its own
@@ -133,9 +137,9 @@ reference or a duplicated meter name (recorded in ADR-026, `026-caching-strategy
 - **A swallow is still a loss.** The helper decides that the caller does not see the failure; it does
   not make the side effect happen. A cache entry heals on its own TTL, but a lost broadcast never
   replays, and callers whose loss is unrecoverable have to say so themselves.
-- **Two "best effort" counters exist.** The layer constraint on the API package means
-  `cache.eviction.failed` and `besteffort.dispatch.failed` count the same shape of event on different
-  meters, so an operator asking "what is silently failing" has two places to look.
+- **Two "best effort" counters exist.** `cache.eviction.failed` and `besteffort.dispatch.failed` count
+  the same shape of event on different meters, one per the ADR-026 non-reuse and one from this helper,
+  so an operator asking "what is silently failing" has two places to look.
 
 ## Related
 [ADR-024](024-push-notifications.md) (push delivery failure is non-fatal and recorded rather than

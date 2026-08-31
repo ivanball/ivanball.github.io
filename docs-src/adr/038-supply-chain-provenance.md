@@ -50,7 +50,7 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
    advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965), was suppressed from 2026-06-19 while SQLitePCLRaw
    shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
    the suppression was removed on 2026-07-20 and replaced with a direct fix: a
-   `SQLitePCLRaw.bundle_e_sqlite3` pin tracked in `Directory.Packages.props` (Directory.Packages.props:42),
+   `SQLitePCLRaw.bundle_e_sqlite3` pin tracked in `Directory.Packages.props` (Directory.Packages.props:58-62),
    referenced directly by `MMCA.Common.Infrastructure` (MMCA.Common.Infrastructure.csproj:26-28) so the
    patched version flows to consumers through the published package graph, the same pattern used for
    the MessagePack pin. This complements the build-time audit: `NuGetAudit` with `NuGetAuditMode=all`

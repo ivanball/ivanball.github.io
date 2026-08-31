@@ -70,7 +70,7 @@ by a short cache so the account-status lookup is not paid on every request.
   app closes it over its own `User` at registration and writes no subclass of its own
   (`services.TryAddScoped<ISoftDeletedUserValidator, SoftDeletedUserValidator<User>>()` at
   `MMCA.ADC.Identity.Application/DependencyInjection.cs:35` and
-  `MMCA.Store.Identity.Application/DependencyInjection.cs:41`). The query bypasses the soft-delete
+  `MMCA.Store.Identity.Application/DependencyInjection.cs:46`). The query bypasses the soft-delete
   global query filter deliberately, because a plain read would hide the very row it needs to find.
 - **A 30-second cache amortizes the lookup.** The key shape and the marker lifetime live in a shared
   class rather than inside the middleware, because a module that deletes an account has to write the
@@ -100,7 +100,7 @@ by a short cache so the account-status lookup is not paid on every request.
   (`SoftDeletedUserMiddleware.cs:76-83`): Identity is the source of truth and already validated the
   token upstream. Resolving it as a constructor/parameter dependency would instead 500 every request
   in those services. MMCA.Helpdesk wires the same pipeline
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:117`) but hosts only a Tickets module and
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:130`) but hosts only a Tickets module and
   registers no validator, so it takes the same no-op path.
 
 `SoftDeletedUserMiddlewareTests`
@@ -197,7 +197,7 @@ revoke at the same speed.
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:19-34`, its own
    remarks at `:11-17` stating no per-app subclass is needed), closed over each app's `User` at
    registration (`MMCA.ADC.Identity.Application/DependencyInjection.cs:35`, from `:32`;
-   `MMCA.Store.Identity.Application/DependencyInjection.cs:41`, from `:39`). The behavior of the query
+   `MMCA.Store.Identity.Application/DependencyInjection.cs:46`, from `:39`). The behavior of the query
    is what it was; only its location changed.
 2. **The 30-second value moved out of the middleware.** There is no `CacheDuration` member in
    `SoftDeletedUserMiddleware` any more. The figure is
@@ -262,8 +262,9 @@ one new neighbour now sits ahead of it.
    startup (`MiddlewarePipelineBuilder.cs:257-280`) and none of them names this step, so a host that
    moves it with the configure overload gets no startup error, only the fitness-function failure.
 4. **Helpdesk anchor corrected.** `app.UseCommonMiddlewarePipeline()` is at
-   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:117` (the previously cited `:111` is now
-   `var app = builder.Build();`). The substance is unchanged: Helpdesk wires the shared pipeline,
+   `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:130`, after `var app = builder.Build();`
+   (`:124`) and `app.MapDefaultEndpoints()` (`:129`); the `:111` and `:117` anchors earlier drafts
+   carried are both dead. The substance is unchanged: Helpdesk wires the shared pipeline,
    registers no `ISoftDeletedUserValidator`, and takes the no-op path.
 5. **Re-checked and unchanged**: `SoftDeletedUserMiddleware.cs:31` (class declaration), `:65-73`
    (anonymous pass-through), `:75` and `:76-83` (lazy resolution, no-validator pass-through), `:85`,
@@ -272,6 +273,6 @@ one new neighbour now sits ahead of it.
    `SoftDeletedUserValidator.cs:19-34` with its constraint at `:20` and query at `:30-33`,
    `SoftDeletedUserCache.cs:29,42-43,53-61`, the two registrations
    (`MMCA.ADC.Identity.Application/DependencyInjection.cs:35`,
-   `MMCA.Store.Identity.Application/DependencyInjection.cs:41`), the two delete handlers
+   `MMCA.Store.Identity.Application/DependencyInjection.cs:46`), the two delete handlers
    (ADC `DeleteUserHandler.cs:68-80`, Store `DeleteUserHandler.cs:35-60`), and
    `MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Middleware/SoftDeletedUserMiddlewareTests.cs`.

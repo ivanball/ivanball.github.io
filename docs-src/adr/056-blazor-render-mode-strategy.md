@@ -52,7 +52,7 @@ layer rather than by weakening the render mode.
   both sides of the pipeline: `AddInteractiveServerComponents()` + `AddInteractiveWebAssemblyComponents()`
   at service registration and `AddInteractiveServerRenderMode()` + `AddInteractiveWebAssemblyRenderMode()`
   on `MapRazorComponents<App>()`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:43-45`, `Program.cs:197-199`;
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:43-45`, `Program.cs:206-208`;
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:85-87`, `Program.cs:204-206`).
 - **Prerendering stays enabled.** No host anywhere in the workspace passes `prerender: false` or
   constructs a render mode with prerendering disabled; every render mode in use is the stock static
@@ -60,33 +60,33 @@ layer rather than by weakening the render mode.
   paid down elsewhere.
 - **The SSR/interactive double fetch is removed once, in the shared list-page base.**
   `DataGridListPageBase<TDto>` injects `PersistentComponentState`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:29`), restores a
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:31`), restores a
   per-page-type key `grid:{TypeFullName}` in `OnInitialized` (`DataGridListPageBase.cs:136-140`), and
   registers a persist callback so the prerender pass hands its rows forward
-  (`DataGridListPageBase.cs:149-159`). The first interactive `ServerData` call returns that snapshot and
-  clears it instead of issuing a redundant API round-trip (`DataGridListPageBase.cs:444-458`), which the
+  (`DataGridListPageBase.cs:151-161`). The first interactive `ServerData` call returns that snapshot and
+  clears it instead of issuing a redundant API round-trip (`DataGridListPageBase.cs:452-461`), which the
   base's own comment records as the fix for the visible cancel-retry cycle caused by the
-  SSR to Server to WASM transition (`DataGridListPageBase.cs:132-135`). The payload is a
-  `PersistedGridState` record of items plus total (`DataGridListPageBase.cs:805`). **Nineteen types
+  SSR to Server to WASM transition (`DataGridListPageBase.cs:134-137`). The payload is a
+  `PersistedGridState` record of items plus total (`DataGridListPageBase.cs:834`). **Nineteen types
   inherit this base** (thirteen in ADC, six in Store), eighteen of them routable list pages plus ADC's
   non-routable Engagement `AttendeeSearchPanel`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIn/AttendeeSearchPanel.razor.cs:16`),
   so the policy is written once and adopted by inheritance.
 - **The persist callback declares `InteractiveAuto` explicitly.** The base passes
   `RenderMode.InteractiveAuto` as the second argument to `RegisterOnPersisting`
-  (`DataGridListPageBase.cs:159`) because a page that inherits its mode from
+  (`DataGridListPageBase.cs:161`) because a page that inherits its mode from
   `<Routes @rendermode="...">` declares none of its own, and the callback would otherwise fail render-mode
   inference during the static prerender pass; the reasoning is recorded inline
-  (`DataGridListPageBase.cs:142-148`).
+  (`DataGridListPageBase.cs:144-150`).
 - **The prerender fetch is time-bounded so a cold backend cannot block the page.** `CreateFetchCts` links
   to the request token and, when `RendererInfo.IsInteractive` is false, cancels after
-  `PrerenderFetchTimeoutMs` (5000 ms) (`DataGridListPageBase.cs:82`, `DataGridListPageBase.cs:520-529`).
+  `PrerenderFetchTimeoutMs` (5000 ms) (`DataGridListPageBase.cs:84`, `DataGridListPageBase.cs:525-534`).
   On timeout the page returns an empty grid that the first interactive call refills
   (`DataGridListPageBase.cs:496-503`).
 - **Detail and dashboard pages take the other route: they skip the prerender fetch entirely.** An early
   `if (!RendererInfo.IsInteractive) return;` guard in `OnParametersSetAsync` / `OnInitializedAsync` appears
   across both apps, with two different stated reasons: avoiding the doubled reads under `InteractiveAuto`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionDetail.razor.cs:81-90`,
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionDetail.razor.cs:88-95`,
   `.../Pages/Public/PublicSpeakerDetail.razor.cs:59`, `.../Pages/Home/ADCHome.razor.cs:116`,
   `.../Pages/Speaker/SpeakerDashboard.razor.cs:65`,
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:69`,
@@ -99,7 +99,7 @@ layer rather than by weakening the render mode.
   pass starts on the same filter combination
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogBrowse.razor.cs:66-72`,
   `CatalogBrowse.razor.cs:92-105`, `CatalogBrowse.razor.cs:124-139`, `CatalogBrowse.razor.cs:155-168`),
-  using the single-argument `RegisterOnPersisting` overload (`CatalogBrowse.razor.cs:94`) rather than the
+  using the single-argument `RegisterOnPersisting` overload (`CatalogBrowse.razor.cs:96`) rather than the
   explicit-render-mode form the base needs. It is a copy of the policy, not an instance of it.
 - **Because any page may run in either runtime, both runtimes register the same services.** Each WASM
   client `Program.cs` mirrors its server host's registrations (MudBlazor, `AddUIShared`, browser device
@@ -122,8 +122,8 @@ layer rather than by weakening the render mode.
   `E2E:ForceServer` returns `InteractiveServer`; ADC additionally honors `E2E:ForceWebAssembly`, which
   returns `InteractiveWebAssembly` and wins if both are set (`MMCA.ADC/.../App.razor:66-77`,
   `MMCA.Store/.../App.razor:39-42`). Those config keys are injected only by the AppHosts, and only when the
-  matching environment variable is present (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:305-320`,
-  `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:286-294`). In CI only `E2E_FORCE_SERVER` is
+  matching environment variable is present (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:363-390`,
+  `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:355-363`). In CI only `E2E_FORCE_SERVER` is
   exported (`MMCA.ADC/.github/workflows/e2e.yml:218`, `MMCA.Store/.github/workflows/e2e.yml:210`);
   ADC's workflow deliberately does **not** set `E2E_FORCE_WASM` and records why
   (`MMCA.ADC/.github/workflows/e2e.yml:203-210`). Both `App.razor` comments cite the same trace evidence:
@@ -180,7 +180,7 @@ layer rather than by weakening the render mode.
   `RendererInfo.IsInteractive` guard avoid the duplicate work; a new page that does none of the three
   silently fetches twice on every load. No test or analyzer flags that.
 - **Persisting grid rows inflates the prerendered HTML.** The full page of DTOs is serialized into the
-  response so the interactive pass can reuse it (`DataGridListPageBase.cs:154`), trading response size for
+  response so the interactive pass can reuse it (`DataGridListPageBase.cs:156`), trading response size for
   one fewer API round-trip; a large page size makes that trade worse.
 - **The deploy-gating E2E suite measures a mode production does not run.** Because CI pins
   `InteractiveServer`, the chromium e2e-gate never exercises the `InteractiveAuto` transition it was pinned

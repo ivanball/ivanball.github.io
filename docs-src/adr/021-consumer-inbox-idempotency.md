@@ -77,14 +77,14 @@ dedicated `AddInboxMessages` migration, whereas Store Sales creates the table an
 because that per-service project postdates the frozen combined-archive lineage that added the ADC
 migration. Adoption inventory as of 2026-08-13: **three ADC services consume from the broker** and
 so use their inbox for real, plus Store Sales. ADC Identity consumes `SpeakerLinkedToUser` and
-`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:299-300`),
-ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:372`), and ADC
+`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:290-291`),
+ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:349`), and ADC
 Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
-`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:305-308`), the
+`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:281-284`), the
 first of which is ADC's first **self-consumption** over the broker: Engagement publishes
 `AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
 so the inbox is load-bearing there rather than decorative. Store Sales consumes `ProductVariantChanged`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:253`). Only **ADC Notification**
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:247`). Only **ADC Notification**
 now carries `EnableInbox: true` and the table while registering no consumer, so its inbox alone is
 provisioned and unused (functionally harmless). The mirror image is equally harmless and worth stating
 because it looks like the opposite mistake: Store Catalog and Store Identity carry the `InboxMessages`
@@ -141,12 +141,12 @@ What changed is that the default is now loud.
 
 1. **A broker-connected host with no inbox says so at startup.** `AddBrokerMessaging` returns early
    for `MessageBusProvider.InProcess`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:682-685`), which is
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:741-744`), which is
    what scopes this to hosts that actually talk to a broker: in-process dispatch never redelivers, so
    there is nothing to warn about. Past that early return, the `EnableInbox` branch
-   (`:715-727`) registers `EfInboxStore` as scoped (`:717`) when the flag is set, and on the `else`
-   branch registers `NoOpInboxStore` as a singleton (`:721`) **plus** an `IHostedService` whose only
-   job is to emit one `Warning` line naming the consequence and the fix (`:726`). The service is
+   (`:784-796`) registers `EfInboxStore` as scoped (`:786`) when the flag is set, and on the `else`
+   branch registers `NoOpInboxStore` as a singleton (`:790`) **plus** an `IHostedService` whose only
+   job is to emit one `Warning` line naming the consequence and the fix (`:795`). The service is
    `InboxDisabledWarningService`
    (`.../Persistence/Inbox/InboxDisabledWarningService.cs:20-21`), and it evaluates nothing at
    runtime: `StartAsync` logs unconditionally (`:24-28`), because the condition was already decided by
@@ -160,11 +160,11 @@ What changed is that the default is now loud.
    inventory audit it asks for is now performed by the host at every boot.
 3. **The `InboxMessages` table is part of the relational model unconditionally.**
    `ApplicationDbContext.OnModelCreating` calls `ConfigureInbox(modelBuilder)` with no flag check
-   (`.../Persistence/DbContexts/ApplicationDbContext.cs:347`, body at `:556-570`, including the unique
-   `IX_InboxMessages_MessageId` at `:562-564`), and it is configured inline in the base context rather
+   (`.../Persistence/DbContexts/ApplicationDbContext.cs:347`, body at `:565-584`, including the unique
+   `IX_InboxMessages_MessageId` at `:576-578`), and it is configured inline in the base context rather
    than as an `IEntityTypeConfiguration`. `SQLServerDbContext` and `SqliteDbContext` reach it through
    `base.OnModelCreating`; `CosmosDbContext` deliberately does not call the base (`CosmosDbContext.cs:89`,
-   documented at `ApplicationDbContext.cs:551-555`), so the guarantee is **relational engines only**,
+   documented at `ApplicationDbContext.cs:567-568`), so the guarantee is **relational engines only**,
    consistent with the "Cosmos hosts skip it" statement in the Decision above.
 
 **So the Trade-offs entry above overstated the cost of enabling.** It said that enabling the inbox
@@ -184,21 +184,21 @@ opt-in where redelivery is possible, and its row is no longer a separate write.
 
 1. **`EnableInbox` becomes three-valued, and unset resolves ON for a broker.**
    `MessageBusSettings.EnableInbox` is now `bool?` with no initializer
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:84`), and every
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:94`), and every
    framework component reads the resolved posture instead:
-   `IsInboxEnabled => EnableInbox ?? Provider != MessageBusProvider.InProcess` (`:92`). An explicit
-   value still wins in both directions (`:78-81`); left unset the transport decides, ON for RabbitMQ
-   and Azure Service Bus, OFF for the in-process provider that has no redelivery to dedup (`:66-69`).
+   `IsInboxEnabled => EnableInbox ?? Provider != MessageBusProvider.InProcess` (`:102`). An explicit
+   value still wins in both directions (`:88-92`); left unset the transport decides, ON for RabbitMQ
+   and Azure Service Bus, OFF for the in-process provider that has no redelivery to dedup (`:76-79`).
    The reason the default flipped is written where the setting lives: broker delivery is
    at-least-once by contract, so an ack lost to a network blip, a redelivery after a lease expiry, or
    an outbox row republished after a crash all hand the same event to the same handlers twice, and
    with the inbox off each of those becomes a duplicate side effect (a second email, a second charge
-   attempt, a double decrement) unless every handler happens to be idempotent on its own (`:69-75`).
+   attempt, a double decrement) unless every handler happens to be idempotent on its own (`:80-85`).
    The registration branch is unchanged in shape and only its condition moved: `AddBrokerMessaging`
    still returns early for `MessageBusProvider.InProcess`
-   (`.../MMCA.Common.Infrastructure/DependencyInjection.cs:682`), so this scopes to broker hosts, and
-   past it `settings.IsInboxEnabled` (`:715`) selects the scoped `EfInboxStore` (`:717`) or the
-   singleton `NoOpInboxStore` plus the startup-warning hosted service (`:721`, `:726`). Reaching
+   (`.../MMCA.Common.Infrastructure/DependencyInjection.cs:741`), so this scopes to broker hosts, and
+   past it `settings.IsInboxEnabled` (`:784`) selects the scoped `EfInboxStore` (`:786`) or the
+   singleton `NoOpInboxStore` plus the startup-warning hosted service (`:790`, `:795`). Reaching
    `InboxDisabledWarningService` therefore now means a **deliberate opt-out** rather than an
    unnoticed default, and its Warning says so, naming the setting, the consequence and the fact that
    the `InboxMessages` table is already part of the model
@@ -221,11 +221,11 @@ opt-in where redelivery is possible, and its row is no longer a separate write.
    being `Added` (`:71-84`), and falls back to the old write-after-handlers path for a caller that
    skipped `TryBeginAsync` (`:86-88`), which is also the path an event whose handlers write nothing
    takes. `IntegrationEventConsumer<TEvent>` is where the three calls sit: the duplicate check and
-   skip (`.../Services/IntegrationEventConsumer.cs:49-53`), the handler loop, and the final
-   `CompleteAsync` (`:90`).
+   skip (`.../Services/IntegrationEventConsumer.cs:54-58`), the handler loop, and the final
+   `CompleteAsync` (`:95`).
    - **The failure path discards the staged row first.** A throwing handler triggers
      `inbox.Abandon(messageId)` before the rethrow that lets MassTransit apply its retry policy
-     (`IntegrationEventConsumer.cs:69`, rethrow at `:76`). `Abandon` detaches a still-`Added` entry
+     (`IntegrationEventConsumer.cs:74`, rethrow at `:81`). `Abandon` detaches a still-`Added` entry
      rather than leaving it staged, because the context is cached for the whole scope and a surviving
      `Added` row would be re-attempted by any later save on it (`EfInboxStore.cs:106-109`). The one
      case this design loses to a pure after-the-fact inbox is made loud rather than silent: when an

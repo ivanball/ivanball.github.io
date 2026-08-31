@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-089: Gateway Topology Owned by Configuration · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected).…">
+  <meta name="description" content="Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected;…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/089-gateway-topology-owned-by-configuration.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-089: Gateway Topology Owned by Configuration">
-  <meta property="og:description" content="Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected).…">
+  <meta property="og:description" content="Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected;…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/089-gateway-topology-owned-by-configuration.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-089: Gateway Topology Owned by Configuration">
-  <meta name="twitter:description" content="Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected).…">
+  <meta name="twitter:description" content="Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected;…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"089 · Gateway Topology Owned by Configuration","item":"https://ivanball.github.io/docs/adr/089-gateway-topology-owned-by-configuration.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -210,7 +213,10 @@
           <h1 id="adr-089-gateway-topology-owned-by-configuration">ADR-089: Gateway Topology Owned by Configuration</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, <code>/Activities</code>, on
-          2026-08-19, and the bicep anchors below are corrected). <strong>Amends
+          2026-08-19, and the bicep anchors below are corrected; revised 2026-08-31: section 5 now states the
+          activity timeout where it actually lives, declared once in the shared <code>MmcaGateway</code>
+          <code>ClusterRequestDefaults</code> profile rather than copied into each cluster, and the host and test anchors
+          throughout are re-pinned). <strong>Amends
           <a href="008-service-extraction-topology.html">ADR-008</a></strong>: that record gave the
           Gateway the route-to-service map and expressed it as code (a list of <code>MapForwarder</code> calls). The map
           itself is unchanged; what changed is where it is written. YARP <code>ReverseProxy</code> <strong>configuration</strong> is now
@@ -230,8 +236,8 @@
           Aspire service-discovery names (<code>http://identity</code>, <code>http://conference</code>, <code>http://catalog</code> and so on)
           resolved through <code>AddHttpForwarderWithServiceDiscovery</code>, which is the part of the arrangement that was
           right and stays, now as <code>AddServiceDiscoveryDestinationResolver</code>
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:93</code>,
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:117</code>).</p>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:115</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:141</code>).</p>
           <p><strong>The problem was not that the table was duplicated across deployment artifacts. It was that one table
           was described three times inside one repository, and the three already disagreed.</strong> ADC was the worked
           example:</p>
@@ -283,8 +289,8 @@
           <h3 id="1-reverseproxy-configuration-is-the-route-table">1. <code>ReverseProxy</code> configuration is the route table</h3>
           <p>Each gateway calls <code>AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection(&quot;ReverseProxy&quot;))</code>
           and <code>MapReverseProxy()</code>, and the <code>MapForwarder</code> lists are deleted. ADC wires it at
-          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:90-93</code> and maps it at <code>:138</code>; Store at
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115-117</code> and <code>:150</code>. Routes and clusters live
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:112-115</code> and maps it at <code>:158</code>; Store at
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:139-141</code> and <code>:172</code>. Routes and clusters live
           in the gateway&#39;s own <code>appsettings.json</code>: 27 routes over five clusters for ADC (4 identity, 16
           conference, 5 engagement, 2 notification, at
           <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:50-159</code>) and 10 routes over three clusters
@@ -307,23 +313,25 @@
           <h3 id="3-routemaptests-is-the-drift-gate-in-both-repositories">3. <code>RouteMapTests</code> is the drift gate, in both repositories</h3>
           <p>ADC&#39;s <code>RouteMapTests</code> is the enumeration of the configured table rather than a hand-typed parallel
           list, and it covers every route rather than 23 of 26. A behavioral theory drives each pinned route
-          through the real proxy pipeline with a recording fake substituted for <code>IHttpForwarder</code>
-          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:135</code>), and two completeness facts read
-          the host&#39;s loaded <code>IProxyConfig</code> and compare it against the same pinned table, so a route or cluster
-          added to <code>appsettings.json</code> without a corresponding expectation fails, and an expectation with no
-          route fails as well (<code>:168</code>, <code>:190</code>). That two-way check is what the previous one-way theory could not
+          through the real proxy pipeline
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:157-189</code>) with a recording fake
+          substituted for <code>IHttpForwarder</code> in the factory&#39;s test services (<code>:426-431</code>), and two completeness
+          facts read the host&#39;s loaded <code>IProxyConfig</code> and compare it against the same pinned table, so a route
+          or cluster added to <code>appsettings.json</code> without a corresponding expectation fails, and an expectation
+          with no route fails as well (<code>:192</code>, <code>:214</code>). That two-way check is what the previous one-way theory could not
           do, and it is the reason a configuration table is safe to adopt: configuration is not compile-checked,
           so the check has to be a test. <code>/Sponsors</code>, <code>/CheckIns</code> and <code>/Points</code> are pinned by it now.</p>
           <p>Store gained the equivalent suite it had none of
-          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:41</code>): all ten route prefixes are
-          pinned to their owning cluster and destination (<code>:79-96</code>, driven at <code>:163</code>), with the forwarder budget
-          and the per-cluster version settings asserted separately (<code>:198</code>, <code>:218</code>, <code>:239</code>). <strong>Updated
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:46</code>): all ten route prefixes are
+          pinned to their owning cluster (<code>:87-99</code>) and to its destination (<code>:106-123</code>, driven through the same
+          recording forwarder at <code>:166-183</code>), with the forwarder budget and the per-cluster version settings
+          asserted separately (<code>:259-277</code>, <code>:279-298</code>, <code>:300-318</code>). <strong>Updated
           2026-08-27: Store&#39;s half is no longer one-way.</strong> ADC&#39;s two completeness facts are ported, so the
           loaded <code>IProxyConfig</code> is compared back against the pinned table in both directions: a route added to
-          <code>appsettings.json</code> with no matching entry fails (<code>:232</code>, the reasoning stated inline at <code>:246-248</code>)
-          and so does a cluster (<code>:253</code>). The same comparison now doubles as the drift gate on the shared
-          <code>MMCA.Common.Gateway</code> cluster profile, asserting that no cluster declares an activity timeout of its
-          own any more (<code>:37-40</code>).</p>
+          <code>appsettings.json</code> with no matching entry fails (<code>:185-205</code>, the reasoning stated inline at
+          <code>:199-201</code>) and so does a cluster (<code>:207-241</code>). The same comparison now doubles as the drift gate on
+          the shared <code>MMCA.Common.Gateway</code> cluster profile, asserting that no cluster declares an activity
+          timeout of its own any more (<code>:228-232</code>).</p>
           <h3 id="4-the-http-version-policy-is-expressed-in-cluster-configuration">4. The HTTP version policy is expressed in cluster configuration</h3>
           <p>Each cluster declares its own <code>HttpRequest</code> version and version policy beside the destination it
           applies to, which is where <a href="012-grpc-host-transport.html">ADR-012</a>&#39;s per-host profile actually belongs:
@@ -354,10 +362,16 @@
           <h3 id="5-stores-timeout-parity-is-fixed-in-the-same-move">5. Store&#39;s timeout parity is fixed in the same move</h3>
           <p>Store&#39;s routes gain the activity timeout ADC already has, tied to the same
           <code>HttpResilienceDefaults.TotalRequestTimeout</code> budget, expressed as configuration rather than as a
-          constructor argument. All three Store clusters now carry <code>&quot;ActivityTimeout&quot;: &quot;00:01:40&quot;</code>
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:65</code>, <code>:75</code>, <code>:85</code>), the same 100 seconds
-          ADC&#39;s four REST clusters carry, and the route-map test pins the value
-          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:72</code>, asserted at <code>:198</code>). This is
+          constructor argument. Store declares <code>&quot;ActivityTimeout&quot;: &quot;00:01:40&quot;</code> exactly once, as
+          <code>MmcaGateway:ClusterRequestDefaults</code>
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:20-22</code>), and the shared cluster profile
+          of section 4 merges those 100 seconds into all three clusters, none of which states a timeout of its
+          own. ADC declares the same 100 seconds in the same place, with the one-hour override its hub cluster
+          needs (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:20-27</code>). The route-map test pins the
+          resolved value on every route
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:57</code>, asserted at <code>:259-277</code>) and
+          pins the absence of any per-cluster declaration beside it (<code>:228-232</code>), so a cluster that reintroduced
+          its own would fail rather than silently opt out of the shared budget. This is
           folded into this record rather than filed separately because the reason
           Store never got it is exactly the reason this record exists: a per-route setting buried in a call site
           in one repository is not visible as a missing setting in the other. Moving both tables into the same

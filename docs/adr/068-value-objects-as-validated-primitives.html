@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-068: Value Objects as Validated Domain Primitives · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-07).">
+  <meta name="description" content="Accepted (2026-08-07). Revised 2026-08-31 (Money&#39;s non-validating construction paths named, Currency&#39;s converter counted among the serialization…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/068-value-objects-as-validated-primitives.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-068: Value Objects as Validated Domain Primitives">
-  <meta property="og:description" content="Accepted (2026-08-07).">
+  <meta property="og:description" content="Accepted (2026-08-07). Revised 2026-08-31 (Money&#39;s non-validating construction paths named, Currency&#39;s converter counted among the serialization…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/068-value-objects-as-validated-primitives.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-068: Value Objects as Validated Domain Primitives">
-  <meta name="twitter:description" content="Accepted (2026-08-07).">
+  <meta name="twitter:description" content="Accepted (2026-08-07). Revised 2026-08-31 (Money&#39;s non-validating construction paths named, Currency&#39;s converter counted among the serialization…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"068 · Value Objects as Validated Domain Primitives","item":"https://ivanball.github.io/docs/adr/068-value-objects-as-validated-primitives.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -209,7 +212,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-068-value-objects-as-validated-domain-primitives">ADR-068: Value Objects as Validated Domain Primitives</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-07).</p>
+          <p>Accepted (2026-08-07). Revised 2026-08-31 (<code>Money</code>&#39;s non-validating construction paths named, <code>Currency</code>&#39;s
+          converter counted among the serialization annotations, <code>Address</code> added to the adopted set, and the Store/ADC
+          anchors refreshed).</p>
           <h2 id="context">Context</h2>
           <p>A domain model has two kinds of small type: the <strong>identity</strong> of a thing, and a <strong>value</strong> the thing
           carries. ADR-048 recorded the identity half: identifiers stay primitives named through a global-using
@@ -238,9 +243,18 @@
           <li><strong>The constructor is private; the factory returns <code>Result&lt;T&gt;</code>.</strong> <code>Email.Create</code> (<code>Email.cs:30</code>),
           <code>PhoneNumber.Create</code> (<code>PhoneNumber.cs:30</code>), <code>Address.Create</code> (<code>Address.cs:69</code>), <code>Money.Create</code>
           (<code>Money.cs:67</code>), <code>DateRange.Create</code> (<code>DateRange.cs:30</code>) and <code>DateTimeRange.Create</code>
-          (<code>DateTimeRange.cs:31</code>) are the only public way to build one; <code>Currency</code> is a closed set resolved by
-          <code>Currency.FromCode</code> (<code>Currency.cs:41</code>). This is ADR-013 applied below the aggregate: an invalid value
-          is a failed <code>Result</code>, never an exception and never a constructed-but-wrong instance.</li>
+          (<code>DateTimeRange.cs:31</code>) are the <strong>validating entrance</strong>, and for <code>Email</code>, <code>PhoneNumber</code>, <code>Address</code>,
+          <code>DateRange</code> and <code>DateTimeRange</code> they are also the only public entrance at all; <code>Currency</code> is a closed
+          set resolved by <code>Currency.FromCode</code> (<code>Currency.cs:41</code>). This is ADR-013 applied below the aggregate: an
+          invalid value is a failed <code>Result</code>, never an exception and never a constructed-but-wrong instance.
+          <code>Money</code> is the exception, deliberately: it also exposes construction sugar that composes
+          already-valid parts and so skips <code>Create</code> entirely, <code>Money.Zero()</code> (<code>Money.cs:142</code>), <code>Money.Zero(Currency)</code>
+          (<code>:147</code>), <code>operator *</code> (<code>:96</code>) and <code>Multiply</code> (<code>:124</code>). The fitness rule below governs the <code>Create</code> name
+          only and says so in its own contract (<code>ArchitectureRules.Entities.cs:49-51</code>), so nothing stops a value
+          object from shipping such a path. What holds it together is that the sugar takes no raw string: a
+          <code>Currency</code> argument can only have come from <code>Currency.FromCode</code> or <code>Currency.All</code>, and the <code>None</code>
+          sentinel is <code>internal</code> (<code>Currency.cs:23</code>), so an external caller still cannot assemble a <code>Money</code> whose
+          currency was never checked.</li>
           <li><strong>That factory shape is fitness-enforced, not conventional.</strong> <code>ArchitectureRules.DomainFactoriesReturnResult</code>
           (<code>Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Entities.cs:53-79</code>) walks every
           concrete class in the Domain and Shared layers and fails the build when a public static <code>Create</code>
@@ -289,28 +303,34 @@
           does. <code>DateRange</code> and <code>DateTimeRange</code> carry no serialization annotations.</li>
           <li><strong>gRPC is mapped by hand, not inferred.</strong> <code>Money</code> crosses a service boundary as a purpose-built
           <code>MoneyV1</code> message with a <strong>string</strong> amount (proto has no decimal) and a currency code
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:70,73</code>),
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:81,83,86</code>),
           translated by <code>MoneyFromWire</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:126</code>)
-          and <code>MoneyToWire</code> (<code>:157</code>).
-          <code>MoneyFromWire</code> honors the empty-code sentinel only when the amount is also zero and returns null
-          for a malformed entry rather than failing the whole batch (<code>:135-140</code>).</li>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:146</code>)
+          and <code>MoneyToWire</code> (<code>:177</code>).
+          <code>MoneyFromWire</code> honors the empty-code sentinel only when the amount is also zero (<code>:155-160</code>) and
+          returns null for a malformed entry, which the calling loop skips rather than failing the whole batch
+          (<code>:121-126</code>).</li>
           <li><strong>Adoption is real but partial.</strong> Store maps <code>ProductVariant.Price</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:21</code>) with
           <code>OwnsMoney</code> (<code>.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:31</code>),
           and <code>Order.Total</code> (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:37</code>) is
-          seeded with <code>Money.Zero()</code> (<code>:77</code>) and accumulated through <code>Money.Add</code> (<code>:109</code>), mapped
-          <code>required: false</code> (<code>OrderConfiguration.cs:26</code>) alongside <code>OrderLine.UnitPrice</code>
-          (<code>OrderLineConfiguration.cs:28</code>). Store Identity maps <code>Customer.Email</code> through <code>EmailValueConverter</code>
-          and <code>Customer.Address</code> through a hand-rolled <code>OwnsOne</code> block (<code>CustomerConfiguration.cs:36,43</code>), and
-          <code>User.Email</code> the same way (<code>UserConfiguration.cs:24</code>). ADC types <code>User.Email</code> as <code>Email</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38</code>, validated through
-          <code>Email.Create</code> at <code>:171</code> and passed to the constructor at <code>:185</code>) with
+          seeded with <code>Money.Zero()</code> in the private constructor (<code>:90</code>) and accumulated through <code>Money.Add</code>
+          (<code>:122</code>, assigned back at <code>:126</code>), mapped <code>required: false</code> (<code>OrderConfiguration.cs:26</code>) alongside
+          <code>OrderLine.UnitPrice</code> (<code>OrderLineConfiguration.cs:28</code>). Store Identity types <code>Customer.Address</code> as the
+          framework <code>Address</code>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:39</code>) and maps
+          <code>Customer.Email</code> through <code>EmailValueConverter</code> with <code>Customer.Address</code> through a hand-rolled <code>OwnsOne</code>
+          block (<code>CustomerConfiguration.cs:36,43</code>), and <code>User.Email</code> the same way (<code>UserConfiguration.cs:24</code>).
+          ADC types <code>User.Email</code> as <code>Email</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:39</code>, validated through
+          <code>Email.Create</code> at <code>:166</code> and passed to the constructor at <code>:180</code>, with the same pair repeated on the
+          social-login path at <code>:207,218</code>) with
           the same converter (<code>.../Identity.Infrastructure/.../UserConfiguration.cs:21</code>) and a speaker&#39;s
           optional email through <code>NullableEmailValueConverter</code>
-          (<code>.../Conference.Infrastructure/.../SpeakerConfiguration.cs:43</code>). <code>Money</code> and <code>Email</code> are the two
-          that got adopted: no code under <code>MMCA.Store/Source</code> or <code>MMCA.ADC/Source</code> uses <code>PhoneNumber</code>,
-          <code>DateRange</code> or <code>DateTimeRange</code>, and MMCA.Helpdesk adopts none of them at all.</li>
+          (<code>.../Conference.Infrastructure/.../SpeakerConfiguration.cs:43</code>). <code>Money</code>, <code>Email</code> and <code>Address</code> are the
+          three that got adopted, with <code>Currency</code> riding along inside <code>Money</code>: no code under <code>MMCA.Store/Source</code>
+          or <code>MMCA.ADC/Source</code> uses <code>PhoneNumber</code>, <code>DateRange</code> or <code>DateTimeRange</code>, and MMCA.Helpdesk adopts none
+          of them at all.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -343,7 +363,10 @@
           class; the rest inline their checks. Only <code>Money</code> has a shipped owned-type helper, so every <code>Address</code>
           mapping is a hand-copied <code>OwnsOne</code> block of six properties
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:43-75</code>).
-          Only four of the seven carry serialization annotations.</li>
+          Five of the seven carry a serialization attribute, and not the same one: four are
+          <code>[DataContract]</code>/<code>[DataMember]</code> (<code>Money</code>, <code>Email</code>, <code>PhoneNumber</code>, <code>Address</code>) while <code>Currency</code> carries
+          <code>[JsonConverter(typeof(CurrencyJsonConverter))]</code> (<code>Currency.cs:13</code>); only <code>DateRange</code> and
+          <code>DateTimeRange</code> are annotation-free.</li>
           <li><strong>Three of the seven have no consumer.</strong> <code>PhoneNumber</code>, <code>DateRange</code> and <code>DateTimeRange</code> ship with
           invariants, tests and converters but no production usage, so their round-trip behavior is exercised
           only by the framework&#39;s own tests.</li>

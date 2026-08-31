@@ -129,13 +129,14 @@ MMCA.Common dogfoods the only base it can, since it ships no host of its own: a 
 this record was written. Its architecture-test project now references `MMCA.Common.Testing` alongside the
 structural package
 (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MMCA.Helpdesk.Architecture.Tests.csproj:26`)
-and subclasses `DecoratorPipelineOrderTestsBase` against the real Tickets pair `UpdateTicketCommand` /
-`GetTicketByIdQuery`
-(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:30-31`),
-whose `ConfigureServices` runs the seed's own registration sequence: `AddApplication()`, the Tickets
-module scan, then `AddApplicationDecorators()` last (`:50-52`). Two files in that project import the
-`MMCA.Common.Testing` namespace, and only one of them belongs to this record: that decorator subclass
-(`:10`). The other, `MiddlewarePipelineOrderTests.cs` (`:1`), is a one-line subclass of
+and subclasses `DecoratorPipelineOrderTestsBase` against a real Tickets pair: the framework's generic
+`UpdateEntityCommand<Ticket, TicketUpdateRequest, TicketIdentifierType>`, closed over the Ticket
+aggregate by the seed's own `AddEntityCrud` wiring, and the module's hand-written `GetTicketByIdQuery`
+(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:36`,
+`:38`), whose `ConfigureServices` runs the seed's own registration sequence: `AddApplication()`, the
+Tickets module registration, then `AddApplicationDecorators()` last (`:58-60`). Two files in that
+project import the `MMCA.Common.Testing` namespace, and only one of them belongs to this record: that
+decorator subclass (`:12`). The other, `MiddlewarePipelineOrderTests.cs` (`:1`), is a one-line subclass of
 `MiddlewarePipelineOrderTestsBase`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:29`,
 `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15`)

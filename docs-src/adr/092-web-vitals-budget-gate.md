@@ -60,29 +60,29 @@ E2E suite.
   directory (`:65-66`); `Describe` (`:118`) renders the same sample as one invariant-culture line
   (`:122-124`) that `AssertWithinBudget` writes to test output.
 - **Both deployed apps assert the shipped defaults.** ADC's `WebVitalsTests`
-  (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:23`) holds one shared
-  `WebVitalsBudget` constructed with no arguments (`:27`, stated at `:25-26`) and measures four
-  surfaces: home (`:36`), the public events entry point including its redirect (`:47`), the session
-  list (`:56`) and login (`:60`). Store's
+  (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:29`) holds one shared
+  `WebVitalsBudget` constructed with no arguments (`:39`, stated at `:37-38`) and measures four
+  surfaces: home (`:48`), the public events entry point including its redirect (`:59`), the session
+  list (`:68`) and login (`:72`). Store's
   (`MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs:25`) constructs the same
-  defaults inline (`:68`, `:94`) over home (`:34`), the
-  catalog browse page (`:38`), login (`:42`) and product detail reached by navigation rather than a
-  hard-coded id (`:53`). Both drive one scripted search interaction on the grid page so the
-  event-timing observer records an INP sample (ADC `:70-81`, Store `:78-89`).
+  defaults inline (`:42`, `:55`, `:62`, `:89`) over home (`:41`), the
+  catalog browse page (`:51`), login (`:61`) and product detail reached by navigation rather than a
+  hard-coded id (`:81`). Both drive one scripted search interaction on the grid page so the
+  event-timing observer records an INP sample (ADC `:35`, `:69`; Store `:57`).
 - **The numbers are calibrated against measured maxima, not picked to be safe.** ADC's remarks record
   LCP 624 / FCP 444 / TTFB 27 ms / CLS 0.005 / INP 32 on run 29146540154, roughly 4x to 30x headroom
-  (`MMCA.ADC/.../WebVitalsTests.cs:14-17`); Store's record LCP 172 / FCP 172 / TTFB 26 ms / CLS 0 /
+  (`MMCA.ADC/.../WebVitalsTests.cs:19-21`); Store's record LCP 172 / FCP 172 / TTFB 26 ms / CLS 0 /
   INP 24 on run 29146556386, roughly 10x to 30x
-  (`MMCA.Store/.../WebVitalsTests.cs:14-19`). Both were calibrated 2026-07-11.
+  (`MMCA.Store/.../WebVitalsTests.cs:17-19`). Both were calibrated 2026-07-11.
 - **The assertions ride the deploy gate because the workflow runs the whole project.** `e2e.yml` runs
   `dotnet test --project ...E2E.Tests.csproj` with no filter (ADC `.github/workflows/e2e.yml:326-329`,
   Store `:369-372`) and points `WEB_VITALS_OUTPUT_DIR` at the uploaded diagnostics directory (ADC
   `:304`, Store `:364`). `deploy.yml` calls that workflow chromium-only as `e2e-gate` (ADC
-  `deploy.yml:531-542`, Store `:537-548`), and the `deploy` job both lists it in `needs` (ADC `:866`,
-  Store `:862`) and requires it to be `success` or `skipped` (ADC `:896`, Store `:893`). A front-end
+  `deploy.yml:628-639`, Store `:584-595`), and the `deploy` job both lists it in `needs` (ADC `:992`,
+  Store `:941`) and requires it to be `success` or `skipped` (ADC `:1022`, Store `:972`). A front-end
   performance budget is therefore a production precondition on the same footing as the SBOM, the
   cost guard and the freshness gates, and `deploy.yml` says so where the k6 gate is defined (ADC
-  `:604-605`, Store `:611-612`).
+  `:701-702`, Store `:658-659`).
 - **The framework measures its own UI, under its own looser numbers.** `WebVitalsE2ETests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitalsE2ETests.cs:16`) uses the same
   collector against the backend-less in-process gallery for the login and components pages
@@ -98,7 +98,7 @@ E2E suite.
   (`:66-73`), and the exact text of the sample line (`:32-43`).
 
 Adoption is the two deployed apps plus the framework gallery. **MMCA.Helpdesk has neither**: it pins
-the package (`MMCA.Helpdesk/Directory.Packages.props:66`) but has no E2E test project at all, so the
+the package (`MMCA.Helpdesk/Directory.Packages.props:84`) but has no E2E test project at all, so the
 seed carries no worked example of a client-side budget, the same gap ADR-063 records for
 accessibility.
 
@@ -111,7 +111,7 @@ accessibility.
   regression.
 - **Calibrating against observed maxima is what separates a budget from a backstop.** Numbers chosen
   by feel end up either flaky or vacuous. Recording the run id and the measured maximum next to the
-  ceiling (ADC `WebVitalsTests.cs:14-17`) makes the headroom a reviewable fact and makes a future
+  ceiling (ADC `WebVitalsTests.cs:19-21`) makes the headroom a reviewable fact and makes a future
   tightening an evidence-based edit rather than a guess.
 - **Ship the mechanics, keep the numbers with the consumer.** The assert body, the message format,
   the artifact shape and the INP-zero carve-out are subtle and identical everywhere, so they belong in
@@ -132,17 +132,17 @@ accessibility.
 
 ## Trade-offs
 - **The gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-  filter (ADC `deploy.yml:538`, Store `:544`) and `deploy` accepts `skipped` for it (ADC `:896`,
-  Store `:893`), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
+  filter (ADC `deploy.yml:635`, Store `:591`) and `deploy` accepts `skipped` for it (ADC `:1022`,
+  Store `:972`), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
   commit. Same intended cost trade as the accessibility gate, and the same caveat: "deployed" does not
   always mean "the budget ran on this commit".
 - **It never runs on a pull request.** The E2E project is in neither solution filter and the gate is
-  push/dispatch only (ADC `deploy.yml:538`, Store `:544`), so a regression is caught between merge and
+  push/dispatch only (ADC `deploy.yml:635`, Store `:591`), so a regression is caught between merge and
   rollout, not before merge.
 - **The measured configuration is not the production one.** CI pins the UI to `InteractiveServer`
   (ADC `e2e.yml:218`, Store `:210`), so the numbers describe Server-mode prerender-then-hydrate under
   runner contention, not production's `InteractiveAuto` on real hardware (ADC
-  `WebVitalsTests.cs:10-13`, the caveat ADR-056 also records).
+  `WebVitalsTests.cs:15-18`, the caveat ADR-056 also records).
 - **A marginal breach can be retried away.** The suite runs with `--retry-failed-tests 2` (ADC
   `e2e.yml:329`, Store `:372`), which is what absorbs a contention spike but also means a budget that
   fails once and passes twice reports green.
@@ -155,7 +155,7 @@ accessibility.
   inventories. Nothing forces a new page to acquire a budget, so breadth grows by discipline, the same
   caveat as the accessibility suites.
 - **Only pages with a search box get an INP sample.** The interaction is best-effort and page-specific
-  (ADC `WebVitalsTests.cs:73-78`, Store `:81-86`); on every other measured page INP stays 0 and its
+  (ADC `WebVitalsTests.cs:31-35`, Store `:44-49`); on every other measured page INP stays 0 and its
   assertion is skipped, so interaction latency is asserted on one page per app.
 - **The green-run artifact is written but not kept.** Both workflows upload the diagnostics bundle
   only on failure (ADC `e2e.yml:355-359`, Store `:398-404`), and MMCA.Common's `ui-e2e` job sets no

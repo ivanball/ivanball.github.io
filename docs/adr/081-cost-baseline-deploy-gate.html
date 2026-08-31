@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-081: The Cost Baseline as a Hard Deploy Gate · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-14).">
+  <meta name="description" content="Accepted (2026-08-14). Revised 2026-08-31 (the read-only claim is qualified: one az config set on the runner&#39;s own CLI precedes the queries; citations…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/081-cost-baseline-deploy-gate.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-081: The Cost Baseline as a Hard Deploy Gate">
-  <meta property="og:description" content="Accepted (2026-08-14).">
+  <meta property="og:description" content="Accepted (2026-08-14). Revised 2026-08-31 (the read-only claim is qualified: one az config set on the runner&#39;s own CLI precedes the queries; citations…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/081-cost-baseline-deploy-gate.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-081: The Cost Baseline as a Hard Deploy Gate">
-  <meta name="twitter:description" content="Accepted (2026-08-14).">
+  <meta name="twitter:description" content="Accepted (2026-08-14). Revised 2026-08-31 (the read-only claim is qualified: one az config set on the runner&#39;s own CLI precedes the queries; citations…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"081 · The Cost Baseline as a Hard Deploy Gate","item":"https://ivanball.github.io/docs/adr/081-cost-baseline-deploy-gate.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -209,13 +212,14 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-081-the-cost-baseline-as-a-hard-deploy-gate">ADR-081: The Cost Baseline as a Hard Deploy Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-14).</p>
+          <p>Accepted (2026-08-14). Revised 2026-08-31 (the read-only claim is qualified: one <code>az config set</code> on
+          the runner&#39;s own CLI precedes the queries; citations re-anchored).</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps run a deliberately small production footprint: every Container App is declared with
           <code>maxReplicas: 2</code> and every SQL database with the <code>Basic</code> tier
-          (<code>MMCA.Store/infra/main.bicep:1101,1206,1339,1415,1513</code> and <code>:594-598,624-628</code>;
-          <code>MMCA.ADC/infra/main.bicep:1228,1357,1486,1741,1860</code> and <code>:634-638,667-671</code>, with ADC&#39;s Notification
-          app deliberately right-sized at <code>maxReplicas: 1</code>, <code>MMCA.ADC/infra/main.bicep:1646-1648</code>). That
+          (<code>MMCA.Store/infra/main.bicep:1038,1142,1273,1349,1447</code> and <code>:557-559,587-589</code>;
+          <code>MMCA.ADC/infra/main.bicep:1177,1304,1431,1684,1806</code> and <code>:612-614,645-647</code>, with ADC&#39;s Notification
+          app deliberately right-sized at <code>maxReplicas: 1</code>, <code>MMCA.ADC/infra/main.bicep:1586-1591</code>). That
           footprint is the cost baseline, and it is what the monthly bill is planned against.</p>
           <p>The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
           real traffic: an operator scales the replica ceiling or the SQL tier up by hand and is supposed to
@@ -223,17 +227,17 @@
           it is silent: nothing breaks, no alert fires on a healthy oversized system, and the app keeps serving
           traffic perfectly while costing several times its baseline.</p>
           <p>The existing control against that was the monthly Azure budget declared in both Bicep templates
-          (<code>MMCA.Store/infra/main.bicep:519-547</code>, <code>MMCA.ADC/infra/main.bicep:562</code>), which notifies at 80% of
+          (<code>MMCA.Store/infra/main.bicep:471-499</code>, <code>MMCA.ADC/infra/main.bicep:529-557</code>), which notifies at 80% of
           actual spend and 100% of forecast spend. The Store template names the exact case it is meant to catch
           in its own comment, &quot;a scale-up (manual SQL-tier / replica) silently running for weeks&quot;
-          (<code>MMCA.Store/infra/main.bicep:517</code>). A spend threshold is a lagging indicator: by the time it
+          (<code>MMCA.Store/infra/main.bicep:469</code>). A spend threshold is a lagging indicator: by the time it
           trips, weeks of the overspend have already happened, and the notification says a number, not which
           resource is wrong. What was missing was a check on the <strong>configuration</strong> itself, and a moment at which
           someone would have to look at it.</p>
           <p>This is the FinOps sibling of the deploy gates the framework already records: ADR-038 (supply-chain
           provenance), ADR-060 (the performance-regression gate against a committed baseline) and ADR-062 (SLO
           alerting as code). ADR-064 decides the three proof-of-recency gates and enumerates <code>cost-guard</code>
-          in passing as one of the jobs &quot;whose subject is the change itself&quot;
+          in passing among the jobs that &quot;have the change itself as their subject&quot;
           (<code>Website/docs-src/adr/064-deploy-recency-gates.md:11-12,39</code>), but it does not decide it. This record
           does.</p>
           <h2 id="decision">Decision</h2>
@@ -266,10 +270,13 @@
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:82</code>), because its retained legacy <code>MMCAStore</code> archive
           was downgraded from S0 to Basic and the bump back to S0 is the documented rollback path, so a
           rollback must not read as drift (<code>MMCA.Store/.github/workflows/cost-guard.yml:9-12</code>, and the same
-          reasoning beside the resource at <code>MMCA.Store/infra/main.bicep:596-599</code>).</p>
+          reasoning beside the resource at <code>MMCA.Store/infra/main.bicep:548-551</code>).</p>
           </li>
-          <li><p><strong>It never mutates anything.</strong> Every call is an <code>az ... list</code> or <code>az ... show</code>; the job&#39;s stated
-          contract is that on drift it fails the run and prints what to reset
+          <li><p><strong>It never mutates production.</strong> Every Azure call is an <code>az ... list</code> or <code>az ... show</code>; the one
+          write in the step is <code>az config set extension.use_dynamic_install=yes_without_prompt</code>, which
+          configures the runner&#39;s own CLI and touches nothing in the subscription
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:48</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:44</code>).
+          The job&#39;s stated contract is that on drift it fails the run and prints what to reset
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:7</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:7-8</code>).
           There is no auto-revert.</p>
           </li>
@@ -281,17 +288,17 @@
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:47</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:43</code>).</p>
           </li>
           <li><p><strong><code>deploy</code> waits on it by name.</strong> <code>cost-guard</code> is listed in <code>deploy.needs</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:862</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:866</code>), and
+          (<code>MMCA.Store/.github/workflows/deploy.yml:941</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:992</code>), and
           because the deploy condition runs under <code>always()</code> with explicit per-need results, the condition
           requires <code>needs.cost-guard.result == &#39;success&#39;</code> literally
-          (<code>MMCA.Store/.github/workflows/deploy.yml:881-893</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:884-896</code>). Only <code>e2e-gate</code> is allowed to be <code>skipped</code> there,
+          (<code>MMCA.Store/.github/workflows/deploy.yml:960-972</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1010-1022</code>). Only <code>e2e-gate</code> is allowed to be <code>skipped</code> there,
           so a cost-guard that fails, errors or is skipped leaves <code>deploy</code> unrun.</p>
           </li>
           <li><p><strong>Gate on deploys only, never on pull requests.</strong> The calling job carries
           <code>if: github.event_name != &#39;pull_request&#39;</code> and <code>secrets: inherit</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:525-528</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:519-522</code>), because there is no production OIDC on a PR and the
+          (<code>MMCA.Store/.github/workflows/deploy.yml:572-575</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:616-619</code>), because there is no production OIDC on a PR and the
           deploy is PR-skipped anyway. Both repos&#39; CONTRIBUTING files list <code>cost-guard</code> among the push-only
           jobs that must <strong>not</strong> be added to branch protection (<code>MMCA.Store/CONTRIBUTING.md:42,118</code>,
           <code>MMCA.ADC/CONTRIBUTING.md:42,111</code>).</p>
@@ -324,9 +331,10 @@
           <code>deploy.needs</code> attaches it to an event that has a human waiting on it, which is what converts a
           notification into a control.</li>
           <li><strong>Read-only is what makes it safe on the critical path.</strong> The gate performs a handful of <code>az</code>
-          queries and mutates nothing, so its worst failure mode is a blocked deploy, never an unintended
-          production change. Auto-reverting a surge would be the opposite trade: a gate that can itself take
-          production down mid-incident, possibly while the surge is the thing keeping the app up.</li>
+          queries and mutates nothing in the subscription, so its worst failure mode is a blocked deploy,
+          never an unintended production change. Auto-reverting a surge would be the opposite trade: a gate
+          that can itself take production down mid-incident, possibly while the surge is the thing keeping
+          the app up.</li>
           <li><strong>One definition serves both cadences.</strong> Making the check a reusable workflow (<code>workflow_call</code>)
           rather than duplicating a job into <code>deploy.yml</code> means the weekly run and the deploy gate cannot
           drift apart, and dispatching it manually to answer &quot;are we at baseline right now&quot; costs nothing.</li>
@@ -374,7 +382,7 @@
           <li><strong>Only two cost dimensions and one name prefix are covered.</strong> Service Bus, Redis, Log Analytics
           retention and everything else in the resource group are invisible to the gate, as is any resource
           whose name does not start with the app prefix or that lives in another resource group. Store&#39;s
-          Service Bus is Standard tier (<code>MMCA.Store/infra/main.bicep:665-667</code>) and would go unchecked if it
+          Service Bus is Standard tier (<code>MMCA.Store/infra/main.bicep:628-630</code>) and would go unchecked if it
           were scaled up.</li>
           <li><strong>The ceiling is an upper bound, not an equality.</strong> Scaling a resource <strong>below</strong> the baseline is not
           drift, so an accidental <code>maxReplicas: 1</code> on a service that needs two, or a downgrade that costs

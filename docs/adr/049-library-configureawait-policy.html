@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-049: Library-Scoped ConfigureAwait(false) Policy (CA2007) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18 and 2026-08-23).">
+  <meta name="description" content="Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18, 2026-08-23 and 2026-08-31).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-049: Library-Scoped ConfigureAwait(false) Policy (CA2007)">
-  <meta property="og:description" content="Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18 and 2026-08-23).">
+  <meta property="og:description" content="Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18, 2026-08-23 and 2026-08-31).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-049: Library-Scoped ConfigureAwait(false) Policy (CA2007)">
-  <meta name="twitter:description" content="Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18 and 2026-08-23).">
+  <meta name="twitter:description" content="Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18, 2026-08-23 and 2026-08-31).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)","item":"https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -209,7 +212,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-049-library-scoped-configureawaitfalse-policy-ca2007">ADR-049: Library-Scoped ConfigureAwait(false) Policy (CA2007)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18 and 2026-08-23).</p>
+          <p>Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18, 2026-08-23 and
+          2026-08-31).</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common ships as NuGet packages consumed by host applications, not as an application itself.
           Library code that awaits without <code>ConfigureAwait(false)</code> captures the caller&#39;s <code>SynchronizationContext</code>
@@ -251,10 +255,10 @@
           context. <code>ConfigureAwait(false)</code> removes the failure mode at the source.</li>
           <li><strong>Standard .NET library guidance, applied at the boundary where it holds.</strong> The rule is scoped to
           exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
-          360+ sites of pure noise (measured across Store/ADC before this decision, and the scale has only
-          grown: a raw <code>\bawait\b</code> scan on 2026-08-23 counts 617 occurrences in <code>MMCA.Store/Source</code> and 1,462
-          in <code>MMCA.ADC/Source</code>, 2,079 combined, which is the upper bound on the CA2007 sites the rule would
-          open there).</li>
+          360+ sites of pure noise (measured across Store/ADC before this decision, and the current scale is
+          far past that: a raw <code>\bawait\b</code> scan on 2026-08-31 counts 569 occurrences in <code>MMCA.Store/Source</code>
+          and 1,291 in <code>MMCA.ADC/Source</code>, 1,860 combined, which is the upper bound on the CA2007 sites the
+          rule would open there).</li>
           <li><strong>Mechanical, with the enforcement and the remediation at different levels.</strong> The build gate is the
           enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
           review effort. The remediation is a convention rather than an artifact: <code>dotnet format analyzers --diagnostics CA2007</code> fixes a batch in place, but no script, CI step or <code>CONTRIBUTING.md</code> entry
@@ -263,9 +267,9 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Visual noise in framework source.</strong> Every await in <code>Source/</code> (except UI packages) carries
-          <code>.ConfigureAwait(false)</code> (324 sites at adoption; 767 gated sites as of the 2026-08-23 snapshot, out
-          of 860 across <code>Source/</code> once the exempt UI packages are counted back in). The gate makes it uniform,
-          so the noise is consistent rather than sporadic.</li>
+          <code>.ConfigureAwait(false)</code> (324 sites at adoption; 910 gated sites as of the 2026-08-31 snapshot, out
+          of 1,012 across <code>Source/</code> once the exempt UI packages are counted back in). The gate makes it
+          uniform, so the noise is consistent rather than sporadic.</li>
           <li><strong>A per-repo delta in an otherwise shared analyzer baseline.</strong> The workspace keeps one
           byte-identical <code>.editorconfig</code> baseline across the four repos; this policy lives in the marked
           repo-delta section of MMCA.Common&#39;s file and is verified by the workspace drift script
@@ -402,6 +406,70 @@
           re-checked this pass against MMCA.Common&#39;s workflow files only (no match); the broader claim
           still rests on the 2026-08-07 revision that established it.</li>
           </ol>
+          <h2 id="revision-2026-08-31">Revision (2026-08-31)</h2>
+          <p>A re-measurement plus a correction to two file anchors. The policy, the gate and the exemption are
+          unchanged. Every counted figure moved, two of the surrounding narratives did not survive the
+          re-measurement, and the <code>.editorconfig</code> line anchors this document has cited since 2026-08-07 shifted.</p>
+          <ol>
+          <li><strong>Framework site counts, measured 2026-08-31.</strong> <code>MMCA.Common/Source/**/*.cs</code> now holds 1,012
+          <code>ConfigureAwait(false)</code> occurrences across 197 files, of which 102 sit inside the exempt UI
+          packages across 35 files (<code>MMCA.Common.UI</code> 49 across 15 files, <code>MMCA.Common.UI.Maui</code> 51 across
+          19 files, <code>MMCA.Common.UI.Web</code> 2 in 1 file), leaving 910 under the gate across 162 files. <strong>The
+          exempt split is no longer unchanged.</strong> It held flat at 93 through 2026-08-14, 2026-08-18 and
+          2026-08-23, and the earlier revisions read that as evidence that every new await landed in gated
+          code; <code>MMCA.Common.UI.Maui</code> has since grown from 42 across 16 files to 51 across 19, so the
+          &quot;all new occurrences landed in gated code&quot; reading does not carry forward to this window. The
+          gate claim it was standing in for is unaffected: the exempt projects are exempt by design, and
+          growth there is Blazor/MAUI components resuming on the renderer context, exactly what the
+          exclusion is for. The 2026-08-23 figures (860 / 176 files, 93 exempt, 767 gated), the 2026-08-18
+          figures (811 / 168 files, 93 exempt, 718 gated), the 2026-08-14 figures (786 / 158 files,
+          93 exempt, 693 gated) and the 2026-08-07 figures (719 / 147 files, 90 exempt, 629 gated) stay in
+          their own revisions as the history of those measurements; the Trade-offs entry now carries today&#39;s
+          numbers. &quot;324 sites at adoption&quot; remains the 2026-07-20 snapshot and is unchanged.</li>
+          <li><strong>Consumer-scale upper bound, measured 2026-08-31, and it fell.</strong> A raw <code>\bawait\b</code> scan gives
+          569 occurrences across 102 files in <code>MMCA.Store/Source/**/*.cs</code> (down from 617 across 119 files)
+          and 1,291 across 246 files in <code>MMCA.ADC/Source/**/*.cs</code> (down from 1,462 across 272 files), 1,860
+          combined, down from 2,079. Both consumers shrank in this window, which is the first time either
+          has: the work that landed in it collapses duplicated code paths and moves module CRUD onto the
+          framework&#39;s generic write-side handlers, so it deletes application code rather than adding it.
+          <strong>The &quot;the scale has only grown&quot; and &quot;ADC accounts for essentially all of the growth&quot; framings
+          are retired.</strong> The figure is a snapshot of how much noise the rule would open in the apps, not a
+          trend line, and the Rationale now reads that way. Raw <code>await</code> still overcounts CA2007 sites (it
+          catches <code>await using</code>, <code>await foreach</code> and awaits the analyzer would not flag), so this stays an
+          upper bound, and at 1,860 it points the same way the original &quot;360+&quot; phrasing did.</li>
+          <li><strong>The two <code>.editorconfig</code> anchors moved four lines down.</strong> The gate header <code>[Source/**.cs]</code> is at
+          <code>MMCA.Common/.editorconfig:832</code> with <code>dotnet_diagnostic.CA2007.severity = warning</code> at <code>:833</code>, and
+          the <code>[Source/Presentation/MMCA.Common.UI*/**.cs]</code> exemption header is at <code>:835</code> with
+          <code>dotnet_diagnostic.CA2007.severity = none</code> at <code>:836</code>. The shift is not a policy change: a comment
+          block now occupies <code>:827-831</code> and states the rationale (packaged libraries must not capture the
+          caller&#39;s context, UI packages excluded, apps keep the baseline) in the file itself. The
+          <code>:828-829</code> and <code>:831-832</code> citations in the 2026-08-07, 2026-08-14, 2026-08-18 and 2026-08-23
+          revisions were correct at those dates and are superseded by these.</li>
+          <li><strong>Everything else re-verified as written.</strong> CA2007 appears in exactly three places in
+          <code>MMCA.Common/.editorconfig</code>: the shared-baseline <code>none</code> at <code>:348</code>, the gate <code>warning</code> at <code>:833</code>
+          and the UI exemption <code>none</code> at <code>:836</code>. No <code>Tests</code>-scoped override exists, so test code inherits
+          the baseline <code>none</code>, as the Decision says. The other three repos keep the baseline untouched
+          (<code>CA2007</code> at <code>:348</code>, <code>MA0004</code> at <code>:536</code>, <code>RCS1090</code> at <code>:635</code>, <code>VSTHRD111</code> at <code>:712</code>, all <code>none</code>
+          in <code>MMCA.ADC/.editorconfig</code>, <code>MMCA.Store/.editorconfig</code> and <code>MMCA.Helpdesk/.editorconfig</code>
+          alike), and the marked delta section that carries this policy names
+          <code>Tools\Scripts\compare-analyzer-config.ps1</code> as its verifier at <code>MMCA.Common/.editorconfig:821-824</code>.
+          The three packaged <code>MMCA.Common.UI*</code> projects still stand (including
+          <code>&lt;PackageId&gt;MMCA.Common.UI.Web&lt;/PackageId&gt;</code> at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/MMCA.Common.UI.Web.csproj:3</code> and
+          <code>ServerTokenStorageService</code> at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:17</code>),
+          as does the enforcement: <code>TreatWarningsAsErrors</code> at <code>MMCA.Common/Directory.Build.props:7</code>,
+          <code>CodeAnalysisTreatWarningsAsErrors</code> at <code>:13</code>, and CA2007 absent from all three <code>NoWarn</code> lists
+          (<code>:27</code>, <code>:32</code>, <code>:38</code>).</li>
+          <li><strong>The remediation command still has no repo artifact, now checked workspace-wide.</strong> The
+          2026-08-23 pass could only re-check MMCA.Common&#39;s workflow files and left the broader claim
+          resting on 2026-08-07; this pass searched the whole workspace. Every <code>dotnet format analyzers</code>
+          occurrence outside this ADR targets the using-ordering rules SA1210/SA1211 (for example
+          <code>Website/docs-src/guides/common-GETTING-STARTED.md:156</code> and
+          <code>MMCA.Helpdesk/build/templates/stage.ps1:1093</code>); nothing anywhere invokes it with
+          <code>--diagnostics CA2007</code>. The Rationale&#39;s framing of the command as guidance for whoever trips the
+          gate, not automation the repo runs, is confirmed without a hedge.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -422,6 +490,7 @@
             <li><a href="#revision-2026-08-14">Revision (2026-08-14)</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-08-23">Revision (2026-08-23)</a></li>
+            <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
             </ul>
           </nav>
         </aside>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -218,10 +221,15 @@
           declares 20 sealed subclasses rather than 19. Revised 2026-08-23: the seed measurements were re-taken
           at HEAD (three standalone fitness-test files landed in the architecture-test project since the
           previous re-measure, moving the file and line totals), and the generated-app test figure is now
-          sourced to the seed&#39;s own documented run rather than to an undated absolute pair.</p>
+          sourced to the seed&#39;s own documented run rather than to an undated absolute pair. Revised 2026-08-31:
+          the wire-contract freeze now <strong>ships</strong> rather than being removed at stage time, so the generated app
+          arrives with its own contract frozen and green, and the scaffold hands over one thing rather than
+          two; <code>mmca-module</code> carries a database-conditioned split (<code>sqlserver</code> / <code>sqlite</code>) in its printed
+          wire-ups; the seed measurements, the fitness-subclass count (21), the documented seed run (117
+          tests), and every staging, README, template and smoke anchor were re-taken at HEAD.</p>
           <h2 id="context">Context</h2>
           <p><a href="../guides/common-BUILD-BY-HAND.html">Build by hand</a> is accurate and complete, and phases 1 through 6
-          of it are transcription work (<code>common-BUILD-BY-HAND.md:96</code> through <code>:1049</code>). Its own instruction for
+          of it are transcription work (<code>common-BUILD-BY-HAND.md:96</code> through <code>:1238</code>). Its own instruction for
           the load-bearing parts is &quot;copy <code>MMCA.Helpdesk/Directory.Build.props</code>&quot; (<code>:170</code>), &quot;copy MMCA.ADC&#39;s
           <code>.editorconfig</code> verbatim&quot; (<code>:114</code>), &quot;copy the relevant rows from MMCA.ADC/Directory.Packages.props&quot;
           (<code>:157</code>). That walkthrough was the whole of
@@ -229,11 +237,11 @@
           is now the six-step <code>dotnet new install MMCA.Templates</code> path
           (<code>common-GETTING-STARTED.md:10-22</code>) and the by-hand transcription moved to its own guide.</p>
           <p>Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
-          starts by hand-creating <strong>12 projects, 114 files, and 7,740 lines</strong> before a line of its own
-          business logic. The method, re-run on 2026-08-23 and stated here so the figures can be reproduced
+          starts by hand-creating <strong>12 projects, 124 files, and 8,855 lines</strong> before a line of its own
+          business logic. The method, re-run on 2026-08-31 and stated here so the figures can be reproduced
           rather than trusted: every file under <code>Source/</code> and <code>Tests/</code> excluding <code>bin/</code>, <code>obj/</code> and
-          <code>TestResults/</code> (107 files, 6,638 lines), plus the seven root build files below (1,102 lines). Those
-          seven are an 823-line <code>.editorconfig</code>, a 72-line <code>Directory.Packages.props</code> carrying 58 pins,
+          <code>TestResults/</code> (117 files, 7,729 lines), plus the seven root build files below (1,126 lines). Those
+          seven are an 827-line <code>.editorconfig</code>, a 90-line <code>Directory.Packages.props</code> carrying 58 pins,
           a 75-line <code>Directory.Build.props</code>, the 74-line local-source swap in <code>Directory.Build.targets</code>,
           <code>global.json</code>, <code>nuget.config</code>, and the solution file. Under <code>Source/</code> and <code>Tests/</code> sit the module
           project set, the vertical slice, the migrations project and its design-time factory, two hosts, the
@@ -278,8 +286,8 @@
           symbol replacement at instantiation.</p>
           <p>The pack is published from MMCA.Helpdesk on a <code>templates-vX.Y.Z</code> tag, under its own nuget.org
           trusted-publishing policy.</p>
-          <p><strong>Two things the scaffold deliberately does not hand over</strong>, because a rename or a shape flag
-          invalidates them and no fixed value is correct for every generated name:</p>
+          <p><strong>One thing the scaffold deliberately does not hand over</strong>, because a rename or a shape flag
+          invalidates it and no fixed value is correct for every generated name:</p>
           <ul>
           <li><strong>Declaration order, and one constructor shape.</strong> An app namespace sorts above <code>MMCA.Common.*</code> for
           <code>Contoso.Support</code> and below it for <code>Zeta.App</code>. <code>SA1210</code> has no notion of blank-line-separated
@@ -288,26 +296,33 @@
           shape flags rather than the renames: the aggregate&#39;s private constructor assigns one property per
           optional axis, so <code>--no-status --no-description --no-owner</code> together leave it with a single
           statement, which the baseline then requires as an expression body. Staging appends a scoped delta
-          dropping those three to <code>suggestion</code> in the <strong>staged</strong> <code>.editorconfig</code> (<code>stage.ps1:833-835</code>); the
+          dropping those three to <code>suggestion</code> in the <strong>staged</strong> <code>.editorconfig</code> (<code>stage.ps1:1106-1109</code>); the
           seed&#39;s own copy, which is the shared analyzer baseline that
           <code>Tools/Scripts/compare-analyzer-config.ps1</code> holds identical across the four repos, is untouched,
-          and it declares none of the three among its 214 explicit <code>dotnet_diagnostic.*.severity</code> lines.
-          Every other analyzer stays at error, as the delta&#39;s own header says (<code>stage.ps1:830</code>). The
+          and it declares none of the three among its 215 explicit <code>dotnet_diagnostic.*.severity</code> lines.
+          Every other analyzer stays at error, as the delta&#39;s own header says (<code>stage.ps1:1104</code>). The
           generated README carries
           <code>dotnet format analyzers MMCA.Helpdesk.slnx --diagnostics SA1210 SA1211 --severity info</code>
-          (<code>build/templates/overlay/mmca-app/README.md:75</code>), which restores the two ordering rules.
+          (<code>build/templates/overlay/mmca-app/README.md:110</code>), which restores the two ordering rules.
           <code>IDE0021</code> is not fixable by that command, so the README tells the adopter to fold the constructor
-          by hand and delete the line (<code>README.md:81-84</code>).</li>
-          <li><strong>The <code>IntegrationEventContractTests</code> subclass.</strong> <code>IntegrationEventContractTestsBase</code> compares a
-          checked-in literal against the actual events with members sorted alphabetically, so
-          <code>{ RequesterUserId, TicketId }</code> is right for <code>Ticket</code> and wrong for <code>Invoice</code>. The subclass is
-          removed at stage time (deleted, not commented out: <code>S125</code> is a warning and <code>TreatWarningsAsErrors</code>
-          makes that a build error), and the generated README carries the class to paste plus the command
-          that prints the value to freeze.</li>
+          by hand and delete the line (<code>README.md:116-119</code>).</li>
           </ul>
+          <p><strong>The wire-contract freeze ships, guarded rather than removed.</strong>
+          <code>IntegrationEventContractTestsBase</code> compares each event&#39;s members as a <strong>set</strong> rather than a
+          sequence, so the aggregate&#39;s own id moving position is not a difference; the namespace and the event
+          type name are ordinary symbol substitutions the template already performs everywhere else; and the
+          one member a shape flag can remove, <code>RequesterUserId</code>, is a comma-separated list element that
+          <code>stage.ps1</code>&#39;s <code>$optionalAxisLines</code> rewrites like any other. The generated app therefore arrives with
+          its own contract already frozen, under its own names, green on the first test run. Staging asserts
+          exactly one <code>IntegrationEventContractTests</code> class in the staged fitness map and throws otherwise
+          (<code>stage.ps1:1155-1178</code>), because a class the staging pass cannot find is a template about to ship an
+          unfrozen wire contract behind a README that says it is frozen. That README section tells the adopter
+          what the test guards and how to evolve it: an event added or reshaped on purpose is versioned
+          (ADR-010) and <code>ExpectedContract</code> updated in the same commit, with the failure printing the live value
+          to paste (<code>build/templates/overlay/mmca-app/README.md:121-133</code>).</p>
           <p><code>mmca-module</code> additionally prints seven numbered wire-ups <code>dotnet new</code> cannot perform
-          (<code>templates/mmca-module/.template.config/template.json:205</code>): the solution entries for the eight new
-          projects, the host and architecture-test project references, the identifier-alias
+          (<code>templates/mmca-module/.template.config/template.json:255-263</code>): the solution entries for the eight
+          new projects, the host and architecture-test project references, the identifier-alias
           <code>&lt;Compile Include ... Link&gt;</code> block, the five <code>IArchitectureMap</code> lines, the host&#39;s
           <code>AddErrorResources&lt;&gt;</code> call, the module&#39;s own database (the AppHost <code>AddDatabase</code> /
           <code>WithSQLServerDataSource</code> pair, the <code>appsettings.json</code> <code>Modules</code> / <code>DataSources</code> / <code>Outbox</code> entries,
@@ -315,17 +330,31 @@
           migration. That text now opens by telling anyone whose solution came from <code>mmca-app</code> to run
           <code>pwsh build/add-module.ps1</code> instead, which performs all seven; the printed steps are the fallback
           for a hand-built solution.</p>
+          <p>Those instructions come in <strong>two</strong> <code>manualInstructions</code> entries, split on the solution&#39;s database
+          engine. The <code>sqlite</code> entry is conditioned on <code>useSqlite</code> and sits first, since <code>dotnet new</code> takes the
+          first entry whose condition holds, and the unconditioned SQL Server entry is the fallback
+          (<code>template.json:256-263</code>). The two differ by more than spelling: SQLite declares no container
+          resource in the AppHost, the settings keys are the framework&#39;s other engine spelling
+          (<code>SqliteConnectionString</code> / <code>SqliteMigrationsAssembly</code>), and the first migration stops being optional,
+          because a SQLite source that names a migrations assembly is migrated at startup rather than created
+          outright. That split exists because <code>--database</code> reaches <code>mmca-module</code> as well as <code>mmca-app</code>: a
+          module&#39;s EF configurations inherit an engine-specific base and its migrations project references an
+          engine-specific provider, so a SQL-Server-shaped module dropped into a SQLite app does not compile.</p>
           <p><strong>The correctness gate is a <code>template-smoke</code> CI job in MMCA.Helpdesk</strong>, not the seed&#39;s own build. The
           seed builds in local-source mode against <code>MMCA.Common@main</code>; a generated app builds in package mode
           against a released version, and a source-mode build can pass where package-mode Release fails on an
-          analyzer. The smoke generates two solutions whose names share no substring with the seed, sweeps for
-          residual <code>Helpdesk</code> / <code>Ticket</code> tokens, builds package-mode, runs the tests, then adds a second module
-          to the first of the two (<code>smoke.ps1:324</code>) through that generated app&#39;s own <code>build/add-module.ps1</code>,
-          launched in a child pwsh so the run proves the exit code an adopter would see
-          (<code>smoke.ps1:415-444</code>). That script performs all seven wire-ups plus the first migration, and the
-          smoke asserts the result on the files rather than on the script&#39;s output, wire-up by wire-up
-          (<code>smoke.ps1:530-630</code>), including the migration (<code>:632-650</code>) and a rerun that must fail at the
-          preflight before editing anything (<code>:655</code>).</p>
+          analyzer. The smoke generates three solutions whose names share no substring with the seed
+          (<code>smoke.ps1:115-134</code>): two module shapes (one <code>--flat --no-status --no-owner</code> with a <code>--title</code>
+          rename, one fully default) plus one solution shape (<code>--database sqlite --no-aspire</code>, which is also
+          the only case that drops the AppHost). Each is swept for residual <code>Helpdesk</code> /
+          <code>Ticket</code> tokens, built package-mode, and tested. Two of the three then add a <strong>second</strong> module
+          through that generated app&#39;s own <code>build/add-module.ps1</code>, launched in a child pwsh so the run proves
+          the exit code an adopter would see (<code>smoke.ps1:603-615</code>). The SQLite case proves the engine reaches
+          the second module and is thin on purpose (<code>smoke.ps1:371-487</code>); the first case proves the wire-ups.
+          That script performs all seven printed wire-ups plus the frozen-contract append and the first
+          migration, and the smoke asserts the result on the files rather than on the script&#39;s output, wire-up
+          by wire-up (<code>smoke.ps1:701-809</code>), including the migration (<code>:811-829</code>) and a rerun that must fail at
+          the preflight before editing anything (<code>:834</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <p><strong>Deriving from the seed rather than maintaining a template tree</strong> is the whole design. A
           hand-maintained copy of a 12-project solution drifts within one release, and drift in a scaffold is
@@ -348,37 +377,39 @@
           silently: the output still compiles, it just carries someone else&#39;s domain vocabulary.</p>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Two documented one-time fixups</strong> in every generated app, above (one of them covering all three
-          relaxed rules). The alternative to the <code>SA1210</code> half of the delta was moving every app-local
+          <li><strong>One documented one-time fixup</strong> in every generated app, above, covering all three relaxed
+          rules. The alternative to the <code>SA1210</code> half of the delta was moving every app-local
           <code>using</code> into per-project global usings, which is not rename-stable either once a project&#39;s usings
           span more than one second-level segment, and which costs the seed the didactic value of showing
           where each type comes from.</li>
           <li><strong><code>mmca-module</code> alone cannot finish the job.</strong> Seven edits are beyond it because <code>dotnet new</code>
           cannot patch existing files. For a solution generated by <code>mmca-app</code> that is no longer manual: the
           overlay ships <code>build/add-module.ps1</code> (<code>build/templates/overlay/mmca-app/build/add-module.ps1</code>,
-          declared <code>copyOnly</code> at <code>MMCA.Helpdesk/.template.config/template.json:264</code> and exempted from the
-          smoke&#39;s rename sweeps at <code>smoke.ps1:114</code>), which runs
-          <code>dotnet new mmca-module</code> and then performs all seven plus the first migration, on the same code
-          path CI exercises. The manual path survives only for a solution the template did not generate,
-          where the printed instructions are the fallback and a new module is not usable until a human
-          applies them.</li>
+          declared <code>copyOnly</code> at <code>MMCA.Helpdesk/.template.config/template.json:332</code> and exempted from the
+          smoke&#39;s rename sweeps at <code>smoke.ps1:144</code>), which runs
+          <code>dotnet new mmca-module</code> and then performs all seven, plus an eighth the printed list does not
+          carry (the new module&#39;s integration event joins <code>ExpectedContract</code>, so a second module does not
+          turn the adopter&#39;s next test run red: <code>build/add-module.ps1:41</code>), plus the first migration, on the
+          same code path CI exercises. The manual path survives only for a solution the template did not
+          generate, where the printed instructions are the fallback and a new module is not usable until a
+          human applies them.</li>
           <li><strong>The template lags a framework release by one step.</strong> <code>--framework-version</code> defaults to whatever
           the seed pins, so a <code>MMCA.Common</code> release needs the seed bumped and the pack re-tagged before the
           default is current. Adopters can pass the flag in the meantime.</li>
           <li><strong><code>release-templates.yml</code>&#39;s filename is load-bearing.</strong> Trusted publishing is keyless OIDC pinned
           to owner, repository, and workflow filename, with no API-key fallback, so renaming that file
           breaks publishing silently. Same property as the MMCA.Common release workflow (ADR-053).</li>
-          <li><strong>The generated app&#39;s first test run is one test short of the seed&#39;s</strong>, and its fitness subclass
-          count is one below the seed&#39;s (20 sealed subclasses in
-          <code>Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs</code>, of which staging
-          removes exactly one, <code>IntegrationEventContractTests</code> at <code>:97</code>, by regex match and replace at
-          <code>stage.ps1:894-907</code>), until the adopter freezes their own wire
-          contract. The delta is exactly one because <code>IntegrationEventContractTestsBase</code> declares a single
-          <code>[Fact]</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/IntegrationEventContractTestsBase.cs:18-19</code>).
-          The seed&#39;s own documented run is 100 tests (<code>MMCA.Helpdesk/CLAUDE.md:109</code>), one of which the
-          generated app does not carry. No gate pins either figure (both <code>smoke.ps1:318</code> and <code>ci.yml:45</code>
-          pass <code>--minimum-expected-tests 1</code>); a generated app that turns off shape axes runs fewer still.</li>
+          <li><strong>The generated app&#39;s test count is not pinned anywhere, and shape flags move it.</strong> The scaffold
+          hands over the whole fitness map: all 21 sealed subclasses in
+          <code>Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs</code> reach a generated app,
+          <code>IntegrationEventContractTests</code> (at <code>:99</code>) included, and it is frozen on its own event rather than
+          the seed&#39;s, so it passes on arrival. The seed&#39;s own documented run is 117 tests
+          (<code>MMCA.Helpdesk/CLAUDE.md:171</code>). A generated app that turns off shape axes runs fewer, and no gate
+          pins the figure on either side: <code>smoke.ps1:361</code>, <code>:487</code> and <code>:909</code> all pass
+          <code>--minimum-expected-tests 1</code>, as does the seed&#39;s own CI (<code>.github/workflows/ci.yml:60</code>). The cost
+          of shipping the freeze is that staging has to keep finding the class: <code>stage.ps1:1176</code> throws when
+          the match count is not exactly one, so renaming or reshaping that subclass fails the pack rather
+          than shipping an unfrozen contract behind a README that promises a frozen one.</li>
           </ul>
           
         <div class="doc-foot btn-row">

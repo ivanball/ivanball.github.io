@@ -9,6 +9,10 @@ re-anchored; two statements are corrected. Store's `OPERATIONS.md` does carry tr
 operational extras (under `####` headings, deliberately outside the gate's `###` match), and Store's
 resource prefix is `mmca-`, not `store-`, which makes the heading-versus-deployed-name trade-off
 wider than previously recorded. No decision changed.
+Revised 2026-08-31: both templates dropped the superseded metric alert declarations entirely, so the
+bullet that recorded them as "declared and disabled, never deleted", its Rationale entry, and the
+carried-debt trade-off are rewritten around what actually keeps the supersede safe (the distinct
+`-v2` names). Every `main.bicep` citation is re-anchored again. No decision changed.
 
 ## Context
 ADR-041 standardized what the fleet **emits**: RED histograms off the CQRS pipeline, an outbox
@@ -33,7 +37,7 @@ Three forces shaped the decision.
    2026-07-29 resolved to exactly that, one window holding 8x401 plus 2x499 plus a single readiness 503
    and zero other failures, and five hub connections averaging 11.3s dragged the fleet-wide average to
    5539ms against a 3000ms threshold while every real request was fast
-   (`MMCA.ADC/infra/main.bicep:273-286`).
+   (`MMCA.ADC/infra/main.bicep:282-295`).
 
 ## Decision
 Declare each consumer's SLO alerts as **data in its Bicep template**, materialize them as Log Analytics
@@ -41,52 +45,52 @@ scheduled query rules, and make the alert-to-runbook pairing a **build gate ship
 
 - **`sloAlertSpecs` is the declaration.** A single array of records carrying `key`, `description`,
   `query`, `timeAggregation`, `metricMeasureColumn`, `threshold` and `severity`
-  (`MMCA.ADC/infra/main.bicep:287`, `MMCA.Store/infra/main.bicep:259`). Both consumers declare the same
+  (`MMCA.ADC/infra/main.bicep:296`, `MMCA.Store/infra/main.bicep:254`). Both consumers declare the same
   three SLOs with the same numbers: `failed-requests` (severity 2, more than 10 per 15 min),
   `server-response-time` (severity 3, average above 3000ms), `dependency-failures` (severity 2, more
-  than 10 per 15 min) (`MMCA.ADC/infra/main.bicep:288-315`, `MMCA.Store/infra/main.bicep:260-287`).
+  than 10 per 15 min) (`MMCA.ADC/infra/main.bicep:296-324`, `MMCA.Store/infra/main.bicep:254-282`).
 
 - **Materialized as Log Analytics scheduled query rules.** One `Microsoft.Insights/scheduledQueryRules`
-  per spec (`MMCA.ADC/infra/main.bicep:317`, `MMCA.Store/infra/main.bicep:289`), named
-  `${prefix}-alert-${spec.key}-v2` (`MMCA.ADC/infra/main.bicep:322`,
-  `MMCA.Store/infra/main.bicep:294`), enabled, scoped to the Log Analytics workspace, evaluated every
+  per spec (`MMCA.ADC/infra/main.bicep:326`, `MMCA.Store/infra/main.bicep:284`), named
+  `${prefix}-alert-${spec.key}-v2` (`MMCA.ADC/infra/main.bicep:330`,
+  `MMCA.Store/infra/main.bicep:289`), enabled, scoped to the Log Analytics workspace, evaluated every
   5 minutes over a 15-minute window with `autoMitigate`
-  (`MMCA.ADC/infra/main.bicep:329-333`, `MMCA.Store/infra/main.bicep:301-305`). A `union(...)` supplies
+  (`MMCA.ADC/infra/main.bicep:339-341`, `MMCA.Store/infra/main.bicep:298-300`). A `union(...)` supplies
   `metricMeasureColumn` only for the aggregate rule; the empty-string case makes a rule count returned
   **rows**, which is what the two failure-count SLOs want
-  (`MMCA.ADC/infra/main.bicep:339-351`, `MMCA.Store/infra/main.bicep:311-323`).
+  (`MMCA.ADC/infra/main.bicep:347-359`, `MMCA.Store/infra/main.bicep:306-318`).
 
 - **The KQL predicate is the point of the migration.** The failure queries exclude only 401 and 499
-  (`MMCA.ADC/infra/main.bicep:291`, `:309`; `MMCA.Store/infra/main.bicep:263`, `:281`) and the latency
+  (`MMCA.ADC/infra/main.bicep:300`, `:318`; `MMCA.Store/infra/main.bicep:258`, `:276`) and the latency
   query excludes `/hubs/` requests before averaging `DurationMs`
-  (`MMCA.ADC/infra/main.bicep:300`, `MMCA.Store/infra/main.bicep:272`). A genuine 400 or 500 burst
+  (`MMCA.ADC/infra/main.bicep:309`, `MMCA.Store/infra/main.bicep:267`). A genuine 400 or 500 burst
   still pages at the same threshold as before.
 
-- **Superseded metric alerts stay declared and disabled, never deleted.** `legacySloMetricAlertSpecs`
-  (`MMCA.ADC/infra/main.bicep:368`, `MMCA.Store/infra/main.bicep:339`) still materializes the three
-  `metricAlerts` (`MMCA.ADC/infra/main.bicep:374`, `MMCA.Store/infra/main.bicep:345`) under their
-  **original, unsuffixed** names (`MMCA.ADC/infra/main.bicep:376`, `MMCA.Store/infra/main.bicep:347`)
-  with `enabled: false` and an empty `actions` array (`MMCA.ADC/infra/main.bicep:381`, `:400`;
-  `MMCA.Store/infra/main.bicep:352`, `:371`). An incremental ARM deployment never deletes a resource
-  just because it left the template, so dropping them would have left them live and firing alongside
-  the new rules; disabling them in place is declarative, needs no portal step, and rolls back in one
-  line. That is also why the replacements carry the `-v2` suffix: reusing the name would have renamed
-  the live originals instead of disabling them (`MMCA.ADC/infra/main.bicep:319-321`,
-  `MMCA.Store/infra/main.bicep:291-293`).
+- **The superseded metric alerts are no longer declared, and the `-v2` names stay.** Neither template
+  carries a `legacySloMetricAlertSpecs` array or a metric alert on `requests/failed`,
+  `requests/duration` or `dependencies/failed`. The only `Microsoft.Insights/metricAlerts` resource
+  left in each is the unrelated severity 1 gateway-availability alert, which stays because
+  availability has no status-code confound and never produced a false page
+  (`MMCA.ADC/infra/main.bicep:369-370`, `:474`; `MMCA.Store/infra/main.bicep:416`). The `-v2` suffix on
+  the replacements is what made that removal safe and is now part of each rule's identity in Azure:
+  renaming it would create a second rule alongside the live one rather than update it, and the
+  unsuffixed names stay occupied in the resource group by the superseded alerts, which an incremental
+  ARM deployment does not delete just because they left the template
+  (`MMCA.ADC/infra/main.bicep:328-329`, `MMCA.Store/infra/main.bicep:286-288`).
 
 - **One unconditional action group.** `alertEmailAddress` is a required parameter with no default
-  (`MMCA.ADC/infra/main.bicep:104`, `MMCA.Store/infra/main.bicep:87`), so the action group's email
-  receiver is not conditional (`MMCA.ADC/infra/main.bicep:257-271`,
-  `MMCA.Store/infra/main.bicep:231-245`) and every scheduled query rule routes to it
-  (`MMCA.ADC/infra/main.bicep:354`, `MMCA.Store/infra/main.bicep:326`). The monthly cost budget
-  notifies the same group (`MMCA.ADC/infra/main.bicep:578`, `:586`;
-  `MMCA.Store/infra/main.bicep:535`, `:543`).
+  (`MMCA.ADC/infra/main.bicep:113`, `MMCA.Store/infra/main.bicep:83`), so the action group's email
+  receiver is not conditional (`MMCA.ADC/infra/main.bicep:266-280`,
+  `MMCA.Store/infra/main.bicep:226-240`) and every scheduled query rule routes to it
+  (`MMCA.ADC/infra/main.bicep:363`, `MMCA.Store/infra/main.bicep:322`). The monthly cost budget
+  notifies the same group (`MMCA.ADC/infra/main.bicep:545`, `:553`;
+  `MMCA.Store/infra/main.bicep:487`, `:495`).
 
 - **A saved workbook renders the same three signals.** `sloWorkbook`
-  (`MMCA.ADC/infra/main.bicep:541`, `MMCA.Store/infra/main.bicep:498`) is bound to the Log Analytics
+  (`MMCA.ADC/infra/main.bicep:508`, `MMCA.Store/infra/main.bicep:450`) is bound to the Log Analytics
   workspace and embeds `workbooks/adc-slo-workbook.json` / `workbooks/store-slo-workbook.json` at
-  compile time via `loadTextContent` (`MMCA.ADC/infra/main.bicep:550`,
-  `MMCA.Store/infra/main.bicep:507`), grouped per service by `AppRoleName`, so the visualization cannot
+  compile time via `loadTextContent` (`MMCA.ADC/infra/main.bicep:517`,
+  `MMCA.Store/infra/main.bicep:459`), grouped per service by `AppRoleName`, so the visualization cannot
   diverge from the alerts by being maintained somewhere else.
 
 - **`infra/OPERATIONS.md` is the paired artifact.** Each repo's runbook carries one `###` section per
@@ -142,16 +146,17 @@ deployment.
 
 **Coverage boundary inside ADC's template.** The gate covers exactly the alerts declared between the two
 parse anchors. ADC additionally provisions two operational scheduled query rules,
-`outbox-dead-letter` and `sql-dependency-failures` (`MMCA.ADC/infra/main.bicep:418`, materialized at
-`:433`), and a severity 1 gateway-availability metric alert over a three-location URL ping web test
-(`MMCA.ADC/infra/main.bicep:474`, `:507`). All three sit outside the `sloAlertSpecs` window, so the
+`outbox-dead-letter` and `sql-dependency-failures` (`MMCA.ADC/infra/main.bicep:385`, materialized at
+`:400`), and a severity 1 gateway-availability metric alert over a three-location URL ping web test
+(`MMCA.ADC/infra/main.bicep:441`, `:474`). All three sit outside the `sloAlertSpecs` window, so the
 pairing gate neither requires nor forbids runbook sections for them, and `OPERATIONS.md` carries none
 today (its only `-alert-` headings are the three SLO sections). Store provisions both of the families
 that apply to it, merged on 2026-08-13: the `outbox-dead-letter` scheduled query rule
-(`MMCA.Store/infra/main.bicep:390`) and the outside-in Gateway availability web test (`:431`) with its
-severity 1 metric alert (`:464`, severity at `:470`), alongside the three SLO rules and the budget
-notifications. Both sit after `resource sloAlerts` (`MMCA.Store/infra/main.bicep:345`) and therefore
-outside the parse window, so Store's two extras are ungated exactly as ADC's three are.
+(`MMCA.Store/infra/main.bicep:342`) and the outside-in Gateway availability web test (`:383`) with its
+severity 1 metric alert (`:416`, severity at `:422`), alongside the three SLO rules and the budget
+notifications. Both sit after the `sloAlerts` window closes
+(`MMCA.Store/infra/main.bicep:284-326`) and therefore outside the parse window, so Store's two extras
+are ungated exactly as ADC's three are.
 
 The two consumers then diverge in how they treat that ungated space. ADC writes no triage for its
 three; Store does write it, and keeps it out of the gate's reach on purpose. Store's `OPERATIONS.md`
@@ -164,16 +169,17 @@ section and fail the build. The runbook states that reasoning inline
 (`MMCA.Store/infra/OPERATIONS.md:62-64`). So the triage exists and is discoverable at 3am, while the
 gate still sees exactly three paired alerts on each side. Store deliberately does not port
 `sql-dependency-failures`: its own `dependency-failures` SLO rule already spans SQL, gRPC and HTTP
-(`MMCA.Store/infra/main.bicep:388-389`), so a narrower SQL-scoped twin would page twice for one fault.
+(`MMCA.Store/infra/main.bicep:340-341`), so a narrower SQL-scoped twin would page twice for one fault.
 
 ## Rationale
 - **Alerts as data, not as portal state.** One array is reviewable in a PR, diffable across
   environments, and re-deployable; the rules, the workbook, and the notification channel are created by
   the same template that creates the workloads they watch.
-- **Disabled beats deleted under incremental ARM.** Removing a resource from a template is a no-op
-  against the resource group, so "delete the old alert" would have shipped a duplicate paging path.
-  Keeping the legacy rules declared with `enabled: false` makes the supersede explicit, atomic with the
-  deployment, and one line to revert.
+- **A new name, not a reused one, is what makes a supersede safe under incremental ARM.** Removing a
+  resource from a template is a no-op against the resource group, so "delete the old alert" on its own
+  ships a duplicate paging path rather than replacing one. The replacements take distinct `-v2` names
+  instead, which is what lets the legacy declarations be absent from both templates today without
+  either renaming a live rule or colliding with the unsuffixed resources that still hold those names.
 - **A log-search rule can say what a metric alert cannot.** The whole class of false pages came from
   predicates a metric alert has no way to express. Moving to KQL kept the thresholds and severities
   identical while removing the 401/499 and connection-lifetime confounds, so the change is a precision
@@ -206,15 +212,17 @@ gate still sees exactly three paired alerts on each side. Store deliberately doe
   the gate by design, re-tiering or renaming either alert leaves stale runbook text that nothing
   checks. The honour-system caveat is recorded in the runbook itself
   (`MMCA.Store/infra/OPERATIONS.md:126-128`).
-- **Disabled-but-declared alerts are carried debt.** Three superseded `metricAlerts` remain in each
-  template and in each resource group until a follow-up deletes them, and the templates say so
-  (`MMCA.ADC/infra/main.bicep:361-367`, `MMCA.Store/infra/main.bicep:333-338`).
+- **The template is not the inventory of the resource group.** The superseded metric alerts are gone
+  from both templates, but an incremental ARM deployment does not delete what it stops declaring, so
+  their unsuffixed names stay occupied in the resource group, and the template says so
+  (`MMCA.Store/infra/main.bicep:286-288`). Anything that exists only in Azure is invisible to every
+  check in this record: the pairing gate parses the template, not the deployment.
 - **The runbook heading is not the deployed resource name.** The gate matches only the `-alert-<key>`
   infix, so the prefix in a heading is unchecked. Live rules resolve from `prefix` and carry the `-v2`
   suffix, while the headings read `adc-alert-failed-requests` and `store-alert-failed-requests`. On ADC
   the gap is only the environment segment and the suffix (`prefix` is `adc-${environmentName}`,
-  `MMCA.ADC/infra/main.bicep:125`). On Store the prefix does not match at all: `prefix` is
-  `mmca-${environmentName}` (`MMCA.Store/infra/main.bicep:105`), so the deployed rule is
+  `MMCA.ADC/infra/main.bicep:134`). On Store the prefix does not match at all: `prefix` is
+  `mmca-${environmentName}` (`MMCA.Store/infra/main.bicep:101`), so the deployed rule is
   `mmca-<env>-alert-failed-requests-v2` against a heading that starts `store-`. A heading is therefore
   a searchable handle, not a literal copy of what an operator sees in the portal, and on Store it is
   not even a prefix match on the resource name.

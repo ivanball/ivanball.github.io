@@ -25,59 +25,59 @@ carry a dedicated test tier for the transport that only production uses.
 
 - **Three provider values, one abstraction.** `MessageBusProvider` has exactly `InProcess = 0`,
   `RabbitMq = 1`, `AzureServiceBus = 2`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:116-132`), bound
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:176-192`), bound
   from the `MessageBus` section (`:14`) and defaulting to `InProcess` (`:17`). `AddBrokerMessaging`
   returns the container untouched for `InProcess`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:669-672`); for either
-  broker value it replaces `IMessageBus` with `BrokerMessageBus` (`:689`) and `IEventBus` with
-  `BrokerEventBus` (`:695`), so the outbox becomes the only delivery channel. No application or
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:741-744`); for either
+  broker value it replaces `IMessageBus` with `BrokerMessageBus` (`:771`) and `IEventBus` with
+  `BrokerEventBus` (`:777`), so the outbox becomes the only delivery channel. No application or
   domain code names a transport.
 - **Local development is RabbitMQ, wired by the AppHost.** `AddMessageBroker()` provisions the
   RabbitMQ container with the management plugin
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:47-52`), and `WithBroker()`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:88-93`), and `WithBroker()`
   attaches it to a project resource with `WithReference` + `WaitFor` and sets
-  `MessageBus__Provider=RabbitMq` (`:66-76`). Every extracted service gets it: ADC's four
-  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:93,116,156,181`, broker declared at `:60`)
-  and Store's three (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:111,132,170`, broker at
-  `:44`). The developer sets nothing: the orchestrator owns the choice.
+  `MessageBus__Provider=RabbitMq` (`:107-117`). Every extracted service gets it: ADC's four
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:96,125,168,196`, broker declared at `:64`)
+  and Store's three (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:130,152,194`, broker at
+  `:48`). The developer sets nothing: the orchestrator owns the choice.
 - **Production is Azure Service Bus, injected by Bicep.** Each service container app receives
   `MessageBus__Provider=AzureServiceBus` plus a `MessageBus__ConnectionString` secret reference:
-  ADC at `MMCA.ADC/infra/main.bicep:1136-1137` (identity, `:1029`), `:1315` (conference, `:1236`),
-  `:1446` (engagement, `:1365`), `:1587` (notification, `:1494`); Store at
-  `MMCA.Store/infra/main.bicep:1035-1036` (identity, `:950`), `:1175` (catalog, `:1109`), `:1300`
-  (sales, `:1214`). The images are the same ones the AppHost runs locally; only the two environment variables
+  ADC at `MMCA.ADC/infra/main.bicep:1085-1086` (identity, `:984`), `:1262-1263` (conference, `:1185`),
+  `:1391-1392` (engagement, `:1312`), `:1530-1531` (notification, `:1439`); Store at
+  `MMCA.Store/infra/main.bicep:976-977` (identity, `:897`), `:1111-1112` (catalog, `:1046`),
+  `:1234-1235` (sales, `:1150`). The images are the same ones the AppHost runs locally; only the two environment variables
   differ.
 - **One resolution order for the connection string.** `ResolveBrokerConnectionString` prefers an
   explicit `MessageBus:ConnectionString`, then `ConnectionStrings:rabbitmq`, then
-  `ConnectionStrings:messaging` (`DependencyInjection.cs:768-777`). Aspire's `WithReference` and
+  `ConnectionStrings:messaging` (`DependencyInjection.cs:880-889`). Aspire's `WithReference` and
   Bicep's `secretRef` therefore both land on a path the host already reads, and the transport
   selector stays separate from the credential.
 - **Retry policy is identical on both transports.** Each branch of `ConfigureBrokerTransport` calls
   `cfg.UseMessageRetry(r => r.Exponential(...))` with the same four arguments before
-  `ConfigureEndpoints`: RabbitMQ at `DependencyInjection.cs:835-839`, Azure Service Bus at
-  `:862-866`. The values come from one settings object: `RetryLimit` 5, `RetryMinIntervalSeconds` 1,
-  `RetryMaxIntervalSeconds` 30 (`MessageBusSettings.cs:43,50,56`). Second-level redelivery is the one
+  `ConfigureEndpoints`: RabbitMQ at `DependencyInjection.cs:947-951`, Azure Service Bus at
+  `:974-978`. The values come from one settings object: `RetryLimit` 5, `RetryMinIntervalSeconds` 1,
+  `RetryMaxIntervalSeconds` 30 (`MessageBusSettings.cs:53,60,66`). Second-level redelivery is the one
   place the two transports diverge by design: Azure Service Bus schedules messages natively, so
-  `UseDelayedRedelivery` is applied unconditionally there (`DependencyInjection.cs:859`), while
+  `UseDelayedRedelivery` is applied unconditionally there (`DependencyInjection.cs:971`), while
   RabbitMQ keeps it opt-in behind `EnableDelayedRedelivery` (default `false`,
-  `MessageBusSettings.cs:96`) because it needs the delayed-message-exchange plugin the Aspire
-  container does not ship (`DependencyInjection.cs:822-825`, posture documented in the remarks at
-  `:794-801`).
+  `MessageBusSettings.cs:156`) because it needs the delayed-message-exchange plugin the Aspire
+  container does not ship (`DependencyInjection.cs:934-938`, posture documented in the remarks at
+  `:906-913`).
 - **Service Bus Standard tier and `Manage` rights are forced by the topology MassTransit builds.**
-  Both namespaces are `Standard`/`Standard` (`MMCA.ADC/infra/main.bicep:724-727`,
-  `MMCA.Store/infra/main.bicep:676-679`) because `UsingAzureServiceBus` configures a topic per
+  Both namespaces are `Standard`/`Standard` (`MMCA.ADC/infra/main.bicep:691-694`,
+  `MMCA.Store/infra/main.bicep:628-631`) because `UsingAzureServiceBus` configures a topic per
   message type plus a subscription per consumer, and Basic supports queues only
-  (`MMCA.ADC/infra/main.bicep:715-716`, `MMCA.Store/infra/main.bicep:667-670`). The `app-clients`
-  authorization rule carries `Send` + `Listen` + **`Manage`** (`MMCA.ADC/infra/main.bicep:744-746`,
-  rule at `:739-749`; `MMCA.Store/infra/main.bicep:695-698`, rule at `:691-701`) so
+  (`MMCA.ADC/infra/main.bicep:682-683`, `MMCA.Store/infra/main.bicep:620-623`). The `app-clients`
+  authorization rule carries `Send` + `Listen` + **`Manage`** (`MMCA.ADC/infra/main.bicep:710-714`,
+  rule at `:706-716`; `MMCA.Store/infra/main.bicep:647-651`, rule at `:643-653`) so
   `ConfigureEndpoints` can provision that topology at startup; without `Manage` the first publish
-  fails with an Unauthorized topology error (`MMCA.ADC/infra/main.bicep:736`,
-  `MMCA.Store/infra/main.bicep:688`). Store sources the connection string from that dedicated rule
+  fails with an Unauthorized topology error (`MMCA.ADC/infra/main.bicep:703-704`,
+  `MMCA.Store/infra/main.bicep:640-641`). Store sources the connection string from that dedicated rule
   rather than `RootManageSharedAccessKey`, so a later move to managed identity can revoke it without
-  touching the namespace root (`MMCA.Store/infra/main.bicep:136,138`).
+  touching the namespace root (`MMCA.Store/infra/main.bicep:131-133`).
 - **Tests use the transport the tier is testing.** A per-service integration host configures no
   provider, so `AddBrokerMessaging` short-circuits and the in-process bus stands
-  (`DependencyInjection.cs:669-672`). The cross-service round-trip tier runs the real broker: the
+  (`DependencyInjection.cs:741-744`). The cross-service round-trip tier runs the real broker: the
   shared fixture base sets `MessageBus__Provider=RabbitMq` plus
   `ConnectionStrings__rabbitmq` against a Testcontainers RabbitMQ for every host it boots
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:249-250`).
@@ -98,7 +98,7 @@ carry a dedicated test tier for the transport that only production uses.
 Adoption differs by repo. ADC and Store select a broker on every extracted service, local and
 production alike. MMCA.Helpdesk stays on `InProcess`: its monolith host calls the same
 `AddBrokerMessaging(builder.Configuration)` with no `MessageBus:Provider` configured
-(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:105`), and its AppHost provisions no
+(`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:118`), and its AppHost provisions no
 broker, so extraction later is an AppHost change rather than a code change.
 
 ## Rationale
@@ -126,7 +126,7 @@ broker, so extraction later is an AppHost change rather than a code change.
 ## Trade-offs
 - **Two brokers means two behaviors to keep aligned.** Configuration parity is enforced by one code
   path, but the products still differ (Service Bus supports delayed redelivery natively, the Aspire
-  RabbitMQ container does not, `DependencyInjection.cs:794-801`), so a transport-specific behavior
+  RabbitMQ container does not, `DependencyInjection.cs:906-913`), so a transport-specific behavior
   can still be adopted by accident.
 - **Production runs a transport that no gating check exercises.** The emulator tiers are
   `continue-on-error` on a nightly schedule (`MMCA.ADC/.github/workflows/cross-service-tests.yml:150`,
@@ -137,16 +137,16 @@ broker, so extraction later is an AppHost change rather than a code change.
   smoke proves the binding and the topology provisioning, not production behavior at volume.
 - **`Manage` rights are broad.** The `app-clients` rule can create and delete entities in the
   namespace, which is the price of letting `ConfigureEndpoints` build the topology instead of
-  declaring every topic in Bicep (`MMCA.ADC/infra/main.bicep:739-749`).
+  declaring every topic in Bicep (`MMCA.ADC/infra/main.bicep:706-716`).
 - **Provider selection is per host and silent when missing.** A service that never receives
   `MessageBus__Provider` keeps the in-process bus and publishes nothing to the broker, without an
-  error (`DependencyInjection.cs:669-672`); correctness depends on auditing the AppHost and the Bicep
+  error (`DependencyInjection.cs:741-744`); correctness depends on auditing the AppHost and the Bicep
   env lists, the same inventory caveat ADR-021 carries for the inbox.
 - **The choice lives in AppHost prose that has to be maintained alongside the calls.** The note above
   ADC's Notification registration now states that `WithBroker(rabbit)` wires the transport the same
   way as the other services, and records that an earlier version of the same note said the broker was
-  not wired yet (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:82-84`, the call it describes at
-  `:93`). Keeping the transport decision in orchestration code puts the explanation in comments, which
+  not wired yet (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:85-87`, the call it describes at
+  `:96`). Keeping the transport decision in orchestration code puts the explanation in comments, which
   are not checked by anything.
 
 ## Related

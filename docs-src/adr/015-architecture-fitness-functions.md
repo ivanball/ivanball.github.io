@@ -162,16 +162,16 @@ exemption records a genuine blind spot in the rule rather than an accepted defec
 This is the structural change to the Decision above, which framed enforcement as two layers (an MSBuild
 project-reference guard and a NetArchTest suite). The gate is neither: it is a **compile-time analyzer
 with a committed baseline**, `Microsoft.CodeAnalysis.PublicApiAnalyzers` 5.6.0
-(`MMCA.Common/Directory.Packages.props:164`), applied to every `Source` project through one
-`Directory.Build.props` ItemGroup rather than per csproj (`:78-85`), with `PublicAPI.Shipped.txt` and
-`PublicAPI.Unshipped.txt` added as `AdditionalFiles` (`:83-84`). Fourteen projects carry the pair.
-**`MMCA.Common.UI.Maui` is deliberately excluded** and the condition says why (`:73-76`): it lives
+(`MMCA.Common/Directory.Packages.props:194`), applied to every `Source` project through one
+`Directory.Build.props` ItemGroup rather than per csproj (`:86-93`), with `PublicAPI.Shipped.txt` and
+`PublicAPI.Unshipped.txt` added as `AdditionalFiles` (`:91-92`). Fourteen projects carry the pair.
+**`MMCA.Common.UI.Maui` is deliberately excluded** and the condition says why (`:82-84`): it lives
 outside `MMCA.Common.slnx` and builds only on the windows `build-maui` job across four MAUI TFMs
 (ADR-042), "so its baseline could neither be bootstrapped nor kept honest from the normal build".
 
 The gate is exactly two rules: **RS0016** fails the build on a public member absent from
 `PublicAPI.Shipped.txt` and **RS0017** on a declared member that disappeared
-(`Directory.Build.props:68-71`, intent stated at `:26` and `.editorconfig:880-884`). Neither is
+(`Directory.Build.props:77-80`, intent stated at `:26` and `.editorconfig:885-887`). Neither is
 explicitly set to `error`: both are left at the repository's global analyzer-error default
 (`dotnet_analyzer_diagnostic.severity = error`, `.editorconfig:312`, plus `TreatWarningsAsErrors`,
 `Directory.Build.props:7`), so they are errors by inheritance rather than by their own entry.
@@ -186,12 +186,12 @@ nothing else. **What is baselined is the surface as of this branch**, which is w
 revision described plus the Section B ones that followed, not a frozen picture of one release. The
 start version is no longer uncited: the gate shipped in v1.153.0, whose changelog entry names
 `Microsoft.CodeAnalysis.PublicApiAnalyzers` on every in-slnx Source project with committed baselines as
-one of three new build gates (`MMCA.Common/CHANGELOG.md:297-303`, under the v1.153.0 heading at
-`:242`). The discipline therefore begins with
+one of three new build gates (`MMCA.Common/CHANGELOG.md:986-992`, under the v1.153.0 heading at
+`:931`). The discipline therefore begins with
 v1.153.0 rather than applying retroactively.
 
 Three rules from the same analyzer are off, each with the reason recorded rather than silently
-suppressed (`.editorconfig:886-895`): **RS0026 / RS0027** (no multiple public overloads with optional
+suppressed (`.editorconfig:890-899`): **RS0026 / RS0027** (no multiple public overloads with optional
 parameters) because the surface being baselined already ships those pairs, mostly the repository read
 and query methods, so obeying the rule now would mean a breaking signature change on every consumer
 ("off rather than silently baselined as a lie"); and **RS0041** (no oblivious reference types in public
@@ -199,7 +199,7 @@ members) because every hit is inside Razor generated code that is not nullable-a
 ours to annotate. RS0041 additionally sits in the global `NoWarn` (`Directory.Build.props:22-27`), and
 the duplication is load-bearing rather than sloppy: a `dotnet_diagnostic` severity does not reach
 generated code, so the `.editorconfig` entry alone would not suppress it. RS0051-RS0056, the
-internal-API analog over `InternalAPI.Shipped.txt`, are off too (`.editorconfig:896-903`): only the
+internal-API analog over `InternalAPI.Shipped.txt`, are off too (`.editorconfig:900-907`): only the
 public, packaged surface is under contract.
 
 **This formalizes what the `consumer-source-build` canary only sampled.** That CI job builds
@@ -333,9 +333,10 @@ job does and the solution-wide run cannot.
 
 **One citation was re-anchored, not rewritten.** The v1.153.0 changelog bullet naming
 `Microsoft.CodeAnalysis.PublicApiAnalyzers` is verbatim unchanged but has moved to
-`MMCA.Common/CHANGELOG.md:297-303` (its release heading at `:242`) as newer releases were prepended
+`MMCA.Common/CHANGELOG.md:986-992` (its release heading at `:931`) as newer releases were prepended
 above it. Line-anchored citations into an append-at-top file are a known cost of citing this precisely;
-the alternative, citing nothing, is worse.
+the alternative, citing nothing, is worse. The anchors above are the current ones and are re-anchored
+in place on each audit, since a pointer that has drifted is broken rather than merely superseded.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

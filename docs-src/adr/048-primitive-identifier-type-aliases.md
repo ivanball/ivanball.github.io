@@ -19,7 +19,7 @@ revisit triggers instead of open-endedly. The decision below is unchanged; see t
 ## Context
 Every entity needs an identity type. The framework's base entity is generic over that type:
 `BaseEntity<TIdentifierType>` constrains it to `notnull` and exposes a single `required init Id`
-(`Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:14-17`), over the equally generic
+(`Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34-37`), over the equally generic
 `IBaseEntity<TIdentifierType>` (`Source/Core/MMCA.Common.Domain/Interfaces/IBaseEntity.cs:7-11`). That
 generic parameter accepts either of the two common identity styles:
 
@@ -46,7 +46,7 @@ not as a wrapper struct.
   (`Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31`), and constrains the user
   type parameter of `AuthenticationServiceBase<TUser>`
   (`where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IAuthUser`,
-  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:41`), with each consuming
+  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:56`), with each consuming
   app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
@@ -62,13 +62,13 @@ not as a wrapper struct.
 - **Aliases are linked solution-wide via `Directory.Build.props`.** Each `GlobalUsings.*.cs` file is
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
-  (`MMCA.Common/Directory.Build.props:110-120`), ADC
-  (`MMCA.ADC/Directory.Build.props:79-92`), Store (`MMCA.Store/Directory.Build.props:79-90`). Adding a
+  (`MMCA.Common/Directory.Build.props:128-138`), ADC
+  (`MMCA.ADC/Directory.Build.props:89-102`), Store (`MMCA.Store/Directory.Build.props:90-101`). Adding a
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
   entity is `User : AuditableAggregateRootEntity<UserIdentifierType>`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:33`); the cross-context
-  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 70); the EF
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34`); the cross-context
+  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 65); the EF
   configuration is `EntityTypeConfigurationSQLServer<User, UserIdentifierType>`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13`);
   the repository handle is `GetRepository<User, UserIdentifierType>()`
@@ -76,7 +76,7 @@ not as a wrapper struct.
   the API contract is `UserDTO : IBaseDTO<UserIdentifierType>` with a `UserIdentifierType Id`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/UserDTO.cs:8,11`); and the
   integration event carries `UserIdentifierType UserId`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:24`).
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:26`).
   No converter, serializer shim, or OpenAPI schema mapping appears at any hop: `int` and `Guid` are the
   values on the wire and in the store.
 - **The wrapper-struct alternative is deliberately deferred, not planned.** No wrapper-struct

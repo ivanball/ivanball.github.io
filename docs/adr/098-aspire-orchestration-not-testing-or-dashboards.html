@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-098: Aspire for Orchestration, Not for Testing or Production Dashboards · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as decisions rather than as gaps. Nothing in any repo…">
+  <meta name="description" content="Accepted (2026-08-28). Revised 2026-08-31: the sanctioned nightly AppHost smoke test is implemented, so Aspire.Hosting.Testing now ships in exactly one…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-098: Aspire for Orchestration, Not for Testing or Production Dashboards">
-  <meta property="og:description" content="Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as decisions rather than as gaps. Nothing in any repo…">
+  <meta property="og:description" content="Accepted (2026-08-28). Revised 2026-08-31: the sanctioned nightly AppHost smoke test is implemented, so Aspire.Hosting.Testing now ships in exactly one…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-098: Aspire for Orchestration, Not for Testing or Production Dashboards">
-  <meta name="twitter:description" content="Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as decisions rather than as gaps. Nothing in any repo…">
+  <meta name="twitter:description" content="Accepted (2026-08-28). Revised 2026-08-31: the sanctioned nightly AppHost smoke test is implemented, so Aspire.Hosting.Testing now ships in exactly one…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"098 · Aspire for Orchestration, Not for Testing or Production Dashboards","item":"https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -209,33 +212,42 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-098-aspire-for-orchestration-not-for-testing-or-production-dashboards">ADR-098: Aspire for Orchestration, Not for Testing or Production Dashboards</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as
-          decisions rather than as gaps. Nothing in any repo changes: both parts describe what the four repos
-          already do, and the value of writing them down is that a reader (or a new module author) stops
-          treating each absence as an oversight to be closed.</p>
+          <p>Accepted (2026-08-28). Revised 2026-08-31: the sanctioned nightly AppHost smoke test is implemented,
+          so <code>Aspire.Hosting.Testing</code> now ships in exactly one place, and every citation below is re-verified
+          against current source. Records two standing divergences from the default .NET Aspire path as
+          decisions rather than as gaps. Both parts describe what the four repos already do, with the single
+          bounded exception recorded in Decision 1, and the value of writing them down is that a reader (or a
+          new module author) stops treating each absence as an oversight to be closed.</p>
           <h2 id="context">Context</h2>
           <p>Aspire is used on exactly two surfaces here.</p>
           <p><strong>Orchestration.</strong> Each app has an AppHost that composes the local stack from one file: ADC&#39;s
           provisions a persistent SQL Server container, one database per service, Redis and the RabbitMQ
           broker, then the four services, the Gateway and the Blazor UI
           (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:1-9</code>, SQL at <code>:14-15</code>, the four databases at
-          <code>:32-35</code>, Redis at <code>:39-40</code>, the broker at <code>:60</code>); <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14</code>
+          <code>:36-39</code>, Redis at <code>:43-44</code>, the broker at <code>:64-65</code>); <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14</code>
           is the same shape over its three services. Service discovery and health-based startup ordering come from Aspire&#39;s resource
           model rather than from hand-written wiring.</p>
           <p><strong>Service defaults.</strong> Every host calls <code>AddServiceDefaults</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39</code>), which wires OpenTelemetry, the
           default health checks, warm-up readiness (ADR-025), service discovery and the Polly HTTP defaults
-          (ADR-009), with <code>MapDefaultEndpoints</code> (<code>:336</code>) adding <code>/health</code> and <code>/alive</code>.</p>
-          <p>Aspire offers two further things this workspace does <strong>not</strong> use, and both read from the outside like
-          an unfinished adoption:</p>
+          (ADR-009), with <code>MapDefaultEndpoints</code> (<code>:328</code>) adding <code>/health</code> (<code>:330</code>), the live-only <code>/alive</code>
+          (<code>:334</code>) and the readiness probe <code>/health/ready</code> (<code>:350</code>) that ACA ingress holds traffic behind.</p>
+          <p>Aspire offers two further things this workspace does <strong>not</strong> adopt, and both read from the outside
+          like an unfinished adoption:</p>
           <ol>
           <li><code>DistributedApplicationTestingBuilder</code> (the <code>Aspire.Hosting.Testing</code> package), which boots the
-          whole app model in a test process. It appears in none of the four .NET repos.</li>
+          whole app model in a test process. No integration tier here uses it, and it appears in exactly one
+          project across the four .NET repos: ADC&#39;s nightly AppHost composition smoke test, the bounded
+          exception Decision 1 sanctions. The package is pinned at
+          <code>MMCA.ADC/Directory.Packages.props:87</code>, referenced only by
+          <code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/MMCA.ADC.AppHost.SmokeTests.csproj:29</code>,
+          and called in one place (<code>AppHostCompositionSmokeTests.cs:46</code>).</li>
           <li>The Azure Container Apps Aspire dashboard, the hosted version of the local dashboard, for looking
           at a deployed environment. No ACA dashboard resource or property exists in ADC&#39;s infrastructure.</li>
           </ol>
-          <p>Neither absence is an accident, but until now neither had a record, which is exactly how an
-          incidental gap and a deliberate choice become indistinguishable.</p>
+          <p>Neither the bounded use nor the outright absence is an accident, but until this record neither had a
+          written basis, which is exactly how an incidental gap and a deliberate choice become
+          indistinguishable.</p>
           <h2 id="decision">Decision</h2>
           <h3 id="1-integration-testing-stays-webapplicationfactory-plus-testcontainers">1. Integration testing stays <code>WebApplicationFactory</code> plus Testcontainers</h3>
           <p>The tiers that exist keep their shape, and <code>DistributedApplicationTestingBuilder</code> stays out of them.</p>
@@ -280,28 +292,32 @@
           brings the app model up and asserts the Gateway&#39;s <code>/health</code>, on the existing non-gating cross-service
           nightly (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:25-31</code>, never in <code>deploy.needs</code> by
           design at <code>:17-22</code>). Its job is to catch a broken AppHost composition without putting the app model
-          in the gating path. The implementation is the ADC nightly AppHost smoke test (an out-of-slnf test
-          project on <code>cross-service-tests.yml</code>, <code>continue-on-error</code> while its headless behavior on the CI
-          runner is unproven); anything beyond that single boot-and-probe is a reversal of this record, not an
-          extension of it.</p>
+          in the gating path. It ships as a single <code>[Fact]</code> that boots the real AppHost through
+          <code>DistributedApplicationTestingBuilder</code> and polls the gateway until it answers 200
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AppHostCompositionSmokeTests.cs:42-59</code>, the
+          builder call at <code>:46</code>), in a project that sits outside every <code>.slnx</code> and <code>.slnf</code> and is restored,
+          built and run by explicit path in the <code>apphost-smoke</code> job (<code>cross-service-tests.yml:191</code>, with
+          <code>continue-on-error: true</code> at <code>:196</code> while its headless behavior on the CI runner is unproven).
+          Anything beyond that single boot-and-probe is a reversal of this record, not an extension of it.</p>
           <h3 id="2-production-observability-is-workspace-based-app-insights-not-the-aca-aspire-dashboard">2. Production observability is workspace-based App Insights, not the ACA Aspire dashboard</h3>
           <ul>
           <li><strong>The sink is workspace-based Application Insights</strong>, backed by the existing Log Analytics
           workspace, with telemetry landing in the workspace tables under its PerGB2018 pricing and retention
-          (<code>MMCA.ADC/infra/main.bicep:191-208</code>, the workspace binding at <code>:206</code>); hosts export to it through
-          <code>UseAzureMonitor</code> whenever the injected connection string is present (<code>:196-198</code>, <code>:214-217</code>).</li>
+          (<code>MMCA.ADC/infra/main.bicep:194-204</code>, the workspace binding at <code>:201</code>); hosts export to it through
+          <code>UseAzureMonitor</code> whenever the injected connection string is present (<code>:191-193</code>, the injected
+          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> entry at <code>:209-212</code>).</li>
           <li><strong>The stream is deliberately thinned, and each cut is priced in the template.</strong> Head-based trace
-          sampling keeps 25% (<code>Telemetry__TracesSampleRatio</code> = <code>0.25</code>, <code>:223-226</code>); the OpenTelemetry logging
+          sampling keeps 25% (<code>Telemetry__TracesSampleRatio</code> = <code>0.25</code>, <code>:218-221</code>); the OpenTelemetry logging
           provider ships <code>Warning</code> and above while Serilog still writes <code>Information</code> to container stdout
-          (<code>:234-237</code>); the two highest-volume instrument groups (<code>http.client.*</code> gauges and the <code>dotnet.*</code>
-          runtime instruments, measured at about 65% of AppMetrics ingestion) are switched off (<code>:245-252</code>);
-          and the metric export interval is stretched from the 60-second default to 300 seconds, cutting
-          roughly 80% of the remaining datapoints while five-minute alert windows keep the same signal
-          (<code>:260-263</code>).</li>
+          (<code>:229-232</code>); the two highest-volume instrument groups (<code>http.client.*</code> gauges and the <code>dotnet.*</code>
+          runtime instruments, measured at about 65% of AppMetrics ingestion, <code>:234-239</code>) are switched off
+          (<code>:240-247</code>); and the metric export interval is stretched from the 60-second default to 300 seconds,
+          cutting roughly 80% of the remaining datapoints while five-minute alert windows keep the same signal
+          (<code>:255-258</code>).</li>
           <li><strong>What an operator actually reads is alerts and a workbook, not a live console.</strong> SLO rules ship as
-          code (<code>main.bicep:331</code>, <code>:388</code>, <code>:447</code>, and the Gateway availability alert at <code>:521</code>, all wired to
+          code (<code>main.bicep:331</code>, <code>:388</code>, <code>:447</code>, and the Gateway availability alert at <code>:474</code>, all wired to
           the unconditional action group at <code>:271-279</code>), and a saved Azure Monitor workbook visualizes the
-          same SLOs per service (<code>:555-567</code>), which is the deployed-environment view (ADR-062, ADR-041).</li>
+          same SLOs per service (<code>:508-520</code>), which is the deployed-environment view (ADR-062, ADR-041).</li>
           <li><strong>The ACA Aspire dashboard is not provisioned</strong>, and that is the decision rather than a to-do. It is
           ephemeral (no retention behind it), full fidelity (it would be looking at the very stream this
           template thins), and it has no alert or saved-query surface, so it cannot be the thing that pages
@@ -310,15 +326,16 @@
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Test at the boundary that ships.</strong> A service is deployed as its own container app
-          (<code>MMCA.ADC/infra/main.bicep:1036</code>, <code>:1250</code>, <code>:1379</code>, <code>:1508</code>), configured entirely through
+          (<code>MMCA.ADC/infra/main.bicep:984</code>, <code>:1185</code>, <code>:1312</code>, <code>:1439</code>), configured entirely through
           environment variables. <code>WebApplicationFactory</code> plus an environment-variable override channel is a
           closer model of that than an app model the deployment does not use: production topology comes from
-          Bicep (<code>MMCA.ADC/.github/workflows/deploy.yml:1129</code>), not from the AppHost.</li>
+          Bicep (<code>MMCA.ADC/.github/workflows/deploy.yml:1223</code>), not from the AppHost.</li>
           <li><strong>The cheapest tier that could have failed.</strong> The per-service tier needs no Docker at all, because
           <code>AddBrokerMessaging</code> returns early on the default <code>InProcess</code> provider, which is what an absent
           <code>MessageBus</code> section resolves to
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:687</code>, the early return
-          at <code>:693-699</code>), and only the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:732</code>, the missing-section
+          fallback at <code>:738-739</code> and the early return at <code>:741-744</code>, over the <code>InProcess</code> default on
+          <code>Settings/MessageBusSettings.cs:17</code>), and only the
           genuinely cross-process flows pay for containers, on a nightly rather than in the deploy chain
           (<code>cross-service-tests.yml:12-22</code>). Booting the whole app model to assert a validation error would
           invert that.</li>
@@ -344,7 +361,7 @@
           production code.</li>
           <li><strong>Sampling means a reported request may have no trace.</strong> At 0.25, three of four traces are dropped
           at the head, so an operator investigating a specific user report will often find the request counted
-          and not traced (<code>main.bicep:223-226</code>).</li>
+          and not traced (<code>main.bicep:218-221</code>).</li>
           <li><strong>The <code>Warning</code> floor moves <code>Information</code> logs off the queryable path.</strong> They exist in container
           stdout only (<code>:228-233</code>), so the correlation-id story (ADR-041) is complete only for what the floor
           admits.</li>

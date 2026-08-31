@@ -18,7 +18,10 @@ on the retries-exhausted path and the `reason` tag that separates the two, and t
 service-defaults, CQRS metric-literal, and outbox span citations onto their current lines. Amended
 (2026-08-18) to record two new meter families (`MMCA.Common.OutputCache`, `MMCA.Common.BestEffort`), to
 correct the meter inventory this record has been under-reporting, and to note that the correlation id
-now starts one hop earlier, at the Gateway; see the Revision (2026-08-18) at the end.
+now starts one hop earlier, at the Gateway; see the Revision (2026-08-18) at the end. Amended
+(2026-08-31) to record the application logging pipeline (Serilog as one additional provider beside the
+OpenTelemetry one, never a replacement `ILoggerFactory`), its level and file-sink policy, the pre-DI
+bootstrap logger, and which hosts adopt it; see the Amended (2026-08-31) section at the end.
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -55,23 +58,24 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   logging decorator routes all three of its exits through a private `RecordDuration` helper, so the
   measurement cannot be skipped. The command helper calls `CqrsMetrics.CommandDuration.Record(...)`
   tagged by `command` and `outcome`
-  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:70`) and the
-  query helper does the same for `QueryDuration`
-  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:68`).
+  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:79`, in the
+  `RecordDuration` helper declared at `:78`) and the query helper does the same for `QueryDuration`
+  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:77`, helper at
+  `:76`).
   The `outcome` tag takes `completed`, `failed` (a `Result` failure), or `exception`, one call site per
-  path (`LoggingCommandDecorator.cs:47`, `:42`, `:56`; the query equivalents at
-  `LoggingQueryDecorator.cs:44`, `:39`, `:53`), so count gives rate, the tag gives errors, and the
+  path (`LoggingCommandDecorator.cs:48`, `:43`, `:57`; the query equivalents at
+  `LoggingQueryDecorator.cs:45`, `:40`, `:54`), so count gives rate, the tag gives errors, and the
   histogram gives duration. The Aspire host subscribes the meter by literal name
   (`Extensions.cs:165`).
 
 - **An outbox dead-letter counter.** The outbox instruments live in their own static type
-  (`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMetrics.cs:15`), which owns the
-  meter `MMCA.Common.Outbox` (`OutboxMetrics.cs:18`) and the counter `outbox.dead_letter.count`
-  (`OutboxMetrics.cs:32`-`OutboxMetrics.cs:33`). `OutboxProcessor` increments it on both dead-letter
+  (`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMetrics.cs:16`), which owns the
+  meter `MMCA.Common.Outbox` (`OutboxMetrics.cs:19`) and the counter `outbox.dead_letter.count`
+  (`OutboxMetrics.cs:41`-`OutboxMetrics.cs:42`). `OutboxProcessor` increments it on both dead-letter
   paths, tagged by `event_type` and by a `reason` that tells them apart: `type_unresolvable` when a
-  message's event type cannot be resolved (`OutboxProcessor.cs:499`-`OutboxProcessor.cs:502`), and
+  message's event type cannot be resolved (`OutboxProcessor.cs:717`-`OutboxProcessor.cs:720`), and
   `retries_exhausted` when a failing message reaches `MaxRetries` and drops out of the poll
-  (`OutboxProcessor.cs:592`-`OutboxProcessor.cs:595`). The processor's activity source publishes outbox
+  (`OutboxProcessor.cs:672`-`OutboxProcessor.cs:675`). The processor's activity source publishes outbox
   spans under the same name (`OutboxProcessor.cs:85`); both the meter and the trace source are
   registered by literal name in the Aspire defaults (`Extensions.cs:164`, `Extensions.cs:175`).
 
@@ -83,8 +87,8 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   (`CorrelationIdMiddleware.cs:36`), and echoes it on the response
   (`CorrelationIdMiddleware.cs:39`, inside the `OnStarting` callback registered at
   `CorrelationIdMiddleware.cs:37`). The CQRS logging decorators stamp that same id into every log
-  scope (`LoggingCommandDecorator.cs:23`, `:25`), so logs, the correlation id, and the trace id line
-  up for one request.
+  scope (read at `LoggingCommandDecorator.cs:24`, stamped by `BeginCommandScope` at `:26`), so logs,
+  the correlation id, and the trace id line up for one request.
 
 - **Two high-volume metric families gated behind cost knobs, on by default.** ASP.NET Core metrics are
   always wired (`Extensions.cs:132`), but the two heaviest AppMetrics contributors on a low-traffic
@@ -93,38 +97,38 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   instrumentation at `Extensions.cs:143`), and .NET runtime metrics (`dotnet.gc.*`, `jit.*`,
   `thread_pool.*`) only when `Telemetry:DisableRuntimeMetrics` is unset or false (`Extensions.cs:150`,
   adding at `Extensions.cs:152`). Both keys are read by `IsInstrumentationDisabled`
-  (`Extensions.cs:396`-`Extensions.cs:397`), which drops the family only when the value parses as boolean `true`; absent,
+  (`Extensions.cs:388`-`Extensions.cs:389`), which drops the family only when the value parses as boolean `true`; absent,
   blank, or unparseable falls back to keeping the instrumentation, so a typo cannot silently blind a
   whole metric family. A deployed host sets one or both to `true` to cut ingestion cost; outbound
   dependency latency is still captured as traces when `HttpClient` metrics are dropped.
 
 - **Head-based sampling as a cost knob, off by default.** `Telemetry:TracesSampleRatio`
-  (`Extensions.cs:188`, parsed by `TryGetTraceSampleRatio` at `Extensions.cs:373`, which reads the
-  key at `Extensions.cs:376`) is unset by default, so a host samples everything and behavior does not
+  (`Extensions.cs:188`, parsed by `TryGetTraceSampleRatio` at `Extensions.cs:365`, which reads the
+  key at `Extensions.cs:368`) is unset by default, so a host samples everything and behavior does not
   change. A deployed host sets a ratio in
   the open interval (0,1) to keep that fraction of traces; the value wraps a `TraceIdRatioBasedSampler`
   in a `ParentBasedSampler` (`Extensions.cs:192`) so a sampled-in request keeps its whole trace across
   service boundaries. A key that is absent, unparseable, or outside (0,1) falls back to sample-all
-  (`Extensions.cs:377`-`Extensions.cs:382`), so a typo can never silently drop all telemetry.
+  (`Extensions.cs:369`-`Extensions.cs:373`), so a typo can never silently drop all telemetry.
 
 - **Outbox poll spans are filtered out of export.** `OutboxPollFilterProcessor`
   (`Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15`), registered before
   the exporters (`Extensions.cs:184`), clears the `Recorded` flag on the recurring `OutboxPoll` span
   and its children (`OutboxPollFilterProcessor.cs:45`). The poll query runs inside that span, opened at
-  the top of `FetchCandidatesAsync` (`OutboxProcessor.cs:405`, span started at `OutboxProcessor.cs:411`,
+  the top of `FetchCandidatesAsync` (`OutboxProcessor.cs:411`, span started at `OutboxProcessor.cs:417`,
   named at `OutboxProcessor.cs:73`), so steady-state polling does not flood Application Insights. Real
   outbox work is untouched: each per-message `OutboxProcess` span is started by `StartOutboxActivity`
-  (called once per message at `OutboxProcessor.cs:490`, declared at `OutboxProcessor.cs:657`) under an
+  (called once per message at `OutboxProcessor.cs:577`, declared at `OutboxProcessor.cs:773`) under an
   explicit parent context restored from the message's stored trace and span ids
-  (`OutboxProcessor.cs:664`-`OutboxProcessor.cs:667`), span started at
-  `OutboxProcessor.cs:669`-`OutboxProcessor.cs:672`, so it is never a child of the poll span.
+  (`OutboxProcessor.cs:780`-`OutboxProcessor.cs:783`), span started at
+  `OutboxProcessor.cs:785`-`OutboxProcessor.cs:788`, so it is never a child of the poll span.
 
 - **Dual exporters, either or both.** `AddOpenTelemetryExporters` enables OTLP when
-  `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.cs:288`-`Extensions.cs:289`, the Aspire dashboard sets it, exporter
-  wired at `Extensions.cs:293`) and Azure Monitor via `UseAzureMonitor` (`Extensions.cs:301`) when
-  `APPLICATIONINSIGHTS_CONNECTION_STRING` is present (read at `Extensions.cs:296`-`Extensions.cs:297`, checked at
-  `Extensions.cs:299`, and set by the cloud deployment). Both can be active at once
-  (`Extensions.cs:284`), so local development ships to the
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.cs:280`-`Extensions.cs:281`, the Aspire dashboard sets it, exporter
+  wired at `Extensions.cs:285`) and Azure Monitor via `UseAzureMonitor` (`Extensions.cs:293`) when
+  `APPLICATIONINSIGHTS_CONNECTION_STRING` is present (read at `Extensions.cs:288`-`Extensions.cs:289`, checked at
+  `Extensions.cs:291`, and set by the cloud deployment). Both can be active at once
+  (`Extensions.cs:276`), so local development ships to the
   Aspire dashboard and production ships to workspace-based Application Insights with no code change.
 
 ## Rationale
@@ -200,6 +204,64 @@ shape of signal that goes unnoticed until an incident. And neither is wired to a
 section, joining ADR-087's two counters in the gap [ADR-062](062-slo-alerting-as-code.md) describes.
 The duplicated-literal cost this record already records in Trade-offs now applies to seven names rather
 than two.
+
+## Amended (2026-08-31)
+The log side of this record. Until now it named only the OpenTelemetry logging call inside
+`ConfigureOpenTelemetry` (`Extensions.cs:125`); what a host actually WRITES its application log lines
+through was undocumented.
+
+**Serilog is registered as ONE additional provider, never through `UseSerilog()`.** `AddCommonSerilog`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Logging/SerilogHostExtensions.cs:48`) builds the
+framework's logger configuration, publishes it as the global `Log.Logger`
+(`SerilogHostExtensions.cs:54`), and adds it to the host's existing factory with
+`builder.Logging.AddSerilog(Log.Logger, dispose: true)` (`:55`). The alternative is a silent-failure
+trap no code reading surfaces, which is why the rationale lives on the type itself (`:16`-`:20`):
+`UseSerilog()` replaces the whole `ILoggerFactory` and with it every other provider, including the
+OpenTelemetry to Azure Monitor provider `AddServiceDefaults` wires (`Extensions.cs:41`,
+`Extensions.cs:121`). A host that calls it publishes no application log line to Application Insights at
+all, while its metrics, traces and health endpoints stay green, so the gap reads as a quiet service
+rather than as a misconfiguration. Ordering carries the same weight in the other direction: the helper
+runs BEFORE `AddServiceDefaults()` in every host that uses it (for example
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:98`-`:99`), so the OpenTelemetry
+provider joins the factory Serilog is already in. One fitness test pins the invariant: the built
+container must contain exactly one `SerilogLoggerProvider`
+(`MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Logging/SerilogHostExtensionsTests.cs:156`-`:158`).
+
+**Level policy and sinks.** The minimum level is `Debug` in Development and `Information` everywhere
+else (`ResolveMinimumLevel`, `SerilogHostExtensions.cs:76`-`:77`, applied at `:107`), with
+`Microsoft.EntityFrameworkCore` and `Microsoft.AspNetCore` held at `Warning` (`:108`-`:109`) and a
+console sink always (`:110`). The rolling daily file sink is environment-conditional: added everywhere
+except Production (`ShouldWriteFileSink`, `:87`-`:88`, applied at `:112`-`:118`), because a production
+container writes it to ephemeral disk nothing reads while stdout and the OpenTelemetry provider already
+carry the same events, whereas outside Production (local runs and the CI E2E stack) that file is what a
+failure gets diagnosed from. A host needing one extra sink or enricher passes the optional `configure`
+hook (`:50`, invoked at `:120`) instead of forking the helper.
+
+**A bootstrap logger for the pre-DI window.** Module discovery runs before the DI container exists, so
+there is no `ILogger<T>` to resolve yet. `CreateBootstrapLoggerFactory()` (`:67`-`:68`) returns a
+factory writing to the same global `Log.Logger`, which each host disposes once startup wiring is done
+(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:113`).
+
+**Adoption is asymmetric.** All seven ADC/Store service hosts call `AddCommonSerilog`, each in its own
+`Program.cs`: ADC Conference (`:98`), Engagement (`:81`), Identity (`:95`), Notification (`:84`), and
+Store Catalog (`:66`), Identity (`:72`), Sales (`:83`); each pairs it with
+`CreateBootstrapLoggerFactory()` in the same file (ADC `:305`, `:204`, `:243`, `:182`; Store `:113`,
+`:108`, `:121`). Neither Gateway references Serilog in its `Program.cs` at all, and neither does
+`MMCA.ADC.UI.Web`: those three take the plain OpenTelemetry
+logging `AddServiceDefaults` gives them. `MMCA.Store.UI.Web` is a third shape, hand-rolling the same
+configuration inline (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:48`-`:53`, the
+non-Production file sink at `:58`-`:64`) and registering it as one provider (`:74`) without calling the
+helper.
+
+Three costs come with it. **The invariant is guarded in the framework, not at the consumer**: the one
+test above runs in MMCA.Common, and nothing in a host's own build stops a new service from reaching for
+`UseSerilog()`, whose failure mode is silence in a place nobody watches for absence. **The defaults
+exist in two shapes**, the helper and `MMCA.Store.UI.Web`'s inline copy, so a change to the framework
+defaults reaches seven hosts and misses the eighth. And **`Information` is not the level that reaches
+the queryable store**: [ADR-098](098-aspire-orchestration-not-testing-or-dashboards.md) records the
+production thinning that floors the OpenTelemetry logging provider at `Warning` while Serilog keeps
+`Information` on container stdout, so the two providers this record puts side by side deliberately
+carry different volumes.
 
 ## Related
 ADR-003 (the outbox whose dead-letter counter and poll-span filtering this defines), ADR-014 (the

@@ -41,7 +41,7 @@ saga-timeout backstop for steps that depend on an external system.
   payment is `OrderPaymentFailedSagaHandler` (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:20-22`).
   A new compensating action is a new handler, not an edit to the command.
 - **Each handler runs in its own DI scope.** Domain-event handlers are registered as singletons
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:143-148`), so every one
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:184-189`), so every one
   opens its own scope through `IServiceScopeFactory` (`OrderCancelledSagaHandler.cs:41`,
   `OrderPaymentFailedSagaHandler.cs:29`,
   `.../Infrastructure/Services/PaymentReconciliationService.cs:89,132`), and the ones that persist
@@ -52,9 +52,9 @@ saga-timeout backstop for steps that depend on an external system.
   notification. Compensation that does write therefore commits on its own, after the originating
   save, rather than joining the transaction it is compensating for.
 - **Idempotency is a persisted marker committed by the SAME `SaveChanges` as the compensating
-  writes.** `Order.InventoryRestored` (`.../Domain/Orders/Order.cs:48-54`) is the marker;
+  writes.** `Order.InventoryRestored` (`.../Domain/Orders/Order.cs:61-67`) is the marker;
   `MarkInventoryRestored` refuses a second call and refuses a non-cancelled order
-  (`Order.cs:281-298`). The handler checks the marker first
+  (`Order.cs:302-325`). The handler checks the marker first
   (`OrderCancelledSagaHandler.cs:56-62`), applies the increases through a pure domain service
   (`.../Domain/Services/InventoryRestorationDomainService.cs:14-27`), then one
   `SaveChangesAsync` commits the increases and the marker together
@@ -63,8 +63,8 @@ saga-timeout backstop for steps that depend on an external system.
 - **Redelivery is the retry mechanism.** A failing in-process handler leaves its outbox row
   unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:301-329`) and the
   `OutboxProcessor` re-dispatches the pure domain event on a later cycle
-  (`MMCA.Common/.../Outbox/OutboxProcessor.cs:507-597`), with the bounded retries, backoff and
-  dead-lettering ADR-003 already defines. The framework packages that failure mode and only that
+  (`MMCA.Common/.../Outbox/OutboxProcessor.cs:604`), with the bounded retries, backoff and
+  dead-lettering ADR-003 already defines (`OutboxProcessor.cs:631-643,667-677`). The framework packages that failure mode and only that
   one: `SafeDomainEventHandler<TDomainEvent>` runs the subclass inside an exception filter whose
   `LogAndRethrow` writes one error line and always returns `false`, so the exception keeps
   propagating, with `OperationCanceledException` excluded because a host shutdown is not a delivery
@@ -77,9 +77,9 @@ saga-timeout backstop for steps that depend on an external system.
   `IDomainEventHandler<OrderPaymentFailed>` directly (`OrderPaymentFailedSagaHandler.cs:20-22`) and
   swallows everything except cancellation into an Error log (`OrderPaymentFailedSagaHandler.cs:52-55`).
 - **Concurrent redeliveries are serialized by the `RowVersion` concurrency token.** Every auditable
-  entity carries one (`MMCA.Common/.../Entities/AuditableBaseEntity.cs:39`), configured as a
+  entity carries one (`MMCA.Common/.../Entities/AuditableBaseEntity.cs:53`), configured as a
   concurrency token on every non-owned auditable type
-  (`MMCA.Common/.../DbContexts/ApplicationDbContext.cs:445-473`, ADR-035). Two deliveries that both
+  (`MMCA.Common/.../DbContexts/ApplicationDbContext.cs:490-521`, ADR-035). Two deliveries that both
   pass the marker check carry the same original token into their update: one commits, the other gets
   `DbUpdateConcurrencyException` and its outbox retry then finds the committed marker and skips.
 - **A periodic sweep drives the transitions a lost webhook would have.**
@@ -88,12 +88,12 @@ saga-timeout backstop for steps that depend on an external system.
   (`.../Infrastructure/DependencyInjection.cs:34-36`). Each cycle selects the oldest orders that have
   sat in `PaymentInitiated` past a cutoff, ordered, bounded and projected to ids entirely in SQL
   (`PaymentReconciliationService.cs:101-109`) over a dedicated filtered index
-  (`.../Persistence/EntityConfiguration/OrderConfiguration.cs:46-52`), asks Stripe for the session's
+  (`.../Persistence/EntityConfiguration/OrderConfiguration.cs:53-59`), asks Stripe for the session's
   authoritative status, and applies the matching transition: paid to `MarkAsPaid`, expired to
   `MarkAsPaymentFailed`, still open to nothing (`PaymentReconciliationService.cs:180-202`). It is
   configuration-gated (`.../Infrastructure/Settings/PaymentReconciliationSettings.cs:13-36`, defaults
   of a 10-minute interval, a 30-minute stuck age and a 50-order batch, carried in
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:62-67`).
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:66-71`).
 - **The sweep gets no private path into the aggregate, and loses races on purpose.** It calls the same
   guarded transitions as the webhook handler
   (`.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:97,128`) and the
@@ -166,14 +166,14 @@ adopted.
   handlers after it, and a redelivery re-runs the ones that already succeeded. The blast radius is
   wider than the one event: the interceptor dispatches every local event of a save in a single call
   and marks their outbox rows processed only afterwards
-  (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:305-310`), so a throw skips
+  (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:328-333`), so a throw skips
   that mark for the whole batch and every local event written by that save is redelivered, not just
   the one whose handler failed. Every handler on a shared event must therefore be idempotent against
   both a repeat of its own event and a repeat of every sibling event of the same save, or must
   swallow its failures itself.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
-  (`MMCA.Store/infra/main.bicep:1339`) two replicas can pick the same stuck order and each spend a
+  (`MMCA.Store/infra/main.bicep:1273`) two replicas can pick the same stuck order and each spend a
   Stripe status call. Correctness holds through the concurrency token; the duplicated external call
   does not deduplicate.
 - **Every compensating action needs its own marker.** There is no generic mechanism: the ADR-021

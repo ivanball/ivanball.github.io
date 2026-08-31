@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one: see the revision at the end).">
+  <meta name="description" content="Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one) and 2026-08-31 (three of the four command-handler…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/052-background-job-execution.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)">
-  <meta property="og:description" content="Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one: see the revision at the end).">
+  <meta property="og:description" content="Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one) and 2026-08-31 (three of the four command-handler…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/052-background-job-execution.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)">
-  <meta name="twitter:description" content="Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one: see the revision at the end).">
+  <meta name="twitter:description" content="Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one) and 2026-08-31 (three of the four command-handler…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"052 · Background Job Execution (Bounded Queue plus Hosted Drain)","item":"https://ivanball.github.io/docs/adr/052-background-job-execution.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -209,8 +212,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-052-background-job-execution-bounded-queue-plus-hosted-drain">ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one:
-          see the revision at the end).</p>
+          <p>Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one)
+          and 2026-08-31 (three of the four command-handler enqueue sites inherit the save-then-enqueue
+          ordering from a shared base class instead of writing it): see the revisions at the end.</p>
           <h2 id="context">Context</h2>
           <p>Some requests trigger work that cannot run inside the request: an AI scoring pass over an event&#39;s
           sessions takes minutes and issues one paid API call per session, and a live-channel broadcast must
@@ -270,10 +274,13 @@
           <li><em>From a domain event handler</em>, which gets post-commit delivery from the existing deferral
           (ADR-003) with no sequencing code in the command handler: domain-event dispatch inside a
           transactional command is deferred until after the commit succeeds and dropped on rollback.</li>
-          <li><em>From the command handler itself, after <code>await unitOfWork.SaveChangesAsync(...)</code> returns</em>, for
+          <li><em>From the command handler side of a non-transactional command, once its save has returned</em>, for
           commands that do not opt into the ADR-014 transaction decorator (which wraps only commands
-          implementing <code>ITransactional</code>, so for the rest <code>SaveChangesAsync</code> <strong>is</strong> the commit). The
-          ordering here is manual and load-bearing: the enqueue call has to stay below the save.</li>
+          implementing <code>ITransactional</code>, so for the rest <code>SaveChangesAsync</code> <strong>is</strong> the commit). Most of
+          these handlers do not write the ordering themselves: a <code>MutateEntityHandlerBase</code> subclass has no
+          save of its own, and the shared base saves and then calls the <code>OnMutatedAsync</code> post-save hook the
+          handler overrides to enqueue, so the order is structural. A handler that saves inline instead
+          keeps the ordering as statement order, where the enqueue call has to stay below the save.</li>
           </ul>
           </li>
           </ul>
@@ -332,7 +339,9 @@
           enqueues the upvote-count broadcast at <code>:80</code>. Both are singletons that open their own scope
           (<code>:53</code> and <code>:54</code> respectively) and wrap the work in <code>BestEffort.ExecuteAsync</code> (<code>:51</code>, <code>:52</code>).</li>
           <li><strong>Four call sites enqueue from the command handler, on the line after the save.</strong> There is no
-          domain event in between:<ul>
+          domain event in between. (<strong>Superseded by the Revision (2026-08-31)</strong>: three of these four
+          handlers hold no save of their own today, and their anchors below have moved. The text is left in
+          place as the record of what was true when written.)<ul>
           <li><code>CloseLivePollHandler</code> awaits <code>unitOfWork.SaveChangesAsync</code> at
           <code>.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:70</code>, logs at <code>:72</code> and calls
           <code>EnqueueClosed(poll)</code> at <code>:74</code>; the queue write itself is at <code>:95</code>.</li>
@@ -355,7 +364,52 @@
           handlers <code>SaveChangesAsync</code> is the commit and an enqueue below it is genuinely post-commit. The
           difference from shape 1 is where the ordering lives: in the command handler&#39;s statement order
           rather than in the ADR-003 deferral, so it is a rule a future edit to those handlers has to keep
-          rather than one the pipeline keeps for them.</li>
+          rather than one the pipeline keeps for them. (<strong>The last sentence is superseded by the Revision
+          (2026-08-31)</strong>: it describes one of the four handlers, not all four.)</li>
+          </ol>
+          <h2 id="revision-2026-08-31">Revision (2026-08-31)</h2>
+          <p><strong>The decision and the safety property are unchanged: post-commit work is still enqueued only once
+          the write is durable.</strong> What changed is who keeps the ordering for shape 2. Three of the four
+          command-handler call sites named above contain no <code>SaveChangesAsync</code> of their own: they are
+          <code>MutateEntityHandlerBase</code> subclasses
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:319</code>, over the
+          shared <code>MutateEntityHandlerCore</code> at <code>:51</code>), and the base saves once for every subclass.</p>
+          <ol>
+          <li><strong>The save is one line in the shared base, not one per handler.</strong>
+          <code>MutateEntityHandlerCore.MutateCoreAsync</code> awaits <code>attemptUnitOfWork.SaveChangesAsync</code> at
+          <code>MutateEntityHandlerBase.cs:302</code>, calls <code>LogMutated</code> at <code>:304</code>, then awaits the <code>OnMutatedAsync</code>
+          post-save hook at <code>:305</code>. The enqueue is the body of that hook, so &quot;enqueue below the save&quot; is
+          structural rather than remembered: a subclass has no way to express the other order.<ul>
+          <li><code>CloseLivePollHandler</code> declares the base at
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollHandler.cs:24</code>,
+          overrides <code>LogMutated</code> at <code>:64-65</code> and calls <code>EnqueueClosed(poll)</code> from <code>OnMutatedAsync</code> at
+          <code>:73</code>; the queue write is at <code>:94-95</code>.</li>
+          <li><code>OpenLivePollHandler</code> declares it at
+          <code>.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:26</code>, overrides <code>LogMutated</code> at <code>:79-80</code> and
+          calls <code>EnqueueOpened(poll)</code> at <code>:88</code>; the queue write is at <code>:109-110</code>.</li>
+          <li><code>ModerateQuestionHandler</code> declares it at
+          <code>.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:28</code>, overrides <code>LogMutated</code>
+          at <code>:81-82</code>, and forwards to <code>EnqueueModeratedAsync(question, command.Action, _wasPending)</code> as
+          the expression body of <code>OnMutatedAsync</code> at <code>:89</code>; that helper wraps its work in
+          <code>BestEffort.ExecuteAsync</code> (<code>:138</code>) with one queue write per branch (<code>:140</code> the moderation event,
+          <code>:154</code> the pending count).</li>
+          </ul>
+          </li>
+          <li><strong>One call site still writes the ordering by hand.</strong> <code>SubmitQuestionHandler</code> implements
+          <code>ICommandHandler&lt;SubmitQuestionCommand, Result&lt;SessionQuestionDTO&gt;&gt;</code> directly
+          (<code>.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:31</code>), so it owns its own
+          sequence: it awaits <code>unitOfWork.SaveChangesAsync</code> at <code>:103</code>, logs at <code>:105</code>, and awaits
+          <code>EnqueueSubmittedAsync(question)</code> at <code>:107</code>, whose <code>BestEffort.ExecuteAsync</code> body (<code>:130-131</code>)
+          writes the queue at <code>:142</code> (approved) and <code>:157</code> (pending count). This is the one handler where an
+          edit that lifted the enqueue above the save would break the property with nothing to catch it.</li>
+          <li><strong>Point 3 above is narrowed, not withdrawn.</strong> Its premise still holds:
+          <code>TransactionalCommandDecorator</code> wraps only commands implementing <code>ITransactional</code> and passes
+          everything else straight through
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:25-26</code>,
+          marker at <code>.../UseCases/ITransactional.cs:6</code>), and no Engagement command implements it, so
+          <code>SaveChangesAsync</code> is the commit for all four sites. What no longer holds is its closing sentence:
+          for the three base-class handlers a pipeline does keep the ordering, and the rule a future edit
+          has to keep by hand lives in <code>SubmitQuestionHandler</code> alone.</li>
           </ol>
           
         <div class="doc-foot btn-row">
@@ -374,6 +428,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-23">Revision (2026-08-23)</a></li>
+            <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
             </ul>
           </nav>
         </aside>

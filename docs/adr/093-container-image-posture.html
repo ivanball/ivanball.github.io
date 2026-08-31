@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -226,11 +229,11 @@
           runtime properties in the state of &quot;what the default gave us&quot;, which is worth recording as such so
           that a later hardening pass starts from a stated position rather than from a discovery.</p>
           <p>The images are built in CI, not by hand: a fan-out <code>build-images</code> matrix job with one leg per image
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:795,806-817</code> for the six ADC legs,
-          <code>MMCA.Store/.github/workflows/deploy.yml:792,804-812</code> for the five Store legs) runs
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:898,908-926</code> for the six ADC legs,
+          <code>MMCA.Store/.github/workflows/deploy.yml:844,854-869</code> for the five Store legs) runs
           <code>docker/build-push-action@v7</code> over a buildx builder
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:834-838</code>), pushes each image to ACR under both the commit sha
-          and <code>latest</code> (<code>:844-846</code>), and caches layers in that same registry with <code>mode=max</code> (<code>:860-861</code>).
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:943-948</code>), pushes each image to ACR under both the commit sha
+          and <code>latest</code> (<code>:954-956</code>), and caches layers in that same registry with <code>mode=max</code> (<code>:970-971</code>).
           The job runs concurrently with the e2e gate and rolls nothing out; that separation is ADR-080&#39;s
           subject, not this one&#39;s.</p>
           <h2 id="decision">Decision</h2>
@@ -243,12 +246,13 @@
           <code>nuget.config</code> expands. The Dockerfile states the reason in place: a build-arg promoted to <code>ENV</code>
           lands in image layers, the build cache, and <code>docker history</code> (<code>:8-10</code>). CI passes it as a
           <code>secrets:</code> input to the build action, not a <code>build-args:</code> input
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:852-853</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:848-849</code>), and the workflow repeats the constraint in its
-          own comments (<code>MMCA.ADC/.github/workflows/deploy.yml:791-794</code>). Secret <em>content</em> is deliberately not
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:962-963</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:908-909</code>), and the workflow repeats the constraint in its
+          own comments (<code>MMCA.ADC/.github/workflows/deploy.yml:887-891</code>). Secret <em>content</em> is deliberately not
           part of the BuildKit cache key, so rotating the token does not invalidate the restore layer; that is
           safe only because the package set is pinned by committed lock files and any
-          <code>Directory.Packages.props</code> change lands in a <code>COPY</code> layer that busts the cache anyway (<code>:847-851</code>).</p>
+          <code>Directory.Packages.props</code> change lands in a <code>COPY</code> layer that busts the cache anyway
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:958-961</code>).</p>
           <p><strong>2. There is deliberately no separate <code>dotnet build</code> stage.</strong> The <code>build</code> stage restores and stops;
           <code>publish</code> does its own restore and build. This is a measured decision, dated in the file: on
           2026-07-24 (CI run 30115729720) the build stage emitted <code>bin/Release/net10.0/</code> while the
@@ -275,7 +279,7 @@
           scale-out replicas skip first-request JIT (<code>.../MMCA.ADC.Conference.Service/Dockerfile:39-40</code>), and
           the containers those replicas land on are fractional-vCPU Container Apps: 0.25 vCPU / 0.5 GiB for
           four of the six ADC apps and 0.5 vCPU / 1 GiB for the other two
-          (<code>MMCA.ADC/infra/main.bicep:1074,1273,1399,1542,1688,1794</code>). On that much CPU, JIT time is not
+          (<code>MMCA.ADC/infra/main.bicep:1026,1222,1346,1487,1631,1737</code>). On that much CPU, JIT time is not
           noise.</p>
           <p><strong>4. Every image is published with <code>UseAppHost=false</code> and started through the shared runtime.</strong> The
           <code>final</code> stage is the <code>base</code> stage plus the publish output, <code>ENV ASPNETCORE_ENVIRONMENT=Production</code>,
@@ -293,7 +297,7 @@
           action, and a rebuild is also not reproducible, since the same commit built a month apart yields a
           different runtime layer. Note the asymmetry with the application layer, which <em>is</em> pinned: the
           deployment references each image by commit sha, not by <code>latest</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:845,958-963</code>). So the code in a revision is exactly
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:955,1095-1100</code>). So the code in a revision is exactly
           identified and the runtime under it is not.</p>
           <p><strong>No image drops privileges: all eleven run as root.</strong> No Dockerfile in either repository contains a
           <code>USER</code> directive, and the <code>final</code> stage adds no user (<code>.../MMCA.ADC.Conference.Service/Dockerfile:46-50</code>).
@@ -302,7 +306,7 @@
           nothing currently fails because of it: Container Apps runs each container in its own sandbox, so
           root inside the container is not root on a shared host.</p>
           <p>Neither posture is currently observed by any gate. The supply-chain job generates its CycloneDX SBOM
-          from the solution filter (<code>MMCA.ADC/.github/workflows/deploy.yml:344-353</code>), so it describes the
+          from the solution filter (<code>MMCA.ADC/.github/workflows/deploy.yml:441-450</code>), so it describes the
           NuGet graph, not the image: no image scanner runs in either pipeline, and a base-layer CVE would
           therefore not be reported by the checks that gate a deploy.</p>
           <h2 id="rationale">Rationale</h2>

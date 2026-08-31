@@ -31,27 +31,27 @@ host through a single registration call, and keep it exercised by a shared fitne
 proves two live versions coexist.
 
 - **One registration wires the whole policy.** `AddCommonApiVersioning`
-  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:243`) deliberately
+  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:244`) deliberately
   does **not** set `DefaultApiVersion`: `1.0` is already the `Asp.Versioning` library default, and the
   API explorer inherits both it and `AssumeDefaultVersionWhenUnspecified` from the versioning options,
   so restating either one trips AV0011/AV0024. The code comment recording that omission is at
-  `WebApplicationBuilderExtensions.cs:245`-`WebApplicationBuilderExtensions.cs:247`. What the registration does set: it assumes the default
+  `WebApplicationBuilderExtensions.cs:246`-`WebApplicationBuilderExtensions.cs:248`. What the registration does set: it assumes the default
   version when a caller sends no header
-  (`AssumeDefaultVersionWhenUnspecified = true`, `WebApplicationBuilderExtensions.cs:250`), reports
+  (`AssumeDefaultVersionWhenUnspecified = true`, `WebApplicationBuilderExtensions.cs:251`), reports
   the supported/deprecated versions on every response (`ReportApiVersions = true`,
-  `WebApplicationBuilderExtensions.cs:251`), and selects the version from an `api-version` request
-  header (`new HeaderApiVersionReader("api-version")`, `WebApplicationBuilderExtensions.cs:252`). The
+  `WebApplicationBuilderExtensions.cs:252`), and selects the version from an `api-version` request
+  header (`new HeaderApiVersionReader("api-version")`, `WebApplicationBuilderExtensions.cs:253`). The
   reader is header-based deliberately: routes and query strings stay version-free, so a caller opts
   into a newer shape by adding one header rather than changing the URL.
 - **The API explorer is wired for versioned OpenAPI.** The same call chains `.AddMvc()` then
-  `.AddApiExplorer` (`WebApplicationBuilderExtensions.cs:253`,
-  `WebApplicationBuilderExtensions.cs:254`), formatting version groups as `'v'VVV`
-  (`WebApplicationBuilderExtensions.cs:256`) and substituting the version into the URL where a host
-  routes one (`SubstituteApiVersionInUrl = true`, `WebApplicationBuilderExtensions.cs:257`). The
+  `.AddApiExplorer` (`WebApplicationBuilderExtensions.cs:254`,
+  `WebApplicationBuilderExtensions.cs:255`), formatting version groups as `'v'VVV`
+  (`WebApplicationBuilderExtensions.cs:257`) and substituting the version into the URL where a host
+  routes one (`SubstituteApiVersionInUrl = true`, `WebApplicationBuilderExtensions.cs:258`). The
   explorer's default-version behavior is inherited rather than configured, exactly as the comment
-  above it records (`WebApplicationBuilderExtensions.cs:245`-`WebApplicationBuilderExtensions.cs:247`). That
+  above it records (`WebApplicationBuilderExtensions.cs:246`-`WebApplicationBuilderExtensions.cs:248`). That
   group format feeds the `v1` OpenAPI document `AddCommonOpenApi` registers
-  (`WebApplicationBuilderExtensions.cs:402`), which
+  (`WebApplicationBuilderExtensions.cs:403`), which
   `MapCommonOpenApi` serves at `/openapi/v1.json` outside Production only
   (`Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:34`, guarded at
   `OpenApiEndpointExtensions.cs:36` and mapped at `OpenApiEndpointExtensions.cs:38`).
@@ -101,11 +101,11 @@ proves two live versions coexist.
   current host was affected either way, which is precisely why the failure could ship unnoticed.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:188`) and Identity
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:168`) hosts, Store's Catalog host
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:141`), and the same call is made
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:165`) and Identity
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:146`) hosts, Store's Catalog host
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:129`), and the same call is made
   by the other extracted hosts and by the monolith reference host
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:33`).
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:34`).
 
 Application controllers beyond `ServiceInfo` declare `[ApiVersion("1.0")]` today: the second version
 exists on the discovery endpoint to keep the versioning path honest, not because any business
@@ -152,4 +152,4 @@ than asserted), ADR-036 (the other controller-convention decision that records t
 `[ApiVersion]` non-inheritance, handled there by ADC's sealed `OAuthController` subclass), ADR-034
 (the generic entity controller bases, which take the opposite shape: `[ApiController]` /
 `[Route("[controller]")]` / `[ApiVersion("1.0")]` sit on the generic base itself,
-`EntityControllerBase.cs:32-34`).
+`EntityControllerBase.cs:33-35`).

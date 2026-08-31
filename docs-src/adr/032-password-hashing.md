@@ -1,8 +1,11 @@
 # ADR-032: Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility
 
 ## Status
-Accepted (2026-06-29, adoption note revised 2026-07-06, registration note revised 2026-08-01,
-call-site hoist recorded 2026-08-23).
+**Superseded by [ADR-102](102-pbkdf2-only-password-hashing.md) (2026-08-31).** Originally Accepted
+(2026-06-29, adoption note revised 2026-07-06, registration note revised 2026-08-01, call-site hoist
+recorded 2026-08-23). The legacy HMAC-SHA512 verification branch this record calls load-bearing has
+since been deleted: hashing and verification are PBKDF2-only, and ADR-102 carries the current
+decision. The body below is retained unchanged as the historical record of the migration-era design.
 
 ## Context
 Identity stores a credential as a (salt, hash) pair, never plaintext. The framework needs one

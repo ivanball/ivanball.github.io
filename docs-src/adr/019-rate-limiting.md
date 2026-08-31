@@ -151,12 +151,12 @@ changed.
    a 65-second TTL only on the increment that created the key (`:137-143`, the 5 seconds of slack
    being deliberate clock skew, `:139-141`), admitting the request when the returned count is within
    the permit limit (`:145`). Exactly two partitions opt in: the global limiter
-   (`WebApplicationBuilderExtensions.cs:85-92`, Redis scope `"global"`) and `UserPolicy` (`:109-116`,
-   scope `"user"`).
+   (`WebApplicationBuilderExtensions.cs:79-104`, Redis scope `"global"` at `:99`) and `UserPolicy`
+   (`:114-128`, scope `"user"` at `:123`).
 
 **`auth-ip` deliberately stays in-memory** (`allowDistributed: false`,
-`WebApplicationBuilderExtensions.cs:216-223`, rationale at `:133-135`), as does `FixedPolicy`
-(`:335-342`). The per-IP cap on the anonymous authentication endpoints is a coarse brute-force
+`WebApplicationBuilderExtensions.cs:234`, rationale at `:143-147`), as does `FixedPolicy`
+(`:346-353`). The per-IP cap on the anonymous authentication endpoints is a coarse brute-force
 backstop sitting in front of a control that is already global and stateful, the ADR-029 per-email
 lockout; making it distributed would put a Redis round trip on the login path to tighten a limit whose
 per-replica multiplication is already accounted for in its generous default of 30.

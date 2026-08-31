@@ -18,7 +18,7 @@ in it would break the web heads at compile time.
 Two constraints shape the packaging. First, per-head service selection already has a working
 precedent: `ITokenStorageService` resolves to a per-head implementation registered after
 `AddUIShared` (`builder.Services.AddCommonMauiTokenStorage()`,
-`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:125`). Second, MMCA.Common's CI and release
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:161`). Second, MMCA.Common's CI and release
 pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
 framework's packages release in lockstep (ADR-016).
 
@@ -41,8 +41,8 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   `IPushDeviceTokenProvider` (ADR-044), and `IBarcodeScannerService` for camera barcode/QR scanning
   (`DependencyInjection.cs:57`). Barcode is the one native override that is deliberately NOT in
   `AddMauiDeviceCapabilities`: it ships behind the opt-in `UseCommonBarcodeScanner`
-  (`Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:92`, called by ADC at
-  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:115`), so a head that never scans ships
+  (`Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104`, called by ADC at
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:151`), so a head that never scans ships
   neither the ZXing handler nor a camera permission declaration. Each capability has an independent
   fallback story, and per-capability contracts let heads adopt incrementally.
 

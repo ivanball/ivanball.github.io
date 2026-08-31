@@ -98,28 +98,28 @@ every REST/gRPC host call it instead of composing its own.
   (`Middleware/SoftDeletedUserMiddleware.cs:43-50`), so the pipeline is literally one shape on every
   host rather than a per-host permutation.
 - **Every REST/gRPC host calls it.** All seven extracted services in the two production apps: ADC
-  Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:322`), ADC Conference
-  (`MMCA.ADC.Conference.Service/Program.cs:399`), ADC Engagement
-  (`MMCA.ADC.Engagement.Service/Program.cs:334`), ADC Notification
-  (`MMCA.ADC.Notification.Service/Program.cs:264`), Store Catalog
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:268`), Store Identity
-  (`MMCA.Store.Identity.Service/Program.cs:257`) and Store Sales
-  (`MMCA.Store.Sales.Service/Program.cs:277`). The reference app calls it too
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:117`), and because that tree **is** the
+  Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:311`), ADC Conference
+  (`MMCA.ADC.Conference.Service/Program.cs:374`), ADC Engagement
+  (`MMCA.ADC.Engagement.Service/Program.cs:308`), ADC Notification
+  (`MMCA.ADC.Notification.Service/Program.cs:240`), Store Catalog
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:258`), Store Identity
+  (`MMCA.Store.Identity.Service/Program.cs:249`) and Store Sales
+  (`MMCA.Store.Sales.Service/Program.cs:269`). The reference app calls it too
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:130`), and because that tree **is** the
   `mmca-app` template (`MMCA.Helpdesk/.template.config/template.json:5,7`, ADR-065), a scaffolded app
   gets the same line: the generated `MMCA.ECommerce` sample has it at
   `MMCA.ECommerce/Source/Hosts/MMCA.ECommerce.Web/Program.cs:100`.
 - **Hosts extend it by appending, after the call, or through the builder.** Service hosts map their
   extra endpoints below the one line: OpenAPI outside Production
-  (`MMCA.ADC.Notification.Service/Program.cs:271-274`), the SignalR hub (`:281`, which
+  (`MMCA.ADC.Notification.Service/Program.cs:247-250`), the SignalR hub (`:257`, which
   `SignalRExtensions.cs:18-19` documents as "call after `UseCommonMiddlewarePipeline`"), and gRPC
-  services (`:286` and `:294`). A host that needs a change inside the edge uses the configure overload
+  services (`:262` and `:270`). A host that needs a change inside the edge uses the configure overload
   instead; no host does today, and every one of the eight production and reference hosts calls the
   zero-argument overload.
 
 Scope is REST and gRPC service hosts. The Blazor UI hosts and the YARP gateways deliberately do not
-call it: the gateways compose a much thinner chain (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:95`,
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:119`), and the UI hosts hand-compose their own,
+call it: the gateways compose a much thinner chain (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:124-158`,
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:150-172`), and the UI hosts hand-compose their own,
 reusing only the localization half via `UseCommonRequestLocalization()`
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:124`,
 `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:164`), which is the public method the
@@ -171,7 +171,7 @@ pipeline's `RequestLocalization` step calls (`MiddlewarePipelineBuilder.cs:47`,
   partitions are spoofable by anything that can reach a service directly. This is safe only because the
   services are not publicly routable and sit behind the gateway; ADR-019 records the same caveat.
 - **Security-response headers are not in this pipeline.** ADR-023's `UseCommonSecurityHeaders` is applied
-  by the gateways and UI hosts only (`MMCA.ADC.Gateway/Program.cs:117`, `MMCA.Store.Gateway/Program.cs:140`,
+  by the gateways and UI hosts only (`MMCA.ADC.Gateway/Program.cs:134`, `MMCA.Store.Gateway/Program.cs:159`,
   `MMCA.ADC.UI.Web/Program.cs:105`, `MMCA.Store.UI.Web/Program.cs:145`). A service host exposed directly,
   without a gateway in front, would serve responses without them.
 - **One step in the fixed order is currently dead weight.** The pre-forwarded scheme/host capture

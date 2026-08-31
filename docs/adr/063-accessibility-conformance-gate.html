@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -215,7 +218,9 @@
           (<a href="091-cache-backed-password-reset.html">ADR-091</a>) added a fourth asserting Identity workflow base and three
           gallery assertions, so the base count, the gallery count (now eleven assertions across seven classes), and
           both consumer subclass counts are updated, along with a correction to ADC&#39;s grid/strict split; no decision
-          changed.</p>
+          changed. Revised 2026-08-31: a signed-in devices/sessions page scan joined the gallery (now twelve
+          assertions across eight classes), and the <code>PageExtensions</code>, ADC/Store <code>deploy.yml</code>, and MMCA.Helpdesk pin
+          line anchors are refreshed; no decision changed.</p>
           <h2 id="context">Context</h2>
           <p>Accessibility was documented before it was enforced. The narrative guide
           (<a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, rubric section 21) named WCAG 2.1 AA
@@ -244,10 +249,10 @@
           (<code>:12-15</code>), so the gate fails only on conformance violations, never on advisories.</li>
           <li><strong>A violation is a thrown test failure, not a report.</strong>
           <code>AssertNoAccessibilityViolationsAsync(AxeRunOptions?)</code>
-          (<code>.../Testing.E2E/Infrastructure/PageExtensions.cs:157</code>) runs axe and, on any violation, throws
-          <code>AccessibilityViolationException</code> (<code>:180</code>; the type is
+          (<code>.../Testing.E2E/Infrastructure/PageExtensions.cs:307</code>) runs axe and, on any violation, throws
+          <code>AccessibilityViolationException</code> (<code>:330</code>; the type is
           <code>.../Testing.E2E/Infrastructure/AccessibilityViolationException.cs:7</code>) carrying each rule&#39;s impact,
-          id, help text, and the offending markup compacted to one line per node (<code>:170-178</code>), so a red gate
+          id, help text, and the offending markup compacted to one line per node (<code>:320-328</code>), so a red gate
           points at the element rather than at a dashboard.</li>
           <li><strong>The package&#39;s Identity workflow bases assert it, so a consumer inherits the scan.</strong> Four bases carry
           the assertion, so a subclass gets a login-page, register-page, profile-page, forgot-password-page, and
@@ -275,10 +280,10 @@
           <code>E2E_BROWSER</code> (<code>:298</code>), with <code>fail-fast: false</code> so each engine reports independently (<code>:235</code>). All
           three contexts block merges (<code>MMCA.Common/CONTRIBUTING.md:63-64</code>, enumerated in the branch-protection
           payload at <code>:174-176</code>).</li>
-          <li><strong>Both deployed apps gate the deploy on it.</strong> <code>MMCA.ADC/.github/workflows/deploy.yml:531</code> and
-          <code>MMCA.Store/.github/workflows/deploy.yml:537</code> call the reusable <code>e2e.yml</code> workflow chromium-only
-          (ADC <code>:541</code>, Store <code>:547</code>) against the full Aspire stack, and the <code>deploy</code> job waits on that gate
-          (ADC <code>:866</code>, Store <code>:862</code>).</li>
+          <li><strong>Both deployed apps gate the deploy on it.</strong> <code>MMCA.ADC/.github/workflows/deploy.yml:636</code> and
+          <code>MMCA.Store/.github/workflows/deploy.yml:592</code> call the reusable <code>e2e.yml</code> workflow chromium-only
+          (ADC <code>:638</code>, Store <code>:594</code>) against the full Aspire stack, and the <code>deploy</code> job waits on that gate
+          (ADC <code>:992</code>, Store <code>:941</code>).</li>
           <li><strong>The gate already owns design-token decisions.</strong> Contrast values in the shared theme are set to
           what the scan will accept, with the ratio recorded in place: light-palette <code>WarningContrastText</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:33</code>, rationale at <code>:29-32</code>,
@@ -288,7 +293,7 @@
           surface ratio (<code>.../MMCA.Common.UI/Theme/BrandColors.cs:26</code>, rationale at <code>:22-24</code>).</li>
           </ul>
           <p>Adoption differs per repo and is uneven on purpose. <strong>MMCA.Common</strong> scans its own backend-less gallery:
-          eleven assertions across seven classes over <code>GalleryAxeTestBase</code>
+          twelve assertions across eight classes over <code>GalleryAxeTestBase</code>
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Infrastructure/GalleryAxeTestBase.cs:14</code>),
           covering login (<code>LoginPageE2ETests.cs:34</code>), register (<code>RegisterPageE2ETests.cs:36</code>), the primitives
           showcase (<code>ComponentsPageE2ETests.cs:80</code>), both dark-mode states (<code>DarkModeE2ETests.cs:30,:40</code>), the
@@ -297,6 +302,10 @@
           pages added with <a href="091-cache-backed-password-reset.html">ADR-091</a>: forgot-password in both its form state and
           its confirmation state, which replaces the form and is therefore a distinct rendering
           (<code>ForgotPasswordPageE2ETests.cs:46</code> and <code>:60</code>), plus reset-password (<code>ResetPasswordPageE2ETests.cs:48</code>).
+          One gallery scan covers a signed-in page: the shared devices/sessions page
+          (<code>SessionsPageE2ETests.cs:34</code>, class at <code>:13</code>), which carries a real <code>[Authorize]</code>, so the test seeds the
+          gallery&#39;s cookie-toggled fake authentication scheme before navigating and scans the populated table, its
+          current-device marker, and the per-device sign-out buttons under the strict options.
           <strong>MMCA.Store</strong> subclasses all four Identity bases
           (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
           <code>UserRegistrationTests.cs:5</code>, <code>ProfileManagementTests.cs:5</code>, <code>PasswordResetTests.cs:5</code>). <strong>MMCA.ADC</strong>
@@ -310,7 +319,7 @@
           scans (10 through <code>ScanGridAsync</code>, 21 strict) and Store&#39;s
           <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 23 (6 grid, 17 strict).
           <strong>MMCA.Helpdesk adopts none of it</strong>: it pins the package version
-          (<code>MMCA.Helpdesk/Directory.Packages.props:66</code>) but no project references it, and the repo has no E2E
+          (<code>MMCA.Helpdesk/Directory.Packages.props:84</code>) but no project references it, and the repo has no E2E
           test project at all (<code>Tests/</code> holds only <code>Architecture</code> and <code>Modules</code>), so the seed has no browser
           accessibility gate today.</p>
           <h2 id="rationale">Rationale</h2>
@@ -353,8 +362,8 @@
           not machine-checkable and are covered by the manual screen-reader checklist in
           <a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, which is a periodic human pass, not a gate.</li>
           <li><strong>The deploy gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:538</code>, Store <code>deploy.yml:544</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
-          (ADC <code>:896</code>, Store <code>:893</code>), so a backend-only or infra-only deploy ships without a browser scan. That
+          filter (ADC <code>deploy.yml:635</code>, Store <code>deploy.yml:591</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
+          (ADC <code>:1022</code>, Store <code>:972</code>), so a backend-only or infra-only deploy ships without a browser scan. That
           is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
           gate as backstop, but it does mean &quot;deployed&quot; does not always mean &quot;axe ran on this commit&quot;.</li>
           <li><strong>Consumer breadth is hand-maintained.</strong> Nothing forces a new page into <code>AccessibilityTests</code>, so

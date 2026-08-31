@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -210,7 +213,11 @@
           <h1 id="adr-083-one-crud-lifecycle-event-per-entity-with-a-state-discriminator">ADR-083: One CRUD Lifecycle Event per Entity with a State Discriminator</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-14). Revised 2026-08-23: the adopter counts were refreshed (ADC Conference&#39;s
-          <code>ActivityChanged</code> joined the base-derived set) and three source citations were re-anchored.</p>
+          <code>ActivityChanged</code> joined the base-derived set) and three source citations were re-anchored.
+          Revised 2026-08-31: the lifecycle-event totals were recounted from source (32 across the three
+          apps, of which 8 are in Store), the selective-handler example was re-anchored to
+          <code>SpeakerDeletedHandler</code> (the previously cited <code>SessionCreatedHandler</code> and its test exist nowhere in
+          MMCA.ADC), and the Sales consumer&#39;s filter citation was re-anchored.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 decides how a domain event <strong>moves</strong>: captured into the outbox inside <code>SaveChangesAsync</code>,
           dispatched in-process after commit, or published to the broker when it is an integration event.
@@ -239,19 +246,19 @@
           <code>Unchanged = 0</code>, <code>Added = 1</code>, <code>Updated = 2</code>, <code>Deleted = 3</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:7-13</code>). No production call
           site in any repo raises <code>Unchanged</code>: it is the zero default, and it appears only as a negative
-          <code>[InlineData]</code> case in handler tests
-          (<code>MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:79,190-191</code>,
-          <code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/DomainEvents/SessionCreatedHandlerTests.cs:40</code>).</li>
+          <code>[InlineData]</code> case in a handler test, whose helper has to hand-build the event because no
+          transition on the aggregate produces one
+          (<code>MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:79,190-191</code>).</li>
           <li><strong><code>Added</code> from the factory, <code>Updated</code> from mutators, <code>Deleted</code> from <code>Delete()</code>.</strong> The base&#39;s usage
           note fixes the mapping (<code>EntityChangedEvent.cs:10-13</code>), and <code>Session</code> is the canonical shape: one
           event type, three raise sites, in
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:206</code> (Added, from
           the static factory), <code>:267</code> (Updated), <code>:304</code> (Deleted, inside the soft delete), all constructing the
           same <code>SessionChanged</code> (<code>.../Sessions/DomainEvents/SessionChanged.cs:13-18</code>).</li>
-          <li><strong>Handlers filter on <code>State</code>, or deliberately do not.</strong> <code>SessionCreatedHandler</code> subscribes to
-          <code>SessionChanged</code> and returns immediately unless the state is <code>Added</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/DomainEventHandlers/SessionCreatedHandler.cs:17-18</code>),
-          and the points award for asking a question does the same on <code>SessionQuestionChanged</code>
+          <li><strong>Handlers filter on <code>State</code>, or deliberately do not.</strong> <code>SpeakerDeletedHandler</code> subscribes to
+          <code>SpeakerChanged</code> and returns immediately unless the state is <code>Deleted</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DomainEventHandlers/SpeakerDeletedHandler.cs:29-30</code>),
+          and the points award for asking a question does the same for <code>Added</code> on <code>SessionQuestionChanged</code>
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:60-63</code>).
           A handler that genuinely wants every transition writes no filter and logs the discriminator instead:
           <code>TicketChangedAuditHandler</code> passes <code>domainEvent.State</code> straight into its <code>LoggerMessage</code> template
@@ -271,7 +278,7 @@
           and explicitly consolidates four former events, <code>ProductVariantAdded</code>, <code>ProductVariantRemoved</code>,
           <code>ProductVariantSkuChanged</code> and <code>ProductVariantPriceChanged</code> (<code>:8-10</code>). The Sales consumer filters it
           to <code>Added</code>
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:37-38</code>).
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:46-47</code>).
           Because integration-event shapes are snapshot-frozen by an architecture test
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Events.cs:45-58</code>),
           <code>State:DomainEntityState</code> is a committed line of the wire contract
@@ -287,16 +294,22 @@
           (<code>SponsorChanged.cs:16</code>, <code>EventChanged.cs:16</code>, <code>QuestionChanged.cs:16</code>, <code>CategoryChanged.cs:16</code>,
           <code>ActivityChanged.cs:16</code>, <code>SpeakerChanged.cs:21</code>, <code>SessionChanged.cs:18</code>), and one in Helpdesk
           (<code>TicketChanged.cs:15</code>).
-          Nineteen further event types follow the same one-event-with-<code>State</code> shape while inheriting
-          <code>BaseDomainEvent</code> or <code>BaseIntegrationEvent</code> directly, either because they identify a parent/child
+          Eighteen further domain events follow the same one-event-with-<code>State</code> shape while inheriting
+          <code>BaseDomainEvent</code> directly (<code>ProductVariantChanged</code> does the same over <code>BaseIntegrationEvent</code> on
+          the wire), either because they identify a parent/child
           pair rather than a single entity (<code>RoomChanged</code> carries <code>EventId</code> + <code>RoomId</code>,
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/RoomChanged.cs:13-18</code>;
           <code>ShoppingCartItemChanged</code> carries <code>CustomerId</code> + <code>ProductVariantId</code>,
-          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/ShoppingCarts/DomainEvents/ShoppingCartItemChanged.cs:16-22</code>)
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/ShoppingCarts/DomainEvents/ShoppingCartItemChanged.cs:16-22</code>;
+          <code>ProductImageChanged</code> carries <code>ProductId</code> + <code>ImageId</code>,
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/DomainEvents/ProductImageChanged.cs:15-20</code>)
           or because the module took the shape without the base (all seven ADC Engagement events, for example
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/UserSessionBookmarks/DomainEvents/UserSessionBookmarkChanged.cs:21-26</code>,
-          whose doc cites the same rule as BR-60 at <code>:8-9</code>). Counting the shape rather than the base type:
-          <strong>23 in ADC</strong> (16 Conference, 7 Engagement), <strong>9 in Store, 1 in Helpdesk</strong>.</li>
+          whose doc cites the same rule as BR-60 at <code>:8-9</code>). Counting the shape rather than the base type, a
+          sweep of every <code>DomainEvents/*.cs</code> declaring a <code>DomainEntityState State</code> member finds <strong>23 in ADC</strong>
+          (16 Conference, 7 Engagement; Identity&#39;s two events are business-specific and carry no
+          discriminator), <strong>8 in Store</strong> (of eighteen domain events there, the other ten name business
+          transitions) and <strong>1 in Helpdesk</strong>: <strong>32</strong> in total.</li>
           <li><strong>Nothing enforces the taxonomy.</strong> The shared fitness rules require domain events to be sealed and to
           live in a <code>*.DomainEvents</code> namespace
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Naming.cs:52-60</code>), to
@@ -344,7 +357,7 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Every selective handler pays a filter.</strong> A handler that cares about one transition has to open with
-          a <code>State</code> guard and return (<code>SessionCreatedHandler.cs:17-18</code> is the shape to copy); omit it and the
+          a <code>State</code> guard and return (<code>SpeakerDeletedHandler.cs:29-30</code> is the shape to copy); omit it and the
           handler fires on all three. The compiler cannot help, because the wrong behavior is an extra silent
           invocation, not a build error.</li>
           <li><strong>The subscription surface is coarser.</strong> Subscribing means subscribing to the whole entity lifecycle:
@@ -357,8 +370,8 @@
           tell the transitions apart
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/LivePolls/DomainEvents/LivePollChanged.cs:9-11,17-22</code>),
           which is a state machine expressed through the CRUD shape rather than as its own events.</li>
-          <li><strong>The base type is optional in practice.</strong> 14 of the 33 lifecycle events across the three apps derive
-          <code>EntityChangedEvent&lt;TId&gt;</code>; the other 19 re-declare the same two members on <code>BaseDomainEvent</code>.
+          <li><strong>The base type is optional in practice.</strong> 14 of the 32 lifecycle events across the three apps derive
+          <code>EntityChangedEvent&lt;TId&gt;</code>; the other 18 re-declare the same two members on <code>BaseDomainEvent</code>.
           Consistency is a review convention, not a fitness function (ADR-015), so a new module can drift
           without a failing test.</li>
           <li><strong>A padded payload where an entity only ever does one thing.</strong> <code>PointsEntryChanged</code> carries a <code>State</code>

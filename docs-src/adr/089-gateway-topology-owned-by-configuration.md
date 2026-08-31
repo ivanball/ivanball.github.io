@@ -2,7 +2,10 @@
 
 ## Status
 Accepted (2026-08-18; revised 2026-08-23: ADC's table gained a 27th route, `/Activities`, on
-2026-08-19, and the bicep anchors below are corrected). **Amends
+2026-08-19, and the bicep anchors below are corrected; revised 2026-08-31: section 5 now states the
+activity timeout where it actually lives, declared once in the shared `MmcaGateway`
+`ClusterRequestDefaults` profile rather than copied into each cluster, and the host and test anchors
+throughout are re-pinned). **Amends
 [ADR-008](008-service-extraction-topology.md)**: that record gave the
 Gateway the route-to-service map and expressed it as code (a list of `MapForwarder` calls). The map
 itself is unchanged; what changed is where it is written. YARP `ReverseProxy` **configuration** is now
@@ -23,8 +26,8 @@ a `ReverseProxy` section at all: YARP was present only as its forwarder primitiv
 Aspire service-discovery names (`http://identity`, `http://conference`, `http://catalog` and so on)
 resolved through `AddHttpForwarderWithServiceDiscovery`, which is the part of the arrangement that was
 right and stays, now as `AddServiceDiscoveryDestinationResolver`
-(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:93`,
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:117`).
+(`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:115`,
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:141`).
 
 **The problem was not that the table was duplicated across deployment artifacts. It was that one table
 was described three times inside one repository, and the three already disagreed.** ADC was the worked
@@ -83,8 +86,8 @@ Make configuration the single source of the gateway route table, and pin it with
 ### 1. `ReverseProxy` configuration is the route table
 Each gateway calls `AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))`
 and `MapReverseProxy()`, and the `MapForwarder` lists are deleted. ADC wires it at
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:90-93` and maps it at `:138`; Store at
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:115-117` and `:150`. Routes and clusters live
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:112-115` and maps it at `:158`; Store at
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:139-141` and `:172`. Routes and clusters live
 in the gateway's own `appsettings.json`: 27 routes over five clusters for ADC (4 identity, 16
 conference, 5 engagement, 2 notification, at
 `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:50-159`) and 10 routes over three clusters
@@ -109,24 +112,26 @@ table, and the two must not converge.
 ### 3. `RouteMapTests` is the drift gate, in both repositories
 ADC's `RouteMapTests` is the enumeration of the configured table rather than a hand-typed parallel
 list, and it covers every route rather than 23 of 26. A behavioral theory drives each pinned route
-through the real proxy pipeline with a recording fake substituted for `IHttpForwarder`
-(`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:135`), and two completeness facts read
-the host's loaded `IProxyConfig` and compare it against the same pinned table, so a route or cluster
-added to `appsettings.json` without a corresponding expectation fails, and an expectation with no
-route fails as well (`:168`, `:190`). That two-way check is what the previous one-way theory could not
+through the real proxy pipeline
+(`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:157-189`) with a recording fake
+substituted for `IHttpForwarder` in the factory's test services (`:426-431`), and two completeness
+facts read the host's loaded `IProxyConfig` and compare it against the same pinned table, so a route
+or cluster added to `appsettings.json` without a corresponding expectation fails, and an expectation
+with no route fails as well (`:192`, `:214`). That two-way check is what the previous one-way theory could not
 do, and it is the reason a configuration table is safe to adopt: configuration is not compile-checked,
 so the check has to be a test. `/Sponsors`, `/CheckIns` and `/Points` are pinned by it now.
 
 Store gained the equivalent suite it had none of
-(`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:41`): all ten route prefixes are
-pinned to their owning cluster and destination (`:79-96`, driven at `:163`), with the forwarder budget
-and the per-cluster version settings asserted separately (`:198`, `:218`, `:239`). **Updated
+(`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:46`): all ten route prefixes are
+pinned to their owning cluster (`:87-99`) and to its destination (`:106-123`, driven through the same
+recording forwarder at `:166-183`), with the forwarder budget and the per-cluster version settings
+asserted separately (`:259-277`, `:279-298`, `:300-318`). **Updated
 2026-08-27: Store's half is no longer one-way.** ADC's two completeness facts are ported, so the
 loaded `IProxyConfig` is compared back against the pinned table in both directions: a route added to
-`appsettings.json` with no matching entry fails (`:232`, the reasoning stated inline at `:246-248`)
-and so does a cluster (`:253`). The same comparison now doubles as the drift gate on the shared
-`MMCA.Common.Gateway` cluster profile, asserting that no cluster declares an activity timeout of its
-own any more (`:37-40`).
+`appsettings.json` with no matching entry fails (`:185-205`, the reasoning stated inline at
+`:199-201`) and so does a cluster (`:207-241`). The same comparison now doubles as the drift gate on
+the shared `MMCA.Common.Gateway` cluster profile, asserting that no cluster declares an activity
+timeout of its own any more (`:228-232`).
 
 ### 4. The HTTP version policy is expressed in cluster configuration
 Each cluster declares its own `HttpRequest` version and version policy beside the destination it
@@ -160,10 +165,16 @@ policy is readable without opening `Program.cs` in either.
 ### 5. Store's timeout parity is fixed in the same move
 Store's routes gain the activity timeout ADC already has, tied to the same
 `HttpResilienceDefaults.TotalRequestTimeout` budget, expressed as configuration rather than as a
-constructor argument. All three Store clusters now carry `"ActivityTimeout": "00:01:40"`
-(`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:65`, `:75`, `:85`), the same 100 seconds
-ADC's four REST clusters carry, and the route-map test pins the value
-(`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:72`, asserted at `:198`). This is
+constructor argument. Store declares `"ActivityTimeout": "00:01:40"` exactly once, as
+`MmcaGateway:ClusterRequestDefaults`
+(`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:20-22`), and the shared cluster profile
+of section 4 merges those 100 seconds into all three clusters, none of which states a timeout of its
+own. ADC declares the same 100 seconds in the same place, with the one-hour override its hub cluster
+needs (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:20-27`). The route-map test pins the
+resolved value on every route
+(`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:57`, asserted at `:259-277`) and
+pins the absence of any per-cluster declaration beside it (`:228-232`), so a cluster that reintroduced
+its own would fail rather than silently opt out of the shared budget. This is
 folded into this record rather than filed separately because the reason
 Store never got it is exactly the reason this record exists: a per-route setting buried in a call site
 in one repository is not visible as a missing setting in the other. Moving both tables into the same

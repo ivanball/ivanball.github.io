@@ -46,8 +46,8 @@ something, keep the schema, and refuse the one combination that cannot work.
 2. **Resolution happens once, at registration.** `AddInfrastructure` binds the section, and on the
    enabled path registers `OutboxProcessor` and `OutboxCleanupService`; on the disabled path it
    registers neither and adds `OutboxDisabledNoticeService` instead
-   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:201-213`, reasoning at
-   `:195-200`).
+   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:186-198`, reasoning at
+   `:180-185`).
 
 3. **The row writes are gated at both write points**, not only the background services:
    `InProcessEventBus` takes its direct-dispatch branch when the outbox is off, with no rows, no save
@@ -61,7 +61,7 @@ something, keep the schema, and refuse the one combination that cannot work.
 
 4. **A broker with the outbox explicitly disabled fails at startup.**
    `EnsureOutboxAvailableForProvider` throws when the provider is anything other than `InProcess` and
-   `EnableOutbox` is explicitly `false` (`DependencyInjection.cs:876-879`). The message names the
+   `EnableOutbox` is explicitly `false` (`DependencyInjection.cs:857-864`). The message names the
    mechanism (`BrokerEventBus` writes the rows, `OutboxProcessor` publishes them), the consequence
    (every cross-service event dropped silently) and the fix. Leaving the setting unset under a broker
    resolves to enabled, so only a deliberate `false` reaches the throw.

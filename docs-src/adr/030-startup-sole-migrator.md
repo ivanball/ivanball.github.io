@@ -31,8 +31,8 @@ in production and is the sole migrator of its own database**: it applies its pen
 at startup, before the new revision serves traffic. There is deliberately **no** separate deploy-step
 migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
-- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:1043,1184,1309` (Identity/Catalog/Sales)
-  and `MMCA.ADC/infra/main.bicep:1118,1307,1431,1579` (Identity/Conference/Engagement/Notification) all set
+- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:985,1120,1243` (Identity/Catalog/Sales)
+  and `MMCA.ADC/infra/main.bicep:1067,1254,1376,1522` (Identity/Conference/Engagement/Notification) all set
   `DatabaseInitStrategy = 'Migrate'`.
 - **One applier per revision.** Each service runs `minReplicas: 1`, so the startup `MigrateAsync` is not
   racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
@@ -40,10 +40,10 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)
 - **No deploy-step backstop, on purpose.** Both `deploy.yml` files carry an explicit comment that there
   is *no external `sqlcmd` migration backstop* and that each service is the **sole migrator**
-  (`MMCA.Store/.github/workflows/deploy.yml:1043-1051`, `MMCA.ADC/.github/workflows/deploy.yml:1079-1088`). The
+  (`MMCA.Store/.github/workflows/deploy.yml:1119-1127`, `MMCA.ADC/.github/workflows/deploy.yml:1227-1236`). The
   `sqlcmd` that *is* installed in the pipeline is a connectivity/readiness probe, not a migration apply.
 - **Build-time drift gate, not a runtime apply.** CI runs
-  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:226`, ADC `deploy.yml:272`) so a
+  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:273`, ADC `deploy.yml:369`) so a
   model that has drifted from its migrations fails the build, but that gate only *detects*; it never
   applies anything. The container does the applying.
 - **This overrides the framework's documented "None for production" recommendation**, accepting
@@ -93,16 +93,16 @@ trade-off it carries.
    environment, under both strategies including the production `"None"` guard: choosing `"None"`
    opts out of applying migrations, not out of seeding. `ModuleLoader.SeedAllAsync` just walks its
    seeder list in module registration order and awaits each one
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:270-276`; the list is
-   built only for enabled modules at `:133-136`). Nothing on that path consults the hosting
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:255-261`; the list is
+   built only for enabled modules at `:118-121`). Nothing on that path consults the hosting
    environment, and the service hosts call the extension method straight after `builder.Build()`
-   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:319`,
-   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:396`,
-   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:331`,
-   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:261`;
-   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:254`,
-   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:265`,
-   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:274`), so production re-seeds on
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:308`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:371`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:305`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:237`;
+   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:246`,
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:255`,
+   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:266`), so production re-seeds on
    every revision.
 2. **Idempotency is delegated entirely to each seeder.** There is no framework-side ledger for seed
    data: no `__EFMigrationsHistory` equivalent, no marker row, no "already seeded" flag. The loop
@@ -110,7 +110,7 @@ trade-off it carries.
    owns the guard: `ConferenceModuleDbSeeder` opens each step with an `ExistsAsync` probe and returns
    early when the row is present, matching the pre-rename event name too so a database seeded before
    the rename stays idempotent
-   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:63-69`).
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:66-79`).
 3. **Deterministic seed identifiers are what make that guard cheap.** The `DbSeeder` base converts an
    integer seed id to the module's identifier type: `int` passes through, and a `Guid` alias is
    manufactured by writing the int into a zeroed 16-byte span, so the same seed integer yields the

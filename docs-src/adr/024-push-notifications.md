@@ -4,6 +4,8 @@
 Accepted (2026-06-27, amended 2026-07-15). Revised 2026-08-07 (transactional email recorded as an
 app-level concern outside the channel model; see Revision below). Revised 2026-08-14 (the opt-in
 dedup short-circuit and the scope key recorded; the `Enabled` gate narrowed to the hub endpoint).
+Revised 2026-08-31 (email adoption re-stated: `IEmailSender` is now consumed inside the framework
+itself by the password-reset workflow, so it is no longer an app-level-only primitive).
 
 ## Context
 The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
@@ -60,14 +62,14 @@ recipient policy both behind abstractions.
   (`SendPushNotificationHandler.cs:134-152`), an OS-level native-push channel that reaches devices the
   SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
   push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:491`), so it
+  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:565`), so it
   stays inert until a native hub is configured. The design of that channel is ADR-044's scope; this ADR
   keeps its own on the inbox and SignalR channels, so the "Two-Channel" title names the durable and
   transient channels this record governs, not a hard cap on the number of delivery legs.
 - **Horizontal scale-out is configuration, not code.** When a Redis connection string is present,
   `AddPushNotifications` adds a Redis backplane to SignalR (`AddStackExchangeRedis`) so a push reaches a
   user whose WebSocket is pinned to a different replica. `PushNotificationSettings.Enabled` (config
-  section `"PushNotifications"`, `PushNotificationSettings.cs:9,12`) gates the hub endpoint only:
+  section `"PushNotifications"`, `PushNotificationSettings.cs:11,14`) gates the hub endpoint only:
   `MapNotificationHub()` maps `NotificationHub` at the configured `HubPath` just when it is true
   (`SignalRExtensions.cs:25`). `AddPushNotifications` binds the section but registers SignalR,
   `SignalRPushNotificationSender` and `SignalRLiveChannelPublisher` unconditionally
@@ -129,29 +131,40 @@ unchanged: this closes a documentation gap so the asymmetry reads as deliberate 
    and `IPushDeviceRegistrar` at `:566`). That block is `AddServices()` (`:529`), which
    `AddInfrastructure` (`:49`) always calls (`:205`), so every host gets it. Unlike the two push
    abstractions it has no null default and no opt-in `Add*` counterpart: the real SMTP sender is always
-   the registration, inert only because nothing resolves it.
+   the registration, and the framework's own password-reset workflow resolves it (item 3).
 2. **It sits outside the inbox / SignalR / native model.** An email creates no `PushNotification` audit
    record, writes no `UserNotification` inbox row, and is never dispatched by
-   `SendPushNotificationHandler`. Callers resolve `IEmailSender` from a scope and send directly, so none
-   of the guarantees this ADR makes (durable-first ordering, best-effort live layer, recorded send
-   status) apply to it.
-3. **Adoption is two call sites, both in Store Sales.** `OrderPaidHandler`
+   `SendPushNotificationHandler`. Callers take `IEmailSender` as a dependency (or resolve it from their
+   own scope) and send directly, so none of the guarantees this ADR makes (durable-first ordering,
+   best-effort live layer, recorded send status) apply to it.
+3. **Adoption is three source call sites, one of them inside the framework.** The framework's own
+   password-reset workflow sends through the abstraction: `ForgotPasswordHandlerBase`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:38`)
+   takes `IEmailSender` as a primary-constructor dependency and dispatches the reset mail, swallowing
+   and logging a send failure so a delivery problem is never reported back to the caller (`:83-96`,
+   which would turn the response into an account-existence oracle). Two Identity modules in two repos
+   inherit that base and pass their own sender through
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:23`,
+   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24`).
+   The two app-level call sites are both in Store Sales: `OrderPaidHandler`
    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/DomainEventHandlers/OrderPaidHandler.cs:41`)
    and `OrderPaymentFailedSagaHandler`
    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Saga/OrderPaymentFailedSagaHandler.cs:31`),
    both `IDomainEventHandler<T>` implementations that open their own DI scope, build the HTML body
    inline, and swallow-and-log a send failure so the order flow is never broken
-   (`OrderPaidHandler.cs:59-64`, `OrderPaymentFailedSagaHandler.cs:52-55`). No other module or repo
-   consumes the abstraction today.
+   (`OrderPaidHandler.cs:59-64`, `OrderPaymentFailedSagaHandler.cs:52-55`).
 4. **No templating, retry, or bounce posture.** The contract is two `SendAsync` overloads over plain
    `subject` / `body` strings with an `isHtml` flag (`IEmailSender.cs:15,23`); bodies are concatenated
    at the call site. `SmtpEmailSender` constructs a fresh `SmtpClient` per call and awaits
-   `SendMailAsync` once (`SmtpEmailSender.cs:30-42`): no retry, no dead-letter, no bounce or
+   `SendMailAsync` once (`SmtpEmailSender.cs:25-37`): no retry, no dead-letter, no bounce or
    delivery-status handling, and no persisted send record equivalent to the `PushNotification`
    aggregate.
-5. **Accepted as-is.** Email stays an app-level concern riding a framework-registered primitive.
-   Pulling it under this ADR's model (durable record, null default, opt-in registration, one dispatching
-   handler) is not justified by two call sites, and the point of recording it here is only that a reader
-   of ADR-024 or ADR-044 should not conclude the inbox, SignalR and native legs are the only delivery
-   paths in the platform. Wider adoption, or a requirement that email delivery be auditable or
-   retried, is the trigger to give it its own record instead of this amendment.
+5. **Accepted as-is.** Email stays a direct-send primitive outside this ADR's channel model, used by
+   one framework workflow and by app code. Pulling it under this ADR's model (durable record, null
+   default, opt-in registration, one dispatching handler) is not justified by the call sites there
+   are: three of them, each wanting a direct send rather than an audited per-recipient fan-out, and
+   the password-reset one deliberately treating a failed send as silent. The point of recording it
+   here is only that a reader of ADR-024 or ADR-044 should not conclude the inbox, SignalR and native
+   legs are the only delivery paths in the platform. Wider adoption, or a requirement that email
+   delivery be auditable or retried, is the trigger to give it its own record instead of this
+   amendment.

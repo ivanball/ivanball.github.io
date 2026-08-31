@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">16</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">101</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">104</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">119</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -408,7 +408,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>101 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>104 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -501,19 +501,22 @@
           <a class="adr" href="docs/adr/086-process-manager-deferred.html"><span class="adr-num">086</span><span><span class="adr-title">A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</span><span class="adr-sum">Accepted (2026-08-18) as a documented deferral. Nothing ships with this record: no state machine, no correlation store, no new package. What ships is…</span></span></a>
           <a class="adr" href="docs/adr/087-broker-poison-message-handling.html"><span class="adr-num">087</span><span><span class="adr-title">Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</span><span class="adr-sum">Accepted (2026-08-18). Amends ADR-009: the outbox&#39;s broker publish gains a circuit breaker, which is the first resilience policy this workspace applies…</span></span></a>
           <a class="adr" href="docs/adr/088-gateway-edge-responsibilities.html"><span class="adr-num">088</span><span><span class="adr-title">Gateway Edge Responsibilities (and the Three It Declines)</span><span class="adr-sum">Accepted (2026-08-18). Extends ADR-019 with a fourth, edge-tier layer whose posture is the deliberate opposite of the service tier&#39;s authenticated-only…</span></span></a>
-          <a class="adr" href="docs/adr/089-gateway-topology-owned-by-configuration.html"><span class="adr-num">089</span><span><span class="adr-title">Gateway Topology Owned by Configuration</span><span class="adr-sum">Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected).…</span></span></a>
+          <a class="adr" href="docs/adr/089-gateway-topology-owned-by-configuration.html"><span class="adr-num">089</span><span><span class="adr-title">Gateway Topology Owned by Configuration</span><span class="adr-sum">Accepted (2026-08-18; revised 2026-08-23: ADC&#39;s table gained a 27th route, /Activities, on 2026-08-19, and the bicep anchors below are corrected;…</span></span></a>
           <a class="adr" href="docs/adr/090-event-upcaster-registration.html"><span class="adr-num">090</span><span><span class="adr-title">Event Upcaster Registration Extension Point</span><span class="adr-sum">Accepted (2026-08-21). Completes the follow-up named in ADR-010: that record established the versioning policy (a SchemaVersion signal plus a…</span></span></a>
           <a class="adr" href="docs/adr/091-cache-backed-password-reset.html"><span class="adr-num">091</span><span><span class="adr-title">Cache-Backed Password Reset</span><span class="adr-sum">Accepted (2026-08-22). Extends ADR-029 (the cache-backed login-protection idiom this record reuses) and ADR-032 (which decided how a password is…</span></span></a>
           <a class="adr" href="docs/adr/092-web-vitals-budget-gate.html"><span class="adr-num">092</span><span><span class="adr-title">Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</span><span class="adr-sum">Accepted (2026-08-23).</span></span></a>
           <a class="adr" href="docs/adr/093-container-image-posture.html"><span class="adr-num">093</span><span><span class="adr-title">Container Image Build and Runtime Posture</span><span class="adr-sum">Accepted (2026-08-23) for the three build decisions below. The two runtime postures in &quot;Open postures&quot; are recorded as undecided: they describe what…</span></span></a>
-          <a class="adr" href="docs/adr/094-client-entity-data-access.html"><span class="adr-num">094</span><span><span class="adr-title">Client-Side Entity Data-Access Contract</span><span class="adr-sum">Accepted (2026-08-23).</span></span></a>
+          <a class="adr" href="docs/adr/094-client-entity-data-access.html"><span class="adr-num">094</span><span><span class="adr-title">Client-Side Entity Data-Access Contract</span><span class="adr-sum">Accepted (2026-08-23). Revised 2026-08-31: GetByIdAsync is recorded with its real signature (id, includeChildren, CancellationToken; a missing entity…</span></span></a>
           <a class="adr" href="docs/adr/095-soft-delete-unique-indexes.html"><span class="adr-num">095</span><span><span class="adr-title">Uniqueness Under Soft Delete (Filtered Unique Indexes)</span><span class="adr-sum">Accepted (2026-08-23). Revised 2026-08-26 (the convention appends its clause to a hand-authored filter instead of skipping the index).</span></span></a>
-          <a class="adr" href="docs/adr/096-best-effort-side-effects.html"><span class="adr-num">096</span><span><span class="adr-title">Best-Effort Side-Effect Contract</span><span class="adr-sum">Accepted (2026-08-23).</span></span></a>
+          <a class="adr" href="docs/adr/096-best-effort-side-effects.html"><span class="adr-num">096</span><span><span class="adr-title">Best-Effort Side-Effect Contract</span><span class="adr-sum">Accepted (2026-08-23). Revised 2026-08-31.</span></span></a>
           <a class="adr" href="docs/adr/097-multi-device-refresh-sessions.html"><span class="adr-num">097</span><span><span class="adr-title">Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</span><span class="adr-sum">Accepted (2026-08-26). Supersedes the storage model of ADR-050 (one plaintext refresh-token column on the user row); the rotation and reuse-detection…</span></span></a>
-          <a class="adr" href="docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html"><span class="adr-num">098</span><span><span class="adr-title">Aspire for Orchestration, Not for Testing or Production Dashboards</span><span class="adr-sum">Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as decisions rather than as gaps. Nothing in any repo…</span></span></a>
+          <a class="adr" href="docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html"><span class="adr-num">098</span><span><span class="adr-title">Aspire for Orchestration, Not for Testing or Production Dashboards</span><span class="adr-sum">Accepted (2026-08-28). Revised 2026-08-31: the sanctioned nightly AppHost smoke test is implemented, so Aspire.Hosting.Testing now ships in exactly one…</span></span></a>
           <a class="adr" href="docs/adr/099-generic-write-side-entity-commands.html"><span class="adr-num">099</span><span><span class="adr-title">Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Extends ADR-034, which gave every entity a generic read surface plus create and delete, by completing the…</span></span></a>
           <a class="adr" href="docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html"><span class="adr-num">100</span><span><span class="adr-title">The Outbox Is Resolved from the Messaging Mode, Not Always On</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Amends ADR-003 (the outbox runs when the transport needs it, rather than in every host unconditionally) and…</span></span></a>
           <a class="adr" href="docs/adr/101-common-metapackage.html"><span class="adr-num">101</span><span><span class="adr-title">An MMCA.Common Metapackage for the Core Six</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Extends ADR-053 (the metapackage ships to both registries from the same tag, through the same workflow) and…</span></span></a>
+          <a class="adr" href="docs/adr/102-pbkdf2-only-password-hashing.html"><span class="adr-num">102</span><span><span class="adr-title">PBKDF2-Only Password Hashing</span><span class="adr-sum">Accepted (2026-08-31). Supersedes ADR-032.</span></span></a>
+          <a class="adr" href="docs/adr/103-bunit-component-test-tier.html"><span class="adr-num">103</span><span><span class="adr-title">bUnit Component-Test Tier as a Shipped Package</span><span class="adr-sum">Accepted (2026-08-31).</span></span></a>
+          <a class="adr" href="docs/adr/104-smart-enums-as-opt-in-capability.html"><span class="adr-num">104</span><span><span class="adr-title">Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</span><span class="adr-sum">Accepted (2026-08-31).</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -539,9 +542,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">164 documents</span>
+            <span class="kicker kicker--accent">167 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 101 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 18 guides and specifications.</p>
+            <p>Every collection indexed in one place: 104 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 18 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->

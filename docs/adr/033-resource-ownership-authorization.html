@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-02, revised 2026-07-25).">
+  <meta name="description" content="Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)">
-  <meta property="og:description" content="Accepted (2026-07-02, revised 2026-07-25).">
+  <meta property="og:description" content="Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)">
-  <meta name="twitter:description" content="Accepted (2026-07-02, revised 2026-07-25).">
+  <meta name="twitter:description" content="Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"033 · Resource-Ownership Authorization (Row-Level + Action Filter)","item":"https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -209,14 +212,13 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-033-resource-ownership-authorization-row-level--action-filter">ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02, revised 2026-07-25).</p>
+          <p>Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31).</p>
           <h2 id="context">Context</h2>
           <p>ADR-020 added a permission (capability) layer over RBAC: it answers &quot;what may this <strong>role</strong> do&quot;,
           resolving a role to a permission so an endpoint can require a capability instead of a role name. It
           explicitly scoped out the orthogonal question, &quot;is this <strong>my</strong> order&quot;, recording that &quot;per-resource
           ownership (a customer may read only their own data) stays a separate concern (<code>OwnerOrAdminFilter</code>),
-          and a route needing both composes the two&quot; (<code>ADRs/020-permission-based-authorization.md:78</code>,
-          <code>020-permission-based-authorization.md:79</code>).</p>
+          and a route needing both composes the two&quot; (<code>020-permission-based-authorization.md:92-93</code>).</p>
           <p>That carve-out names a mechanism that already ships in framework code but had no decision record of
           its own. RBAC and permissions are principal-scoped: a customer with the Customer role may read orders,
           but that role says nothing about <em>which</em> orders. Two endpoint shapes need a different, resource-scoped
@@ -292,39 +294,59 @@
           audit of the whole controller, not just of the routes that motivated it.</p>
           <p><strong>Adoption.</strong> MMCA.Store wires both in production. The filter guards
           <code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:49</code> and
-          <code>MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:32</code> as a <code>[ServiceFilter]</code>. The
+          <code>MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:34</code> as a <code>[ServiceFilter]</code>. The
           ownership specification scopes list/get queries:
           <code>ShoppingCartsController</code> builds a <code>ShoppingCartByCustomerSpecification</code>
           (<code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:66</code>,
           <code>MMCA.Store/.../Sales.Application/ShoppingCarts/Specifications/ShoppingCartByCustomerSpecification.cs:19</code>,
           which filters by <code>Id</code> because a cart is keyed by customer, <code>ShoppingCartByCustomerSpecification.cs:24</code>)
-          and <code>OrdersController</code> builds an <code>OrdersByCustomerSpecification</code> through a private
+          and hands it to every read through one <code>GetReadSpecificationAsync</code> override
+          (<code>ShoppingCartsController.cs:206</code>), so the list, the paged list, the by-id read and every page the CSV
+          export streams are narrowed by the same expression rather than by a copy per action.
+          <code>OrdersController</code> builds an <code>OrdersByCustomerSpecification</code> through a private
           <code>GetOwnershipSpecification()</code> method
           (<code>MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:64-66</code>,
           <code>MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13</code>, filtering
           by <code>CustomerId</code>, <code>OrdersByCustomerSpecification.cs:18</code>), passed as <code>specification: GetOwnershipSpecification()</code> into each query (<code>OrdersController.cs:105</code>, <code>OrdersController.cs:143</code>,
-          <code>OrdersController.cs:177</code>). <code>OrdersController</code> does not use the class-level filter for its mutating
-          routes; it runs an explicit per-mutation ownership check, <code>ValidateOwnershipAsync</code>
-          (<code>OrdersController.cs:431</code>), that reuses <code>OwnershipHelper.IsAdmin</code> through its <code>IsAdmin</code> property
+          <code>OrdersController.cs:177</code>) and into its CSV export through a <code>GetExportSpecification</code> override
+          (<code>OrdersController.cs:244-245</code>). <code>OrdersController</code> does not use the class-level filter for its
+          mutating routes; it runs an explicit per-mutation ownership check, <code>ValidateOwnershipAsync</code>
+          (<code>OrdersController.cs:414</code>), that reuses <code>OwnershipHelper.IsAdmin</code> through its <code>IsAdmin</code> property
           (<code>OrdersController.cs:62</code>) to let the bypass role through. Its two denial branches return different
           statuses on purpose:</p>
           <ul>
-          <li><strong>Missing owner claim</strong> (the caller carries no <code>customer_id</code>): <code>Error.Forbidden</code>, a 403
-          (<code>OrdersController.cs:439</code>, <code>OrdersController.cs:441-446</code>). Nothing was looked up, so there is no
+          <li><strong>Missing owner claim</strong> (the caller carries no <code>customer_id</code>, checked at <code>OrdersController.cs:422</code>):
+          <code>Error.Forbidden</code>, a 403 (<code>OrdersController.cs:424-428</code>). Nothing was looked up, so there is no
           resource whose existence a 403 could leak; this matches the filter&#39;s own missing-claim <code>ForbidResult</code>.</li>
-          <li><strong>Owner mismatch</strong> (the claim is present but the order is someone else&#39;s): <code>Error.NotFound</code>, a 404
-          rather than a 403 (<code>OrdersController.cs:454</code>, <code>OrdersController.cs:454-456</code>), so the response does not
-          reveal that another customer&#39;s order exists.</li>
+          <li><strong>Owner mismatch</strong> (the claim is present but the order is someone else&#39;s, the existence check at
+          <code>OrdersController.cs:431-433</code>): <code>Error.NotFound</code>, a 404 rather than a 403
+          (<code>OrdersController.cs:437-439</code>), so the response does not reveal that another customer&#39;s order exists.</li>
           </ul>
+          <p><strong>A <code>null</code> specification means two different things, so the collection reads gate on it.</strong> Store&#39;s two
+          row-scoped controllers each carry a private <code>RequireResolvableOwner()</code>
+          (<code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:80</code>, <code>OrdersController.cs:78-88</code>).
+          <code>OwnershipHelper.GetOwnershipSpecification</code> returns <code>null</code> both for an admin (scoping deliberately
+          skipped) and for a non-admin whose <code>customer_id</code> claim cannot be resolved, and only the first may query
+          unscoped. The gate lets the bypass role and any caller with a resolvable claim through, and answers
+          everyone else with <code>Error.Forbidden</code>, a 403 through the same <code>Result</code>/HTTP edge as the rest
+          (<code>ShoppingCartsController.cs:82-89</code>, <code>OrdersController.cs:80-87</code>). It runs on every collection read and
+          on the CSV export (<code>ShoppingCartsController.cs:106</code>, <code>:126</code>, <code>:188</code>; <code>OrdersController.cs:98</code>, <code>:132</code>,
+          <code>:169</code>, <code>:232</code>). This is the concrete mitigation for the &quot;claim-based ownership trusts the token&quot;
+          trade-off below: claim-less Customer tokens are issuable in practice, because customer linking on
+          registration can fail without failing the registration itself, so &quot;no claim&quot; is treated as deny rather
+          than as no scoping.</p>
           <p>MMCA.ADC&#39;s Engagement module is the first host to configure the filter&#39;s vocabulary rather than take
           the defaults. <code>AddModuleEngagementAPI</code>
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:42</code>) calls
-          <code>services.Configure&lt;OwnerOrAdminFilterOptions&gt;(...)</code> (<code>DependencyInjection.cs:44</code>) to point the shared
-          filter at ADC&#39;s own ownership terms: the <code>user_id</code> claim its token service emits
-          (<code>DependencyInjection.cs:46</code>), the <code>Organizer</code> bypass role (<code>RoleNames.Organizer</code>,
-          <code>Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:15</code>, <code>DependencyInjection.cs:47</code>), and the <code>userId</code>
-          query argument its Bookmarks list endpoints bind (<code>DependencyInjection.cs:48</code>). The filter type is
-          unchanged; only the options differ, which is exactly what the options object exists for. The Bookmarks
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:43</code>) calls
+          <code>services.Configure&lt;OwnerOrAdminFilterOptions&gt;(...)</code> (<code>DependencyInjection.cs:45</code>) to point the shared
+          filter at ADC&#39;s own ownership terms: <code>ClaimTypes.NameIdentifier</code> as the owner claim
+          (<code>DependencyInjection.cs:53</code>), the <code>Organizer</code> bypass role (<code>RoleNames.Organizer</code>,
+          <code>Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:15</code>, <code>DependencyInjection.cs:54</code>), and the <code>userId</code>
+          query argument its Bookmarks list endpoints bind (<code>DependencyInjection.cs:55</code>). ADC&#39;s token carries the
+          user id in <code>sub</code> alone; the JWT bearer handler maps inbound <code>sub</code> onto <code>ClaimTypes.NameIdentifier</code>, so
+          that is the type the principal the filter inspects actually carries (<code>DependencyInjection.cs:47-52</code>).
+          The filter type is unchanged; only the options differ, which is exactly what the options object exists
+          for. The Bookmarks
           <strong>delete</strong> keeps a separate DB-backed inline ownership check that returns 404-not-403 (the same
           per-mutation, existence-hiding pattern Store&#39;s <code>OrdersController</code> uses).</p>
           <p><strong>The deny-by-default audit.</strong> Both Store controllers apply the filter at class level, so every action
@@ -338,23 +360,36 @@
           </tr>
           </thead>
           <tbody><tr>
-          <td><code>ShoppingCartsController.GetAllAsync</code> (both overloads)</td>
-          <td><code>ShoppingCartByCustomerSpecification</code> already narrows the rows to the caller</td>
+          <td><code>ShoppingCartsController.GetAllAsync</code> (both overloads, <code>:98</code>, <code>:113</code>)</td>
+          <td><code>ShoppingCartByCustomerSpecification</code> through <code>GetReadSpecificationAsync</code> already narrows the rows to the caller, plus the <code>RequireResolvableOwner()</code> gate (<code>:106</code>, <code>:126</code>)</td>
           </tr>
           <tr>
-          <td><code>ShoppingCartsController.GetAllForLookupAsync</code></td>
-          <td><code>RequireAdmin</code> policy</td>
+          <td><code>ShoppingCartsController.GetAllForLookupAsync</code> (<code>:142</code>)</td>
+          <td><code>[HasPermission(SalesPermissions.ShoppingCartsManage)]</code> (<code>:144</code>)</td>
           </tr>
           <tr>
-          <td><code>CustomersController.GetAllAsync</code> (both overloads), <code>GetAllForLookupAsync</code></td>
-          <td><code>RequireAdmin</code> policy</td>
+          <td><code>ShoppingCartsController.ExportAsync</code> (<code>:178</code>)</td>
+          <td>the same <code>GetReadSpecificationAsync</code> scoping the list endpoints read, plus the <code>RequireResolvableOwner()</code> gate (<code>:188</code>)</td>
+          </tr>
+          <tr>
+          <td><code>CustomersController.GetAllAsync</code> (both overloads, <code>:49</code>, <code>:61</code>), <code>GetAllForLookupAsync</code> (<code>:78</code>)</td>
+          <td><code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>:51</code>, <code>:63</code>, <code>:80</code>)</td>
+          </tr>
+          <tr>
+          <td><code>CustomersController.ExportAsync</code> (<code>:110</code>)</td>
+          <td><code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>:112</code>)</td>
           </tr>
           </tbody></table></div>
+          <p>Store states each of those guards as a capability, never as a role name: an endpoint requires what it
+          does and the module&#39;s grant table decides who holds it (ADR-020).</p>
           <p><code>CustomersController.CreateAsync</code> was inherited without its own policy and had been relying on the
           filter failing open. Deny-by-default closes that, but only incidentally, because the action happens to
-          carry no owner parameter; it is now explicitly <code>RequireAdmin</code>, matching the Admin-gated create page
-          that is its only caller. ADC&#39;s <code>BookmarksController</code> needs no annotation: both filtered actions bind a
-          <code>[Required]</code> non-nullable <code>userId</code>, so model validation rejects a missing value before the filter runs.</p>
+          carry no owner parameter; it now states its own guard,
+          <code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>CustomersController.cs:130</code>) beside the
+          <code>[AllowMissingOwner]</code> opt-out (<code>CustomersController.cs:131</code>), matching the admin-gated create page that
+          is its only caller (<code>CustomersController.cs:124-127</code>). ADC&#39;s <code>BookmarksController</code> needs no annotation:
+          both filtered actions bind a <code>[Required]</code> non-nullable <code>userId</code>, so model validation rejects a missing
+          value before the filter runs.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Reject-one and filter-many are genuinely two mechanisms.</strong> A single-resource route has an id to
@@ -382,7 +417,9 @@
           (<code>customer_id</code> by default) being present and correct, so their correctness depends entirely on the
           upstream token validation (ADR-004); a missing claim 403s (filter) or yields a <code>null</code> spec (helper,
           which for a non-admin returns <code>null</code> and therefore no scoping, so callers must not treat a missing
-          claim as &quot;admin&quot;).</li>
+          claim as &quot;admin&quot;). Store&#39;s two row-scoped controllers close that with the <code>RequireResolvableOwner()</code>
+          gate recorded in Adoption, but the helper&#39;s return value is still ambiguous by itself, so every new
+          collection read has to add the same gate rather than inherit it.</li>
           <li><strong>The filter assumes the owner parameter equals the owning id.</strong> <code>OwnerOrAdminFilter</code> compares its
           configured owner parameter, resolved from either a route value or a model-bound argument, against the
           configured owner claim (<code>OwnerOrAdminFilter.cs:72</code>). That holds where the resource is keyed by the
@@ -394,10 +431,12 @@
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-020 (the role/permission RBAC layer this complements, and whose explicit
-          <code>020-permission-based-authorization.md:78</code> scope-out this fills), ADR-034 (the generic entity query
+          <code>020-permission-based-authorization.md:92-93</code> scope-out this fills), ADR-034 (the generic entity query
           pipeline / <code>IEntityQueryService</code> the collection-scoping <code>Specification</code> slots into), ADR-013 (failures
           surface as <code>Result</code>/HTTP at the edge, the filter as a 403 <code>ForbidResult</code>), ADR-004 (the validated
-          principal and owner claim both enforcement points trust).</p>
+          principal and owner claim both enforcement points trust), ADR-078 (the CSV export endpoint, whose
+          per-controller scoping hook is what lets an export inherit the same ownership specification as the list
+          it mirrors).</p>
           <h2 id="revision-2026-07-25">Revision (2026-07-25)</h2>
           <p>An audit against the code. No behavior changed; the ADR text did.</p>
           <ol>
@@ -420,6 +459,39 @@
           missing-owner-claim <code>Error.Forbidden</code> branch (<code>OrdersController.cs:439</code>, <code>:441-446</code>), and the
           owner-mismatch <code>Error.NotFound</code> branch (<code>OrdersController.cs:454</code>, <code>:454-456</code>).
           <code>OrdersByCustomerSpecification.cs:13</code> and <code>:18</code> were re-checked and are unchanged.</p>
+          <h2 id="revision-2026-08-31">Revision (2026-08-31)</h2>
+          <p>Behavior changed on both adopters since the 2026-08-01 pass, so this is not an anchor refresh.</p>
+          <ol>
+          <li><strong>The ambiguous <code>null</code> specification is now gated.</strong> <code>OwnershipHelper.GetOwnershipSpecification</code>
+          returns <code>null</code> for an admin and for a non-admin whose owner claim cannot be resolved, and Store&#39;s
+          collection reads used to run unscoped in both cases. Both row-scoped controllers now carry a
+          <code>RequireResolvableOwner()</code> gate that 403s the second caller (<code>ShoppingCartsController.cs:80</code>,
+          <code>OrdersController.cs:78-88</code>). Recorded in Adoption and referenced from the claim-based-ownership
+          trade-off it answers.</li>
+          <li><strong>The Store guards are capabilities, not a role policy.</strong> The deny-by-default table named a
+          <code>RequireAdmin</code> policy; that identifier no longer exists anywhere in MMCA.Store source. The
+          annotated actions state <code>[HasPermission(SalesPermissions.ShoppingCartsManage)]</code> and
+          <code>[HasPermission(IdentityPermissions.CustomersManage)]</code> instead (ADR-020), including
+          <code>CustomersController.CreateAsync</code> (<code>CustomersController.cs:130</code>).</li>
+          <li><strong>The table was two rows short.</strong> Both CSV exports carry <code>[AllowMissingOwner]</code> and were missing:
+          <code>ShoppingCartsController.ExportAsync</code> (<code>:178</code>), guarded by the <code>GetReadSpecificationAsync</code> row
+          scoping plus the fail-closed gate, and <code>CustomersController.ExportAsync</code> (<code>:110</code>), guarded by the
+          customer-management capability. Sales exports read the caller&#39;s own ownership specification through
+          <code>GetReadSpecificationAsync</code> (<code>ShoppingCartsController.cs:206</code>) and <code>GetExportSpecification</code>
+          (<code>OrdersController.cs:244-245</code>), so an export matches the list endpoint it mirrors (the ADR-078
+          follow-up); the Customers export stays capability-gated, because its list endpoints are not row
+          scoped and there is no ownership specification to reproduce.</li>
+          <li><strong>ADC&#39;s owner claim is <code>ClaimTypes.NameIdentifier</code>, not <code>user_id</code>.</strong> The token carries the user id
+          in <code>sub</code> alone and the JWT bearer handler maps it onto <code>ClaimTypes.NameIdentifier</code>, which is what
+          the Engagement module configures (<code>DependencyInjection.cs:53</code>). The <code>user_id</code> wording was wrong,
+          not merely mis-anchored.</li>
+          <li><strong>Refreshed anchors</strong>: the ADR-020 carve-out quote (now
+          <code>020-permission-based-authorization.md:92-93</code>, and the stale <code>ADRs/</code> path prefix dropped, since the
+          ADRs are canonical under <code>Website/docs-src/adr/</code>), <code>CustomersController</code> <code>[ServiceFilter]</code> (<code>:34</code>),
+          <code>ValidateOwnershipAsync</code> (<code>OrdersController.cs:414</code>) with its <code>Error.Forbidden</code> (<code>:422</code>, <code>:424-428</code>)
+          and <code>Error.NotFound</code> (<code>:431-433</code>, <code>:437-439</code>) branches, and the ADC Engagement registration
+          (<code>DependencyInjection.cs:43</code>, <code>:45</code>, <code>:54</code>, <code>:55</code>).</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -438,6 +510,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-07-25">Revision (2026-07-25)</a></li>
             <li><a href="#revision-2026-08-01">Revision (2026-08-01)</a></li>
+            <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
             </ul>
           </nav>
         </aside>

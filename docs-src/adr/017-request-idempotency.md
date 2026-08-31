@@ -142,21 +142,22 @@ reference to `MMCA.Common.API` and means a differently-named lookalike attribute
 
 ### The shared auth controllers declare both ways, and the split is the interesting part
 `AuthControllerBase` marks register `[Idempotent]`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:76-77`), which is
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:91-92`), which is
 the canonical double-submit: a user pressing the button twice should get one account and one response.
-Login (`:54-55`), refresh (`:98-99`) and revoke (`:117-118`) are `[NonIdempotent]`, as is the OAuth code
-exchange (`.../Controllers/OAuthControllerBase.cs:136-137`). Token issuance must never be replay-cached,
+Login (`:67-68`), refresh (`:115-116`) and revoke (`:142-143`, with the per-session revoke at
+`:205-206`) are `[NonIdempotent]`, as is the OAuth code exchange
+(`.../Controllers/OAuthControllerBase.cs:148-149`). Token issuance must never be replay-cached,
 and the sharpest case is refresh: [ADR-050](050-jwt-refresh-token-rotation.md) rotates the stored
 refresh token on every use, so a cached replay would hand a client a token pair that has already been
 rotated away and revoked, turning this filter's safety feature into an authentication failure. The
-OAuth `complete` action is a `[HttpGet]` (`OAuthControllerBase.cs:74`) and is therefore outside the
+OAuth `complete` action is a `[HttpGet]` (`OAuthControllerBase.cs:86`) and is therefore outside the
 gate's scope rather than unmarked.
 
 ### The no-op-without-a-key contract is now pinned by tests
 The Decision has always said an absent or blank `Idempotency-Key` means the action runs normally. That
 is now asserted rather than asserted-about: the filter returns `next()` untouched at the action stage
 with no key (`.../Idempotency/IdempotencyFilter.cs:133-138`), only enables request buffering when a key
-is present (`:123-124`), and treats blank as absent (`:165-172`), with
+is present (`:121-122`), and treats blank as absent (`:163-170`), with
 `Tests/Presentation/MMCA.Common.API.Tests/Idempotency/IdempotencyFilterPassthroughTests.cs:46`, `:68`
 and `:85` covering the missing-header, blank-header and unbuffered-body cases. That matters because it
 is the premise of adopting `[Idempotent]` widely: annotating an existing endpoint cannot change what an

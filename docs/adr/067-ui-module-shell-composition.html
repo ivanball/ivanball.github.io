@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -211,7 +214,8 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-07). Revised 2026-08-29: records the component-vendor choice (MudBlazor) that the
           Context already scoped to this ADR, and the <code>IToastService</code> / <code>IAppDialogService</code> facades that keep
-          the vendor out of call sites.</p>
+          the vendor out of call sites. Revised 2026-08-31: records that the two facade registrations live in
+          their own <code>AddCommonUiFacades()</code> call, shared by <code>AddUIShared</code> and the shipped bUnit base.</p>
           <h2 id="context">Context</h2>
           <p>ADR-059 decided how a module plugs into the <strong>server</strong>: an <code>IModule</code> implementation is discovered by
           reflection, registered in topological order, and a host composes an application out of those modules
@@ -270,7 +274,7 @@
           </li>
           <li><p><strong>Registration is one call.</strong> <code>AddUIModule&lt;TModule&gt;()</code> runs the Scrutor scan for the module&#39;s entity
           services and then registers the descriptor as a singleton <code>IUIModule</code>
-          (<code>MMCA.Common.UI/DependencyInjection.cs:152-162</code>); modules with extra services register the
+          (<code>MMCA.Common.UI/DependencyInjection.cs:185-194</code>); modules with extra services register the
           descriptor directly with <code>AddSingleton&lt;IUIModule, TModule&gt;()</code> after their own registrations
           (<code>MMCA.Common.UI/Notifications/DependencyInjection.cs:39</code>,
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:69</code>).</p>
@@ -284,15 +288,19 @@
           five severities every component library exposes and is fire-and-forget by design (during SSR
           pre-render there is no toast host, so the call is a silent no-op); <code>IAppDialogService</code> is one
           <code>ConfirmAsync</code>, where dismissing the prompt counts as declining, so a caller only ever branches on
-          <code>true</code>. <code>AddUIShared</code> TryAdd-registers <code>MudToastService</code> and <code>MudAppDialogService</code> over MudBlazor&#39;s
-          <code>ISnackbar</code> and <code>IDialogService</code> (<code>MMCA.Common.UI/DependencyInjection.cs:91-92</code>), so the vendor type
-          appears in exactly one implementation per contract, and the framework helpers that raise a toast or
-          ask a question (<code>ResultUiExtensions.NotifyOnFailure</code>, <code>ListPageActions.DeleteWithConfirmationAsync</code>)
-          take the facade. Richer, entity-specific dialogs stay component-side (<code>DeleteConfirmation</code>).</p>
+          <code>true</code>. Both facades are registered by one extracted call, <code>AddCommonUiFacades()</code>, which
+          TryAdd-registers <code>MudToastService</code> and <code>MudAppDialogService</code> over MudBlazor&#39;s <code>ISnackbar</code> and
+          <code>IDialogService</code> (<code>MMCA.Common.UI/DependencyInjection.cs:140-145</code>). <code>AddUIShared</code> calls it (<code>:88</code>),
+          and so does the shipped bUnit base
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:53</code>),
+          so a component test resolves the two contracts without pulling in the rest of the shared-UI surface.
+          The vendor type therefore appears in exactly one implementation per contract, and the framework
+          helpers that raise a toast or ask a question (<code>ResultUiExtensions.NotifyOnFailure</code>,
+          <code>ListPageActions.DeleteWithConfirmationAsync</code>) take the facade. Richer, entity-specific dialogs stay component-side (<code>DeleteConfirmation</code>).</p>
           </li>
           <li><p><strong>Blazor Web heads feed the same enumeration to the endpoint side.</strong> <code>MapRazorComponents&lt;App&gt;()</code>
           takes the module assemblies from <code>GetServices&lt;IUIModule&gt;()</code> in addition to the shell assemblies
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:186-200</code>, which also de-duplicates, and
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:195-209</code>, which also de-duplicates, and
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:201-212</code>), so the router&#39;s view and the
           endpoint&#39;s view of the routable assemblies come from one source.</p>
           </li>
@@ -305,15 +313,15 @@
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/CatalogUIModule.cs:13</code>,
           <code>Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:16</code>, <code>Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:13</code>);
           the framework&#39;s own notification module
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:14</code>); and the
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15</code>); and the
           backend-less component gallery, whose stub descriptor is the only reason its <code>/components</code> page is
-          routable (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:13</code>,
-          registered at <code>GalleryHost.cs:85</code>). Two adopters are <strong>host-only</strong>: ADC&#39;s <code>DeviceUIModule</code> adds the
+          routable (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:14</code>,
+          registered at <code>GalleryHost.cs:90</code>). Two adopters are <strong>host-only</strong>: ADC&#39;s <code>DeviceUIModule</code> adds the
           MAUI-only device settings page plus the deep-link listener
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:19</code>, registered at <code>MauiProgram.cs:121</code>), and
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:19</code>, registered at <code>MauiProgram.cs:157</code>), and
           Store&#39;s <code>MauiUIModule</code> contributes no nav and no pages at all, existing purely to hang the native
           theme sync on the layout extension point (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:14</code>,
-          registered at <code>MauiProgram.cs:72</code>). MMCA.Helpdesk deliberately does <strong>not</strong> adopt this: the seed&#39;s
+          registered at <code>MauiProgram.cs:80</code>). MMCA.Helpdesk deliberately does <strong>not</strong> adopt this: the seed&#39;s
           Blazor head owns its own <code>Routes.razor</code> and <code>MainLayout</code> and never calls <code>AddUIShared</code>, because it has
           no <code>ApiSettings</code>-backed client pipeline (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:25-28</code>).</p>
           <h2 id="rationale">Rationale</h2>
@@ -363,7 +371,7 @@
           protection still comes from <code>AuthorizeRouteView</code> and the pages&#39; own attributes (<code>Routes.razor:11-29</code>).</li>
           <li><strong>Blazor Web heads wire the assemblies twice.</strong> The router&#39;s <code>AdditionalAssemblies</code> and the
           endpoint&#39;s <code>AddAdditionalAssemblies</code> are separate calls, so both hosts repeat the enumeration in
-          <code>Program.cs</code> (<code>MMCA.ADC.UI.Web/Program.cs:186-200</code>, <code>MMCA.Store.UI.Web/Program.cs:201-212</code>); they
+          <code>Program.cs</code> (<code>MMCA.ADC.UI.Web/Program.cs:195-209</code>, <code>MMCA.Store.UI.Web/Program.cs:201-212</code>); they
           derive it from the same <code>IUIModule</code> registrations, but the duplication is real.</li>
           <li><strong>The reference seed does not demonstrate the pattern.</strong> Helpdesk&#39;s hand-rolled shell means an
           adopter following it gets the framework&#39;s components but not this composition model.</li>

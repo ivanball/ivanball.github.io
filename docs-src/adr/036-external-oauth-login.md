@@ -56,23 +56,25 @@ a local `User`.
   upstream access logs.
 - **The exchange resolves to a local `User`, three ways, and guards the by-email link.**
   `ExternalLoginAsync` (app-level,
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:130`)
-  first looks the user up by `LoginProvider` + `ProviderKey` (`AuthenticationService.cs:151`). Missing,
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:145`)
+  opens the transaction and runs the workflow body in `ExternalLoginCoreAsync`
+  (`AuthenticationService.cs:157`), which
+  first looks the user up by `LoginProvider` + `ProviderKey` (`AuthenticationService.cs:166`). Missing,
   it **validates the provider-supplied email before it searches on it**: `Email.Create(email)`
-  (`AuthenticationService.cs:171`) is checked as a `Result`, and an unparseable claim value **rejects**
+  (`AuthenticationService.cs:184`) is checked as a `Result`, and an unparseable claim value **rejects**
   the sign-in with an `Error.Validation` carrying code `Auth.ExternalEmailInvalid`
-  (`AuthenticationService.cs:175`). This address is the one email in the system no request-level
+  (`AuthenticationService.cs:187`). This address is the one email in the system no request-level
   validator has already gated (it arrives in an OAuth claim, not in a validated request), and the
-  by-email lookup that follows (`AuthenticationService.cs:181`) compares against the validated `Email`
+  by-email lookup that follows (`AuthenticationService.cs:194`) compares against the validated `Email`
   value object rather than the raw claim string. When a local or other-provider account
   already owns that email, it applies an account-takeover guard before linking: it asks
-  `IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync` (`AuthenticationService.cs:196`)
+  `IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync` (`AuthenticationService.cs:207`)
   whether the provider asserted the incoming email as verified, and when it did not it **rejects** the
-  sign-in with `Auth.ExternalEmailNotVerified` (defined inline at `AuthenticationService.cs:202`)
+  sign-in with `Auth.ExternalEmailNotVerified` (defined inline at `AuthenticationService.cs:213`)
   instead of linking, so an unverified provider assertion cannot claim an existing local account. Only
   when the provider did assert a verified email does it **link** the external provider to that account
-  (`User.LinkExternalProvider`, `AuthenticationService.cs:207`). When no account owns the email it
-  **creates** a new `Attendee` via `User.CreateExternal` (`AuthenticationService.cs:213`; an external
+  (`User.LinkExternalProvider`, `AuthenticationService.cs:218`). When no account owns the email it
+  **creates** a new `Attendee` via `User.CreateExternal` (`AuthenticationService.cs:224`; an external
   user has empty password hash/salt and carries `LoginProvider` / `ProviderKey`). In the link and
   create cases it rotates the refresh token, saves, and mints the access token, so the caller receives
   the same `AuthenticationResponse` shape as a local login.
@@ -145,9 +147,9 @@ Identity story stays local-credential + RS256 only.
   `email_verified` claim passes the guard; GitHub's OAuth flow asserts nothing, so a GitHub sign-in
   whose email matches an existing account is rejected with `Auth.ExternalEmailNotVerified`, not linked.
   The framework itself still performs no such check: `Auth.ExternalEmailNotVerified` is defined inline
-  in ADC's override (`AuthenticationService.cs:202`), and a non-adopting host (Store, Helpdesk) gets only
+  in ADC's override (`AuthenticationService.cs:213`), and a non-adopting host (Store, Helpdesk) gets only
   the framework's not-supported default (`Auth.ExternalLoginNotSupported`,
-  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:74`), so the guard is
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:130`), so the guard is
   ADC's own edge, not a framework guarantee.
 - **Not exactly-once account creation across the redirect.** The exchange commits the `User` before
   the UI redeems the code; an abandoned redemption still creates (or links) the account. That is the

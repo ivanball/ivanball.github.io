@@ -3,6 +3,10 @@
 ## Status
 Accepted (2026-08-14). Revised 2026-08-23: the adopter counts were refreshed (ADC Conference's
 `ActivityChanged` joined the base-derived set) and three source citations were re-anchored.
+Revised 2026-08-31: the lifecycle-event totals were recounted from source (32 across the three
+apps, of which 8 are in Store), the selective-handler example was re-anchored to
+`SpeakerDeletedHandler` (the previously cited `SessionCreatedHandler` and its test exist nowhere in
+MMCA.ADC), and the Sales consumer's filter citation was re-anchored.
 
 ## Context
 ADR-003 decides how a domain event **moves**: captured into the outbox inside `SaveChangesAsync`,
@@ -35,19 +39,19 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   `Unchanged = 0`, `Added = 1`, `Updated = 2`, `Deleted = 3`
   (`MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:7-13`). No production call
   site in any repo raises `Unchanged`: it is the zero default, and it appears only as a negative
-  `[InlineData]` case in handler tests
-  (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:79,190-191`,
-  `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/DomainEvents/SessionCreatedHandlerTests.cs:40`).
+  `[InlineData]` case in a handler test, whose helper has to hand-build the event because no
+  transition on the aggregate produces one
+  (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandlerTests.cs:79,190-191`).
 - **`Added` from the factory, `Updated` from mutators, `Deleted` from `Delete()`.** The base's usage
   note fixes the mapping (`EntityChangedEvent.cs:10-13`), and `Session` is the canonical shape: one
   event type, three raise sites, in
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:206` (Added, from
   the static factory), `:267` (Updated), `:304` (Deleted, inside the soft delete), all constructing the
   same `SessionChanged` (`.../Sessions/DomainEvents/SessionChanged.cs:13-18`).
-- **Handlers filter on `State`, or deliberately do not.** `SessionCreatedHandler` subscribes to
-  `SessionChanged` and returns immediately unless the state is `Added`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/DomainEventHandlers/SessionCreatedHandler.cs:17-18`),
-  and the points award for asking a question does the same on `SessionQuestionChanged`
+- **Handlers filter on `State`, or deliberately do not.** `SpeakerDeletedHandler` subscribes to
+  `SpeakerChanged` and returns immediately unless the state is `Deleted`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/DomainEventHandlers/SpeakerDeletedHandler.cs:29-30`),
+  and the points award for asking a question does the same for `Added` on `SessionQuestionChanged`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:60-63`).
   A handler that genuinely wants every transition writes no filter and logs the discriminator instead:
   `TicketChangedAuditHandler` passes `domainEvent.State` straight into its `LoggerMessage` template
@@ -67,7 +71,7 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   and explicitly consolidates four former events, `ProductVariantAdded`, `ProductVariantRemoved`,
   `ProductVariantSkuChanged` and `ProductVariantPriceChanged` (`:8-10`). The Sales consumer filters it
   to `Added`
-  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:37-38`).
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:46-47`).
   Because integration-event shapes are snapshot-frozen by an architecture test
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Events.cs:45-58`),
   `State:DomainEntityState` is a committed line of the wire contract
@@ -83,16 +87,22 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   (`SponsorChanged.cs:16`, `EventChanged.cs:16`, `QuestionChanged.cs:16`, `CategoryChanged.cs:16`,
   `ActivityChanged.cs:16`, `SpeakerChanged.cs:21`, `SessionChanged.cs:18`), and one in Helpdesk
   (`TicketChanged.cs:15`).
-  Nineteen further event types follow the same one-event-with-`State` shape while inheriting
-  `BaseDomainEvent` or `BaseIntegrationEvent` directly, either because they identify a parent/child
+  Eighteen further domain events follow the same one-event-with-`State` shape while inheriting
+  `BaseDomainEvent` directly (`ProductVariantChanged` does the same over `BaseIntegrationEvent` on
+  the wire), either because they identify a parent/child
   pair rather than a single entity (`RoomChanged` carries `EventId` + `RoomId`,
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/DomainEvents/RoomChanged.cs:13-18`;
   `ShoppingCartItemChanged` carries `CustomerId` + `ProductVariantId`,
-  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/ShoppingCarts/DomainEvents/ShoppingCartItemChanged.cs:16-22`)
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/ShoppingCarts/DomainEvents/ShoppingCartItemChanged.cs:16-22`;
+  `ProductImageChanged` carries `ProductId` + `ImageId`,
+  `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/DomainEvents/ProductImageChanged.cs:15-20`)
   or because the module took the shape without the base (all seven ADC Engagement events, for example
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/UserSessionBookmarks/DomainEvents/UserSessionBookmarkChanged.cs:21-26`,
-  whose doc cites the same rule as BR-60 at `:8-9`). Counting the shape rather than the base type:
-  **23 in ADC** (16 Conference, 7 Engagement), **9 in Store, 1 in Helpdesk**.
+  whose doc cites the same rule as BR-60 at `:8-9`). Counting the shape rather than the base type, a
+  sweep of every `DomainEvents/*.cs` declaring a `DomainEntityState State` member finds **23 in ADC**
+  (16 Conference, 7 Engagement; Identity's two events are business-specific and carry no
+  discriminator), **8 in Store** (of eighteen domain events there, the other ten name business
+  transitions) and **1 in Helpdesk**: **32** in total.
 - **Nothing enforces the taxonomy.** The shared fitness rules require domain events to be sealed and to
   live in a `*.DomainEvents` namespace
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Naming.cs:52-60`), to
@@ -139,7 +149,7 @@ total number of records deriving the base to **16**.
 
 ## Trade-offs
 - **Every selective handler pays a filter.** A handler that cares about one transition has to open with
-  a `State` guard and return (`SessionCreatedHandler.cs:17-18` is the shape to copy); omit it and the
+  a `State` guard and return (`SpeakerDeletedHandler.cs:29-30` is the shape to copy); omit it and the
   handler fires on all three. The compiler cannot help, because the wrong behavior is an extra silent
   invocation, not a build error.
 - **The subscription surface is coarser.** Subscribing means subscribing to the whole entity lifecycle:
@@ -152,8 +162,8 @@ total number of records deriving the base to **16**.
   tell the transitions apart
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/LivePolls/DomainEvents/LivePollChanged.cs:9-11,17-22`),
   which is a state machine expressed through the CRUD shape rather than as its own events.
-- **The base type is optional in practice.** 14 of the 33 lifecycle events across the three apps derive
-  `EntityChangedEvent<TId>`; the other 19 re-declare the same two members on `BaseDomainEvent`.
+- **The base type is optional in practice.** 14 of the 32 lifecycle events across the three apps derive
+  `EntityChangedEvent<TId>`; the other 18 re-declare the same two members on `BaseDomainEvent`.
   Consistency is a review convention, not a fitness function (ADR-015), so a new module can drift
   without a failing test.
 - **A padded payload where an entity only ever does one thing.** `PointsEntryChanged` carries a `State`

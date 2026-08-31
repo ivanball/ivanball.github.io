@@ -1,8 +1,9 @@
 # ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)
 
 ## Status
-Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one:
-see the revision at the end).
+Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one)
+and 2026-08-31 (three of the four command-handler enqueue sites inherit the save-then-enqueue
+ordering from a shared base class instead of writing it): see the revisions at the end.
 
 ## Context
 Some requests trigger work that cannot run inside the request: an AI scoring pass over an event's
@@ -64,10 +65,13 @@ starts an untracked `Task` from a request.
   - *From a domain event handler*, which gets post-commit delivery from the existing deferral
     (ADR-003) with no sequencing code in the command handler: domain-event dispatch inside a
     transactional command is deferred until after the commit succeeds and dropped on rollback.
-  - *From the command handler itself, after `await unitOfWork.SaveChangesAsync(...)` returns*, for
+  - *From the command handler side of a non-transactional command, once its save has returned*, for
     commands that do not opt into the ADR-014 transaction decorator (which wraps only commands
-    implementing `ITransactional`, so for the rest `SaveChangesAsync` **is** the commit). The
-    ordering here is manual and load-bearing: the enqueue call has to stay below the save.
+    implementing `ITransactional`, so for the rest `SaveChangesAsync` **is** the commit). Most of
+    these handlers do not write the ordering themselves: a `MutateEntityHandlerBase` subclass has no
+    save of its own, and the shared base saves and then calls the `OnMutatedAsync` post-save hook the
+    handler overrides to enqueue, so the order is structural. A handler that saves inline instead
+    keeps the ordering as statement order, where the enqueue call has to stay below the save.
 
 Two implementations exist: `LiveChannelPublishQueue` / `LiveChannelPublishProcessor` (ephemeral,
 DropOldest, ADR-039) and `SessionScoringQueue` / `SessionScoringProcessor` (expensive, Wait, dedup
@@ -124,7 +128,9 @@ both shapes.
    enqueues the upvote-count broadcast at `:80`. Both are singletons that open their own scope
    (`:53` and `:54` respectively) and wrap the work in `BestEffort.ExecuteAsync` (`:51`, `:52`).
 2. **Four call sites enqueue from the command handler, on the line after the save.** There is no
-   domain event in between:
+   domain event in between. (**Superseded by the Revision (2026-08-31)**: three of these four
+   handlers hold no save of their own today, and their anchors below have moved. The text is left in
+   place as the record of what was true when written.)
    - `CloseLivePollHandler` awaits `unitOfWork.SaveChangesAsync` at
      `.../LivePolls/UseCases/Close/CloseLivePollHandler.cs:70`, logs at `:72` and calls
      `EnqueueClosed(poll)` at `:74`; the queue write itself is at `:95`.
@@ -145,4 +151,47 @@ both shapes.
    handlers `SaveChangesAsync` is the commit and an enqueue below it is genuinely post-commit. The
    difference from shape 1 is where the ordering lives: in the command handler's statement order
    rather than in the ADR-003 deferral, so it is a rule a future edit to those handlers has to keep
-   rather than one the pipeline keeps for them.
+   rather than one the pipeline keeps for them. (**The last sentence is superseded by the Revision
+   (2026-08-31)**: it describes one of the four handlers, not all four.)
+
+## Revision (2026-08-31)
+**The decision and the safety property are unchanged: post-commit work is still enqueued only once
+the write is durable.** What changed is who keeps the ordering for shape 2. Three of the four
+command-handler call sites named above contain no `SaveChangesAsync` of their own: they are
+`MutateEntityHandlerBase` subclasses
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:319`, over the
+shared `MutateEntityHandlerCore` at `:51`), and the base saves once for every subclass.
+
+1. **The save is one line in the shared base, not one per handler.**
+   `MutateEntityHandlerCore.MutateCoreAsync` awaits `attemptUnitOfWork.SaveChangesAsync` at
+   `MutateEntityHandlerBase.cs:302`, calls `LogMutated` at `:304`, then awaits the `OnMutatedAsync`
+   post-save hook at `:305`. The enqueue is the body of that hook, so "enqueue below the save" is
+   structural rather than remembered: a subclass has no way to express the other order.
+   - `CloseLivePollHandler` declares the base at
+     `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollHandler.cs:24`,
+     overrides `LogMutated` at `:64-65` and calls `EnqueueClosed(poll)` from `OnMutatedAsync` at
+     `:73`; the queue write is at `:94-95`.
+   - `OpenLivePollHandler` declares it at
+     `.../LivePolls/UseCases/Open/OpenLivePollHandler.cs:26`, overrides `LogMutated` at `:79-80` and
+     calls `EnqueueOpened(poll)` at `:88`; the queue write is at `:109-110`.
+   - `ModerateQuestionHandler` declares it at
+     `.../SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:28`, overrides `LogMutated`
+     at `:81-82`, and forwards to `EnqueueModeratedAsync(question, command.Action, _wasPending)` as
+     the expression body of `OnMutatedAsync` at `:89`; that helper wraps its work in
+     `BestEffort.ExecuteAsync` (`:138`) with one queue write per branch (`:140` the moderation event,
+     `:154` the pending count).
+2. **One call site still writes the ordering by hand.** `SubmitQuestionHandler` implements
+   `ICommandHandler<SubmitQuestionCommand, Result<SessionQuestionDTO>>` directly
+   (`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:31`), so it owns its own
+   sequence: it awaits `unitOfWork.SaveChangesAsync` at `:103`, logs at `:105`, and awaits
+   `EnqueueSubmittedAsync(question)` at `:107`, whose `BestEffort.ExecuteAsync` body (`:130-131`)
+   writes the queue at `:142` (approved) and `:157` (pending count). This is the one handler where an
+   edit that lifted the enqueue above the save would break the property with nothing to catch it.
+3. **Point 3 above is narrowed, not withdrawn.** Its premise still holds:
+   `TransactionalCommandDecorator` wraps only commands implementing `ITransactional` and passes
+   everything else straight through
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:25-26`,
+   marker at `.../UseCases/ITransactional.cs:6`), and no Engagement command implements it, so
+   `SaveChangesAsync` is the commit for all four sites. What no longer holds is its closing sentence:
+   for the three base-class handlers a pipeline does keep the ordering, and the rule a future edit
+   has to keep by hand lives in `SubmitQuestionHandler` alone.

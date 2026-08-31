@@ -56,7 +56,7 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
   delivery paths, with two new fitness functions on `EventConventionTestsBase` gating upcaster shape.
 - The convention test is **no longer vacuous in MMCA.Common**: the framework now ships one concrete
   integration event, `OutputCacheEvictionRequested`
-  (`Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:23`), a sealed
+  (`Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:29`), a sealed
   record inheriting `BaseIntegrationEvent`, and `CommonArchitectureMap` registers the Domain assembly it
   lives in (`Tests/Architecture/MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:22`), so
   `EventVersioningConventionTests` gates a real event in Common's own build. Enforcement therefore runs
