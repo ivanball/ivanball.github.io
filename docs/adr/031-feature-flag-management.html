@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -211,7 +214,9 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-06-27). Revised 2026-08-18 (a targeting-context accessor is now registered, so the
           built-in Targeting and Percentage filters give consistent per-user bucketing across replicas; the
-          last Trade-offs entry is narrowed accordingly. See the Revision (2026-08-18) at the end).</p>
+          last Trade-offs entry is narrowed accordingly. See the Revision (2026-08-18) at the end). Revised
+          2026-08-31 (the targeting identifier is the JWT <code>sub</code> claim read through <code>FindUserIdValue()</code>, not a
+          <code>user_id</code> claim; the Revision section is corrected accordingly).</p>
           <h2 id="context">Context</h2>
           <p>The apps need to decouple <em>release</em> from <em>deploy</em>: ship code dark, flip a kill switch, or roll a feature
           out to a percentage of users without a redeploy. A flag has to be enforceable at <strong>two</strong> different points
@@ -275,24 +280,29 @@
           rollout assigns a user differently on each replica and a user can see a feature appear and disappear
           between requests.</p>
           <p><code>CurrentUserTargetingContextAccessor</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:51-52</code>)
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:54-55</code>)
           implements <code>ITargetingContextAccessor</code> and is registered inside <code>AddAPI</code> as
           <code>services.AddFeatureManagement().WithTargeting&lt;CurrentUserTargetingContextAccessor&gt;()</code>, preceded by
           <code>AddHttpContextAccessor()</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:90-92</code>,
           rationale at <code>:84-89</code>). It takes <code>IHttpContextAccessor</code> rather than the scoped <code>ICurrentUserService</code>
-          precisely because <code>WithTargeting</code> registers the accessor as a singleton. <code>UserId</code> resolves to the
-          <code>user_id</code> claim falling back to <code>Identity.Name</code> (<code>:86</code>, claim constant at <code>:55</code>), and <code>Groups</code> accepts
-          role claims under <code>ClaimTypes.Role</code>, <code>&quot;role&quot;</code> or <code>&quot;roles&quot;</code> (<code>:76-82</code>), so a rollout can target a role
-          as well as a user. An unauthenticated or absent principal yields an empty context rather than an
+          precisely because <code>WithTargeting</code> registers the accessor as a singleton. <code>UserId</code> resolves to the JWT
+          <code>sub</code> claim through <code>user.FindUserIdValue()</code>, falling back to <code>Identity.Name</code> (<code>:86</code>), and <code>Groups</code>
+          accepts role claims under <code>ClaimTypes.Role</code>, <code>&quot;role&quot;</code> or <code>&quot;roles&quot;</code> (<code>:76-82</code>), so a rollout can target
+          a role as well as a user. An unauthenticated or absent principal yields an empty context rather than an
           exception (<code>:67-74</code>), which keeps anonymous traffic evaluating to the flag&#39;s non-targeted result
-          instead of failing.</p>
+          instead of failing. <code>FindUserIdValue</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:26-28</code>) reads the raw
+          <code>sub</code> claim (<code>AuthClaimTypes.Subject</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:25</code>) and falls back to the mapped
+          <code>ClaimTypes.NameIdentifier</code> the JWT bearer handler produces, so targeting buckets on exactly the
+          identifier <code>CurrentUserService</code> and the idempotency filter read.</p>
           <p><strong>No decorator changed.</strong> <code>FeatureGateCommandDecorator</code> still depends only on <code>IFeatureManager</code> and
           still calls <code>IsEnabledAsync(featureGated.FeatureName)</code> with no targeting argument (<code>:20</code>, <code>:51</code>); the
           targeting context is resolved inside the filter through the registered accessor. Both enforcement
           surfaces therefore inherit consistent bucketing with no change at either call site, which is the
           property that made this a registration-only change.</p>
           <p>The Trade-offs entry above is <strong>narrowed, not removed</strong>: bucketing is now consistent across replicas
-          for any host that goes through <code>AddAPI</code>, but it is only as consistent as the <code>user_id</code> claim is
+          for any host that goes through <code>AddAPI</code>, but it is only as consistent as the <code>sub</code> claim is
           stable, and a flag whose filter is configured without a targeting audience still behaves exactly as
           before.</p>
           <h2 id="related">Related</h2>

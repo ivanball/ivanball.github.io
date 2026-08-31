@@ -1,14 +1,15 @@
 # ADR-081: The Cost Baseline as a Hard Deploy Gate
 
 ## Status
-Accepted (2026-08-14).
+Accepted (2026-08-14). Revised 2026-08-31 (the read-only claim is qualified: one `az config set` on
+the runner's own CLI precedes the queries; citations re-anchored).
 
 ## Context
 Both deployed apps run a deliberately small production footprint: every Container App is declared with
 `maxReplicas: 2` and every SQL database with the `Basic` tier
-(`MMCA.Store/infra/main.bicep:1101,1206,1339,1415,1513` and `:594-598,624-628`;
-`MMCA.ADC/infra/main.bicep:1228,1357,1486,1741,1860` and `:634-638,667-671`, with ADC's Notification
-app deliberately right-sized at `maxReplicas: 1`, `MMCA.ADC/infra/main.bicep:1646-1648`). That
+(`MMCA.Store/infra/main.bicep:1038,1142,1273,1349,1447` and `:557-559,587-589`;
+`MMCA.ADC/infra/main.bicep:1177,1304,1431,1684,1806` and `:612-614,645-647`, with ADC's Notification
+app deliberately right-sized at `maxReplicas: 1`, `MMCA.ADC/infra/main.bicep:1586-1591`). That
 footprint is the cost baseline, and it is what the monthly bill is planned against.
 
 The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
@@ -18,10 +19,10 @@ it is silent: nothing breaks, no alert fires on a healthy oversized system, and 
 traffic perfectly while costing several times its baseline.
 
 The existing control against that was the monthly Azure budget declared in both Bicep templates
-(`MMCA.Store/infra/main.bicep:519-547`, `MMCA.ADC/infra/main.bicep:562`), which notifies at 80% of
+(`MMCA.Store/infra/main.bicep:471-499`, `MMCA.ADC/infra/main.bicep:529-557`), which notifies at 80% of
 actual spend and 100% of forecast spend. The Store template names the exact case it is meant to catch
 in its own comment, "a scale-up (manual SQL-tier / replica) silently running for weeks"
-(`MMCA.Store/infra/main.bicep:517`). A spend threshold is a lagging indicator: by the time it
+(`MMCA.Store/infra/main.bicep:469`). A spend threshold is a lagging indicator: by the time it
 trips, weeks of the overspend have already happened, and the notification says a number, not which
 resource is wrong. What was missing was a check on the **configuration** itself, and a moment at which
 someone would have to look at it.
@@ -29,7 +30,7 @@ someone would have to look at it.
 This is the FinOps sibling of the deploy gates the framework already records: ADR-038 (supply-chain
 provenance), ADR-060 (the performance-regression gate against a committed baseline) and ADR-062 (SLO
 alerting as code). ADR-064 decides the three proof-of-recency gates and enumerates `cost-guard`
-in passing as one of the jobs "whose subject is the change itself"
+in passing among the jobs that "have the change itself as their subject"
 (`Website/docs-src/adr/064-deploy-recency-gates.md:11-12,39`), but it does not decide it. This record
 does.
 
@@ -63,10 +64,13 @@ The cost baseline is asserted by a **read-only reusable workflow** that both run
   (`MMCA.Store/.github/workflows/cost-guard.yml:82`), because its retained legacy `MMCAStore` archive
   was downgraded from S0 to Basic and the bump back to S0 is the documented rollback path, so a
   rollback must not read as drift (`MMCA.Store/.github/workflows/cost-guard.yml:9-12`, and the same
-  reasoning beside the resource at `MMCA.Store/infra/main.bicep:596-599`).
+  reasoning beside the resource at `MMCA.Store/infra/main.bicep:548-551`).
 
-- **It never mutates anything.** Every call is an `az ... list` or `az ... show`; the job's stated
-  contract is that on drift it fails the run and prints what to reset
+- **It never mutates production.** Every Azure call is an `az ... list` or `az ... show`; the one
+  write in the step is `az config set extension.use_dynamic_install=yes_without_prompt`, which
+  configures the runner's own CLI and touches nothing in the subscription
+  (`MMCA.Store/.github/workflows/cost-guard.yml:48`, `MMCA.ADC/.github/workflows/cost-guard.yml:44`).
+  The job's stated contract is that on drift it fails the run and prints what to reset
   (`MMCA.Store/.github/workflows/cost-guard.yml:7`, `MMCA.ADC/.github/workflows/cost-guard.yml:7-8`).
   There is no auto-revert.
 
@@ -78,17 +82,17 @@ The cost baseline is asserted by a **read-only reusable workflow** that both run
   (`MMCA.Store/.github/workflows/cost-guard.yml:47`, `MMCA.ADC/.github/workflows/cost-guard.yml:43`).
 
 - **`deploy` waits on it by name.** `cost-guard` is listed in `deploy.needs`
-  (`MMCA.Store/.github/workflows/deploy.yml:862`, `MMCA.ADC/.github/workflows/deploy.yml:866`), and
+  (`MMCA.Store/.github/workflows/deploy.yml:941`, `MMCA.ADC/.github/workflows/deploy.yml:992`), and
   because the deploy condition runs under `always()` with explicit per-need results, the condition
   requires `needs.cost-guard.result == 'success'` literally
-  (`MMCA.Store/.github/workflows/deploy.yml:881-893`,
-  `MMCA.ADC/.github/workflows/deploy.yml:884-896`). Only `e2e-gate` is allowed to be `skipped` there,
+  (`MMCA.Store/.github/workflows/deploy.yml:960-972`,
+  `MMCA.ADC/.github/workflows/deploy.yml:1010-1022`). Only `e2e-gate` is allowed to be `skipped` there,
   so a cost-guard that fails, errors or is skipped leaves `deploy` unrun.
 
 - **Gate on deploys only, never on pull requests.** The calling job carries
   `if: github.event_name != 'pull_request'` and `secrets: inherit`
-  (`MMCA.Store/.github/workflows/deploy.yml:525-528`,
-  `MMCA.ADC/.github/workflows/deploy.yml:519-522`), because there is no production OIDC on a PR and the
+  (`MMCA.Store/.github/workflows/deploy.yml:572-575`,
+  `MMCA.ADC/.github/workflows/deploy.yml:616-619`), because there is no production OIDC on a PR and the
   deploy is PR-skipped anyway. Both repos' CONTRIBUTING files list `cost-guard` among the push-only
   jobs that must **not** be added to branch protection (`MMCA.Store/CONTRIBUTING.md:42,118`,
   `MMCA.ADC/CONTRIBUTING.md:42,111`).
@@ -120,9 +124,10 @@ the same two, so neither has a rollout for this gate to block.
   `deploy.needs` attaches it to an event that has a human waiting on it, which is what converts a
   notification into a control.
 - **Read-only is what makes it safe on the critical path.** The gate performs a handful of `az`
-  queries and mutates nothing, so its worst failure mode is a blocked deploy, never an unintended
-  production change. Auto-reverting a surge would be the opposite trade: a gate that can itself take
-  production down mid-incident, possibly while the surge is the thing keeping the app up.
+  queries and mutates nothing in the subscription, so its worst failure mode is a blocked deploy,
+  never an unintended production change. Auto-reverting a surge would be the opposite trade: a gate
+  that can itself take production down mid-incident, possibly while the surge is the thing keeping
+  the app up.
 - **One definition serves both cadences.** Making the check a reusable workflow (`workflow_call`)
   rather than duplicating a job into `deploy.yml` means the weekly run and the deploy gate cannot
   drift apart, and dispatching it manually to answer "are we at baseline right now" costs nothing.
@@ -169,7 +174,7 @@ the same two, so neither has a rollout for this gate to block.
 - **Only two cost dimensions and one name prefix are covered.** Service Bus, Redis, Log Analytics
   retention and everything else in the resource group are invisible to the gate, as is any resource
   whose name does not start with the app prefix or that lives in another resource group. Store's
-  Service Bus is Standard tier (`MMCA.Store/infra/main.bicep:665-667`) and would go unchecked if it
+  Service Bus is Standard tier (`MMCA.Store/infra/main.bicep:628-630`) and would go unchecked if it
   were scaled up.
 - **The ceiling is an upper bound, not an equality.** Scaling a resource **below** the baseline is not
   drift, so an accidental `maxReplicas: 1` on a service that needs two, or a downgrade that costs

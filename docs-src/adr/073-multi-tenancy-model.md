@@ -19,6 +19,11 @@ an untenanted scope throws); restated why `DesignTimeDbContextHelper` registers 
 `OnConfiguring` now resolves it with `GetService` and its absence no longer breaks `dotnet ef`; and
 replaced the claimed adoption-sweep grep with what is verifiable, namely zero parameterless
 `IgnoreQueryFilters()` call sites in `MMCA.Common/Source` today and no automated gate against a future one.
+Revised 2026-08-31: the named-filter exclusion now runs at **eight** call sites in `EFReadRepository`
+(four to five to six to eight across four revisions, the shared field still the invariant), and the
+`ApplicationDbContext` filter and interceptor anchors, the interceptor registrations in
+`DependencyInjection` and `DesignTimeDbContextHelper`, and the outbox per-tenant scope and claim-lease
+anchors were all re-anchored to current source.
 
 ## Context
 MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
@@ -28,12 +33,12 @@ to", had no recorded answer, which meant every consumer that ever needed one wou
 column here, a `Where` clause in each handler there, and one forgotten handler is a customer data leak.
 
 The framework does have the machinery this needs, built for a different reason. `ApplySoftDeleteFilters`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:336`,
-called from `OnModelCreating` at `:306`) proves that a global predicate applied by expression tree to every
-matching entity type makes an invariant unforgettable, and EF10's **named** query filters
-(`modelBuilder.Entity(clrType).HasQueryFilter(SoftDeleteFilterName, filter)`, `:348`, the name itself a
-constant at `:357`) mean a second filter can be added beside the first rather than replacing it. The
-interceptor pipeline resolved in `OnConfiguring` (`:236-251`) proves that a write-side rule can be enforced
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:367`,
+called from `OnModelCreating` (`:331`) at `:333`) proves that a global predicate applied by expression tree
+to every matching entity type makes an invariant unforgettable, and EF10's **named** query filters
+(`modelBuilder.Entity(clrType).HasQueryFilter(SoftDeleteFilterName, filter)`, `:379`, the name itself a
+constant at `:388`) mean a second filter can be added beside the first rather than replacing it. The
+interceptor pipeline resolved in `OnConfiguring` (`:249-271`) proves that a write-side rule can be enforced
 once for every context.
 
 That left a specific set of open questions: whether a tenant is a row discriminator or a database, what
@@ -100,12 +105,12 @@ non-excluded path, it returns 400 with a ProblemDetails body.
 
 ### Writes are guarded by their own interceptor
 `TenantSaveChangesInterceptor` is a **separate** interceptor from the audit one (one concern per
-interceptor, matching how audit stamping and domain-event capture are already split at `:236-251`, where
-it is registered between the two). It stamps `TenantId` on Added entries and throws
+interceptor, matching how audit stamping and domain-event capture are already split at `:256-257`, where
+it is registered between the two at `:266`). It stamps `TenantId` on Added entries and throws
 `CrossTenantWriteException` on any Added, Modified, or Deleted entry whose tenant differs from the
 resolved one. It is always registered
 (`TryAddSingleton<TenantSaveChangesInterceptor>`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:63`), and with no tenant
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:62`), and with no tenant
 resolved it is inert for updates, deletes, and every entity that does not carry `ITenantEntity`: the
 system context is unrestricted on the write side exactly as it is on the read side. Inserts are the one
 exception. `StampOrVerifyInsert` throws `CrossTenantWriteException.ForUnresolvedTenant` when an Added
@@ -114,10 +119,10 @@ exception. `StampOrVerifyInsert` throws `CrossTenantWriteException.ForUnresolved
 because a row that no tenant can ever read is a worse outcome than a failed save; a system scope that
 names the tenant explicitly (a seeder, a per-tenant job) still writes.
 `DesignTimeDbContextHelper` registers it too
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:77`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:131`),
 so `dotnet ef` scaffolds against exactly the runtime interceptor pipeline for consumers with and without
 tenancy. Its absence is survivable rather than fatal: `OnConfiguring` resolves the tenant interceptor with
-`GetService` and falls back to the two-interceptor chain (`ApplicationDbContext.cs:244`), so a
+`GetService` (`ApplicationDbContext.cs:264`) and falls back to the two-interceptor chain (`:268-270`), so a
 directly-constructed test or design-time context that never registered it still builds.
 
 ### The tenant is read live, not copied at context creation
@@ -147,18 +152,18 @@ overridden context exists, restating the one-scope-one-tenant invariant where it
 field carries the name,
 `private static readonly string[] SoftDeleteFilterOnly = [DbContexts.ApplicationDbContext.SoftDeleteFilterName]`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:33`), and
-it is passed to `IgnoreQueryFilters` at all **six** call sites (`:52`, `:81`, `:161`, `:238`, `:252`,
-`:319`): one field rather than six inline arrays, so the set of filters a soft-delete-inclusive read
-drops cannot diverge between two of them. The repository's `ignoreQueryFilters: true` parameter has always meant
+it is passed to `IgnoreQueryFilters` at all **eight** call sites (`:52`, `:81`, `:102`, `:198`, `:288`,
+`:365`, `:379`, `:446`): one field rather than eight inline arrays, so the set of filters a
+soft-delete-inclusive read drops cannot diverge between two of them. The repository's `ignoreQueryFilters: true` parameter has always meant
 "include soft-deleted rows", and naming the filter keeps that meaning exactly while making it impossible
 for a soft-delete-inclusive read to cross tenants.
 
 ### Background work drains and migrates per tenant
 `OutboxProcessor` and `OutboxCleanupService` enumerate `(source, tenant?)` pairs from `TenancySettings`
-and call `ITenantContext.SetTenant` inside the per-source scope before obtaining the context, so the
-factory routes to the tenant's database and the claim-lease update
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:425-432`) runs
-against the right rows. There is deliberately **no `OutboxMessage` schema change**: a `TenantId` column
+and call `ITenantContext.SetTenant` inside the per-source scope before obtaining the context
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:264`), so the
+factory routes to the tenant's database and the claim-lease update (`:477-481`, the `ExecuteUpdateAsync`
+that sets `LockedUntil` and `LockToken`) runs against the right rows. There is deliberately **no `OutboxMessage` schema change**: a `TenantId` column
 would force a migration on every consumer on upgrade, for a discriminator the per-tenant database already
 provides and shared-schema tenancy does not need (the row sits in its aggregate's database either way).
 

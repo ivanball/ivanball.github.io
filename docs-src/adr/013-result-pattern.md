@@ -8,6 +8,8 @@ Revised 2026-08-27 (v1.164.0): the **UI layer deviation is retired**. `MMCA.Comm
 return `Result` end to end instead of throwing, the severity ranking is hoisted into
 `MMCA.Common.Shared` so the HTTP and gRPC edges classify one aggregate identically, and the round
 trip back into `Result` is a shipped reader rather than a per-service convention.
+Revised 2026-08-31: the catch-all exception handler now maps `CrossTenantWriteException` to HTTP 400
+ahead of its 500 fallback, so a write refused at the tenant boundary reads as a caller fault.
 
 ## Context
 Operations at every layer fail in *expected* ways: input is invalid, a domain invariant is broken, a
@@ -30,7 +32,7 @@ not exceptions.
   request was well formed and permitted, the server could not complete it,
   `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:36-41`): it maps to HTTP 500
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:30`) and to gRPC
-  `Internal` (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:45`), and it
+  `Internal` (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:46`), and it
   is explicitly not for business-rule violations, which is what keeps the other eight categories
   caller-fixable (`ErrorType.cs:38-39`, factory at `.../Shared/Abstractions/Error.cs:114-115`).
 - Domain factory methods and mutators return `Result<T>`; application command/query handlers thread
@@ -59,7 +61,7 @@ not exceptions.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35-60`) maps an
   `ErrorType` to an HTTP status through a `FrozenDictionary` (`ErrorHttpMapping.cs:20-31`, resolved at
   `ApiControllerBase.cs:48`) and returns an RFC 9457 ProblemDetails body carrying **all** errors
-  (`:50-58`, projection at `ErrorHttpMapping.cs:112-120`). gRPC does the equivalent over the wire
+  (`:50-58`, projection at `ErrorHttpMapping.cs:61-69`). gRPC does the equivalent over the wire
   (`GrpcResultExceptionInterceptor`, ADR-007) from a mirrored table (`Validation`/`Invariant`/`Failure`
   to `InvalidArgument`, `NotFound` to `NotFound`, `Conflict` to `Aborted`, `Unauthorized` to
   `Unauthenticated`, `Forbidden` to `PermissionDenied`, `UnprocessableEntity` to `FailedPrecondition`,
@@ -116,7 +118,18 @@ not exceptions.
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ValidationExceptionHandler.cs:28,33,48-54`).
   - `GlobalExceptionHandler` (registered last) is the catch-all that turns any remaining unhandled
     exception into HTTP 500
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:26-28`).
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:67-80`,
+    status set at `:69`). It maps exactly one exception by type before that fallback: a
+    `CrossTenantWriteException` (the save-time tenant-boundary rejection,
+    `.../MMCA.Common.Infrastructure/Persistence/Interceptors/CrossTenantWriteException.cs:24`) is a
+    caller fault rather than a server fault and is answered with HTTP 400, logged at warning rather
+    than error because a tenant-scoped API refusing an untenanted write is routine (`:47-64`, the
+    warning at `:51`, the 400 at `:53`). The special case sits inside the catch-all rather than in
+    its own handler because the exception derives from `InvalidOperationException`, so no handler
+    ahead of this one claims it, and every other save-time invariant failure of that family still
+    ends at the 500 (`:13-19`). The response body names no tenant id and no entity type: echoing
+    either would tell an unauthorized caller which tenant owns the row it just tried to write, so
+    the detail is a fixed string and the full failure stays in the log (`:31-39`).
 
 ### The client half: the UI layer returns `Result` too (2026-08-27)
 

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-104: Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-31).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/104-smart-enums-as-opt-in-capability.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-104: Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base">
+  <meta property="og:description" content="Accepted (2026-08-31).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/104-smart-enums-as-opt-in-capability.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-104: Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base">
+  <meta name="twitter:description" content="Accepted (2026-08-31).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"104 · Plain Enums by Default, Enumeration<T> as the Opt-In Smart-Enum Base","item":"https://ivanball.github.io/docs/adr/104-smart-enums-as-opt-in-capability.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 104 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html" aria-current="page">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-104-plain-enums-by-default-enumerationt-as-the-opt-in-smart-enum-base">ADR-104: Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-31).</p>
+          <h2 id="context">Context</h2>
+          <p>A bounded set of named values shows up everywhere in this workspace: the state that triggered a
+          domain event, an error category, a rate-limiting algorithm, a message-bus provider, a JWT signing
+          algorithm. The framework answers that need with an ordinary CLR enum. <code>DomainEntityState</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:7-13</code>) is the canonical
+          example, and it is the discriminator ADR-083 chose for the whole CRUD lifecycle taxonomy.</p>
+          <p>A CLR enum stops being enough at one specific point: when a member needs to carry behavior or data.
+          A <code>switch</code> over an enum that appears in three places is the usual symptom, because the value has no
+          home to hang a policy, a rate or a display rule on. The classic answer is the smart enumeration: a
+          sealed class whose members are <code>public static readonly</code> fields, so each member is a real object.</p>
+          <p>The framework ships that base. <code>Enumeration&lt;TEnumeration&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:71-72</code>) is complete rather
+          than sketched: reflection-based member discovery, <code>Result</code>-returning lookups, type-guarded equality,
+          a System.Text.Json converter factory, <code>DataContract</code> attribution for the XML formatter, and a pair
+          of EF Core value converters in Infrastructure. Thirty-three test methods across three files pin its
+          contract. It also sits in the <code>MMCA.Common.Shared.ValueObjects</code> namespace but deliberately does not
+          derive from <code>ValueObject</code>, because the <code>ValueObjectsAreImmutableSealedInShared</code> fitness rule requires
+          every <code>ValueObject</code> derivative to be a sealed record, which forbids the static-member idiom the type
+          exists for (<code>Enumeration.cs:26-29</code>).</p>
+          <p><strong>Adoption is zero.</strong> A search of all four repos plus the samples finds no production type deriving
+          from <code>Enumeration&lt;T&gt;</code>: the only derivations anywhere are five private fixtures inside the three test
+          files. The bounded sets the framework and its consumers actually declare are plain C# enums. The
+          string-keyed sibling <code>RoleValue</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:25</code>),
+          which takes the same not-a-<code>ValueObject</code> trade-off for a closed string set, does have a production
+          derivation in ADC (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:17</code>),
+          so the idiom is not foreign here; the integer-keyed base is simply not the shape any set has needed
+          yet.</p>
+          <p>That leaves two readings of the same code, and this record picks one. Either the choice between a
+          plain enum and a smart enumeration is a decision worth writing down, with a stated rule for when
+          each applies, or <code>Enumeration&lt;T&gt;</code> is dead public surface frozen by the ADR-015 public-API gate. This
+          record takes the first reading and states the posture explicitly, the same &quot;shipped in the
+          framework, tested, latent until the first adoption&quot; honesty ADR-037 records for the field-level
+          encryption converter.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>A plain C# enum is the default for a bounded set. <code>Enumeration&lt;T&gt;</code> is the opt-in base for a set
+          whose members need behavior or data, and nothing in the framework pushes a consumer toward it.</strong></p>
+          <ol>
+          <li><p><strong>Plain enums stay the default, including on the framework&#39;s own hot paths.</strong> <code>DomainEntityState</code>
+          is a four-member CLR enum (<code>DomainEntityState.cs:7-13</code>) and is the discriminator ADR-083&#39;s
+          <code>EntityChangedEvent&lt;TId&gt;</code> carries across the wire. Nothing in this record proposes converting it
+          or any other existing enum.</p>
+          </li>
+          <li><p><strong>The smart-enum base is a real closed type per enumeration.</strong>
+          <code>Enumeration&lt;TEnumeration&gt; where TEnumeration : Enumeration&lt;TEnumeration&gt;</code>
+          (<code>Enumeration.cs:71-72</code>) is self-referencing, so <code>All</code>, <code>FromValue</code> and <code>FromName</code> are per-type
+          lookups with no type argument at the call site. A member carries a canonical <code>Name</code>
+          (<code>:95</code>) and a stable integer <code>Value</code> (<code>:99</code>), set through the protected constructor (<code>:87</code>).</p>
+          </li>
+          <li><p><strong>Members are discovered by reflection, once, then frozen.</strong> <code>DiscoverMembers</code> reads the
+          <code>public static readonly</code> fields declared <strong>directly</strong> on the closed type
+          (<code>BindingFlags.Public | Static | DeclaredOnly</code>, <code>:165-174</code>, filter at <code>:167-169</code>), ordered by
+          <code>Value</code> (<code>:172</code>). Three <code>Lazy&lt;&gt;</code> caches back it: the member list (<code>:74</code>), a
+          <code>FrozenDictionary&lt;int, TEnumeration&gt;</code> by value (<code>:76-77</code>) and a case-insensitive
+          <code>FrozenDictionary&lt;string, TEnumeration&gt;</code> by name (<code>:79-82</code>). Two members sharing a value or a
+          name therefore fail when the lookup is first built rather than silently shadowing each other
+          (documented at <code>:31-34</code>).</p>
+          </li>
+          <li><p><strong>Lookups return <code>Result</code>, not exceptions, matching ADR-013.</strong> <code>FromValue</code> fails with code
+          <code>Enumeration.UnknownValue</code> (<code>:115-125</code>, code at <code>:121</code>) and <code>FromName</code> with
+          <code>Enumeration.UnknownName</code> (<code>:136-146</code>, code at <code>:142</code>); <code>FromName</code> treats a null name as a lookup
+          miss rather than throwing (<code>:138</code>).</p>
+          </li>
+          <li><p><strong>Equality is type-guarded and deliberately not <code>IEquatable&lt;T&gt;</code>.</strong> <code>Equals</code> compares the concrete
+          type and the value (<code>:152-155</code>), <code>GetHashCode</code> combines both (<code>:158</code>), so two enumerations that
+          happen to share an integer are never equal. The base declines <code>IEquatable&lt;T&gt;</code> because an unsealed
+          implementation breaks the equality contract for subclasses (S4035), leaving a sealed derived type
+          free to add its own (<code>:37-41</code>). <code>ToString</code> returns the name (<code>:149</code>).</p>
+          </li>
+          <li><p><strong>JSON is the member name, through a converter factory.</strong> <code>EnumerationJsonConverterFactory</code>
+          (<code>:195</code>) converts only the self-referencing closed type, by walking the base chain and comparing
+          the generic argument with the type itself (<code>:198-199</code>, <code>:213-222</code>). Its nested converter writes
+          <code>value.Name</code> (<code>:241-242</code>) and reads a string back through <code>FromName</code>, throwing <code>JsonException</code>
+          for a non-string token and for an unknown name (<code>:227-238</code>). <code>HandleNull</code> stays at its default,
+          so a JSON null short-circuits before the converter runs (<code>:189-193</code>).</p>
+          </li>
+          <li><p><strong>The factory is registered once for the whole API surface.</strong> System.Text.Json resolves
+          <code>[JsonConverter]</code> off the type being converted without walking base types, so the attribute on
+          the base (<code>:66</code>) covers only a member typed as the base. <code>AddAPI</code> adds the factory to
+          <code>JsonSerializerOptions.Converters</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:58</code>, rationale at
+          <code>:55-57</code>), beside the <code>CurrencyJsonConverter</code> precedent (<code>:53</code>), so a concrete enumeration
+          serializes by name across every host that calls <code>AddAPI</code> with no per-type attribute.</p>
+          </li>
+          <li><p><strong>XML rides the DataContract attributes already on the type.</strong> The base is <code>[DataContract]</code>
+          (<code>Enumeration.cs:65</code>) with <code>[DataMember(Order = 1)] Name</code> (<code>:94</code>) and
+          <code>[DataMember(Order = 2)] Value</code> (<code>:98</code>), and <code>AddAPI</code> registers
+          <code>AddXmlDataContractSerializerFormatters()</code> (<code>DependencyInjection.cs:60</code>).</p>
+          </li>
+          <li><p><strong>Persistence is a plain <code>int</code> column, through a shipped value-converter pair.</strong>
+          <code>EnumerationValueConverter&lt;TEnumeration&gt;</code> is a <code>ValueConverter&lt;TEnumeration, int&gt;</code> writing
+          <code>member.Value</code> and reading through <code>FromValue</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/EnumerationValueConverter.cs:33-45</code>),
+          and <code>NullableEnumerationValueConverter&lt;TEnumeration&gt;</code> passes null through both legs so an absent
+          member stays NULL instead of collapsing onto the member valued zero (<code>:62-74</code>). Mapping through
+          <code>HasConversion</code> rather than <code>OwnsOne</code> keeps the backing column a plain <code>int</code>, so replacing a CLR
+          enum property with a smart enumeration is not a schema change (<code>:9-11</code>). Column facets stay at
+          the call site by design (<code>:19-21</code>). The read leg trusts the column: a value no member declares
+          materializes a null reference for that row, which only a write made outside EF can produce
+          (<code>:23-30</code>).</p>
+          </li>
+          <li><p><strong>The contract is pinned by tests, not by adoption.</strong> <code>EnumerationTests</code>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs:1-144</code>, 15
+          test methods) covers both lookups, casing, null, per-type <code>All</code> scoping and cross-enumeration
+          equality and hashing; <code>EnumerationSerializationTests</code>
+          (<code>.../ValueObjects/EnumerationSerializationTests.cs:1-139</code>, 11 methods) covers both routes to the
+          converter and pins the documented limitation that an unattributed enumeration under unconfigured
+          options falls back to the default object shape (<code>:68-75</code>); <code>EnumerationValueConverterTests</code>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs:1-100</code>,
+          7 methods) covers both converters including the null pass-through (<code>:70-78</code>).</p>
+          </li>
+          <li><p><strong>The rule for choosing.</strong> Use a plain C# enum when the members are names for states or options
+          and every decision about them is made by the code that reads them: it is the cheaper type, it
+          needs no converter registration, and it is what ADR-083&#39;s discriminator, <code>ErrorType</code>,
+          <code>RateLimitAlgorithm</code>, <code>MessageBusProvider</code> and <code>JwtSigningAlgorithm</code> all are today. Reach for
+          <code>Enumeration&lt;T&gt;</code> when a member must carry data or behavior (a rate, a policy, a display rule, a
+          per-member override), when the same <code>switch</code> over the set is about to appear in a third place,
+          or when the set needs <code>Result</code>-shaped parsing at a boundary. Declare the concrete type sealed
+          with private constructors and <code>public static readonly</code> members, and map it with the shipped
+          value converter.</p>
+          </li>
+          <li><p><strong>The surface is frozen public API.</strong> Every member of the base and the factory is in
+          <code>MMCA.Common.Shared</code>&#39;s shipped baseline
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:381-386</code>, <code>:504-508</code>,
+          <code>:633-635</code>), and both converters are in Infrastructure&#39;s
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:109-110</code>, <code>:113-114</code>).
+          Under
+          ADR-015&#39;s RS0016/RS0017 gate, removing or reshaping any of it is a reviewable text diff and a
+          breaking change to the package surface, which is precisely why leaving an unadopted capability
+          in place is a decision rather than an oversight.</p>
+          </li>
+          <li><p><strong>Adoption is zero and this record says so.</strong> No production type in MMCA.Common, MMCA.Store,
+          MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample derives from <code>Enumeration&lt;T&gt;</code>. The only
+          types that reference it at all are the base file itself, the EF converters, the <code>AddAPI</code>
+          registration and the three test files; the only derivations are the five private fixtures in
+          those tests (<code>EnumerationTests.cs:122</code>, <code>:134</code>, <code>EnumerationSerializationTests.cs:111</code>, <code>:122</code>,
+          <code>EnumerationValueConverterTests.cs:89</code>).</p>
+          </li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The default should be the cheap type.</strong> A CLR enum costs nothing at a call boundary, needs no
+          serializer or EF registration, and is what a .NET reader expects for a set of names. Making the
+          smart enumeration the default would tax every bounded set in the workspace for a capability almost
+          none of them use.</li>
+          <li><strong>The expensive case still needs an answer.</strong> The reason a smart enumeration exists is that a
+          plain enum forces behavior away from the value it belongs to. Having the base ready means the
+          first set that needs per-member behavior does not arrive with a hand-rolled variant, its own JSON
+          shape and its own <code>HasConversion</code> lambda pair.</li>
+          <li><strong>Wire and schema compatibility is what makes the switch reversible.</strong> JSON is the member name and
+          the column is a plain <code>int</code>, so a set that starts as a CLR enum serialized by name and stored by
+          value can become a smart enumeration without a contract change or a migration
+          (<code>EnumerationValueConverter.cs:9-11</code>).</li>
+          <li><strong>A converter factory beats per-type attributes.</strong> Registering the factory once in <code>AddAPI</code> means
+          a consumer&#39;s concrete enumeration is correct by default across every endpoint, instead of being
+          correct only where someone remembered the attribute (<code>DependencyInjection.cs:55-58</code>).</li>
+          <li><strong><code>Result</code> lookups match the rest of the framework.</strong> <code>FromValue</code>/<code>FromName</code> returning
+          <code>Result&lt;TEnumeration&gt;</code> (<code>Enumeration.cs:115</code>, <code>:136</code>) keeps parsing a value rather than an
+          exception, which is ADR-013&#39;s posture and what every <code>Create</code> factory on a value object already
+          does (ADR-068).</li>
+          <li><strong>Recording an unadopted capability is cheaper than discovering it twice.</strong> ADR-037 made the same
+          call for the encryption converter, and the payoff was concrete: the posture being explicit is what
+          made it safe to replace that converter&#39;s format. The same applies here, and the alternative
+          (deleting the type) costs a public-API break under ADR-015 for a capability that is complete and
+          tested.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>A capability nobody uses is a capability nobody has stress-tested.</strong> The contract is pinned by
+          33 test methods against private fixtures, not by a production set with real members, real
+          migrations and a real wire history. Its ergonomics are asserted rather than demonstrated, exactly
+          as ADR-101 says of the metapackage.</li>
+          <li><strong>Two answers to one question.</strong> A reader now has to choose between a plain enum and
+          <code>Enumeration&lt;T&gt;</code>, and the rule in Decision point 11 is prose, not a fitness function. Nothing
+          fails a build when a set that would benefit from behavior stays a <code>switch</code>, and nothing fails when
+          a trivial set is declared as a smart enumeration.</li>
+          <li><strong>Public API surface with no consumer.</strong> Eighteen shipped declarations across two packages
+          (<code>Shared/PublicAPI.Shipped.txt:381-386</code>, <code>:504-508</code>, <code>:633-635</code>;
+          <code>Infrastructure/PublicAPI.Shipped.txt:109-110</code>, <code>:113-114</code>) are frozen under ADR-015 and can only
+          be removed as a breaking change.</li>
+          <li><strong>The JSON attribute does not inherit.</strong> A concrete enumeration serialized outside <code>AddAPI</code>&#39;s
+          options (a hand-built <code>JsonSerializerOptions</code>, a <code>System.Text.Json</code> call in a test or a tool)
+          falls back to the default object shape unless it repeats <code>[JsonConverter]</code> or registers the
+          factory. That is a documented, tested limitation
+          (<code>Enumeration.cs:185-188</code>, <code>EnumerationSerializationTests.cs:68-75</code>), not a defect, but it is a
+          trap for the first adopter.</li>
+          <li><strong>The EF read leg trusts the column.</strong> A row carrying a value no member declares materializes a
+          null reference rather than failing loudly (<code>EnumerationValueConverter.cs:23-30</code>, <code>:42</code>). The write
+          leg cannot produce such a row, so this is reachable only through a manual script, a data fix, or a
+          member deleted from the enumeration after rows were written.</li>
+          <li><strong>Member discovery is reflection over declared fields.</strong> Members declared on an intermediate base
+          are invisible by design (<code>DeclaredOnly</code>, <code>Enumeration.cs:167</code>), and a duplicate value or name is
+          caught when the lookup is first built rather than at compile time, so a declaration bug surfaces
+          at first use instead of in the editor.</li>
+          <li><strong>The type sits in <code>ValueObjects</code> without being one.</strong> It lives in the
+          <code>MMCA.Common.Shared.ValueObjects</code> namespace (<code>Enumeration.cs:11</code>) but is out of scope for
+          <code>ValueObjectsAreImmutableSealedInShared</code>, which only inspects types deriving from <code>ValueObject</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Immutability.cs:56-74</code>,
+          base-type filter at <code>:61</code>). The reason is documented on the type (<code>Enumeration.cs:26-29</code>), and
+          <code>RoleValue</code> takes the same trade-off, but a reader scanning the namespace sees a type the value
+          object rules do not cover.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="037-field-level-encryption-at-rest.html">ADR-037</a> (the precedent for recording a shipped, tested and
+          unadopted framework capability as a decision rather than leaving it to read as unfinished adoption),
+          <a href="068-value-objects-as-validated-primitives.html">ADR-068</a> (the seven sealed <code>record</code> value objects over
+          the <code>ValueObject</code> base, whose fitness rule is exactly what <code>Enumeration&lt;T&gt;</code> declines to sit under,
+          and whose <code>Result</code>-returning <code>Create</code> factories are the parsing shape <code>FromValue</code>/<code>FromName</code> follow),
+          <a href="083-crud-lifecycle-event-taxonomy.html">ADR-083</a> (the plain-enum discriminator: <code>DomainEntityState</code> is
+          the default choice this record keeps, and it rides integration events as a frozen wire field),
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the RS0016/RS0017 public-API baseline that freezes
+          this surface and makes leaving it in place a decision with a stated cost),
+          <a href="013-result-pattern.html">ADR-013</a> (the <code>Result</code> posture the lookups follow instead of throwing),
+          <a href="018-polyglot-persistence.html">ADR-018</a> (the other shipped-but-latent record ADR-037 cites for the
+          same posture).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/104-smart-enums-as-opt-in-capability.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -216,7 +219,11 @@
           re-anchored; two statements are corrected. Store&#39;s <code>OPERATIONS.md</code> does carry triage for its two
           operational extras (under <code>####</code> headings, deliberately outside the gate&#39;s <code>###</code> match), and Store&#39;s
           resource prefix is <code>mmca-</code>, not <code>store-</code>, which makes the heading-versus-deployed-name trade-off
-          wider than previously recorded. No decision changed.</p>
+          wider than previously recorded. No decision changed.
+          Revised 2026-08-31: both templates dropped the superseded metric alert declarations entirely, so the
+          bullet that recorded them as &quot;declared and disabled, never deleted&quot;, its Rationale entry, and the
+          carried-debt trade-off are rewritten around what actually keeps the supersede safe (the distinct
+          <code>-v2</code> names). Every <code>main.bicep</code> citation is re-anchored again. No decision changed.</p>
           <h2 id="context">Context</h2>
           <p>ADR-041 standardized what the fleet <strong>emits</strong>: RED histograms off the CQRS pipeline, an outbox
           dead-letter counter, correlation ids, exporters, and the cost knobs that keep ingestion affordable.
@@ -239,7 +246,7 @@
           2026-07-29 resolved to exactly that, one window holding 8x401 plus 2x499 plus a single readiness 503
           and zero other failures, and five hub connections averaging 11.3s dragged the fleet-wide average to
           5539ms against a 3000ms threshold while every real request was fast
-          (<code>MMCA.ADC/infra/main.bicep:273-286</code>).</li>
+          (<code>MMCA.ADC/infra/main.bicep:282-295</code>).</li>
           </ol>
           <h2 id="decision">Decision</h2>
           <p>Declare each consumer&#39;s SLO alerts as <strong>data in its Bicep template</strong>, materialize them as Log Analytics
@@ -247,52 +254,52 @@
           <ul>
           <li><p><strong><code>sloAlertSpecs</code> is the declaration.</strong> A single array of records carrying <code>key</code>, <code>description</code>,
           <code>query</code>, <code>timeAggregation</code>, <code>metricMeasureColumn</code>, <code>threshold</code> and <code>severity</code>
-          (<code>MMCA.ADC/infra/main.bicep:287</code>, <code>MMCA.Store/infra/main.bicep:259</code>). Both consumers declare the same
+          (<code>MMCA.ADC/infra/main.bicep:296</code>, <code>MMCA.Store/infra/main.bicep:254</code>). Both consumers declare the same
           three SLOs with the same numbers: <code>failed-requests</code> (severity 2, more than 10 per 15 min),
           <code>server-response-time</code> (severity 3, average above 3000ms), <code>dependency-failures</code> (severity 2, more
-          than 10 per 15 min) (<code>MMCA.ADC/infra/main.bicep:288-315</code>, <code>MMCA.Store/infra/main.bicep:260-287</code>).</p>
+          than 10 per 15 min) (<code>MMCA.ADC/infra/main.bicep:296-324</code>, <code>MMCA.Store/infra/main.bicep:254-282</code>).</p>
           </li>
           <li><p><strong>Materialized as Log Analytics scheduled query rules.</strong> One <code>Microsoft.Insights/scheduledQueryRules</code>
-          per spec (<code>MMCA.ADC/infra/main.bicep:317</code>, <code>MMCA.Store/infra/main.bicep:289</code>), named
-          <code>${prefix}-alert-${spec.key}-v2</code> (<code>MMCA.ADC/infra/main.bicep:322</code>,
-          <code>MMCA.Store/infra/main.bicep:294</code>), enabled, scoped to the Log Analytics workspace, evaluated every
+          per spec (<code>MMCA.ADC/infra/main.bicep:326</code>, <code>MMCA.Store/infra/main.bicep:284</code>), named
+          <code>${prefix}-alert-${spec.key}-v2</code> (<code>MMCA.ADC/infra/main.bicep:330</code>,
+          <code>MMCA.Store/infra/main.bicep:289</code>), enabled, scoped to the Log Analytics workspace, evaluated every
           5 minutes over a 15-minute window with <code>autoMitigate</code>
-          (<code>MMCA.ADC/infra/main.bicep:329-333</code>, <code>MMCA.Store/infra/main.bicep:301-305</code>). A <code>union(...)</code> supplies
+          (<code>MMCA.ADC/infra/main.bicep:339-341</code>, <code>MMCA.Store/infra/main.bicep:298-300</code>). A <code>union(...)</code> supplies
           <code>metricMeasureColumn</code> only for the aggregate rule; the empty-string case makes a rule count returned
           <strong>rows</strong>, which is what the two failure-count SLOs want
-          (<code>MMCA.ADC/infra/main.bicep:339-351</code>, <code>MMCA.Store/infra/main.bicep:311-323</code>).</p>
+          (<code>MMCA.ADC/infra/main.bicep:347-359</code>, <code>MMCA.Store/infra/main.bicep:306-318</code>).</p>
           </li>
           <li><p><strong>The KQL predicate is the point of the migration.</strong> The failure queries exclude only 401 and 499
-          (<code>MMCA.ADC/infra/main.bicep:291</code>, <code>:309</code>; <code>MMCA.Store/infra/main.bicep:263</code>, <code>:281</code>) and the latency
+          (<code>MMCA.ADC/infra/main.bicep:300</code>, <code>:318</code>; <code>MMCA.Store/infra/main.bicep:258</code>, <code>:276</code>) and the latency
           query excludes <code>/hubs/</code> requests before averaging <code>DurationMs</code>
-          (<code>MMCA.ADC/infra/main.bicep:300</code>, <code>MMCA.Store/infra/main.bicep:272</code>). A genuine 400 or 500 burst
+          (<code>MMCA.ADC/infra/main.bicep:309</code>, <code>MMCA.Store/infra/main.bicep:267</code>). A genuine 400 or 500 burst
           still pages at the same threshold as before.</p>
           </li>
-          <li><p><strong>Superseded metric alerts stay declared and disabled, never deleted.</strong> <code>legacySloMetricAlertSpecs</code>
-          (<code>MMCA.ADC/infra/main.bicep:368</code>, <code>MMCA.Store/infra/main.bicep:339</code>) still materializes the three
-          <code>metricAlerts</code> (<code>MMCA.ADC/infra/main.bicep:374</code>, <code>MMCA.Store/infra/main.bicep:345</code>) under their
-          <strong>original, unsuffixed</strong> names (<code>MMCA.ADC/infra/main.bicep:376</code>, <code>MMCA.Store/infra/main.bicep:347</code>)
-          with <code>enabled: false</code> and an empty <code>actions</code> array (<code>MMCA.ADC/infra/main.bicep:381</code>, <code>:400</code>;
-          <code>MMCA.Store/infra/main.bicep:352</code>, <code>:371</code>). An incremental ARM deployment never deletes a resource
-          just because it left the template, so dropping them would have left them live and firing alongside
-          the new rules; disabling them in place is declarative, needs no portal step, and rolls back in one
-          line. That is also why the replacements carry the <code>-v2</code> suffix: reusing the name would have renamed
-          the live originals instead of disabling them (<code>MMCA.ADC/infra/main.bicep:319-321</code>,
-          <code>MMCA.Store/infra/main.bicep:291-293</code>).</p>
+          <li><p><strong>The superseded metric alerts are no longer declared, and the <code>-v2</code> names stay.</strong> Neither template
+          carries a <code>legacySloMetricAlertSpecs</code> array or a metric alert on <code>requests/failed</code>,
+          <code>requests/duration</code> or <code>dependencies/failed</code>. The only <code>Microsoft.Insights/metricAlerts</code> resource
+          left in each is the unrelated severity 1 gateway-availability alert, which stays because
+          availability has no status-code confound and never produced a false page
+          (<code>MMCA.ADC/infra/main.bicep:369-370</code>, <code>:474</code>; <code>MMCA.Store/infra/main.bicep:416</code>). The <code>-v2</code> suffix on
+          the replacements is what made that removal safe and is now part of each rule&#39;s identity in Azure:
+          renaming it would create a second rule alongside the live one rather than update it, and the
+          unsuffixed names stay occupied in the resource group by the superseded alerts, which an incremental
+          ARM deployment does not delete just because they left the template
+          (<code>MMCA.ADC/infra/main.bicep:328-329</code>, <code>MMCA.Store/infra/main.bicep:286-288</code>).</p>
           </li>
           <li><p><strong>One unconditional action group.</strong> <code>alertEmailAddress</code> is a required parameter with no default
-          (<code>MMCA.ADC/infra/main.bicep:104</code>, <code>MMCA.Store/infra/main.bicep:87</code>), so the action group&#39;s email
-          receiver is not conditional (<code>MMCA.ADC/infra/main.bicep:257-271</code>,
-          <code>MMCA.Store/infra/main.bicep:231-245</code>) and every scheduled query rule routes to it
-          (<code>MMCA.ADC/infra/main.bicep:354</code>, <code>MMCA.Store/infra/main.bicep:326</code>). The monthly cost budget
-          notifies the same group (<code>MMCA.ADC/infra/main.bicep:578</code>, <code>:586</code>;
-          <code>MMCA.Store/infra/main.bicep:535</code>, <code>:543</code>).</p>
+          (<code>MMCA.ADC/infra/main.bicep:113</code>, <code>MMCA.Store/infra/main.bicep:83</code>), so the action group&#39;s email
+          receiver is not conditional (<code>MMCA.ADC/infra/main.bicep:266-280</code>,
+          <code>MMCA.Store/infra/main.bicep:226-240</code>) and every scheduled query rule routes to it
+          (<code>MMCA.ADC/infra/main.bicep:363</code>, <code>MMCA.Store/infra/main.bicep:322</code>). The monthly cost budget
+          notifies the same group (<code>MMCA.ADC/infra/main.bicep:545</code>, <code>:553</code>;
+          <code>MMCA.Store/infra/main.bicep:487</code>, <code>:495</code>).</p>
           </li>
           <li><p><strong>A saved workbook renders the same three signals.</strong> <code>sloWorkbook</code>
-          (<code>MMCA.ADC/infra/main.bicep:541</code>, <code>MMCA.Store/infra/main.bicep:498</code>) is bound to the Log Analytics
+          (<code>MMCA.ADC/infra/main.bicep:508</code>, <code>MMCA.Store/infra/main.bicep:450</code>) is bound to the Log Analytics
           workspace and embeds <code>workbooks/adc-slo-workbook.json</code> / <code>workbooks/store-slo-workbook.json</code> at
-          compile time via <code>loadTextContent</code> (<code>MMCA.ADC/infra/main.bicep:550</code>,
-          <code>MMCA.Store/infra/main.bicep:507</code>), grouped per service by <code>AppRoleName</code>, so the visualization cannot
+          compile time via <code>loadTextContent</code> (<code>MMCA.ADC/infra/main.bicep:517</code>,
+          <code>MMCA.Store/infra/main.bicep:459</code>), grouped per service by <code>AppRoleName</code>, so the visualization cannot
           diverge from the alerts by being maintained somewhere else.</p>
           </li>
           <li><p><strong><code>infra/OPERATIONS.md</code> is the paired artifact.</strong> Each repo&#39;s runbook carries one <code>###</code> section per
@@ -350,16 +357,17 @@
           deployment.</p>
           <p><strong>Coverage boundary inside ADC&#39;s template.</strong> The gate covers exactly the alerts declared between the two
           parse anchors. ADC additionally provisions two operational scheduled query rules,
-          <code>outbox-dead-letter</code> and <code>sql-dependency-failures</code> (<code>MMCA.ADC/infra/main.bicep:418</code>, materialized at
-          <code>:433</code>), and a severity 1 gateway-availability metric alert over a three-location URL ping web test
-          (<code>MMCA.ADC/infra/main.bicep:474</code>, <code>:507</code>). All three sit outside the <code>sloAlertSpecs</code> window, so the
+          <code>outbox-dead-letter</code> and <code>sql-dependency-failures</code> (<code>MMCA.ADC/infra/main.bicep:385</code>, materialized at
+          <code>:400</code>), and a severity 1 gateway-availability metric alert over a three-location URL ping web test
+          (<code>MMCA.ADC/infra/main.bicep:441</code>, <code>:474</code>). All three sit outside the <code>sloAlertSpecs</code> window, so the
           pairing gate neither requires nor forbids runbook sections for them, and <code>OPERATIONS.md</code> carries none
           today (its only <code>-alert-</code> headings are the three SLO sections). Store provisions both of the families
           that apply to it, merged on 2026-08-13: the <code>outbox-dead-letter</code> scheduled query rule
-          (<code>MMCA.Store/infra/main.bicep:390</code>) and the outside-in Gateway availability web test (<code>:431</code>) with its
-          severity 1 metric alert (<code>:464</code>, severity at <code>:470</code>), alongside the three SLO rules and the budget
-          notifications. Both sit after <code>resource sloAlerts</code> (<code>MMCA.Store/infra/main.bicep:345</code>) and therefore
-          outside the parse window, so Store&#39;s two extras are ungated exactly as ADC&#39;s three are.</p>
+          (<code>MMCA.Store/infra/main.bicep:342</code>) and the outside-in Gateway availability web test (<code>:383</code>) with its
+          severity 1 metric alert (<code>:416</code>, severity at <code>:422</code>), alongside the three SLO rules and the budget
+          notifications. Both sit after the <code>sloAlerts</code> window closes
+          (<code>MMCA.Store/infra/main.bicep:284-326</code>) and therefore outside the parse window, so Store&#39;s two extras
+          are ungated exactly as ADC&#39;s three are.</p>
           <p>The two consumers then diverge in how they treat that ungated space. ADC writes no triage for its
           three; Store does write it, and keeps it out of the gate&#39;s reach on purpose. Store&#39;s <code>OPERATIONS.md</code>
           carries an <code>## Operational alert runbooks</code> section (<code>MMCA.Store/infra/OPERATIONS.md:58</code>) holding
@@ -371,16 +379,17 @@
           (<code>MMCA.Store/infra/OPERATIONS.md:62-64</code>). So the triage exists and is discoverable at 3am, while the
           gate still sees exactly three paired alerts on each side. Store deliberately does not port
           <code>sql-dependency-failures</code>: its own <code>dependency-failures</code> SLO rule already spans SQL, gRPC and HTTP
-          (<code>MMCA.Store/infra/main.bicep:388-389</code>), so a narrower SQL-scoped twin would page twice for one fault.</p>
+          (<code>MMCA.Store/infra/main.bicep:340-341</code>), so a narrower SQL-scoped twin would page twice for one fault.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Alerts as data, not as portal state.</strong> One array is reviewable in a PR, diffable across
           environments, and re-deployable; the rules, the workbook, and the notification channel are created by
           the same template that creates the workloads they watch.</li>
-          <li><strong>Disabled beats deleted under incremental ARM.</strong> Removing a resource from a template is a no-op
-          against the resource group, so &quot;delete the old alert&quot; would have shipped a duplicate paging path.
-          Keeping the legacy rules declared with <code>enabled: false</code> makes the supersede explicit, atomic with the
-          deployment, and one line to revert.</li>
+          <li><strong>A new name, not a reused one, is what makes a supersede safe under incremental ARM.</strong> Removing a
+          resource from a template is a no-op against the resource group, so &quot;delete the old alert&quot; on its own
+          ships a duplicate paging path rather than replacing one. The replacements take distinct <code>-v2</code> names
+          instead, which is what lets the legacy declarations be absent from both templates today without
+          either renaming a live rule or colliding with the unsuffixed resources that still hold those names.</li>
           <li><strong>A log-search rule can say what a metric alert cannot.</strong> The whole class of false pages came from
           predicates a metric alert has no way to express. Moving to KQL kept the thresholds and severities
           identical while removing the 401/499 and connection-lifetime confounds, so the change is a precision
@@ -414,15 +423,17 @@
           the gate by design, re-tiering or renaming either alert leaves stale runbook text that nothing
           checks. The honour-system caveat is recorded in the runbook itself
           (<code>MMCA.Store/infra/OPERATIONS.md:126-128</code>).</li>
-          <li><strong>Disabled-but-declared alerts are carried debt.</strong> Three superseded <code>metricAlerts</code> remain in each
-          template and in each resource group until a follow-up deletes them, and the templates say so
-          (<code>MMCA.ADC/infra/main.bicep:361-367</code>, <code>MMCA.Store/infra/main.bicep:333-338</code>).</li>
+          <li><strong>The template is not the inventory of the resource group.</strong> The superseded metric alerts are gone
+          from both templates, but an incremental ARM deployment does not delete what it stops declaring, so
+          their unsuffixed names stay occupied in the resource group, and the template says so
+          (<code>MMCA.Store/infra/main.bicep:286-288</code>). Anything that exists only in Azure is invisible to every
+          check in this record: the pairing gate parses the template, not the deployment.</li>
           <li><strong>The runbook heading is not the deployed resource name.</strong> The gate matches only the <code>-alert-&lt;key&gt;</code>
           infix, so the prefix in a heading is unchecked. Live rules resolve from <code>prefix</code> and carry the <code>-v2</code>
           suffix, while the headings read <code>adc-alert-failed-requests</code> and <code>store-alert-failed-requests</code>. On ADC
           the gap is only the environment segment and the suffix (<code>prefix</code> is <code>adc-${environmentName}</code>,
-          <code>MMCA.ADC/infra/main.bicep:125</code>). On Store the prefix does not match at all: <code>prefix</code> is
-          <code>mmca-${environmentName}</code> (<code>MMCA.Store/infra/main.bicep:105</code>), so the deployed rule is
+          <code>MMCA.ADC/infra/main.bicep:134</code>). On Store the prefix does not match at all: <code>prefix</code> is
+          <code>mmca-${environmentName}</code> (<code>MMCA.Store/infra/main.bicep:101</code>), so the deployed rule is
           <code>mmca-&lt;env&gt;-alert-failed-requests-v2</code> against a heading that starts <code>store-</code>. A heading is therefore
           a searchable handle, not a literal copy of what an operator sees in the portal, and on Store it is
           not even a prefix match on the resource name.</li>

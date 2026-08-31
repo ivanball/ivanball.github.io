@@ -7,6 +7,12 @@ leaderboard display-name erasure path. Every decision below still holds (the opa
 aggregate carrying a scope, index-as-anti-farming, the ADC-local ledger, the opt-in leaderboard); the
 "organizers scan attendees, never the reverse" posture is the one that acquired a recorded exception,
 amended in place in the Decision and Rationale below.
+Revised (2026-08-31): four content-level facts changed and are corrected in place. The sponsor-visit
+award is 20 rather than 5, duplicate-key classification moved out of the Engagement module into
+MMCA.Common's `IUniqueConstraintViolationDetector` (which matches provider error numbers first and
+message text only as a fallback), the leaderboard total is summed by the database rather than folded
+in memory, and a batch feedback path joined the two single-answer raise sites. Every decision above
+still holds; only the passages that describe those four facts, and the citations throughout, move.
 
 ## Context
 ADC wanted two conference-day capabilities that turn out to be one mechanism. Organizers want to know
@@ -76,14 +82,14 @@ are attendee scans of a **printed** QR and carry no `[HasPermission]` at all.
 the identity comes from the token, as on `/my-badge`, and the room endpoint resolves the session
 server-side from the room plus a configured grace window rather than accepting a session id
 (`:145-158`; `CheckInSettings.RoomCheckInGraceMinutes`, 15 by default, read at
-`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:52`). For these rows the two
+`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:51`). For these rows the two
 parties are the same person, which the aggregate says outright (`CheckIn.cs:46-49`).
 
 The scan surface adapts to the head rather than branching on platform, per ADR-071:
-`ScannerAvailable => Scanner.IsSupported` (`CheckInScan.razor.cs:36`) gates the camera card
+`ScannerAvailable => Scanner.IsSupported` (`CheckInScan.razor.cs:38`) gates the camera card
 (`CheckInScan.razor:68`), while the manual attendee-search panel is **always** rendered, because on a web
 or Windows head that search *is* the check-in surface (`CheckInScan.razor:108-113`). The scan loop
-discards a non-badge QR and keeps scanning rather than failing (`CheckInScan.razor.cs:125-129`).
+discards a non-badge QR and keeps scanning rather than failing (`CheckInScan.razor.cs:127-133`).
 
 ### One `CheckIn` aggregate carrying a scope
 `CheckInScope` is `Event = 0` / `Session = 1` / `Sponsor = 2`
@@ -99,8 +105,8 @@ in advance.
 ### Idempotency and anti-farming are the same index
 A repeat scan is answered, not written: `CheckInProcessor.FindExistingAsync` returns the prior row and the
 processor reports `AlreadyCheckedIn = true` without a write
-(`.../Engagement.Application/CheckIns/Services/CheckInProcessor.cs:59-68`), so no second integration event
-is published. Three **filtered unique indexes** are the backstop under a concurrent double scan
+(`.../Engagement.Application/CheckIns/Services/CheckInProcessor.cs:71-75`, surfaced on the DTO at
+`:147`), so no second integration event is published. Three **filtered unique indexes** are the backstop under a concurrent double scan
 (`.../EntityConfiguration/CheckInConfiguration.cs:49-62`): `(UserId, EventId)` filtered to `[Scope] = 0`,
 `(UserId, SessionId)` filtered to `[Scope] = 1`, and `(UserId, SponsorId)` filtered to `[Scope] = 2`
 (`:60-62`), all three also excluding soft-deleted rows. The third one is what makes a shared sponsor
@@ -114,7 +120,7 @@ unique index on `(UserId, ActivityType, SubjectKey)`
 (`.../EntityConfiguration/PointsEntryConfiguration.cs:46-48`). That one index is simultaneously the
 idempotency guard for redelivered integration events and the anti-farming rule: because the subject key is
 `session:{id}`, `event:{id}` or `sponsor:{id}`
-(`.../Engagement.Shared/Points/PointsSubjectKeys.cs:18-31`, max 64 chars at `:13`),
+(`.../Engagement.Shared/Points/PointsSubjectKeys.cs:16-32`, max 64 chars at `:14`),
 asking five questions in one session earns the question award exactly once.
 
 ### Points are ADC-local, with the extraction path pre-paid
@@ -126,14 +132,16 @@ built so it can MOVE to MMCA.Common the day a second consumer (Store loyalty) ex
 
 - `PointsSettings` (section `"Points"`, `.../Engagement.Shared/Points/PointsSettings.cs:15-40`) carries the
   rule values: `EventCheckIn` 25, `SessionCheckIn` 10, `SessionFeedback` 15, `EventFeedback` 15,
-  `QuestionAsked` 5, `SponsorVisit` 5 (`:37`), `LeaderboardSize` 10 (`:40`).
+  `QuestionAsked` 5, `SponsorVisit` 20 (`:37`), `LeaderboardSize` 10 (`:40`). The deployed
+  configuration restates the same seven values rather than relying on the defaults
+  (`.../MMCA.ADC.Engagement.Service/appsettings.json:26-34`).
 - **Zero disables a rule.** `PointsAwarder` short-circuits on `value <= 0` and writes nothing
-  (`.../Points/Services/PointsAwarder.cs:44-49`); an absent config entry binds to 0 and takes the same
+  (`.../Points/Services/PointsAwarder.cs:43-51`); an absent config entry binds to 0 and takes the same
   path.
 - The awarded `Points` value is snapshotted onto the entry at award time (`PointsEntry.cs:40`), so the
   ledger records what a rule was worth then.
-- A duplicate is success, not failure: the pre-check returns `Result.Success()` (`PointsAwarder.cs:55-62`)
-  and a lost race is caught and also returns success (`:73-80`).
+- A duplicate is success, not failure: the pre-check returns `Result.Success()` (`PointsAwarder.cs:55-64`)
+  and a lost race is caught and also returns success (`:75-82`).
 
 Award triggers come from three different mechanisms, chosen per event source:
 
@@ -144,46 +152,56 @@ Award triggers come from three different mechanisms, chosen per event source:
 | `SessionFeedback` (15) | `SessionFeedbackSubmitted` | `session:{id}` | Outbox integration event |
 | `EventFeedback` (15) | `EventFeedbackSubmitted` | `event:{id}` | Outbox integration event |
 | `QuestionAsked` (5) | `SessionQuestionChanged`, `Added` only | `session:{id}` | In-module domain event |
-| `SponsorVisit` (5) | `AttendeeCheckedIn`, sponsor scope | `sponsor:{id}` | Outbox integration event |
+| `SponsorVisit` (20) | `AttendeeCheckedIn`, sponsor scope | `sponsor:{id}` | Outbox integration event |
 
 The three `AttendeeCheckedIn` rows are one method mapping wire scope onto an earn rule
-(`.../Points/IntegrationEventHandlers/AttendeeCheckedInPointsHandler.cs:63-97`, sponsor branch at
-`:86-92`; `PointsActivityType.SponsorVisit = 6`). Room self check-in has no rule of its own: it writes
-an ordinary session-scoped `CheckIn` (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:101`),
-so it earns the `SessionCheckIn` row above and inherits its once-per-session cap.
+(`.../Points/IntegrationEventHandlers/AttendeeCheckedInPointsHandler.cs:65-99`, sponsor branch at
+`:88-94`; `PointsActivityType.SponsorVisit = 6`). Room self check-in has no rule of its own: it writes
+an ordinary session-scoped `CheckIn` through the shared core
+(`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:72-81`, the scope argument at
+`:76`), so it earns the `SessionCheckIn` row above and inherits its once-per-session cap.
 
-`AttendeeCheckedIn` (`.../Engagement.Shared/CheckIns/IntegrationEvents/AttendeeCheckedIn.cs:22-30`) is
+`AttendeeCheckedIn` (`.../Engagement.Shared/CheckIns/IntegrationEvents/AttendeeCheckedIn.cs:24-32`) is
 raised inside `CheckIn.Create` (`CheckIn.cs:112-119`), so the outbox captures it in the same transaction
-as the row (ADR-003), and it carries `Scope` as a **string** so a new scope stays additive. `SponsorId`
-proved that: it was added as an optional last parameter (`:29`), so consumers keep deserializing payloads
-that predate it. It is ADC's first broker self-consumption: the Engagement service both publishes and
-consumes it (`.../Services/MMCA.ADC.Engagement.Service/Program.cs:287-296` for the reasoning, `:297-303`
-for the registrations).
+as the row (ADR-003), and it carries `Scope` as a **string** (`:26`) so a new scope stays additive.
+`SponsorId` proved that: it was added as an optional last parameter (`:31`), so consumers keep
+deserializing payloads that predate it. It is ADC's first broker self-consumption: the Engagement
+service both publishes and consumes it
+(`.../Services/MMCA.ADC.Engagement.Service/Program.cs:264-273` for the reasoning, `:281-284` for the
+four `RegisterIntegrationEventConsumer<T>` calls inside `AddBrokerMessaging`).
 
 The two feedback events are new to the Conference module
-(`.../Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:19-24`,
-`.../Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:18-22`) and are raised on the
-**answer-create path only**, never on the BR-107 upsert-update path
-(`AddSessionQuestionAnswerHandler.cs:131-134`, `AddEventQuestionAnswerHandler.cs:109-112`). One feedback
-form produces one event per answer row, and the shared subject key collapses them to one award.
+(`.../Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:20-26`,
+`.../Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:19-24`) and are raised on the
+**answer-create path only**, never on the BR-107 upsert-update path. Three handlers raise them, and
+the create-path-only rule holds at all three: `AddSessionQuestionAnswerHandler.cs:112`,
+`AddEventQuestionAnswerHandler.cs:109-112`, and the batch path
+`BatchAddSessionQuestionAnswersHandler.cs:155-156`, which emits one `SessionFeedbackSubmitted` per
+newly created answer so a whole form submitted in one call produces exactly what the single-answer
+handler would have produced call by call (`:152-154`). One feedback form therefore produces one event
+per answer row on either path, and the shared subject key collapses them to one award.
 
 `QuestionAsked` rides the existing in-module `SessionQuestionChanged` domain event, filtered to
-`DomainEntityState.Added` (`.../Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:48-49`),
-keyed by session rather than by question (`:74`).
+`DomainEntityState.Added` (`.../Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:60-64`),
+keyed by session rather than by question (`:85`).
 
 ### The leaderboard is opt-in, and opting in is a row
 `LeaderboardOptIn` (`.../Engagement.Domain/Points/LeaderboardOptIn.cs:32`, `:35`) holds `UserId` and a
 `DisplayName` snapshot, resolved server-side from the caller's token claims rather than accepted from the
-request body (`SetLeaderboardParticipationHandler.cs:142-161`; the request carries only `Participate`).
-Opting out soft-deletes the row (`LeaveAsync`, `:118-139`, `active.Delete()` at `:133`) and rejoining
+request body (`SetLeaderboardParticipationHandler.cs:154-185`, the three claim lookups at `:156-158`;
+the request carries only `Participate`, `:50-52`).
+Opting out soft-deletes the row (`LeaveAsync`, `:118-136`, `active.Delete()` at `:130`) and rejoining
 reactivates it (`JoinAsync`, `:84-89`, the BR-135 pattern), so nobody's name is on the board without a
 live opt-in. Erasure is a separate, irreversible promise: `EraseDisplayName()` (`LeaderboardOptIn.cs:119-130`)
 overwrites the published name in place when the account behind it is erased, and it is driven by a fourth
-broker consumer, `UserDeleted` -> `UserDeletedPointsHandler` (`Program.cs:302`), because the published
-name is the one piece of personal data the Identity-side erasure cannot reach across the database
-boundary (`Program.cs:283-285`). The row itself survives (anonymize-in-place, ADR-005). `GetLeaderboard`
-(`.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs`) reads only opted-in users' entries, folds
-totals in memory, orders by total then display name, and assigns distinct sequential ranks.
+broker consumer, `UserDeleted` -> `UserDeletedPointsHandler` (`Program.cs:284`, the mapping documented at
+`:258`), because the published name is the one piece of personal data the Identity-side erasure cannot
+reach across the database boundary (`Program.cs:260-262`). The row itself survives (anonymize-in-place,
+ADR-005). `GetLeaderboard`
+(`.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs`) reads only opted-in users' entries
+(`:39-46`), asks the database for one grouped `SUM` per attendee rather than reading the ledger rows
+(`SumByAsync`, `:55-59`, filtered to the opted-in ids at `:58`), then orders by total and display name
+(`:68-69`) and assigns distinct sequential ranks (`:73`).
 
 `Engagement.CheckIn` and `Engagement.Points` are feature flags enforced with `[FeatureGate]` at the
 controllers (`CheckInsController.cs:33`, `PointsController.cs:34`, ADR-031), and the two self-service
@@ -210,8 +228,8 @@ check-in history followed as `check_ins = 6` (`:45`) with an `EngagementCheckInE
   reversal. Sponsor booth visits and room self check-in are printed QRs the attendee scans, so the code
   **is** shareable and the argument above applies to them in full. What changed is that the exposure is
   now priced instead of avoided: the once-per-subject filtered unique index caps a leaked sponsor link at
-  one award per attendee (`CheckInConfiguration.cs:60-62`), the award is deliberately small and
-  zero-able mid-conference (`PointsSettings.cs:32-37`), each surface has its own kill switch
+  one award per attendee (`CheckInConfiguration.cs:60-62`), the award is a single per-sponsor grant
+  and zero-able mid-conference (`PointsSettings.cs:32-37`), each surface has its own kill switch
   (`EngagementFeatures.cs:37`, `:44`), and the row still records both parties even when they are the
   same person (`CheckIn.cs:46-49`), so a self-recorded row is identifiable as one rather than
   indistinguishable from an organizer scan. Both flags ship on
@@ -246,10 +264,13 @@ check-in history followed as `check_ins = 6` (`:45`) with an `EngagementCheckInE
   scanned, and that `Regenerate()` invalidates a leaked code, but the value itself carries no proof of
   possession.
 - **`QuestionAsked` is at-most-once and says so.** It rides an in-process domain event dispatched after
-  commit, so a crash in that window silently loses one five-point award
-  (`SessionQuestionSubmittedPointsHandler.cs:23-32`, whose body is additionally wrapped in a best-effort
-  catch). Promotion to an integration event is a one-file change per side, deliberately deferred: five
-  points do not justify an outbox row per question.
+  commit, so a crash in that window loses one five-point award and nothing else: no question is lost
+  and no total is corrupted (`SessionQuestionSubmittedPointsHandler.cs:30-39`). The body is
+  additionally wrapped in a best-effort, CA1031-suppressed catch (`:92-97`), so a failing award never
+  fails the question that already committed. Only that pre-dispatch crash is silent; every path that
+  declines to award logs it, at a level matching how surprising it is (`:41-44`, `:100-110`).
+  Promotion to an integration event is a one-file change per side, deliberately deferred: five points
+  do not justify an outbox row per question.
 - **The feature flags gate the surface, not the ledger.** `[FeatureGate]` sits on the controllers and the
   two self-service actions, and no Engagement handler implements `IFeatureGated`, so turning
   `Engagement.Points` off hides the pages and the API while
@@ -258,19 +279,27 @@ check-in history followed as `check_ins = 6` (`:45`) with an `EngagementCheckInE
 - **Rule values are snapshotted, so history is mixed-rate.** Changing `SessionCheckIn` from 10 to 15 does
   not restate earlier entries, which is right for an audit ledger and confusing on a leaderboard where two
   attendees with identical activity can hold different totals.
-- **Duplicate-key detection is message-text matching.** `DuplicateKeyDetection.IsDuplicateKey` walks the
-  inner exception chain looking for "duplicate key", "UNIQUE KEY constraint" or "unique index"
-  (`.../Engagement.Application/Common/DuplicateKeyDetection.cs:35-48`, rationale in its remarks `:12-31`)
-  because the Application layer references neither EF Core nor SqlClient, and
-  it deliberately does not match SQL Server error numbers 2601/2627. Layer purity is bought with a
-  provider-dependent string comparison; the pre-check makes it a rare path, not a hot one. It started
-  private to `PointsAwarder` and was lifted into a shared helper once a second lose-the-race handler
-  needed it, so `PointsAwarder` (`:74`) and `SetLeaderboardParticipationHandler` (`:103`) now match on
-  one copy of the wording rather than two.
-- **The leaderboard folds totals in memory.** `GetLeaderboardHandler` reads the opted-in users' entries and
-  sums them client-side, because the Application layer has no EF Core to push a `GROUP BY` down with. It is
-  bounded by the opt-in population and fine at conference scale; it is not a design that survives a much
-  larger ledger.
+- **Duplicate-key detection is an injected framework concern, not module code.** The Application layer
+  references neither EF Core nor SqlClient, so it cannot read a provider error number itself. It asks
+  someone who can: `IUniqueConstraintViolationDetector`
+  (`MMCA.Common.Application/Interfaces/Infrastructure/IUniqueConstraintViolationDetector.cs:31`) is
+  constructor-injected into all three ADC handlers that can lose an insert race, so `PointsAwarder`
+  (`:32`, catch filter at `:75`), `SetLeaderboardParticipationHandler` (`:33`, `:103`) and
+  `GetOrCreateMyBadgeHandler` (`:20`, `:53`) classify one way rather than three. The registered
+  implementation walks the inner exception chain matching **SQL Server error numbers 2601 and 2627
+  first** (`MMCA.Common.Infrastructure/Persistence/SqlServerUniqueConstraintViolationDetector.cs:34`,
+  `:37`, `:50-54`), and falls back to the message text "duplicate key" or "UNIQUE constraint failed"
+  only for a link in the chain that is not a `SqlException` (`:40`, `:43`, `:63-67`). The trade that
+  remains is the fallback: it is provider-dependent string matching, kept because a retry decorator or
+  a test double re-throwing its own type carries the number nowhere but the message. The pre-check
+  makes the whole path rare, not hot.
+- **The leaderboard total is a database `SUM`, so ordering is the part that stays in memory.**
+  `GetLeaderboardHandler` pushes the aggregation down (`SumByAsync`, `:55-59`) and one grouped total
+  comes back per opted-in attendee rather than every ledger row. What still runs in the handler is the
+  ordering, the `Take` and the rank assignment (`:65-77`), bounded by the opt-in population rather
+  than by the size of the ledger. The remaining wrinkle is a type one: points are stored as `int` and
+  the grouped sum speaks `decimal`, so the selector widens implicitly and the total narrows back on
+  the way out (`:50-53`, `:61`).
 - **Broker self-consumption for an in-service concern.** `AttendeeCheckedIn` is published and consumed by
   the same Engagement service, so an in-service award takes a broker round-trip. That is the price of
   keeping the award path identical to the cross-module ones (feedback arrives from Conference) and of

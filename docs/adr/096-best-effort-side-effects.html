@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-096: Best-Effort Side-Effect Contract · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-23).">
+  <meta name="description" content="Accepted (2026-08-23). Revised 2026-08-31.">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-096: Best-Effort Side-Effect Contract">
-  <meta property="og:description" content="Accepted (2026-08-23).">
+  <meta property="og:description" content="Accepted (2026-08-23). Revised 2026-08-31.">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-096: Best-Effort Side-Effect Contract">
-  <meta name="twitter:description" content="Accepted (2026-08-23).">
+  <meta name="twitter:description" content="Accepted (2026-08-23). Revised 2026-08-31.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"096 · Best-Effort Side-Effect Contract","item":"https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -209,7 +212,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-096-best-effort-side-effect-contract">ADR-096: Best-Effort Side-Effect Contract</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-23).</p>
+          <p>Accepted (2026-08-23). Revised 2026-08-31.</p>
           <h2 id="context">Context</h2>
           <p>A command that has already committed often has follow-up work attached to it: evict the output-cache
           entries the write invalidated, broadcast the new state to a live channel, send the notification the
@@ -261,9 +264,10 @@
           promptly instead of being recorded as a spurious side-effect failure. A cancellation that is not the
           caller&#39;s (an inner timeout) is a genuine failure of the side effect and is swallowed like any other.</li>
           <li><strong>Post-commit work passes <code>CancellationToken.None</code> on purpose.</strong> The write has committed, so its
-          follow-up must outlive a caller that has already walked away
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/OutputCacheEvictionExtensions.cs:34-40</code>;
-          the ADC broadcasts take the parameter&#39;s default for the same reason,
+          follow-up must outlive a caller that has already walked away: the framework&#39;s own output-cache
+          eviction helper passes it explicitly
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:78-92</code>,
+          the token at <code>:90</code>; the ADC broadcasts take the parameter&#39;s default for the same reason,
           <code>.../SubmitQuestionHandler.cs:122-124</code>).</li>
           <li><strong>The contract is pinned by tests.</strong> <code>BestEffortTests</code> covers the transparent success path, token
           passthrough, one-Warning-per-failure, the <code>operation</code>-tagged increment observed through a
@@ -271,24 +275,26 @@
           and argument validation
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/BestEffortTests.cs:15-141</code>).</li>
           </ul>
-          <p>Adoption today is <strong>seven production call sites across two apps</strong>. Six are in ADC Engagement: the
+          <p>Adoption today is <strong>seven call sites</strong>, six of them in ADC Engagement: the
           live-channel drain worker, whose operation name is the prefix <code>live-channel-publish:</code> plus the work
           item&#39;s event name and whose own catch turns the rethrown cancellation into a quiet stop
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:36</code>,
           <code>:45-58</code>, <code>:60-65</code>); three session-question broadcasts, <code>session-question-submit-broadcast</code>
           (<code>.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34</code>, call at <code>:131</code>),
-          <code>session-question-moderation-broadcast</code> (<code>.../UseCases/Moderate/ModerateQuestionHandler.cs:30</code>, call at
-          <code>:136</code>) and <code>session-question-upvote-broadcast</code>
+          <code>session-question-moderation-broadcast</code> (<code>.../UseCases/Moderate/ModerateQuestionHandler.cs:31</code>, call at
+          <code>:138</code>) and <code>session-question-upvote-broadcast</code>
           (<code>.../DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:45</code>, call at <code>:52</code>); the poll-results
           broadcast <code>livepoll-results-broadcast</code>
           (<code>.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:44</code>, call at <code>:51</code>); and the
           cross-host cache eviction <code>bookmark-cache-evict-broadcast</code>
           (<code>.../UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:56</code>, call at
-          <code>:68-80</code>). The seventh is Store Catalog&#39;s <code>TryEvictByTagAsync</code> extension, whose operation name is the
-          prefix <code>catalog.output-cache-evict:</code> plus the tag
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/OutputCacheEvictionExtensions.cs:18</code>,
-          <code>:30-41</code>); four controllers evict through it (<code>Controllers/CategoriesController.cs:157</code>,
-          <code>ProductsController.cs:222</code>, <code>ProductVariantsController.cs:129</code>, <code>ProductImagesController.cs:281</code>).</p>
+          <code>:68-80</code>). The seventh is the framework&#39;s own multi-tag eviction helper,
+          <code>OutputCacheEvictionExtensions.TryEvictTagsAsync</code>, whose operation name is the constant prefix
+          <code>output-cache-evict:</code> plus the tag being evicted
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:34</code>,
+          <code>:78-92</code>). Store Catalog reaches it from four controllers, each naming its own low-cardinality cache
+          tag: <code>catalog:categories</code> from <code>Controllers/CategoriesController.cs:168</code>, and <code>catalog:products</code> from
+          <code>ProductsController.cs:242</code>, <code>ProductVariantsController.cs:140</code> and <code>ProductImagesController.cs:208</code>.</p>
           <p>Two swallows deliberately stay hand-rolled, and both say so in code. Store&#39;s <code>AddVariantHandler</code>
           publishes <code>ProductVariantChanged</code> after the commit and catches around it, logging at <strong>Error</strong> with
           the <code>ProductId</code> and <code>ProductVariantId</code>: the event is lost, Sales does not auto-create the zero-stock
@@ -296,11 +302,12 @@
           would both downgrade an unrecoverable loss to Warning and drop the ids, which is why that one site
           stays as it is while every other swallow in the repo uses the helper
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/AddVariant/AddVariantHandler.cs:81-95</code>,
-          catch at <code>:97-108</code>). The framework&#39;s own <code>OutputCacheEvictionHandler</code> hand-rolls the same
-          swallow-log-count shape against <code>cache.eviction.failed</code> on the <code>MMCA.Common.OutputCache</code> meter
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:51-62</code>),
-          because <code>BestEffort</code> lives in Application and the API package cannot reach it without a layer-crossing
-          reference or a duplicated meter name (recorded in ADR-026, <code>026-caching-strategy.md:412-417</code>).</p>
+          the post-commit publish at <code>:97-108</code> and its catch at <code>:111-115</code>). The framework&#39;s own
+          <code>OutputCacheEvictionHandler</code> hand-rolls the same swallow-log-count shape against
+          <code>cache.eviction.failed</code> on the <code>MMCA.Common.OutputCache</code> meter
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:51-62</code>): it is
+          the one documented non-reuse of this helper inside the framework, and ADR-026 records the rationale
+          (<code>026-caching-strategy.md:412-417</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>One policy beats five local leniencies.</strong> Each feature record is still right about its own
@@ -338,9 +345,9 @@
           <li><strong>A swallow is still a loss.</strong> The helper decides that the caller does not see the failure; it does
           not make the side effect happen. A cache entry heals on its own TTL, but a lost broadcast never
           replays, and callers whose loss is unrecoverable have to say so themselves.</li>
-          <li><strong>Two &quot;best effort&quot; counters exist.</strong> The layer constraint on the API package means
-          <code>cache.eviction.failed</code> and <code>besteffort.dispatch.failed</code> count the same shape of event on different
-          meters, so an operator asking &quot;what is silently failing&quot; has two places to look.</li>
+          <li><strong>Two &quot;best effort&quot; counters exist.</strong> <code>cache.eviction.failed</code> and <code>besteffort.dispatch.failed</code> count
+          the same shape of event on different meters, one per the ADR-026 non-reuse and one from this helper,
+          so an operator asking &quot;what is silently failing&quot; has two places to look.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="024-push-notifications.html">ADR-024</a> (push delivery failure is non-fatal and recorded rather than

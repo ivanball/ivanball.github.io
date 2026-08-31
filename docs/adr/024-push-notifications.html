@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -211,7 +214,9 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-06-27, amended 2026-07-15). Revised 2026-08-07 (transactional email recorded as an
           app-level concern outside the channel model; see Revision below). Revised 2026-08-14 (the opt-in
-          dedup short-circuit and the scope key recorded; the <code>Enabled</code> gate narrowed to the hub endpoint).</p>
+          dedup short-circuit and the scope key recorded; the <code>Enabled</code> gate narrowed to the hub endpoint).
+          Revised 2026-08-31 (email adoption re-stated: <code>IEmailSender</code> is now consumed inside the framework
+          itself by the password-reset workflow, so it is no longer an app-level-only primitive).</p>
           <h2 id="context">Context</h2>
           <p>The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
           a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -266,14 +271,14 @@
           (<code>SendPushNotificationHandler.cs:134-152</code>), an OS-level native-push channel that reaches devices the
           SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
           push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:491</code>), so it
+          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:565</code>), so it
           stays inert until a native hub is configured. The design of that channel is ADR-044&#39;s scope; this ADR
           keeps its own on the inbox and SignalR channels, so the &quot;Two-Channel&quot; title names the durable and
           transient channels this record governs, not a hard cap on the number of delivery legs.</li>
           <li><strong>Horizontal scale-out is configuration, not code.</strong> When a Redis connection string is present,
           <code>AddPushNotifications</code> adds a Redis backplane to SignalR (<code>AddStackExchangeRedis</code>) so a push reaches a
           user whose WebSocket is pinned to a different replica. <code>PushNotificationSettings.Enabled</code> (config
-          section <code>&quot;PushNotifications&quot;</code>, <code>PushNotificationSettings.cs:9,12</code>) gates the hub endpoint only:
+          section <code>&quot;PushNotifications&quot;</code>, <code>PushNotificationSettings.cs:11,14</code>) gates the hub endpoint only:
           <code>MapNotificationHub()</code> maps <code>NotificationHub</code> at the configured <code>HubPath</code> just when it is true
           (<code>SignalRExtensions.cs:25</code>). <code>AddPushNotifications</code> binds the section but registers SignalR,
           <code>SignalRPushNotificationSender</code> and <code>SignalRLiveChannelPublisher</code> unconditionally
@@ -336,32 +341,43 @@
           and <code>IPushDeviceRegistrar</code> at <code>:566</code>). That block is <code>AddServices()</code> (<code>:529</code>), which
           <code>AddInfrastructure</code> (<code>:49</code>) always calls (<code>:205</code>), so every host gets it. Unlike the two push
           abstractions it has no null default and no opt-in <code>Add*</code> counterpart: the real SMTP sender is always
-          the registration, inert only because nothing resolves it.</li>
+          the registration, and the framework&#39;s own password-reset workflow resolves it (item 3).</li>
           <li><strong>It sits outside the inbox / SignalR / native model.</strong> An email creates no <code>PushNotification</code> audit
           record, writes no <code>UserNotification</code> inbox row, and is never dispatched by
-          <code>SendPushNotificationHandler</code>. Callers resolve <code>IEmailSender</code> from a scope and send directly, so none
-          of the guarantees this ADR makes (durable-first ordering, best-effort live layer, recorded send
-          status) apply to it.</li>
-          <li><strong>Adoption is two call sites, both in Store Sales.</strong> <code>OrderPaidHandler</code>
+          <code>SendPushNotificationHandler</code>. Callers take <code>IEmailSender</code> as a dependency (or resolve it from their
+          own scope) and send directly, so none of the guarantees this ADR makes (durable-first ordering,
+          best-effort live layer, recorded send status) apply to it.</li>
+          <li><strong>Adoption is three source call sites, one of them inside the framework.</strong> The framework&#39;s own
+          password-reset workflow sends through the abstraction: <code>ForgotPasswordHandlerBase</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:38</code>)
+          takes <code>IEmailSender</code> as a primary-constructor dependency and dispatches the reset mail, swallowing
+          and logging a send failure so a delivery problem is never reported back to the caller (<code>:83-96</code>,
+          which would turn the response into an account-existence oracle). Two Identity modules in two repos
+          inherit that base and pass their own sender through
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:23</code>,
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24</code>).
+          The two app-level call sites are both in Store Sales: <code>OrderPaidHandler</code>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/DomainEventHandlers/OrderPaidHandler.cs:41</code>)
           and <code>OrderPaymentFailedSagaHandler</code>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Saga/OrderPaymentFailedSagaHandler.cs:31</code>),
           both <code>IDomainEventHandler&lt;T&gt;</code> implementations that open their own DI scope, build the HTML body
           inline, and swallow-and-log a send failure so the order flow is never broken
-          (<code>OrderPaidHandler.cs:59-64</code>, <code>OrderPaymentFailedSagaHandler.cs:52-55</code>). No other module or repo
-          consumes the abstraction today.</li>
+          (<code>OrderPaidHandler.cs:59-64</code>, <code>OrderPaymentFailedSagaHandler.cs:52-55</code>).</li>
           <li><strong>No templating, retry, or bounce posture.</strong> The contract is two <code>SendAsync</code> overloads over plain
           <code>subject</code> / <code>body</code> strings with an <code>isHtml</code> flag (<code>IEmailSender.cs:15,23</code>); bodies are concatenated
           at the call site. <code>SmtpEmailSender</code> constructs a fresh <code>SmtpClient</code> per call and awaits
-          <code>SendMailAsync</code> once (<code>SmtpEmailSender.cs:30-42</code>): no retry, no dead-letter, no bounce or
+          <code>SendMailAsync</code> once (<code>SmtpEmailSender.cs:25-37</code>): no retry, no dead-letter, no bounce or
           delivery-status handling, and no persisted send record equivalent to the <code>PushNotification</code>
           aggregate.</li>
-          <li><strong>Accepted as-is.</strong> Email stays an app-level concern riding a framework-registered primitive.
-          Pulling it under this ADR&#39;s model (durable record, null default, opt-in registration, one dispatching
-          handler) is not justified by two call sites, and the point of recording it here is only that a reader
-          of ADR-024 or ADR-044 should not conclude the inbox, SignalR and native legs are the only delivery
-          paths in the platform. Wider adoption, or a requirement that email delivery be auditable or
-          retried, is the trigger to give it its own record instead of this amendment.</li>
+          <li><strong>Accepted as-is.</strong> Email stays a direct-send primitive outside this ADR&#39;s channel model, used by
+          one framework workflow and by app code. Pulling it under this ADR&#39;s model (durable record, null
+          default, opt-in registration, one dispatching handler) is not justified by the call sites there
+          are: three of them, each wanting a direct send rather than an audited per-recipient fan-out, and
+          the password-reset one deliberately treating a failed send as silent. The point of recording it
+          here is only that a reader of ADR-024 or ADR-044 should not conclude the inbox, SignalR and native
+          legs are the only delivery paths in the platform. Wider adoption, or a requirement that email
+          delivery be auditable or retried, is the trigger to give it its own record instead of this
+          amendment.</li>
           </ol>
           
         <div class="doc-foot btn-row">

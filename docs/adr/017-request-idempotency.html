@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -345,20 +348,21 @@
           reference to <code>MMCA.Common.API</code> and means a differently-named lookalike attribute does not count.</p>
           <h3 id="the-shared-auth-controllers-declare-both-ways-and-the-split-is-the-interesting-part">The shared auth controllers declare both ways, and the split is the interesting part</h3>
           <p><code>AuthControllerBase</code> marks register <code>[Idempotent]</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:76-77</code>), which is
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:91-92</code>), which is
           the canonical double-submit: a user pressing the button twice should get one account and one response.
-          Login (<code>:54-55</code>), refresh (<code>:98-99</code>) and revoke (<code>:117-118</code>) are <code>[NonIdempotent]</code>, as is the OAuth code
-          exchange (<code>.../Controllers/OAuthControllerBase.cs:136-137</code>). Token issuance must never be replay-cached,
+          Login (<code>:67-68</code>), refresh (<code>:115-116</code>) and revoke (<code>:142-143</code>, with the per-session revoke at
+          <code>:205-206</code>) are <code>[NonIdempotent]</code>, as is the OAuth code exchange
+          (<code>.../Controllers/OAuthControllerBase.cs:148-149</code>). Token issuance must never be replay-cached,
           and the sharpest case is refresh: <a href="050-jwt-refresh-token-rotation.html">ADR-050</a> rotates the stored
           refresh token on every use, so a cached replay would hand a client a token pair that has already been
           rotated away and revoked, turning this filter&#39;s safety feature into an authentication failure. The
-          OAuth <code>complete</code> action is a <code>[HttpGet]</code> (<code>OAuthControllerBase.cs:74</code>) and is therefore outside the
+          OAuth <code>complete</code> action is a <code>[HttpGet]</code> (<code>OAuthControllerBase.cs:86</code>) and is therefore outside the
           gate&#39;s scope rather than unmarked.</p>
           <h3 id="the-no-op-without-a-key-contract-is-now-pinned-by-tests">The no-op-without-a-key contract is now pinned by tests</h3>
           <p>The Decision has always said an absent or blank <code>Idempotency-Key</code> means the action runs normally. That
           is now asserted rather than asserted-about: the filter returns <code>next()</code> untouched at the action stage
           with no key (<code>.../Idempotency/IdempotencyFilter.cs:133-138</code>), only enables request buffering when a key
-          is present (<code>:123-124</code>), and treats blank as absent (<code>:165-172</code>), with
+          is present (<code>:121-122</code>), and treats blank as absent (<code>:163-170</code>), with
           <code>Tests/Presentation/MMCA.Common.API.Tests/Idempotency/IdempotencyFilterPassthroughTests.cs:46</code>, <code>:68</code>
           and <code>:85</code> covering the missing-header, blank-header and unbuffered-body cases. That matters because it
           is the premise of adopting <code>[Idempotent]</code> widely: annotating an existing endpoint cannot change what an

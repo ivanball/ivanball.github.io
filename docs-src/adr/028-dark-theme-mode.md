@@ -1,7 +1,7 @@
 # ADR-028: Day/Dark Theme Mode
 
 ## Status
-Accepted (2026-06-27; revised 2026-07-15).
+Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31).
 
 ## Context
 `MMCATheme` (`MMCA.Common.UI/Theme/MMCATheme.cs`) has always defined a complete, brand-tuned `PaletteDark`
@@ -19,14 +19,19 @@ intended end state but is not yet wired for theme (see Decision 3).
 1. **Bind the existing theme.** The shared `MainLayout` renders a single `<MmcaThemeProviders />`
    component (`MMCA.Common.UI/Layout/MainLayout.razor:14`), which owns the four Mud providers plus the
    Day/Dark lifecycle in one place. Inside that component `MudThemeProvider` is bound with
-   `@bind-IsDarkMode` against the already-complete `MMCATheme.Instance`
-   (`MMCA.Common.UI/Components/MmcaThemeProviders.razor:11`), a two-way binding to that component's own
-   `_isDarkMode` field (`MmcaThemeProviders.razor:24`); no `@ref` is used. The layout no longer holds the
-   provider markup or the `_isDarkMode` field itself. No new palette work.
+   `Theme="@Theme"` and `@bind-IsDarkMode`
+   (`MMCA.Common.UI/Components/MmcaThemeProviders.razor:12`), a two-way binding to that component's own
+   `_isDarkMode` field (`MmcaThemeProviders.razor:25`); no `@ref` is used. `Theme` is a `MudTheme`
+   parameter whose default is the already-complete `MMCATheme.Instance`
+   (`MmcaThemeProviders.razor:23`), so a consuming app that needs its own brand passes a derived
+   `MudTheme` instead of duplicating the provider block. The layout no longer holds the provider
+   markup or the `_isDarkMode` field itself. No new palette work.
 
 2. **A `ThemeService` (`MMCA.Common.UI`) owns the preference**, registered in `AddUIShared`. It holds the
-   current mode, reads/writes a **non-HttpOnly cookie + localStorage**, and raises a change event so the
-   app-bar toggle and `MainLayout` stay in sync. First-visit default is the OS `prefers-color-scheme`, read
+   current mode, reads/writes a **non-HttpOnly cookie + localStorage**, and raises a change event that
+   `MmcaThemeProviders` (`MmcaThemeProviders.razor:28`) and every `ThemeToggle` (`ThemeToggle.razor:16`)
+   subscribe to, so the shared providers component and the app-bar toggle stay in sync; the layout
+   itself subscribes to nothing. First-visit default is the OS `prefers-color-scheme`, read
    via a small JS interop call (`theme.js` `systemPrefersDark()` →
    `window.matchMedia('(prefers-color-scheme: dark)')`), used only when no cookie/profile value exists.
 
@@ -48,8 +53,12 @@ intended end state but is not yet wired for theme (see Decision 3).
    authenticated toggle writes both, anonymous users get cookie/localStorage only.
 
 6. **Helpdesk is brought into line.** Its host's custom `MainLayout` used a bare `<MudThemeProvider />`
-   (not even `MMCATheme`); it is aligned to `MMCATheme.Instance` + the bound `IsDarkMode` + the toggle. As
-   an `InteractiveServer`-only host it has no WASM boundary, but it still reads the cookie for consistency.
+   (not even `MMCATheme`); it now renders the framework's `<MmcaThemeProviders />`
+   (`MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:6`) plus `<CultureSwitcher />` and
+   `<ThemeToggle />` in its own `MudAppBar` (`MainLayout.razor:13-14`), so the theme, the bound
+   `IsDarkMode` and the whole lifecycle come from the shared component rather than being restated in
+   the host. As an `InteractiveServer`-only host it has no WASM boundary, but it still reads the
+   cookie for consistency.
 
 ## Rationale
 - **Reusing the i18n cookie/profile machinery** means one persistence model for both user preferences,
@@ -64,8 +73,12 @@ intended end state but is not yet wired for theme (see Decision 3).
 - **The same FOUC hazard as locale is not yet closed for theme.** The SSR `data-theme`/inline-script read is
   unimplemented (Decision 3), so the first paint can briefly flash the wrong theme before the post-render JS
   interop corrects it; there is no free no-flash for InteractiveAuto.
-- **Helpdesk's custom layout** had to be touched separately because it does not inherit Common's
-  `MainLayout`; future hosts that fork the layout inherit the same obligation.
+- **Helpdesk's custom layout** is still wired separately because it does not inherit Common's
+  `MainLayout`, but the obligation is now two component tags (`<MmcaThemeProviders />` plus
+  `<ThemeToggle />`) rather than a provider block and its lifecycle: the layout's own comment
+  (`MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:4-5`) records that the four Mud providers
+  and the Day/Dark lifecycle belong to `MmcaThemeProviders` and that the layout carries only Helpdesk
+  chrome. Future hosts that fork the layout inherit that same two-tag obligation.
 - **Per-user persistence adds a column** to the Identity `User` (folded into the ADR-027 migration, so no
   extra migration), and a profile-edit surface.
 

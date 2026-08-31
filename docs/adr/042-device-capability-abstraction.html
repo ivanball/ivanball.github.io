@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -224,7 +227,7 @@
           <p>Two constraints shape the packaging. First, per-head service selection already has a working
           precedent: <code>ITokenStorageService</code> resolves to a per-head implementation registered after
           <code>AddUIShared</code> (<code>builder.Services.AddCommonMauiTokenStorage()</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:125</code>). Second, MMCA.Common&#39;s CI and release
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:161</code>). Second, MMCA.Common&#39;s CI and release
           pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
           framework&#39;s packages release in lockstep (ADR-016).</p>
           <h2 id="decision">Decision</h2>
@@ -246,8 +249,8 @@
           <code>IPushDeviceTokenProvider</code> (ADR-044), and <code>IBarcodeScannerService</code> for camera barcode/QR scanning
           (<code>DependencyInjection.cs:57</code>). Barcode is the one native override that is deliberately NOT in
           <code>AddMauiDeviceCapabilities</code>: it ships behind the opt-in <code>UseCommonBarcodeScanner</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:92</code>, called by ADC at
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:115</code>), so a head that never scans ships
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104</code>, called by ADC at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:151</code>), so a head that never scans ships
           neither the ZXing handler nor a camera permission declaration. Each capability has an independent
           fallback story, and per-capability contracts let heads adopt incrementally.</p>
           </li>

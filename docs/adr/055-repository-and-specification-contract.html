@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -243,7 +246,17 @@
           the narrow read interfaces now have shipped dependents in both consumer applications. The Decision&#39;s
           consumption paragraph, the superseded &quot;ISP split is guidance&quot; Trade-offs note, and the Store
           paragraph plus the adoption-sample caution in the Revision (2026-08-21) are restated to that
-          reality, with the Store holders anchored by file and line for the first time).</p>
+          reality, with the Store holders anchored by file and line for the first time).
+          Revised 2026-08-31 (<strong>substantive in consequence, not in decision</strong>: <code>IEntityQuerier</code> carries five
+          further members this record described nowhere, two <code>FirstOrDefaultAsync</code> overloads, the grouped
+          <code>CountByAsync</code> and <code>SumByAsync</code>, and <code>FindIncludingDeletedAsync</code>, so the interface is wider again;
+          MMCA.Helpdesk now has a narrowed <code>IEntityReader</code> holder of its own, which retires the &quot;Helpdesk
+          consumes none of this&quot; caution and makes three of the four repositories narrowed dependents; ADC&#39;s
+          narrowing grew to fifteen declarations across eleven files; MMCA.Store&#39;s <code>AssignParentCategoryHandler</code>
+          is now <code>CategoryAssignParentUpdateHandler</code>. Every <code>IRepository.cs</code>, <code>EFReadRepository.cs</code>,
+          <code>EFReadRepositoryDecorator.cs</code>, <code>EntityQueryService.cs</code>, <code>DependencyInjection.cs</code> and consumer anchor
+          is re-verified, and the superseded <code>Expression.Invoke</code> entry drops its line number, which now points
+          at unrelated text. See the Revision (2026-08-31) at the end).</p>
           <h2 id="context">Context</h2>
           <p>Every read an application handler performs has to come from somewhere, and the shape of that contract
           decides whether the module can still be lifted into its own service later (ADR-007, ADR-008). The
@@ -274,14 +287,21 @@
           (<code>IRepository.cs:21</code>) carries single-entity lookups: <code>GetByIdAsync</code> (<code>IRepository.cs:26</code>, <code>:31</code>),
           <code>GetByIdsAsync</code> (<code>:48</code>), and the two <code>ExistsAsync</code> overloads (<code>:56</code>, <code>:62</code>).
           <code>IEntityQuerier&lt;TEntity, TIdentifierType&gt;</code> (<code>:80</code>) carries collection work: <code>GetAllAsync</code> (<code>:85</code>),
-          <code>GetProjectedAsync</code> (<code>:105</code>), <code>GetAllForLookupAsync</code> (<code>:113</code>), and <code>CountAsync</code> (<code>:120</code>, <code>:123</code>).
-          <code>IReadRepository</code> composes exactly those two (<code>:221-222</code>), and <code>IRepository</code> composes read plus
-          write (<code>:349</code>). The interface documentation directs new handlers at the focused sub-interfaces and
-          leaves existing code on the composite (<code>:216-217</code>).</li>
+          <code>GetProjectedAsync</code> (<code>:105</code>), <code>GetAllForLookupAsync</code> (<code>:222</code>), and <code>CountAsync</code> (<code>:229</code>, <code>:232</code>).
+          It also carries the reads that keep a single row or an aggregate in the database rather than
+          folding it in memory: <code>FirstOrDefaultAsync</code> over a predicate (<code>:133</code>) or over a specification,
+          which honors the specification&#39;s ordering so &quot;first&quot; is deterministic (<code>:148</code>); the grouped
+          <code>CountByAsync</code> (<code>:167</code>) and <code>SumByAsync</code> (<code>:184</code>), which are how an Application layer that
+          references no EF Core asks for a <code>GROUP BY</code> instead of projecting every row out and grouping
+          client-side; and <code>FindIncludingDeletedAsync</code> (<code>:215</code>), which returns the active and the
+          soft-deleted matches as two collections from one read.
+          <code>IReadRepository</code> composes exactly those two (<code>:330-331</code>), and <code>IRepository</code> composes read plus
+          write (<code>:467</code>). The interface documentation directs new handlers at the focused sub-interfaces and
+          leaves existing code on the composite (<code>:325-326</code>).</li>
           <li><strong>The raw queryables live on the composite only.</strong> <code>Table</code>, <code>TableNoTracking</code>,
           <code>TableNoTrackingSingleQuery</code>, and <code>TableNoTrackingSplitQuery</code> are declared on <code>IReadRepository</code>
-          (<code>IRepository.cs:227</code>, <code>:230</code>, <code>:233</code>, <code>:236</code>) and implemented as EF <code>DbSet</code> expressions
-          (<code>EFReadRepository.cs:279</code>, <code>:282</code>, <code>:285</code>, <code>:288</code>). They are deliberately absent from
+          (<code>IRepository.cs:336</code>, <code>:339</code>, <code>:342</code>, <code>:345</code>) and implemented as EF <code>DbSet</code> expressions
+          (<code>EFReadRepository.cs:406</code>, <code>:409</code>, <code>:412</code>, <code>:415</code>). They are deliberately absent from
           <code>IEntityReader</code> and <code>IEntityQuerier</code>, so a handler that declares the narrow dependency cannot reach
           a queryable at all.</li>
           <li><strong>Application code must not touch those queryables, and a fitness rule fails the build.</strong>
@@ -299,7 +319,7 @@
           specification is a constructor argument plus one expression, for example
           <code>OrdersByCustomerSpecification</code>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13</code>,
-          <code>:18</code>). A business filter that takes no argument is smaller still, one overridden <code>Criteria</code>, as in
+          <code>:17</code>). A business filter that takes no argument is smaller still, one overridden <code>Criteria</code>, as in
           ADC&#39;s <code>PublishedEventSpecification</code>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Specifications/PublishedEventSpecification.cs:11</code>,
           <code>:14</code>), the only class in that module&#39;s <code>Events/Specifications</code> directory. Row-scoping is not
@@ -308,7 +328,7 @@
           (<code>Source/Core/MMCA.Common.Domain/Specifications/OwnedByUserSpecification.cs:20</code>, <code>:29-30</code>) and is
           closed over the entity type at the call site, which is how ADC scopes an attendee to their own
           answers
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:66-67</code>).</li>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:75</code>).</li>
           <li><strong>Specifications compose.</strong> <code>AndSpecification</code> (<code>Specification.cs:81</code>), <code>OrSpecification</code> (<code>:105</code>),
           and <code>NotSpecification</code> (<code>:128</code>) each expose a <code>Criteria</code> that delegates to the internal
           <code>SpecificationComposer</code> (<code>:146</code>). <code>Combine</code> (<code>:155</code>) rebinds the right operand&#39;s parameter onto the
@@ -321,9 +341,9 @@
           no hand-written class. Composition is used in production: ADC&#39;s paged session read ANDs the
           public-session specification with the speaker-scoped one rather than substituting, because dropping
           the public filter would leak non-accepted sessions to non-privileged callers
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:96</code>,
-          <code>:118</code>, rationale at <code>:91-93</code>). Since 2026-08-21 all three composing call sites write the fluent
-          form, <code>publicSpecification.And(...)</code> (<code>SessionsController.cs:118</code>), and the hand-built
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:110</code>,
+          <code>:128</code>, rationale at <code>:100-104</code>). Since 2026-08-21 all three composing call sites write the fluent
+          form, <code>publicSpecification.And(...)</code> (<code>SessionsController.cs:128</code>), and the hand-built
           <code>new AndSpecification&lt;...&gt;(a, b)</code> construction no longer appears in any consumer.</li>
           <li><strong>The specification enters the same query pipeline, not a parallel one.</strong> <code>IEntityQueryService</code>
           takes an optional <code>ISpecification&lt;TEntity, TIdentifierType&gt;</code> on every DTO or entity read: the two
@@ -332,8 +352,8 @@
           <code>:131</code>). The other two reads on the interface take a raw predicate rather than a specification,
           <code>GetAllForLookupAsync</code> (<code>:87-91</code>) and <code>ExistsAsync</code> (<code>:143-146</code>).
           <code>EntityQueryService</code> passes the specification&#39;s <code>Criteria</code> into the query parameters
-          (<code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:427</code>) alongside the dynamic
-          filters, sorting, and paging. Cross-source predicates are produced the same way:
+          (<code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:286</code> on the list path, <code>:518</code>
+          in <code>BuildQueryAsync</code>) alongside the dynamic filters, sorting, and paging. Cross-source predicates are produced the same way:
           <code>CrossSourceSpecification.BuildAsync</code>
           (<code>Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:39</code>) resolves the
           principal keys with <code>GetProjectedAsync</code> (<code>:55-56</code>) and returns an <code>InlineSpecification</code> of
@@ -353,46 +373,48 @@
           rule also ships with a documented exemption list, <code>AllowedFiles</code>
           (<code>RawQueryableConventionTestsBase.cs:38</code>), used as an adoption ratchet (<code>:24-27</code>): MMCA.Common
           exempts six files, the generic query pipeline itself (<code>EntityQueryService.cs</code>, which builds its base
-          query from <code>Table</code> / <code>TableNoTracking</code> at <code>EntityQueryService.cs:419-421</code>) plus five Notifications
+          query from <code>Table</code> / <code>TableNoTracking</code> at <code>EntityQueryService.cs:298</code> and <code>:510-512</code>) plus five Notifications
           handlers (<code>RawQueryableConventionTests.cs:26-36</code>), and MMCA.ADC exempts eight, the Engagement live
           layer and bookmark aggregations, the Identity user-list projection, and the Notification GDPR export
           (<code>MMCA.ADC/.../RawQueryableConventionTests.cs:34-52</code>).</p>
           <p>The interface split is shipped and, since 2026-08-21, consumed. MMCA.ADC declares the narrow
-          interfaces at twelve read-only sites across eight Application files: helper parameters narrowed to
+          interfaces at fifteen read-only sites across eleven Application files: helper parameters narrowed to
           <code>IEntityReader</code> where the helper only looks up or checks existence (for example
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionRoomScheduling.cs:45</code>)
           or to <code>IEntityQuerier</code> where it projects or counts (for example
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:131</code>),
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:130</code>),
           and locals typed to the querier where a visibility helper reads through the unit of work
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:40</code>,
           <code>:75</code>, <code>:126</code>, <code>:151</code>). MMCA.Store ships the same narrowing at three read-only holders: a
           by-id/existence service field
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Customers/CustomerService.cs:14</code>),
           a handler parameter narrowed to <code>IEntityReader</code>
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/UseCases/AssignParentCategory/AssignParentCategoryHandler.cs:68</code>),
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/UseCases/AssignParentCategory/CategoryAssignParentUpdateHandler.cs:98</code>),
           and a querier parameter on the customer-provisioning handler
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:98</code>);
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:96</code>);
           a fourth, <code>ProductVariantService</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductVariantService.cs:15</code>),
-          deliberately stays on <code>IReadRepository</code> because it calls members of both halves. MMCA.Helpdesk still
-          narrows nothing; the only mention of either name there
-          remains a pair of comments in its template staging script
-          (<code>MMCA.Helpdesk/build/templates/stage.ps1:250</code>, <code>:983</code>) describing the contract rather than
-          depending on it.</p>
+          deliberately stays on <code>IReadRepository</code> because it calls members of both halves. MMCA.Helpdesk
+          narrows one site, the reference app&#39;s by-id query handler, whose local is typed to
+          <code>IEntityReader&lt;Ticket, TicketIdentifierType&gt;</code> and assigned from <code>GetReadRepository</code>
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/UseCases/GetById/GetTicketByIdHandler.cs:24</code>,
+          with the reason written next to it at <code>:22-23</code>), so the seed teaches the narrowing rather than only
+          describing it in the comments its template staging script carries
+          (<code>MMCA.Helpdesk/build/templates/stage.ps1:517</code>, <code>:1262</code>).</p>
           <p>What has not changed is the wiring, and that is deliberate. <code>IUnitOfWork</code> hands out only the
           composites (<code>IRepository</code> at
           <code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IUnitOfWork.cs:19</code>, <code>IReadRepository</code>
           at <code>:29</code>), and the container registers only the open generic <code>IRepository&lt;,&gt;</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:107</code>). Every narrowed holder is
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:105</code>). Every narrowed holder is
           assigned from <code>IUnitOfWork.GetReadRepository&lt;,&gt;()</code> (or <code>GetRepository&lt;,&gt;()</code> where the same handler
           also writes) and narrows by an implicit reference conversion at the assignment, because
-          <code>IReadRepository</code> derives from both narrow interfaces (<code>IRepository.cs:221-222</code>). Nothing
+          <code>IReadRepository</code> derives from both narrow interfaces (<code>IRepository.cs:330-331</code>). Nothing
           constructor-injects <code>IEntityReader</code> or <code>IEntityQuerier</code>, and nothing should: the unit of work is
           where an entity&#39;s physical data source resolves to the right context and where the repository
           instance is cached for the scope, so a narrow interface resolved straight from the container would
-          bypass both. The ISP split is therefore the declared dependency shape at read-only call sites in two
-          shipped applications, sitting on an unchanged registration surface
-          (<code>IRepository.cs:216-217</code>).</p>
+          bypass both. The ISP split is therefore the declared dependency shape at read-only call sites in all
+          three consumer applications, sitting on an unchanged registration surface
+          (<code>IRepository.cs:325-326</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>A narrow interface is the enforcement, not a style preference.</strong> A handler that asks for
@@ -406,7 +428,7 @@
           in a query and compiled in memory by <code>IsSatisfiedBy</code> (<code>Specification.cs:9-11</code>, <code>:32</code>), so an
           authorization predicate can be asserted in a domain test with no database at all.</li>
           <li><strong>Composability keeps filters additive.</strong> ANDing an authorization scope onto a business filter is a
-          two-line construction (<code>SessionsController.cs:118</code>) instead of a second hand-written query path,
+          two-line construction (<code>SessionsController.cs:128</code>) instead of a second hand-written query path,
           which is what makes &quot;never substitute the public filter&quot; a cheap rule to follow.</li>
           <li><strong>A textual scan was chosen deliberately over IL analysis.</strong> NetArchTest and reflection cannot see
           member usage inside method bodies, and the testing package carries no IL or Roslyn dependency on
@@ -439,8 +461,9 @@
           <li><strong><code>Expression.Invoke</code> composition is a provider bet.</strong> <em>(Superseded by the Revision (2026-08-18)
           below: the combinators now rebind parameters via <code>ParameterReplacer</code> and <code>Expression.Invoke</code> no
           longer appears in <code>Specification.cs</code>; kept as the record of the trade-off as originally
-          accepted.)</em> The And/Or/Not combinators embed each
-          operand with <code>Expression.Invoke</code> (<code>Specification.cs:75-77</code>), which the SQL Server provider
+          accepted, without a line anchor: the numbers it cited now point at unrelated text.)</em>
+          The And/Or/Not combinators embed each
+          operand with <code>Expression.Invoke</code> in <code>Specification.cs</code>, which the SQL Server provider
           translates; the cross-source helper deliberately avoids it and rebinds parameters instead so the
           combined predicate stays translatable on every provider
           (<code>CrossSourceSpecification.cs:83-87</code>). Composed specifications are therefore not automatically
@@ -513,10 +536,10 @@
           explicit construction remains supported but has no caller.)</em></p>
           <h3 id="3-the-querier-answers-specification-first-reads">3. The querier answers specification-first reads</h3>
           <p><code>IEntityQuerier</code> (<code>IRepository.cs:80</code>) gains four members that take an <code>ISpecification</code> rather than a
-          raw predicate or a bag of query parameters: <code>CountAsync</code> (<code>:134</code>, ordering and paging deliberately
-          ignored), <code>ListAsync</code> (<code>:151</code>), a projecting <code>ListAsync&lt;TResult&gt;(specification, select, ...)</code>
-          (<code>:170</code>), and <code>AnyAsync</code> (<code>:182</code>), implemented on <code>EFReadRepository</code> and forwarded by
-          <code>EFReadRepositoryDecorator</code> (<code>:78</code>, <code>:92</code>, <code>:98</code>, <code>:105</code>). Alongside them, <code>IEntityQueryService</code>
+          raw predicate or a bag of query parameters: <code>CountAsync</code> (<code>:243</code>, ordering and paging deliberately
+          ignored), <code>ListAsync</code> (<code>:260</code>), a projecting <code>ListAsync&lt;TResult&gt;(specification, select, ...)</code>
+          (<code>:279</code>), and <code>AnyAsync</code> (<code>:291</code>), implemented on <code>EFReadRepository</code> and forwarded by
+          <code>EFReadRepositoryDecorator</code> (<code>:118</code>, <code>:132</code>, <code>:138</code>, <code>:145</code>). Alongside them, <code>IEntityQueryService</code>
           widened from the abstract <code>Specification&lt;TEntity, TIdentifierType&gt;?</code> to the interface
           <code>ISpecification&lt;TEntity, TIdentifierType&gt;?</code> on all four of the members that take one
           (<code>IEntityQueryService.cs:40</code>, <code>:63</code>, <code>:110</code>, <code>:131</code>), which is what lets a <code>QuerySpecification</code>, a
@@ -531,7 +554,7 @@
           <p>An optional <code>IEntityDTOProjector&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOProjector.cs:51</code>) exposes one
           member, <code>IQueryable&lt;TEntityDTO&gt; ProjectTo(IQueryable&lt;TEntity&gt; source)</code> (<code>:62</code>), and is auto-registered
-          by the Application assembly scan (<code>.../Application/DependencyInjection.cs:160</code>). When one is
+          by the Application assembly scan (<code>.../Application/DependencyInjection.cs:209</code>). When one is
           registered, the read takes a server-side path, <code>ExecuteProjectedAsync</code>
           (<code>.../Application/Services/Query/IEntityQueryPipeline.cs:58</code>, implemented at
           <code>EntityQueryPipeline.cs:60</code>), which applies the projection <strong>last</strong>, after criteria, dynamic filters,
@@ -549,9 +572,9 @@
           projection form (<code>PushNotificationDTOProjection</code>, <code>:22</code>) rather than hand-writing a <code>Select</code>, so ADR-001&#39;s
           generated mapper is reused as an expression tree instead of as a method call.</p>
           <h3 id="5-keyset-pagination-and-deterministic-ordering">5. Keyset pagination, and deterministic ordering</h3>
-          <p><code>GetPageByCursorAsync</code> is declared on <code>IEntityQuerier</code> alone (<code>IRepository.cs:207</code>, inherited by
-          <code>IReadRepository</code> at <code>:221</code>, implemented at <code>EFReadRepository.cs:369</code> and forwarded at
-          <code>EFReadRepositoryDecorator.cs:111</code>):</p>
+          <p><code>GetPageByCursorAsync</code> is declared on <code>IEntityQuerier</code> alone (<code>IRepository.cs:316</code>, inherited by
+          <code>IReadRepository</code> at <code>:330</code>, implemented at <code>EFReadRepository.cs:496</code> and forwarded at
+          <code>EFReadRepositoryDecorator.cs:151</code>):</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">Task&lt;Result&lt;KeysetCollectionResult&lt;TEntity&gt;&gt;&gt; GetPageByCursorAsync(
     KeysetPageRequest request,
     ISpecification&lt;TEntity, TIdentifierType&gt;? specification = <span class="hljs-literal">null</span>,
@@ -570,8 +593,8 @@
           missing sort value from an empty one. <code>TryDecode</code> (<code>:169</code>) rejects bad base64, a wrong version, a
           wrong segment count, or a flag that is not <code>0</code>/<code>1</code>, and <strong>failures are <code>Result</code> values, never
           exceptions</strong>: an unusable cursor returns <code>Error.Validation(&quot;Error.InvalidCursor&quot;, ...)</code>
-          (<code>EFReadRepository.cs:395-401</code>) and an unknown sort column returns <code>Error.InvalidEntityField</code>
-          (<code>:378-384</code>), both <code>ErrorType.Validation</code> and both therefore mapping to a 400 through the ADR-013
+          (<code>EFReadRepository.cs:522-527</code>) and an unknown sort column returns <code>Error.InvalidEntityField</code>
+          (<code>:505-511</code>), both <code>ErrorType.Validation</code> and both therefore mapping to a 400 through the ADR-013
           edge. One escape remains: <code>KeysetQueryBuilder.Compare</code> throws <code>NotSupportedException</code> for a sort
           column whose type has neither a relational operator nor <code>IComparable&lt;T&gt;</code>
           (<code>.../Repositories/KeysetQueryBuilder.cs:246</code>), which is a programming error rather than bad input,
@@ -591,7 +614,9 @@
           <h3 id="what-this-revision-costs">What this revision costs</h3>
           <ul>
           <li><strong>The contract is materially wider.</strong> <code>IEntityQuerier</code> gained five members and <code>ISpecification</code> has
-          a second, richer implementation shape. Every one of them is public API on a lockstep-released
+          a second, richer implementation shape. <em>(As of the Revision (2026-08-31) below, five further
+          members have landed on the same interface, so it carries ten more than the shape the Decision
+          originally described.)</em> Every one of them is public API on a lockstep-released
           package family (ADR-016), so the surface consumers inherit is larger and the ISP split is
           correspondingly less narrow than the Rationale above describes.</li>
           <li><strong><code>QuerySpecification</code> reintroduces the coupling the predicate-only shape avoided.</strong> Ordering,
@@ -618,8 +643,8 @@
           <ul>
           <li><strong>Fluent composition replaced hand-built combinators.</strong> The workspace&#39;s three composing call sites
           now write <code>a.And(b)</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:118</code>,
-          <code>.../SpeakersController.cs:174</code>, and
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:128</code>,
+          <code>.../SpeakersController.cs:173</code>, and
           <code>.../MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:148-149</code>), so the
           <code>SpecificationExtensions</code> members from the Revision (2026-08-18) have production callers and
           <code>new AndSpecification&lt;...&gt;(a, b)</code> no longer appears in any consumer.</li>
@@ -631,14 +656,16 @@
           <li><strong>Twelve read-only declarations across eight files narrowed</strong> from <code>IRepository&lt;,&gt;</code> to
           <code>IEntityReader&lt;,&gt;</code> (by-id and existence helpers) or <code>IEntityQuerier&lt;,&gt;</code> (projection and count
           helpers, and the visibility helper&#39;s locals), each still assigned from the unit of work. Helpers
-          that also write kept the composite, correctly.</li>
+          that also write kept the composite, correctly. <em>(The count has since grown: the Revision
+          (2026-08-31) below records fifteen declarations across eleven files.)</em></li>
           </ul>
           <p><strong>MMCA.Store ships the counterpart</strong> <em>(merged to <code>main</code> on 2026-08-22, after this revision was
-          written; restated here as of 2026-08-23)</em>: three read-only holders narrowed
-          (<code>CustomerService.cs:14</code>, <code>AssignParentCategoryHandler.cs:68</code>, <code>UserRegisteredHandler.cs:98</code>), and
-          <code>ProductVariantService</code> deliberately left on <code>IReadRepository</code>
+          written; restated here as of 2026-08-23, and re-anchored 2026-08-31 after the category handler was
+          renamed)</em>: three read-only holders narrowed
+          (<code>CustomerService.cs:14</code>, <code>CategoryAssignParentUpdateHandler.cs:98</code>, <code>UserRegisteredHandler.cs:96</code>),
+          and <code>ProductVariantService</code> deliberately left on <code>IReadRepository</code>
           (<code>ProductVariantService.cs:15</code>) because it calls <code>ExistsAsync</code> (a reader member, <code>:20</code>, <code>:26</code>) and
-          <code>GetProjectedAsync</code> (a querier member, <code>:38</code>, <code>:55</code>) from the same field. That refusal is the
+          <code>GetProjectedAsync</code> (a querier member, <code>:38</code>, <code>:57</code>, <code>:71</code>) from the same field. That refusal is the
           split working as designed: a holder that genuinely needs both halves says so by keeping the
           composite. Both applications also state the convention in their CLAUDE.md files, so new read-only
           code is pointed at the narrow interfaces by guidance as well as by example.</p>
@@ -651,10 +678,62 @@
           conversion from <code>GetReadRepository&lt;,&gt;()</code> is the supported acquisition path.</li>
           <li><strong>Half the composition surface still has no caller.</strong> <code>Or</code> and <code>Not</code>, the specification-taking
           <code>CountAsync</code> and <code>AnyAsync</code>, and <code>GetPageByCursorAsync</code> have zero application callers in any of
-          the four repositories, and MMCA.Helpdesk consumes none of this. The adoption sample is two
-          applications, both shipped; the &quot;untested by usage&quot; caution above still applies to the members
-          nothing calls.</li>
+          the four repositories: the only references are the interface declaration and the profiling
+          decorator&#39;s forward. The &quot;untested by usage&quot; caution above still applies to the members nothing
+          calls. <em>(Restated 2026-08-31: the adoption sample is no longer two applications. MMCA.Helpdesk
+          narrows one holder of its own, so three of the four repositories have a narrowed dependent; the
+          members listed here still have none.)</em></li>
           </ul>
+          <h2 id="revision-2026-08-31">Revision (2026-08-31)</h2>
+          <p>Again nothing in the decision changed. Two things did: the querier grew a second time, and the
+          reference application joined the two production apps as a consumer of the narrow read interfaces.</p>
+          <h3 id="the-querier-carries-five-more-members">The querier carries five more members</h3>
+          <p><code>IEntityQuerier</code> (<code>IRepository.cs:80</code>) now also declares, beyond the collection members the Decision
+          above names and the four specification-first reads from the Revision (2026-08-18):</p>
+          <ul>
+          <li><code>FirstOrDefaultAsync(where, includes, asTracking, ignoreQueryFilters, ...)</code> (<code>:133</code>) and
+          <code>FirstOrDefaultAsync(specification, ...)</code> (<code>:148</code>). The point of both is that the database returns
+          one row: without them a caller reaches for <code>GetAllAsync</code> plus an in-memory <code>FirstOrDefault</code>, which
+          materializes the whole matching set to keep one entity. The predicate overload applies no ordering,
+          so &quot;first&quot; is whatever the provider returns first; the specification overload honors the
+          specification&#39;s ordering, which is what makes the choice among several matches deterministic.</li>
+          <li><code>CountByAsync&lt;TKey&gt;(keySelector, where, ...)</code> (<code>:167</code>) and
+          <code>SumByAsync&lt;TKey&gt;(keySelector, sumSelector, where, ...)</code> (<code>:184</code>), a <code>GROUP BY</code> and a
+          <code>GROUP BY</code> with <code>SUM</code>, each returning one entry per key that has at least one row. These exist
+          because the Application layer references no EF Core and therefore has no <code>IQueryable</code> to group: the
+          alternative is projecting every matching row out of the database and folding it client-side, so
+          these members are how only the aggregate crosses the wire.</li>
+          <li><code>FindIncludingDeletedAsync(...)</code> (<code>:215</code>), which returns the active and the soft-deleted matches as
+          two separate collections from one read, rather than making a caller drop the <code>SoftDelete</code> filter and
+          re-partition the result itself.</li>
+          </ul>
+          <p>The widening cost recorded in &quot;What this revision costs&quot; above applies unchanged and doubled: these
+          are public API on a lockstep-released package family (ADR-016), the surface every consumer inherits
+          whether or not it calls them, and <code>IEntityQuerier</code> is correspondingly less narrow than the Rationale&#39;s
+          &quot;a narrow interface is the enforcement&quot; argument implies. What has not changed is the enforcement
+          itself: none of the five hands back an <code>IQueryable</code>, so a handler holding the narrow interface still
+          cannot reach a raw queryable.</p>
+          <h3 id="mmcahelpdesk-narrows-too">MMCA.Helpdesk narrows too</h3>
+          <p>The reference application now declares a narrow holder of its own. <code>GetTicketByIdHandler</code> types its
+          local to <code>IEntityReader&lt;Ticket, TicketIdentifierType&gt;</code> and assigns it from
+          <code>unitOfWork.GetReadRepository&lt;Ticket, TicketIdentifierType&gt;()</code>
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/Tickets/UseCases/GetById/GetTicketByIdHandler.cs:24</code>),
+          with the reasoning written beside it (<code>:22-23</code>): the read repository rather than the write surface,
+          and the reader rather than the composite, because a by-id lookup is all the handler does. That is the
+          same acquisition path both production applications use, so the seed now demonstrates the narrowing
+          instead of only describing it, which matters more here than in either app: this tree is also the
+          <code>mmca-app</code> template source, so an adopter&#39;s scaffolded query handler starts narrowed.</p>
+          <p>Three of the four repositories therefore have a narrowed dependent. Coverage of the queryable fitness
+          rule is unrelated and unchanged: MMCA.Helpdesk still ships no
+          <code>RawQueryableConventionTests</code> subclass, so the Trade-offs entry above stands as written.</p>
+          <h3 id="the-consumer-anchors-moved">The consumer anchors moved</h3>
+          <p>MMCA.ADC&#39;s narrowing grew from twelve declarations across eight Application files to fifteen across
+          eleven, the new ones being Engagement&#39;s vote, upvote, badge, check-in and leaderboard paths plus
+          Conference&#39;s room and session update handlers; <code>SessionRoomScheduling.cs:45</code> and the four
+          <code>PublicConferenceVisibility</code> locals are where the Revision (2026-08-21) left them. MMCA.Store still
+          ships exactly three narrowed holders, but <code>AssignParentCategoryHandler</code> is now
+          <code>CategoryAssignParentUpdateHandler</code>, so the file this record cited no longer exists under that name.
+          Neither change touches the contract; both are recorded so the citations above resolve.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -673,6 +752,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-08-21">Revision (2026-08-21)</a></li>
+            <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
             </ul>
           </nav>
         </aside>

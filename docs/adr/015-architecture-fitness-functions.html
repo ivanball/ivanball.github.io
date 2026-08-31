@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -359,15 +362,15 @@
           <p>This is the structural change to the Decision above, which framed enforcement as two layers (an MSBuild
           project-reference guard and a NetArchTest suite). The gate is neither: it is a <strong>compile-time analyzer
           with a committed baseline</strong>, <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> 5.6.0
-          (<code>MMCA.Common/Directory.Packages.props:164</code>), applied to every <code>Source</code> project through one
-          <code>Directory.Build.props</code> ItemGroup rather than per csproj (<code>:78-85</code>), with <code>PublicAPI.Shipped.txt</code> and
-          <code>PublicAPI.Unshipped.txt</code> added as <code>AdditionalFiles</code> (<code>:83-84</code>). Fourteen projects carry the pair.
-          <strong><code>MMCA.Common.UI.Maui</code> is deliberately excluded</strong> and the condition says why (<code>:73-76</code>): it lives
+          (<code>MMCA.Common/Directory.Packages.props:194</code>), applied to every <code>Source</code> project through one
+          <code>Directory.Build.props</code> ItemGroup rather than per csproj (<code>:86-93</code>), with <code>PublicAPI.Shipped.txt</code> and
+          <code>PublicAPI.Unshipped.txt</code> added as <code>AdditionalFiles</code> (<code>:91-92</code>). Fourteen projects carry the pair.
+          <strong><code>MMCA.Common.UI.Maui</code> is deliberately excluded</strong> and the condition says why (<code>:82-84</code>): it lives
           outside <code>MMCA.Common.slnx</code> and builds only on the windows <code>build-maui</code> job across four MAUI TFMs
           (ADR-042), &quot;so its baseline could neither be bootstrapped nor kept honest from the normal build&quot;.</p>
           <p>The gate is exactly two rules: <strong>RS0016</strong> fails the build on a public member absent from
           <code>PublicAPI.Shipped.txt</code> and <strong>RS0017</strong> on a declared member that disappeared
-          (<code>Directory.Build.props:68-71</code>, intent stated at <code>:26</code> and <code>.editorconfig:880-884</code>). Neither is
+          (<code>Directory.Build.props:77-80</code>, intent stated at <code>:26</code> and <code>.editorconfig:885-887</code>). Neither is
           explicitly set to <code>error</code>: both are left at the repository&#39;s global analyzer-error default
           (<code>dotnet_analyzer_diagnostic.severity = error</code>, <code>.editorconfig:312</code>, plus <code>TreatWarningsAsErrors</code>,
           <code>Directory.Build.props:7</code>), so they are errors by inheritance rather than by their own entry.
@@ -381,11 +384,11 @@
           revision described plus the Section B ones that followed, not a frozen picture of one release. The
           start version is no longer uncited: the gate shipped in v1.153.0, whose changelog entry names
           <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> on every in-slnx Source project with committed baselines as
-          one of three new build gates (<code>MMCA.Common/CHANGELOG.md:297-303</code>, under the v1.153.0 heading at
-          <code>:242</code>). The discipline therefore begins with
+          one of three new build gates (<code>MMCA.Common/CHANGELOG.md:986-992</code>, under the v1.153.0 heading at
+          <code>:931</code>). The discipline therefore begins with
           v1.153.0 rather than applying retroactively.</p>
           <p>Three rules from the same analyzer are off, each with the reason recorded rather than silently
-          suppressed (<code>.editorconfig:886-895</code>): <strong>RS0026 / RS0027</strong> (no multiple public overloads with optional
+          suppressed (<code>.editorconfig:890-899</code>): <strong>RS0026 / RS0027</strong> (no multiple public overloads with optional
           parameters) because the surface being baselined already ships those pairs, mostly the repository read
           and query methods, so obeying the rule now would mean a breaking signature change on every consumer
           (&quot;off rather than silently baselined as a lie&quot;); and <strong>RS0041</strong> (no oblivious reference types in public
@@ -393,7 +396,7 @@
           ours to annotate. RS0041 additionally sits in the global <code>NoWarn</code> (<code>Directory.Build.props:22-27</code>), and
           the duplication is load-bearing rather than sloppy: a <code>dotnet_diagnostic</code> severity does not reach
           generated code, so the <code>.editorconfig</code> entry alone would not suppress it. RS0051-RS0056, the
-          internal-API analog over <code>InternalAPI.Shipped.txt</code>, are off too (<code>.editorconfig:896-903</code>): only the
+          internal-API analog over <code>InternalAPI.Shipped.txt</code>, are off too (<code>.editorconfig:900-907</code>): only the
           public, packaged surface is under contract.</p>
           <p><strong>This formalizes what the <code>consumer-source-build</code> canary only sampled.</strong> That CI job builds
           MMCA.Helpdesk against the PR&#39;s framework source, so it catches a breaking public-API change only where
@@ -518,9 +521,10 @@
           job does and the solution-wide run cannot.</p>
           <p><strong>One citation was re-anchored, not rewritten.</strong> The v1.153.0 changelog bullet naming
           <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> is verbatim unchanged but has moved to
-          <code>MMCA.Common/CHANGELOG.md:297-303</code> (its release heading at <code>:242</code>) as newer releases were prepended
+          <code>MMCA.Common/CHANGELOG.md:986-992</code> (its release heading at <code>:931</code>) as newer releases were prepended
           above it. Line-anchored citations into an append-at-top file are a known cost of citing this precisely;
-          the alternative, citing nothing, is worse.</p>
+          the alternative, citing nothing, is worse. The anchors above are the current ones and are re-anchored
+          in place on each audit, since a pointer that has drifted is broken rather than merely superseded.</p>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and

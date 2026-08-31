@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-028: Day/Dark Theme Mode · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27; revised 2026-07-15).">
+  <meta name="description" content="Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-028: Day/Dark Theme Mode">
-  <meta property="og:description" content="Accepted (2026-06-27; revised 2026-07-15).">
+  <meta property="og:description" content="Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-028: Day/Dark Theme Mode">
-  <meta name="twitter:description" content="Accepted (2026-06-27; revised 2026-07-15).">
+  <meta name="twitter:description" content="Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"028 · Day/Dark Theme Mode","item":"https://ivanball.github.io/docs/adr/028-dark-theme-mode.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -209,7 +212,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-028-daydark-theme-mode">ADR-028: Day/Dark Theme Mode</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27; revised 2026-07-15).</p>
+          <p>Accepted (2026-06-27; revised 2026-07-15; revised 2026-08-31).</p>
           <h2 id="context">Context</h2>
           <p><code>MMCATheme</code> (<code>MMCA.Common.UI/Theme/MMCATheme.cs</code>) has always defined a complete, brand-tuned <code>PaletteDark</code>
           alongside <code>PaletteLight</code>, but <code>MudThemeProvider</code> was hard-wired to light: no <code>@ref</code>, no <code>IsDarkMode</code>
@@ -224,14 +227,19 @@
           <li><p><strong>Bind the existing theme.</strong> The shared <code>MainLayout</code> renders a single <code>&lt;MmcaThemeProviders /&gt;</code>
           component (<code>MMCA.Common.UI/Layout/MainLayout.razor:14</code>), which owns the four Mud providers plus the
           Day/Dark lifecycle in one place. Inside that component <code>MudThemeProvider</code> is bound with
-          <code>@bind-IsDarkMode</code> against the already-complete <code>MMCATheme.Instance</code>
-          (<code>MMCA.Common.UI/Components/MmcaThemeProviders.razor:11</code>), a two-way binding to that component&#39;s own
-          <code>_isDarkMode</code> field (<code>MmcaThemeProviders.razor:24</code>); no <code>@ref</code> is used. The layout no longer holds the
-          provider markup or the <code>_isDarkMode</code> field itself. No new palette work.</p>
+          <code>Theme=&quot;@Theme&quot;</code> and <code>@bind-IsDarkMode</code>
+          (<code>MMCA.Common.UI/Components/MmcaThemeProviders.razor:12</code>), a two-way binding to that component&#39;s own
+          <code>_isDarkMode</code> field (<code>MmcaThemeProviders.razor:25</code>); no <code>@ref</code> is used. <code>Theme</code> is a <code>MudTheme</code>
+          parameter whose default is the already-complete <code>MMCATheme.Instance</code>
+          (<code>MmcaThemeProviders.razor:23</code>), so a consuming app that needs its own brand passes a derived
+          <code>MudTheme</code> instead of duplicating the provider block. The layout no longer holds the provider
+          markup or the <code>_isDarkMode</code> field itself. No new palette work.</p>
           </li>
           <li><p><strong>A <code>ThemeService</code> (<code>MMCA.Common.UI</code>) owns the preference</strong>, registered in <code>AddUIShared</code>. It holds the
-          current mode, reads/writes a <strong>non-HttpOnly cookie + localStorage</strong>, and raises a change event so the
-          app-bar toggle and <code>MainLayout</code> stay in sync. First-visit default is the OS <code>prefers-color-scheme</code>, read
+          current mode, reads/writes a <strong>non-HttpOnly cookie + localStorage</strong>, and raises a change event that
+          <code>MmcaThemeProviders</code> (<code>MmcaThemeProviders.razor:28</code>) and every <code>ThemeToggle</code> (<code>ThemeToggle.razor:16</code>)
+          subscribe to, so the shared providers component and the app-bar toggle stay in sync; the layout
+          itself subscribes to nothing. First-visit default is the OS <code>prefers-color-scheme</code>, read
           via a small JS interop call (<code>theme.js</code> <code>systemPrefersDark()</code> →
           <code>window.matchMedia(&#39;(prefers-color-scheme: dark)&#39;)</code>), used only when no cookie/profile value exists.</p>
           </li>
@@ -253,8 +261,12 @@
           authenticated toggle writes both, anonymous users get cookie/localStorage only.</p>
           </li>
           <li><p><strong>Helpdesk is brought into line.</strong> Its host&#39;s custom <code>MainLayout</code> used a bare <code>&lt;MudThemeProvider /&gt;</code>
-          (not even <code>MMCATheme</code>); it is aligned to <code>MMCATheme.Instance</code> + the bound <code>IsDarkMode</code> + the toggle. As
-          an <code>InteractiveServer</code>-only host it has no WASM boundary, but it still reads the cookie for consistency.</p>
+          (not even <code>MMCATheme</code>); it now renders the framework&#39;s <code>&lt;MmcaThemeProviders /&gt;</code>
+          (<code>MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:6</code>) plus <code>&lt;CultureSwitcher /&gt;</code> and
+          <code>&lt;ThemeToggle /&gt;</code> in its own <code>MudAppBar</code> (<code>MainLayout.razor:13-14</code>), so the theme, the bound
+          <code>IsDarkMode</code> and the whole lifecycle come from the shared component rather than being restated in
+          the host. As an <code>InteractiveServer</code>-only host it has no WASM boundary, but it still reads the
+          cookie for consistency.</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -272,8 +284,12 @@
           <li><strong>The same FOUC hazard as locale is not yet closed for theme.</strong> The SSR <code>data-theme</code>/inline-script read is
           unimplemented (Decision 3), so the first paint can briefly flash the wrong theme before the post-render JS
           interop corrects it; there is no free no-flash for InteractiveAuto.</li>
-          <li><strong>Helpdesk&#39;s custom layout</strong> had to be touched separately because it does not inherit Common&#39;s
-          <code>MainLayout</code>; future hosts that fork the layout inherit the same obligation.</li>
+          <li><strong>Helpdesk&#39;s custom layout</strong> is still wired separately because it does not inherit Common&#39;s
+          <code>MainLayout</code>, but the obligation is now two component tags (<code>&lt;MmcaThemeProviders /&gt;</code> plus
+          <code>&lt;ThemeToggle /&gt;</code>) rather than a provider block and its lifecycle: the layout&#39;s own comment
+          (<code>MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:4-5</code>) records that the four Mud providers
+          and the Day/Dark lifecycle belong to <code>MmcaThemeProviders</code> and that the layout carries only Helpdesk
+          chrome. Future hosts that fork the layout inherit that same two-tag obligation.</li>
           <li><strong>Per-user persistence adds a column</strong> to the Identity <code>User</code> (folded into the ADR-027 migration, so no
           extra migration), and a profile-edit surface.</li>
           </ul>

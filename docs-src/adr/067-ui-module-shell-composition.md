@@ -3,7 +3,8 @@
 ## Status
 Accepted (2026-08-07). Revised 2026-08-29: records the component-vendor choice (MudBlazor) that the
 Context already scoped to this ADR, and the `IToastService` / `IAppDialogService` facades that keep
-the vendor out of call sites.
+the vendor out of call sites. Revised 2026-08-31: records that the two facade registrations live in
+their own `AddCommonUiFacades()` call, shared by `AddUIShared` and the shipped bUnit base.
 
 ## Context
 ADR-059 decided how a module plugs into the **server**: an `IModule` implementation is discovered by
@@ -60,7 +61,7 @@ Ship the application shell in the framework package and let each module plug int
   layout.
 - **Registration is one call.** `AddUIModule<TModule>()` runs the Scrutor scan for the module's entity
   services and then registers the descriptor as a singleton `IUIModule`
-  (`MMCA.Common.UI/DependencyInjection.cs:152-162`); modules with extra services register the
+  (`MMCA.Common.UI/DependencyInjection.cs:185-194`); modules with extra services register the
   descriptor directly with `AddSingleton<IUIModule, TModule>()` after their own registrations
   (`MMCA.Common.UI/Notifications/DependencyInjection.cs:39`,
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:69`).
@@ -73,15 +74,19 @@ Ship the application shell in the framework package and let each module plug int
   five severities every component library exposes and is fire-and-forget by design (during SSR
   pre-render there is no toast host, so the call is a silent no-op); `IAppDialogService` is one
   `ConfirmAsync`, where dismissing the prompt counts as declining, so a caller only ever branches on
-  `true`. `AddUIShared` TryAdd-registers `MudToastService` and `MudAppDialogService` over MudBlazor's
-  `ISnackbar` and `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:91-92`), so the vendor type
-  appears in exactly one implementation per contract, and the framework helpers that raise a toast or
-  ask a question (`ResultUiExtensions.NotifyOnFailure`, `ListPageActions.DeleteWithConfirmationAsync`)
-  take the facade. Richer, entity-specific dialogs stay component-side (`DeleteConfirmation`).
+  `true`. Both facades are registered by one extracted call, `AddCommonUiFacades()`, which
+  TryAdd-registers `MudToastService` and `MudAppDialogService` over MudBlazor's `ISnackbar` and
+  `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:140-145`). `AddUIShared` calls it (`:88`),
+  and so does the shipped bUnit base
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:53`),
+  so a component test resolves the two contracts without pulling in the rest of the shared-UI surface.
+  The vendor type therefore appears in exactly one implementation per contract, and the framework
+  helpers that raise a toast or ask a question (`ResultUiExtensions.NotifyOnFailure`,
+  `ListPageActions.DeleteWithConfirmationAsync`) take the facade. Richer, entity-specific dialogs stay component-side (`DeleteConfirmation`).
 
 - **Blazor Web heads feed the same enumeration to the endpoint side.** `MapRazorComponents<App>()`
   takes the module assemblies from `GetServices<IUIModule>()` in addition to the shell assemblies
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:186-200`, which also de-duplicates, and
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:195-209`, which also de-duplicates, and
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:201-212`), so the router's view and the
   endpoint's view of the routable assemblies come from one source.
 
@@ -93,15 +98,15 @@ Conference, Identity and Engagement
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/CatalogUIModule.cs:13`,
 `Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:16`, `Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:13`);
 the framework's own notification module
-(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:14`); and the
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15`); and the
 backend-less component gallery, whose stub descriptor is the only reason its `/components` page is
-routable (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:13`,
-registered at `GalleryHost.cs:85`). Two adopters are **host-only**: ADC's `DeviceUIModule` adds the
+routable (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:14`,
+registered at `GalleryHost.cs:90`). Two adopters are **host-only**: ADC's `DeviceUIModule` adds the
 MAUI-only device settings page plus the deep-link listener
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:19`, registered at `MauiProgram.cs:121`), and
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:19`, registered at `MauiProgram.cs:157`), and
 Store's `MauiUIModule` contributes no nav and no pages at all, existing purely to hang the native
 theme sync on the layout extension point (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:14`,
-registered at `MauiProgram.cs:72`). MMCA.Helpdesk deliberately does **not** adopt this: the seed's
+registered at `MauiProgram.cs:80`). MMCA.Helpdesk deliberately does **not** adopt this: the seed's
 Blazor head owns its own `Routes.razor` and `MainLayout` and never calls `AddUIShared`, because it has
 no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:25-28`).
 
@@ -150,7 +155,7 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:11-29`).
 - **Blazor Web heads wire the assemblies twice.** The router's `AdditionalAssemblies` and the
   endpoint's `AddAdditionalAssemblies` are separate calls, so both hosts repeat the enumeration in
-  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:186-200`, `MMCA.Store.UI.Web/Program.cs:201-212`); they
+  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:195-209`, `MMCA.Store.UI.Web/Program.cs:201-212`); they
   derive it from the same `IUIModule` registrations, but the duplication is real.
 - **The reference seed does not demonstrate the pattern.** Helpdesk's hand-rolled shell means an
   adopter following it gets the framework's components but not this composition model.

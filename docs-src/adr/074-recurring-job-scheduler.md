@@ -1,7 +1,7 @@
 # ADR-074: Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)
 
 ## Status
-Accepted (2026-08-13; revised 2026-08-14, 2026-08-18). The implementation lands in the MMCA.Common "enterprise capability wave" release
+Accepted (2026-08-13; revised 2026-08-14, 2026-08-18, 2026-08-31). The implementation lands in the MMCA.Common "enterprise capability wave" release
 and is opt-in: a host calls `AddScheduledJobs(configuration)` and sets `Scheduler:Enabled`. Until it does,
 the framework creates no table and starts no runner.
 
@@ -29,9 +29,10 @@ scheduling product (Hangfire or Quartz.NET) or to extend the durable polling loo
 ### The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET
 A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
 outbox claims a batch with an `ExecuteUpdateAsync` that sets `LockedUntil` and `LockToken` in one statement
-(`.../Persistence/Outbox/OutboxProcessor.cs:447-448`, inside `ClaimEligibleAsync`, `:432`) over a `Where` that
-admits only rows whose `LockedUntil` is null or already in the past (`:444-446`), then re-reads the claimed
-set by `LockToken` so a partial claim processes only its own rows (`:459-461`). A due job is claimed the same way, so two replicas can
+(`.../Persistence/Outbox/OutboxProcessor.cs:478-479`, inside `ClaimEligibleAsync`, `:454`) over a shared
+`FilterClaimable` predicate that admits only rows whose `LockedUntil` is null or already in the past
+(`:533-535`), then re-reads the claimed
+set by `LockToken` so a partial claim processes only its own rows (`:490-493`). A due job is claimed the same way, so two replicas can
 never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.
 
 Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
@@ -60,8 +61,8 @@ carries `JobName` (the primary key), `CronExpression`, `NextRunOn`, `LastRunOn`,
 `LastDurationMs`, `LockedUntil` and `LockToken`. It is deliberately **not** an `IAuditableEntity`: it
 self-stamps nothing, it is never soft-deleted, and no global query filter reaches it. That falls out of the
 mapping rather than being asserted: the soft-delete filter is applied only to entity types assignable to
-`IAuditableEntity` (`.../Persistence/DbContexts/ApplicationDbContext.cs:339`, `:348`), and
-`ConfigureScheduler` maps the table with no `HasQueryFilter` call of its own (`:538-563`). That is the
+`IAuditableEntity` (`.../Persistence/DbContexts/ApplicationDbContext.cs:370`, `:379`), and
+`ConfigureScheduler` maps the table with no `HasQueryFilter` call of its own (`:594-619`). That is the
 `OutboxMessage` precedent: infrastructure rows are not domain rows.
 
 The table lives in the **Default** source and only there. The outbox exists once per relational database
@@ -95,23 +96,24 @@ job that must run for every window is not served by this scheduler.
 rather than at 03:00.
 
 `SchedulerMetrics` (`.../Infrastructure/Scheduling/SchedulerMetrics.cs:16`) follows the same conventions as
-`OutboxMetrics` (`.../Persistence/Outbox/OutboxMetrics.cs:15`) under
+`OutboxMetrics` (`.../Persistence/Outbox/OutboxMetrics.cs:16`) under
 [ADR-041](041-observability-and-telemetry.md): one meter per subsystem, never a second `Meter` with the
 same name, and outcomes carried as tags rather than as separate instruments. It is not an
 instrument-for-instrument copy. The scheduler emits **one** counter, `RunCounter`, tagged by `job` and by
 `outcome` (`Succeeded`, `Failed`, `Skipped`), so a failure rate is that counter split by tag rather than a
 second instrument (`:28`), plus two histograms: `DurationHistogram` for execution time in seconds (`:39`)
 and `LagHistogram` for lag, actual start minus `NextRunOn` (`:50`). The outbox carries a different set for
-its own shape: two counters, `DeadLetterCounter` and `ProcessedCounter` (`OutboxMetrics.cs:32`, `:38`), one
-histogram, `DispatchLagHistogram` (`:48`), and a `PendingDepthGauge` observable gauge (`:66`) that the
-scheduler has no counterpart for, because backlog depth is a question about a queue and a schedule has no
-queue.
+its own shape: two counters, `DeadLetterCounter` and `ProcessedCounter` (`OutboxMetrics.cs:41`, `:47`), one
+histogram, `DispatchLagHistogram` (`:57`), and two observable gauges, `PendingDepthGauge` for backlog depth
+(`:75`) and `OldestPendingAgeGauge` for the age of the oldest row still awaiting dispatch, per `data_source`
+(`:98`). The scheduler has a counterpart for neither, because depth and backlog age are questions about a
+queue and a schedule has no queue.
 
 Registration is two calls. `AddScheduledJobs(configuration)` binds the settings and registers the runner;
 `AddScheduledJob<TJob>()` adds one job from any module, using the accumulate-across-modules idiom that
 `AddPermissions` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:54`)
 and its `EnsurePermissionRegistry` helper (`:68`) already establish. That registration takes **no schedule
-argument** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:339`): the schedule is
+argument** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:426`): the schedule is
 the job's own `CronExpression` property, and the one way to retime a shipped job without a release is
 configuration, the `Scheduler:Jobs:{Name}:Cron` section bound by `SchedulerSettings.Jobs`
 (`.../Infrastructure/Settings/SchedulerSettings.cs:54-60`) into `ScheduledJobOverrideSettings.Cron` (`:74`).
@@ -126,7 +128,7 @@ the next occurrence recomputed from the current instant, with a row whose expres
 `DesignTimeDbContextOptions.EnableScheduler`
 (`.../Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:41`) is the design-time mirror of
 `Scheduler:Enabled`, and `DesignTimeDbContextHelper` feeds it to the context as a fixed
-`SchedulerSettings` (`.../Design/DesignTimeDbContextHelper.cs:82-83`). Without that flag the design-time
+`SchedulerSettings` (`.../Design/DesignTimeDbContextHelper.cs:136-137`). Without that flag the design-time
 model diverges from the runtime model and `dotnet ef` breaks for every consumer.
 
 ### The framework dogfoods it

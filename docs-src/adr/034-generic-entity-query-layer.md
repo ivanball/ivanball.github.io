@@ -6,10 +6,13 @@ covers `long`/`long?` via `LongFilterStrategy`. Amended (2026-07-25): the keyed
 by-id fast path is named `TryGetFastPathIncludes` in code; citations rebased.
 **Extended by [ADR-099](099-generic-write-side-entity-commands.md)** (2026-08-29, v1.170.0): the write
 half this record left at create and delete gains a generic update, through an
-`IEntityUpdateApplier` the module implements, an `UpdateEntityCommand` / `UpdateEntityHandler` pair,
+`IEntityUpdateCommandApplier` the module implements, an `UpdateEntityCommand` / `UpdateEntityHandler` pair,
 an `AddEntityCrud` registration for all three verbs, and a `CrudEntityControllerBase` carrying the
 PUT. The PUT ships on a **new derived base** rather than on `AggregateRootEntityControllerBase`, whose
 generic arity is deliberately unchanged; everything below is untouched.
+Revised (2026-08-31): the update-applier interface is named `IEntityUpdateCommandApplier`
+(`Source/Core/MMCA.Common.Application/UseCases/IEntityUpdateCommandApplier.cs:38`); source
+citations below rebased to their current lines.
 
 ## Context
 Every module exposes many entities, and most of them need the same read and write
@@ -33,14 +36,14 @@ contract, supplied by two controller bases over a shared query pipeline.
 
 1. **Generic read controller.** `EntityControllerBase<TEntity, TEntityDTO,
    TIdentifierType>`
-   (`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:35`,
+   (`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:36`,
    `[ApiController]` / `[Route("[controller]")]` / `[ApiVersion("1.0")]` at
-   `EntityControllerBase.cs:32-34`) exposes four core GET routes for any entity
+   `EntityControllerBase.cs:33-35`) exposes four core GET routes for any entity
    (plus a `[HttpGet("export")]` CSV action inserted between the paged and lookup
-   routes): `[HttpGet]` list (`EntityControllerBase.cs:101`), `[HttpGet("paged")]`
-   (`EntityControllerBase.cs:140`), `[HttpGet("lookup")]` for id/name dropdown
-   entries (`EntityControllerBase.cs:348`), and `[HttpGet("{id}")]`
-   (`EntityControllerBase.cs:378`).
+   routes): `[HttpGet]` list (`EntityControllerBase.cs:106`), `[HttpGet("paged")]`
+   (`EntityControllerBase.cs:153`), `[HttpGet("lookup")]` for id/name dropdown
+   entries (`EntityControllerBase.cs:371`), and `[HttpGet("{id}")]`
+   (`EntityControllerBase.cs:410`).
 
 2. **Generic write controller.** `AggregateRootEntityControllerBase<TEntity,
    TEntityDTO, TIdentifierType, TCreateRequest>`
@@ -53,7 +56,7 @@ contract, supplied by two controller bases over a shared query pipeline.
    not create a duplicate (ADR-017).
 
 3. **Sparse fieldsets via `fields`.** A comma-separated `fields` query parameter
-   (`EntityControllerBase.cs:105`, `:149`, `:387`) drives a server-side projection:
+   (`EntityControllerBase.cs:110`, `:162`, `:419`) drives a server-side projection:
    `QueryFieldService.ApplyFieldSelection`
    (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:229`) builds a
    `MemberInit` expression that selects only the requested writable properties so
@@ -61,19 +64,19 @@ contract, supplied by two controller bases over a shared query pipeline.
 
 4. **Dynamic per-type filtering.** The paged route binds
    `Dictionary<string, (string Operator, string Value)> filters` through
-   `[ModelBinder(typeof(QueryFilterModelBinder))]` (`EntityControllerBase.cs:152`),
+   `[ModelBinder(typeof(QueryFilterModelBinder))]` (`EntityControllerBase.cs:165`),
    which parses `filters[Property].operator` / `filters[Property].value` query keys
    (`Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:24`).
    `QueryFilterService.ApplyFilters`
-   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:76`)
+   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:77`)
    resolves a `IFilterStrategy`
    (`Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6`)
    per property CLR type from a strategy registry (string, bool, int, long, DateTime,
-   decimal, Guid and their nullables, `QueryFilterService.cs:29-45`), each strategy
+   decimal, Guid and their nullables, `QueryFilterService.cs:31-47`), each strategy
    declaring its `SupportedOperators` (`IFilterStrategy.cs:24`). Extra types register
-   via `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:60`).
+   via `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:61`).
 
-5. **Sort.** `sortColumn` / `sortDirection` (`EntityControllerBase.cs:147-148`)
+5. **Sort.** `sortColumn` / `sortDirection` (`EntityControllerBase.cs:160-161`)
    feed `QueryFieldService.ApplySorting` (`QueryFieldService.cs:155`), an
    `OrderBy("<col> ascending|descending")` over the entity property the DTO name
    maps to.
@@ -96,7 +99,7 @@ contract, supplied by two controller bases over a shared query pipeline.
    caller that omits pagination cannot trigger an unbounded full-table load.
 
 8. **Two include paths.** `includeFKs` / `includeChildren`
-   (`EntityControllerBase.cs:106-107` for the list overload, `:145-146` for the
+   (`EntityControllerBase.cs:111-112` for the list overload, `:158-159` for the
    paged overload) select navigation loading. `EntityQueryPipeline`
    (`EntityQueryPipeline.cs:13`) runs PATH 1 for source-supported includes via EF
    Core `.Include()` translated to SQL (`EntityQueryPipeline.cs:128-134`) and PATH 2
@@ -111,7 +114,7 @@ contract, supplied by two controller bases over a shared query pipeline.
 - **Bounded dynamic querying, not open SQL.** Filtering is dynamic over the wire but
   not unbounded in the engine: each property is filtered only by a registered
   `IFilterStrategy` whose `SupportedOperators` are validated before the database is
-  touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:111`,
+  touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:119`,
   invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:266`),
   and `MaxUnboundedResultLimit` (`EntityQueryPipeline.cs:23`) plus the `MaxPageSize`
   clamp (`EntityControllerBase.cs:168`) bound the result size.
@@ -133,7 +136,7 @@ contract, supplied by two controller bases over a shared query pipeline.
 - **Dynamic filtering is an injection and over-fetch surface.** Arbitrary
   client-supplied property/operator/value triples are an attack surface; it is
   bounded by validating properties and operators up front
-  (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:111`), routing each
+  (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:119`), routing each
   type through its registered `IFilterStrategy` rather than free-form expression
   evaluation, and capping rows with `MaxUnboundedResultLimit`
   (`EntityQueryPipeline.cs:23`). Sparse fieldsets reject non-writable properties at
@@ -143,7 +146,7 @@ contract, supplied by two controller bases over a shared query pipeline.
   purpose-built endpoint; the query contract (filter key syntax, operators) must be
   learned once rather than read off each endpoint.
 - **Opting out means overriding the base.** All four reads and the two writes are
-  `virtual` (`EntityControllerBase.cs:104`, `AggregateRootEntityControllerBase.cs:63`),
+  `virtual` (`EntityControllerBase.cs:109`, `AggregateRootEntityControllerBase.cs:63`),
   so a controller that needs bespoke behavior overrides the specific action rather
   than abandoning the base, but the default surface is opt-out, not opt-in.
 
@@ -151,7 +154,7 @@ contract, supplied by two controller bases over a shared query pipeline.
 ADR-001 (manual DTO mapping: the generic controllers project through
 `IEntityDTOMapper`), ADR-002 (navigation populators: the unsupported-include path),
 ADR-013 (Result pattern at the edge: every action returns through
-`HandleFailure(result.Errors)`, `EntityControllerBase.cs:121`), ADR-017 (idempotency:
+`HandleFailure(result.Errors)`, `EntityControllerBase.cs:128`), ADR-017 (idempotency:
 the generic create is `[Idempotent]`, `AggregateRootEntityControllerBase.cs:59`),
 ADR-019 (rate limiting: these GET routes are the authenticated read surface the
 always-on global limiter caps per principal).

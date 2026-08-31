@@ -10,7 +10,9 @@ surface extensions complete the record by closing the shapes that still forced a
 (a mutation context carrying side data plus an idempotent-no-op short circuit, a payload-returning
 mutate base, attempt-scope parity on the mutate path, an extensible `DeleteEntityHandler`, and a
 verb-discriminated command with a command-aware applier). Still additive: every existing subclass,
-command and applier compiles and behaves exactly as before. See the Revision at the end.
+command and applier compiles and behaves exactly as before. See the Revision at the end. Revised
+2026-08-31: both consumer applications run on the extended surface from their own `main`, so the
+closing note records adoption in production rather than a branch.
 
 ## Context
 ADR-034 records the read side of the generic resource layer and stops one verb short. Its
@@ -65,7 +67,7 @@ Ship the generic write side as four additive pieces plus a registration helper.
    - It implements `ICommandWithRequest<TUpdateRequest>` (`:50`), so the framework's validator bridge
      registers a `CommandRequestValidator<TCommand, TRequest>`
      (`Source/Core/MMCA.Common.Application/Validation/CommandRequestValidator.cs:19`) for it
-     automatically (`Source/Core/MMCA.Common.Application/DependencyInjection.cs:247-259`). A module
+     automatically (`Source/Core/MMCA.Common.Application/DependencyInjection.cs:252-268`). A module
      writes `IValidator<TUpdateRequest>` and nothing else; the command is validated before the
      transaction opens, by the same Validating decorator every hand-written command goes through
      (ADR-014).
@@ -76,14 +78,14 @@ Ship the generic write side as four additive pieces plus a registration helper.
 
 3. **One generic update handler, on the existing base.**
    `UpdateEntityHandler<TEntity, TEntityDTO, TIdentifierType, TUpdateRequest>`
-   (`Source/Core/MMCA.Common.Application/UseCases/UpdateEntityHandler.cs:37`) derives from the
-   DTO-returning `MutateEntityHandlerBase` (`MutateEntityHandlerBase.cs:192`) and overrides three
-   members: the id (`UpdateEntityHandler.cs:57`), the row version (`:65`), and `MutateAsync`, which
-   is a single delegation to the applier (`:73-81`). It is left unsealed so a module can subclass it
+   (`Source/Core/MMCA.Common.Application/UseCases/UpdateEntityHandler.cs:48`) derives from the
+   DTO-returning `MutateEntityHandlerBase` (`MutateEntityHandlerBase.cs:342`) and overrides three
+   members: the id (`UpdateEntityHandler.cs:68`), the row version (`:76`), and `MutateAsync`, which
+   is a single delegation to the applier (`:84-92`). It is left unsealed so a module can subclass it
    to declare the `Includes` a particular aggregate's mutation needs, or to add a `[LoggerMessage]`
    partial, without giving up the shared workflow (`:15-21`). `HandlerName` reports the open handler
-   name so a `NotFound` failure reads the same as the hand-written handler it replaces (`:54`).
-   **It raises no events of its own** (`:22-26`): domain events belong to the aggregate's mutation
+   name so a `NotFound` failure reads the same as the hand-written handler it replaces (`:65`).
+   **It raises no events of its own** (`:33-37`): domain events belong to the aggregate's mutation
    methods, which the applier calls, and a handler that published anything would fire on the generic
    path and stay silent on a hand-written one (ADR-083).
 
@@ -95,9 +97,9 @@ Ship the generic write side as four additive pieces plus a registration helper.
 
 5. **One registration call per aggregate.**
    `AddEntityCrud<TEntity, TEntityDTO, TIdentifierType, TCreateRequest, TUpdateRequest>()`
-   (`Source/Core/MMCA.Common.Application/DependencyInjection.cs:313`) registers the create, update
-   and delete handlers closed over that aggregate's types (`:321-331`). Two properties are
-   deliberate (`:293-301`):
+   (`Source/Core/MMCA.Common.Application/DependencyInjection.cs:318`) registers the create, update
+   and delete handlers closed over that aggregate's types (`:326-336`). Two properties are
+   deliberate (`:298-306`):
    - **Closed, not open-generic**, because Scrutor's `TryDecorate` wraps concrete service types: an
      open `ICommandHandler<,>` registration would resolve completely undecorated and
      `VerifyDecoratorPipeline()` could not see it.
@@ -105,7 +107,7 @@ Ship the generic write side as four additive pieces plus a registration helper.
      a delete that must load its children first) registers its own handler for that verb before this
      call and keeps the generic pair for the other two.
 
-   It calls `ThrowIfPipelineSealed` (`:319`), so registering after `AddApplicationDecorators()` fails
+   It calls `ThrowIfPipelineSealed` (`:324`), so registering after `AddApplicationDecorators()` fails
    loudly rather than leaving three handlers unwrapped (ADR-014).
 
 6. **PUT ships on a new derived controller base, not on the shipped one.**
@@ -130,7 +132,7 @@ Ship the generic write side as four additive pieces plus a registration helper.
 - **Invariants and events keep exactly one home.** The applier calls the aggregate's guarded methods,
   so a generic PUT raises the same `{Entity}Changed` event with the same state discriminator a
   hand-written handler would (ADR-083), and a refused invariant stops the write before the save
-  (`MutateEntityHandlerBase.cs:148-151`).
+  (`MutateEntityHandlerBase.cs:293-295`).
 - **A new base beats a wider one.** Adding a fifth type parameter to the shipped base would break
   every consumer's controllers at compile time in exchange for one action. Inheritance costs one word
   in a class declaration for the controllers that want the verb and nothing at all for those that do
@@ -164,9 +166,10 @@ Ship the generic write side as four additive pieces plus a registration helper.
 - **Nothing in the framework opts a consumer in: every registration is a line the module writes.**
   Adoption is per aggregate and partial. ADC's Conference module registers it for `Category`,
   `Activity` and `Sponsor`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:140-142`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:139-141`),
   Store's Catalog for `Product` (one call per field-scoped update request) and `Category`
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:67-71`),
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:68-72`,
+  `:79`),
   and Store's Identity for `Customer`
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:65-67`),
   each call placed after the convention scan so `TryAdd` leaves the hand-written handlers those
@@ -210,7 +213,7 @@ neither keeps overriding what it always overrode and never sees the context. It 
 workflow answers with the mutated aggregate, so a value the mutation computed on the way (the
 pre-mutation state, the blob the write is about to orphan) had nowhere to go except handler instance
 state, which a scoped handler must not carry between calls (`MutationContext.cs:12-17`).
-`SkipSave()` is read in the workflow itself (`MutateEntityHandlerBase.cs:295-296`): the command
+`SkipSave()` is read in the workflow itself (`MutateEntityHandlerBase.cs:299-300`): the command
 returns the loaded aggregate as a success, with no save, no `LogMutated` and no `OnMutatedAsync`,
 because an already-satisfied request (remove an avatar that is not there) is a success and must not
 log a mutation that did not happen. The one behavioral note for anyone writing a new handler is that
@@ -219,15 +222,15 @@ exactly one of the two overloads, and overriding neither throws at the call site
 (`:117-119`).
 
 **2. A payload-returning mutate base.**
-`MutateEntityPayloadHandlerBase<TCommand, TEntity, TIdentifierType, TResultPayload>` (`:383`) is the
-third mutate flavor beside the bare-`Result` one (`:315`) and the refreshed-DTO one (`:338`), for a
+`MutateEntityPayloadHandlerBase<TCommand, TEntity, TIdentifierType, TResultPayload>` (`:387`) is the
+third mutate flavor beside the bare-`Result` one (`:319`) and the refreshed-DTO one (`:342`), for a
 command whose response is a purpose-built envelope rather than the aggregate's DTO. `TResultPayload`
 is unconstrained, and the subclass builds the answer in `BuildResult(entity, command, context)`
-(`:414`), called only on success (`:399-401`), reading both the mutated aggregate and whatever the
+(`:418`), called only on success (`:403-405`), reading both the mutated aggregate and whatever the
 mutation wrote into the context. That pair is the point: a pre-mutation value reaches the response
 without handler instance state. It is a sibling type rather than a fourth type parameter on the DTO
 flavor because generic types overload by arity alone and a four-parameter `MutateEntityHandlerBase`
-already exists (`:376-377`).
+already exists (`:378-381`).
 
 **3. Attempt-scope parity on the mutate path.** `MutateCoreAsync(attemptUnitOfWork, command, token)`
 (`:253`) and its context-taking overload (`:269`) take the unit of work as a parameter, exactly as the
@@ -262,9 +265,9 @@ command that the three-parameter form cannot express.
   TApplier>` (`UpdateEntityHandler.cs:115`) injects that applier by its concrete type (`:117`), which
   the module scan registers alongside its interfaces, and reports a `HandlerName` naming the verb so
   two verbs produce distinguishable `NotFound` failures (`:133`). Registration is one
-  `AddEntityUpdateVerb<...>()` per verb (`DependencyInjection.cs:380`), `TryAdd` like `AddEntityCrud`
-  (`:388`) and bridging the verb's command to `IValidator<TUpdateRequest>` (`:394`). The wire shape
-  does not move: same route, same request DTO.
+  `AddEntityUpdateVerb<...>()` per verb (`DependencyInjection.cs:376`), `TryAdd` like `AddEntityCrud`
+  (`:384-388`) and bridging the verb's command to `IValidator<TUpdateRequest>` (`:390-392`). The
+  wire shape does not move: same route, same request DTO.
 - *A command carrying state beside the request.* `UpdateEntityCommand<TEntity, TUpdateRequest,
   TIdentifierType>` is no longer sealed (`UpdateEntityCommand.cs:46`, rationale at `:26-35`), so a
   module derives a positional record that adds a route-derived child id, a server-decided flag or a
@@ -276,11 +279,11 @@ command that the three-parameter form cannot express.
   and still answers with a bare `Result` for the same reason the request-only applier does (`:29-32`).
   `UpdateEntityCommandHandler<TCommand, ...>` (`UpdateEntityHandler.cs:185`) runs it on the shared
   workflow, delegating through the context-aware `MutateAsync` (`:218-223`), and
-  `AddEntityUpdate<TCommand, ...>()` registers the pair (`DependencyInjection.cs:431`).
-- Both helpers call `ThrowIfPipelineSealed` (`:386`, `:437`) like `AddEntityCrud`, and both call the
-  new `AddCommandRequestValidator<TCommand, TRequest>()` (`:464`): the explicit form of the bridge the
+  `AddEntityUpdate<TCommand, ...>()` registers the pair (`DependencyInjection.cs:427`).
+- Both helpers call `ThrowIfPipelineSealed` (`:382`, `:433`) like `AddEntityCrud`, and both call the
+  new `AddCommandRequestValidator<TCommand, TRequest>()` (`:460`): the explicit form of the bridge the
   module scan applies by reflection, for a command the scan cannot see because it is a closed generic
-  constructed at registration time. It is `TryAdd` (`:467`), so an explicit `IValidator<TCommand>`
+  constructed at registration time. It is `TryAdd` (`:463`), so an explicit `IValidator<TCommand>`
   still wins, and registering it with no `IValidator<TRequest>` present is harmless.
 - Post-load, pre-mutate work needs no new hook. A subclass that has to stamp `SetOriginalRowVersion`
   on a tracked child row (ADR-035's second token, which the base's root-stamping `RowVersion` hook
@@ -321,10 +324,22 @@ shape rather than where a handler happens to be long.
   transaction boundary inside a base class.
 
 Nothing in the framework opts a consumer in, which is unchanged from the original decision: adoption
-stays per aggregate, per verb, and partial, and `TryAdd` keeps a hand-written handler in place. What
-shipped in v1.172.0 is the framework surface. Consumer adoption of these five is carried on
-`feature/write-side-generics-adoption` in MMCA.ADC and MMCA.Store and is on neither app's `main`, so
-nothing about either deployed application changed with this release.
+stays per aggregate, per verb, and partial, and `TryAdd` keeps a hand-written handler in place. Both
+consumer applications run on these surfaces. MMCA.ADC serves its speaker update through a
+command-aware applier
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/Update/SpeakerUpdateApplier.cs:13-14`)
+registered with `AddEntityUpdate`
+(`.../MMCA.ADC.Conference.Application/DependencyInjection.cs:163`); its session, event and room
+writes sit on the payload base
+(`.../Sessions/UseCases/Update/UpdateSessionHandler.cs:23`,
+`.../Events/UseCases/Update/UpdateEventHandler.cs:22`,
+`.../Events/UseCases/AddRoom/AddRoomHandler.cs:28`), as does the avatar write
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/SetUserAvatar/SetUserAvatarHandler.cs:27`),
+and the avatar removal takes the mutation context on the bare-`Result` base
+(`.../Users/UseCases/RemoveUserAvatar/RemoveUserAvatarHandler.cs:19`, `:31`). MMCA.Store registers
+the verb discriminator for the two inventory verbs that share one request DTO
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/DependencyInjection.cs:78-79`). Those
+writes run the generic path in production; the four kinds listed above are what stays outside it.
 
 ### What these cost
 

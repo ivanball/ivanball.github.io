@@ -92,7 +92,7 @@ MMCA.Common is a published package family released in lockstep
 ([ADR-016](016-lockstep-versioning-masstransit-pin.md)), the framework share of that count
 is a breaking public-API change that all three consumers must absorb in a single sweep, and the
 identifier type is a generic parameter on `BaseEntity<TIdentifierType>`
-(`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:14`), `IBaseDTO<TIdentifierType>`
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34`), `IBaseDTO<TIdentifierType>`
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IBaseDTO.cs:9`) and
 `IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOMapper.cs:14`)

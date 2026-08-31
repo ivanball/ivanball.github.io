@@ -37,10 +37,10 @@ Several questions had no recorded answer:
 ### A fourth `SaveChangesInterceptor`, resolved optionally, running last
 `AuditTrailSaveChangesInterceptor` (Infrastructure `Persistence/AuditTrail/`) joins the interceptors
 `ApplicationDbContext.OnConfiguring` already passes to `optionsBuilder.AddInterceptors`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:236-260`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:256-278`,
 where `AuditSaveChangesInterceptor` and `DomainEventSaveChangesInterceptor` are resolved with
-`GetRequiredService` and the tenant and audit-trail interceptors with `GetService`). The new one is
-resolved with `GetService`, not `GetRequiredService` (`:258`): a host that never calls `AddAuditTrail`
+`GetRequiredService` (`:256-257`) and the tenant and audit-trail interceptors with `GetService`). The new
+one is resolved with `GetService`, not `GetRequiredService` (`:278`): a host that never calls `AddAuditTrail`
 resolves null, nothing is added to the pipeline, and the feature costs nothing.
 
 **Registration order is execution order and it is load-bearing.** After the wave the sequence is
@@ -86,8 +86,8 @@ ADR-070 fail-fast chain, and `AddAuditTrail(configuration)` in Infrastructure's 
 registers the interceptor and the settings together.
 
 ### The table lives in every relational source that adopts it
-`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:304`) calls
-`ConfigureAuditTrail(modelBuilder)` (`:326`, the method itself at `:572`), gated on the settings flag
+`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:331`) calls
+`ConfigureAuditTrail(modelBuilder)` (`:353`, the method itself at `:628`), gated on the settings flag
 resolved from the root provider the way the interceptors are, creating an `AuditTrailEntries` table with
 an index on
 `(EntityType, EntityKey, ChangedOn)`. A same-transaction write requires the table in the same database as

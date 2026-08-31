@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -215,7 +218,9 @@
           Revised 2026-08-27 (v1.164.0): the <strong>UI layer deviation is retired</strong>. <code>MMCA.Common.UI</code> services
           return <code>Result</code> end to end instead of throwing, the severity ranking is hoisted into
           <code>MMCA.Common.Shared</code> so the HTTP and gRPC edges classify one aggregate identically, and the round
-          trip back into <code>Result</code> is a shipped reader rather than a per-service convention.</p>
+          trip back into <code>Result</code> is a shipped reader rather than a per-service convention.
+          Revised 2026-08-31: the catch-all exception handler now maps <code>CrossTenantWriteException</code> to HTTP 400
+          ahead of its 500 fallback, so a write refused at the tenant boundary reads as a caller fault.</p>
           <h2 id="context">Context</h2>
           <p>Operations at every layer fail in <em>expected</em> ways: input is invalid, a domain invariant is broken, a
           requested entity is missing, a uniqueness conflict occurs, the caller lacks permission. There are two
@@ -237,7 +242,7 @@
           request was well formed and permitted, the server could not complete it,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:36-41</code>): it maps to HTTP 500
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:30</code>) and to gRPC
-          <code>Internal</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:45</code>), and it
+          <code>Internal</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:46</code>), and it
           is explicitly not for business-rule violations, which is what keeps the other eight categories
           caller-fixable (<code>ErrorType.cs:38-39</code>, factory at <code>.../Shared/Abstractions/Error.cs:114-115</code>).</p>
           </li>
@@ -270,7 +275,7 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35-60</code>) maps an
           <code>ErrorType</code> to an HTTP status through a <code>FrozenDictionary</code> (<code>ErrorHttpMapping.cs:20-31</code>, resolved at
           <code>ApiControllerBase.cs:48</code>) and returns an RFC 9457 ProblemDetails body carrying <strong>all</strong> errors
-          (<code>:50-58</code>, projection at <code>ErrorHttpMapping.cs:112-120</code>). gRPC does the equivalent over the wire
+          (<code>:50-58</code>, projection at <code>ErrorHttpMapping.cs:61-69</code>). gRPC does the equivalent over the wire
           (<code>GrpcResultExceptionInterceptor</code>, ADR-007) from a mirrored table (<code>Validation</code>/<code>Invariant</code>/<code>Failure</code>
           to <code>InvalidArgument</code>, <code>NotFound</code> to <code>NotFound</code>, <code>Conflict</code> to <code>Aborted</code>, <code>Unauthorized</code> to
           <code>Unauthenticated</code>, <code>Forbidden</code> to <code>PermissionDenied</code>, <code>UnprocessableEntity</code> to <code>FailedPrecondition</code>,
@@ -330,7 +335,18 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ValidationExceptionHandler.cs:28,33,48-54</code>).</li>
           <li><code>GlobalExceptionHandler</code> (registered last) is the catch-all that turns any remaining unhandled
           exception into HTTP 500
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:26-28</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:67-80</code>,
+          status set at <code>:69</code>). It maps exactly one exception by type before that fallback: a
+          <code>CrossTenantWriteException</code> (the save-time tenant-boundary rejection,
+          <code>.../MMCA.Common.Infrastructure/Persistence/Interceptors/CrossTenantWriteException.cs:24</code>) is a
+          caller fault rather than a server fault and is answered with HTTP 400, logged at warning rather
+          than error because a tenant-scoped API refusing an untenanted write is routine (<code>:47-64</code>, the
+          warning at <code>:51</code>, the 400 at <code>:53</code>). The special case sits inside the catch-all rather than in
+          its own handler because the exception derives from <code>InvalidOperationException</code>, so no handler
+          ahead of this one claims it, and every other save-time invariant failure of that family still
+          ends at the 500 (<code>:13-19</code>). The response body names no tenant id and no entity type: echoing
+          either would tell an unauthorized caller which tenant owns the row it just tried to write, so
+          the detail is a fixed string and the full failure stays in the log (<code>:31-39</code>).</li>
           </ul>
           </li>
           </ul>

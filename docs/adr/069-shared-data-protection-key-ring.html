@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -223,9 +226,9 @@
           antiforgery tokens; both are DataProtection payloads. ADR-008 then split the monolith into
           independently scaled hosts, and in ADC the two hosts that mint those payloads (the UI host and the
           Identity service, which also does OAuth correlation and state cookie cryptography) both run at
-          <code>maxReplicas: 2</code> (<code>MMCA.ADC/infra/main.bicep:1228</code> Identity service, <code>:1860</code> UI host). Only the
+          <code>maxReplicas: 2</code> (<code>MMCA.ADC/infra/main.bicep:1177</code> Identity service, <code>:1806</code> UI host). Only the
           Identity service runs with <strong>no session affinity</strong>; the UI ingress is sticky
-          (<code>MMCA.ADC/infra/main.bicep:1782-1783</code>), which narrows the UI window rather than closing it, since
+          (<code>MMCA.ADC/infra/main.bicep:1725-1726</code>), which narrows the UI window rather than closing it, since
           affinity is lost on a replica restart, a revision swap, or a dropped affinity cookie.</p>
           <p>Nothing in the record decided <strong>where the key ring lives</strong>. ADR-061 decides how a running app reaches
           a secret (Key Vault reference resolved by a managed identity) and ADR-045 decides that blob storage is
@@ -261,60 +264,60 @@
           Crypto User role, because that role assignment is granted out of band and can lag a deployment.
           Folding the second step into the first would turn an optional hardening gap into a total
           authentication outage. The deployment template records the same reasoning as a follow-up
-          (<code>MMCA.ADC/infra/main.bicep:847-850</code>), and no deployed app sets <code>DataProtection__KeyVaultKeyUri</code>
+          (<code>MMCA.ADC/infra/main.bicep:802-805</code>), and no deployed app sets <code>DataProtection__KeyVaultKeyUri</code>
           today, so gate 2 is configured nowhere: the key ring is persisted but not encrypted at rest.</li>
           <li><strong>One <code>DefaultAzureCredential</code> instance serves both sinks</strong> (<code>DataProtectionExtensions.cs:68</code>), so
           they share a single token cache. A deployed host authenticates with its managed identity and a
           developer machine falls back to the local Azure CLI or Visual Studio sign-in; ADC pins <strong>which</strong>
-          identity with <code>AZURE_CLIENT_ID</code> on both adopting apps (<code>MMCA.ADC/infra/main.bicep:1148</code>, <code>:1816</code>).</li>
+          identity with <code>AZURE_CLIENT_ID</code> on both adopting apps (<code>MMCA.ADC/infra/main.bicep:1097</code>, <code>:1759</code>).</li>
           <li><strong>ADC adopts it on exactly the two hosts that mint the payloads.</strong> The Identity service calls it
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:126</code>) and so does the Web UI host
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:111</code>) and so does the Web UI host
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:40</code>). Neither call sits immediately after
           <code>AddServiceDefaults()</code>: <code>AddCommonKeyVaultConfiguration()</code> deliberately sits between them in both
-          hosts (UI host <code>:30</code> -&gt; <code>:38</code> -&gt; <code>:40</code>; Identity service <code>:111</code> -&gt; <code>:119</code> -&gt; <code>:126</code>), because
+          hosts (UI host <code>:30</code> -&gt; <code>:38</code> -&gt; <code>:40</code>; Identity service <code>:96</code> -&gt; <code>:104</code> -&gt; <code>:111</code>), because
           <code>ConfigurationManager</code> loads each source as it is added, so the vault has to be layered in before
           anything reads the blob URI out of configuration. The Conference, Engagement, Notification and
           Gateway hosts do not call it at all, because they mint neither a session cookie nor an antiforgery
           token.</li>
           <li><strong>In ADC, infrastructure provisions one private container, not a new storage account.</strong>
           <code>dataprotection-keys</code> is created on the existing avatar storage account with <code>publicAccess: &#39;None&#39;</code>
-          (<code>MMCA.ADC/infra/main.bicep:832-838</code>), deliberately unlike the public <code>avatars</code> container beside it,
+          (<code>MMCA.ADC/infra/main.bicep:787-793</code>), deliberately unlike the public <code>avatars</code> container beside it,
           and both apps are pointed at <code>.../dataprotection-keys/keys.xml</code> with the shared discriminator
-          <code>MMCA.ADC</code> (<code>:1146-1147</code>, <code>:1814-1815</code>), unconditionally. No extra role assignment is needed: the
+          <code>MMCA.ADC</code> (<code>:1095-1096</code>, <code>:1757-1758</code>), unconditionally. No extra role assignment is needed: the
           ADR-045 Storage Blob Data Contributor grant is scoped to the storage <strong>account</strong>, so it already
-          covers this container (<code>:845-846</code>). That grant is itself guarded by <code>grantAvatarStorageRole</code>,
-          default <code>false</code>, because the deploy identity deliberately lacks role-assignment rights (<code>:113</code>,
-          <code>:840-848</code>).</li>
+          covers this container (<code>:800-801</code>, <code>:808</code>). That grant is itself guarded by <code>grantAvatarStorageRole</code>,
+          default <code>false</code>, because the deploy identity deliberately lacks role-assignment rights (<code>:122</code>,
+          <code>:806-814</code>).</li>
           <li><strong>The Azure dependencies live in the Aspire package only.</strong>
           <code>Azure.Extensions.AspNetCore.DataProtection.Blobs</code> and <code>.Keys</code> are referenced by
-          <code>MMCA.Common.Aspire</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/MMCA.Common.Aspire.csproj:27-28</code>)
-          and pinned centrally (<code>MMCA.Common/Directory.Packages.props:95-96</code>), alongside a direct
+          <code>MMCA.Common.Aspire</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/MMCA.Common.Aspire.csproj:28-29</code>)
+          and pinned centrally (<code>MMCA.Common/Directory.Packages.props:114-115</code>), alongside a direct
           <code>System.Security.Cryptography.Xml</code> pin that lifts that chain&#39;s transitive off a vulnerable version
-          for consumers without the ASP.NET Core framework reference (<code>Directory.Packages.props:101</code>).</li>
+          for consumers without the ASP.NET Core framework reference (<code>Directory.Packages.props:120</code>).</li>
           </ul>
           <p><strong>Both consumers have now adopted it (2026-08-13).</strong> MMCA.Store originally had no call site and no
           <code>DataProtection</code> configuration anywhere in the repo, even though its UI and Identity container apps
-          also run at <code>maxReplicas: 2</code> (<code>MMCA.Store/infra/main.bicep:1513</code> UI host, <code>:1101</code> Identity
+          also run at <code>maxReplicas: 2</code> (<code>MMCA.Store/infra/main.bicep:1447</code> UI host, <code>:1038</code> Identity
           service). Its UI host now calls <code>AddCommonDataProtection()</code> immediately after <code>AddServiceDefaults()</code>
           (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:76</code>, <code>:82</code>), and the infrastructure side has
           landed and is live. Store diverges from ADC in three ways worth recording:</p>
           <ul>
           <li><strong>A new dedicated storage account, not a reused one.</strong> Store has no public-blob workload to share an
           account with, so the template provisions its own <code>Standard_LRS</code> account <code>dataProtectionStorage</code> with
-          <code>allowBlobPublicAccess: false</code> (<code>MMCA.Store/infra/main.bicep:794-812</code>) and its own private
-          <code>dataprotection-keys</code> container (<code>:819-825</code>).</li>
+          <code>allowBlobPublicAccess: false</code> (<code>MMCA.Store/infra/main.bicep:746-764</code>) and its own private
+          <code>dataprotection-keys</code> container (<code>:771-777</code>).</li>
           <li><strong>The blob URI is gated behind a readiness flag.</strong> <code>DataProtection__ApplicationName=&#39;MMCA.Store&#39;</code>
-          (<code>:1496</code>) and <code>AZURE_CLIENT_ID</code> (<code>:1498</code>) are unconditional, but
+          (<code>:1430</code>) and <code>AZURE_CLIENT_ID</code> (<code>:1432</code>) are unconditional, but
           <code>DataProtection__BlobStorageUri</code> is appended only when the <code>dataProtectionStorageReady</code> parameter is
-          true (default <code>false</code> at <code>:93</code>, concatenated at <code>:1499-1501</code>). The flag exists because
+          true (default <code>false</code> at <code>:89</code>, concatenated at <code>:1433-1435</code>). The flag exists because
           <code>AddCommonDataProtection</code> gates on the presence of the URI, never on reachability: wiring the URI
           before the data-plane grant exists would 403 on the first protect call rather than degrade. That
           flag has since been flipped true in production: the deploy workflow passes
           <code>&quot;dataProtectionStorageReady&quot;: {&quot;value&quot;: true}</code> in its base parameters
-          (<code>MMCA.Store/.github/workflows/deploy.yml:961</code>).</li>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1039</code>).</li>
           <li><strong>Its own role-assignment guard.</strong> The Storage Blob Data Contributor grant is guarded by Store&#39;s
-          own <code>grantDataProtectionStorageRole</code> parameter (default <code>false</code> at <code>:90</code>), with the account-scoped
-          role assignment at <code>:843</code>, deliberately separate from the readiness flag above: one says whether
+          own <code>grantDataProtectionStorageRole</code> parameter (default <code>false</code> at <code>:86</code>), with the account-scoped
+          role assignment at <code>:795-803</code>, deliberately separate from the readiness flag above: one says whether
           THIS deployment creates the grant, the other says whether the grant already exists.</li>
           </ul>
           <p>The framework side needed no change at all: the whole delta was one call site plus infrastructure,

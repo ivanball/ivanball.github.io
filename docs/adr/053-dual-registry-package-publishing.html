@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -216,10 +219,14 @@
           reservation has been granted, so the Decision now records it as done rather than pending. See also
           <a href="101-common-metapackage.html">ADR-101</a> (2026-08-29, v1.170.0): the <code>MMCA.Common</code> metapackage joins the
           set published to both registries from the same tag, with no workflow change; it shortens the install
-          line this record made credential-free from six references to one.</p>
+          line this record made credential-free from six references to one. Revised (2026-08-31): the
+          per-package counts this record used to spell out are replaced by a pointer to
+          <code>MMCA.Common/FACTS.md:19-38</code> (generated and CI-gated, so it cannot drift), and the fork behavior is
+          corrected to what <code>release.yml</code> actually does.</p>
           <h2 id="context">Context</h2>
-          <p>The fifteen <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release. That
-          was the right default while the framework had exactly one consumer group (this account&#39;s own
+          <p>The <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release (the package
+          list and its count are generated and CI-gated in <code>MMCA.Common/FACTS.md:19-38</code>, so this record links
+          to them rather than restating them). That was the right default while the framework had exactly one consumer group (this account&#39;s own
           repositories), which already authenticate to GitHub for other reasons.</p>
           <p>It stopped being right the moment the framework was documented publicly. GitHub Packages&#39; <strong>NuGet</strong>
           registry requires a personal access token with <code>read:packages</code> for a restore, <strong>even when the
@@ -244,10 +251,15 @@
           <p>Every release publishes to <strong>both</strong> registries, from the same tag, in the same workflow run.</p>
           <ul>
           <li><code>release.yml</code> keeps its existing <code>dotnet nuget push</code> to <code>https://nuget.pkg.github.com/ivanball/index.json</code>
-          unchanged, and gains a second push to <code>https://api.nuget.org/v3/index.json</code> with
-          <code>--skip-duplicate</code>. Both the main (ubuntu) job and the MAUI (windows) job push to both registries,
-          so the lockstep release stays whole across all fifteen packages (ADR-042 splits the MAUI package
-          into its own job).</li>
+          unchanged (<code>release.yml:68</code>, <code>:149</code>), and gains a second push to <code>https://api.nuget.org/v3/index.json</code>
+          with <code>--skip-duplicate</code> (<code>release.yml:88</code>, <code>:165</code>). Both the main (ubuntu) job and the MAUI (windows)
+          job push to both registries, so the lockstep release stays whole across every published id: the
+          packable projects in <code>MMCA.Common.slnx</code> (<code>MMCA.Common.slnx:8-29</code>) ship from the ubuntu job, and
+          <code>MMCA.Common.UI.Maui</code> ships from the windows job (ADR-042 splits the MAUI package into its own
+          job). <code>MMCA.Common/FACTS.md:19-38</code> is the source of truth for that set. Two build comments still
+          name an older count in prose (<code>release.yml:90</code> calls <code>MMCA.Common.UI.Maui</code> &quot;the 15th package&quot;,
+          <code>Directory.Build.props:68</code> says &quot;fifteen csproj files&quot;); both are descriptive text with no effect
+          on what packs or pushes.</li>
           <li><strong>Authentication to nuget.org is trusted publishing, not a stored API key.</strong> Each publishing job
           requests a GitHub OIDC token (<code>permissions: id-token: write</code>) and exchanges it through
           <code>NuGet/login@v1</code> for an API key valid for one hour, immediately before the push. No long-lived
@@ -260,8 +272,12 @@
           <li><strong>One policy covers both jobs</strong>, because it keys on the workflow file rather than the job. Each
           job still needs its own <code>id-token: write</code> permission and its own exchange: a short-lived key is
           single-use and cannot cross a job boundary.</li>
-          <li>The nuget.org steps are guarded by <code>github.repository_owner == &#39;ivanball&#39;</code>, so a fork completes a
-          full GitHub Packages release instead of failing on an exchange it can never satisfy.</li>
+          <li>The nuget.org steps are guarded by <code>github.repository_owner == &#39;ivanball&#39;</code> (<code>release.yml:80</code>,
+          <code>:87</code>, <code>:156</code>, <code>:163</code>), so a fork skips the trusted-publishing exchange it can never satisfy
+          instead of failing on it. The guard covers the nuget.org steps only. The GitHub Packages push
+          target is hardcoded to the <code>ivanball</code> namespace (<code>release.yml:68</code>, <code>:149</code>), which a fork&#39;s own
+          <code>GITHUB_TOKEN</code> has no write scope for, so a fork&#39;s run reaches that push and fails there. Releasing
+          from a fork is therefore not a path this workflow supports on either registry.</li>
           <li><strong>The <code>MMCA.</code> ID prefix reservation has been granted</strong> (2026-07-28), so the ids are protected from
           being taken by anyone else: every published <code>MMCA.Common.*</code> id reports <code>verified: true</code> in the
           nuget.org search index, where it reported <code>verified: false</code> while the request was pending.
@@ -292,8 +308,8 @@
           is still there, so the step still runs, and the release fails at the push. Trusted publishing
           removes the rotation obligation rather than scheduling it.</li>
           <li><strong>The owner guard beats a secret-presence guard.</strong> It states the actual condition (this is the
-          canonical repository) instead of inferring it from configuration, and it keeps a fork&#39;s release
-          working.</li>
+          canonical repository) instead of inferring it from configuration, and it keeps the exchange from
+          running anywhere the policy could not authorize it.</li>
           <li><strong>nuget.org is irreversible per version, so the conservative scope is right.</strong> <code>--skip-duplicate</code>
           keeps a re-run idempotent, and starting clean avoids publishing a long tail of old versions that
           nobody asked for and that can never be deleted (only unlisted).</li>
@@ -329,7 +345,7 @@
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning: every package ships at one version, so both registries receive the
-          same fifteen ids per release),
+          same set of ids per release, enumerated in <code>MMCA.Common/FACTS.md:19-38</code>),
           ADR-038 (supply-chain provenance: the SBOM hard gate, lock files, and vulnerability audit that all
           run before either push; keyless publishing extends that posture to the credential itself),
           ADR-042 (the MAUI package&#39;s separate windows job, which needs the same dual push to keep the

@@ -39,7 +39,7 @@ Cache in two tiers, each with its own substrate.
   Caching decorators, `LoginProtectionService`) depends only on this interface, never on a concrete
   cache or on Redis.
 - **The backing store is chosen at startup, not in code (amended by ADR-077).** `AddCaching()`
-  (`MMCA.Common.Infrastructure/DependencyInjection.cs:177`, called from `AddInfrastructure`) registers
+  (`MMCA.Common.Infrastructure/DependencyInjection.cs:215`, called from `AddInfrastructure`) registers
   `DistributedCacheService` when a real `IDistributedCache` is present (one that is not the in-memory
   `MemoryDistributedCache`, i.e. Aspire registered Redis), and otherwise `MemoryCacheService`. The
   monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
@@ -57,12 +57,12 @@ Cache in two tiers, each with its own substrate.
   below.
 - **A short default TTL bounds staleness.** The 30 seconds is one figure with one home:
   `CacheOptions.DefaultDuration` (`= TimeSpan.FromSeconds(30)`,
-  `MMCA.Common.Infrastructure/Caching/CacheOptions.cs:17`), a bare `TimeSpan` so that an
+  `MMCA.Common.Infrastructure/Caching/CacheOptions.cs:23`), a bare `TimeSpan` so that an
   implementation which does not speak `DistributedCacheEntryOptions` (`HybridCacheService`, whose
   entry options are its own type, ADR-077) defaults to the same policy instead of hard-coding a
   second 30 seconds. `CacheOptions.DefaultExpiration` is that duration expressed as an absolute
   expiration (`AbsoluteExpirationRelativeToNow = DefaultDuration`,
-  `MMCA.Common.Infrastructure/Caching/CacheOptions.cs:22-25`); callers may override per entry. The
+  `MMCA.Common.Infrastructure/Caching/CacheOptions.cs:28-31`); callers may override per entry. The
   short default means even a prefix invalidation that cannot reach every replica (memory mode, or
   distributed mode without a multiplexer) self-heals within seconds.
 
@@ -95,8 +95,8 @@ Cache in two tiers, each with its own substrate.
   `AddOutputCache` defaults to a per-replica in-memory store, so a tag eviction reaches only the replica
   that served the mutation. Both adopters now register a shared store inside the same
   redis-connection-string conditional that wires Tier 1: ADC Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:156`) and Store Catalog
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:117`) both call
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:140`) and Store Catalog
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:96`) both call
   `builder.Services.AddStackExchangeRedisOutputCache(...)`. `AddOutputCache` registers its store with
   `TryAdd`, so the explicit registration wins regardless of call order, and with no Redis configured the
   in-memory store still applies, which is correct at a single replica. ADR-040's 2026-07-25 amendment
@@ -128,13 +128,13 @@ Cache in two tiers, each with its own substrate.
   container. All seven services now register `AddRedisClient("redis")` immediately alongside
   `AddRedisDistributedCache("redis")`, gated by the same redis-connection-string conditional, precisely so
   the multiplexer is present for SCAN-based prefix eviction (ADC Conference
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:140,145`, Notification
-  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:114,119`, Engagement
-  `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:111,116`, Identity
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:131,136`; Store Catalog
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94,99`, Sales
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:111,116`, Identity
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:100,105`). Those seven are the
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:124,129`, Notification
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:98,103`, Engagement
+  `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:95,100`, Identity
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:116,121`; Store Catalog
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:73,78`, Sales
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:89,94`, Identity
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:78,83`). Those seven are the
   whole set: a sweep of both repos' `Source/` trees for `AddRedisDistributedCache` /
   `AddRedisClient` finds no eighth registration. So whenever Redis is
   configured, prefix-based invalidation against Redis is live and cached entries are evicted on write; the
@@ -146,9 +146,9 @@ Cache in two tiers, each with its own substrate.
   `ICacheService.IncrementAsync` is a default interface member implemented as a read-modify-write
   (`MMCA.Common.Application/Interfaces/ICacheService.cs:59`), and `DistributedCacheService` overrides it
   with the same read-modify-write shape rather than Redis `INCR`
-  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:127-133`). The reason is a storage
+  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:146-152`). The reason is a storage
   format mismatch, documented at the implementation
-  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:108-126`): `INCR` writes a Redis
+  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:127-145`): `INCR` writes a Redis
   string, while `StackExchangeRedisCache` stores every entry as a Redis hash (`absexp` / `sldexp` /
   `data`, read back with `HMGET`). An `INCR`-written counter therefore makes the next read of that key
   fail with `WRONGTYPE`, which surfaces as a 500 on whatever endpoint owns the counter (registration and
@@ -350,7 +350,7 @@ One substrate correction plus a line-anchor re-verification. No decision and no 
    preceding revision treated its predecessor: the anchors it recorded were correct on 2026-08-07 and
    have since drifted again.
 
-Items 3, 4 and 6 of this entry were correct on 2026-08-14 and have since drifted, and item 4's
+Items 1, 3, 4 and 6 of this entry were correct on 2026-08-14 and have since drifted, and item 4's
 `WebApplicationExtensions.cs` home no longer exists at all: read the entry as the state on that date,
 and the 2026-08-23 entry below for the current anchors.
 
@@ -367,9 +367,9 @@ invalidation that crossed a boundary was the expiry clock.
 
 ### An integration event carries the eviction
 `OutputCacheEvictionRequested`
-(`MMCA.Common/Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:27`) is
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:29`) is
 a sealed record over `BaseIntegrationEvent` whose only own member is
-`IReadOnlyList<string> Tags { get; init; } = []` (`:35`), inheriting `SchemaVersion => 1`
+`IReadOnlyList<string> Tags { get; init; } = []` (`:37`), inheriting `SchemaVersion => 1`
 (`.../DomainEvents/BaseIntegrationEvent.cs:32`) and therefore ADR-010's versioning contract. It is the
 **first concrete integration event the framework itself ships**: a repository-wide search of `Source/`
 finds no other, every prior hit being the interface, the abstract base or generic plumbing. Until now
@@ -479,4 +479,44 @@ One correction of substance plus a line-anchor re-verification. No decision and 
    `:109-113`), `OutputCacheEvictionExtensions.cs:32` and `:36-38`, `OutputCacheEvictionHandler.cs:32`
    and `:44-63`, `OutputCacheMetrics.cs:19` and `:29-37`, and `MMCA.Common.Aspire/Extensions.cs:169`.
 5. **The 2026-08-14 anchor claim is annotated rather than removed**, consistent with how every
+   preceding revision treated its predecessor.
+
+Item 4's "re-checked and unchanged" list did not hold: `CacheOptions`, both adopters'
+`AddStackExchangeRedisOutputCache` calls, all seven paired Redis registrations and the
+`DistributedCacheService` counter anchors have all moved since. Read items 1 and 4 as the state on
+2026-08-23, and the 2026-08-31 entry below for the current anchors.
+
+## Revision (2026-08-31)
+Line anchors only, re-verified against the current source. No decision, no behavior, and no
+substantive prose changed.
+
+1. **`AddCaching`.** Now at `MMCA.Common.Infrastructure/DependencyInjection.cs:215` (from `:177`);
+   line 177 is now inside `AddInfrastructure`, at its `IOutboxSignal` registration. The
+   presence-of-a-real-`IDistributedCache` swap it describes is unchanged.
+2. **`CacheOptions`.** `DefaultDuration` is at `CacheOptions.cs:23` (from `:17`, now a line of the
+   doc comment above it) and `DefaultExpiration`'s
+   `AbsoluteExpirationRelativeToNow = DefaultDuration` at `:28-31` (from `:22-25`). The figure is
+   still 30 seconds and still has exactly one home.
+3. **Tier 2.** ADC Conference's `AddStackExchangeRedisOutputCache(...)` is at `Program.cs:140` (from
+   `:156`) and Store Catalog's at `Program.cs:96` (from `:117`).
+4. **Trade-offs, the seven paired Redis registrations.** All seven moved up: ADC Conference to
+   `Program.cs:124,129` (from `:140,145`), Notification to `Program.cs:98,103` (from `:114,119`),
+   Engagement to `Program.cs:95,100` (from `:111,116`), Identity to `Program.cs:116,121` (from
+   `:131,136`); Store Catalog to `Program.cs:73,78` (from `:94,99`), Sales to `Program.cs:89,94`
+   (from `:111,116`), Identity to `Program.cs:78,83` (from `:100,105`). The 2026-08-14 exhaustiveness
+   check still holds: a sweep of both repos' `Source/` trees for `AddRedisDistributedCache` /
+   `AddRedisClient` returns these same fourteen call sites and no eighth service.
+5. **Counter anchors.** `DistributedCacheService`'s `IncrementAsync` override is now at
+   `DistributedCacheService.cs:146-152` (from `:127-133`) and the storage-format-mismatch `<remarks>`
+   documenting it at `:127-145` (from `:108-126`); the old range now falls inside the unrelated
+   `RemoveByPrefixAsync` (its no-multiplexer warning and Redis SCAN delete). The read-modify-write
+   behavior and the reason for it are unchanged, and `ICacheService.cs:54-57` / `:59` were re-checked
+   and still hold, so item 1 of the 2026-08-23 entry stands as written.
+6. **The eviction event.** `OutputCacheEvictionRequested`'s declaration is at `:29` and `Tags` at
+   `:37` (from `:27` and `:35`), both pushed down two lines by the
+   `[EventName("Common.OutputCacheEvictionRequested.v1")]` attribute now sitting on the type (`:28`)
+   and the `using` it needs (`:1`). Re-checked and unchanged: `IntegrationEventConsumerExtensions.cs:108-110` and `:78-90`, and
+   the Tier 2 policy anchors (`OutputCacheOptionsExtensions.cs:20`,
+   `PublicEndpointOutputCachePolicy.cs:35`, `:71-75`, `:109-113`).
+7. **The 2026-08-23 anchor claim is annotated rather than removed**, consistent with how every
    preceding revision treated its predecessor.

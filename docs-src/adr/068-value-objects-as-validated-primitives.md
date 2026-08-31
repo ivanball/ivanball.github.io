@@ -1,7 +1,9 @@
 # ADR-068: Value Objects as Validated Domain Primitives
 
 ## Status
-Accepted (2026-08-07).
+Accepted (2026-08-07). Revised 2026-08-31 (`Money`'s non-validating construction paths named, `Currency`'s
+converter counted among the serialization annotations, `Address` added to the adopted set, and the Store/ADC
+anchors refreshed).
 
 ## Context
 A domain model has two kinds of small type: the **identity** of a thing, and a **value** the thing
@@ -34,9 +36,18 @@ Model a domain value that carries an invariant as an **immutable record value ob
 - **The constructor is private; the factory returns `Result<T>`.** `Email.Create` (`Email.cs:30`),
   `PhoneNumber.Create` (`PhoneNumber.cs:30`), `Address.Create` (`Address.cs:69`), `Money.Create`
   (`Money.cs:67`), `DateRange.Create` (`DateRange.cs:30`) and `DateTimeRange.Create`
-  (`DateTimeRange.cs:31`) are the only public way to build one; `Currency` is a closed set resolved by
-  `Currency.FromCode` (`Currency.cs:41`). This is ADR-013 applied below the aggregate: an invalid value
-  is a failed `Result`, never an exception and never a constructed-but-wrong instance.
+  (`DateTimeRange.cs:31`) are the **validating entrance**, and for `Email`, `PhoneNumber`, `Address`,
+  `DateRange` and `DateTimeRange` they are also the only public entrance at all; `Currency` is a closed
+  set resolved by `Currency.FromCode` (`Currency.cs:41`). This is ADR-013 applied below the aggregate: an
+  invalid value is a failed `Result`, never an exception and never a constructed-but-wrong instance.
+  `Money` is the exception, deliberately: it also exposes construction sugar that composes
+  already-valid parts and so skips `Create` entirely, `Money.Zero()` (`Money.cs:142`), `Money.Zero(Currency)`
+  (`:147`), `operator *` (`:96`) and `Multiply` (`:124`). The fitness rule below governs the `Create` name
+  only and says so in its own contract (`ArchitectureRules.Entities.cs:49-51`), so nothing stops a value
+  object from shipping such a path. What holds it together is that the sugar takes no raw string: a
+  `Currency` argument can only have come from `Currency.FromCode` or `Currency.All`, and the `None`
+  sentinel is `internal` (`Currency.cs:23`), so an external caller still cannot assemble a `Money` whose
+  currency was never checked.
 - **That factory shape is fitness-enforced, not conventional.** `ArchitectureRules.DomainFactoriesReturnResult`
   (`Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Entities.cs:53-79`) walks every
   concrete class in the Domain and Shared layers and fails the build when a public static `Create`
@@ -85,28 +96,34 @@ Model a domain value that carries an invariant as an **immutable record value ob
   does. `DateRange` and `DateTimeRange` carry no serialization annotations.
 - **gRPC is mapped by hand, not inferred.** `Money` crosses a service boundary as a purpose-built
   `MoneyV1` message with a **string** amount (proto has no decimal) and a currency code
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:70,73`),
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:81,83,86`),
   translated by `MoneyFromWire`
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:126`)
-  and `MoneyToWire` (`:157`).
-  `MoneyFromWire` honors the empty-code sentinel only when the amount is also zero and returns null
-  for a malformed entry rather than failing the whole batch (`:135-140`).
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:146`)
+  and `MoneyToWire` (`:177`).
+  `MoneyFromWire` honors the empty-code sentinel only when the amount is also zero (`:155-160`) and
+  returns null for a malformed entry, which the calling loop skips rather than failing the whole batch
+  (`:121-126`).
 - **Adoption is real but partial.** Store maps `ProductVariant.Price`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:21`) with
   `OwnsMoney` (`.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:31`),
   and `Order.Total` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:37`) is
-  seeded with `Money.Zero()` (`:77`) and accumulated through `Money.Add` (`:109`), mapped
-  `required: false` (`OrderConfiguration.cs:26`) alongside `OrderLine.UnitPrice`
-  (`OrderLineConfiguration.cs:28`). Store Identity maps `Customer.Email` through `EmailValueConverter`
-  and `Customer.Address` through a hand-rolled `OwnsOne` block (`CustomerConfiguration.cs:36,43`), and
-  `User.Email` the same way (`UserConfiguration.cs:24`). ADC types `User.Email` as `Email`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38`, validated through
-  `Email.Create` at `:171` and passed to the constructor at `:185`) with
+  seeded with `Money.Zero()` in the private constructor (`:90`) and accumulated through `Money.Add`
+  (`:122`, assigned back at `:126`), mapped `required: false` (`OrderConfiguration.cs:26`) alongside
+  `OrderLine.UnitPrice` (`OrderLineConfiguration.cs:28`). Store Identity types `Customer.Address` as the
+  framework `Address`
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:39`) and maps
+  `Customer.Email` through `EmailValueConverter` with `Customer.Address` through a hand-rolled `OwnsOne`
+  block (`CustomerConfiguration.cs:36,43`), and `User.Email` the same way (`UserConfiguration.cs:24`).
+  ADC types `User.Email` as `Email`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:39`, validated through
+  `Email.Create` at `:166` and passed to the constructor at `:180`, with the same pair repeated on the
+  social-login path at `:207,218`) with
   the same converter (`.../Identity.Infrastructure/.../UserConfiguration.cs:21`) and a speaker's
   optional email through `NullableEmailValueConverter`
-  (`.../Conference.Infrastructure/.../SpeakerConfiguration.cs:43`). `Money` and `Email` are the two
-  that got adopted: no code under `MMCA.Store/Source` or `MMCA.ADC/Source` uses `PhoneNumber`,
-  `DateRange` or `DateTimeRange`, and MMCA.Helpdesk adopts none of them at all.
+  (`.../Conference.Infrastructure/.../SpeakerConfiguration.cs:43`). `Money`, `Email` and `Address` are the
+  three that got adopted, with `Currency` riding along inside `Money`: no code under `MMCA.Store/Source`
+  or `MMCA.ADC/Source` uses `PhoneNumber`, `DateRange` or `DateTimeRange`, and MMCA.Helpdesk adopts none
+  of them at all.
 
 ## Rationale
 - **The invariant belongs to the type, not to every caller.** A `string` email can be validated in one
@@ -137,7 +154,10 @@ Model a domain value that carries an invariant as an **immutable record value ob
   class; the rest inline their checks. Only `Money` has a shipped owned-type helper, so every `Address`
   mapping is a hand-copied `OwnsOne` block of six properties
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:43-75`).
-  Only four of the seven carry serialization annotations.
+  Five of the seven carry a serialization attribute, and not the same one: four are
+  `[DataContract]`/`[DataMember]` (`Money`, `Email`, `PhoneNumber`, `Address`) while `Currency` carries
+  `[JsonConverter(typeof(CurrencyJsonConverter))]` (`Currency.cs:13`); only `DateRange` and
+  `DateTimeRange` are annotation-free.
 - **Three of the seven have no consumer.** `PhoneNumber`, `DateRange` and `DateTimeRange` ship with
   invariants, tests and converters but no production usage, so their round-trip behavior is exercised
   only by the framework's own tests.

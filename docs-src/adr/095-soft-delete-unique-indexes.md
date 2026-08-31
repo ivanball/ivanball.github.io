@@ -8,14 +8,14 @@ filter instead of skipping the index).
 ADR-005 makes deletion **soft**: an `IAuditableEntity` sets `IsDeleted = true`
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditableEntity.cs:11`) and a named global
 query filter hides the row from every query
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:336-350`,
-the filter name at `:357`). The application therefore behaves as though the row is gone.
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:367-380`,
+the filter name at `:388`). The application therefore behaves as though the row is gone.
 
 The database does not. A unique index still counts the hidden row, so the deleted record keeps
 occupying its unique slot forever: delete a speaker and the email unique index still refuses to
 create a new speaker with that email, with an error the user cannot act on because the conflicting
 row is invisible to them. That contradiction is stated as the reason for the convention in its own
-remarks (`.../Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:10-21`).
+remarks (`.../Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:10-16`).
 
 The obvious fix, a hand-written `HasFilter("[IsDeleted] = 0")` on each index, is the kind of rule
 that gets forgotten: it lives in a different file from the `IsDeleted` flag, it is engine-specific
@@ -28,14 +28,14 @@ Make the filter a **convention**: every unique index on a soft-deletable entity 
 rows, automatically, in every context of every consumer.
 
 - **A model-finalizing convention, registered once in the base context.**
-  `SoftDeleteUniqueIndexConvention` (`.../Conventions/SoftDeleteUniqueIndexConvention.cs:24`) is added
+  `SoftDeleteUniqueIndexConvention` (`.../Conventions/SoftDeleteUniqueIndexConvention.cs:33`) is added
   by `ApplicationDbContext.ConfigureConventions`
-  (`.../DbContexts/ApplicationDbContext.cs:296`, rationale at `:293-295`). Because ADR-006 keeps one
+  (`.../DbContexts/ApplicationDbContext.cs:323`, rationale at `:320-322`). Because ADR-006 keeps one
   context class per engine over that base, a single registration reaches every module, every database
   and every consumer repo. Nothing opts in per entity.
 - **Scope: unique, non-owned, soft-deletable.** The convention walks entity types assignable to
   `IAuditableEntity` and not owned (`:45-46`, the same predicate the query filter uses at
-  `ApplicationDbContext.cs:339`), then applies the filter to every index that is unique
+  `ApplicationDbContext.cs:370`), then applies the filter to every index that is unique
   (`:48-49`, `:60-63`).
 - **A hand-authored filter is kept and extended, not replaced and not skipped.** An index that
   already declares a predicate keeps it and gains the soft-delete clause appended with `AND` (`:79`),
@@ -60,23 +60,24 @@ rows, automatically, in every context of every consumer.
   workspace wants it, and the alternative (leaving hand-filtered indexes silently un-narrowed) is the
   bug this revision fixes.
 - **One predicate builder serves both paths.** `SoftDeleteFilterSql.Build`
-  (`.../Persistence/SoftDeleteFilterSql.cs:27-38`) is called by the convention (`:47`) and by the
-  public opt-in `HasSoftDeleteFilter`
+  (`.../Persistence/SoftDeleteFilterSql.cs:27-37`) is called by the convention
+  (`SoftDeleteUniqueIndexConvention.cs:56`) and by the public opt-in `HasSoftDeleteFilter`
   (`.../Persistence/Configuration/IndexBuilderExtensions.cs:50-64`), so the automatic and the manual
   path cannot disagree about identifier quoting or about which column carries the flag
-  (`SoftDeleteFilterSql.cs:8-14`). The column name is read from the model, falling back to the
-  property name (`:32-33`), and the quoting is chosen per engine: brackets for SQL Server, double
-  quotes otherwise (`:35-37`).
+  (`SoftDeleteFilterSql.cs:8-14`). The column name is read from the model (`:32`), falling back to the
+  property name (`:57-59`), and the quoting is chosen per engine: brackets for SQL Server, double
+  quotes otherwise (`:34-36`).
 - **SQL Server and SQLite are covered; Cosmos is a no-op.** The convention returns immediately for
-  `DataSource.CosmosDB` (`:33-34`) and the builder returns `null` for it (`SoftDeleteFilterSql.cs:29-30`),
-  which the callers read as "leave the index untouched".
+  `DataSource.CosmosDB` (`SoftDeleteUniqueIndexConvention.cs:42-43`) and the builder returns `null`
+  for it (`SoftDeleteFilterSql.cs:29-30`), which the callers read as "leave the index untouched".
 - **Non-unique indexes opt in by hand.** `HasSoftDeleteFilter` is the extension point for an index the
   convention deliberately skips (a non-unique one), and a unique index that wants to declare the
   combined predicate at its own declaration site uses the same call: the two are joined as
   `{additionalFilter} AND {filter}` (`:60-63`). The framework's own push-notification dedup index does
   exactly that (`PushNotificationConfiguration.cs:68-70`), and since the convention started appending,
   that call is belt and braces rather than the only thing narrowing the index: it produces the same
-  SQL in the same order, and the convention recognizes it and stops (`:62-67`). Store's SKU index
+  SQL in the same order, and the convention recognizes it and stops
+  (`SoftDeleteUniqueIndexConvention.cs:72-75`). Store's SKU index
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:44-46`)
   is the same shape.
 
@@ -146,7 +147,7 @@ at the moment it is called, so a `HasColumnName` on the soft-delete property has
   rather than at delete time.
 - **Engine coverage is partial by construction.** The guarantee exists only where the provider
   supports a filtered or partial index. On Cosmos both paths return without touching the index
-  (`SoftDeleteUniqueIndexConvention.cs:33-34`, `SoftDeleteFilterSql.cs:29-30`), so a Cosmos-backed
+  (`SoftDeleteUniqueIndexConvention.cs:42-43`, `SoftDeleteFilterSql.cs:29-30`), so a Cosmos-backed
   source (ADR-018) does not get this behavior at all, and a model shared across engines gets a
   different uniqueness contract per engine.
 - **The filter is not visible where the index is declared.** Reading

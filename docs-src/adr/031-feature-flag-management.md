@@ -3,7 +3,9 @@
 ## Status
 Accepted (2026-06-27). Revised 2026-08-18 (a targeting-context accessor is now registered, so the
 built-in Targeting and Percentage filters give consistent per-user bucketing across replicas; the
-last Trade-offs entry is narrowed accordingly. See the Revision (2026-08-18) at the end).
+last Trade-offs entry is narrowed accordingly. See the Revision (2026-08-18) at the end). Revised
+2026-08-31 (the targeting identifier is the JWT `sub` claim read through `FindUserIdValue()`, not a
+`user_id` claim; the Revision section is corrected accordingly).
 
 ## Context
 The apps need to decouple *release* from *deploy*: ship code dark, flip a kill switch, or roll a feature
@@ -69,17 +71,22 @@ rollout assigns a user differently on each replica and a user can see a feature 
 between requests.
 
 `CurrentUserTargetingContextAccessor`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:51-52`)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:54-55`)
 implements `ITargetingContextAccessor` and is registered inside `AddAPI` as
 `services.AddFeatureManagement().WithTargeting<CurrentUserTargetingContextAccessor>()`, preceded by
 `AddHttpContextAccessor()` (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:90-92`,
 rationale at `:84-89`). It takes `IHttpContextAccessor` rather than the scoped `ICurrentUserService`
-precisely because `WithTargeting` registers the accessor as a singleton. `UserId` resolves to the
-`user_id` claim falling back to `Identity.Name` (`:86`, claim constant at `:55`), and `Groups` accepts
-role claims under `ClaimTypes.Role`, `"role"` or `"roles"` (`:76-82`), so a rollout can target a role
-as well as a user. An unauthenticated or absent principal yields an empty context rather than an
+precisely because `WithTargeting` registers the accessor as a singleton. `UserId` resolves to the JWT
+`sub` claim through `user.FindUserIdValue()`, falling back to `Identity.Name` (`:86`), and `Groups`
+accepts role claims under `ClaimTypes.Role`, `"role"` or `"roles"` (`:76-82`), so a rollout can target
+a role as well as a user. An unauthenticated or absent principal yields an empty context rather than an
 exception (`:67-74`), which keeps anonymous traffic evaluating to the flag's non-targeted result
-instead of failing.
+instead of failing. `FindUserIdValue`
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:26-28`) reads the raw
+`sub` claim (`AuthClaimTypes.Subject`,
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:25`) and falls back to the mapped
+`ClaimTypes.NameIdentifier` the JWT bearer handler produces, so targeting buckets on exactly the
+identifier `CurrentUserService` and the idempotency filter read.
 
 **No decorator changed.** `FeatureGateCommandDecorator` still depends only on `IFeatureManager` and
 still calls `IsEnabledAsync(featureGated.FeatureName)` with no targeting argument (`:20`, `:51`); the
@@ -88,7 +95,7 @@ surfaces therefore inherit consistent bucketing with no change at either call si
 property that made this a registration-only change.
 
 The Trade-offs entry above is **narrowed, not removed**: bucketing is now consistent across replicas
-for any host that goes through `AddAPI`, but it is only as consistent as the `user_id` claim is
+for any host that goes through `AddAPI`, but it is only as consistent as the `sub` claim is
 stable, and a flag whose filter is configured without a targeting audience still behaves exactly as
 before.
 

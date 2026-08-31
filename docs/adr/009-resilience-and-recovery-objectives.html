@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -302,9 +305,9 @@
           <li><strong>The outbox&#39;s broker publish is now a resilience objective.</strong> <code>OutboxProcessor</code> holds a Polly
           <code>ResiliencePipeline</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:99</code>,
-          built at <code>:639-650</code>) and wraps exactly one call in it, the broker publish (<code>:516-520</code>); the
-          in-process dispatch branch and every database call sit outside it by construction (<code>:88-91</code>,
-          <code>:512-515</code>). Its parameters live beside the HTTP ones as
+          built at <code>:755-766</code>) and wraps exactly one call in it, the broker publish (<code>:596-600</code>); the
+          in-process dispatch branch (<code>:602-605</code>) and every database call sit outside it by construction
+          (<code>:88-91</code>). Its parameters live beside the HTTP ones as
           <code>BrokerResilienceDefaults</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/BrokerResilienceDefaults.cs:24</code>: a 0.5
           failure ratio over a 30-second sampling window, a minimum throughput of 10, and a 15-second break),
@@ -320,7 +323,7 @@
           delay, alongside <code>CommandTimeoutSeconds</code> at <code>:56</code>) already owns retrying at the persistence layer
           and constrains how a user-initiated transaction may be written (<code>:61-63</code>, restated at
           <code>.../Application/Interfaces/Infrastructure/IUnitOfWork.cs:63</code>), which is why the strategy is
-          materialized explicitly in <code>DbContextFactory</code> (<code>:526</code>). A Polly breaker wrapped around a call the
+          materialized explicitly in <code>DbContextFactory</code> (<code>:524</code>). A Polly breaker wrapped around a call the
           strategy is already retrying would either count one logical failure many times or force the
           strategy to be replaced, and replacing it is an EF execution-strategy rework rather than a
           resilience addition. <strong>The EF retry strategy plus the command timeout remains the database

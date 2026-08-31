@@ -79,7 +79,7 @@ machine**, not a hand-rolled orchestrator and not a third-party workflow engine:
 MassTransit is **pinned to v8** and the pin is a build gate
 ([ADR-016](016-lockstep-versioning-masstransit-pin.md)): `MassTransit`, `MassTransit.RabbitMQ` and
 `MassTransit.Azure.ServiceBus.Core` are all held at 8.5.10 in
-`MMCA.Common/Directory.Packages.props:79-81`, because v9 requires a commercial license. The v8 saga
+`MMCA.Common/Directory.Packages.props:95-97`, because v9 requires a commercial license. The v8 saga
 state machine and its EF Core saga repository are fully capable, so the pin does not block the design;
 what it blocks is assuming a future v9 feature, and it means the coordinator inherits the pin's own
 risk. If v8 stops receiving security fixes, a process manager built on it is inside the blast radius

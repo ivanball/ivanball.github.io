@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -241,10 +244,10 @@
           <h3 id="a-fourth-savechangesinterceptor-resolved-optionally-running-last">A fourth <code>SaveChangesInterceptor</code>, resolved optionally, running last</h3>
           <p><code>AuditTrailSaveChangesInterceptor</code> (Infrastructure <code>Persistence/AuditTrail/</code>) joins the interceptors
           <code>ApplicationDbContext.OnConfiguring</code> already passes to <code>optionsBuilder.AddInterceptors</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:236-260</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:256-278</code>,
           where <code>AuditSaveChangesInterceptor</code> and <code>DomainEventSaveChangesInterceptor</code> are resolved with
-          <code>GetRequiredService</code> and the tenant and audit-trail interceptors with <code>GetService</code>). The new one is
-          resolved with <code>GetService</code>, not <code>GetRequiredService</code> (<code>:258</code>): a host that never calls <code>AddAuditTrail</code>
+          <code>GetRequiredService</code> (<code>:256-257</code>) and the tenant and audit-trail interceptors with <code>GetService</code>). The new
+          one is resolved with <code>GetService</code>, not <code>GetRequiredService</code> (<code>:278</code>): a host that never calls <code>AddAuditTrail</code>
           resolves null, nothing is added to the pipeline, and the feature costs nothing.</p>
           <p><strong>Registration order is execution order and it is load-bearing.</strong> After the wave the sequence is
           <code>AuditSaveChangesInterceptor</code> (stamps <code>CreatedBy/On</code> and <code>LastModifiedBy/On</code>), then
@@ -284,8 +287,8 @@
           ADR-070 fail-fast chain, and <code>AddAuditTrail(configuration)</code> in Infrastructure&#39;s <code>DependencyInjection.cs</code>
           registers the interceptor and the settings together.</p>
           <h3 id="the-table-lives-in-every-relational-source-that-adopts-it">The table lives in every relational source that adopts it</h3>
-          <p><code>ApplicationDbContext.OnModelCreating</code> (<code>.../ApplicationDbContext.cs:304</code>) calls
-          <code>ConfigureAuditTrail(modelBuilder)</code> (<code>:326</code>, the method itself at <code>:572</code>), gated on the settings flag
+          <p><code>ApplicationDbContext.OnModelCreating</code> (<code>.../ApplicationDbContext.cs:331</code>) calls
+          <code>ConfigureAuditTrail(modelBuilder)</code> (<code>:353</code>, the method itself at <code>:628</code>), gated on the settings flag
           resolved from the root provider the way the interceptors are, creating an <code>AuditTrailEntries</code> table with
           an index on
           <code>(EntityType, EntityKey, ChangedOn)</code>. A same-transaction write requires the table in the same database as

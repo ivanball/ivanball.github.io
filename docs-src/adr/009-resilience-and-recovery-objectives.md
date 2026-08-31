@@ -75,9 +75,9 @@ both recorded in full in [ADR-087](087-broker-poison-message-handling.md).
 1. **The outbox's broker publish is now a resilience objective.** `OutboxProcessor` holds a Polly
    `ResiliencePipeline`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:99`,
-   built at `:639-650`) and wraps exactly one call in it, the broker publish (`:516-520`); the
-   in-process dispatch branch and every database call sit outside it by construction (`:88-91`,
-   `:512-515`). Its parameters live beside the HTTP ones as
+   built at `:755-766`) and wraps exactly one call in it, the broker publish (`:596-600`); the
+   in-process dispatch branch (`:602-605`) and every database call sit outside it by construction
+   (`:88-91`). Its parameters live beside the HTTP ones as
    `BrokerResilienceDefaults`
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/BrokerResilienceDefaults.cs:24`: a 0.5
    failure ratio over a 30-second sampling window, a minimum throughput of 10, and a 15-second break),
@@ -93,7 +93,7 @@ both recorded in full in [ADR-087](087-broker-poison-message-handling.md).
    delay, alongside `CommandTimeoutSeconds` at `:56`) already owns retrying at the persistence layer
    and constrains how a user-initiated transaction may be written (`:61-63`, restated at
    `.../Application/Interfaces/Infrastructure/IUnitOfWork.cs:63`), which is why the strategy is
-   materialized explicitly in `DbContextFactory` (`:526`). A Polly breaker wrapped around a call the
+   materialized explicitly in `DbContextFactory` (`:524`). A Polly breaker wrapped around a call the
    strategy is already retrying would either count one logical failure many times or force the
    strategy to be replaced, and replacing it is an EF execution-strategy rework rather than a
    resilience addition. **The EF retry strategy plus the command timeout remains the database

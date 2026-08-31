@@ -1,10 +1,12 @@
 # ADR-098: Aspire for Orchestration, Not for Testing or Production Dashboards
 
 ## Status
-Accepted (2026-08-28). Records two standing divergences from the default .NET Aspire path as
-decisions rather than as gaps. Nothing in any repo changes: both parts describe what the four repos
-already do, and the value of writing them down is that a reader (or a new module author) stops
-treating each absence as an oversight to be closed.
+Accepted (2026-08-28). Revised 2026-08-31: the sanctioned nightly AppHost smoke test is implemented,
+so `Aspire.Hosting.Testing` now ships in exactly one place, and every citation below is re-verified
+against current source. Records two standing divergences from the default .NET Aspire path as
+decisions rather than as gaps. Both parts describe what the four repos already do, with the single
+bounded exception recorded in Decision 1, and the value of writing them down is that a reader (or a
+new module author) stops treating each absence as an oversight to be closed.
 
 ## Context
 Aspire is used on exactly two surfaces here.
@@ -13,25 +15,32 @@ Aspire is used on exactly two surfaces here.
 provisions a persistent SQL Server container, one database per service, Redis and the RabbitMQ
 broker, then the four services, the Gateway and the Blazor UI
 (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:1-9`, SQL at `:14-15`, the four databases at
-`:32-35`, Redis at `:39-40`, the broker at `:60`); `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14`
+`:36-39`, Redis at `:43-44`, the broker at `:64-65`); `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14`
 is the same shape over its three services. Service discovery and health-based startup ordering come from Aspire's resource
 model rather than from hand-written wiring.
 
 **Service defaults.** Every host calls `AddServiceDefaults`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39`), which wires OpenTelemetry, the
 default health checks, warm-up readiness (ADR-025), service discovery and the Polly HTTP defaults
-(ADR-009), with `MapDefaultEndpoints` (`:336`) adding `/health` and `/alive`.
+(ADR-009), with `MapDefaultEndpoints` (`:328`) adding `/health` (`:330`), the live-only `/alive`
+(`:334`) and the readiness probe `/health/ready` (`:350`) that ACA ingress holds traffic behind.
 
-Aspire offers two further things this workspace does **not** use, and both read from the outside like
-an unfinished adoption:
+Aspire offers two further things this workspace does **not** adopt, and both read from the outside
+like an unfinished adoption:
 
 1. `DistributedApplicationTestingBuilder` (the `Aspire.Hosting.Testing` package), which boots the
-   whole app model in a test process. It appears in none of the four .NET repos.
+   whole app model in a test process. No integration tier here uses it, and it appears in exactly one
+   project across the four .NET repos: ADC's nightly AppHost composition smoke test, the bounded
+   exception Decision 1 sanctions. The package is pinned at
+   `MMCA.ADC/Directory.Packages.props:87`, referenced only by
+   `MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/MMCA.ADC.AppHost.SmokeTests.csproj:29`,
+   and called in one place (`AppHostCompositionSmokeTests.cs:46`).
 2. The Azure Container Apps Aspire dashboard, the hosted version of the local dashboard, for looking
    at a deployed environment. No ACA dashboard resource or property exists in ADC's infrastructure.
 
-Neither absence is an accident, but until now neither had a record, which is exactly how an
-incidental gap and a deliberate choice become indistinguishable.
+Neither the bounded use nor the outright absence is an accident, but until this record neither had a
+written basis, which is exactly how an incidental gap and a deliberate choice become
+indistinguishable.
 
 ## Decision
 
@@ -82,29 +91,33 @@ loop the current fixtures give.
 brings the app model up and asserts the Gateway's `/health`, on the existing non-gating cross-service
 nightly (`MMCA.ADC/.github/workflows/cross-service-tests.yml:25-31`, never in `deploy.needs` by
 design at `:17-22`). Its job is to catch a broken AppHost composition without putting the app model
-in the gating path. The implementation is the ADC nightly AppHost smoke test (an out-of-slnf test
-project on `cross-service-tests.yml`, `continue-on-error` while its headless behavior on the CI
-runner is unproven); anything beyond that single boot-and-probe is a reversal of this record, not an
-extension of it.
+in the gating path. It ships as a single `[Fact]` that boots the real AppHost through
+`DistributedApplicationTestingBuilder` and polls the gateway until it answers 200
+(`MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AppHostCompositionSmokeTests.cs:42-59`, the
+builder call at `:46`), in a project that sits outside every `.slnx` and `.slnf` and is restored,
+built and run by explicit path in the `apphost-smoke` job (`cross-service-tests.yml:191`, with
+`continue-on-error: true` at `:196` while its headless behavior on the CI runner is unproven).
+Anything beyond that single boot-and-probe is a reversal of this record, not an extension of it.
 
 ### 2. Production observability is workspace-based App Insights, not the ACA Aspire dashboard
 
 - **The sink is workspace-based Application Insights**, backed by the existing Log Analytics
   workspace, with telemetry landing in the workspace tables under its PerGB2018 pricing and retention
-  (`MMCA.ADC/infra/main.bicep:191-208`, the workspace binding at `:206`); hosts export to it through
-  `UseAzureMonitor` whenever the injected connection string is present (`:196-198`, `:214-217`).
+  (`MMCA.ADC/infra/main.bicep:194-204`, the workspace binding at `:201`); hosts export to it through
+  `UseAzureMonitor` whenever the injected connection string is present (`:191-193`, the injected
+  `APPLICATIONINSIGHTS_CONNECTION_STRING` entry at `:209-212`).
 - **The stream is deliberately thinned, and each cut is priced in the template.** Head-based trace
-  sampling keeps 25% (`Telemetry__TracesSampleRatio` = `0.25`, `:223-226`); the OpenTelemetry logging
+  sampling keeps 25% (`Telemetry__TracesSampleRatio` = `0.25`, `:218-221`); the OpenTelemetry logging
   provider ships `Warning` and above while Serilog still writes `Information` to container stdout
-  (`:234-237`); the two highest-volume instrument groups (`http.client.*` gauges and the `dotnet.*`
-  runtime instruments, measured at about 65% of AppMetrics ingestion) are switched off (`:245-252`);
-  and the metric export interval is stretched from the 60-second default to 300 seconds, cutting
-  roughly 80% of the remaining datapoints while five-minute alert windows keep the same signal
-  (`:260-263`).
+  (`:229-232`); the two highest-volume instrument groups (`http.client.*` gauges and the `dotnet.*`
+  runtime instruments, measured at about 65% of AppMetrics ingestion, `:234-239`) are switched off
+  (`:240-247`); and the metric export interval is stretched from the 60-second default to 300 seconds,
+  cutting roughly 80% of the remaining datapoints while five-minute alert windows keep the same signal
+  (`:255-258`).
 - **What an operator actually reads is alerts and a workbook, not a live console.** SLO rules ship as
-  code (`main.bicep:331`, `:388`, `:447`, and the Gateway availability alert at `:521`, all wired to
+  code (`main.bicep:331`, `:388`, `:447`, and the Gateway availability alert at `:474`, all wired to
   the unconditional action group at `:271-279`), and a saved Azure Monitor workbook visualizes the
-  same SLOs per service (`:555-567`), which is the deployed-environment view (ADR-062, ADR-041).
+  same SLOs per service (`:508-520`), which is the deployed-environment view (ADR-062, ADR-041).
 - **The ACA Aspire dashboard is not provisioned**, and that is the decision rather than a to-do. It is
   ephemeral (no retention behind it), full fidelity (it would be looking at the very stream this
   template thins), and it has no alert or saved-query surface, so it cannot be the thing that pages
@@ -112,15 +125,16 @@ extension of it.
 
 ## Rationale
 - **Test at the boundary that ships.** A service is deployed as its own container app
-  (`MMCA.ADC/infra/main.bicep:1036`, `:1250`, `:1379`, `:1508`), configured entirely through
+  (`MMCA.ADC/infra/main.bicep:984`, `:1185`, `:1312`, `:1439`), configured entirely through
   environment variables. `WebApplicationFactory` plus an environment-variable override channel is a
   closer model of that than an app model the deployment does not use: production topology comes from
-  Bicep (`MMCA.ADC/.github/workflows/deploy.yml:1129`), not from the AppHost.
+  Bicep (`MMCA.ADC/.github/workflows/deploy.yml:1223`), not from the AppHost.
 - **The cheapest tier that could have failed.** The per-service tier needs no Docker at all, because
   `AddBrokerMessaging` returns early on the default `InProcess` provider, which is what an absent
   `MessageBus` section resolves to
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:687`, the early return
-  at `:693-699`), and only the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:732`, the missing-section
+  fallback at `:738-739` and the early return at `:741-744`, over the `InProcess` default on
+  `Settings/MessageBusSettings.cs:17`), and only the
   genuinely cross-process flows pay for containers, on a nightly rather than in the deploy chain
   (`cross-service-tests.yml:12-22`). Booting the whole app model to assert a validation error would
   invert that.
@@ -145,7 +159,7 @@ extension of it.
   production code.
 - **Sampling means a reported request may have no trace.** At 0.25, three of four traces are dropped
   at the head, so an operator investigating a specific user report will often find the request counted
-  and not traced (`main.bicep:223-226`).
+  and not traced (`main.bicep:218-221`).
 - **The `Warning` floor moves `Information` logs off the queryable path.** They exist in container
   stdout only (`:228-233`), so the correlation-id story (ADR-041) is complete only for what the floor
   admits.

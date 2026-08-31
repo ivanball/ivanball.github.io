@@ -3,8 +3,11 @@
 ## Status
 Accepted (2026-08-12). Amended 2026-08-13: the composition-time string trade-off below was resolved
 in v1.147.0 by a deferred-resolution overload; see the updated trade-off entry. Amended 2026-08-14:
-source citations re-anchored, and the registration path corrected (the string overload delegates to
-the delegate overload, which is where the ZXing and singleton registrations happen).
+source citations re-anchored, and the registration path corrected. Revised 2026-08-31: the
+backward-compatible `UseCommonBarcodeScanner(string, string)` overload and the paired
+`MauiBarcodeScannerService(string, string)` constructor were removed in the v1.173.0
+collapse-dual-paths wave, so the deferred-resolution delegates are now the only registration path;
+citations re-anchored and the ZXing pin updated.
 
 ## Context
 ADC's badge check-in feature ([ADR-072](072-qr-badge-check-in-and-points.md)) needs two things that
@@ -53,34 +56,36 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
   cancelled token all return `null` (`:3-10`), and the decoded payload is documented as untrusted input.
   `NullBarcodeScannerService` (`Fallbacks/NullBarcodeScannerService.cs:9-16`) reports `IsSupported == false`
   and returns `null`, TryAdd-registered by `AddDeviceCapabilityDefaults`
-  (`Services/Capabilities/DependencyInjection.cs:57`).
+  (`Services/Capabilities/DependencyInjection.cs:63`).
 - **The native implementation is opt-in and deliberately NOT folded into `UseMauiDeviceCapabilities`.**
   A head asks for the camera by name:
-  `UseCommonBarcodeScanner(string cancelText = "Cancel", string cameraDescription = "Scan a code")`
-  on `MauiAppBuilder` (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:67-70`), which delegates to the
-  `Func<string>` overload (`:92-103`); that overload is where ZXing's `UseBarcodeReader()` (`:99`) runs and
-  where `MauiBarcodeScannerService` is plain-`AddSingleton`ed over the TryAdd default (`:100-101`).
-  `UseMauiDeviceCapabilities` (`:29-42`) does not call it, and says why (`:47-49`): a head that never
-  scans should ship neither the camera handler nor a camera permission declaration.
+  `UseCommonBarcodeScanner(Func<string> cancelText, Func<string> cameraDescription)` on
+  `MauiAppBuilder` (`MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104-115`) is the one
+  registration path; it is where ZXing's `UseBarcodeReader()` (`:111`) runs and where
+  `MauiBarcodeScannerService` is plain-`AddSingleton`ed over the TryAdd default (`:112-113`). Both
+  delegates are resolved per scan rather than captured at composition, so the scan surface follows
+  the in-app language (`:88-95`). `UseMauiDeviceCapabilities` (`:30-43`) does not call it, and the
+  reason sits on the opt-in method's own doc comment (`:86-87`): a head that never scans should ship
+  neither the camera handler nor a camera permission declaration.
 - **The scan is a modal page with exactly one resolution.** `MauiBarcodeScannerService`
   (`Capabilities/MauiBarcodeScannerService.cs:24`) marshals to the main thread, then inside
-  `ScanOnMainThreadAsync` (`:94-119`) pushes a `BarcodeScanPage` modally (`:109`) and pops it in a
-  `finally` (`:115-118`). The page holds a
+  `ScanOnMainThreadAsync` (`:79-104`) pushes a `BarcodeScanPage` modally (`:94`) and pops it in a
+  `finally` (`:100-103`). The page holds a
   `TaskCompletionSource<string?>` (`Capabilities/BarcodeScanPage.cs:23-24`) that four paths can complete
   and only the first wins: a decode, the cancel button, the hardware back gesture, and
   `OnDisappearing`; the caller's `CancellationToken` is bridged to the same `Cancel()`
-  (`MauiBarcodeScannerService.cs:112`). Only 2D formats are read (`BarcodeScanPage.cs:36`), because 1D
+  (`MauiBarcodeScannerService.cs:97`). Only 2D formats are read (`BarcodeScanPage.cs:36`), because 1D
   symbologies multiply false positives on a badge screen.
 - **Permission stays with the head, not the framework.** No framework code calls
   `Permissions.RequestAsync<Permissions.Camera>`. An undeclared or denied camera produces a preview that
   never decodes and is cancelled out of, which the contract already renders as `null`
   (`MauiBarcodeScannerService.cs:7-11`), so the degradation path and the cancel path are the same path.
-- **Supported means Android or iOS.** `IsSupported` gates on `DeviceInfo.Current.Platform` (`:66-68`);
+- **Supported means Android or iOS.** `IsSupported` gates on `DeviceInfo.Current.Platform` (`:51-53`);
   Windows and Mac Catalyst heads keep the null behavior even after opting in.
 
 Packaging follows ADR-042 exactly: `QRCoder` 1.8.0 (MIT) is a `MMCA.Common.UI` dependency and
-`ZXing.Net.Maui.Controls` 0.10.3 (MIT) a `MMCA.Common.UI.Maui` one, both pinned in
-`MMCA.Common/Directory.Packages.props` (`:134`, `:157`), and the MAUI package keeps its
+`ZXing.Net.Maui.Controls` 0.10.4 (MIT) a `MMCA.Common.UI.Maui` one, both pinned in
+`MMCA.Common/Directory.Packages.props` (`:153`, `:187`), and the MAUI package keeps its
 windows-job build and pack.
 
 ## Rationale
@@ -111,15 +116,14 @@ windows-job build and pack.
   measured in one screen.
 
 ## Trade-offs
-- **The scan page's strings were resolved at composition, not per call (resolved in v1.147.0).**
-  As shipped in v1.145.0, `cancelText` and `cameraDescription` were captured into the singleton at
-  registration, so a head that switches culture at runtime under
-  [ADR-027](027-multi-locale-i18n.md) kept the cancel button, page title and semantic description in
-  the language that was current at startup. v1.147.0 added a
-  `UseCommonBarcodeScanner(Func<string> cancelText, Func<string> cameraDescription)` overload whose
-  delegates are invoked once per scan, when the modal page is built, so the scan surface follows the
-  in-app language. The original string overload remains and keeps its startup-fixed semantics (its
-  XML doc says so); heads with a language switcher should pass the delegate overload.
+- **The scan page's text is the caller's delegate, not a string (resolved in v1.147.0).**
+  `cancelText` and `cameraDescription` arrive as `Func<string>` and are invoked once per scan, when
+  the modal page is built (`Capabilities/MauiBarcodeScannerService.cs:65-69`), so a head that
+  switches culture at runtime under [ADR-027](027-multi-locale-i18n.md) gets the cancel button, page
+  title and semantic description in the language that is current at the scan rather than the one
+  that was current at startup. The price is on the caller: a head passes the resource lookups
+  themselves (`() => localizer["Cancel"]`) and has to keep them cheap and side-effect free, because
+  they run on the main thread inside the scan path.
 - **`QrCodeImage` has no error surface.** There is no `try`/`catch` around the encode, so a payload too
   large for the chosen version and error-correction combination propagates out of `OnParametersSet`
   rather than degrading to a message. The intended payloads are short opaque tokens, so the failure mode
@@ -145,7 +149,7 @@ windows-job build and pack.
 `MMCA.Common.UI`, native implementation in `MMCA.Common.UI.Maui`, override after `AddUIShared`),
 [ADR-072](072-qr-badge-check-in-and-points.md) (the ADC feature that motivated both halves and owns the
 payload format and its verification), [ADR-027](027-multi-locale-i18n.md) (the culture model the
-builder-time strings do not participate in), [ADR-016](016-lockstep-versioning-masstransit-pin.md)
+per-scan text delegates follow), [ADR-016](016-lockstep-versioning-masstransit-pin.md)
 (lockstep release and the licensing posture behind the ZXing choice),
 [ADR-045](045-managed-file-storage-and-avatars.md) (the previous capability addition, and the same
 treatment of untrusted device input).

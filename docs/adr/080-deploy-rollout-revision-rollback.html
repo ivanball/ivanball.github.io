@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -214,10 +217,10 @@
           <p>Both production apps deploy to Azure Container Apps from a single <code>deploy.yml</code> job on push to <code>main</code>,
           and every gate runs <strong>before</strong> anything rolls out: the <code>deploy</code> job waits on <code>supply-chain</code>,
           <code>cost-guard</code>, the three recency gates, the chromium <code>e2e-gate</code>, <code>foundation</code> and <code>build-images</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:862</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:866</code>), and the
+          (<code>MMCA.Store/.github/workflows/deploy.yml:941</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:992</code>), and the
           image matrix pushes to ACR without rolling anything out. The rollout itself is one <code>azure/arm-deploy</code>
-          step over <code>infra/main.bicep</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1035-1041</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1070-1076</code>).</p>
+          step over <code>infra/main.bicep</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1111-1117</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1218-1224</code>).</p>
           <p>The question that step leaves open is what happens <strong>after</strong> ARM returns success. ARM success means
           the revision was accepted by the control plane, not that it serves: a container that boots, fails to
           reach Key Vault or its database, and crash-loops is still a successful template deployment. Without a
@@ -229,7 +232,7 @@
           justification for its expand/contract guard. ADR-030 depends on the same model from the other side:
           startup migration is the sole migrator, so a failed startup migration fails the new revision and
           &quot;there is no automated down-migration&quot;
-          (<code>Website/docs-src/adr/030-startup-sole-migrator.md:62-64</code>). Both CONTRIBUTING files say the same
+          (<code>Website/docs-src/adr/030-startup-sole-migrator.md:69-71</code>). Both CONTRIBUTING files say the same
           thing to contributors (<code>MMCA.Store/CONTRIBUTING.md:56-59</code>, <code>MMCA.ADC/CONTRIBUTING.md:57-60</code>). This
           ADR records the rollout and rollback model those documents assume.</p>
           <h2 id="decision">Decision</h2>
@@ -238,59 +241,59 @@
           <ul>
           <li><strong>Single-revision rollout.</strong> Every container app runs <code>activeRevisionsMode: &#39;Single&#39;</code>, so a deploy
           replaces the serving revision rather than splitting traffic across two: Store&#39;s identity, catalog,
-          sales, gateway and ui apps (<code>MMCA.Store/infra/main.bicep:963,1122,1227,1364,1450</code>) and ADC&#39;s
+          sales, gateway and ui apps (<code>MMCA.Store/infra/main.bicep:910,1059,1163,1298,1384</code>) and ADC&#39;s
           identity, conference, engagement, notification, gateway and ui apps
-          (<code>MMCA.ADC/infra/main.bicep:1042,1249,1378,1507,1673,1776</code>). There is no canary or blue/green stage
+          (<code>MMCA.ADC/infra/main.bicep:997,1198,1325,1452,1616,1719</code>). There is no canary or blue/green stage
           and no traffic-splitting step.</li>
           <li><strong>Readiness gating is the first line of defence.</strong> Every app carries startup, liveness and
           readiness probes, with readiness on <code>/health/ready</code>, so ACA holds user traffic on the old revision
-          until the new one is warm (<code>MMCA.Store/infra/main.bicep:1332-1336</code>, five apps at
-          <code>:1097,1202,1335,1409,1507</code>; <code>MMCA.ADC/infra/main.bicep:1631-1639</code>, six apps at
-          <code>:1218,1347,1476,1633,1729,1848</code>). This is the ADR-025 warm-up gate doing rollout duty.</li>
+          until the new one is warm (<code>MMCA.Store/infra/main.bicep:1266-1270</code>, five apps at
+          <code>:1034,1138,1269,1343,1441</code>; <code>MMCA.ADC/infra/main.bicep:1654-1679</code>, six apps at
+          <code>:1167,1294,1421,1576,1672,1794</code>). This is the ADR-025 warm-up gate doing rollout duty.</li>
           <li><strong>A post-deploy smoke gate is the last step of the deploy job.</strong> <code>Smoke test (rollback on failure)</code>
           probes the freshly deployed fleet from outside Azure
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1059</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1099</code>). The
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1135</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1247</code>). The
           shared <code>probe</code> helper retries 12 times with a 15-second curl timeout and a 10-second sleep between
-          attempts (<code>MMCA.Store/.github/workflows/deploy.yml:1072-1081</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1112-1121</code>). The step runs under <code>set -uo pipefail</code> without
-          <code>-e</code> (<code>:1066</code>, <code>:1106</code>), so a failed probe records the failure instead of aborting the step before
+          attempts (<code>MMCA.Store/.github/workflows/deploy.yml:1148-1157</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1260-1269</code>). The step runs under <code>set -uo pipefail</code> without
+          <code>-e</code> (<code>:1142</code>, <code>:1254</code>), so a failed probe records the failure instead of aborting the step before
           the rollback loop can run.</li>
           <li><strong>The probes assert an expected status code, not merely &quot;not an error&quot;.</strong> Store checks Gateway
           <code>/health</code>, <code>/.well-known/jwks.json</code> (through to Identity), <code>/Products</code> (Catalog, anonymous) and
           <code>/Orders</code> asserted as exactly <strong>401</strong>, plus the UI root
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1069-1071,1084-1093</code>); ADC checks Gateway <code>/health</code>,
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1145-1147,1159-1169</code>); ADC checks Gateway <code>/health</code>,
           JWKS, <code>/Events</code> (Conference, anonymous), <code>/Bookmarks</code> and <code>/Notifications/inbox</code> both asserted as
-          <strong>401</strong>, plus the UI root (<code>MMCA.ADC/.github/workflows/deploy.yml:1109-1111,1124-1135</code>). An
+          <strong>401</strong>, plus the UI root (<code>MMCA.ADC/.github/workflows/deploy.yml:1257-1259,1271-1283</code>). An
           anonymous 200 on a protected route is a failure, because it would mean authorization stopped being
           enforced; a 401 from the service proves the request traversed Gateway to service to auth pipeline.</li>
           <li><strong>Hardening checks observe, they do not gate.</strong> The Gateway <code>X-Content-Type-Options</code> check prints a
           warning and never sets the failure flag, because a missing hardening header is not a
           &quot;revision not serving&quot; condition and must not trip a fleet-wide rollback
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1095-1102</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1137-1144</code>).</li>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1171-1178</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1285-1292</code>).</li>
           <li><strong>On failure, walk every app back to its previous revision.</strong> The loop iterates the full app list
-          (five for Store at <code>MMCA.Store/.github/workflows/deploy.yml:1067</code>, six for ADC at
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1107</code>), selects the second-newest <code>Provisioned</code> revision by
+          (five for Store at <code>MMCA.Store/.github/workflows/deploy.yml:1143</code>, six for ADC at
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1255</code>), selects the second-newest <code>Provisioned</code> revision by
           <code>createdTime</code>, and issues <code>az containerapp revision copy --from-revision</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1111-1125</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1156-1169</code>). Every app is attempted before any failure is
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1187-1202</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1304-1317</code>). Every app is attempted before any failure is
           reported, so one bad app does not abandon the rest, and the <code>az</code> call is deliberately <strong>not</strong> piped:
           a pipeline would report <code>tail</code>&#39;s exit status and every rollback would look successful
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1117-1119</code>).</li>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1193-1195</code>).</li>
           <li><strong>A failed rollback escalates louder than a failed deploy.</strong> Apps whose rollback failed accumulate
           in <code>rollback_failed</code>, and the step writes a &quot;Smoke gate failed AND rollback incomplete&quot; block into
           the job summary naming them, because a fleet split across revisions needs immediate manual attention
           and must never read as a clean auto-revert
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1127-1135</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1152-1154,1170-1178</code>).</li>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1203-1211</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1300-1302,1318-1326</code>).</li>
           <li><strong>The run fails either way.</strong> After the rollback loop the step exits 1
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1136</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1179</code>), so
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1212</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1327</code>), so
           a reverted deploy is still a red run: recovery is automatic, but it is never silent.</li>
           <li><strong>Rollback is revision-only and never touches data or schema.</strong> There is no down-migration step and
           no deploy-time <code>sqlcmd</code> backstop anywhere in the pipeline; each service self-applies its own
           migrations at startup as the sole migrator
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1043-1051</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1078-1088</code>). Reverting the image therefore leaves the new
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1119-1127</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1226-1236</code>). Reverting the image therefore leaves the new
           schema in place, which is exactly why ADR-057 requires every migration to be backward compatible
           one release back.</li>
           </ul>
@@ -299,8 +302,8 @@
           <li><strong>ARM success is the wrong success signal.</strong> The smoke gate converts &quot;the control plane accepted the
           template&quot; into &quot;the fleet answers requests&quot;, which is the only claim a deploy should be green on.
           It is also the backend backstop the <code>deploy</code> job explicitly relies on when the ui-scoped <code>e2e-gate</code>
-          legitimately skips (<code>MMCA.Store/.github/workflows/deploy.yml:879-880</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:883</code>).</li>
+          legitimately skips (<code>MMCA.Store/.github/workflows/deploy.yml:972</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1022</code>).</li>
           <li><strong>Probing through the Gateway exercises the real path.</strong> Hitting the public Gateway FQDN rather than
           each service directly proves ingress, YARP routing, service discovery and the target service&#39;s auth
           pipeline in one request, which is what actually breaks: a service that deployed but cannot reach its
@@ -330,23 +333,23 @@
           inter-service gRPC edge, the SignalR hub, and every authenticated write path are all invisible to the
           gate. Store never probes Catalog writes or Stripe; ADC never probes the live layer beyond a 401.</li>
           <li><strong>The app list is hand-maintained.</strong> <code>APPS</code> is a literal string
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1067</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1107</code>), so a
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1143</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1255</code>), so a
           new container app added to Bicep is deployed but never rolled back until someone remembers to add it
           here.</li>
           <li><strong>The previous-revision selector is positional.</strong> It takes index <code>[1]</code> of the <code>Provisioned</code>
-          revisions sorted newest first (<code>MMCA.Store/.github/workflows/deploy.yml:1112-1114</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1157-1159</code>). When the new revision never reached
+          revisions sorted newest first (<code>MMCA.Store/.github/workflows/deploy.yml:1188-1190</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1305-1307</code>). When the new revision never reached
           <code>Provisioned</code> at all, index <code>[1]</code> is one release further back than the revision currently serving, so
           the rollback overshoots.</li>
           <li><strong>A failed revision listing is indistinguishable from &quot;nothing to roll back&quot;.</strong> The <code>az revision list</code> call swallows errors into an empty string and the loop then logs &quot;no previous revision:
           skipping&quot; without adding the app to <code>rollback_failed</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1114,1123-1124</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1159,1166-1167</code>), so that app is reported under the clean
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1190,1199-1200</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1307,1314-1315</code>), so that app is reported under the clean
           branch.</li>
           <li><strong>Detection is slow and bounded by the job timeout.</strong> Each failing probe burns up to 12 attempts of
           15-second timeout plus a 10-second sleep, and the probes run sequentially, so a total outage spends
           roughly five minutes per probe before the rollback loop starts, against a <code>timeout-minutes: 40</code> job
-          (<code>MMCA.Store/.github/workflows/deploy.yml:861</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:865</code>). A
+          (<code>MMCA.Store/.github/workflows/deploy.yml:940</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:991</code>). A
           worst-case failure across all probes can approach that ceiling, and a job killed at its timeout never
           runs the rollback.</li>
           <li><strong>Only a smoke-gate failure triggers a rollback.</strong> A regression that passes the probes and is found

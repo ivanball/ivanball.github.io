@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-103: bUnit Component-Test Tier as a Shipped Package · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-31).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/103-bunit-component-test-tier.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-103: bUnit Component-Test Tier as a Shipped Package">
+  <meta property="og:description" content="Accepted (2026-08-31).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/103-bunit-component-test-tier.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-103: bUnit Component-Test Tier as a Shipped Package">
+  <meta name="twitter:description" content="Accepted (2026-08-31).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"103 · bUnit Component-Test Tier as a Shipped Package","item":"https://ivanball.github.io/docs/adr/103-bunit-component-test-tier.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">103 · bUnit Component-Test Tier as a Shipped Package</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 104 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html" aria-current="page">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-103-bunit-component-test-tier-as-a-shipped-package">ADR-103: bUnit Component-Test Tier as a Shipped Package</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-31).</p>
+          <h2 id="context">Context</h2>
+          <p>Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates <strong>structure</strong>
+          with NetArchTest. ADR-058 ships the <strong>runtime conformance</strong> suites as abstract bases in
+          <code>MMCA.Common.Testing</code> and scopes itself explicitly to contracts that only a booted host can prove
+          (<code>058-runtime-conformance-suites-as-a-package.md:22-25</code>). ADR-063 and ADR-092 ship the <strong>browser</strong>
+          tier as Playwright contracts and deploy gates (WCAG 2.1 AA scans, Core Web Vitals budgets). Between a
+          plain unit test over a handler and a Playwright run against a live stack sits the <strong>component</strong> tier:
+          render one Blazor page or component in process, drive it, assert on its markup. That tier exists in
+          all three code repos with a UI and was recorded nowhere. ADR-101 names the <code>Testing.*</code> packages only
+          to keep them out of the metapackage (<code>101-common-metapackage.md:55</code>), which decides their packaging
+          and nothing about the tier itself.</p>
+          <p>A component test is cheap to write and expensive to set up, and the expensive part is not per test.
+          It is a fixed set of choices that is the same answer in every repo: which bUnit line, which component
+          vendor&#39;s services, whether JSInterop is strict or loose, how a principal reaches both
+          <code>&lt;AuthorizeView&gt;</code> and a page that injects <code>AuthenticationStateProvider</code> directly, how
+          <code>IStringLocalizer&lt;T&gt;</code> resolves for ADR-027 markup, and when the renderer info is set. Getting one of
+          them wrong does not fail as a setup error: it fails as what looks like a bug in the page under test.
+          An unresolvable <code>IToastService</code>, a viewport that no browser answers so the card/grid choice comes down
+          to timing, or a test double silently replaced by the framework default because its registration ran
+          after the bUnit provider was frozen.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Ship the component-test tier as a package. <code>MMCA.Common.Testing.UI</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/MMCA.Common.Testing.UI.csproj:3-4</code>) is one of the
+          17 packages released in lockstep (<code>MMCA.Common/FACTS.md:19,37</code>), and its <code>BunitComponentTestBase</code>
+          fixes every choice above once, in one file.</p>
+          <ul>
+          <li><strong>bUnit v2, with the version-specific symbols isolated to this base.</strong> The base derives from bUnit
+          v2&#39;s <code>BunitContext</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:37</code>),
+          and its remarks state why: v2 is the line compatible with xUnit v3 and Microsoft Testing Platform,
+          and derived test classes call <code>RenderUnderTest</code> / <code>RenderAs</code> and never touch the version-specific
+          symbols, so a move off that line changes this file and no other
+          (<code>BunitComponentTestBase.cs:29-34</code>). The line is pinned at <code>bunit</code> 2.9.0 in each repo&#39;s central
+          package file (<code>MMCA.Common/Directory.Packages.props:200-201</code>,
+          <code>MMCA.ADC/Directory.Packages.props:31-32</code>, <code>MMCA.Store/Directory.Packages.props:51-52</code>), and the
+          package carries a direct <code>AngleSharp</code> pin because central package management does not pin
+          transitives (<code>MMCA.Common.Testing.UI.csproj:13-15</code>).</li>
+          <li><strong>MudBlazor services plus the ADR-067 facades, registered once.</strong> The constructor calls
+          <code>Services.AddMudServices()</code> (<code>BunitComponentTestBase.cs:46</code>) and then
+          <code>Services.AddCommonUiFacades()</code> (<code>:53</code>), which is the same call the production shell makes from
+          <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:88</code>). That
+          call registers <code>IToastService</code> -&gt; <code>MudToastService</code> and <code>IAppDialogService</code> -&gt; <code>MudAppDialogService</code>
+          with <code>TryAdd</code> (<code>DependencyInjection.cs:140-145</code>), so a component test resolves the vendor-neutral
+          facades and exercises the real Mud-backed path, and a test that wants a recording double registers
+          one afterwards (last registration wins, <code>BunitComponentTestBase.cs:48-52</code>).</li>
+          <li><strong>Loose JSInterop.</strong> <code>JSInterop.Mode = JSRuntimeMode.Loose</code> (<code>:55</code>) so MudBlazor components that
+          probe JS during render return default values instead of throwing (<code>:17-19</code>).</li>
+          <li><strong>A mutable <code>AuthenticationStateProvider</code> that serves both consumption paths.</strong> One
+          <code>MutableAuthenticationStateProvider</code> instance is held by the base (<code>:42</code>), registered as the
+          <code>AuthenticationStateProvider</code> singleton (<code>:58</code>), and implemented over a settable principal that
+          notifies listeners (<code>:156-168</code>). <code>RenderAs</code> sets the principal and also adds the cascading
+          <code>AuthenticationState</code>, so <code>&lt;AuthorizeView&gt;</code> and a directly injecting page agree (<code>:124-135</code>);
+          <code>SetUser</code> changes it mid-test without a new render root (<code>:114-115</code>); the default is anonymous
+          (<code>:39-40</code>, <code>:118-121</code>). Authorization is permissive but real: <code>IsAuthenticatedAuthorizationService</code>
+          succeeds for an authenticated identity and fails otherwise (<code>:57</code>, <code>:170-180</code>). Principals come from
+          the shipped <code>TestPrincipal</code> factory, which writes the user id under both <code>sub</code> and
+          <code>ClaimTypes.NameIdentifier</code> because a real principal reaches a page under either name
+          (<code>Infrastructure/TestPrincipal.cs:7,22-32</code>), plus an <code>Organizer</code> shorthand (<code>TestPrincipal.cs:35-36</code>).</li>
+          <li><strong>Open-generic <code>IStringLocalizer</code> for ADR-027 markup.</strong> <code>Services.AddLogging()</code> and
+          <code>Services.AddLocalization()</code> (<code>BunitComponentTestBase.cs:63-64</code>) let every component test render
+          localized markup against the neutral resources in the component&#39;s own assembly with no per-test
+          setup (<code>:60-62</code>).</li>
+          <li><strong><code>SetRendererInfo</code> behind one helper, because its call ordering is load-bearing.</strong>
+          <code>ConfigureDataGridListPageHost</code> (<code>:94-112</code>) registers the list-page state services (<code>:99-100</code>),
+          substitutes MudBlazor&#39;s <code>IBrowserViewportService</code> with an inert double so <code>IsMobile</code> stays
+          deterministically false (<code>:104</code>, which is why <code>Moq</code> is a package dependency rather than a
+          hand-written stub, <code>MMCA.Common.Testing.UI.csproj:17-21</code>), adds bUnit&#39;s persistent component state
+          for the prerender boundary (<code>:108</code>), and calls <code>SetRendererInfo</code> <strong>last</strong> (<code>:111</code>). The rule is
+          written where the helper is: <code>SetRendererInfo</code> builds and freezes the bUnit service provider, so any
+          registration made after it is silently ignored and the page resolves the framework default instead
+          of the test&#39;s double (<code>:72-77</code>). Eighteen test files across MMCA.Common, MMCA.ADC and MMCA.Store
+          call the helper today; its comment records the fifteen hand-rolled copies of the block that the
+          extraction replaced (<code>:75-76</code>).</li>
+          <li><strong>The rest of the harness ships with it.</strong> <code>RenderMudProviders</code> renders the popover, dialog and
+          snackbar providers into the test&#39;s render root and returns handles (<code>:142-148</code>, <code>:151-154</code>);
+          <code>BunitInteractionExtensions</code> expresses clicks and text reads over accessible text rather than CSS
+          paths (<code>Infrastructure/BunitInteractionExtensions.cs:12-34</code>); <code>MarkupSnapshot</code> is a dependency-free
+          golden-markup comparison that normalizes MudBlazor&#39;s per-render GUIDs
+          (<code>Infrastructure/MarkupSnapshot.cs:21</code>); and the HTTP-facing doubles cover the UI service layer
+          (<code>Infrastructure/UiHttpServiceHarness.cs:12</code>, <code>Infrastructure/CapturingHttpMessageHandler.cs:19</code>,
+          <code>Infrastructure/StubTokenStorageService.cs:13</code>, <code>Infrastructure/HttpTestDoubles.cs:12</code>,
+          <code>Infrastructure/ErrorSummaryExtensions.cs:10</code>).</li>
+          <li><strong>Adoption is one thin repo-local subclass per test project.</strong> Six consumer test projects take the
+          package reference: ADC Conference, Identity and Engagement
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:12</code>,
+          <code>.../Identity/MMCA.ADC.Identity.UI.Tests/MMCA.ADC.Identity.UI.Tests.csproj:12</code>,
+          <code>.../Engagement/MMCA.ADC.Engagement.UI.Tests/MMCA.ADC.Engagement.UI.Tests.csproj:11</code>) and Store
+          Catalog, Sales and Identity
+          (<code>MMCA.Store/Tests/Modules/Catalog/MMCA.Store.Catalog.UI.Tests/MMCA.Store.Catalog.UI.Tests.csproj:12</code>,
+          <code>.../Sales/MMCA.Store.Sales.UI.Tests/MMCA.Store.Sales.UI.Tests.csproj:12</code>,
+          <code>.../Identity/MMCA.Store.Identity.UI.Tests/MMCA.Store.Identity.UI.Tests.csproj:12</code>); MMCA.Common&#39;s
+          own UI tests take it by project reference
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/MMCA.Common.UI.Tests.csproj:22</code>). Each repo&#39;s
+          subclass carries only what its head owns and nothing shared: Store Catalog&#39;s is an empty declaration
+          (<code>MMCA.Store/Tests/Modules/Catalog/MMCA.Store.Catalog.UI.Tests/BunitTestBase.cs:11</code>), ADC
+          Conference&#39;s adds the ADR-042 device-capability defaults and inert configuration
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:18-38</code>), and
+          MMCA.Common&#39;s adds the layout-chrome services only its own tests render
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:15-46</code>).</li>
+          </ul>
+          <p>All six consumer projects sit in the gating CI subset, so the tier runs on every pull request rather
+          than on a schedule (<code>MMCA.ADC/MMCA.ADC.CI.slnf:43,49,55</code>,
+          <code>MMCA.Store/MMCA.Store.CI.slnf:40,46,52</code>). MMCA.Helpdesk has no UI test project (its three test
+          projects are Tickets domain, Tickets application, and architecture), so the tier is adopted exactly
+          where a Blazor UI exists.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The setup is what a component test gets wrong, so the setup is what the framework should own.</strong>
+          Every item in the Decision is a choice with one correct answer per repo and a failure mode that
+          reads as a defect in the page under test. Shipping them as a base class turns &quot;remember the six
+          rules&quot; into &quot;inherit the base&quot;, the same invariant-over-discipline posture ADR-015 takes for
+          structure and ADR-058 takes for runtime contracts.</li>
+          <li><strong>One freeze rule, one call site.</strong> The <code>SetRendererInfo</code> ordering constraint cannot be enforced by
+          the compiler, so the next best thing is to have exactly one place that gets it right and a helper
+          name that says when to call it (<code>BunitComponentTestBase.cs:70-77</code>).</li>
+          <li><strong>The version boundary is a single file.</strong> Isolating <code>BunitContext</code> and <code>Render&lt;T&gt;</code> behind
+          <code>RenderUnderTest</code> / <code>RenderAs</code> means a bUnit line change is a framework edit, not a sweep across
+          every UI test class in three repos (<code>:29-34</code>).</li>
+          <li><strong>Test-time and run-time resolve the same facades.</strong> Because the base calls the production
+          <code>AddCommonUiFacades</code> rather than registering its own doubles (<code>:53</code>,
+          <code>MMCA.Common.UI/DependencyInjection.cs:88,140-145</code>), a component test asserts against the real
+          toast and dialog implementations ADR-067 put behind those interfaces, and a test that wants to
+          assert on a toast opts into a double explicitly.</li>
+          <li><strong>A package matches how every other shipped test tier is delivered.</strong> Runtime conformance
+          (ADR-058), accessibility (ADR-063) and web vitals (ADR-092) all ship as consumable contracts rather
+          than as copied snippets, and a package inherits the lockstep release policy (ADR-016) so the tier
+          moves with the framework it tests (<code>FACTS.md:15-17</code>).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Loose JSInterop proves nothing about JS.</strong> A component test can render a component that calls a
+          JS module which does not exist, because the loose mode answers with defaults
+          (<code>BunitComponentTestBase.cs:55</code>). Only the browser tier (ADR-063, ADR-092) catches that.</li>
+          <li><strong>Authorization in this tier answers on authentication, not on policy.</strong> The shipped double succeeds
+          for any authenticated principal (<code>:170-180</code>), so a component test cannot assert a permission
+          denial; permission behavior belongs to the handler and API tiers.</li>
+          <li><strong>The frozen-provider rule is a convention, not a compiler error.</strong> Nothing fails a test that
+          registers a service after <code>SetRendererInfo</code>; the symptom is the framework default resolving quietly
+          in place of the double (<code>:72-77</code>), which is exactly the failure the helper exists to prevent and
+          cannot prevent for a test that bypasses it.</li>
+          <li><strong>Nothing enforces adoption.</strong> No fitness rule requires a UI test project to subclass the shared
+          base, so a new project can still re-derive the block; the only inventory is a search.</li>
+          <li><strong>The base pulls MudBlazor and Moq into every consuming test project</strong>
+          (<code>MMCA.Common.Testing.UI.csproj:16,21</code>), so a repo that wanted a different mocking library in its UI
+          tests still takes Moq transitively, and a non-MudBlazor UI could not use this base at all.</li>
+          <li><strong>The bUnit version is pinned per repo, not by the package.</strong> The package references <code>bunit</code> without
+          a version (<code>MMCA.Common.Testing.UI.csproj:13</code>) and each consumer&#39;s central package file names the
+          number (<code>MMCA.Common/Directory.Packages.props:201</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
+          <code>MMCA.Store/Directory.Packages.props:52</code>), so three files have to agree, and the AngleSharp advisory
+          pin has to be repeated the same way.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a> (the runtime conformance tier this sits
+          below: same delivery shape, different question, and its bases need a booted host where these need
+          only a renderer), <a href="063-accessibility-conformance-gate.html">ADR-063</a> and
+          <a href="092-web-vitals-budget-gate.html">ADR-092</a> (the browser tier above, which owns everything loose
+          JSInterop and a stubbed viewport cannot see), <a href="067-ui-module-shell-composition.html">ADR-067</a> (the shell
+          and the <code>IToastService</code> / <code>IAppDialogService</code> facades this base registers through the production
+          <code>AddCommonUiFacades</code> call), <a href="027-multi-locale-i18n.html">ADR-027</a> (the localized markup the open-generic
+          <code>IStringLocalizer</code> registration lets a component test render),
+          <a href="042-device-capability-abstraction.html">ADR-042</a> (the capability defaults a consumer subclass adds on
+          top), <a href="101-common-metapackage.html">ADR-101</a> (why this package stays outside the <code>MMCA.Common</code>
+          metapackage), <a href="015-architecture-fitness-functions.html">ADR-015</a> (the structural tier below) and
+          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release the package rides).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/103-bunit-component-test-tier.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

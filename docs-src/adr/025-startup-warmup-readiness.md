@@ -5,7 +5,9 @@ Accepted (2026-06-27). Revised 2026-07-28: `/health/ready` now excludes `optiona
 as `live`-tagged ones (see Decision), and the absence of a warm-up timeout was recorded as a known gap
 (see Trade-offs). Revised 2026-08-01: that gap is closed. Every warm-up task now runs under a
 120-second per-task ceiling, so a task that hangs no longer holds the readiness gate closed (see
-Decision and Trade-offs).
+Decision and Trade-offs). Revised 2026-08-31: the record now covers `SelfHttpWarmupTaskBase`, the shipped
+base class for warming a host's own inbound request path, which both production apps subclass (see
+Decision).
 
 ## Context
 On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
@@ -26,9 +28,9 @@ gets it.
 - **A readiness gate that starts closed.** `WarmupReadinessGate` (singleton) begins not-ready;
   `WarmupReadinessHealthCheck` is registered tagged `ready` and reports `Unhealthy` until the gate opens.
   `MapDefaultEndpoints()` maps `/health/ready` to every check tagged neither `live` nor `optional`
-  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:358-360`), so while warm-up is running the replica's
+  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:350-353`), so while warm-up is running the replica's
   readiness endpoint reports not-ready and the platform keeps traffic off it. (`/alive` maps only the
-  `live`-tagged self check, `Extensions.cs:342-345`, so liveness is unaffected and the container is not
+  `live`-tagged self check, `Extensions.cs:334-337`, so liveness is unaffected and the container is not
   restarted.) The second exclusion, `optional` (`HealthCheckTags.cs:32`), covers a dependency the app
   degrades gracefully without: a distributed cache sitting behind an in-memory fallback, a broker behind
   a retrying outbox. Those checks are still reported on `/health`, so the degradation stays visible, but
@@ -57,9 +59,36 @@ gets it.
   separately, so its own first fetch still runs; the intent recorded on the task itself
   (`Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-20`) is that over a
   now-warm connection that fetch completes in single-digit milliseconds.
+- **A shipped base class for warming the host's own request path.** `SelfHttpWarmupTaskBase`
+  (`Source/Hosting/MMCA.Common.Aspire/Warmup/SelfHttpWarmupTaskBase.cs:28`, public API at
+  `Source/Hosting/MMCA.Common.Aspire/PublicAPI.Shipped.txt:91-93`) is the second warm-up family: where the
+  OIDC task warms one outbound connection, this replays a short list of hot read paths against the host's
+  own Kestrel endpoint, so the cost paid down is the full inbound path (ingress connection, Kestrel,
+  output cache, routing, authentication, handler, EF Core, SQL) rather than a single dependency
+  (`:11-22`). A derived task supplies only a name and its `WarmupPaths` (`:49`, `:59`); the mechanism is
+  in the base. It waits for `ApplicationStarted` before self-requesting, because the warm-up runner starts
+  before Kestrel is listening (`:189-199`, awaited at `:102`), and it resolves the actual bound cleartext
+  address from `IServer`, falling back to `ASPNETCORE_URLS` and then to port 8080 (`:157-166`, `:39`),
+  which is the only correct answer under Aspire's dynamic ports. Requests are pinned to HTTP/2 with
+  `RequestVersionExact` by default (`:70`, `:77`) because a host serving h2c-only cleartext endpoints
+  rejects a silent downgrade to HTTP/1.1, which would fail the warm-up on every startup; a host that stays
+  Http1AndHttp2 overrides both members. `RequireSuccessStatusCode` defaults to true but is overridable to
+  false (`:90`), so a self-request against an `[Authorize]` route counts as warmed: the 401 is by design
+  and the refusal still traverses the whole pipeline. The task no-ops under the `Testing` environment
+  (`:46`, `:95-98`), whose in-memory `TestServer` never opens a socket. Failures follow the same rule as
+  the rest of the subsystem: caught, logged at warning level, never fatal (`:141-146`, `:205-207`). Both
+  production apps subclass and register it: ADC in Conference
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:28`, registered
+  at `Program.cs:254`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:29`,
+  `Program.cs:153`) and Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:29`,
+  `Program.cs:165`); Store in Catalog
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:29`,
+  `Program.cs:154`), Identity (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:31`,
+  `Program.cs:135`) and Sales (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:32`,
+  `Program.cs:148`).
 - **Extensible per host.** `AddWarmupReadiness()` registers the gate, the runner, the readiness health
   check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
-  `AddWarmupTask<T>()`.
+  `AddWarmupTask<T>()`, which is also how a `SelfHttpWarmupTaskBase` subclass enters the run.
 
 ## Rationale
 - **Keep cold replicas out of rotation, briefly.** Gating readiness on warm-up means the platform does

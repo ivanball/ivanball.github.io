@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 101 ADRs</summary>
+        <summary>All 104 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -201,6 +201,9 @@
         <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
         <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
         <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
           </ol>
         </nav>
       </details>
@@ -302,28 +305,28 @@
           (<code>Middleware/SoftDeletedUserMiddleware.cs:43-50</code>), so the pipeline is literally one shape on every
           host rather than a per-host permutation.</li>
           <li><strong>Every REST/gRPC host calls it.</strong> All seven extracted services in the two production apps: ADC
-          Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:322</code>), ADC Conference
-          (<code>MMCA.ADC.Conference.Service/Program.cs:399</code>), ADC Engagement
-          (<code>MMCA.ADC.Engagement.Service/Program.cs:334</code>), ADC Notification
-          (<code>MMCA.ADC.Notification.Service/Program.cs:264</code>), Store Catalog
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:268</code>), Store Identity
-          (<code>MMCA.Store.Identity.Service/Program.cs:257</code>) and Store Sales
-          (<code>MMCA.Store.Sales.Service/Program.cs:277</code>). The reference app calls it too
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:117</code>), and because that tree <strong>is</strong> the
+          Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:311</code>), ADC Conference
+          (<code>MMCA.ADC.Conference.Service/Program.cs:374</code>), ADC Engagement
+          (<code>MMCA.ADC.Engagement.Service/Program.cs:308</code>), ADC Notification
+          (<code>MMCA.ADC.Notification.Service/Program.cs:240</code>), Store Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:258</code>), Store Identity
+          (<code>MMCA.Store.Identity.Service/Program.cs:249</code>) and Store Sales
+          (<code>MMCA.Store.Sales.Service/Program.cs:269</code>). The reference app calls it too
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:130</code>), and because that tree <strong>is</strong> the
           <code>mmca-app</code> template (<code>MMCA.Helpdesk/.template.config/template.json:5,7</code>, ADR-065), a scaffolded app
           gets the same line: the generated <code>MMCA.ECommerce</code> sample has it at
           <code>MMCA.ECommerce/Source/Hosts/MMCA.ECommerce.Web/Program.cs:100</code>.</li>
           <li><strong>Hosts extend it by appending, after the call, or through the builder.</strong> Service hosts map their
           extra endpoints below the one line: OpenAPI outside Production
-          (<code>MMCA.ADC.Notification.Service/Program.cs:271-274</code>), the SignalR hub (<code>:281</code>, which
+          (<code>MMCA.ADC.Notification.Service/Program.cs:247-250</code>), the SignalR hub (<code>:257</code>, which
           <code>SignalRExtensions.cs:18-19</code> documents as &quot;call after <code>UseCommonMiddlewarePipeline</code>&quot;), and gRPC
-          services (<code>:286</code> and <code>:294</code>). A host that needs a change inside the edge uses the configure overload
+          services (<code>:262</code> and <code>:270</code>). A host that needs a change inside the edge uses the configure overload
           instead; no host does today, and every one of the eight production and reference hosts calls the
           zero-argument overload.</li>
           </ul>
           <p>Scope is REST and gRPC service hosts. The Blazor UI hosts and the YARP gateways deliberately do not
-          call it: the gateways compose a much thinner chain (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:95</code>,
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:119</code>), and the UI hosts hand-compose their own,
+          call it: the gateways compose a much thinner chain (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:124-158</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:150-172</code>), and the UI hosts hand-compose their own,
           reusing only the localization half via <code>UseCommonRequestLocalization()</code>
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:124</code>,
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:164</code>), which is the public method the
@@ -376,7 +379,7 @@
           partitions are spoofable by anything that can reach a service directly. This is safe only because the
           services are not publicly routable and sit behind the gateway; ADR-019 records the same caveat.</li>
           <li><strong>Security-response headers are not in this pipeline.</strong> ADR-023&#39;s <code>UseCommonSecurityHeaders</code> is applied
-          by the gateways and UI hosts only (<code>MMCA.ADC.Gateway/Program.cs:117</code>, <code>MMCA.Store.Gateway/Program.cs:140</code>,
+          by the gateways and UI hosts only (<code>MMCA.ADC.Gateway/Program.cs:134</code>, <code>MMCA.Store.Gateway/Program.cs:159</code>,
           <code>MMCA.ADC.UI.Web/Program.cs:105</code>, <code>MMCA.Store.UI.Web/Program.cs:145</code>). A service host exposed directly,
           without a gateway in front, would serve responses without them.</li>
           <li><strong>One step in the fixed order is currently dead weight.</strong> The pre-forwarded scheme/host capture

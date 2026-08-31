@@ -17,8 +17,11 @@ Three things change below: the one-package constraint in the Context is retired,
 point (`AddMmcaGateway`) joins the Decision, and the declines gain a companion list of
 **delegations**, behaviors the gateway deliberately leaves to a layer better placed to perform them,
 recorded so an audit reads them as decisions rather than as gaps. Both consumer gateways reference
-the package in package mode (`MMCA.ADC/Directory.Packages.props:106`,
-`MMCA.Store/Directory.Packages.props:14`, both pinned at 1.164.1).
+the package in package mode (`MMCA.ADC/Directory.Packages.props:113`,
+`MMCA.Store/Directory.Packages.props:14`).
+
+**Revised 2026-08-31:** both consumers now pin `MMCA.Common.Gateway` at 1.174.0, and the source
+citations below are refreshed against current line numbers. Nothing in the decision changes.
 
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
@@ -67,7 +70,7 @@ owned had to be reachable from the Aspire package alone.
 **That constraint is retired (2026-08-27).** A gateway host now takes two framework packages,
 `MMCA.Common.Aspire` for the host-level kit above and `MMCA.Common.Gateway` for the YARP-level
 composition below (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/MMCA.ADC.Gateway.csproj:3-4`,
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:26-27`). The split is along a
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/MMCA.Store.Gateway.csproj:25-26`). The split is along a
 real boundary rather than a packaging convenience: the Aspire kit registers **host** middleware and
 health checks that any ASP.NET Core process could use, while the Gateway package registers YARP's own
 extension points (config filters, transforms, per-route limiter policies) and therefore has to
@@ -133,11 +136,11 @@ gateway's `appsettings.json` beside the `ReverseProxy` route table that same fil
 ([ADR-089](089-gateway-topology-owned-by-configuration.md)). The two entries are recorded here so they
 are not rediscovered as incidents: Store's Stripe webhook route (`/Payments/{**catch-all}`, bypassed
 by the `"/Payments"` prefix at
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:17`, route at `:57-60`), because a 429
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:17`, route at `:77-80`), because a 429
 to Stripe is a retry and eventually a disabled endpoint, which silently stops every payment update
 ([ADR-084](084-stripe-webhook-ingress.md)); and ADC's SignalR hub route (`/hubs/{**catch-all}`,
 bypassed by the `"/hubs"` prefix at
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:18`, route at `:126-129`), because a
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:17`, route at `:156-159`), because a
 negotiate-plus-reconnect storm from one office's shared address is exactly the pattern a per-IP window
 misreads as abuse ([ADR-039](039-live-channel-push.md)).
 
@@ -149,12 +152,12 @@ a single tripwire that one misbehaving caller pulls for everyone behind it.
 
 **3. Readiness reflects the downstreams; liveness does not.**
 `AddGatewayDownstreamHealthChecks(params string[] serviceNames)`
-(`.../Gateway/GatewayHealthCheckExtensions.cs:75`) registers one check per named downstream with an
-`HttpClient` whose `BaseAddress` is the Aspire service-discovery name `http://{name}` (`:93-100`),
-deduplicated through a registry so a repeated name cannot double-probe (`:80-88`, `:124-171`). Each
-check probes `/alive` (`DownstreamServiceHealthCheck.cs:31`) under a 2 second budget applied at both
-the client and the registration (`:29`, `GatewayHealthCheckExtensions.cs:99`, `:110`), reports
-`Unhealthy` on failure (`:108`) and carries the `Ready` tag (`:109`).
+(`.../Gateway/GatewayHealthCheckExtensions.cs:130`) registers one check per named downstream with an
+`HttpClient` whose `BaseAddress` is the Aspire service-discovery name `http://{name}` (`:194`),
+deduplicated through a registry so a repeated name cannot double-probe (`:176-181`, `:219-272`). Each
+check probes `/alive` (`DownstreamServiceHealthCheck.cs:46`) under a 2 second budget
+(`GatewayHealthCheckExtensions.cs:84`) applied at both the client (`:195`) and the registration
+(`:212`), reports `Unhealthy` on failure (`:210`) and carries the `Ready` tag (`:211`).
 
 The tag is the whole design. The Aspire defaults map `/alive` to checks tagged `Live`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:342-345`) and `/health/ready` to
@@ -219,7 +222,7 @@ keeps the Gateway a transport concern and keeps ADR-008's extraction reversible.
 adds exactly one request transform: `GatewayTraceHeaderTransformProvider` removes and re-adds
 `X-MMCA-Route` and `X-MMCA-Cluster` on every proxied request
 (`.../MMCA.Common.Gateway/Transforms/GatewayTraceHeaderTransformProvider.cs:60-71`, header names
-defaulted at `GatewaySettings.cs:193`, `:196`). The exception is deliberate and narrow: it stamps
+defaulted at `GatewaySettings.cs:181`, `:184`). The exception is deliberate and narrow: it stamps
 **which route and cluster YARP selected**, a fact only the proxy knows and one a downstream cannot
 reconstruct, which is the same argument that made correlation an edge responsibility. It reads
 nothing from the request and changes nothing a downstream parses. The decline that stands is the one
@@ -263,7 +266,7 @@ balances across the replicas behind it. ADC declares five clusters with one dest
 (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:163-166`, `:172-175`, `:181-184`,
 `:190-193`, `:195-198`) and Store three (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:84-92`,
 `:93-101`, `:102-106`), resolved through `AddServiceDiscoveryDestinationResolver`
-(ADC `Program.cs:108`, Store `Program.cs:127`) against the bicep address book
+(ADC `Program.cs:115`, Store `Program.cs:141`) against the bicep address book
 (`MMCA.ADC/infra/main.bicep:1718-1721`). The shape is not incidental: both repositories **pin it as
 an invariant**, asserting that each cluster contains a single destination
 (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:229-231`,
@@ -288,16 +291,16 @@ is harmless. Retrying where the key is is the only version that is correct.
 package can apply YARP health-check defaults to any cluster that declares none
 (`Configuration/GatewayHealthCheckDefaultsConfigFilter.cs`, additive-only: an existing block is kept
 verbatim, `:30-31`, class doc at `:9-14`). **Passive** checking is the default that is on
-(`GatewaySettings.cs:147`, `TransportFailureRate` at `:151`, 60 second reactivation at `:154`),
+(`GatewaySettings.cs:135`, `TransportFailureRate` at `:139`, 60 second reactivation at `:142`),
 because YARP watches the forwarded responses it is already making, so it costs no extra traffic
-(`:141-143`). **Active** probing is opt-in (`Enabled` defaults to `false`, `:165`, reasoning at
-`:157-161`: an extra probe per destination per interval is real traffic and real cost, and passive
+(`:129-131`). **Active** probing is opt-in (`Enabled` defaults to `false`, `:153`, reasoning at
+`:145-149`: an extra probe per destination per interval is real traffic and real cost, and passive
 checks already eject a destination failing the requests the gateway cares about); when enabled it
-probes `/alive` (`:182-183`) on the `ConsecutiveFailures` policy (`:168-169`) every 10 seconds
-(`:172`) under a 5 second budget (`:175`). `/alive` rather than `/health` is its own decision:
+probes `/alive` (`:170-171`) on the `ConsecutiveFailures` policy (`:156-157`) every 10 seconds
+(`:160`) under a 5 second budget (`:163`). `/alive` rather than `/health` is its own decision:
 readiness on a downstream flips during that downstream's rolling deployment, and ejecting a
 destination for that is the gateway reacting to a healthy deployment as if it were an outage
-(`:177-181`). Both consumers enable it at a 30 second interval
+(`:165-169`). Both consumers enable it at a 30 second interval
 (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:35-40`,
 `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:24-29`) and both pin the effective
 result (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:229`,
@@ -375,7 +378,7 @@ off and the deployed answer is on.
   recorded decision without failing a build.
 - **Nothing gates adoption.** A gateway that never calls the three registrations behaves exactly as
   before, and no fitness function names a gateway host. Both consumer gateways do call all three
-  today (ADC `Program.cs:65`, `:71`, `:112`; Store `Program.cs:74`, `:79`, `:136`), but that is a
+  today (ADC `Program.cs:64`, `:78`, `:112`; Store `Program.cs:87`, `:112`, `:138`), but that is a
   wiring habit rather than an enforced invariant, which is the audit-the-inventory caveat ADR-005 and
   ADR-017 both record, now applied to the edge.
 

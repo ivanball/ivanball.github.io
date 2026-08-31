@@ -18,7 +18,9 @@ policy without it. Amended (2026-08-19): the cross-service eviction limit in
 Trade-offs is narrowed by [ADR-026](026-caching-strategy.md)'s Revision (2026-08-18): a mutation in
 another service can now request this host's tag eviction over the outbox, broker and inbox path via
 `OutputCacheEvictionRequested`, best-effort and per tag, and ADC's bookmark counts now pair that
-event with their short TTL rather than relying on the TTL alone (see Trade-offs).
+event with their short TTL rather than relying on the TTL alone (see Trade-offs). Amended
+(2026-08-31): ADC's public-policy set is eleven with `ActivitiesCache`, and ten of the eleven pass
+the bypass audience; `NowNextCache` remains the only policy without it.
 
 ## Context
 
@@ -26,10 +28,10 @@ The framework's read-scaling design leans on ASP.NET Core output caching: anonym
 endpoints (`[AllowAnonymous]` GETs like event/session/speaker catalogs) carry named policies with
 tag-based eviction, primed by startup warmup and load-tested by k6. Five minutes is the usual TTL
 and every Store Catalog policy uses it
-(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:153-158`), but it is a default,
+(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:141-146`), but it is a default,
 not a rule: ADC runs two 60-second policies whose payload cannot wait five minutes (`NowNextCache`,
 a clock-dependent now-and-next snapshot, and `BookmarkCountsCache`, written by another service;
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:252,264`).
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:229,241`).
 
 That design was silently inert for the traffic that matters. The shared UI HttpClient pipeline
 attaches the stored Bearer token to every outgoing API request via `AuthDelegatingHandler`,
@@ -86,12 +88,12 @@ and the API-layer visibility check reads the same list
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:25`).
 Two lists naming different roles would put a privileged payload in the shared public entries and
 serve it to everyone, so the single declaration is the guard, not a convention. Nor is the bypass a
-narrow exception in practice: nine of ADC's ten public policies pass it
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:236-263`), the exception being
+narrow exception in practice: ten of ADC's eleven public policies pass it
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:213-241`), the exception being
 `NowNextCache`, whose published-data payload is identical for every role. Breadth has a second
 driver that role-shaped variance does not cover: the admin surfaces read back right after mutating
 and not every write path evicts tags, so a cached stale row version makes the next save throw
-`DbUpdateConcurrencyException` (`Program.cs:227-228`).
+`DbUpdateConcurrencyException` (`Program.cs:204-205`).
 
 ## Rationale
 
@@ -136,9 +138,9 @@ and not every write path evicts tags, so a cached stale row version makes the ne
   registration (`AddStackExchangeRedisOutputCache`) rather than new infrastructure. Both hosts put
   that registration in the same Redis-connection-string branch as `AddRedisDistributedCache` rather
   than next to `AddOutputCache`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:156`,
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:117`), leaning on the framework
-  behavior their comments state (`Program.cs:152-153` and `:114-115`): `AddOutputCache` registers
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:140`,
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:96`), leaning on the framework
+  behavior their comments state (`Program.cs:136` and `:93`): `AddOutputCache` registers
   its store with `TryAdd`, so an explicit Redis registration wins regardless of call order. Read that as
   framework behavior per those host comments; nothing in these repos verifies it.
 
@@ -153,11 +155,11 @@ and not every write path evicts tags, so a cached stale row version makes the ne
   exactly that: `UserSessionBookmarkCacheEvictionHandler`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:43`,
   raising the event at `:77`) with the Conference host consuming it (`AddOutputCacheEvictionHandler()`
-  at `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:270`,
-  `RegisterOutputCacheEvictionConsumer()` at `:373`), keeping the short TTL as the backstop for a lost
-  or late event rather than the only defense (`BookmarkCountsCache`, 60 seconds, `Program.cs:264`).
+  at `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:247`,
+  `RegisterOutputCacheEvictionConsumer()` at `:350`), keeping the short TTL as the backstop for a lost
+  or late event rather than the only defense (`BookmarkCountsCache`, 60 seconds, `Program.cs:241`).
   A payload that changes on the clock still has no mutation to evict on, so a short TTL remains its
-  whole answer (`NowNextCache`, 60 seconds, `Program.cs:252`). When adding a cached endpoint, check
+  whole answer (`NowNextCache`, 60 seconds, `Program.cs:229`). When adding a cached endpoint, check
   which process owns every write that can change its payload, and whether time alone changes it.
 - Cache hit rate becomes meaningful for authenticated load tests; k6 scripts that log in now
   exercise the same cache path as anonymous ones.
