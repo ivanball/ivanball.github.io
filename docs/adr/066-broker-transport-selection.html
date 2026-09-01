@@ -218,7 +218,9 @@
           deploy-gating in BOTH consumers, ADC since 2026-08-31 as TD-17 and Store immediately after, so the
           &quot;both jobs are continue-on-error&quot; record and the &quot;no gating check exercises the production
           transport&quot; trade-off are rewritten; the dedicated <code>app-clients</code> SAS sourcing is recorded for both
-          repos rather than Store alone).</p>
+          repos rather than Store alone; and the emulator fixture is now framework code, <code>ServiceBusEmulatorFixtureBase</code>
+          in <code>MMCA.Common.Testing</code> since v1.178.0, subclassed by both consumers instead of hand-copied into
+          each, so the bullet that described a per-repo fixture shape is restated around the shipped base).</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 decides that integration events leave an aggregate through the outbox and are published by
           <code>OutboxProcessor</code> via <code>IMessageBus</code>, and it settles the <em>dispatch</em> question (&quot;in-process for the
@@ -295,21 +297,30 @@
           shared fixture base sets <code>MessageBus__Provider=RabbitMq</code> plus
           <code>ConnectionStrings__rabbitmq</code> against a Testcontainers RabbitMQ for every host it boots
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:249-250</code>).</li>
-          <li><strong>A dedicated emulator tier exists to prove the production binding, and it gates the deploy.</strong> Both
-          repos carry the same fixture shape. The emulator image is pinned to
-          <code>mcr.microsoft.com/azure-messaging/servicebus-emulator:2.0.1</code> (ADC
-          <code>MMCA.ADC/Tests/Integration/MMCA.ADC.ServiceBusEmulator.IntegrationTests/Infrastructure/ServiceBusEmulatorFixture.cs:50</code>,
-          Store
-          <code>MMCA.Store/Tests/Integration/MMCA.Store.ServiceBusEmulator.IntegrationTests/Infrastructure/ServiceBusEmulatorFixture.cs:24</code>);
-          the bus is a MassTransit v8 bus started through <code>Bus.Factory.CreateUsingAzureServiceBus</code> with the
-          custom-clients <code>Host</code> overload, the only v8 path onto the emulator (ADC <code>:120-142</code>); and a static
-          constructor lowers MassTransit&#39;s process-global TTL and auto-delete defaults under the emulator&#39;s
-          one-hour quota (ADC <code>:64-71</code>, Store <code>:31-38</code>), which is why the tier runs in its own test process.
-          The bus is started <strong>once on the collection fixture</strong> in both repos, not per test class, and both
-          startup phases are wall-clock bounded (ADC&#39;s <code>ContainerStartTimeout</code> / <code>BusStartTimeout</code> /
-          <code>BusStopTimeout</code> at <code>:56-58</code>, applied through the PHASE 1 and PHASE 2 <code>TimeoutException</code> wrappers at
-          <code>:100-108</code> and <code>:148-156</code>), because the admin plane throttles at roughly one operation per second and
-          a job-timeout kill discards the step log that would name the phase. Both jobs are <strong>authoritative</strong>
+          <li><strong>A dedicated emulator tier exists to prove the production binding, and it gates the deploy.</strong> The
+          fixture is framework code, not a per-repo copy: <code>ServiceBusEmulatorFixtureBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/ServiceBusEmulatorFixtureBase.cs</code>) ships in
+          <code>MMCA.Common.Testing</code> as of v1.178.0, and both consumers subclass it, supplying only their
+          <code>ReceiveQueueName</code>, their contract handlers through <code>ConfigureReceiveEndpoint</code>, the
+          <code>[CollectionDefinition]</code> class (per test assembly by construction) and the assertions. The base owns
+          everything that was hand-copied on both sides before: the pinned image (<code>DefaultEmulatorImage</code>,
+          <code>mcr.microsoft.com/azure-messaging/servicebus-emulator:2.0.1</code>, 2.x on purpose because the HTTP
+          management plane MassTransit provisions its topology through shipped in 2.0.0); the admin-plane
+          connection string built against the mapped port 5300 (<code>AdminPlanePort</code>,
+          <code>ComposeAdminConnectionString</code>, pure and static so it is unit-testable without a container); the
+          MassTransit v8 bus started through <code>Bus.Factory.CreateUsingAzureServiceBus</code> with the custom-clients
+          <code>Host</code> overload, the only v8 path onto the emulator; and a static constructor lowering MassTransit&#39;s
+          process-global TTL and auto-delete defaults under the emulator&#39;s one-hour quota, which is why the
+          tier runs in its own test process. Two shapes the base now enforces rather than suggests: the bus
+          lives on the FIXTURE and starts once for the whole tier (a test class implementing <code>IAsyncLifetime</code>
+          is re-instantiated per <code>[Fact]</code>, so a bus created there re-provisions the entire topology through an
+          admin plane that throttles at roughly one admin operation per second), and exactly ONE receive
+          endpoint is provisioned (<code>ReceiveQueueName</code>), so an added contract costs a topic plus a subscription
+          rather than another queue. Both startup phases are wall-clock bounded by overridable budgets
+          (<code>ContainerStartTimeout</code> 4 minutes, <code>BusStartTimeout</code> 3 minutes, <code>BusStopTimeout</code> 1 minute) that
+          throw a named PHASE 1 or PHASE 2 <code>TimeoutException</code>: the point is not only failing sooner but
+          keeping the evidence, since a step killed by the JOB timeout has its log discarded, which is what
+          left ADC&#39;s 7-of-7 hang (2026-07-21 to 07-24) unlocalized for a week. Both jobs are <strong>authoritative</strong>
           on the weekday-nightly workflow: neither carries <code>continue-on-error</code> (ADC
           <code>MMCA.ADC/.github/workflows/cross-service-tests.yml:153-157</code>, rationale <code>:126-137</code>, cron <code>:31</code>;
           Store&#39;s <code>servicebus-emulator-smoke</code> job in
@@ -367,7 +378,9 @@
           escape hatch is <code>deploy.yml</code>&#39;s break-glass <code>skip_freshness_gates</code> input, which forces a written
           justification into the run summary.</li>
           <li><strong>The emulator is not Azure Service Bus.</strong> It imposes its own quotas (the one-hour entity TTL the
-          fixture works around at <code>ServiceBusEmulatorFixture.cs:64-71</code>, a throttled admin plane), so a green
+          shared fixture base works around in its static constructor,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/ServiceBusEmulatorFixtureBase.cs</code>, plus a throttled
+          admin plane and a 10-connection namespace quota), so a green
           smoke proves the binding and the topology provisioning, not production behavior at volume.</li>
           <li><strong><code>Manage</code> rights are broad.</strong> The <code>app-clients</code> rule can create and delete entities in the
           namespace, which is the price of letting <code>ConfigureEndpoints</code> build the topology instead of

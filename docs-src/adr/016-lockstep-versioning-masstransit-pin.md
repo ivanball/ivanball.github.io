@@ -22,6 +22,12 @@ entries are 8.5.10, the same patch as Common's three MassTransit entries, which 
 figure in the 2026-08-14 entry and retires the note that the app-side entry trailed within v8; the
 `Directory.Packages.props`, `DependencyInjection.cs` and `MessageBusSettings.cs` citations are
 rebased onto their current lines. The pin, the gate and the dependency set are unchanged.
+Amended (2026-09-01): the emulator proving ground named in **Transport exit options** is authoritative
+and deploy-gating in both consumers (ADC on 2026-08-31 as TD-17, Store immediately after), so the
+"advisory by design so it can never gate a deploy" clause is restated; its fixture now ships as
+`ServiceBusEmulatorFixtureBase` in `MMCA.Common.Testing` (v1.178.0), which is why the tier's
+MassTransit v8 constraint is enforced in framework code rather than in two copies. The pin, the gate
+and the dependency set are unchanged.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -157,10 +163,13 @@ function that reads it
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-22`,
 the major ceiling at `:24-37`), plus the dependabot ignore they are paired with.
 
-A proving ground already exists: ADC's nightly runs an Azure Service Bus emulator smoke against its
-real integration-event contracts, advisory by design so it can never gate a deploy
-(`MMCA.ADC/.github/workflows/cross-service-tests.yml:145-172`, the non-gating rationale at
-`:126-129`). Any transport candidate has somewhere to be exercised that is not production.
+A proving ground already exists: both consumers' nightlies run an Azure Service Bus emulator smoke
+against their real integration-event contracts, and the tier is authoritative rather than advisory,
+so a transport regression blocks the next deploy
+(`MMCA.ADC/.github/workflows/cross-service-tests.yml:153-157`, the gating rationale at `:126-137`,
+and the equivalent `servicebus-emulator-smoke` job in
+`MMCA.Store/.github/workflows/cross-service-tests.yml`; the deploy-side halves are recorded in
+ADR-066 and ADR-064). Any transport candidate has somewhere to be exercised that is not production.
 
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker
