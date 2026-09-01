@@ -395,8 +395,8 @@ so it inherits ADR-087's fault consumer by default. It now sits below a sibling 
 [ADR-090](090-event-upcaster-registration.md) registration a host adds while a retired contract still
 drains from a queue. The two are alternatives on one event, never both: registering a plain and an
 upcasting consumer for the same type puts two consumers on one queue. `AddOutputCacheEvictionHandler()`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:32`)
-registers the handler itself, through `TryAddEnumerable` (`:36-38`). They are in different packages
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:111`)
+registers the handler itself, through `TryAddEnumerable` (`:115-117`). They are in different packages
 because the two halves are genuinely different concerns (broker registration is Infrastructure, output
 caching is API), and **a host that calls only one gets silence**: the consumer without the handler
 receives and discards, the handler without the consumer is never invoked.
@@ -519,4 +519,26 @@ substantive prose changed.
    the Tier 2 policy anchors (`OutputCacheOptionsExtensions.cs:20`,
    `PublicEndpointOutputCachePolicy.cs:35`, `:71-75`, `:109-113`).
 7. **The 2026-08-23 anchor claim is annotated rather than removed**, consistent with how every
+   preceding revision treated its predecessor.
+
+## Revision (2026-09-01)
+Line anchors only, for the one file the 2026-08-31 entry did not re-read. No decision, no behavior,
+and no substantive prose changed.
+
+1. **The eviction registration.** `AddOutputCacheEvictionHandler()` is now at
+   `MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:111` (from `:32`) and its
+   `TryAddEnumerable` call at `:115-117` (from `:36-38`). The class itself is still the head of the
+   file (`:27`); what moved the members is a second `extension(T)` block added above the
+   `extension(IServiceCollection services)` one (`:36` and `:95` respectively), holding the multi-tag
+   eviction helpers `EvictTagsAsync` (`:49`) and its best-effort sibling `TryEvictTagsAsync` (`:78`)
+   that a mutating controller calls after a write, plus the `EvictOperationPrefix` const they name
+   their operations from (`:34`). Two `extension(T)` blocks in one static class is also why the file
+   now carries a CA1708 suppression (`:23-26`). The registration behavior the citation describes,
+   one handler however many callers register it, is unchanged.
+2. **Re-checked and unchanged.** `OutputCacheEvictionHandler.cs:32` (the class) and `:44-63` (the
+   per-tag loop with its swallow-log-count catch), `OutputCacheMetrics.cs:19` (the meter name) and
+   `:29-37` (the `cache.eviction.failed` instrument plus its recorder), and
+   `MMCA.Common.Aspire/Extensions.cs:169` (the meter subscription, still the fifth `AddMeter` line).
+   The 2026-08-31 entry's own anchors were not re-read this pass and stand as written there.
+3. **The 2026-08-31 anchor claim is annotated rather than removed**, consistent with how every
    preceding revision treated its predecessor.

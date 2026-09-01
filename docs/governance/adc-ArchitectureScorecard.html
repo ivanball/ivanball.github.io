@@ -168,7 +168,7 @@
           <td>4</td>
           <td>9</td>
           <td>8/18</td>
-          <td>Creational (entity factories/Options), structural (decorator pipeline, manual mapper adapter, gRPC adapters), behavioral (Strategy, dispatcher, Specification, domain events), and domain patterns (Result, Repository/UoW, Outbox) all present, idiomatic, ADR-justified, consistently named. Evidence: <code>Identity.Domain/Users/User.cs:130</code> (Factory Create→Result&lt;User&gt;); <code>Conference.Application/Events/Specifications/OwnEventQuestionAnswerSpecification.cs:15-16</code> (authz scoping); exactly 5× <code>{Category,Room,Speaker,Session,Question}SyncStrategy.cs</code></td>
+          <td>Creational (entity factories/Options), structural (decorator pipeline, manual mapper adapter, gRPC adapters), behavioral (Strategy, dispatcher, Specification, domain events), and domain patterns (Result, Repository/UoW, Outbox) all present, idiomatic, ADR-justified, consistently named. Evidence: <code>Identity.Domain/Users/User.cs:158</code> (Factory Create→Result&lt;User&gt;); <code>Conference.Application/Events/Specifications/PublishedEventSpecification.cs:11,14</code> (read scoping: the BR-108 published-only criteria applied for non-organizer readers on public endpoints); exactly 5× <code>{Category,Room,Speaker,Session,Question}SyncStrategy.cs</code></td>
           </tr>
           <tr>
           <td>3</td>

@@ -13,6 +13,11 @@ Revised 2026-08-31: both templates dropped the superseded metric alert declarati
 bullet that recorded them as "declared and disabled, never deleted", its Rationale entry, and the
 carried-debt trade-off are rewritten around what actually keeps the supersede safe (the distinct
 `-v2` names). Every `main.bicep` citation is re-anchored again. No decision changed.
+Revised 2026-09-01: ADC's `infra/OPERATIONS.md` gained the same `## Operational alert runbooks`
+section Store carries, with a `####` heading per ungated alert family it provisions, so the coverage
+boundary paragraph and the trade-off that cited Store's triage alone are rewritten around both
+consumers. The gate still scopes to the `sloAlertSpecs` window by design and the honour-system caveat
+still applies to every `####` section. No decision changed.
 
 ## Context
 ADR-041 standardized what the fleet **emits**: RED histograms off the CQRS pipeline, an outbox
@@ -144,13 +149,13 @@ scheduled query rules, and make the alert-to-runbook pairing a **build gate ship
 it is an inapplicable one. MMCA.Common runs the base against its own fixture pair, not against a real
 deployment.
 
-**Coverage boundary inside ADC's template.** The gate covers exactly the alerts declared between the two
+**Coverage boundary inside the templates.** The gate covers exactly the alerts declared between the two
 parse anchors. ADC additionally provisions two operational scheduled query rules,
 `outbox-dead-letter` and `sql-dependency-failures` (`MMCA.ADC/infra/main.bicep:385`, materialized at
-`:400`), and a severity 1 gateway-availability metric alert over a three-location URL ping web test
-(`MMCA.ADC/infra/main.bicep:441`, `:474`). All three sit outside the `sloAlertSpecs` window, so the
-pairing gate neither requires nor forbids runbook sections for them, and `OPERATIONS.md` carries none
-today (its only `-alert-` headings are the three SLO sections). Store provisions both of the families
+`:402`, severity 2 at `:407`), and a severity 1 gateway-availability metric alert over a three-location
+URL ping web test (`MMCA.ADC/infra/main.bicep:441`, alert at `:475`, severity at `:480`). All three sit
+outside the `sloAlertSpecs` window, so the pairing gate neither requires nor forbids runbook sections
+for them. Store provisions both of the families
 that apply to it, merged on 2026-08-13: the `outbox-dead-letter` scheduled query rule
 (`MMCA.Store/infra/main.bicep:342`) and the outside-in Gateway availability web test (`:383`) with its
 severity 1 metric alert (`:416`, severity at `:422`), alongside the three SLO rules and the budget
@@ -158,18 +163,24 @@ notifications. Both sit after the `sloAlerts` window closes
 (`MMCA.Store/infra/main.bicep:284-326`) and therefore outside the parse window, so Store's two extras
 are ungated exactly as ADC's three are.
 
-The two consumers then diverge in how they treat that ungated space. ADC writes no triage for its
-three; Store does write it, and keeps it out of the gate's reach on purpose. Store's `OPERATIONS.md`
-carries an `## Operational alert runbooks` section (`MMCA.Store/infra/OPERATIONS.md:58`) holding
-`store-alert-outbox-dead-letter` (sev 2) at `:66` and `store-alert-gateway-availability` (sev 1) at
-`:89`. Both are `####` headings rather than `###`, because `RunbookHeadingRegex` is `^###\s+.*$`
+Both consumers write triage for that ungated space, and both keep it out of the gate's reach on
+purpose. Each repo's `OPERATIONS.md` carries an `## Operational alert runbooks` section holding one
+`####` heading per ungated alert family that repo provisions, each with numbered triage steps. Store's
+(`MMCA.Store/infra/OPERATIONS.md:58`) holds `store-alert-outbox-dead-letter` (sev 2) at `:66` and
+`store-alert-gateway-availability` (sev 1) at `:89`. ADC's sits after its three `###` SLO sections in
+`MMCA.ADC/infra/OPERATIONS.md` and holds `adc-prod-alert-outbox-dead-letter` (sev 2),
+`adc-prod-alert-sql-dependency-failures` (sev 2) and `adc-prod-alert-gateway-availability` (sev 1),
+named with the full deployed names its SLO headings already use. The headings are `####` rather than
+`###` in both repos, because `RunbookHeadingRegex` is `^###\s+.*$`
 (`ObservabilityConventionTestsBase.cs:145-146`) and does not match a `####` line: an `###` heading
 naming a non-spec alert would read to `EveryRunbookAlertSection_MapsToAProvisionedAlert` as an orphan
-section and fail the build. The runbook states that reasoning inline
-(`MMCA.Store/infra/OPERATIONS.md:62-64`). So the triage exists and is discoverable at 3am, while the
-gate still sees exactly three paired alerts on each side. Store deliberately does not port
-`sql-dependency-failures`: its own `dependency-failures` SLO rule already spans SQL, gRPC and HTTP
-(`MMCA.Store/infra/main.bicep:340-341`), so a narrower SQL-scoped twin would page twice for one fault.
+section and fail the build. Each runbook states that reasoning inline, above its own first `####`
+heading (`MMCA.Store/infra/OPERATIONS.md:62-64` and the matching prose in ADC's section). So the
+triage exists and is discoverable at 3am on both sides, while the gate still sees exactly three paired
+alerts on each side. The one provisioning asymmetry that remains is deliberate: Store does not port
+`sql-dependency-failures`, because its own `dependency-failures` SLO rule already spans SQL, gRPC and
+HTTP (`MMCA.Store/infra/main.bicep:340-341`), so a narrower SQL-scoped twin would page twice for one
+fault.
 
 ## Rationale
 - **Alerts as data, not as portal state.** One array is reviewable in a PR, diffable across
@@ -207,11 +218,12 @@ gate still sees exactly three paired alerts on each side. Store deliberately doe
 - **Only the spec-window alerts are covered.** ADC's outbox dead-letter, SQL dependency and
   gateway-availability alerts and Store's outbox dead-letter and gateway-availability alerts are
   provisioned but ungated, so all five can be added, renamed or re-tiered with no **build**
-  consequence. That is not the same as no consequence: Store's two do have written triage
-  (`MMCA.Store/infra/OPERATIONS.md:66`, `:89`), and because those `####` sections are invisible to
-  the gate by design, re-tiering or renaming either alert leaves stale runbook text that nothing
-  checks. The honour-system caveat is recorded in the runbook itself
-  (`MMCA.Store/infra/OPERATIONS.md:126-128`).
+  consequence. That is not the same as no consequence: all five have written triage (Store
+  `MMCA.Store/infra/OPERATIONS.md:66`, `:89`; ADC's three in the `## Operational alert runbooks`
+  section of `MMCA.ADC/infra/OPERATIONS.md`), and because those `####` sections are invisible to
+  the gate by design, re-tiering or renaming any of them leaves stale runbook text that nothing
+  checks. Both runbooks record that honour-system caveat themselves, in their Governance sections
+  (`MMCA.Store/infra/OPERATIONS.md:126-128` and the ADC equivalent).
 - **The template is not the inventory of the resource group.** The superseded metric alerts are gone
   from both templates, but an incremental ARM deployment does not delete what it stops declaring, so
   their unsuffixed names stay occupied in the resource group, and the template says so
