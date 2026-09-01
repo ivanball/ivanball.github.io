@@ -596,8 +596,8 @@
           <a href="090-event-upcaster-registration.html">ADR-090</a> registration a host adds while a retired contract still
           drains from a queue. The two are alternatives on one event, never both: registering a plain and an
           upcasting consumer for the same type puts two consumers on one queue. <code>AddOutputCacheEvictionHandler()</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:32</code>)
-          registers the handler itself, through <code>TryAddEnumerable</code> (<code>:36-38</code>). They are in different packages
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:111</code>)
+          registers the handler itself, through <code>TryAddEnumerable</code> (<code>:115-117</code>). They are in different packages
           because the two halves are genuinely different concerns (broker registration is Infrastructure, output
           caching is API), and <strong>a host that calls only one gets silence</strong>: the consumer without the handler
           receives and discards, the handler without the consumer is never invoked.</p>
@@ -719,6 +719,28 @@
           <li><strong>The 2026-08-23 anchor claim is annotated rather than removed</strong>, consistent with how every
           preceding revision treated its predecessor.</li>
           </ol>
+          <h2 id="revision-2026-09-01">Revision (2026-09-01)</h2>
+          <p>Line anchors only, for the one file the 2026-08-31 entry did not re-read. No decision, no behavior,
+          and no substantive prose changed.</p>
+          <ol>
+          <li><strong>The eviction registration.</strong> <code>AddOutputCacheEvictionHandler()</code> is now at
+          <code>MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:111</code> (from <code>:32</code>) and its
+          <code>TryAddEnumerable</code> call at <code>:115-117</code> (from <code>:36-38</code>). The class itself is still the head of the
+          file (<code>:27</code>); what moved the members is a second <code>extension(T)</code> block added above the
+          <code>extension(IServiceCollection services)</code> one (<code>:36</code> and <code>:95</code> respectively), holding the multi-tag
+          eviction helpers <code>EvictTagsAsync</code> (<code>:49</code>) and its best-effort sibling <code>TryEvictTagsAsync</code> (<code>:78</code>)
+          that a mutating controller calls after a write, plus the <code>EvictOperationPrefix</code> const they name
+          their operations from (<code>:34</code>). Two <code>extension(T)</code> blocks in one static class is also why the file
+          now carries a CA1708 suppression (<code>:23-26</code>). The registration behavior the citation describes,
+          one handler however many callers register it, is unchanged.</li>
+          <li><strong>Re-checked and unchanged.</strong> <code>OutputCacheEvictionHandler.cs:32</code> (the class) and <code>:44-63</code> (the
+          per-tag loop with its swallow-log-count catch), <code>OutputCacheMetrics.cs:19</code> (the meter name) and
+          <code>:29-37</code> (the <code>cache.eviction.failed</code> instrument plus its recorder), and
+          <code>MMCA.Common.Aspire/Extensions.cs:169</code> (the meter subscription, still the fifth <code>AddMeter</code> line).
+          The 2026-08-31 entry&#39;s own anchors were not re-read this pass and stand as written there.</li>
+          <li><strong>The 2026-08-31 anchor claim is annotated rather than removed</strong>, consistent with how every
+          preceding revision treated its predecessor.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -745,6 +767,7 @@
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-08-23">Revision (2026-08-23)</a></li>
             <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
+            <li><a href="#revision-2026-09-01">Revision (2026-09-01)</a></li>
             </ul>
           </nav>
         </aside>

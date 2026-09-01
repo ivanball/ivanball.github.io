@@ -232,7 +232,13 @@
           entries are 8.5.10, the same patch as Common&#39;s three MassTransit entries, which supersedes the 8.5.5
           figure in the 2026-08-14 entry and retires the note that the app-side entry trailed within v8; the
           <code>Directory.Packages.props</code>, <code>DependencyInjection.cs</code> and <code>MessageBusSettings.cs</code> citations are
-          rebased onto their current lines. The pin, the gate and the dependency set are unchanged.</p>
+          rebased onto their current lines. The pin, the gate and the dependency set are unchanged.
+          Amended (2026-09-01): the emulator proving ground named in <strong>Transport exit options</strong> is authoritative
+          and deploy-gating in both consumers (ADC on 2026-08-31 as TD-17, Store immediately after), so the
+          &quot;advisory by design so it can never gate a deploy&quot; clause is restated; its fixture now ships as
+          <code>ServiceBusEmulatorFixtureBase</code> in <code>MMCA.Common.Testing</code> (v1.178.0), which is why the tier&#39;s
+          MassTransit v8 constraint is enforced in framework code rather than in two copies. The pin, the gate
+          and the dependency set are unchanged.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>FACTS.md</code> for the authoritative
           list and count) consumed by three downstream repos: the two
@@ -369,10 +375,13 @@
           function that reads it
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-22</code>,
           the major ceiling at <code>:24-37</code>), plus the dependabot ignore they are paired with.</p>
-          <p>A proving ground already exists: ADC&#39;s nightly runs an Azure Service Bus emulator smoke against its
-          real integration-event contracts, advisory by design so it can never gate a deploy
-          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:145-172</code>, the non-gating rationale at
-          <code>:126-129</code>). Any transport candidate has somewhere to be exercised that is not production.</p>
+          <p>A proving ground already exists: both consumers&#39; nightlies run an Azure Service Bus emulator smoke
+          against their real integration-event contracts, and the tier is authoritative rather than advisory,
+          so a transport regression blocks the next deploy
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:153-157</code>, the gating rationale at <code>:126-137</code>,
+          and the equivalent <code>servicebus-emulator-smoke</code> job in
+          <code>MMCA.Store/.github/workflows/cross-service-tests.yml</code>; the deploy-side halves are recorded in
+          ADR-066 and ADR-064). Any transport candidate has somewhere to be exercised that is not production.</p>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker
           transport behind the outbox and database-per-service flows).</p>

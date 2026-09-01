@@ -214,7 +214,12 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-01). Revised 2026-08-07: the MMCA.Helpdesk workflow inventory below was corrected
           (it also carries <code>release-templates.yml</code>, and its <code>ci.yml</code> runs two jobs, not one); the conclusion
-          that Helpdesk has no rollout for a recency gate to block is unchanged.</p>
+          that Helpdesk has no rollout for a recency gate to block is unchanged. Revised 2026-09-01: the broker
+          recency gate now requires TWO job conclusions, <code>cross-service</code> and <code>servicebus-emulator-smoke</code>, in
+          both repos (ADC promoted the emulator tier on 2026-08-31 as TD-17, Store immediately after), so the
+          bullet that described one required job and treated <code>servicebus-emulator-smoke</code> as the advisory job
+          that justifies reading jobs instead of the run conclusion is restated; that justification now rests
+          on <code>apphost-smoke</code>, which is still advisory. The gate mechanism and every other gate are unchanged.</p>
           <h2 id="context">Context</h2>
           <p>A production rollout in both deployed apps waits on a list of jobs in <code>deploy.needs</code>
           (<code>MMCA.ADC/.github/workflows/deploy.yml:992</code>, <code>MMCA.Store/.github/workflows/deploy.yml:941</code>). Most of
@@ -270,18 +275,21 @@
           <code>MMCA.Store/.github/workflows/deploy.yml:641-644,696-699,776-779</code>); Store&#39;s broker message is the
           same sentence without the <code>(TD-02)</code> suffix ADC carries.</p>
           </li>
-          <li><p><strong>The broker gate keys off the job, not the run conclusion.</strong> It enumerates completed runs of
-          <code>cross-service-tests.yml</code> (any conclusion, 25 per page) and, for each, asks the jobs API whether a
-          job literally named <code>cross-service</code> concluded <code>success</code>, stopping at the first one that did
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:808-821</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:762-775</code>). The reasoning is recorded inline in both repos:
-          a skip-if-unchanged guard can make a run conclude <code>success</code> with the test jobs skipped and no
-          round-trip executed, and the advisory <code>servicebus-emulator-smoke</code> job can fail or hang so the run
-          concludes <code>failure</code> or <code>cancelled</code> although the real round-trip passed
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:795-807</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:750-761</code>). The ADC comment names the incident that forced
-          break-glass while that job was hanging, 2026-07-21 to 07-24
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:801-802</code>).</p>
+          <li><p><strong>The broker gate keys off the jobs, not the run conclusion.</strong> It enumerates completed runs of
+          <code>cross-service-tests.yml</code> (any conclusion, 25 per page) and, for each, asks the jobs API which of
+          the named broker jobs concluded <code>success</code>, stopping at the first run where all of them did
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:874</code>, gate job <code>:815</code>; the Store gate enumerates the same
+          job names in <code>MMCA.Store/.github/workflows/deploy.yml</code>). Two jobs are required in both repos as of
+          2026-08-31 (ADC, TD-17) and immediately after in Store: <code>cross-service</code>, the Testcontainers RabbitMQ
+          outbox to broker to consumer round-trip, and <code>servicebus-emulator-smoke</code>, the Azure Service Bus
+          emulator topology plus AMQP round-trip, so the production transport is a deploy precondition too
+          (ADR-066). The reasoning for reading jobs rather than the run is recorded inline in both repos: a
+          skip-if-unchanged guard can make a run conclude <code>success</code> with the test jobs skipped and no
+          round-trip executed, and a still-advisory job in the same workflow (<code>apphost-smoke</code>) can fail or
+          hang so the run concludes <code>failure</code> or <code>cancelled</code> although both proofs passed
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:850-869</code>). The ADC comment names the incident that forced
+          break-glass while the emulator job was hanging, 2026-07-21 to 07-24
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:864</code>).</p>
           </li>
           <li><p><strong>Break-glass exists as a dispatch input pair and refuses to fire without a written reason.</strong>
           <code>workflow_dispatch</code> carries <code>skip_freshness_gates</code> (boolean, default <code>false</code>) and
