@@ -60,7 +60,7 @@ gets it.
   health checks that the Aspire client integrations add automatically switched off, because those
   arrive untagged and therefore gate readiness, and the framework registers its own `redis` check in
   their place, tagged `optional` and performing a `PING` only
-  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:247`). A host that reaches for an Aspire client
+  (`Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57` and `Source/Hosting/MMCA.Common.Aspire/Health/RedisPingHealthCheck.cs:26`). A host that reaches for an Aspire client
   integration directly puts the untagged check back and defeats both rules at once.
 - **A background runner that opens the gate once warm-up has had its chance.** `WarmupHostedService`
   runs every registered `IWarmupTask` exactly once, in parallel, then opens the gate. Critically the gate
