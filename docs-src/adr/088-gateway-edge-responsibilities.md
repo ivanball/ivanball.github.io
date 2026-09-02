@@ -126,7 +126,7 @@ the reasoning stated inline at `:169-171`). The `[Range]` bounds on the three nu
 (`GatewayRateLimitingSettings.cs:50`, `:54`, `:64`) are therefore load-bearing on both paths: an
 invalid `PermitLimit` throws where it is configured, not at the first throttled request.
 
-Bypasses are two-tier, and the tiers are different kinds of thing. **Infrastructure bypasses are
+Bypasses are two-tier as first recorded (a third, secret-gated tier for synthetic traffic was added in the 2026-09-01 amendment below), and the tiers are different kinds of thing. **Infrastructure bypasses are
 unconditional**: `/health`, `/alive` and `/.well-known` are hard-coded
 (`GatewayRateLimitingExtensions.cs:47`, matched by path segment, case-insensitively, `:64`), because
 throttling them takes down probes and token validation (ADR-004's JWKS discovery) as a side effect of
@@ -149,6 +149,33 @@ misreads as abuse ([ADR-039](039-live-channel-push.md)).
 bucket with every other unattributable request, which is the same fail-open posture ADR-019 chose for
 `auth-ip` and for the global limiter's fallback key, for the same reason: a shared "unknown" bucket is
 a single tripwire that one misbehaving caller pulls for everyone behind it.
+
+**Amendment (2026-09-01): a third, secret-gated bypass tier for synthetic traffic.** The two tiers
+above assume every caller is a real client. A capacity proof is not: both consumers run a monthly
+single-runner k6 read-load test against production through the gateway
+(`MMCA.ADC/.github/workflows/load-test.yml`, `MMCA.Store/.github/workflows/load-test.yml`), and the
+whole run arrives from ONE runner IP at roughly 100 requests per second, which the per-IP window
+(120 per 60 s) reads as exactly the flood it exists to stop. The first scheduled runs after the edge
+limiter shipped failed on 2026-09-01 with 96% 429s in both apps (ADC run 33500095682, Store run
+33499906085), and ADC's `load-freshness` deploy gate keys off the last green run, so an unfixed
+limiter would have blocked every ADC deploy from 2026-09-05. Raising `PermitLimit` for everyone or
+adding the read paths to `BypassPathPrefixes` would have removed the protection from the very
+surface it guards, and lifting the limit from the load-test workflow via a temporary container-app
+revision would have made a workflow that promises to be read-only mutate production twice a month.
+The framework instead gained a **synthetic-traffic bypass** (v1.180.0): a request carrying the
+configured header (`SyntheticTrafficHeaderName`, default `X-Synthetic-Traffic-Key`,
+`GatewayRateLimitingSettings.cs:91`) whose single value matches the configured secret
+(`SyntheticTrafficSecret`, `:115`) takes the same no-limiter partition as the two tiers above on BOTH
+chained limiters (`GatewayRateLimitingExtensions.cs:131`, `:169`). It is off by default (a null or
+blank secret disables it, `:94-113`), the comparison is constant-time
+(`CryptographicOperations.FixedTimeEquals`, `:113`), exactly one header value is accepted (`:105`),
+and a configured secret shorter than 32 characters fails at registration under the ADR-070 contract
+(`[StringLength(int.MaxValue, MinimumLength = 32)]`, `GatewayRateLimitingSettings.cs:114`). The secret
+is a deployment concern, never a checked-in setting: each consumer injects
+`GatewayRateLimiting__SyntheticTrafficSecret` into its gateway from Key Vault the same way it injects
+the SMTP password, and the k6 workflow sends the header from the matching repository secret. This
+tier is for load and capacity proofs only; a monitoring probe belongs on the always-bypassed
+infrastructure paths, and an application route that needs relief belongs in `BypassPathPrefixes`.
 
 **3. Readiness reflects the downstreams; liveness does not.**
 `AddGatewayDownstreamHealthChecks(params string[] serviceNames)`
