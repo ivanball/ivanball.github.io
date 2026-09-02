@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Versioning &amp; Breaking-Change Policy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="MMCA.Common publishes fifteen NuGet packages that are versioned and released together as a single unit. They share one version number so a consumer…">
+  <meta name="description" content="MMCA.Common publishes its NuGet packages (the authoritative list and count live in FACTS.md) versioned and released together as a single unit. They…">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-VERSIONING.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Versioning &amp; Breaking-Change Policy">
-  <meta property="og:description" content="MMCA.Common publishes fifteen NuGet packages that are versioned and released together as a single unit. They share one version number so a consumer…">
+  <meta property="og:description" content="MMCA.Common publishes its NuGet packages (the authoritative list and count live in FACTS.md) versioned and released together as a single unit. They…">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-VERSIONING.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Versioning &amp; Breaking-Change Policy">
-  <meta name="twitter:description" content="MMCA.Common publishes fifteen NuGet packages that are versioned and released together as a single unit. They share one version number so a consumer…">
+  <meta name="twitter:description" content="MMCA.Common publishes its NuGet packages (the authoritative list and count live in FACTS.md) versioned and released together as a single unit. They…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Versioning & Breaking-Change Policy","item":"https://ivanball.github.io/docs/guides/common-VERSIONING.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -125,8 +125,9 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="versioning--breaking-change-policy">Versioning &amp; Breaking-Change Policy</h1>
-          <p>MMCA.Common publishes fifteen NuGet packages that are versioned and released <strong>together</strong> as a
-          single unit. They share one version number so a consumer never has to reason about cross-package
+          <p>MMCA.Common publishes its NuGet packages (the authoritative list and count live in
+          <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>) versioned and released
+          <strong>together</strong> as a single unit. They share one version number so a consumer never has to reason about cross-package
           compatibility. (<code>MMCA.Common.UI.Maui</code> rides the same tag but is built and packed by a dedicated
           windows job in <code>release.yml</code>, since its MAUI target frameworks cannot build on the ubuntu runner.)</p>
           <p>Every release goes to <strong>two registries</strong> (<a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>):
