@@ -1,6 +1,6 @@
 # Phase 1b - Functional Group Taxonomy
 
-This is the **primary axis** of the guide. Every one of the **3,668** distinct first-party type
+This is the **primary axis** of the guide. Every one of the **4,205** distinct first-party type
 nodes from [`00-inventory.md`](00-inventory.md) is assigned to **exactly one** functional group -
 its primary *home*: the capability or cross-cutting concern it most exists to serve. A type used
 across many groups (e.g. `Result<T>`, the entity base) lives in the one foundational group that
@@ -53,35 +53,35 @@ disclosure) and is cross-linked in the chapter.
 
 | # | Group (chapter) | Types | Levels | Charter |
 |---|-----------------|-------|--------|---------|
-| G01 | **Result & Error Handling**<br/>group-01-result-error-handling.md | 14 | L0-L2 | The Result/Error railway that every operation returns instead of throwing; pagination result shapes. |
-| G02 | **Domain Building Blocks (Entities, Value Objects, Aggregates)**<br/>group-02-domain-building-blocks.md | 33 | L0-L5 | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases. |
+| G01 | **Result & Error Handling**<br/>group-01-result-error-handling.md | 16 | L0-L3 | The Result/Error railway that every operation returns instead of throwing; pagination result shapes. |
+| G02 | **Domain Building Blocks (Entities, Value Objects, Aggregates)**<br/>group-02-domain-building-blocks.md | 36 | L0-L5 | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases. |
 | G03 | **Querying: Specifications, Filtering & the Entity Query Service**<br/>group-03-querying-specifications.md | 38 | L0-L8 | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline. |
-| G04 | **Domain & Integration Events + Outbox Dual-Dispatch**<br/>group-04-events-outbox.md | 32 | L0-L13 | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses. |
-| G05 | **CQRS: Commands, Queries & the Decorator Pipeline**<br/>group-05-cqrs-pipeline.md | 38 | L0-L9 | The command/query handler abstraction and the cross-cutting decorator pipeline (logging, transaction, caching, feature-gate, idempotency) wrapping it. |
-| G06 | **Validation**<br/>group-06-validation.md | 17 | L0-L5 | The FluentValidation-based validation contracts and failure mapping that gate commands before they execute. |
-| G07 | **Persistence & EF Core**<br/>group-07-persistence-ef-core.md | 118 | L0-L14 | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time. |
-| G08 | **Authentication & Authorization**<br/>group-08-auth.md | 77 | L0-L10 | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing. |
+| G04 | **Domain & Integration Events + Outbox Dual-Dispatch**<br/>group-04-events-outbox.md | 36 | L0-L13 | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses. |
+| G05 | **CQRS: Commands, Queries & the Decorator Pipeline**<br/>group-05-cqrs-pipeline.md | 57 | L0-L14 | The command/query handler abstraction and the cross-cutting decorator pipeline (logging, transaction, caching, feature-gate, idempotency) wrapping it. |
+| G06 | **Validation**<br/>group-06-validation.md | 22 | L0-L9 | The FluentValidation-based validation contracts and failure mapping that gate commands before they execute. |
+| G07 | **Persistence & EF Core**<br/>group-07-persistence-ef-core.md | 124 | L0-L14 | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time. |
+| G08 | **Authentication & Authorization**<br/>group-08-auth.md | 87 | L0-L10 | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing. |
 | G09 | **Caching**<br/>group-09-caching.md | 8 | L0-L4 | The cache abstraction and its decorator-driven, invalidation-aware integration into the query pipeline. |
-| G10 | **Notifications (Push + In-App Inbox + Email)**<br/>group-10-notifications.md | 55 | L0-L10 | The notification subsystem: push (SignalR), the in-app inbox, email sending, recipient providers, and the thin ADC Notification module host. |
+| G10 | **Notifications (Push + In-App Inbox + Email)**<br/>group-10-notifications.md | 57 | L0-L10 | The notification subsystem: push (SignalR), the in-app inbox, email sending, recipient providers, and the thin ADC Notification module host. |
 | G11 | **Navigation Metadata & Populators (EF-decoupled eager loading)**<br/>group-11-navigation-populators.md | 12 | L0-L9 | INavigationMetadata/INavigationPopulator and the loader that hydrate cross-container/cross-source relationships without EF Include coupling ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)). |
-| G12 | **API Hosting, Middleware, Idempotency & DTO/Contract Mapping**<br/>group-12-api-hosting-mapping.md | 79 | L0-L16 | The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping. |
+| G12 | **API Hosting, Middleware, Idempotency & DTO/Contract Mapping**<br/>group-12-api-hosting-mapping.md | 81 | L0-L16 | The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping. |
 | G13 | **gRPC & Inter-Service Contracts**<br/>group-13-grpc-contracts.md | 6 | L0-L4 | Typed gRPC clients/servers, interceptors, Result-over-the-wire, and the ServiceContract marker for synchronous inter-service calls ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)). |
-| G14 | **Module System, Composition & Configuration**<br/>group-14-module-system-composition.md | 70 | L0-L14 | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding. |
-| G15 | **Common UI Framework (MudBlazor components, theme, base pages)**<br/>group-15-common-ui-framework.md | 91 | L0-L7 | Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app. |
-| G16 | **Aspire Orchestration & Service Defaults**<br/>group-16-aspire-orchestration.md | 31 | L0-L10 | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure. |
-| G17 | **ADC Conference - Domain Model & Module Contracts**<br/>group-17-conference-domain.md | 100 | L0-L10 | The Conference bounded context: Event/Session/Speaker/Category/Question aggregates, their domain events and invariants, plus the Shared identifiers/DTOs/integration-event contracts. |
-| G18 | **ADC Conference - Application & Use Cases**<br/>group-18-conference-application.md | 285 | L0-L14 | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics. |
+| G14 | **Module System, Composition & Configuration**<br/>group-14-module-system-composition.md | 72 | L0-L14 | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding. |
+| G15 | **Common UI Framework (MudBlazor components, theme, base pages)**<br/>group-15-common-ui-framework.md | 117 | L0-L8 | Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app. |
+| G16 | **Aspire Orchestration & Service Defaults**<br/>group-16-aspire-orchestration.md | 57 | L0-L10 | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure. |
+| G17 | **ADC Conference - Domain Model & Module Contracts**<br/>group-17-conference-domain.md | 99 | L0-L10 | The Conference bounded context: Event/Session/Speaker/Category/Question aggregates, their domain events and invariants, plus the Shared identifiers/DTOs/integration-event contracts. |
+| G18 | **ADC Conference - Application & Use Cases**<br/>group-18-conference-application.md | 303 | L0-L15 | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics. |
 | G19 | **ADC Conference - Infrastructure & Persistence**<br/>group-19-conference-infrastructure.md | 33 | L0-L12 | The Conference module DbContext registration, EF entity configurations, database seeding, and infrastructure services. |
-| G20 | **ADC Conference - API, gRPC Contracts & Service Host**<br/>group-20-conference-api-grpc.md | 43 | L0-L12 | Conference REST controllers, the .Contracts gRPC surface, the extractable service host, and the gRPC adapter. |
-| G21 | **ADC Conference - UI**<br/>group-21-conference-ui.md | 106 | L0-L10 | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services. |
+| G20 | **ADC Conference - API, gRPC Contracts & Service Host**<br/>group-20-conference-api-grpc.md | 44 | L0-L12 | Conference REST controllers, the .Contracts gRPC surface, the extractable service host, and the gRPC adapter. |
+| G21 | **ADC Conference - UI**<br/>group-21-conference-ui.md | 146 | L0-L10 | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services. |
 | G22 | **ADC Engagement Module (Session Bookmarks)**<br/>group-22-engagement-module.md | 179 | L0-L13 | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI. |
-| G26 | **ADC Engagement Live Layer (Real-Time Polls & Session Q&A)**<br/>group-23-engagement-live-layer.md | 95 | L0-L10 | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&A with upvoting, over the SignalR hub-channel transport ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)) and the cross-service gRPC live-channel adapter. |
-| G23 | **ADC Identity Module (Users, Profiles, GDPR Export/Erasure)**<br/>group-24-identity-module.md | 88 | L0-L17 | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI. |
+| G26 | **ADC Engagement Live Layer (Real-Time Polls & Session Q&A)**<br/>group-23-engagement-live-layer.md | 99 | L0-L14 | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&A with upvoting, over the SignalR hub-channel transport ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)) and the cross-service gRPC live-channel adapter. |
+| G23 | **ADC Identity Module (Users, Profiles, GDPR Export/Erasure)**<br/>group-24-identity-module.md | 90 | L0-L17 | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI. |
 | G24 | **ADC Application Host, UI Shell & Cross-Module Composition**<br/>group-25-adc-host-composition.md | 17 | L0-L13 | The ADC host: the Blazor Web/WASM/WinUI shells, host pages/services, security, and the cross-module application composition. |
-| G27 | **Device Capability Abstraction Layer (Native Contracts, MAUI, Browser & Fallback Adapters)**<br/>group-26-device-capability-layer.md | 96 | L0-L4 | Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045). |
-| G25 | **Testing & Quality Infrastructure**<br/>group-27-testing-infrastructure.md | 1907 | L0-L19 | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception). |
+| G27 | **Device Capability Abstraction Layer (Native Contracts, MAUI, Browser & Fallback Adapters)**<br/>group-26-device-capability-layer.md | 99 | L0-L4 | Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045). |
+| G25 | **Testing & Quality Infrastructure**<br/>group-27-testing-infrastructure.md | 2270 | L0-L19 | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception). |
 
-**Reconciliation:** 1761 production types across 26 groups + 1907 test/testing types in G25 = **3668** (matches the inventory's distinct-node count). No type appears twice; none dropped.
+**Reconciliation:** 1935 production types across 26 groups + 2270 test/testing types in G25 = **4205** (matches the inventory's distinct-node count). No type appears twice; none dropped.
 
 ---
 
@@ -89,7 +89,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G01 - Result & Error Handling
 
-> `group-01-result-error-handling.md` | 14 types | The Result/Error railway that every operation returns instead of throwing; pagination result shapes.
+> `group-01-result-error-handling.md` | 16 types | The Result/Error railway that every operation returns instead of throwing; pagination result shapes.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -104,22 +104,26 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `Error` | record | MMCA.Common.Shared.Abstractions |
 | 1 | `KeysetCollectionResult<T>` | record | MMCA.Common.Shared.Abstractions |
 | 1 | `PagedCollectionResult<T>` | record | MMCA.Common.Shared.Abstractions |
+| 2 | `ErrorTypeSeverity` | class | MMCA.Common.Shared.Abstractions |
 | 2 | `Result` | class | MMCA.Common.Shared.Abstractions |
 | 2 | `ResultConverter` | class | MMCA.Common.Shared.Serialization |
 | 2 | `ResultJsonConverterFactory` | class | MMCA.Common.Shared.Serialization |
+| 3 | `ResultExtensions` | class | MMCA.Common.Shared.Abstractions |
 
 ### G02 - Domain Building Blocks (Entities, Value Objects, Aggregates)
 
-> `group-02-domain-building-blocks.md` | 33 types | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases.
+> `group-02-domain-building-blocks.md` | 36 types | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
 | 0 | `DomainEntityState` | enum | MMCA.Common.Domain.Enums |
 | 0 | `DomainHelper` | class | MMCA.Common.Shared.Extensions |
+| 0 | `EventNameAttribute` | class | MMCA.Common.Domain.Attributes |
 | 0 | `IAuditableEntity` | interface | MMCA.Common.Domain.Interfaces |
 | 0 | `IAuditedEntity` | interface | MMCA.Common.Domain.Interfaces |
 | 0 | `IBaseEntity<TIdentifierType>` | interface | MMCA.Common.Domain.Interfaces |
 | 0 | `IdValueGeneratedAttribute` | class | MMCA.Common.Domain.Attributes |
+| 0 | `IHasOrderingKey` | interface | MMCA.Common.Domain.Interfaces |
 | 0 | `IRowVersioned` | interface | MMCA.Common.Domain.Interfaces |
 | 0 | `ITenantEntity` | interface | MMCA.Common.Domain.Interfaces |
 | 0 | `PiiAttribute` | class | MMCA.Common.Domain.Attributes |
@@ -141,6 +145,7 @@ disclosure) and is cross-linked in the chapter.
 | 3 | `EnumerationConverter<TEnumeration>` | class | MMCA.Common.Shared.ValueObjects |
 | 3 | `EnumerationJsonConverterFactory` | class | MMCA.Common.Shared.ValueObjects |
 | 3 | `IAnonymizable` | interface | MMCA.Common.Domain.Interfaces |
+| 3 | `IReactivatable` | interface | MMCA.Common.Domain.Interfaces |
 | 3 | `PhoneNumberInvariants` | class | MMCA.Common.Shared.ValueObjects |
 | 4 | `AuditableAggregateRootEntity<TIdentifierType>` | class | MMCA.Common.Domain.Entities |
 | 4 | `Email` | record | MMCA.Common.Shared.ValueObjects |
@@ -195,7 +200,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G04 - Domain & Integration Events + Outbox Dual-Dispatch
 
-> `group-04-events-outbox.md` | 32 types | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.
+> `group-04-events-outbox.md` | 36 types | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -205,8 +210,10 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `InboxMessage` | class | MMCA.Common.Infrastructure.Persistence.Inbox |
 | 0 | `IOutboxSignal` | interface | MMCA.Common.Infrastructure.Persistence.Outbox |
 | 0 | `OutboxCycleResult` | record struct | MMCA.Common.Infrastructure.Persistence.Outbox |
+| 0 | `OutboxDisabledNoticeService` | class | MMCA.Common.Infrastructure.Persistence.Outbox |
 | 0 | `OutboxMetrics` | class | MMCA.Common.Infrastructure.Persistence.Outbox |
 | 1 | `BaseDomainEvent` | record | MMCA.Common.Domain.DomainEvents |
+| 1 | `EventNameResolver` | class | MMCA.Common.Infrastructure.Persistence.Outbox |
 | 1 | `IDomainEventDispatcher` | interface | MMCA.Common.Application.Interfaces |
 | 1 | `IDomainEventHandler<in TDomainEvent>` | interface | MMCA.Common.Application.Interfaces |
 | 1 | `IIntegrationEvent` | interface | MMCA.Common.Domain.Interfaces |
@@ -223,41 +230,49 @@ disclosure) and is cross-linked in the chapter.
 | 3 | `InProcessMessageBus` | class | MMCA.Common.Infrastructure.Services |
 | 3 | `IntegrationEventConsumer<TEvent>` | class | MMCA.Common.Infrastructure.Services |
 | 3 | `OutputCacheEvictionRequested` | record | MMCA.Common.Domain.IntegrationEvents |
+| 3 | `ScopedIntegrationEventHandlerBase<TIntegrationEvent>` | class | MMCA.Common.Application.DomainEvents |
 | 4 | `IntegrationEventConsumerExtensions` | class | MMCA.Common.Infrastructure.Services |
 | 9 | `OutboxMessage` | class | MMCA.Common.Infrastructure.Persistence.Outbox |
 | 11 | `OutboxFinalizer` | class | MMCA.Common.Infrastructure.Persistence.Outbox |
 | 13 | `BrokerEventBus` | class | MMCA.Common.Infrastructure.Services |
 | 13 | `EfInboxStore` | class | MMCA.Common.Infrastructure.Persistence.Inbox |
 | 13 | `InProcessEventBus` | class | MMCA.Common.Infrastructure.Services |
+| 13 | `OutboxAdministration` | class | MMCA.Common.Infrastructure.Persistence.Outbox |
 | 13 | `OutboxCleanupService` | class | MMCA.Common.Infrastructure.Persistence.Outbox |
 | 13 | `OutboxProcessor` | class | MMCA.Common.Infrastructure.Persistence.Outbox |
 
 ### G05 - CQRS: Commands, Queries & the Decorator Pipeline
 
-> `group-05-cqrs-pipeline.md` | 38 types | The command/query handler abstraction and the cross-cutting decorator pipeline (logging, transaction, caching, feature-gate, idempotency) wrapping it.
+> `group-05-cqrs-pipeline.md` | 57 types | The command/query handler abstraction and the cross-cutting decorator pipeline (logging, transaction, caching, feature-gate, idempotency) wrapping it.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
+| 0 | `CqrsContractMismatchKind` | enum | MMCA.Common.Application.UseCases |
 | 0 | `CqrsMetrics` | class | MMCA.Common.Application.UseCases.Decorators |
 | 0 | `ICacheInvalidating` | interface | MMCA.Common.Application.UseCases |
+| 0 | `ICommand<TResult>` | interface | MMCA.Common.Application.UseCases |
 | 0 | `ICommandHandler<in TCommand, TResult>` | interface | MMCA.Common.Application.UseCases |
 | 0 | `ICommandWithRequest<out TRequest>` | interface | MMCA.Common.Application.UseCases |
 | 0 | `ICreateRequest` | interface | MMCA.Common.Application.Interfaces |
 | 0 | `IDistributedLock` | interface | MMCA.Common.Application.Interfaces |
 | 0 | `IFeatureGated` | interface | MMCA.Common.Application.UseCases |
 | 0 | `IHasTimeout` | interface | MMCA.Common.Application.UseCases |
+| 0 | `IQuery<TResult>` | interface | MMCA.Common.Application.UseCases |
 | 0 | `IQueryCacheable` | interface | MMCA.Common.Application.UseCases |
 | 0 | `IQueryHandler<in TQuery, TResult>` | interface | MMCA.Common.Application.UseCases |
 | 0 | `IRequiresPermission` | interface | MMCA.Common.Application.UseCases |
 | 0 | `IScheduledJob` | interface | MMCA.Common.Application.Interfaces |
 | 0 | `ITenantContext` | interface | MMCA.Common.Application.Interfaces |
 | 0 | `ITransactional` | interface | MMCA.Common.Application.UseCases |
+| 0 | `MutationContext` | class | MMCA.Common.Application.UseCases |
+| 1 | `CqrsContractMismatch` | record | MMCA.Common.Application.UseCases |
 | 1 | `DeleteEntityCommand<TEntity, TIdentifierType>` | record | MMCA.Common.Application.UseCases |
 | 1 | `IAuditTrailReader` | interface | MMCA.Common.Application.Interfaces |
 | 1 | `ProfilingCommandDecorator<TCommand, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
 | 1 | `ProfilingQueryDecorator<TQuery, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
 | 1 | `TenantCacheKey` | class | MMCA.Common.Application.UseCases.Decorators |
 | 2 | `CacheKeyLocks` | class | MMCA.Common.Application.Interfaces |
+| 2 | `CqrsContractInspector` | class | MMCA.Common.Application.UseCases |
 | 2 | `IEventUpcaster` | interface | MMCA.Common.Application.Interfaces |
 | 2 | `IEventUpcasterRegistry` | interface | MMCA.Common.Application.Interfaces |
 | 2 | `QueryCacheKeyLocks` | class | MMCA.Common.Application.UseCases.Decorators |
@@ -269,26 +284,42 @@ disclosure) and is cross-linked in the chapter.
 | 4 | `FeatureGateCommandDecorator<TCommand, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
 | 4 | `FeatureGateQueryDecorator<TQuery, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
 | 4 | `IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>` | interface | MMCA.Common.Application.Interfaces |
+| 4 | `IEntityUpdateApplier<TEntity, TUpdateRequest, TIdentifierType>` | interface | MMCA.Common.Application.Interfaces |
 | 4 | `TimeoutCommandDecorator<TCommand, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
 | 4 | `TimeoutQueryDecorator<TQuery, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
 | 4 | `ValidatingCommandDecorator<TCommand, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
+| 4 | `ValidatingQueryDecorator<TQuery, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
+| 5 | `UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>` | record | MMCA.Common.Application.UseCases |
+| 6 | `IEntityUpdateCommandApplier<TEntity, TUpdateRequest, TIdentifierType, in TCommand>` | interface | MMCA.Common.Application.UseCases |
+| 8 | `AddChildEntityHandlerBase<TCommand, TParent, TIdentifierType, TChild, TChildDTO>` | class | MMCA.Common.Application.UseCases |
+| 8 | `CreateEntityHandlerBase<TCreateRequest, TEntity, TIdentifierType, TEntityDTO>` | class | MMCA.Common.Application.UseCases |
 | 8 | `DeleteEntityHandler<TEntity, TIdentifierType>` | class | MMCA.Common.Application.UseCases |
+| 8 | `MutateEntityHandlerCore<TCommand, TEntity, TIdentifierType>` | class | MMCA.Common.Application.UseCases |
 | 8 | `TransactionalCommandDecorator<TCommand, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
 | 9 | `AuthorizationCommandDecorator<TCommand, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
 | 9 | `AuthorizationQueryDecorator<TQuery, TResult>` | class | MMCA.Common.Application.UseCases.Decorators |
+| 9 | `CreateEntityHandler<TCreateRequest, TEntity, TIdentifierType, TEntityDTO>` | class | MMCA.Common.Application.UseCases |
+| 9 | `MutateEntityHandlerBase<TCommand, TEntity, TIdentifierType>` | class | MMCA.Common.Application.UseCases |
+| 10 | `RemoveChildEntityHandlerBase<TCommand, TParent, TIdentifierType>` | class | MMCA.Common.Application.UseCases |
+| 10 | `UpdateEntityCommandHandler<TCommand, TEntity, TEntityDTO, TIdentifierType, TUpdateRequest>` | class | MMCA.Common.Application.UseCases |
+| 10 | `UpdateEntityHandler<TEntity, TEntityDTO, TIdentifierType, TUpdateRequest>` | class | MMCA.Common.Application.UseCases |
+| 14 | `MutateEntityPayloadHandlerBase<TCommand, TEntity, TIdentifierType, TResultPayload>` | class | MMCA.Common.Application.UseCases |
 
 ### G06 - Validation
 
-> `group-06-validation.md` | 17 types | The FluentValidation-based validation contracts and failure mapping that gate commands before they execute.
+> `group-06-validation.md` | 22 types | The FluentValidation-based validation contracts and failure mapping that gate commands before they execute.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
 | 0 | `EmailRules<T>` | class | MMCA.Common.Application.Validation |
 | 0 | `NonNegativeIntRules<T>` | class | MMCA.Common.Application.Validation |
+| 0 | `OptionalErrorCodeExtensions` | class | MMCA.Common.Application.Validation |
+| 0 | `OptionalPositiveIdRules<T, TId>` | class | MMCA.Common.Application.Validation |
 | 0 | `OptionalStringRules<T>` | class | MMCA.Common.Application.Validation |
 | 0 | `PasswordRules<T>` | class | MMCA.Common.Application.Validation |
 | 0 | `PositiveDecimalRules<T>` | class | MMCA.Common.Application.Validation |
 | 0 | `PositiveIntRules<T>` | class | MMCA.Common.Application.Validation |
+| 0 | `RequiredIdRules<T, TId>` | class | MMCA.Common.Application.Validation |
 | 0 | `RequiredStringRules<T>` | class | MMCA.Common.Application.Validation |
 | 0 | `StrongPasswordRules<T>` | class | MMCA.Common.Application.Validation |
 | 1 | `CommandRequestValidator<TCommand, TRequest>` | class | MMCA.Common.Application.Validation |
@@ -300,10 +331,12 @@ disclosure) and is cross-linked in the chapter.
 | 4 | `StateRules<T>` | class | MMCA.Common.Application.Validation |
 | 4 | `ZipCodeRules<T>` | class | MMCA.Common.Application.Validation |
 | 5 | `AddressValidator` | class | MMCA.Common.Application.Validation |
+| 6 | `AbsoluteUrlRules<T>` | class | MMCA.Common.Application.Validation |
+| 9 | `CurrentUserServiceExtensions` | class | MMCA.Common.Application.Extensions |
 
 ### G07 - Persistence & EF Core
 
-> `group-07-persistence-ef-core.md` | 118 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.
+> `group-07-persistence-ef-core.md` | 124 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -312,19 +345,23 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `CosmosIntIdValueGenerator` | class | MMCA.Common.Infrastructure.Persistence.ValueGenerators |
 | 0 | `CrossTenantWriteException` | class | MMCA.Common.Infrastructure.Persistence.Interceptors |
 | 0 | `DataSource` | enum | MMCA.Common.Application.Interfaces.Infrastructure |
+| 0 | `DefaultSeed` | record | MMCA.Common.Infrastructure.Persistence.DataSources |
 | 0 | `DetectChangesScope` | struct | MMCA.Common.Infrastructure.Persistence.DbContexts |
 | 0 | `EncryptedStringConverter` | class | MMCA.Common.Infrastructure.Persistence.Encryption |
 | 0 | `EntityConfigurationOptions` | class | MMCA.Common.Infrastructure.Persistence |
+| 0 | `GroupedCount<TKey>` | record | MMCA.Common.Infrastructure.Persistence.Repositories |
+| 0 | `GroupedSum<TKey>` | record | MMCA.Common.Infrastructure.Persistence.Repositories |
 | 0 | `IDbSeeder` | interface | MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding |
 | 0 | `IdentityInsertGroup` | record | MMCA.Common.Infrastructure.Persistence.DbContexts.Factory |
 | 0 | `IEntityConfigurationAssemblyProvider` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 0 | `ImageContentSniffer` | class | MMCA.Common.Application.Interfaces.Infrastructure |
 | 0 | `INativePushSender` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 0 | `IQueryableExecutor` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
+| 0 | `IUniqueConstraintViolationDetector` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 0 | `IUpdatePropertySetter<TEntity>` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 0 | `ModelBuilderExtensions` | class | MMCA.Common.Infrastructure.Persistence.DbContexts |
-| 0 | `NamespaceConventions` | class | MMCA.Common.Infrastructure.Persistence |
 | 0 | `NativePushPayloads` | class | MMCA.Common.Infrastructure.Services |
+| 0 | `OutboxDeadLetter` | record | MMCA.Common.Application.Interfaces.Infrastructure |
 | 0 | `PeriodicBackgroundService` | class | MMCA.Common.Infrastructure.Services |
 | 0 | `ProfilingHelper` | class | MMCA.Common.Infrastructure.Persistence |
 | 0 | `SeedAccount` | record | MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding |
@@ -334,15 +371,17 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `DataSourceKey` | record struct | MMCA.Common.Application.Interfaces.Infrastructure |
 | 1 | `DbSeeder` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding |
 | 1 | `DefaultEntityConfigurationAssemblyProvider` | class | MMCA.Common.Infrastructure.Persistence |
+| 1 | `DesignTimeDbContextOptions` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Design |
 | 1 | `EFQueryableExecutor` | class | MMCA.Common.Infrastructure.Persistence |
 | 1 | `ExplicitAssemblyProvider` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Design |
+| 1 | `NamespaceConventions` | class | MMCA.Common.Infrastructure.Persistence |
 | 1 | `NullNativePushSender` | class | MMCA.Common.Infrastructure.Services |
 | 1 | `PendingEntityKey` | record | MMCA.Common.Infrastructure.Persistence.AuditTrail |
 | 1 | `SoftDeleteFilterSql` | class | MMCA.Common.Infrastructure.Persistence |
+| 1 | `SqlServerUniqueConstraintViolationDetector` | class | MMCA.Common.Infrastructure.Persistence |
 | 1 | `TenantContext` | class | MMCA.Common.Infrastructure.Services |
 | 1 | `UpdatePropertySetterBuilder<TEntity>` | class | MMCA.Common.Infrastructure.Persistence.Repositories |
 | 2 | `AggregateCapture` | record | MMCA.Common.Infrastructure.Persistence.Interceptors |
-| 2 | `DesignTimeDbContextOptions` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Design |
 | 2 | `FaultIntegrationEventConsumer<TEvent>` | class | MMCA.Common.Infrastructure.Services |
 | 2 | `IDataSourceService` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 2 | `IEntityDataSourceRegistry` | interface | MMCA.Common.Infrastructure.Persistence.DataSources |
@@ -358,6 +397,7 @@ disclosure) and is cross-linked in the chapter.
 | 3 | `IDataSourceResolver` | interface | MMCA.Common.Infrastructure.Persistence.DataSources |
 | 3 | `IFileStorageService` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 3 | `IImageProcessor` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
+| 3 | `IOutboxAdministration` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 3 | `IPushDeviceRegistrar` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 3 | `UpcastingIntegrationEventConsumer<TEvent>` | class | MMCA.Common.Infrastructure.Services |
 | 4 | `AzureBlobFileStorageService` | class | MMCA.Common.Infrastructure.Services |
@@ -368,10 +408,10 @@ disclosure) and is cross-linked in the chapter.
 | 4 | `IEntityReader<TEntity, TIdentifierType>` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 4 | `IEntityTypeConfigurationBase<TEntity, TIdentifierType>` | interface | MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration |
 | 4 | `ImageSharpImageProcessor` | class | MMCA.Common.Infrastructure.Services |
-| 4 | `IWriteRepository<TEntity, TIdentifierType>` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 4 | `NullableEnumerationValueConverter<TEnumeration>` | class | MMCA.Common.Infrastructure.Persistence.Conversions |
 | 4 | `NullFileStorageService` | class | MMCA.Common.Infrastructure.Services |
 | 4 | `NullPushDeviceRegistrar` | class | MMCA.Common.Infrastructure.Services |
+| 4 | `RefreshSessionModelBuilderExtensions` | class | MMCA.Common.Infrastructure.Persistence.Auth |
 | 4 | `SpecificationEvaluator` | class | MMCA.Common.Infrastructure.Persistence.Repositories |
 | 5 | `EmailValueConverter` | class | MMCA.Common.Infrastructure.Persistence.Conversions |
 | 5 | `EntityDataSourceRegistry` | class | MMCA.Common.Infrastructure.Persistence.DataSources |
@@ -381,6 +421,7 @@ disclosure) and is cross-linked in the chapter.
 | 5 | `IEntityTypeConfigurationSqlite<TEntity, TIdentifierType>` | interface | MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration |
 | 5 | `IEntityTypeConfigurationSQLServer<TEntity, TIdentifierType>` | interface | MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration |
 | 5 | `IReadRepository<TEntity, TIdentifierType>` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
+| 5 | `IWriteRepository<TEntity, TIdentifierType>` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 5 | `KeysetQueryBuilder` | class | MMCA.Common.Infrastructure.Persistence.Repositories |
 | 5 | `NullableEmailValueConverter` | class | MMCA.Common.Infrastructure.Persistence.Conversions |
 | 5 | `NullablePhoneNumberValueConverter` | class | MMCA.Common.Infrastructure.Persistence.Conversions |
@@ -399,7 +440,9 @@ disclosure) and is cross-linked in the chapter.
 | 7 | `IUnitOfWork` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 8 | `PushNotificationConfiguration` | class | MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration.Notifications |
 | 8 | `UserNotificationConfiguration` | class | MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration.Notifications |
+| 9 | `EFRepository<TEntity, TIdentifierType>` | class | MMCA.Common.Infrastructure.Persistence.Repositories |
 | 10 | `CapturedState` | record | MMCA.Common.Infrastructure.Persistence.Interceptors |
+| 10 | `RepositoryFactory` | class | MMCA.Common.Infrastructure.Persistence.Repositories.Factory |
 | 11 | `ApplicationDbContext` | class | MMCA.Common.Infrastructure.Persistence.DbContexts |
 | 11 | `AuditSaveChangesInterceptor` | class | MMCA.Common.Infrastructure.Persistence.Interceptors |
 | 11 | `AuditTrailSaveChangesInterceptor` | class | MMCA.Common.Infrastructure.Persistence.AuditTrail |
@@ -408,27 +451,23 @@ disclosure) and is cross-linked in the chapter.
 | 11 | `DomainEventSaveChangesInterceptor` | class | MMCA.Common.Infrastructure.Persistence.Interceptors |
 | 11 | `TenantSaveChangesInterceptor` | class | MMCA.Common.Infrastructure.Persistence.Interceptors |
 | 12 | `CosmosDbContext` | class | MMCA.Common.Infrastructure.Persistence.DbContexts |
-| 12 | `EFRepository<TEntity, TIdentifierType>` | class | MMCA.Common.Infrastructure.Persistence.Repositories |
 | 12 | `IDbContextFactory` | interface | MMCA.Common.Infrastructure.Persistence.DbContexts.Factory |
 | 12 | `IPhysicalDbContextFactory` | interface | MMCA.Common.Infrastructure.Persistence.DbContexts.Factory |
 | 12 | `SqliteDbContext` | class | MMCA.Common.Infrastructure.Persistence.DbContexts |
 | 12 | `SQLServerDbContext` | class | MMCA.Common.Infrastructure.Persistence.DbContexts |
-| 13 | `ApplicationDbContextEFFactory` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Factory |
 | 13 | `AuditTrailCleanupJob` | class | MMCA.Common.Infrastructure.Persistence.AuditTrail |
 | 13 | `AuditTrailReader` | class | MMCA.Common.Infrastructure.Persistence.AuditTrail |
 | 13 | `DbContextFactory` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Factory |
-| 13 | `DefaultCosmosDbContextFactory` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Factory |
-| 13 | `DefaultSqliteDbContextFactory` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Factory |
-| 13 | `DefaultSqlServerDbContextFactory` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Factory |
 | 13 | `DesignTimeDbContextHelper` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Design |
+| 13 | `EFRefreshSessionStore` | class | MMCA.Common.Infrastructure.Persistence.Auth |
 | 13 | `PhysicalDbContextFactory` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Factory |
-| 13 | `RepositoryFactory` | class | MMCA.Common.Infrastructure.Persistence.Repositories.Factory |
+| 13 | `RefreshSessionCleanupService` | class | MMCA.Common.Infrastructure.Persistence.Auth |
 | 13 | `UnitOfWork` | class | MMCA.Common.Infrastructure.Persistence |
 | 14 | `IdentityModuleDbSeederBase<TUser>` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Seeding |
 
 ### G08 - Authentication & Authorization
 
-> `group-08-auth.md` | 77 types | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.
+> `group-08-auth.md` | 87 types | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -436,10 +475,9 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `AuthClaimTypes` | class | MMCA.Common.Shared.Auth |
 | 0 | `AuthenticationRequest` | record struct | MMCA.Common.Shared |
 | 0 | `AuthenticationResponse` | record struct | MMCA.Common.Shared.Auth |
-| 0 | `AuthorizationPolicies` | class | MMCA.Common.API.Authorization |
 | 0 | `ChangePasswordRequest` | record struct | MMCA.Common.Shared.Auth |
 | 0 | `ChangePreferencesRequest` | record | MMCA.Common.Shared.Auth |
-| 0 | `ClaimBasedUserIdProvider` | class | MMCA.Common.Infrastructure.Services |
+| 0 | `ConcurrencyETag` | class | MMCA.Common.Shared.Http |
 | 0 | `ForgotPasswordRequest` | record struct | MMCA.Common.Shared.Auth |
 | 0 | `IAuthUser` | interface | MMCA.Common.Domain.Auth |
 | 0 | `IcsEvent` | record | MMCA.Common.Shared.Calendars |
@@ -448,9 +486,11 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `IPasswordHasher` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 0 | `IPermissionRegistry` | interface | MMCA.Common.Shared.Auth |
 | 0 | `ISoftDeletedUserValidator` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
+| 0 | `IssuedSession` | record | MMCA.Common.Application.Auth |
 | 0 | `ITokenService` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 0 | `LoginProtectionSettings` | class | MMCA.Common.Infrastructure.Auth |
 | 0 | `LoginRequest` | record struct | MMCA.Common.Shared.Auth |
+| 0 | `ModuleNameConventions` | class | MMCA.Common.Shared.Conventions |
 | 0 | `OAuthCodeExchangeRequest` | record struct | MMCA.Common.Shared.Auth |
 | 0 | `OwnerOrAdminFilterOptions` | class | MMCA.Common.API.Authorization |
 | 0 | `PasswordResetEntry` | record | MMCA.Common.Infrastructure.Auth |
@@ -458,6 +498,8 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `PermissionPolicy` | class | MMCA.Common.API.Authorization |
 | 0 | `PermissionRequirement` | class | MMCA.Common.API.Authorization |
 | 0 | `PrivacyFeatures` | class | MMCA.Common.Shared.Privacy |
+| 0 | `RefreshSessionSettings` | class | MMCA.Common.Application.Auth |
+| 0 | `RefreshSessionSummaryResponse` | record | MMCA.Common.Shared.Auth |
 | 0 | `RefreshTokenRequest` | record struct | MMCA.Common.Shared.Auth |
 | 0 | `Releaser` | record struct | MMCA.Common.Shared.Concurrency |
 | 0 | `ResetPasswordRequest` | record struct | MMCA.Common.Shared.Auth |
@@ -467,6 +509,7 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `SessionTokenResult` | record struct | MMCA.Common.API.SessionCookies |
 | 0 | `UserDataExportSectionDTO` | record | MMCA.Common.Shared.Privacy |
 | 0 | `UserPreferencesResponse` | record | MMCA.Common.Shared.Auth |
+| 1 | `ClaimsPrincipalExtensions` | class | MMCA.Common.Shared.Auth |
 | 1 | `ForgotPasswordRequestValidator` | class | MMCA.Common.Application.Auth.Validation |
 | 1 | `HasPermissionAttribute` | class | MMCA.Common.API.Authorization |
 | 1 | `ICookieSessionRefresher` | interface | MMCA.Common.API.SessionCookies |
@@ -480,6 +523,8 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `RefreshTokenRequestValidator` | class | MMCA.Common.Application.Auth.Validation |
 | 1 | `ResetPasswordRequestValidator` | class | MMCA.Common.Application.Auth.Validation |
 | 1 | `RsaJwksProvider` | class | MMCA.Common.Infrastructure.Auth |
+| 1 | `SessionStampingTokenService` | class | MMCA.Common.Application.Auth |
+| 1 | `UnconfiguredPermissionRegistry` | class | MMCA.Common.Application.Auth |
 | 1 | `UserDataExportDTO` | record | MMCA.Common.Shared.Privacy |
 | 2 | `CookieSessionRefreshMiddleware` | class | MMCA.Common.API.SessionCookies |
 | 2 | `PermissionRegistryBuilder` | class | MMCA.Common.Shared.Auth |
@@ -493,9 +538,12 @@ disclosure) and is cross-linked in the chapter.
 | 3 | `IPasswordChangeableUser` | interface | MMCA.Common.Domain.Auth |
 | 3 | `IPasswordResetTokenService` | interface | MMCA.Common.Application.Auth |
 | 3 | `IUserPreferences` | interface | MMCA.Common.Domain.Auth |
+| 3 | `ProblemDetailsResultReader` | class | MMCA.Common.Shared.Http |
+| 3 | `RefreshSession` | class | MMCA.Common.Domain.Auth |
 | 3 | `RoleValue` | class | MMCA.Common.Shared.Auth |
 | 4 | `CookieSessionRefresher` | class | MMCA.Common.API.SessionCookies |
 | 4 | `IErasableUser` | interface | MMCA.Common.Domain.Auth |
+| 4 | `IRefreshSessionStore` | interface | MMCA.Common.Application.Auth |
 | 4 | `RegisterRequest` | record struct | MMCA.Common.Shared.Auth |
 | 4 | `SessionCookieAuthenticationHandler` | class | MMCA.Common.API.SessionCookies |
 | 4 | `SoftDeletedUserCache` | class | MMCA.Common.Application.Auth |
@@ -505,6 +553,7 @@ disclosure) and is cross-linked in the chapter.
 | 5 | `PasswordResetTokenService` | class | MMCA.Common.Infrastructure.Auth |
 | 5 | `SessionCookieAuthenticationExtensions` | class | MMCA.Common.API.SessionCookies |
 | 8 | `AuthenticationServiceBase<TUser>` | class | MMCA.Common.Application.Auth |
+| 8 | `ClaimBasedUserIdProvider` | class | MMCA.Common.Infrastructure.Services |
 | 8 | `ICurrentUserService` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 9 | `CurrentUserService` | class | MMCA.Common.Infrastructure.Services |
 | 9 | `OwnershipHelper` | class | MMCA.Common.API.Authorization |
@@ -527,7 +576,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G10 - Notifications (Push + In-App Inbox + Email)
 
-> `group-10-notifications.md` | 55 types | The notification subsystem: push (SignalR), the in-app inbox, email sending, recipient providers, and the thin ADC Notification module host.
+> `group-10-notifications.md` | 57 types | The notification subsystem: push (SignalR), the in-app inbox, email sending, recipient providers, and the thin ADC Notification module host.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -542,11 +591,14 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `MarkAllNotificationsReadCommand` | record | MMCA.Common.Application.Notifications.UserNotifications.UseCases.MarkAllRead |
 | 0 | `MarkNotificationReadCommand` | record | MMCA.Common.Application.Notifications.UserNotifications.UseCases.MarkRead |
 | 0 | `NotificationFeatures` | class | MMCA.Common.Shared.Notifications |
+| 0 | `NotificationPermissions` | class | MMCA.Common.Shared.Notifications |
+| 0 | `NotificationScopeKey` | class | MMCA.Common.Shared.Notifications |
 | 0 | `PushNotificationStatus` | enum | MMCA.Common.Domain.Notifications.PushNotifications |
 | 0 | `SendPushNotificationRequest` | record | MMCA.Common.Shared.Notifications.PushNotifications |
 | 0 | `UserNotificationDTO` | record | MMCA.Common.Shared.Notifications.UserNotifications |
 | 0 | `UserNotificationExportItemDTO` | record | MMCA.ADC.Notification.Shared.UserNotifications |
 | 1 | `AttendeeNotificationRecipientProvider` | class | MMCA.ADC.Notification.Application |
+| 1 | `DependencyInjection` | class | MMCA.ADC.Notification.API |
 | 1 | `IUserNotificationExportService` | interface | MMCA.ADC.Notification.Shared.UserNotifications |
 | 1 | `LiveChannelGrpcService` | class | MMCA.ADC.Notification.Service.Grpc |
 | 1 | `LiveChannelPublisherGrpcAdapter` | class | MMCA.ADC.Notification.Contracts |
@@ -556,7 +608,6 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `PushNotificationDTO` | record | MMCA.Common.Shared.Notifications.PushNotifications |
 | 1 | `SendPushNotificationCommand` | record | MMCA.Common.Application.Notifications.PushNotifications.UseCases.Send |
 | 1 | `SmtpEmailSender` | class | MMCA.Common.Infrastructure.Services |
-| 2 | `DependencyInjection` | class | MMCA.ADC.Notification.API |
 | 2 | `DisabledUserNotificationExportService` | class | MMCA.ADC.Notification.Shared.UserNotifications |
 | 2 | `NotificationHub` | class | MMCA.Common.Infrastructure.Hubs |
 | 2 | `PushNotificationCreated` | record | MMCA.Common.Domain.Notifications.PushNotifications.DomainEvents |
@@ -608,7 +659,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G12 - API Hosting, Middleware, Idempotency & DTO/Contract Mapping
 
-> `group-12-api-hosting-mapping.md` | 79 types | The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping.
+> `group-12-api-hosting-mapping.md` | 81 types | The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -616,14 +667,12 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `AppAssociationOptions` | class | MMCA.Common.API.Startup |
 | 0 | `AssemblyReference` | class | MMCA.Common.API |
 | 0 | `ClassReference` | class | MMCA.Common.API |
-| 0 | `ConcurrencyETag` | class | MMCA.Common.API.Concurrency |
 | 0 | `CsvWriter` | class | MMCA.Common.API.Export |
 | 0 | `DbUpdateExceptionHandler` | class | MMCA.Common.API.Middleware |
 | 0 | `DisabledFeatureHandler` | class | MMCA.Common.API.FeatureManagement |
 | 0 | `ErrorResources` | class | MMCA.Common.API.Resources |
 | 0 | `ErrorResourceSource` | class | MMCA.Common.API.Localization |
 | 0 | `ExternalAuthExtensions` | class | MMCA.Common.API.Authentication |
-| 0 | `GlobalExceptionHandler` | class | MMCA.Common.API.Middleware |
 | 0 | `IBaseDTO<TIdentifierType>` | interface | MMCA.Common.Shared.DTOs |
 | 0 | `IConcurrencyAware` | interface | MMCA.Common.Shared.DTOs |
 | 0 | `ICorrelationContext` | interface | MMCA.Common.Application.Interfaces |
@@ -631,6 +680,7 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `IdempotencyRecord` | record | MMCA.Common.API.Idempotency |
 | 0 | `IdempotencySettings` | class | MMCA.Common.API.Idempotency |
 | 0 | `IErrorLocalizer` | interface | MMCA.Common.API.Localization |
+| 0 | `JwtAuthorityExtensions` | class | MMCA.Common.API.Startup |
 | 0 | `JwtForwardingDelegatingHandler` | class | MMCA.Common.Infrastructure.Http |
 | 0 | `MiddlewarePipelineStep` | record | MMCA.Common.API.Startup |
 | 0 | `MiddlewarePipelineStepNames` | class | MMCA.Common.API.Startup |
@@ -648,38 +698,41 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `ValidationExceptionHandler` | class | MMCA.Common.API.Middleware |
 | 1 | `AppAssociationEndpointExtensions` | class | MMCA.Common.API.Startup |
 | 1 | `BaseLookup<TIdentifierType>` | record | MMCA.Common.Shared.DTOs |
-| 1 | `ConcurrencyTokenRequest` | record | MMCA.Common.Shared.DTOs |
 | 1 | `CorrelationContext` | class | MMCA.Common.Infrastructure.Services |
 | 1 | `DomainExceptionHandler` | class | MMCA.Common.API.Middleware |
 | 1 | `ErrorLocalizer` | class | MMCA.Common.API.Localization |
+| 1 | `GlobalExceptionHandler` | class | MMCA.Common.API.Middleware |
 | 1 | `JwksEndpointExtensions` | class | MMCA.Common.API.Startup |
+| 1 | `MiniProfilerExtensions` | class | MMCA.Common.API.Startup |
 | 1 | `OutputCacheOptionsExtensions` | class | MMCA.Common.API.Caching |
 | 1 | `RateLimitingSettings` | class | MMCA.Common.API.RateLimiting |
 | 1 | `RedisFixedWindowRateLimiter` | class | MMCA.Common.API.RateLimiting |
 | 1 | `ServiceInfoControllerBase` | class | MMCA.Common.API.Controllers |
-| 1 | `SupportsIfMatchAttribute` | class | MMCA.Common.API.Concurrency |
-| 2 | `ErrorHttpMapping` | class | MMCA.Common.API.Middleware |
 | 2 | `IEntityControllerBase<TEntityDTO, TIdentifierType>` | interface | MMCA.Common.API.Controllers |
-| 2 | `MiniProfilerExtensions` | class | MMCA.Common.API.Startup |
+| 2 | `InsecureJwtMetadataWarningStartupFilter` | class | MMCA.Common.API.Startup |
 | 2 | `ModuleControllerFeatureProvider` | class | MMCA.Common.API |
 | 2 | `OidcDiscoveryEndpointExtensions` | class | MMCA.Common.API.Startup |
-| 3 | `ApiControllerBase` | class | MMCA.Common.API.Controllers |
+| 2 | `WebApplicationBuilderExtensions` | class | MMCA.Common.API.Startup |
+| 3 | `ErrorHttpMapping` | class | MMCA.Common.API.Middleware |
 | 3 | `IAggregateRootEntityControllerBase<TEntityDTO, TIdentifierType, TCreateRequest>` | interface | MMCA.Common.API.Controllers |
-| 3 | `InsecureJwtMetadataWarningStartupFilter` | class | MMCA.Common.API.Startup |
+| 3 | `ModuleHostContext` | class | MMCA.Common.API.Startup |
 | 3 | `SignalRExtensions` | class | MMCA.Common.API.Startup |
 | 3 | `TenantResolutionMiddleware` | class | MMCA.Common.API.Middleware |
-| 3 | `UnhandledResultFailureFilter` | class | MMCA.Common.API.Middleware |
-| 3 | `WebApplicationBuilderExtensions` | class | MMCA.Common.API.Startup |
+| 4 | `ApiControllerBase` | class | MMCA.Common.API.Controllers |
 | 4 | `CurrencyJsonConverter` | class | MMCA.Common.API.JsonConverters |
 | 4 | `IdempotencyFilter` | class | MMCA.Common.API.Idempotency |
 | 4 | `IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>` | interface | MMCA.Common.Application.Interfaces |
 | 4 | `IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>` | interface | MMCA.Common.Application.Interfaces |
+| 4 | `ModuleHostExtensions` | class | MMCA.Common.API.Startup |
 | 4 | `OutputCacheEvictionHandler` | class | MMCA.Common.API.Caching |
+| 4 | `SupportsIfMatchAttribute` | class | MMCA.Common.API.Concurrency |
+| 4 | `UnhandledResultFailureFilter` | class | MMCA.Common.API.Middleware |
 | 5 | `IdempotentAttribute` | class | MMCA.Common.API.Idempotency |
 | 5 | `OutputCacheEvictionExtensions` | class | MMCA.Common.API.Caching |
 | 6 | `EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>` | class | MMCA.Common.API.Controllers |
 | 6 | `OAuthControllerBase` | class | MMCA.Common.API.Controllers |
 | 7 | `AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>` | class | MMCA.Common.API.Controllers |
+| 8 | `CrudEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest, TUpdateRequest>` | class | MMCA.Common.API.Controllers |
 | 8 | `CurrentUserTargetingContextAccessor` | class | MMCA.Common.API.FeatureManagement |
 | 9 | `CorrelationIdMiddleware` | class | MMCA.Common.API.Middleware |
 | 9 | `SoftDeletedUserMiddleware` | class | MMCA.Common.API.Middleware |
@@ -707,10 +760,11 @@ disclosure) and is cross-linked in the chapter.
 
 ### G14 - Module System, Composition & Configuration
 
-> `group-14-module-system-composition.md` | 70 types | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.
+> `group-14-module-system-composition.md` | 72 types | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
+| 0 | `ApplicationSettings` | class | MMCA.Common.Application.Settings |
 | 0 | `AssemblyReference` | class | MMCA.Common.Application |
 | 0 | `AssemblyReference` | class | MMCA.Common.Domain |
 | 0 | `AssemblyReference` | class | MMCA.Common.Infrastructure |
@@ -719,56 +773,56 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `ClassReference` | class | MMCA.Common.Application |
 | 0 | `ClassReference` | class | MMCA.Common.Domain |
 | 0 | `ClassReference` | class | MMCA.Common.Infrastructure |
+| 0 | `ConnectionStringSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 0 | `DataSourceEntrySettings` | class | MMCA.Common.Infrastructure.Settings |
+| 0 | `DecoratorPipelineSeal` | class | MMCA.Common.Application |
 | 0 | `FileStorageSettings` | class | MMCA.Common.Infrastructure.Settings |
-| 0 | `IApplicationSettings` | interface | MMCA.Common.Application.Settings |
-| 0 | `IConnectionStringSettings` | interface | MMCA.Common.Infrastructure.Settings |
 | 0 | `IModuleSeeder` | interface | MMCA.Common.Application.Modules |
 | 0 | `InProcessLockHandle` | class | MMCA.Common.Infrastructure.Concurrency |
-| 0 | `IPushNotificationSettings` | interface | MMCA.Common.Infrastructure.Settings |
-| 0 | `ISmtpSettings` | interface | MMCA.Common.Infrastructure.Settings |
 | 0 | `IUserScopedRequest` | interface | MMCA.Common.Application.Users |
 | 0 | `JobClaim` | record | MMCA.Common.Infrastructure.Scheduling |
 | 0 | `JwksSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 0 | `JwtSigningAlgorithm` | enum | MMCA.Common.Infrastructure.Settings |
 | 0 | `MessageBusProvider` | enum | MMCA.Common.Infrastructure.Settings |
+| 0 | `MmcaApplicationPipelineBuilder` | class | MMCA.Common.Application |
 | 0 | `ModuleSettings` | class | MMCA.Common.Application.Settings |
 | 0 | `NativePushSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 0 | `PersistenceSettings` | class | MMCA.Common.Infrastructure.Settings |
+| 0 | `QueryCachePipelineSettings` | class | MMCA.Common.Application.Settings |
 | 0 | `RedisLockHandle` | class | MMCA.Common.Infrastructure.Concurrency |
 | 0 | `ScheduledJobEntry` | class | MMCA.Common.Infrastructure.Scheduling |
 | 0 | `ScheduledJobOverrideSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 0 | `SchedulerMetrics` | class | MMCA.Common.Infrastructure.Scheduling |
+| 0 | `ServiceBusEmulatorSupport` | class | MMCA.Common.Infrastructure.Messaging |
+| 0 | `SmtpSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 0 | `TenantDataSourceOverrideSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 0 | `TenantResolutionStrategy` | enum | MMCA.Common.Infrastructure.Settings |
 | 0 | `UseDatabaseAttribute` | class | MMCA.Common.Infrastructure |
 | 0 | `UserDataExportSectionDefaults` | class | MMCA.Common.Application.Users.UseCases.ExportUserData |
 | 0 | `UserUseCaseLog` | class | MMCA.Common.Application.Users |
-| 1 | `ApplicationSettings` | class | MMCA.Common.Application.Settings |
 | 1 | `AuditTrailSettings` | class | MMCA.Common.Infrastructure.Settings |
-| 1 | `ConnectionStringSettings` | class | MMCA.Common.Infrastructure.Settings |
+| 1 | `CacheSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 1 | `DataSourcesSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 1 | `GetUserPreferencesQuery` | record | MMCA.Common.Application.Users.UseCases.GetPreferences |
-| 1 | `IJwtSettings` | interface | MMCA.Common.Infrastructure.Settings |
+| 1 | `IModule` | interface | MMCA.Common.Application.Modules |
 | 1 | `InProcessDistributedLock` | class | MMCA.Common.Infrastructure.Concurrency |
 | 1 | `IUserOwnedRequest` | interface | MMCA.Common.Application.Users |
 | 1 | `IUserScopedCommand<out TRequest>` | interface | MMCA.Common.Application.Users |
+| 1 | `JwtSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 1 | `MessageBusSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 1 | `ModulesSettings` | class | MMCA.Common.Application.Settings |
 | 1 | `PushNotificationSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 1 | `SchedulerSettings` | class | MMCA.Common.Infrastructure.Settings |
-| 1 | `SmtpSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 1 | `TenantEntrySettings` | class | MMCA.Common.Infrastructure.Settings |
 | 1 | `UseDataSourceAttribute` | class | MMCA.Common.Infrastructure |
 | 1 | `UserDataExportSectionResult` | record | MMCA.Common.Application.Users.UseCases.ExportUserData |
-| 2 | `IModule` | interface | MMCA.Common.Application.Modules |
+| 2 | `ConnectionStringSettingsValidator` | class | MMCA.Common.Infrastructure.Settings |
 | 2 | `IUserDataExportSection` | interface | MMCA.Common.Application.Users.UseCases.ExportUserData |
-| 2 | `JwtSettings` | class | MMCA.Common.Infrastructure.Settings |
+| 2 | `ModuleLoader` | class | MMCA.Common.Application.Modules |
 | 2 | `OutboxSettings` | class | MMCA.Common.Infrastructure.Settings |
 | 2 | `RedisDistributedLock` | class | MMCA.Common.Infrastructure.Concurrency |
 | 2 | `TenancySettings` | class | MMCA.Common.Infrastructure.Settings |
 | 2 | `UserOwnershipRule` | class | MMCA.Common.Application.Users |
-| 3 | `ModuleLoader` | class | MMCA.Common.Application.Modules |
 | 4 | `TenancySettingsValidator` | class | MMCA.Common.Infrastructure.Settings |
 | 8 | `ChangePasswordHandlerBase<TUser, TCommand>` | class | MMCA.Common.Application.Users.UseCases.ChangePassword |
 | 8 | `ChangePreferencesHandlerBase<TUser, TCommand>` | class | MMCA.Common.Application.Users.UseCases.ChangePreferences |
@@ -778,39 +832,51 @@ disclosure) and is cross-linked in the chapter.
 | 8 | `GetUserPreferencesHandlerBase<TUser>` | class | MMCA.Common.Application.Users.UseCases.GetPreferences |
 | 8 | `ResetPasswordHandlerBase<TUser, TCommand>` | class | MMCA.Common.Application.Users.UseCases.ResetPassword |
 | 8 | `SoftDeletedUserValidator<TUser>` | class | MMCA.Common.Application.Users |
-| 10 | `DependencyInjection` | class | MMCA.Common.Application |
+| 11 | `DependencyInjection` | class | MMCA.Common.Application |
+| 13 | `CreateMigrationProofTable` | class | MMCA.Common.Infrastructure.Tests.MigrationsFixture |
 | 13 | `ScheduledJobRunner` | class | MMCA.Common.Infrastructure.Scheduling |
 | 14 | `DependencyInjection` | class | MMCA.Common.Infrastructure |
 
 ### G15 - Common UI Framework (MudBlazor components, theme, base pages)
 
-> `group-15-common-ui-framework.md` | 91 types | Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app.
+> `group-15-common-ui-framework.md` | 117 types | Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
+| 0 | `AbsoluteUrlAttribute` | class | MMCA.Common.UI.Validation |
+| 0 | `ApiFileDownloadButton` | class | MMCA.Common.UI.Components |
 | 0 | `BackNavigationResult` | record | MMCA.Common.UI.Services.Navigation |
 | 0 | `BrandColors` | class | MMCA.Common.UI.Theme |
 | 0 | `BreakpointConstants` | class | MMCA.Common.UI.Common |
+| 0 | `CachedPage` | record | MMCA.Common.UI.Pages.Common |
 | 0 | `ChannelReferenceCounter` | class | MMCA.Common.UI.Services.Notifications |
 | 0 | `CultureDelegatingHandler` | class | MMCA.Common.UI.Services |
+| 0 | `ErrorMessages` | class | MMCA.Common.UI.Pages.Common |
 | 0 | `ForgotPasswordModel` | class | MMCA.Common.UI.Pages.Auth |
 | 0 | `IApiSettings` | interface | MMCA.Common.UI.Common.Settings |
+| 0 | `IAppDialogService` | interface | MMCA.Common.UI.Common.Interfaces |
 | 0 | `ICultureApplier` | interface | MMCA.Common.UI.Services |
 | 0 | `IHomePageContent` | interface | MMCA.Common.UI.Common.Interfaces |
+| 0 | `IModelValidator` | interface | MMCA.Common.UI.Validation |
+| 0 | `InfiniteScrollSentinel` | class | MMCA.Common.UI.Components |
 | 0 | `INotificationScopeProvider` | interface | MMCA.Common.UI.Services.Notifications |
 | 0 | `IOAuthUISettings` | interface | MMCA.Common.UI.Services.Auth |
+| 0 | `IPublicLinkBuilder` | interface | MMCA.Common.UI.Services |
+| 0 | `ISecureTokenStore` | interface | MMCA.Common.UI.Services.Auth |
 | 0 | `ISessionCookieSync` | interface | MMCA.Common.UI.Services.Auth |
 | 0 | `ITokenRefresher` | interface | MMCA.Common.UI.Services.Auth |
 | 0 | `ITokenStorageService` | interface | MMCA.Common.UI.Services.Auth |
+| 0 | `IUiReadCache` | interface | MMCA.Common.UI.Services.Caching |
 | 0 | `IUserPreferenceWriter` | interface | MMCA.Common.UI.Services |
 | 0 | `JwtTokenInfo` | class | MMCA.Common.UI.Services.Auth |
+| 0 | `LatestLoadGuard` | class | MMCA.Common.UI.Common |
 | 0 | `LayoutSettings` | class | MMCA.Common.UI.Common.Settings |
 | 0 | `LazyJsModule` | class | MMCA.Common.UI.Services |
 | 0 | `ListPageState` | record | MMCA.Common.UI.Services |
 | 0 | `LoginModel` | class | MMCA.Common.UI.Pages.Auth |
 | 0 | `MudTranslations` | class | MMCA.Common.UI.Resources |
 | 0 | `NavSection` | enum | MMCA.Common.UI.Common |
-| 0 | `NotificationRoutePaths` | class | MMCA.Common.UI.Common |
+| 0 | `NotificationBellOptions` | class | MMCA.Common.UI.Common.Settings |
 | 0 | `NotificationState` | class | MMCA.Common.UI.Services.Notifications |
 | 0 | `PasswordComplexityAttribute` | class | MMCA.Common.UI.Pages.Auth |
 | 0 | `PersistedGridState` | record | MMCA.Common.UI.Pages.Common |
@@ -821,8 +887,11 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `ReturnUrlProtector` | class | MMCA.Common.UI.Services.Navigation |
 | 0 | `RoutePaths` | class | MMCA.Common.UI.Common |
 | 0 | `SharedResource` | class | MMCA.Common.UI.Resources |
+| 0 | `ToastSeverity` | enum | MMCA.Common.UI.Common.Interfaces |
 | 0 | `UIModuleConfiguration` | class | MMCA.Common.UI.Common.Settings |
+| 0 | `UiReadCacheOptions` | class | MMCA.Common.UI.Common.Settings |
 | 0 | `UISharedAssemblyReference` | class | MMCA.Common.UI |
+| 0 | `UserAgentSummary` | class | MMCA.Common.UI.Services.Auth |
 | 0 | `UserPreferences` | record | MMCA.Common.UI.Services |
 | 0 | `UserPreferencesRequest` | record | MMCA.Common.UI.Services |
 | 0 | `WebApplicationExtensions` | class | MMCA.Common.UI.Extensions |
@@ -831,9 +900,11 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `AuthDelegatingHandler` | class | MMCA.Common.UI.Services.Auth |
 | 1 | `AuthenticatedServiceBase` | class | MMCA.Common.UI.Services |
 | 1 | `ConfigurationOAuthUISettings` | class | MMCA.Common.UI.Services.Auth |
+| 1 | `DataAnnotationsModelValidator` | class | MMCA.Common.UI.Validation |
 | 1 | `DefaultOAuthUISettings` | class | MMCA.Common.UI.Services.Auth |
 | 1 | `DirectApiTokenRefresher` | class | MMCA.Common.UI.Services.Auth |
 | 1 | `EndpointCultureApplier` | class | MMCA.Common.UI.Services |
+| 1 | `IToastService` | interface | MMCA.Common.UI.Common.Interfaces |
 | 1 | `IUserPreferenceReader` | interface | MMCA.Common.UI.Services |
 | 1 | `JsFetchSessionCookieSync` | class | MMCA.Common.UI.Services.Auth |
 | 1 | `JwtAuthenticationStateProvider` | class | MMCA.Common.UI.Services.Auth |
@@ -841,78 +912,114 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `ListPageStateService` | class | MMCA.Common.UI.Services |
 | 1 | `MauiBackNavigationBridge` | class | MMCA.Common.UI.Services.Navigation |
 | 1 | `MmcaCultureBootstrap` | class | MMCA.Common.UI.Services |
+| 1 | `MudAppDialogService` | class | MMCA.Common.UI.Services |
 | 1 | `NavigationHistoryService` | class | MMCA.Common.UI.Services.Navigation |
+| 1 | `NavigationPublicLinkBuilder` | class | MMCA.Common.UI.Services |
 | 1 | `NavItem` | record | MMCA.Common.UI.Common |
+| 1 | `NotificationSendModel` | class | MMCA.Common.UI.Pages.Notifications |
 | 1 | `NullNotificationScopeProvider` | class | MMCA.Common.UI.Services.Notifications |
+| 1 | `OfflineFirstPageSnapshot<TItem>` | class | MMCA.Common.UI.Pages.Common |
 | 1 | `PseudoStringLocalizer` | class | MMCA.Common.UI.Globalization |
 | 1 | `ResxMudLocalizer` | class | MMCA.Common.UI.Globalization |
 | 1 | `SameOriginProxyTokenRefresher` | class | MMCA.Common.UI.Services.Auth |
 | 1 | `ThemeService` | class | MMCA.Common.UI.Services |
+| 1 | `UiReadCache` | class | MMCA.Common.UI.Services.Caching |
 | 1 | `WasmTokenStorageService` | class | MMCA.Common.UI.Services.Auth |
 | 2 | `ApiUserPreferenceReader` | class | MMCA.Common.UI.Services |
 | 2 | `BlazorCspPolicyProvider` | class | MMCA.Common.UI.Web.Security |
 | 2 | `ChannelSubscription` | class | MMCA.Common.UI.Services.Notifications |
-| 2 | `ErrorMessages` | class | MMCA.Common.UI.Pages.Common |
-| 2 | `IEntityService<TEntityDTO, TIdentifierType>` | interface | MMCA.Common.UI.Common.Interfaces |
-| 2 | `INotificationInboxUIService` | interface | MMCA.Common.UI.Services.Notifications |
-| 2 | `IPushNotificationUIService` | interface | MMCA.Common.UI.Services.Notifications |
 | 2 | `IUIModule` | interface | MMCA.Common.UI.Common.Interfaces |
 | 2 | `MMCATheme` | class | MMCA.Common.UI.Theme |
+| 2 | `ModelValidation` | class | MMCA.Common.UI.Validation |
 | 2 | `NotificationHubService` | class | MMCA.Common.UI.Services.Notifications |
 | 2 | `PseudoStringLocalizerFactory` | class | MMCA.Common.UI.Globalization |
-| 2 | `ServiceExceptionHelper` | class | MMCA.Common.UI.Services |
-| 3 | `ChildEntityServiceBase` | class | MMCA.Common.UI.Services |
-| 3 | `EntityServiceBase<TEntityDTO, TIdentifierType>` | class | MMCA.Common.UI.Services |
-| 3 | `NotificationBell` | class | MMCA.Common.UI.Components.Notifications |
-| 3 | `NotificationInboxService` | class | MMCA.Common.UI.Services.Notifications |
-| 4 | `NotificationUIModule` | class | MMCA.Common.UI.Notifications |
-| 4 | `PushNotificationService` | class | MMCA.Common.UI.Services.Notifications |
+| 3 | `DataGridListPageBase<TDto>` | class | MMCA.Common.UI.Pages.Common |
+| 3 | `HttpResultExecutor` | class | MMCA.Common.UI.Services |
+| 3 | `IEntityService<TEntityDTO, TIdentifierType>` | interface | MMCA.Common.UI.Common.Interfaces |
+| 3 | `INotificationInboxUIService` | interface | MMCA.Common.UI.Services.Notifications |
+| 3 | `IPushNotificationUIService` | interface | MMCA.Common.UI.Services.Notifications |
+| 3 | `MobileInfiniteScrollList<TItem>` | class | MMCA.Common.UI.Components |
+| 3 | `ResultUiExtensions` | class | MMCA.Common.UI.Common |
+| 4 | `ChildEntityServiceBase` | class | MMCA.Common.UI.Services |
+| 4 | `EntityServiceBase<TEntityDTO, TIdentifierType>` | class | MMCA.Common.UI.Services |
+| 4 | `ListPageActions` | class | MMCA.Common.UI.Pages.Common |
+| 4 | `NotificationInbox` | class | MMCA.Common.UI.Pages.Notifications |
+| 4 | `NotificationInboxService` | class | MMCA.Common.UI.Services.Notifications |
 | 4 | `ServerTokenStorageService` | class | MMCA.Common.UI.Web.Services |
-| 5 | `DataGridListPageBase<TDto>` | class | MMCA.Common.UI.Pages.Common |
-| 5 | `DependencyInjection` | class | MMCA.Common.UI.Notifications |
 | 5 | `DependencyInjection` | class | MMCA.Common.UI.Web |
 | 5 | `IAuthUIService` | interface | MMCA.Common.UI.Services.Auth |
-| 5 | `MobileInfiniteScrollList<TItem>` | class | MMCA.Common.UI.Components |
 | 5 | `MoneyExtensions` | class | MMCA.Common.UI.Extensions |
-| 5 | `NotificationInbox` | class | MMCA.Common.UI.Pages.Notifications |
-| 5 | `NotificationList` | class | MMCA.Common.UI.Pages.Notifications |
-| 5 | `NotificationSend` | class | MMCA.Common.UI.Pages.Notifications |
+| 5 | `MudToastService` | class | MMCA.Common.UI.Services |
+| 5 | `NotificationRoutePaths` | class | MMCA.Common.UI.Common |
+| 5 | `PushNotificationService` | class | MMCA.Common.UI.Services.Notifications |
 | 6 | `AuthUIService` | class | MMCA.Common.UI.Services.Auth |
+| 6 | `NotificationBell` | class | MMCA.Common.UI.Components.Notifications |
+| 6 | `NotificationList` | class | MMCA.Common.UI.Pages.Notifications |
+| 6 | `NotificationSend` | class | MMCA.Common.UI.Pages.Notifications |
+| 6 | `Sessions` | class | MMCA.Common.UI.Pages.Auth |
 | 7 | `DependencyInjection` | class | MMCA.Common.UI |
+| 7 | `NotificationUIModule` | class | MMCA.Common.UI.Notifications |
+| 8 | `DependencyInjection` | class | MMCA.Common.UI.Notifications |
 
 ### G16 - Aspire Orchestration & Service Defaults
 
-> `group-16-aspire-orchestration.md` | 31 types | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.
+> `group-16-aspire-orchestration.md` | 57 types | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
+| 0 | `AppHostCompositionSmokeTests` | class | MMCA.ADC.AppHost.SmokeTests |
 | 0 | `BrokerResilienceDefaults` | class | MMCA.Common.Shared.Resilience |
+| 0 | `BrokerSelection` | class | MMCA.ADC.AppHost |
+| 0 | `CspNonce` | class | MMCA.Common.Aspire.Security |
 | 0 | `CspPolicy` | record | MMCA.Common.Aspire.Security |
 | 0 | `DataProtectionExtensions` | class | MMCA.Common.Aspire |
-| 0 | `DownstreamServiceHealthCheck` | class | MMCA.Common.Aspire.Gateway |
-| 0 | `Extensions` | class | MMCA.Common.Aspire.Hosting |
+| 0 | `DownstreamProbeVersion` | enum | MMCA.Common.Aspire.Gateway |
+| 0 | `ForwardedHeadersExtensions` | class | MMCA.Common.Gateway |
+| 0 | `GatewayActiveHealthCheckDefaults` | class | MMCA.Common.Gateway |
+| 0 | `GatewayClusterRequestProfile` | class | MMCA.Common.Gateway |
 | 0 | `GatewayCorsExtensions` | class | MMCA.Common.Aspire |
 | 0 | `GatewayDownstreamRegistry` | class | MMCA.Common.Aspire.Gateway |
+| 0 | `GatewayPassiveHealthCheckDefaults` | class | MMCA.Common.Gateway |
 | 0 | `GatewayRateLimitingSettings` | class | MMCA.Common.Aspire.Gateway |
+| 0 | `GatewayRoutePolicyPartition` | enum | MMCA.Common.Gateway |
+| 0 | `GatewayTraceHeaderSettings` | class | MMCA.Common.Gateway |
+| 0 | `H2cHealthCheckRegistry` | class | MMCA.Common.Aspire.Hosting |
 | 0 | `HealthCheckTags` | class | MMCA.Common.Aspire |
-| 0 | `Http2ForwardingConfigFilter` | class | MMCA.ADC.Gateway |
 | 0 | `HttpResilienceDefaults` | class | MMCA.Common.Shared.Resilience |
 | 0 | `IWarmupTask` | interface | MMCA.Common.Aspire.Warmup |
 | 0 | `KestrelListenerSpec` | record | MMCA.Common.Aspire.Kestrel |
 | 0 | `KeyVaultConfigurationExtensions` | class | MMCA.Common.Aspire |
+| 0 | `RedisCachingExtensions` | class | MMCA.Common.Aspire.Caching |
+| 0 | `RedisPingHealthCheck` | class | MMCA.Common.Aspire.Health |
 | 0 | `SecurityHeadersSettings` | class | MMCA.Common.Aspire.Security |
+| 0 | `SerilogHostExtensions` | class | MMCA.Common.Aspire.Logging |
+| 0 | `ServiceBusEmulatorResource` | class | MMCA.Common.Aspire.Hosting |
 | 0 | `WarmupReadinessGate` | class | MMCA.Common.Aspire.Warmup |
-| 1 | `GatewayHealthCheckExtensions` | class | MMCA.Common.Aspire.Gateway |
+| 1 | `DownstreamServiceHealthCheck` | class | MMCA.Common.Aspire.Gateway |
+| 1 | `Extensions` | class | MMCA.Common.Aspire.Hosting |
+| 1 | `GatewayDownstreamHealthCheckOptions` | class | MMCA.Common.Aspire.Gateway |
+| 1 | `GatewayHealthCheckDefaults` | class | MMCA.Common.Gateway |
 | 1 | `GatewayRateLimitingExtensions` | class | MMCA.Common.Aspire.Gateway |
+| 1 | `GatewayRoutePolicySettings` | class | MMCA.Common.Gateway |
+| 1 | `GrpcResilienceDefaults` | class | MMCA.Common.Shared.Resilience |
+| 1 | `H2cEndpointHealthCheck` | class | MMCA.Common.Aspire.Hosting |
+| 1 | `H2cHealthCheckExtensions` | class | MMCA.Common.Aspire.Hosting |
 | 1 | `ICspPolicyProvider` | interface | MMCA.Common.Aspire.Security |
 | 1 | `KestrelEndpointExtensions` | class | MMCA.Common.Aspire.Kestrel |
 | 1 | `OpenIdConnectMetadataWarmupTask` | class | MMCA.Common.Aspire.Warmup |
 | 1 | `SelfHttpWarmupTaskBase` | class | MMCA.Common.Aspire.Warmup |
 | 1 | `WarmupHostedService` | class | MMCA.Common.Aspire.Warmup |
 | 1 | `WarmupReadinessHealthCheck` | class | MMCA.Common.Aspire.Warmup |
+| 2 | `GatewayHealthCheckExtensions` | class | MMCA.Common.Aspire.Gateway |
+| 2 | `GatewaySettings` | class | MMCA.Common.Gateway |
 | 2 | `SecurityHeadersMiddleware` | class | MMCA.Common.Aspire.Security |
 | 2 | `StaticCspPolicyProvider` | class | MMCA.Common.Aspire.Security |
+| 3 | `GatewayClusterProfileConfigFilter` | class | MMCA.Common.Gateway.Configuration |
+| 3 | `GatewayHealthCheckDefaultsConfigFilter` | class | MMCA.Common.Gateway.Configuration |
+| 3 | `GatewayRoutePolicyExtensions` | class | MMCA.Common.Gateway.RateLimiting |
+| 3 | `GatewayTraceHeaderTransformProvider` | class | MMCA.Common.Gateway.Transforms |
 | 3 | `SecurityHeadersExtensions` | class | MMCA.Common.Aspire.Security |
+| 4 | `GatewayReverseProxyExtensions` | class | MMCA.Common.Gateway |
 | 9 | `GatewayCorrelationMiddleware` | class | MMCA.Common.Aspire.Gateway |
 | 9 | `OutboxPollFilterProcessor` | class | MMCA.Common.Aspire.Telemetry |
 | 10 | `Extensions` | class | MMCA.Common.Aspire |
@@ -920,7 +1027,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G17 - ADC Conference - Domain Model & Module Contracts
 
-> `group-17-conference-domain.md` | 100 types | The Conference bounded context: Event/Session/Speaker/Category/Question aggregates, their domain events and invariants, plus the Shared identifiers/DTOs/integration-event contracts.
+> `group-17-conference-domain.md` | 99 types | The Conference bounded context: Event/Session/Speaker/Category/Question aggregates, their domain events and invariants, plus the Shared identifiers/DTOs/integration-event contracts.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -952,7 +1059,6 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `ContentSimilarityDTO` | record | MMCA.ADC.Conference.Shared.Sessions.DecisionSupport |
 | 1 | `EventQuestionAnswerDTO` | record | MMCA.ADC.Conference.Shared.Events |
 | 1 | `EventSpeakerDTO` | record | MMCA.ADC.Conference.Shared.Events |
-| 1 | `EventTransitionRequest` | record | MMCA.ADC.Conference.Shared.Events |
 | 1 | `MultiSessionSpeaker` | record | MMCA.ADC.Conference.Shared.Sessions.DecisionSupport |
 | 1 | `NowNextDTO` | record | MMCA.ADC.Conference.Shared.Sessions |
 | 1 | `QuestionDTO` | record | MMCA.ADC.Conference.Shared.Questions |
@@ -1027,16 +1133,15 @@ disclosure) and is cross-linked in the chapter.
 
 ### G18 - ADC Conference - Application & Use Cases
 
-> `group-18-conference-application.md` | 285 types | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics.
+> `group-18-conference-application.md` | 303 types | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
-| 0 | `ActivityEventIdRules<T>` | class | MMCA.ADC.Conference.Application.Activities.Validation |
-| 0 | `ActivitySortOrderRules<T>` | class | MMCA.ADC.Conference.Application.Activities.Validation |
 | 0 | `ActivityTimeRangeRules<T>` | class | MMCA.ADC.Conference.Application.Activities.Validation |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Conference.Application |
-| 0 | `CategoryItemSortRules<T>` | class | MMCA.ADC.Conference.Application.Categories.Validation |
+| 0 | `BatchSessionQuestionAnswerItem` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.BatchAddSessionQuestionAnswers |
 | 0 | `ClassReference` | class | MMCA.ADC.Conference.Application |
+| 0 | `ConferenceCategoryUpdateRequest` | record | MMCA.ADC.Conference.Application.Categories.UseCases.Update |
 | 0 | `EventDateRangeRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
 | 0 | `ExportEventCalendarQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar |
 | 0 | `ExportSessionCalendarQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar |
@@ -1058,11 +1163,15 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `GetSessionSelectionDashboardQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard |
 | 0 | `GetSpeakersByEventFilterQuery` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSpeakersByEventFilter |
 | 0 | `GetSpeakerSessionOverlapQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSpeakerSessionOverlap |
+| 0 | `IActivityFieldsRequest` | interface | MMCA.ADC.Conference.Application.Activities.Validation |
+| 0 | `IEventFieldsRequest` | interface | MMCA.ADC.Conference.Application.Events.Validation |
+| 0 | `ISessionFieldsRequest` | interface | MMCA.ADC.Conference.Application.Sessions.Validation |
+| 0 | `ISpeakerFieldsRequest` | interface | MMCA.ADC.Conference.Application.Speakers.Validation |
+| 0 | `ISponsorFieldsRequest` | interface | MMCA.ADC.Conference.Application.Sponsors.Validation |
 | 0 | `LocalityLookupEntry` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport |
+| 0 | `QuestionUpdateRequest` | record | MMCA.ADC.Conference.Application.Questions.UseCases.Update |
 | 0 | `RoomCapacityRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
-| 0 | `RoomSortRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
 | 0 | `ScoreEventSessionsCommand` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions |
-| 0 | `SessionEventIdRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
 | 0 | `SessionizeCategoryItem` | record | MMCA.ADC.Conference.Application.Events.Sessionize |
 | 0 | `SessionizeLink` | record | MMCA.ADC.Conference.Application.Events.Sessionize |
 | 0 | `SessionizeQuestion` | record | MMCA.ADC.Conference.Application.Events.Sessionize |
@@ -1074,31 +1183,32 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `SessionScoringWorkItem` | record struct | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions |
 | 0 | `SessionSimilarityCalculator` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetContentSimilarity |
 | 0 | `SpeakerInfo` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions |
-| 0 | `SponsorEventIdRules<T>` | class | MMCA.ADC.Conference.Application.Sponsors.Validation |
-| 0 | `SponsorSortRules<T>` | class | MMCA.ADC.Conference.Application.Sponsors.Validation |
 | 0 | `StatusBucket` | enum | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard |
 | 0 | `StatusBucket` | enum | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetCategoryDistribution |
+| 1 | `ActivityEventIdRules<T>` | class | MMCA.ADC.Conference.Application.Activities.Validation |
+| 1 | `ActivitySortOrderRules<T>` | class | MMCA.ADC.Conference.Application.Activities.Validation |
 | 1 | `ActivityUpdateRequest` | record | MMCA.ADC.Conference.Application.Activities.UseCases.Update |
-| 1 | `ConferenceCategoryUpdateRequest` | record | MMCA.ADC.Conference.Application.Categories.UseCases.Update |
+| 1 | `CategoryItemSortRules<T>` | class | MMCA.ADC.Conference.Application.Categories.Validation |
 | 1 | `EventUpdateRequest` | record | MMCA.ADC.Conference.Application.Events.UseCases.Update |
 | 1 | `ISessionScoringQueue` | interface | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions |
-| 1 | `QuestionUpdateRequest` | record | MMCA.ADC.Conference.Application.Questions.UseCases.Update |
+| 1 | `RoomSortRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
+| 1 | `SessionEventIdRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
 | 1 | `SessionizeCategory` | record | MMCA.ADC.Conference.Application.Events.Sessionize |
 | 1 | `SessionizeSession` | record | MMCA.ADC.Conference.Application.Events.Sessionize |
 | 1 | `SessionizeSpeaker` | record | MMCA.ADC.Conference.Application.Events.Sessionize |
 | 1 | `SessionScoringInput` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions |
 | 1 | `SessionUpdateRequest` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.Update |
 | 1 | `SpeakerUpdateRequest` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.Update |
+| 1 | `SponsorEventIdRules<T>` | class | MMCA.ADC.Conference.Application.Sponsors.Validation |
+| 1 | `SponsorSortRules<T>` | class | MMCA.ADC.Conference.Application.Sponsors.Validation |
 | 1 | `SponsorUpdateRequest` | record | MMCA.ADC.Conference.Application.Sponsors.UseCases.Update |
 | 2 | `IAiScoringService` | interface | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions |
 | 2 | `SessionizeResponse` | record | MMCA.ADC.Conference.Application.Events.Sessionize |
 | 2 | `SessionScoringQueue` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions |
 | 3 | `ISessionizeService` | interface | MMCA.ADC.Conference.Application.Events.Sessionize |
-| 3 | `RoomChangedHandler` | class | MMCA.ADC.Conference.Application.Events.DomainEventHandlers |
 | 3 | `SessionizeSyncWarnings` | class | MMCA.ADC.Conference.Application.Events.UseCases.RefreshFromSessionize |
 | 3 | `UpdateEventResult` | record | MMCA.ADC.Conference.Application.Events.UseCases.Update |
 | 3 | `UpdateSessionResult` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.Update |
-| 4 | `SessionCreatedHandler` | class | MMCA.ADC.Conference.Application.Sessions.DomainEventHandlers |
 | 4 | `SpeakerDeletedHandler` | class | MMCA.ADC.Conference.Application.Speakers.DomainEventHandlers |
 | 7 | `ActivityDescriptionRules<T>` | class | MMCA.ADC.Conference.Application.Activities.Validation |
 | 7 | `ActivityNameRules<T>` | class | MMCA.ADC.Conference.Application.Activities.Validation |
@@ -1110,6 +1220,7 @@ disclosure) and is cross-linked in the chapter.
 | 7 | `CategoryItemNameRules<T>` | class | MMCA.ADC.Conference.Application.Categories.Validation |
 | 7 | `ConferenceCategoryCreateRequest` | record | MMCA.ADC.Conference.Application.Categories.UseCases.Create |
 | 7 | `ConferenceCategoryTitleRules<T>` | class | MMCA.ADC.Conference.Application.Categories.Validation |
+| 7 | `ConferenceCategoryUpdateApplier` | class | MMCA.ADC.Conference.Application.Categories.UseCases.Update |
 | 7 | `EventNameRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
 | 7 | `EventOrganizerContactEmailRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
 | 7 | `EventSponsorshipPacketUrlRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
@@ -1128,8 +1239,12 @@ disclosure) and is cross-linked in the chapter.
 | 7 | `SessionResourceLinksRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
 | 7 | `SessionStatusRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
 | 7 | `SessionTitleRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
+| 7 | `SpeakerEmailRules<T>` | class | MMCA.ADC.Conference.Application.Speakers.Validation |
 | 7 | `SpeakerFirstNameRules<T>` | class | MMCA.ADC.Conference.Application.Speakers.Validation |
+| 7 | `SpeakerGitHubUrlRules<T>` | class | MMCA.ADC.Conference.Application.Speakers.Validation |
 | 7 | `SpeakerLastNameRules<T>` | class | MMCA.ADC.Conference.Application.Speakers.Validation |
+| 7 | `SpeakerLinkedInUrlRules<T>` | class | MMCA.ADC.Conference.Application.Speakers.Validation |
+| 7 | `SpeakerWebsiteUrlRules<T>` | class | MMCA.ADC.Conference.Application.Speakers.Validation |
 | 7 | `SponsorBoothNumberRules<T>` | class | MMCA.ADC.Conference.Application.Sponsors.Validation |
 | 7 | `SponsorDescriptionRules<T>` | class | MMCA.ADC.Conference.Application.Sponsors.Validation |
 | 7 | `SponsorLinkedInUrlRules<T>` | class | MMCA.ADC.Conference.Application.Sponsors.Validation |
@@ -1138,10 +1253,8 @@ disclosure) and is cross-linked in the chapter.
 | 7 | `SponsorTwitterHandleRules<T>` | class | MMCA.ADC.Conference.Application.Sponsors.Validation |
 | 7 | `SponsorWebsiteUrlRules<T>` | class | MMCA.ADC.Conference.Application.Sponsors.Validation |
 | 7 | `UpdateCategoryItemCommand` | record | MMCA.ADC.Conference.Application.Categories.UseCases.UpdateCategoryItem |
-| 7 | `UpdateConferenceCategoryCommand` | record | MMCA.ADC.Conference.Application.Categories.UseCases.Update |
-| 8 | `ActivityUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Activities.UseCases.Update |
+| 8 | `ActivityFieldRules<T>` | class | MMCA.ADC.Conference.Application.Activities.Validation |
 | 8 | `AddCategoryItemCommandValidator` | class | MMCA.ADC.Conference.Application.Categories.UseCases.AddCategoryItem |
-| 8 | `AddCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Categories.UseCases.AddCategoryItem |
 | 8 | `AddEventQuestionAnswerCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.AddEventQuestionAnswer |
 | 8 | `AddEventSpeakerCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.AddEventSpeaker |
 | 8 | `AddRoomCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.AddRoom |
@@ -1151,9 +1264,9 @@ disclosure) and is cross-linked in the chapter.
 | 8 | `ConferenceCategoryDTOMapper` | class | MMCA.ADC.Conference.Application.Categories.DTOs |
 | 8 | `ConferenceCategoryUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Categories.UseCases.Update |
 | 8 | `EventCreateRequest` | record | MMCA.ADC.Conference.Application.Events.UseCases.Create |
+| 8 | `EventFieldRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
 | 8 | `EventQuestionAnswerDTOMapper` | class | MMCA.ADC.Conference.Application.Events.DTOs |
 | 8 | `EventSpeakerDTOMapper` | class | MMCA.ADC.Conference.Application.Events.DTOs |
-| 8 | `EventUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Events.UseCases.Update |
 | 8 | `LinkUserToSpeakerCommand` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.LinkUser |
 | 8 | `PublishedEventSpecification` | class | MMCA.ADC.Conference.Application.Events.Specifications |
 | 8 | `PublishEventCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.Publish |
@@ -1161,24 +1274,22 @@ disclosure) and is cross-linked in the chapter.
 | 8 | `QuestionDTOMapper` | class | MMCA.ADC.Conference.Application.Questions.DTOs |
 | 8 | `QuestionUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Questions.UseCases.Update |
 | 8 | `RefreshFromSessionizeCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.RefreshFromSessionize |
-| 8 | `RemoveCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Categories.UseCases.RemoveCategoryItem |
 | 8 | `RemoveEventQuestionAnswerCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.RemoveEventQuestionAnswer |
 | 8 | `RemoveEventSpeakerCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.RemoveEventSpeaker |
 | 8 | `RemoveRoomCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.RemoveRoom |
 | 8 | `RemoveSpeakerCategoryItemCommand` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.RemoveSpeakerCategoryItem |
 | 8 | `RoomDTOMapper` | class | MMCA.ADC.Conference.Application.Events.DTOs |
+| 8 | `SessionFieldRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
 | 8 | `SessionizeSyncContext` | record | MMCA.ADC.Conference.Application.Events.UseCases.RefreshFromSessionize |
-| 8 | `SessionUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.Update |
 | 8 | `SpeakerCategoryItemDTOMapper` | class | MMCA.ADC.Conference.Application.Speakers.DTOs |
 | 8 | `SpeakerCreateRequest` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.Create |
+| 8 | `SpeakerFieldRules<T>` | class | MMCA.ADC.Conference.Application.Speakers.Validation |
 | 8 | `SpeakerLocalityHelper` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport |
 | 8 | `SpeakerQuestionAnswerDTOMapper` | class | MMCA.ADC.Conference.Application.Speakers.DTOs |
-| 8 | `SpeakerUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.Update |
-| 8 | `SponsorUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Sponsors.UseCases.Update |
+| 8 | `SponsorFieldRules<T>` | class | MMCA.ADC.Conference.Application.Sponsors.Validation |
 | 8 | `UnlinkUserFromSpeakerCommand` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.UnlinkUser |
 | 8 | `UnpublishEventCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.Unpublish |
 | 8 | `UpdateCategoryItemCommandValidator` | class | MMCA.ADC.Conference.Application.Categories.UseCases.UpdateCategoryItem |
-| 8 | `UpdateCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Categories.UseCases.UpdateCategoryItem |
 | 8 | `UpdateEventCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.Update |
 | 8 | `UpdateEventQuestionAnswerCommand` | record | MMCA.ADC.Conference.Application.Events.UseCases.UpdateEventQuestionAnswer |
 | 8 | `UpdateQuestionCommand` | record | MMCA.ADC.Conference.Application.Questions.UseCases.Update |
@@ -1187,24 +1298,28 @@ disclosure) and is cross-linked in the chapter.
 | 8 | `UserRegisteredHandler` | class | MMCA.ADC.Conference.Application.Users.IntegrationEventHandlers |
 | 9 | `ActivityCreateRequest` | record | MMCA.ADC.Conference.Application.Activities.UseCases.Create |
 | 9 | `ActivityDTOMapper` | class | MMCA.ADC.Conference.Application.Activities.DTOs |
+| 9 | `ActivityUpdateApplier` | class | MMCA.ADC.Conference.Application.Activities.UseCases.Update |
+| 9 | `ActivityUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Activities.UseCases.Update |
+| 9 | `AddCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Categories.UseCases.AddCategoryItem |
 | 9 | `AddEventQuestionAnswerCommandValidator` | class | MMCA.ADC.Conference.Application.Events.UseCases.AddEventQuestionAnswer |
 | 9 | `AddEventQuestionAnswerHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.AddEventQuestionAnswer |
 | 9 | `AddEventSpeakerCommandValidator` | class | MMCA.ADC.Conference.Application.Events.UseCases.AddEventSpeaker |
 | 9 | `AddEventSpeakerHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.AddEventSpeaker |
 | 9 | `AddRoomCommandValidator` | class | MMCA.ADC.Conference.Application.Events.UseCases.AddRoom |
-| 9 | `AddRoomHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.AddRoom |
 | 9 | `AddSessionCategoryItemCommand` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionCategoryItem |
 | 9 | `AddSessionQuestionAnswerCommand` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionQuestionAnswer |
 | 9 | `AddSessionSpeakerCommand` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionSpeaker |
 | 9 | `AddSpeakerCategoryItemCommandValidator` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.AddSpeakerCategoryItem |
 | 9 | `AddSpeakerCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.AddSpeakerCategoryItem |
+| 9 | `BatchAddSessionQuestionAnswersCommand` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.BatchAddSessionQuestionAnswers |
 | 9 | `CalendarExportMapper` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar |
 | 9 | `CreateConferenceCategoryHandler` | class | MMCA.ADC.Conference.Application.Categories.UseCases.Create |
-| 9 | `CreateQuestionHandler` | class | MMCA.ADC.Conference.Application.Questions.UseCases.Create |
+| 9 | `DeleteConferenceCategoryHandler` | class | MMCA.ADC.Conference.Application.Categories.UseCases.Delete |
 | 9 | `DeleteSessionHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.Delete |
 | 9 | `EventCreateRequestMapper` | class | MMCA.ADC.Conference.Application.Events.UseCases.Create |
 | 9 | `EventCreateRequestValidator` | class | MMCA.ADC.Conference.Application.Events.UseCases.Create |
 | 9 | `EventDTOMapper` | class | MMCA.ADC.Conference.Application.Events.DTOs |
+| 9 | `EventUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Events.UseCases.Update |
 | 9 | `GetCategoryDistributionHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetCategoryDistribution |
 | 9 | `GetContentSimilarityHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetContentSimilarity |
 | 9 | `GetNowNextQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext |
@@ -1216,41 +1331,34 @@ disclosure) and is cross-linked in the chapter.
 | 9 | `GetSpeakersByEventFilterHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSpeakersByEventFilter |
 | 9 | `GetSpeakerSessionOverlapHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSpeakerSessionOverlap |
 | 9 | `ISessionizeSyncStrategy` | interface | MMCA.ADC.Conference.Application.Events.UseCases.RefreshFromSessionize |
-| 9 | `LinkUserToSpeakerHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.LinkUser |
 | 9 | `PublicSessionStatusSpecification` | class | MMCA.ADC.Conference.Application.Sessions.Specifications |
-| 9 | `PublishEventHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.Publish |
 | 9 | `QuestionCreateRequestMapper` | class | MMCA.ADC.Conference.Application.Questions.UseCases.Create |
 | 9 | `QuestionCreateRequestValidator` | class | MMCA.ADC.Conference.Application.Questions.UseCases.Create |
-| 9 | `RemoveEventQuestionAnswerHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.RemoveEventQuestionAnswer |
-| 9 | `RemoveEventSpeakerHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.RemoveEventSpeaker |
-| 9 | `RemoveRoomHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.RemoveRoom |
 | 9 | `RemoveSessionCategoryItemCommand` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.RemoveSessionCategoryItem |
 | 9 | `RemoveSessionQuestionAnswerCommand` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.RemoveSessionQuestionAnswer |
 | 9 | `RemoveSessionSpeakerCommand` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.RemoveSessionSpeaker |
-| 9 | `RemoveSpeakerCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.RemoveSpeakerCategoryItem |
 | 9 | `ScoreEventSessionsHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions |
 | 9 | `SessionBookmarkValidationService` | class | MMCA.ADC.Conference.Application.Sessions |
 | 9 | `SessionCategoryItemDTOMapper` | class | MMCA.ADC.Conference.Application.Sessions.DTOs |
 | 9 | `SessionCreateRequest` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.Create |
 | 9 | `SessionQuestionAnswerDTOMapper` | class | MMCA.ADC.Conference.Application.Sessions.DTOs |
+| 9 | `SessionQuestionAnswerRules` | class | MMCA.ADC.Conference.Application.Sessions |
 | 9 | `SessionRoomScheduling` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
 | 9 | `SessionSpeakerDTOMapper` | class | MMCA.ADC.Conference.Application.Sessions.DTOs |
+| 9 | `SessionUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.Update |
 | 9 | `SpeakerCreateRequestMapper` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.Create |
 | 9 | `SpeakerCreateRequestValidator` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.Create |
 | 9 | `SpeakerDTOMapper` | class | MMCA.ADC.Conference.Application.Speakers.DTOs |
+| 9 | `SpeakerUpdateApplier` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.Update |
+| 9 | `SpeakerUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.Update |
 | 9 | `SponsorCreateRequest` | record | MMCA.ADC.Conference.Application.Sponsors.UseCases.Create |
 | 9 | `SponsorDTOMapper` | class | MMCA.ADC.Conference.Application.Sponsors.DTOs |
-| 9 | `UnlinkUserFromSpeakerHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.UnlinkUser |
-| 9 | `UnpublishEventHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.Unpublish |
-| 9 | `UpdateActivityCommand` | record | MMCA.ADC.Conference.Application.Activities.UseCases.Update |
-| 9 | `UpdateConferenceCategoryHandler` | class | MMCA.ADC.Conference.Application.Categories.UseCases.Update |
-| 9 | `UpdateEventQuestionAnswerHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.UpdateEventQuestionAnswer |
-| 9 | `UpdateQuestionHandler` | class | MMCA.ADC.Conference.Application.Questions.UseCases.Update |
+| 9 | `SponsorUpdateApplier` | class | MMCA.ADC.Conference.Application.Sponsors.UseCases.Update |
+| 9 | `SponsorUpdateRequestValidator` | class | MMCA.ADC.Conference.Application.Sponsors.UseCases.Update |
+| 9 | `UpdateEventQuestionAnswerCommandValidator` | class | MMCA.ADC.Conference.Application.Events.UseCases.UpdateEventQuestionAnswer |
 | 9 | `UpdateRoomCommandValidator` | class | MMCA.ADC.Conference.Application.Events.UseCases.UpdateRoom |
-| 9 | `UpdateRoomHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.UpdateRoom |
 | 9 | `UpdateSessionCommand` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.Update |
 | 9 | `UpdateSessionQuestionAnswerCommand` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.UpdateSessionQuestionAnswer |
-| 9 | `UpdateSponsorCommand` | record | MMCA.ADC.Conference.Application.Sponsors.UseCases.Update |
 | 10 | `ActivityCreateRequestMapper` | class | MMCA.ADC.Conference.Application.Activities.UseCases.Create |
 | 10 | `ActivityCreateRequestValidator` | class | MMCA.ADC.Conference.Application.Activities.UseCases.Create |
 | 10 | `ActivityNavigationPopulator` | class | MMCA.ADC.Conference.Application.Activities |
@@ -1260,6 +1368,8 @@ disclosure) and is cross-linked in the chapter.
 | 10 | `AddSessionQuestionAnswerHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionQuestionAnswer |
 | 10 | `AddSessionSpeakerCommandValidator` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionSpeaker |
 | 10 | `AddSessionSpeakerHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.AddSessionSpeaker |
+| 10 | `BatchAddSessionQuestionAnswersCommandValidator` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.BatchAddSessionQuestionAnswers |
+| 10 | `BatchAddSessionQuestionAnswersHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.BatchAddSessionQuestionAnswers |
 | 10 | `CategoryItemNavigationPopulator` | class | MMCA.ADC.Conference.Application.Categories |
 | 10 | `CategorySyncStrategy` | class | MMCA.ADC.Conference.Application.Events.UseCases.RefreshFromSessionize |
 | 10 | `ConferenceCategoryNavigationPopulator` | class | MMCA.ADC.Conference.Application.Categories |
@@ -1277,10 +1387,10 @@ disclosure) and is cross-linked in the chapter.
 | 10 | `GetNowNextHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext |
 | 10 | `GetPublicSessionFilterHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.GetPublicSessionFilter |
 | 10 | `PublicConferenceVisibility` | class | MMCA.ADC.Conference.Application.Common |
+| 10 | `PublishEventHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.Publish |
 | 10 | `QuestionSyncStrategy` | class | MMCA.ADC.Conference.Application.Events.UseCases.RefreshFromSessionize |
-| 10 | `RemoveSessionCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.RemoveSessionCategoryItem |
+| 10 | `RemoveEventQuestionAnswerHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.RemoveEventQuestionAnswer |
 | 10 | `RemoveSessionQuestionAnswerHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.RemoveSessionQuestionAnswer |
-| 10 | `RemoveSessionSpeakerHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.RemoveSessionSpeaker |
 | 10 | `RoomNavigationPopulator` | class | MMCA.ADC.Conference.Application.Events |
 | 10 | `RoomSyncStrategy` | class | MMCA.ADC.Conference.Application.Events.UseCases.RefreshFromSessionize |
 | 10 | `SessionCategoryItemNavigationPopulator` | class | MMCA.ADC.Conference.Application.Sessions |
@@ -1299,12 +1409,13 @@ disclosure) and is cross-linked in the chapter.
 | 10 | `SponsorCreateRequestMapper` | class | MMCA.ADC.Conference.Application.Sponsors.UseCases.Create |
 | 10 | `SponsorCreateRequestValidator` | class | MMCA.ADC.Conference.Application.Sponsors.UseCases.Create |
 | 10 | `SponsorNavigationPopulator` | class | MMCA.ADC.Conference.Application.Sponsors |
-| 10 | `UpdateActivityHandler` | class | MMCA.ADC.Conference.Application.Activities.UseCases.Update |
-| 10 | `UpdateEventHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.Update |
+| 10 | `UnlinkUserFromSpeakerHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.UnlinkUser |
+| 10 | `UnpublishEventHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.Unpublish |
+| 10 | `UpdateCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Categories.UseCases.UpdateCategoryItem |
+| 10 | `UpdateEventQuestionAnswerHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.UpdateEventQuestionAnswer |
+| 10 | `UpdateRoomHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.UpdateRoom |
+| 10 | `UpdateSessionQuestionAnswerCommandValidator` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.UpdateSessionQuestionAnswer |
 | 10 | `UpdateSessionQuestionAnswerHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.UpdateSessionQuestionAnswer |
-| 10 | `UpdateSpeakerHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.Update |
-| 10 | `UpdateSponsorHandler` | class | MMCA.ADC.Conference.Application.Sponsors.UseCases.Update |
-| 11 | `CreateSessionHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.Create |
 | 11 | `DependencyInjection` | class | MMCA.ADC.Conference.Application |
 | 11 | `GetPublicActivityFilterHandler` | class | MMCA.ADC.Conference.Application.Activities.UseCases.GetPublicActivityFilter |
 | 11 | `GetPublicEventSpeakerFilterHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.GetPublicEventSpeakerFilter |
@@ -1314,8 +1425,21 @@ disclosure) and is cross-linked in the chapter.
 | 11 | `GetPublicSpeakerCategoryItemFilterHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.GetPublicSpeakerCategoryItemFilter |
 | 11 | `GetPublicSpeakerFilterHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.GetPublicSpeakerFilter |
 | 11 | `GetPublicSponsorFilterHandler` | class | MMCA.ADC.Conference.Application.Sponsors.UseCases.GetPublicSponsorFilter |
-| 11 | `UpdateSessionHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.Update |
+| 11 | `RemoveCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Categories.UseCases.RemoveCategoryItem |
+| 11 | `RemoveEventSpeakerHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.RemoveEventSpeaker |
+| 11 | `RemoveRoomHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.RemoveRoom |
+| 11 | `RemoveSessionCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.RemoveSessionCategoryItem |
+| 11 | `RemoveSessionSpeakerHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.RemoveSessionSpeaker |
+| 11 | `RemoveSpeakerCategoryItemHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.RemoveSpeakerCategoryItem |
+| 11 | `UpdateSpeakerHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.Update |
+| 14 | `CreateQuestionHandler` | class | MMCA.ADC.Conference.Application.Questions.UseCases.Create |
+| 14 | `CreateSessionHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.Create |
+| 14 | `LinkUserToSpeakerHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.LinkUser |
 | 14 | `RefreshFromSessionizeHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.RefreshFromSessionize |
+| 14 | `UpdateQuestionHandler` | class | MMCA.ADC.Conference.Application.Questions.UseCases.Update |
+| 15 | `AddRoomHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.AddRoom |
+| 15 | `UpdateEventHandler` | class | MMCA.ADC.Conference.Application.Events.UseCases.Update |
+| 15 | `UpdateSessionHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.Update |
 
 ### G19 - ADC Conference - Infrastructure & Persistence
 
@@ -1359,7 +1483,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G20 - ADC Conference - API, gRPC Contracts & Service Host
 
-> `group-20-conference-api-grpc.md` | 43 types | Conference REST controllers, the .Contracts gRPC surface, the extractable service host, and the gRPC adapter.
+> `group-20-conference-api-grpc.md` | 44 types | Conference REST controllers, the .Contracts gRPC surface, the extractable service host, and the gRPC adapter.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -1372,18 +1496,19 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `AddSessionSpeakerRequest` | record | MMCA.ADC.Conference.API.Controllers |
 | 0 | `AddSpeakerCategoryItemRequest` | record | MMCA.ADC.Conference.API.Controllers |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Conference.API |
+| 0 | `BatchSessionQuestionAnswerItemRequest` | record | MMCA.ADC.Conference.API.Controllers |
 | 0 | `ClassReference` | class | MMCA.ADC.Conference.API |
 | 0 | `ConferenceErrorResources` | class | MMCA.ADC.Conference.API.Resources |
 | 0 | `UpdateCategoryItemRequest` | record | MMCA.ADC.Conference.API.Controllers |
 | 0 | `UpdateEventQuestionAnswerRequest` | record | MMCA.ADC.Conference.API.Controllers |
 | 0 | `UpdateRoomRequest` | record | MMCA.ADC.Conference.API.Controllers |
 | 0 | `UpdateSessionQuestionAnswerRequest` | record | MMCA.ADC.Conference.API.Controllers |
-| 2 | `DependencyInjection` | class | MMCA.ADC.Conference.API |
-| 2 | `GrpcErrorTrailerParser` | class | MMCA.ADC.Conference.Contracts |
+| 1 | `BatchAddSessionQuestionAnswersRequest` | record | MMCA.ADC.Conference.API.Controllers |
+| 1 | `DependencyInjection` | class | MMCA.ADC.Conference.API |
 | 2 | `SelfHttpOutputCacheWarmupTask` | class | MMCA.ADC.Conference.Service |
 | 2 | `ServiceInfoController` | class | MMCA.ADC.Conference.API.Controllers |
-| 4 | `SessionSelectionController` | class | MMCA.ADC.Conference.API.Controllers |
 | 5 | `ConferenceModule` | class | MMCA.ADC.Conference.API |
+| 5 | `SessionSelectionController` | class | MMCA.ADC.Conference.API.Controllers |
 | 8 | `CategoryItemsController` | class | MMCA.ADC.Conference.API.Controllers |
 | 8 | `ConferenceCategoriesController` | class | MMCA.ADC.Conference.API.Controllers |
 | 9 | `CurrentUserServiceExtensions` | class | MMCA.ADC.Conference.API.Authorization |
@@ -1409,116 +1534,156 @@ disclosure) and is cross-linked in the chapter.
 
 ### G21 - ADC Conference - UI
 
-> `group-21-conference-ui.md` | 106 types | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services.
+> `group-21-conference-ui.md` | 146 types | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
 | 0 | `ADCEventInfo` | record | MMCA.ADC.Conference.UI.Pages.Home |
 | 0 | `CategoryItemInfo` | record | MMCA.ADC.Conference.UI.Services |
+| 0 | `ChildEntityDeletePath` | class | MMCA.ADC.Conference.UI.Services |
 | 0 | `ConferenceRoutePaths` | class | MMCA.ADC.Conference.UI |
 | 0 | `ConferenceTrackInfo` | record | MMCA.ADC.Conference.UI.Pages.Home |
+| 0 | `DetailPageBase` | class | MMCA.ADC.Conference.UI.Pages.Common |
 | 0 | `EventInfo` | record | MMCA.ADC.Conference.UI.Services |
 | 0 | `EventPhase` | enum | MMCA.ADC.Conference.UI.Pages.Home |
-| 0 | `InfiniteScrollSentinel` | class | MMCA.ADC.Conference.UI.Components |
-| 0 | `IPublicLinkBuilder` | interface | MMCA.ADC.Conference.UI.Services |
 | 0 | `KeynoteSpeakerInfo` | record | MMCA.ADC.Conference.UI.Pages.Home |
 | 0 | `PreConferenceWorkshopInfo` | record | MMCA.ADC.Conference.UI.Pages.Home |
+| 0 | `PublicSessionListFilterState` | class | MMCA.ADC.Conference.UI.Pages.Public |
 | 0 | `ScorePollSignal` | enum | MMCA.ADC.Conference.UI.Pages.SessionSelection |
+| 0 | `SessionSchedulePageRequest` | record | MMCA.ADC.Conference.UI.Services |
 | 0 | `SessionSelectionDisplay` | class | MMCA.ADC.Conference.UI.Pages.SessionSelection |
 | 0 | `SpeakerInfo` | record | MMCA.ADC.Conference.UI.Services |
 | 1 | `ADCCollectionResult` | record | MMCA.ADC.Conference.UI.Pages.Home |
+| 1 | `ADCHomeContent` | class | MMCA.ADC.Conference.UI.Pages.Home |
 | 1 | `ADCSponsorInfo` | record | MMCA.ADC.Conference.UI.Pages.Home |
-| 1 | `ICategoryItemLookupService` | interface | MMCA.ADC.Conference.UI.Services |
-| 1 | `IEventLookupService` | interface | MMCA.ADC.Conference.UI.Services |
-| 1 | `ISpeakerLookupService` | interface | MMCA.ADC.Conference.UI.Services |
-| 1 | `NavigationPublicLinkBuilder` | class | MMCA.ADC.Conference.UI.Services |
 | 1 | `ScorePollTracker` | class | MMCA.ADC.Conference.UI.Pages.SessionSelection |
+| 1 | `SpeakerDetailLookups` | record | MMCA.ADC.Conference.UI.Services |
 | 1 | `SpeakerQr` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
+| 2 | `ActivityFormModel` | class | MMCA.ADC.Conference.UI.Pages.Activity |
 | 2 | `ADCSponsorCollectionResult` | record | MMCA.ADC.Conference.UI.Pages.Home |
-| 2 | `IEventSpeakerUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 2 | `IOrganizerEventFeedbackUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 2 | `IOrganizerSessionFeedbackUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 2 | `ISessionCategoryItemUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 2 | `ISessionSpeakerUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 2 | `ISpeakerCategoryItemUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 2 | `SessionSelectionSpeakerOverlap` | class | MMCA.ADC.Conference.UI.Pages.SessionSelection |
-| 3 | `CachedSessionPage` | record | MMCA.ADC.Conference.UI.Pages.Public |
-| 3 | `CategoryItemLookupService` | class | MMCA.ADC.Conference.UI.Services |
+| 2 | `ConferenceCategoryItemEditModel` | class | MMCA.ADC.Conference.UI.Pages.ConferenceCategory |
+| 2 | `QuestionFormModel` | class | MMCA.ADC.Conference.UI.Pages.Question |
+| 2 | `RoomFormModel` | class | MMCA.ADC.Conference.UI.Pages.Room |
+| 2 | `SponsorFormModel` | class | MMCA.ADC.Conference.UI.Pages.Sponsor |
+| 3 | `ActivityCreateModel` | class | MMCA.ADC.Conference.UI.Pages.Activity |
+| 3 | `ActivityEditModel` | class | MMCA.ADC.Conference.UI.Pages.Activity |
+| 3 | `ConferenceCategoryFormModel` | class | MMCA.ADC.Conference.UI.Pages.ConferenceCategory |
 | 3 | `ConferenceUIModule` | class | MMCA.ADC.Conference.UI |
-| 3 | `EventLookupService` | class | MMCA.ADC.Conference.UI.Services |
-| 3 | `IActivityUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 3 | `ICategoryItemUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 3 | `IConferenceCategoryUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 3 | `IEventUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 3 | `IQuestionUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 3 | `IRoomUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 3 | `ISessionUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 3 | `EventFormModel` | class | MMCA.ADC.Conference.UI.Pages.Event |
+| 3 | `ICategoryItemLookupService` | interface | MMCA.ADC.Conference.UI.Services |
+| 3 | `IEventLookupService` | interface | MMCA.ADC.Conference.UI.Services |
+| 3 | `IEventSpeakerUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 3 | `IOrganizerEventFeedbackUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 3 | `IOrganizerSessionFeedbackUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 3 | `IPublicSessionScheduleService` | interface | MMCA.ADC.Conference.UI.Services |
+| 3 | `ISessionCategoryItemUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 3 | `ISessionSpeakerUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 3 | `ISpeakerCategoryItemUIService` | interface | MMCA.ADC.Conference.UI.Services |
 | 3 | `ISpeakerDashboardUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 3 | `ISpeakerUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 3 | `ISponsorUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 3 | `OrganizerEventFeedbackService` | class | MMCA.ADC.Conference.UI.Services |
-| 3 | `OrganizerSessionFeedbackService` | class | MMCA.ADC.Conference.UI.Services |
+| 3 | `ISpeakerDetailLookupService` | interface | MMCA.ADC.Conference.UI.Services |
+| 3 | `ISpeakerLookupService` | interface | MMCA.ADC.Conference.UI.Services |
 | 3 | `PublicScheduleRoomOptions` | class | MMCA.ADC.Conference.UI.Pages.Public |
-| 3 | `SpeakerLookupService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `ActivityService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `CategoryItemService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `ConferenceCategoryService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `EventService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `EventSpeakerService` | class | MMCA.ADC.Conference.UI.Services |
+| 3 | `PublicSessionListFilterBar` | class | MMCA.ADC.Conference.UI.Pages.Public |
+| 3 | `QuestionCreateModel` | class | MMCA.ADC.Conference.UI.Pages.Question |
+| 3 | `QuestionEditModel` | class | MMCA.ADC.Conference.UI.Pages.Question |
+| 3 | `RoomCreateModel` | class | MMCA.ADC.Conference.UI.Pages.Room |
+| 3 | `RoomEditModel` | class | MMCA.ADC.Conference.UI.Pages.Room |
+| 3 | `SessionFormModel` | class | MMCA.ADC.Conference.UI.Pages.Session |
+| 3 | `SessionizeRefreshOutcome` | record | MMCA.ADC.Conference.UI.Services |
+| 3 | `SpeakerFormModel` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
+| 3 | `SponsorCreateModel` | class | MMCA.ADC.Conference.UI.Pages.Sponsor |
+| 3 | `SponsorEditModel` | class | MMCA.ADC.Conference.UI.Pages.Sponsor |
+| 4 | `CategoryItemLookupService` | class | MMCA.ADC.Conference.UI.Services |
+| 4 | `ConferenceCategoryCreateModel` | class | MMCA.ADC.Conference.UI.Pages.ConferenceCategory |
+| 4 | `ConferenceCategoryEditModel` | class | MMCA.ADC.Conference.UI.Pages.ConferenceCategory |
+| 4 | `EventCreateModel` | class | MMCA.ADC.Conference.UI.Pages.Event |
+| 4 | `EventEditModel` | class | MMCA.ADC.Conference.UI.Pages.Event |
+| 4 | `EventLookupService` | class | MMCA.ADC.Conference.UI.Services |
+| 4 | `IActivityUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 4 | `ICategoryItemUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 4 | `IConferenceCategoryUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 4 | `IEventUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 4 | `IQuestionUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 4 | `IRoomUIService` | interface | MMCA.ADC.Conference.UI.Services |
 | 4 | `ISessionSelectionUIService` | interface | MMCA.ADC.Conference.UI.Services |
-| 4 | `QuestionService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `RoomService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `SessionCategoryItemService` | class | MMCA.ADC.Conference.UI.Services |
+| 4 | `ISessionUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 4 | `ISpeakerUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 4 | `ISponsorUIService` | interface | MMCA.ADC.Conference.UI.Services |
+| 4 | `OrganizerEventFeedbackService` | class | MMCA.ADC.Conference.UI.Services |
+| 4 | `OrganizerSessionFeedbackService` | class | MMCA.ADC.Conference.UI.Services |
+| 4 | `ScorePollHost` | record | MMCA.ADC.Conference.UI.Pages.SessionSelection |
+| 4 | `SessionCreateModel` | class | MMCA.ADC.Conference.UI.Pages.Session |
+| 4 | `SessionEditModel` | class | MMCA.ADC.Conference.UI.Pages.Session |
 | 4 | `SessionSelectionAiScores` | class | MMCA.ADC.Conference.UI.Pages.SessionSelection |
 | 4 | `SessionSelectionFilterOptions` | record | MMCA.ADC.Conference.UI.Pages.SessionSelection |
-| 4 | `SessionService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `SessionSpeakerService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `SpeakerCategoryItemService` | class | MMCA.ADC.Conference.UI.Services |
 | 4 | `SpeakerDashboardService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `SpeakerService` | class | MMCA.ADC.Conference.UI.Services |
-| 4 | `SponsorService` | class | MMCA.ADC.Conference.UI.Services |
+| 4 | `SpeakerLookupService` | class | MMCA.ADC.Conference.UI.Services |
+| 4 | `SpeakerUserSearch` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
+| 5 | `ActivityService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `CategoryItemService` | class | MMCA.ADC.Conference.UI.Services |
 | 5 | `ConferenceCategoryCreate` | class | MMCA.ADC.Conference.UI.Pages.ConferenceCategory |
-| 5 | `EventCreate` | class | MMCA.ADC.Conference.UI.Pages.Event |
-| 5 | `OrganizerEventFeedback` | class | MMCA.ADC.Conference.UI.Pages.Feedback |
-| 5 | `OrganizerSessionFeedback` | class | MMCA.ADC.Conference.UI.Pages.Feedback |
-| 5 | `PublicSessionListFilterBar` | class | MMCA.ADC.Conference.UI.Pages.Public |
-| 5 | `QuestionCreate` | class | MMCA.ADC.Conference.UI.Pages.Question |
-| 5 | `RoomCreate` | class | MMCA.ADC.Conference.UI.Pages.Room |
-| 5 | `SessionCreate` | class | MMCA.ADC.Conference.UI.Pages.Session |
+| 5 | `ConferenceCategoryDetail` | class | MMCA.ADC.Conference.UI.Pages.ConferenceCategory |
+| 5 | `ConferenceCategoryList` | class | MMCA.ADC.Conference.UI.Pages.ConferenceCategory |
+| 5 | `ConferenceCategoryService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `EventService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `EventSpeakerService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `FeedbackQuestionLoader` | class | MMCA.ADC.Conference.UI.Pages.Feedback |
+| 5 | `PublicSessionListView` | class | MMCA.ADC.Conference.UI.Pages.Public |
+| 5 | `PublicSessionScheduleService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `QuestionService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `RoomService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `ScorePollSession` | class | MMCA.ADC.Conference.UI.Pages.SessionSelection |
+| 5 | `SessionCategoryItemService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `SessionLookups` | class | MMCA.ADC.Conference.UI.Pages.Session |
+| 5 | `SessionSelectionFilters` | class | MMCA.ADC.Conference.UI.Pages.SessionSelection |
 | 5 | `SessionSelectionService` | class | MMCA.ADC.Conference.UI.Services |
-| 5 | `SpeakerCreate` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
+| 5 | `SessionService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `SessionSpeakerService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `SpeakerCategoryItemService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `SpeakerCreateModel` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
+| 5 | `SpeakerDetailLookupService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `SpeakerEditModel` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
+| 5 | `SpeakerService` | class | MMCA.ADC.Conference.UI.Services |
+| 5 | `SponsorService` | class | MMCA.ADC.Conference.UI.Services |
+| 6 | `ConferenceCategoryItemsPanel` | class | MMCA.ADC.Conference.UI.Pages.ConferenceCategory |
 | 6 | `DependencyInjection` | class | MMCA.ADC.Conference.UI |
-| 7 | `ConferenceCategoryDetail` | class | MMCA.ADC.Conference.UI.Pages.ConferenceCategory |
-| 7 | `ConferenceCategoryList` | class | MMCA.ADC.Conference.UI.Pages.ConferenceCategory |
-| 7 | `EventList` | class | MMCA.ADC.Conference.UI.Pages.Event |
-| 7 | `PublicSessionListView` | class | MMCA.ADC.Conference.UI.Pages.Public |
-| 7 | `QuestionList` | class | MMCA.ADC.Conference.UI.Pages.Question |
+| 6 | `EventCreate` | class | MMCA.ADC.Conference.UI.Pages.Event |
+| 6 | `EventList` | class | MMCA.ADC.Conference.UI.Pages.Event |
+| 6 | `OrganizerEventFeedback` | class | MMCA.ADC.Conference.UI.Pages.Feedback |
+| 6 | `OrganizerSessionFeedback` | class | MMCA.ADC.Conference.UI.Pages.Feedback |
+| 6 | `QuestionCreate` | class | MMCA.ADC.Conference.UI.Pages.Question |
+| 6 | `QuestionList` | class | MMCA.ADC.Conference.UI.Pages.Question |
+| 6 | `RoomCreate` | class | MMCA.ADC.Conference.UI.Pages.Room |
+| 6 | `SessionCreate` | class | MMCA.ADC.Conference.UI.Pages.Session |
+| 6 | `SpeakerCreate` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
+| 7 | `SessionSelectionSpeakerOverlap` | class | MMCA.ADC.Conference.UI.Pages.SessionSelection |
 | 8 | `EventDetail` | class | MMCA.ADC.Conference.UI.Pages.Event |
 | 8 | `PublicEventDetail` | class | MMCA.ADC.Conference.UI.Pages.Public |
-| 8 | `PublicSpeakerDetail` | class | MMCA.ADC.Conference.UI.Pages.Public |
 | 8 | `QuestionDetail` | class | MMCA.ADC.Conference.UI.Pages.Question |
 | 8 | `RoomDetail` | class | MMCA.ADC.Conference.UI.Pages.Room |
 | 8 | `SpeakerCategoryItemsPanel` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
 | 8 | `SpeakerDetail` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
 | 9 | `ActivityCreate` | class | MMCA.ADC.Conference.UI.Pages.Activity |
 | 9 | `ActivityDetail` | class | MMCA.ADC.Conference.UI.Pages.Activity |
-| 9 | `ActivityList` | class | MMCA.ADC.Conference.UI.Pages.Activity |
 | 9 | `ADCHome` | class | MMCA.ADC.Conference.UI.Pages.Home |
+| 9 | `EventFilteredListPageBase<TDto>` | class | MMCA.ADC.Conference.UI.Pages.Common |
 | 9 | `PublicActivityList` | class | MMCA.ADC.Conference.UI.Pages.Public |
 | 9 | `PublicEventList` | class | MMCA.ADC.Conference.UI.Pages.Public |
 | 9 | `PublicSessionDetail` | class | MMCA.ADC.Conference.UI.Pages.Public |
-| 9 | `PublicSpeakerList` | class | MMCA.ADC.Conference.UI.Pages.Public |
 | 9 | `PublicSponsorList` | class | MMCA.ADC.Conference.UI.Pages.Public |
-| 9 | `RoomList` | class | MMCA.ADC.Conference.UI.Pages.Room |
 | 9 | `SessionDetail` | class | MMCA.ADC.Conference.UI.Pages.Session |
 | 9 | `SessionSelectionDashboard` | class | MMCA.ADC.Conference.UI.Pages.SessionSelection |
 | 9 | `SpeakerDashboard` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
-| 9 | `SpeakerList` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
 | 9 | `SponsorCreate` | class | MMCA.ADC.Conference.UI.Pages.Sponsor |
 | 9 | `SponsorDetail` | class | MMCA.ADC.Conference.UI.Pages.Sponsor |
-| 9 | `SponsorList` | class | MMCA.ADC.Conference.UI.Pages.Sponsor |
+| 10 | `ActivityList` | class | MMCA.ADC.Conference.UI.Pages.Activity |
 | 10 | `PublicSessionList` | class | MMCA.ADC.Conference.UI.Pages.Public |
+| 10 | `PublicSpeakerDetail` | class | MMCA.ADC.Conference.UI.Pages.Public |
+| 10 | `PublicSpeakerList` | class | MMCA.ADC.Conference.UI.Pages.Public |
+| 10 | `RoomList` | class | MMCA.ADC.Conference.UI.Pages.Room |
 | 10 | `SessionList` | class | MMCA.ADC.Conference.UI.Pages.Session |
+| 10 | `SpeakerList` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
+| 10 | `SponsorList` | class | MMCA.ADC.Conference.UI.Pages.Sponsor |
 
 ### G22 - ADC Engagement Module (Session Bookmarks)
 
@@ -1526,11 +1691,10 @@ disclosure) and is cross-linked in the chapter.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
-| 0 | `AnswerState` | class | MMCA.ADC.Engagement.UI.Pages.Feedback |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Engagement.Infrastructure |
-| 0 | `AssemblyReference` | class | MMCA.ADC.Engagement.API |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Engagement.Domain |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Engagement.Application |
+| 0 | `AssemblyReference` | class | MMCA.ADC.Engagement.API |
 | 0 | `AttendeeRow` | record | MMCA.ADC.Engagement.UI.Services |
 | 0 | `AttendeeSearchField` | enum | MMCA.ADC.Engagement.UI.Services |
 | 0 | `BadgePayload` | class | MMCA.ADC.Engagement.Shared.CheckIns |
@@ -1539,16 +1703,16 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `CheckInScope` | enum | MMCA.ADC.Engagement.Shared.CheckIns |
 | 0 | `CheckInSettings` | class | MMCA.ADC.Engagement.Shared.CheckIns |
 | 0 | `CheckInState` | enum | MMCA.ADC.Engagement.UI.Pages.Rooms |
-| 0 | `ClassReference` | class | MMCA.ADC.Engagement.Domain |
-| 0 | `ClassReference` | class | MMCA.ADC.Engagement.API |
-| 0 | `ClassReference` | class | MMCA.ADC.Engagement.Infrastructure |
 | 0 | `ClassReference` | class | MMCA.ADC.Engagement.Application |
+| 0 | `ClassReference` | class | MMCA.ADC.Engagement.Domain |
+| 0 | `ClassReference` | class | MMCA.ADC.Engagement.Infrastructure |
+| 0 | `ClassReference` | class | MMCA.ADC.Engagement.API |
 | 0 | `CreateBookmarkRequest` | record | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
-| 0 | `DuplicateKeyDetection` | class | MMCA.ADC.Engagement.Application.Common |
 | 0 | `EngagementErrorResources` | class | MMCA.ADC.Engagement.API.Resources |
 | 0 | `EngagementFeatures` | class | MMCA.ADC.Engagement.Shared |
 | 0 | `EngagementPermissions` | class | MMCA.ADC.Engagement.Shared.Authorization |
 | 0 | `EngagementRoutePaths` | class | MMCA.ADC.Engagement.UI |
+| 0 | `FeedbackAnswerModel` | class | MMCA.ADC.Engagement.UI.Pages.Feedback |
 | 0 | `GetAttendanceStatsQuery` | record | MMCA.ADC.Engagement.Application.CheckIns.UseCases.GetAttendanceStats |
 | 0 | `GetBookmarkedSessionIdsQuery` | record | MMCA.ADC.Engagement.Application.UserSessionBookmarks.UseCases.GetBookmarkedSessionIds |
 | 0 | `GetLeaderboardQuery` | record | MMCA.ADC.Engagement.Application.Points.UseCases.GetLeaderboard |
@@ -1563,8 +1727,7 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `NowNextSessionInfo` | record | MMCA.ADC.Engagement.UI.Services |
 | 0 | `OptInRow` | record | MMCA.ADC.Engagement.Application.Points.UseCases.GetLeaderboard |
 | 0 | `PointsActivityType` | enum | MMCA.ADC.Engagement.Shared.Points |
-| 0 | `PointsRow` | record | MMCA.ADC.Engagement.Application.Points.UseCases.GetLeaderboard |
-| 0 | `PointsSubjectKeys` | class | MMCA.ADC.Engagement.Shared.Points |
+| 0 | `RecordedCheckIn` | record struct | MMCA.ADC.Engagement.Application.CheckIns.Services |
 | 0 | `RoomCheckInRequest` | record | MMCA.ADC.Engagement.Shared.CheckIns |
 | 0 | `RoomCheckInResultDTO` | record | MMCA.ADC.Engagement.Shared.CheckIns |
 | 0 | `ScanOutcomeKind` | enum | MMCA.ADC.Engagement.UI.Pages.CheckIn |
@@ -1582,14 +1745,15 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `CheckInAttendeeRequest` | record | MMCA.ADC.Engagement.Shared.CheckIns |
 | 1 | `CheckInDTO` | record | MMCA.ADC.Engagement.Shared.CheckIns |
 | 1 | `CreateBookmarkRequestValidator` | class | MMCA.ADC.Engagement.Application.UserSessionBookmarks.UseCases.Create |
+| 1 | `DependencyInjection` | class | MMCA.ADC.Engagement.API |
 | 1 | `DisabledBookmarkCountService` | class | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
 | 1 | `ILiveChannelPublishQueue` | interface | MMCA.ADC.Engagement.Application.Live |
-| 1 | `LifecycleTransitionRequest` | record | MMCA.ADC.Engagement.Shared |
 | 1 | `ManualCheckInRequest` | record | MMCA.ADC.Engagement.Shared.CheckIns |
 | 1 | `NowNextSnapshot` | record | MMCA.ADC.Engagement.UI.Services |
 | 1 | `OverviewRow` | record | MMCA.ADC.Engagement.Application.Points.UseCases.GetPointsOverview |
 | 1 | `PointsActivityTotalDTO` | record | MMCA.ADC.Engagement.Shared.Points |
 | 1 | `PointsEntryDTO` | record | MMCA.ADC.Engagement.Shared.Points |
+| 1 | `PointsSubjectKeys` | class | MMCA.ADC.Engagement.Shared.Points |
 | 1 | `RoomCheckInRequestValidator` | class | MMCA.ADC.Engagement.Application.CheckIns.UseCases.RecordRoomCheckIn |
 | 1 | `ScanOutcome` | record | MMCA.ADC.Engagement.UI.Pages.CheckIn |
 | 1 | `SessionReminderPlanner` | class | MMCA.ADC.Engagement.UI.Services |
@@ -1599,51 +1763,52 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `UserSessionBookmarkDTO` | record | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
 | 2 | `CheckInAttendeeRequestValidator` | class | MMCA.ADC.Engagement.Application.CheckIns.UseCases.CheckInAttendee |
 | 2 | `CurrentEventNotificationScopeProvider` | class | MMCA.ADC.Engagement.UI.Services |
-| 2 | `DependencyInjection` | class | MMCA.ADC.Engagement.API |
-| 2 | `IBookmarkUIService` | interface | MMCA.ADC.Engagement.UI.Services |
-| 2 | `ICheckInUIService` | interface | MMCA.ADC.Engagement.UI.Services |
-| 2 | `IEventFeedbackUIService` | interface | MMCA.ADC.Engagement.UI.Services |
-| 2 | `INowNextService` | interface | MMCA.ADC.Engagement.UI.Services |
-| 2 | `IQuestionLookupService` | interface | MMCA.ADC.Engagement.UI.Services |
-| 2 | `ISessionBookmarkUIService` | interface | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
-| 2 | `ISessionFeedbackUIService` | interface | MMCA.ADC.Engagement.UI.Services |
 | 2 | `LeaderboardOptInChanged` | record | MMCA.ADC.Engagement.Domain.Points.DomainEvents |
+| 2 | `LiveBroadcastPatch` | class | MMCA.ADC.Engagement.UI.Services |
 | 2 | `LiveChannelPublishQueue` | class | MMCA.ADC.Engagement.Application.Live |
 | 2 | `ManualCheckInRequestValidator` | class | MMCA.ADC.Engagement.Application.CheckIns.UseCases.ManualCheckIn |
 | 2 | `MyPointsDTO` | record | MMCA.ADC.Engagement.Shared.Points |
 | 2 | `PointsEntryChanged` | record | MMCA.ADC.Engagement.Domain.Points.DomainEvents |
 | 2 | `PointsOverviewDTO` | record | MMCA.ADC.Engagement.Shared.Points |
 | 2 | `SelfHttpWarmupTask` | class | MMCA.ADC.Engagement.Service |
-| 2 | `SessionReminderCoordinator` | class | MMCA.ADC.Engagement.UI.Services |
 | 2 | `UserEngagementExportDTO` | record | MMCA.ADC.Engagement.Shared.Exports |
 | 2 | `UserSessionBookmarkChanged` | record | MMCA.ADC.Engagement.Domain.UserSessionBookmarks.DomainEvents |
 | 3 | `AttendeeCheckedIn` | record | MMCA.ADC.Engagement.Shared.CheckIns.IntegrationEvents |
-| 3 | `BookmarkService` | class | MMCA.ADC.Engagement.UI.Services |
-| 3 | `CheckInService` | class | MMCA.ADC.Engagement.UI.Services |
-| 3 | `EventFeedbackService` | class | MMCA.ADC.Engagement.UI.Services |
+| 3 | `IBookmarkUIService` | interface | MMCA.ADC.Engagement.UI.Services |
+| 3 | `ICheckInUIService` | interface | MMCA.ADC.Engagement.UI.Services |
+| 3 | `IEventFeedbackUIService` | interface | MMCA.ADC.Engagement.UI.Services |
+| 3 | `INowNextService` | interface | MMCA.ADC.Engagement.UI.Services |
 | 3 | `IPointsAwarder` | interface | MMCA.ADC.Engagement.Application.Points.Services |
 | 3 | `IPointsUIService` | interface | MMCA.ADC.Engagement.UI.Services |
+| 3 | `IQuestionLookupService` | interface | MMCA.ADC.Engagement.UI.Services |
+| 3 | `ISessionBookmarkUIService` | interface | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
+| 3 | `ISessionFeedbackUIService` | interface | MMCA.ADC.Engagement.UI.Services |
 | 3 | `IUserEngagementExportService` | interface | MMCA.ADC.Engagement.Shared.Exports |
 | 3 | `LiveChannelPublishProcessor` | class | MMCA.ADC.Engagement.Infrastructure.Live |
-| 3 | `NowNextService` | class | MMCA.ADC.Engagement.UI.Services |
-| 3 | `QuestionLookupService` | class | MMCA.ADC.Engagement.UI.Services |
-| 3 | `SessionBookmarkUIService` | class | MMCA.ADC.Engagement.UI.Services |
-| 3 | `SessionFeedbackService` | class | MMCA.ADC.Engagement.UI.Services |
-| 4 | `CheckInsController` | class | MMCA.ADC.Engagement.API.Controllers |
+| 3 | `LiveChannelSubscription` | class | MMCA.ADC.Engagement.UI.Services |
+| 4 | `BookmarkService` | class | MMCA.ADC.Engagement.UI.Services |
+| 4 | `CheckInService` | class | MMCA.ADC.Engagement.UI.Services |
 | 4 | `DependencyInjection` | class | MMCA.ADC.Engagement.Infrastructure |
 | 4 | `DisabledUserEngagementExportService` | class | MMCA.ADC.Engagement.Shared.Exports |
+| 4 | `EventFeedbackService` | class | MMCA.ADC.Engagement.UI.Services |
 | 4 | `EventFeedbackSubmittedPointsHandler` | class | MMCA.ADC.Engagement.Application.Points.IntegrationEventHandlers |
-| 4 | `MyBadge` | class | MMCA.ADC.Engagement.UI.Pages.CheckIn |
-| 4 | `PointsController` | class | MMCA.ADC.Engagement.API.Controllers |
+| 4 | `NowNextService` | class | MMCA.ADC.Engagement.UI.Services |
 | 4 | `PointsService` | class | MMCA.ADC.Engagement.UI.Services |
+| 4 | `QuestionLookupService` | class | MMCA.ADC.Engagement.UI.Services |
+| 4 | `SessionFeedbackService` | class | MMCA.ADC.Engagement.UI.Services |
 | 4 | `SessionFeedbackSubmittedPointsHandler` | class | MMCA.ADC.Engagement.Application.Points.IntegrationEventHandlers |
 | 4 | `SessionQuestionSubmittedPointsHandler` | class | MMCA.ADC.Engagement.Application.Points.DomainEventHandlers |
+| 4 | `SessionReminderCoordinator` | class | MMCA.ADC.Engagement.UI.Services |
 | 4 | `UserSessionBookmarkCacheEvictionHandler` | class | MMCA.ADC.Engagement.Application.UserSessionBookmarks.DomainEventHandlers |
 | 5 | `AttendeeSummary` | record | MMCA.ADC.Engagement.UI.Services |
+| 5 | `CheckInsController` | class | MMCA.ADC.Engagement.API.Controllers |
 | 5 | `EngagementModule` | class | MMCA.ADC.Engagement.API |
+| 5 | `MyBadge` | class | MMCA.ADC.Engagement.UI.Pages.CheckIn |
 | 5 | `MyPoints` | class | MMCA.ADC.Engagement.UI.Pages.Points |
 | 5 | `OrganizerPointsOverview` | class | MMCA.ADC.Engagement.UI.Pages.Points |
+| 5 | `PointsController` | class | MMCA.ADC.Engagement.API.Controllers |
 | 5 | `RoomCheckIn` | class | MMCA.ADC.Engagement.UI.Pages.Rooms |
+| 5 | `SessionBookmarkUIService` | class | MMCA.ADC.Engagement.UI.Services |
 | 5 | `SponsorVisit` | class | MMCA.ADC.Engagement.UI.Pages.Sponsors |
 | 6 | `AttendeeBadgeInvariants` | class | MMCA.ADC.Engagement.Domain.Badges |
 | 6 | `CheckInInvariants` | class | MMCA.ADC.Engagement.Domain.CheckIns |
@@ -1651,6 +1816,7 @@ disclosure) and is cross-linked in the chapter.
 | 6 | `LeaderboardOptIn` | class | MMCA.ADC.Engagement.Domain.Points |
 | 6 | `LeaderboardOptInInvariants` | class | MMCA.ADC.Engagement.Domain.Points |
 | 6 | `PointsEntryInvariants` | class | MMCA.ADC.Engagement.Domain.Points |
+| 6 | `SessionFeedback` | class | MMCA.ADC.Engagement.UI.Pages.Feedback |
 | 6 | `UserSessionBookmarkInvariants` | class | MMCA.ADC.Engagement.Domain.UserSessionBookmarks |
 | 7 | `AttendeeBadge` | class | MMCA.ADC.Engagement.Domain.Badges |
 | 7 | `AttendeeLookupService` | class | MMCA.ADC.Engagement.UI.Services |
@@ -1665,7 +1831,6 @@ disclosure) and is cross-linked in the chapter.
 | 8 | `IBookmarkManagementDomainService` | interface | MMCA.ADC.Engagement.Domain.Services |
 | 8 | `LeaderboardOptInConfiguration` | class | MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration |
 | 8 | `PointsEntryConfiguration` | class | MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration |
-| 8 | `SessionFeedback` | class | MMCA.ADC.Engagement.UI.Pages.Feedback |
 | 8 | `SessionQuestionConfiguration` | class | MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration |
 | 8 | `SessionQuestionUpvoteConfiguration` | class | MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration |
 | 8 | `UserDeletedPointsHandler` | class | MMCA.ADC.Engagement.Application.Points.IntegrationEventHandlers |
@@ -1694,21 +1859,21 @@ disclosure) and is cross-linked in the chapter.
 | 11 | `CheckInProcessor` | class | MMCA.ADC.Engagement.Application.CheckIns.Services |
 | 11 | `EngagementUIModule` | class | MMCA.ADC.Engagement.UI |
 | 11 | `GetAttendanceStatsHandler` | class | MMCA.ADC.Engagement.Application.CheckIns.UseCases.GetAttendanceStats |
-| 11 | `RecordRoomCheckInHandler` | class | MMCA.ADC.Engagement.Application.CheckIns.UseCases.RecordRoomCheckIn |
-| 11 | `RecordSponsorVisitHandler` | class | MMCA.ADC.Engagement.Application.CheckIns.UseCases.RecordSponsorVisit |
 | 11 | `UserEngagementExportService` | class | MMCA.ADC.Engagement.Application.Exports |
 | 12 | `CheckInAttendeeHandler` | class | MMCA.ADC.Engagement.Application.CheckIns.UseCases.CheckInAttendee |
-| 12 | `DependencyInjection` | class | MMCA.ADC.Engagement.UI |
 | 12 | `DependencyInjection` | class | MMCA.ADC.Engagement.Application |
+| 12 | `DependencyInjection` | class | MMCA.ADC.Engagement.UI |
 | 12 | `ManualCheckInHandler` | class | MMCA.ADC.Engagement.Application.CheckIns.UseCases.ManualCheckIn |
 | 12 | `ModuleApplicationDbContext` | class | MMCA.ADC.Engagement.Infrastructure.Persistence.DbContexts |
+| 12 | `RecordRoomCheckInHandler` | class | MMCA.ADC.Engagement.Application.CheckIns.UseCases.RecordRoomCheckIn |
+| 12 | `RecordSponsorVisitHandler` | class | MMCA.ADC.Engagement.Application.CheckIns.UseCases.RecordSponsorVisit |
 | 12 | `UserEngagementExportGrpcService` | class | MMCA.ADC.Engagement.Service.Grpc |
 | 12 | `UserEngagementExportServiceGrpcAdapter` | class | MMCA.ADC.Engagement.Contracts |
 | 13 | `DependencyInjection` | class | MMCA.ADC.Engagement.Contracts |
 
 ### G26 - ADC Engagement Live Layer (Real-Time Polls & Session Q&A)
 
-> `group-23-engagement-live-layer.md` | 95 types | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&A with upvoting, over the SignalR hub-channel transport ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)) and the cross-service gRPC live-channel adapter.
+> `group-23-engagement-live-layer.md` | 99 types | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&A with upvoting, over the SignalR hub-channel transport ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)) and the cross-service gRPC live-channel adapter.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -1720,10 +1885,10 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `GetModerationQueueQuery` | record | MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.GetModerationQueue |
 | 0 | `GetOpenPollsQuery` | record | MMCA.ADC.Engagement.Application.LivePolls.UseCases.GetOpenPolls |
 | 0 | `GetPollResultsQuery` | record | MMCA.ADC.Engagement.Application.LivePolls.UseCases.GetPollResults |
+| 0 | `GetSessionManagePollsQuery` | record | MMCA.ADC.Engagement.Application.LivePolls.UseCases.GetSessionManagePolls |
 | 0 | `GetSessionQuestionsQuery` | record | MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.GetSessionQuestions |
 | 0 | `ISessionLiveUIService` | interface | MMCA.ADC.Engagement.Shared.SessionQuestions |
 | 0 | `LiveEventContext` | record | MMCA.ADC.Engagement.UI.Services |
-| 0 | `LivePollChannel` | class | MMCA.ADC.Engagement.Shared.LivePolls |
 | 0 | `LivePollClosedPayload` | record | MMCA.ADC.Engagement.Shared.LivePolls |
 | 0 | `LivePollOpenedPayload` | record | MMCA.ADC.Engagement.Shared.LivePolls |
 | 0 | `LivePollOptionDTO` | record | MMCA.ADC.Engagement.Shared.LivePolls |
@@ -1731,8 +1896,8 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `LivePollStatus` | enum | MMCA.ADC.Engagement.Shared.LivePolls |
 | 0 | `ModerationAction` | enum | MMCA.ADC.Engagement.Shared.SessionQuestions |
 | 0 | `OpenLivePollCommand` | record | MMCA.ADC.Engagement.Application.LivePolls.UseCases.Open |
-| 0 | `OptionState` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
 | 0 | `OptionState` | class | MMCA.ADC.Engagement.UI.Pages.HappeningNow |
+| 0 | `OptionState` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
 | 0 | `QuestionStatus` | enum | MMCA.ADC.Engagement.Shared.SessionQuestions |
 | 0 | `SessionInfo` | record | MMCA.ADC.Engagement.UI.Services |
 | 0 | `SessionQuestionAnsweredPayload` | record | MMCA.ADC.Engagement.Shared.SessionQuestions |
@@ -1747,29 +1912,30 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `CastVoteCommandValidator` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.CastVote |
 | 1 | `CreateLivePollCommand` | record | MMCA.ADC.Engagement.Application.LivePolls.UseCases.Create |
 | 1 | `ILiveEventUIService` | interface | MMCA.ADC.Engagement.UI.Services |
-| 1 | `ISessionLookupService` | interface | MMCA.ADC.Engagement.UI.Services |
+| 1 | `LivePollChannel` | class | MMCA.ADC.Engagement.Shared.LivePolls |
 | 1 | `LivePollDTO` | record | MMCA.ADC.Engagement.Shared.LivePolls |
 | 1 | `LivePollResultsDTO` | record | MMCA.ADC.Engagement.Shared.LivePolls |
 | 1 | `ModerateQuestionCommand` | record | MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Moderate |
 | 1 | `SessionLiveUIService` | class | MMCA.ADC.Engagement.UI.Services |
 | 1 | `SessionQuestionDTO` | record | MMCA.ADC.Engagement.Shared.SessionQuestions |
 | 1 | `ToggleUpvoteCommandValidator` | class | MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.ToggleUpvote |
-| 2 | `ILivePollUIService` | interface | MMCA.ADC.Engagement.UI.Services |
-| 2 | `ISessionQuestionUIService` | interface | MMCA.ADC.Engagement.UI.Services |
 | 2 | `LivePollChanged` | record | MMCA.ADC.Engagement.Domain.LivePolls.DomainEvents |
 | 2 | `LivePollVoteChanged` | record | MMCA.ADC.Engagement.Domain.LivePolls.DomainEvents |
 | 2 | `SessionQuestionChanged` | record | MMCA.ADC.Engagement.Domain.SessionQuestions.DomainEvents |
 | 2 | `SessionQuestionUpvoteChanged` | record | MMCA.ADC.Engagement.Domain.SessionQuestions.DomainEvents |
+| 3 | `ILivePollUIService` | interface | MMCA.ADC.Engagement.UI.Services |
+| 3 | `ISessionLookupService` | interface | MMCA.ADC.Engagement.UI.Services |
+| 3 | `ISessionQuestionUIService` | interface | MMCA.ADC.Engagement.UI.Services |
 | 3 | `LivePollAuthorization` | class | MMCA.ADC.Engagement.Application.LivePolls.Services |
-| 3 | `LivePollUIService` | class | MMCA.ADC.Engagement.UI.Services |
-| 3 | `SessionLookupService` | class | MMCA.ADC.Engagement.UI.Services |
-| 3 | `SessionQuestionUIService` | class | MMCA.ADC.Engagement.UI.Services |
-| 5 | `PresenterView` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
-| 5 | `SessionLive` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
-| 5 | `SessionLivePollPanel` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
-| 5 | `SessionLiveQuestionPanel` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
+| 4 | `LivePollUIService` | class | MMCA.ADC.Engagement.UI.Services |
+| 4 | `SessionLivePollPanel` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
+| 4 | `SessionLookupService` | class | MMCA.ADC.Engagement.UI.Services |
+| 4 | `SessionQuestionUIService` | class | MMCA.ADC.Engagement.UI.Services |
 | 6 | `LivePollInvariants` | class | MMCA.ADC.Engagement.Domain.LivePolls |
 | 6 | `LivePollVoteInvariants` | class | MMCA.ADC.Engagement.Domain.LivePolls |
+| 6 | `PresenterView` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
+| 6 | `SessionLive` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
+| 6 | `SessionLiveQuestionPanel` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
 | 6 | `SessionQuestionInvariants` | class | MMCA.ADC.Engagement.Domain.SessionQuestions |
 | 6 | `SessionQuestionUpvoteInvariants` | class | MMCA.ADC.Engagement.Domain.SessionQuestions |
 | 7 | `CreateLivePollRequestValidator` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.Create |
@@ -1781,12 +1947,12 @@ disclosure) and is cross-linked in the chapter.
 | 8 | `LivePoll` | class | MMCA.ADC.Engagement.Domain.LivePolls |
 | 8 | `LivePollOption` | class | MMCA.ADC.Engagement.Domain.LivePolls |
 | 8 | `LivePollVoteConfiguration` | class | MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration |
-| 8 | `ModerateQuestionHandler` | class | MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Moderate |
+| 8 | `PollManagementPanel` | class | MMCA.ADC.Engagement.UI.Pages.HappeningNow |
 | 8 | `SessionLiveModerationPanel` | class | MMCA.ADC.Engagement.UI.Pages.SessionLive |
 | 8 | `SessionQuestionUpvoteChangedHandler` | class | MMCA.ADC.Engagement.Application.SessionQuestions.DomainEventHandlers |
 | 8 | `SessionQuestionViewBuilder` | class | MMCA.ADC.Engagement.Application.SessionQuestions.Services |
 | 8 | `ToggleUpvoteHandler` | class | MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.ToggleUpvote |
-| 9 | `CloseLivePollHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.Close |
+| 9 | `DeleteLivePollHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.Delete |
 | 9 | `GetModerationQueueHandler` | class | MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.GetModerationQueue |
 | 9 | `GetSessionQuestionsHandler` | class | MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.GetSessionQuestions |
 | 9 | `LiveEventService` | class | MMCA.ADC.Engagement.UI.Services |
@@ -1795,22 +1961,25 @@ disclosure) and is cross-linked in the chapter.
 | 9 | `LivePollOptionConfiguration` | class | MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration |
 | 9 | `LivePollResultsBuilder` | class | MMCA.ADC.Engagement.Application.LivePolls.Services |
 | 9 | `LivePollsController` | class | MMCA.ADC.Engagement.API.Controllers |
-| 9 | `OpenLivePollHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.Open |
 | 9 | `SessionQuestionsController` | class | MMCA.ADC.Engagement.API.Controllers |
 | 9 | `SubmitQuestionHandler` | class | MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Submit |
 | 10 | `CastVoteHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.CastVote |
+| 10 | `CloseLivePollHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.Close |
 | 10 | `CreateLivePollHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.Create |
 | 10 | `GetEventPollsHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.GetEventPolls |
 | 10 | `GetOpenPollsHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.GetOpenPolls |
 | 10 | `GetPollResultsHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.GetPollResults |
+| 10 | `GetSessionManagePollsHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.GetSessionManagePolls |
 | 10 | `HappeningNow` | class | MMCA.ADC.Engagement.UI.Pages.HappeningNow |
 | 10 | `LivePollNavigationPopulator` | class | MMCA.ADC.Engagement.Application.LivePolls.Services |
 | 10 | `LivePollOptionNavigationPopulator` | class | MMCA.ADC.Engagement.Application.LivePolls.Services |
 | 10 | `LivePollVoteChangedHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.DomainEventHandlers |
+| 10 | `OpenLivePollHandler` | class | MMCA.ADC.Engagement.Application.LivePolls.UseCases.Open |
+| 14 | `ModerateQuestionHandler` | class | MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Moderate |
 
 ### G23 - ADC Identity Module (Users, Profiles, GDPR Export/Erasure)
 
-> `group-24-identity-module.md` | 88 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.
+> `group-24-identity-module.md` | 90 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -1845,32 +2014,32 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `DisabledAttendeeQueryService` | class | MMCA.ADC.Identity.Shared.Users |
 | 1 | `ForgotPasswordCommand` | record | MMCA.ADC.Identity.Application.Users.UseCases.ForgotPassword |
 | 1 | `HttpContextExternalLoginEmailVerifier` | class | MMCA.ADC.Identity.API.Authentication |
-| 1 | `IUserUIService` | interface | MMCA.ADC.Identity.UI.Services |
+| 1 | `SetUserAvatarCommandValidator` | class | MMCA.ADC.Identity.Application.Users.UseCases.SetUserAvatar |
 | 1 | `UserDataExportEngagementSectionDTO` | record | MMCA.ADC.Identity.Shared.Users |
 | 1 | `UserDataExportNotificationSectionDTO` | record | MMCA.ADC.Identity.Shared.Users |
 | 1 | `UserDTO` | record | MMCA.ADC.Identity.Shared.Users |
 | 2 | `DependencyInjection` | class | MMCA.ADC.Identity.API |
 | 2 | `ExportUserDataQuery` | record | MMCA.ADC.Identity.Application.Users.UseCases.ExportUserData |
+| 2 | `IdentityModule` | class | MMCA.ADC.Identity.API |
 | 2 | `SelfHttpWarmupTask` | class | MMCA.ADC.Identity.Service |
 | 2 | `UserDeleted` | record | MMCA.ADC.Identity.Domain.Users.DomainEvents |
 | 2 | `UserPasswordChanged` | record | MMCA.ADC.Identity.Domain.Users.DomainEvents |
-| 3 | `IdentityModule` | class | MMCA.ADC.Identity.API |
 | 3 | `IdentityUIModule` | class | MMCA.ADC.Identity.UI |
+| 3 | `IUserUIService` | interface | MMCA.ADC.Identity.UI.Services |
 | 3 | `NotificationUserDataExportSection` | class | MMCA.ADC.Identity.Application.Users.UseCases.ExportUserData |
 | 3 | `UserDeleted` | record | MMCA.ADC.Identity.Shared.Users.IntegrationEvents |
 | 3 | `UserRegistered` | record | MMCA.ADC.Identity.Shared.Users.IntegrationEvents |
-| 3 | `UserService` | class | MMCA.ADC.Identity.UI.Services |
-| 4 | `DependencyInjection` | class | MMCA.ADC.Identity.UI |
 | 4 | `EngagementUserDataExportSection` | class | MMCA.ADC.Identity.Application.Users.UseCases.ExportUserData |
-| 4 | `UserClaimsController` | class | MMCA.ADC.Identity.API.Controllers |
 | 4 | `UserRole` | class | MMCA.ADC.Identity.Domain.Users |
-| 6 | `ListPageActions` | class | MMCA.ADC.Identity.UI.Common |
+| 4 | `UserService` | class | MMCA.ADC.Identity.UI.Services |
+| 5 | `DependencyInjection` | class | MMCA.ADC.Identity.UI |
+| 5 | `UserClaimsController` | class | MMCA.ADC.Identity.API.Controllers |
+| 5 | `UserList` | class | MMCA.ADC.Identity.UI.Pages.User |
 | 6 | `Profile` | class | MMCA.ADC.Identity.UI.Pages.Profile |
 | 6 | `UserInvariants` | class | MMCA.ADC.Identity.Domain.Users |
 | 7 | `OAuthController` | class | MMCA.ADC.Identity.API.Controllers |
 | 7 | `RegisterRequestValidator` | class | MMCA.ADC.Identity.Application.Users.Validation |
 | 7 | `User` | class | MMCA.ADC.Identity.Domain.Users |
-| 7 | `UserList` | class | MMCA.ADC.Identity.UI.Pages.User |
 | 8 | `AttendeeQueryService` | class | MMCA.ADC.Identity.Application.Users |
 | 8 | `ChangePasswordCommand` | record | MMCA.ADC.Identity.Application.Users.UseCases.ChangePassword |
 | 8 | `ChangePreferencesCommand` | record | MMCA.ADC.Identity.Application.Users.UseCases.ChangePreferences |
@@ -1878,7 +2047,6 @@ disclosure) and is cross-linked in the chapter.
 | 8 | `GetUserAvatarHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.GetUserAvatar |
 | 8 | `GetUsersHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.GetUsers |
 | 8 | `ResetPasswordCommand` | record | MMCA.ADC.Identity.Application.Users.UseCases.ResetPassword |
-| 8 | `SetUserAvatarHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.SetUserAvatar |
 | 8 | `SpeakerLinkedToUserHandler` | class | MMCA.ADC.Identity.Application.Speakers.IntegrationEventHandlers |
 | 8 | `SpeakerUnlinkedFromUserHandler` | class | MMCA.ADC.Identity.Application.Speakers.IntegrationEventHandlers |
 | 8 | `UserConfiguration` | class | MMCA.ADC.Identity.Infrastructure.Persistence.EntityConfiguration |
@@ -1886,21 +2054,24 @@ disclosure) and is cross-linked in the chapter.
 | 9 | `AttendeeQueryServiceGrpcAdapter` | class | MMCA.ADC.Identity.Contracts |
 | 9 | `AttendeesGrpcService` | class | MMCA.ADC.Identity.Service.Grpc |
 | 9 | `ChangePasswordHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.ChangePassword |
+| 9 | `ChangePreferencesCommandValidator` | class | MMCA.ADC.Identity.Application.Users.UseCases.ChangePreferences |
 | 9 | `ChangePreferencesHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.ChangePreferences |
 | 9 | `DeleteUserHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.DeleteUser |
 | 9 | `ExportUserDataHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.ExportUserData |
 | 9 | `GetUserPreferencesHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.GetPreferences |
-| 9 | `RemoveUserAvatarHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.RemoveUserAvatar |
 | 9 | `ResetPasswordHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.ResetPassword |
 | 9 | `UsersController` | class | MMCA.ADC.Identity.API.Controllers |
 | 10 | `DependencyInjection` | class | MMCA.ADC.Identity.Contracts |
+| 11 | `UsersDataExportController` | class | MMCA.ADC.Identity.API.Controllers |
 | 12 | `ModuleApplicationDbContext` | class | MMCA.ADC.Identity.Infrastructure.Persistence.DbContexts |
 | 14 | `AuthenticationService` | class | MMCA.ADC.Identity.Application.Users |
 | 14 | `ForgotPasswordHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.ForgotPassword |
 | 15 | `DependencyInjection` | class | MMCA.ADC.Identity.Application |
 | 15 | `IdentityModuleDbSeeder` | class | MMCA.ADC.Identity.Infrastructure.Persistence.DbContexts.Seeding |
+| 15 | `SetUserAvatarHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.SetUserAvatar |
 | 16 | `IdentityModuleSeeder` | class | MMCA.ADC.Identity.API |
 | 16 | `PasswordResetController` | class | MMCA.ADC.Identity.API.Controllers |
+| 16 | `RemoveUserAvatarHandler` | class | MMCA.ADC.Identity.Application.Users.UseCases.RemoveUserAvatar |
 | 17 | `AuthController` | class | MMCA.ADC.Identity.API.Controllers |
 
 ### G24 - ADC Application Host, UI Shell & Cross-Module Composition
@@ -1911,12 +2082,12 @@ disclosure) and is cross-linked in the chapter.
 |-------|------|------|-----------|
 | 0 | `NowNextSession` | record | MMCA.ADC.UI |
 | 1 | `ADCHomePageContent` | class | MMCA.ADC.UI.Web.Client.Pages |
-| 1 | `AppActionsInitializer` | class | MMCA.ADC.UI.Services |
-| 1 | `MauiPublicLinkBuilder` | class | MMCA.ADC.UI.Services |
 | 1 | `NowNextSnapshot` | record | MMCA.ADC.UI |
 | 3 | `DeviceUIModule` | class | MMCA.ADC.UI |
 | 3 | `MainPage` | class | MMCA.ADC.UI |
 | 4 | `App` | class | MMCA.ADC.UI |
+| 6 | `AppActionRouteMap` | class | MMCA.ADC.UI.Services |
+| 7 | `AppActionsInitializer` | class | MMCA.ADC.UI.Services |
 | 9 | `MainActivity` | class | MMCA.ADC.UI |
 | 9 | `WebAuthenticatorCallbackActivity` | class | MMCA.ADC.UI |
 | 10 | `ADCHomePageContent` | class | MMCA.ADC.UI.Pages |
@@ -1929,7 +2100,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G27 - Device Capability Abstraction Layer (Native Contracts, MAUI, Browser & Fallback Adapters)
 
-> `group-26-device-capability-layer.md` | 96 types | Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045).
+> `group-26-device-capability-layer.md` | 99 types | Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045).
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -1955,6 +2126,7 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `ISpeechToTextService` | interface | MMCA.Common.UI.Services.Capabilities |
 | 0 | `ITextToSpeechService` | interface | MMCA.Common.UI.Services.Capabilities |
 | 0 | `LocalNotificationRequest` | record | MMCA.Common.UI.Services.Capabilities |
+| 0 | `MauiErrorHandlingInitializer` | class | MMCA.Common.UI.Maui |
 | 0 | `PickedMedia` | class | MMCA.Common.UI.Services.Capabilities |
 | 0 | `PushDeviceToken` | record | MMCA.Common.UI.Services.Capabilities |
 | 1 | `AlwaysOnlineConnectivityStatusService` | class | MMCA.Common.UI.Services.Capabilities.Fallbacks |
@@ -1980,7 +2152,9 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `MauiHapticFeedbackService` | class | MMCA.Common.UI.Maui.Capabilities |
 | 1 | `MauiLocalCacheStore` | class | MMCA.Common.UI.Maui.Capabilities |
 | 1 | `MauiMapNavigationService` | class | MMCA.Common.UI.Maui.Capabilities |
+| 1 | `MauiPublicLinkBuilder` | class | MMCA.Common.UI.Maui.Services |
 | 1 | `MauiScreenshotService` | class | MMCA.Common.UI.Maui.Capabilities |
+| 1 | `MauiSecureTokenStore` | class | MMCA.Common.UI.Maui.Services |
 | 1 | `MauiShareService` | class | MMCA.Common.UI.Maui.Capabilities |
 | 1 | `MauiSpeechToTextService` | class | MMCA.Common.UI.Maui.Capabilities |
 | 1 | `MauiTextToSpeechService` | class | MMCA.Common.UI.Maui.Capabilities |
@@ -2032,60 +2206,62 @@ disclosure) and is cross-linked in the chapter.
 
 ### G25 - Testing & Quality Infrastructure
 
-> `group-27-testing-infrastructure.md` | 1907 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).
+> `group-27-testing-infrastructure.md` | 2270 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).
 
 Rolled up by project (individual `[Fact]`s not sectioned - logged exception). Reusable test
 infrastructure assemblies (sectioned in full in the chapter) are marked **(infra)**.
 
 | Test project (assembly) | Types | Levels | Kind |
 |--------------------------|-------|--------|------|
-| `MMCA.ADC.Architecture.Tests` **(infra)** | 35 | L1-L13 |  |
+| `MMCA.ADC.Architecture.Tests` **(infra)** | 43 | L1-L13 |  |
 | `MMCA.ADC.Conference.API.Tests`  | 20 | L1-L11 |  |
-| `MMCA.ADC.Conference.Application.Tests`  | 166 | L0-L15 |  |
+| `MMCA.ADC.Conference.Application.Tests`  | 165 | L0-L16 |  |
 | `MMCA.ADC.Conference.Domain.Tests`  | 28 | L6-L11 |  |
-| `MMCA.ADC.Conference.Infrastructure.Tests`  | 15 | L0-L11 |  |
+| `MMCA.ADC.Conference.Infrastructure.Tests`  | 14 | L0-L11 |  |
 | `MMCA.ADC.Conference.IntegrationTests`  | 37 | L1-L18 |  |
 | `MMCA.ADC.Conference.Shared.Tests`  | 17 | L0-L10 |  |
-| `MMCA.ADC.Conference.UI.Tests`  | 45 | L1-L11 |  |
-| `MMCA.ADC.CrossService.IntegrationTests`  | 11 | L0-L18 |  |
-| `MMCA.ADC.E2E.Tests`  | 83 | L0-L8 |  |
-| `MMCA.ADC.Engagement.API.Tests`  | 9 | L1-L12 |  |
-| `MMCA.ADC.Engagement.Application.Tests`  | 59 | L0-L15 |  |
+| `MMCA.ADC.Conference.UI.Tests`  | 53 | L1-L11 |  |
+| `MMCA.ADC.CrossService.IntegrationTests`  | 13 | L1-L18 |  |
+| `MMCA.ADC.E2E.Tests`  | 84 | L0-L8 |  |
+| `MMCA.ADC.Engagement.API.Tests`  | 10 | L1-L12 |  |
+| `MMCA.ADC.Engagement.Application.Tests`  | 66 | L1-L15 |  |
 | `MMCA.ADC.Engagement.Domain.Tests`  | 11 | L7-L11 |  |
 | `MMCA.ADC.Engagement.Infrastructure.Tests`  | 4 | L1-L11 |  |
 | `MMCA.ADC.Engagement.IntegrationTests`  | 22 | L0-L18 |  |
 | `MMCA.ADC.Engagement.Shared.Tests`  | 7 | L1-L10 |  |
-| `MMCA.ADC.Engagement.UI.Tests`  | 34 | L0-L11 |  |
+| `MMCA.ADC.Engagement.UI.Tests`  | 36 | L0-L11 |  |
 | `MMCA.ADC.Gateway.Tests`  | 8 | L0-L15 |  |
-| `MMCA.ADC.Identity.API.Tests`  | 7 | L1-L18 |  |
-| `MMCA.ADC.Identity.Application.Tests`  | 28 | L0-L15 |  |
+| `MMCA.ADC.Identity.API.Tests`  | 8 | L1-L18 |  |
+| `MMCA.ADC.Identity.Application.Tests`  | 30 | L2-L17 |  |
 | `MMCA.ADC.Identity.Domain.Tests`  | 4 | L8-L8 |  |
-| `MMCA.ADC.Identity.Infrastructure.Tests`  | 4 | L8-L16 |  |
+| `MMCA.ADC.Identity.Infrastructure.Tests`  | 9 | L0-L16 |  |
 | `MMCA.ADC.Identity.IntegrationTests`  | 34 | L0-L19 |  |
 | `MMCA.ADC.Identity.Shared.Tests`  | 3 | L2-L5 |  |
-| `MMCA.ADC.Identity.UI.Tests`  | 6 | L3-L8 |  |
+| `MMCA.ADC.Identity.UI.Tests`  | 7 | L3-L8 |  |
 | `MMCA.ADC.Notification.API.Tests`  | 1 | L4-L4 |  |
 | `MMCA.ADC.Notification.Application.Tests`  | 5 | L1-L15 |  |
 | `MMCA.ADC.Notification.IntegrationTests`  | 9 | L1-L18 |  |
 | `MMCA.ADC.ServiceBusEmulator.IntegrationTests`  | 3 | L4-L6 |  |
 | `MMCA.ADC.Services.Tests`  | 5 | L0-L13 |  |
-| `MMCA.Common.API.Tests`  | 121 | L0-L18 |  |
-| `MMCA.Common.Application.Tests`  | 265 | L0-L10 |  |
-| `MMCA.Common.Architecture.Tests` **(infra)** | 89 | L0-L13 |  |
-| `MMCA.Common.Aspire.Tests`  | 36 | L0-L11 |  |
+| `MMCA.Common.API.Tests`  | 138 | L0-L18 |  |
+| `MMCA.Common.Application.Tests`  | 343 | L0-L16 |  |
+| `MMCA.Common.Architecture.Tests` **(infra)** | 158 | L0-L13 |  |
+| `MMCA.Common.Aspire.Hosting.Tests`  | 4 | L0-L11 |  |
+| `MMCA.Common.Aspire.Tests`  | 41 | L0-L12 |  |
 | `MMCA.Common.Benchmarks`  | 6 | L0-L4 |  |
-| `MMCA.Common.Domain.Tests`  | 57 | L0-L8 |  |
-| `MMCA.Common.Grpc.Tests`  | 15 | L0-L4 |  |
+| `MMCA.Common.Domain.Tests`  | 62 | L0-L8 |  |
+| `MMCA.Common.Gateway.Tests`  | 7 | L0-L4 |  |
+| `MMCA.Common.Grpc.Tests`  | 16 | L0-L4 |  |
 | `MMCA.Common.Infrastructure.Redis.Tests`  | 2 | L5-L5 |  |
-| `MMCA.Common.Infrastructure.Tests`  | 323 | L0-L16 |  |
-| `MMCA.Common.Shared.Tests`  | 33 | L0-L6 |  |
-| `MMCA.Common.Testing` **(infra)** | 19 | L0-L14 |  |
-| `MMCA.Common.Testing.Architecture` **(infra)** | 48 | L0-L5 |  |
-| `MMCA.Common.Testing.E2E` **(infra)** | 25 | L0-L4 |  |
-| `MMCA.Common.Testing.Tests`  | 17 | L0-L15 |  |
-| `MMCA.Common.Testing.UI` **(infra)** | 15 | L0-L3 |  |
-| `MMCA.Common.UI.E2E.Tests`  | 15 | L2-L13 |  |
-| `MMCA.Common.UI.Gallery` **(infra)** | 9 | L0-L9 |  |
-| `MMCA.Common.UI.Tests`  | 88 | L0-L7 |  |
+| `MMCA.Common.Infrastructure.Tests`  | 380 | L0-L17 |  |
+| `MMCA.Common.Shared.Tests`  | 44 | L0-L6 |  |
+| `MMCA.Common.Testing` **(infra)** | 23 | L0-L14 |  |
+| `MMCA.Common.Testing.Architecture` **(infra)** | 57 | L0-L5 |  |
+| `MMCA.Common.Testing.E2E` **(infra)** | 30 | L0-L4 |  |
+| `MMCA.Common.Testing.Tests`  | 27 | L0-L15 |  |
+| `MMCA.Common.Testing.UI` **(infra)** | 16 | L0-L3 |  |
+| `MMCA.Common.UI.E2E.Tests`  | 18 | L2-L13 |  |
+| `MMCA.Common.UI.Gallery` **(infra)** | 11 | L0-L9 |  |
+| `MMCA.Common.UI.Tests`  | 127 | L0-L8 |  |
 | `MMCA.Common.UI.Web.Tests`  | 4 | L1-L5 |  |
 

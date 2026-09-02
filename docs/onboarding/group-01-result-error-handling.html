@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>1. Result &amp; Error Handling · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="This is the first capability chapter, and it is deliberately first because the pattern it teaches underpins almost every other one in the guide. Before…">
+  <meta name="description" content="What this group covers. This is the first capability chapter, and it is deliberately first because the pattern it teaches underpins almost every other…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-01-result-error-handling.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="1. Result &amp; Error Handling">
-  <meta property="og:description" content="This is the first capability chapter, and it is deliberately first because the pattern it teaches underpins almost every other one in the guide. Before…">
+  <meta property="og:description" content="What this group covers. This is the first capability chapter, and it is deliberately first because the pattern it teaches underpins almost every other…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-01-result-error-handling.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="1. Result &amp; Error Handling">
-  <meta name="twitter:description" content="This is the first capability chapter, and it is deliberately first because the pattern it teaches underpins almost every other one in the guide. Before…">
+  <meta name="twitter:description" content="What this group covers. This is the first capability chapter, and it is deliberately first because the pattern it teaches underpins almost every other…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"1. Result & Error Handling","item":"https://ivanball.github.io/docs/onboarding/group-01-result-error-handling.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -91,8 +91,9 @@
         <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
         <span aria-hidden="true">/</span>
         <span class="current">1. Result &amp; Error Handling</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -144,154 +145,246 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="1-result--error-handling">1. Result &amp; Error Handling</h1>
-          <p>This is the first capability chapter, and it is deliberately first because the pattern it teaches
-          underpins almost every other one in the guide. Before you read a command handler, a domain factory, a
-          controller action, or a gRPC call in any later chapter, you need the <strong>Result pattern</strong> in your head:
-          in this codebase, an operation that can fail in an <em>expected</em> way does <strong>not</strong> throw, it <strong>returns</strong> a
-          value that is either a success or a structured failure. The types in this chapter are that value, the
-          error it carries, the classification that drives HTTP and gRPC status codes, the collection envelopes
-          that list and paged reads come back in, the JSON converters that let a result survive a round trip
-          through the distributed cache, and the two narrow exception types reserved for the cases where
-          returning a value is genuinely impossible. (The primer introduces the idea in
+          <p><strong>What this group covers.</strong> This is the first capability chapter, and it is deliberately first because
+          the pattern it teaches underpins almost every other one in the guide. Before you read a command
+          handler, a domain factory, a controller action, or a gRPC call in any later chapter, you need the
+          <strong>Result pattern</strong> in your head: in this codebase an operation that can fail in an <em>expected</em> way does
+          not throw, it <strong>returns</strong> a value that is either a success or a structured failure. The sixteen types
+          here are that value (<a href="#result"><code>Result</code></a> and its combinator surface, extended over pending tasks by
+          <a href="#resultextensions"><code>ResultExtensions</code></a>), the error it carries (<a href="#error"><code>Error</code></a>), the classification
+          that drives HTTP and gRPC status codes (<a href="#errortype"><code>ErrorType</code></a> plus the
+          <a href="#errortypeseverity"><code>ErrorTypeSeverity</code></a> ranking that picks <em>which</em> error speaks for a multi-error
+          failure), the JSON machinery that lets a result survive a Redis round trip
+          (<a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a>, <a href="#resultconverter"><code>ResultConverter</code></a>,
+          <a href="#propertyreader"><code>PropertyReader</code></a>), the two narrow exception types reserved for the cases where
+          returning a value is structurally impossible (<a href="#domainexception"><code>DomainException</code></a>,
+          <a href="#domaininvariantviolationexception"><code>DomainInvariantViolationException</code></a>), and the collection
+          envelopes that successful reads come back in, offset
+          (<a href="#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a>, <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a>,
+          <a href="#paginationmetadata"><code>PaginationMetadata</code></a>) and keyset
+          (<a href="#keysetpagerequest"><code>KeysetPageRequest</code></a>, <a href="#keysetcollectionresultt"><code>KeysetCollectionResult&lt;T&gt;</code></a>,
+          <a href="#keysetcursor"><code>KeysetCursor</code></a>). The primer introduces the idea in
           <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">§2</a>; this chapter is where it becomes
-          concrete.) The governing decision is
-          <strong><a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a></strong>: expected failures are
-          transport-agnostic <a href="#result"><code>Result</code></a> / <a href="#errortype"><code>ErrorType</code></a> values, only the edge maps them to
-          HTTP or gRPC, and exceptions stay for the genuinely exceptional.</p>
-          <p><strong>Why a return value instead of an exception.</strong> Exceptions are expensive (stack capture and
-          unwinding), they are invisible in a method&#39;s signature, and they conflate <em>programmer errors</em> with
-          <em>business outcomes</em>. &quot;This order ID does not exist&quot; and &quot;this email is already taken&quot; are not
-          exceptional, they are routine, expected branches of normal control flow. Modeling them as data lets
-          the compiler see them (a method that returns <code>Result&lt;T&gt;</code> advertises that it can fail), lets them be
-          collected into a list, passed through a pipeline, inspected, and mapped to a response <strong>without</strong> any
-          <code>try</code>/<code>catch</code>. That decision is the single most pervasive idiom in the two repos: practically every
-          entity factory method, every CQRS command and query handler, every controller action, and every
-          service method returns <a href="#result"><code>Result</code></a> or <code>Result&lt;T&gt;</code>. This touches <code>[Rubric §2, Design Patterns]</code>
-          (which assesses whether patterns are idiomatic and solve real problems rather than being &quot;pattern
-          theater&quot;, and here Result is the genuine, codebase-wide error-flow mechanism) and <code>[Rubric §9, API &amp; Contract Design]</code> (which assesses consistent, standardized error responses, because every failure
-          flows through the same envelope, so every endpoint produces the same error shape).</p>
-          <p><strong>The three-layer split.</strong> The pattern is factored into three small, dependency-free pieces that each
-          do one job, all living in <code>MMCA.Common.Shared</code>, the innermost layer that even the Blazor WebAssembly
-          UI can reference without dragging in EF Core or ASP.NET:</p>
-          <ul>
-          <li><a href="#errortype"><code>ErrorType</code></a> (Level 0) is the <strong>classification axis</strong>, an eight-member enum
-          (<code>Validation</code>, <code>Invariant</code>, <code>NotFound</code>, <code>Conflict</code>, <code>Unauthorized</code>, <code>Forbidden</code>,
-          <code>UnprocessableEntity</code>, <code>Failure</code>) where each member&#39;s doc comment names the HTTP status it maps to:
-          <code>Validation</code> / <code>Invariant</code> / <code>Failure</code> to 400, <code>NotFound</code> to 404, <code>Conflict</code> to 409, <code>Unauthorized</code>
-          to 401, <code>Forbidden</code> to 403, <code>UnprocessableEntity</code> to 422
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:8-33</code>). Note that this
-          HTTP-shaped concept lives in the core as a <em>pure enum</em> with no reference to ASP.NET, which is
-          <code>[Rubric §3, Clean Architecture]</code> in miniature (dependencies point inward, inner layers stay
-          framework-free), with the actual status translation deferred to the presentation layer.</li>
-          <li><a href="#error"><code>Error</code></a> (Level 1) is the <strong>carrier</strong>, an immutable positional <code>record</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:15-20</code>) with a machine-readable
-          <code>Code</code> (for example <code>&quot;Order.NotFound&quot;</code>, for programmatic branching), a human-readable <code>Message</code> (for
-          clients), an <code>ErrorType</code>, and optional <code>Source</code> / <code>Target</code> context. Eight factory methods, one per
-          <code>ErrorType</code> (<code>Error.cs:37-101</code>), each hard-code the correct classification, so a caller can never
-          accidentally pair <code>Error.NotFoundError(...)</code> with the wrong type. Three pre-built static singletons
-          (<code>Error.NotFound</code>, <code>Error.AlreadyDeleted</code>, <code>Error.InvalidEntityField</code>, <code>Error.cs:23-29</code>) cover the
-          ubiquitous cases without re-allocating, and <code>WithSource</code> / <code>WithTarget</code> (<code>Error.cs:106,112</code>) enrich
-          an error through <code>with</code>-expression copies.</li>
-          <li><a href="#result"><code>Result</code></a> (Level 2) is the <strong>outcome envelope</strong>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:18</code>), either a success (no
-          errors) or a failure carrying one or more <code>Error</code>s. The generic <code>Result&lt;T&gt;</code> (same file,
-          <code>Result.cs:137</code>) adds a <code>Value</code> on the success path (<code>Result.cs:140</code>) and the functional combinators
-          that make the pattern ergonomic.</li>
-          </ul>
-          <p><strong>The railway, in one picture.</strong> &quot;Railway-oriented programming&quot; is the mental model: imagine two
-          parallel tracks, a success track and a failure track. An operation that takes the current result as
-          input is skipped if the result is already a failure (the train stays on the failure track), and runs
-          only if it is a success, where it may stay on the success track or switch to failure. Control flows
-          forward without nested <code>if (result.IsFailure)</code> checks. <code>Result&lt;T&gt;</code> exposes exactly three combinators
-          for this, deliberately kept minimal because they cover the three real shapes:
-          <code>Match(onSuccess, onFailure)</code> (<code>Result.cs:165</code>) terminates the railway by collapsing both tracks to a
-          single value (exactly one branch runs); <code>Map(mapper)</code> (<code>Result.cs:181</code>) transforms the success value
-          while propagating errors untouched; and <code>BindAsync(binder)</code> (<code>Result.cs:194</code>) is the <strong>monadic bind</strong>
-          for async continuations, short-circuiting on failure (returning the original errors without invoking
-          <code>binder</code>) and otherwise awaiting the next operation, which itself returns a result. The non-generic
-          base adds <code>Result.Combine(params ReadOnlySpan&lt;Result&gt; results)</code> (<code>Result.cs:105</code>), the
-          <strong>aggregate-all-failures</strong> combinator that runs several invariant checks and returns <em>all</em> their
-          errors at once rather than failing on the first. That is the workhorse of domain factory methods
-          (<code>Result.Combine(CheckName(name), CheckDate(date), ...)</code>), its <code>ReadOnlySpan</code> parameter avoids a heap
-          allocation in the common case, and it rejects an empty call outright (<code>Result.cs:107-110</code>) because
-          combining nothing has no defensible answer.</p>
-          <p><strong>Construction discipline, and the invariant it buys.</strong> You cannot <code>new</code> a <code>Result&lt;T&gt;</code> directly: its
-          constructors are <code>internal</code> (<code>Result.cs:144,150</code>), so the only way to produce one is through the
-          static factory methods on the base <a href="#result"><code>Result</code></a> class (<code>Success</code> / <code>Failure</code>,
-          <code>Result.cs:43-83</code>). That is what guarantees the invariant the rest of the codebase relies on: a result
-          is <em>always</em> either a clean success or a non-empty failure, never a half-built object. Two details make
-          it airtight. First, the success path is served by a single cached immutable instance
-          (<code>Result.cs:20,43</code>) and the error list is allocated lazily (<code>Result.cs:25,38</code>), so the overwhelmingly
-          common success case allocates nothing. Second, <code>ThrowIfNoErrors</code> (<code>Result.cs:88-96</code>) throws
-          <code>ArgumentException</code> when a failure factory is handed an empty collection, because <code>IsSuccess</code> is
-          derived from the error count (<code>Result.cs:31</code>) and an accidentally-empty collection would otherwise
-          turn an explicit <code>Failure(...)</code> call into a <em>success</em>. Likewise, <a href="#error"><code>Error</code></a>&#39;s factory methods
-          are the canonical construction path because they fix the code-to-classification pairing at the call
-          site. This is quiet <code>[Rubric §15, Best Practices &amp; Code Quality]</code> work: the type system and the
+          concrete. The governing decision is
+          <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a>: expected failures are
+          transport-agnostic values, only the edge maps them to HTTP or gRPC, and exceptions stay for the
+          genuinely exceptional.</p>
+          <p>Every type in this chapter lives in <code>MMCA.Common.Shared</code>, the innermost layer, which is why the Blazor
+          WebAssembly client can reference the exact same <code>Result</code>, <code>Error</code> and <code>PagedCollectionResult&lt;T&gt;</code> the
+          SQL Server repository produced, with no EF Core or ASP.NET dragged along. That placement is
+          [Rubric §3, Clean Architecture] in miniature: an HTTP-shaped concept (<code>ErrorType</code>) is modelled as a
+          pure enum in the core, and the translation to a status code is deferred to the presentation layer.</p>
+          <h2 id="why-a-return-value-instead-of-an-exception">Why a return value instead of an exception</h2>
+          <p>Exceptions are expensive (stack capture and unwinding), they are invisible in a method&#39;s signature,
+          and they conflate <em>programmer errors</em> with <em>business outcomes</em>. &quot;This order ID does not exist&quot; and
+          &quot;this email is already taken&quot; are not exceptional, they are routine, expected branches of normal
+          control flow. Modelling them as data lets the compiler see them (a method that returns <code>Result&lt;T&gt;</code>
+          advertises that it can fail), lets them be collected into a list, passed through a pipeline,
+          inspected, and mapped to a response without any <code>try</code>/<code>catch</code>. That decision is the single most
+          pervasive idiom in the two repos: practically every entity factory method, every CQRS command and
+          query handler, every controller action, and every client service method returns <a href="#result"><code>Result</code></a> or
+          <code>Result&lt;T&gt;</code>. This touches [Rubric §2, Design Patterns] (which assesses whether patterns are idiomatic
+          and solve real problems rather than being &quot;pattern theater&quot;, and here Result is the genuine,
+          codebase-wide error-flow mechanism) and [Rubric §9, API &amp; Contract Design] (which assesses consistent,
+          standardized error responses, because every failure flows through the same envelope, so every endpoint
+          produces the same error shape).</p>
+          <h2 id="three-pieces-classification-carrier-envelope">Three pieces: classification, carrier, envelope</h2>
+          <p><a href="#errortype"><code>ErrorType</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:10</code>) is the <strong>classification
+          axis</strong>, a nine-member enum whose per-member doc comments name the HTTP status each maps to:
+          <code>Validation</code>, <code>Invariant</code> and <code>Failure</code> to 400, <code>NotFound</code> to 404, <code>Conflict</code> to 409, <code>Unauthorized</code>
+          to 401, <code>Forbidden</code> to 403, <code>UnprocessableEntity</code> to 422 (<code>ErrorType.cs:12-34</code>), and <code>Unexpected</code> to
+          500 (<code>ErrorType.cs:36-41</code>). That last member is the one to internalize: it is reserved for a genuine
+          server-side fault, a request that was well-formed and permitted but that the server could not
+          complete, and its doc comment is explicit that it must never be used for a business-rule violation
+          (<code>ErrorType.cs:37-39</code>).</p>
+          <p><a href="#error"><code>Error</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:15</code>) is the
+          <strong>carrier</strong>, an immutable positional <code>record</code> (<code>Error.cs:15-20</code>) with a machine-readable <code>Code</code> (for
+          example <code>&quot;Order.NotFound&quot;</code>, used for programmatic branching and, per
+          <a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>, as the localization key), a
+          human-readable <code>Message</code>, an <code>ErrorType</code>, and optional <code>Source</code> / <code>Target</code> context. Nine factory
+          methods, one per <code>ErrorType</code> (<code>Error.cs:37-115</code>), each hard-code the correct classification, so a
+          caller can never accidentally pair <code>Error.NotFoundError(...)</code> with the wrong type. Three pre-built
+          static singletons (<code>Error.NotFound</code>, <code>Error.AlreadyDeleted</code>, <code>Error.InvalidEntityField</code>,
+          <code>Error.cs:23-29</code>) cover the ubiquitous cases without re-allocating, and <code>WithSource</code> / <code>WithTarget</code>
+          (<code>Error.cs:120</code>, <code>Error.cs:126</code>) enrich an error through <code>with</code>-expression copies.</p>
+          <p><a href="#result"><code>Result</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:19</code>) is the
+          <strong>outcome envelope</strong>, either a success (no errors) or a failure carrying one or more <code>Error</code>s. The
+          sealed generic <code>Result&lt;T&gt;</code> (same file, <code>Result.cs:204</code>) adds a <code>Value</code> on the success path
+          (<code>Result.cs:207</code>) and the functional combinators that make the pattern ergonomic.</p>
+          <h2 id="the-railway-in-one-picture">The railway, in one picture</h2>
+          <p>&quot;Railway-oriented programming&quot; is the mental model: imagine two parallel tracks, a success track and a
+          failure track. An operation that takes the current result as input is skipped if the result is already
+          a failure (the train stays on the failure track), and runs only if it is a success, where it may stay
+          on the success track or switch to failure. Control flows forward without nested
+          <code>if (result.IsFailure)</code> checks.</p>
+          <p>On <code>Result&lt;T&gt;</code> the surface is seven members. <code>Match(onSuccess, onFailure)</code> (<code>Result.cs:260</code>)
+          terminates the railway by collapsing both tracks to a single value, with <code>MatchAsync</code>
+          (<code>Result.cs:355</code>) as its awaiting twin. <code>Map(mapper)</code> (<code>Result.cs:276</code>) transforms the success value
+          while propagating errors untouched. <code>Bind(binder)</code> (<code>Result.cs:302</code>) and <code>BindAsync(binder)</code>
+          (<code>Result.cs:289</code>) are the <strong>monadic bind</strong>, synchronous and asynchronous: they short-circuit on
+          failure, returning the original errors without invoking <code>binder</code>, and otherwise hand the success value
+          to the next result-returning operation. <code>Tap(action)</code> (<code>Result.cs:314</code>) runs a side effect on the
+          success value and returns the same instance so the call can sit inline in a chain, and
+          <code>Ensure(predicate, error)</code> (<code>Result.cs:334</code>) fails an otherwise-successful chain when the value does
+          not satisfy a condition, without ever running the predicate on an already-failed result
+          (<code>Result.cs:339-344</code>).</p>
+          <p>The non-generic base carries the valueless equivalents: <code>Match</code> (<code>Result.cs:155</code>), <code>Bind</code>
+          (<code>Result.cs:187</code>), and <code>OnFailure(action)</code> (<code>Result.cs:169</code>), which runs a side effect on the error
+          list and passes the instance through. It also owns <code>Combine(params ReadOnlySpan&lt;Result&gt; results)</code>
+          (<code>Result.cs:124</code>), the <strong>aggregate-all-failures</strong> combinator that runs several invariant checks and
+          returns <em>all</em> their errors at once rather than failing on the first. That is the workhorse of domain
+          factory methods (<code>Result.Combine(CheckName(name), CheckDate(date), ...)</code>), its <code>ReadOnlySpan</code>
+          parameter avoids a heap allocation in the common case, it allocates the aggregated error list only
+          when something actually failed (<code>Result.cs:131-140</code>), and it rejects an empty call outright
+          (<code>Result.cs:126-129</code>) because combining nothing has no defensible answer.</p>
+          <p>Three implicit conversions remove the remaining ceremony: an <code>Error</code> lifts into a failed <code>Result</code>
+          (<code>Result.cs:43</code>, with the named alternate <code>FromError</code> at <code>Result.cs:49</code> for callers that prefer it) or
+          into a failed <code>Result&lt;T&gt;</code> (<code>Result.cs:233</code>), and a bare value lifts into a successful <code>Result&lt;T&gt;</code>
+          (<code>Result.cs:249</code>), so a guard clause writes <code>return someError;</code> and a happy path writes
+          <code>return theValue;</code>. <a href="#resultextensions"><code>ResultExtensions</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ResultExtensions.cs:10</code>) then carries the
+          same combinators over a <strong>pending</strong> <code>Task&lt;Result&lt;T&gt;&gt;</code> so an asynchronous pipeline composes end to end
+          without an <code>await</code> and a temporary local between every step: two <code>BindAsync</code> overloads for async and
+          sync binders (<code>ResultExtensions.cs:20</code>, <code>ResultExtensions.cs:39</code>), <code>MapAsync</code>
+          (<code>ResultExtensions.cs:58</code>), <code>TapAsync</code> (<code>ResultExtensions.cs:77</code>), and <code>MatchAsync</code>
+          (<code>ResultExtensions.cs:102</code>). Each awaits the incoming task exactly once and then delegates to the
+          instance combinator, so the short-circuit behavior is identical by construction rather than by
+          duplication, which is the [Rubric §16, Maintainability] argument for the helper existing at all.</p>
+          <h2 id="construction-discipline-and-the-invariant-it-buys">Construction discipline, and the invariant it buys</h2>
+          <p>You cannot <code>new</code> a <code>Result&lt;T&gt;</code> directly: its constructors are <code>internal</code> (<code>Result.cs:211</code>,
+          <code>Result.cs:217</code>), so the only way to produce one is through the static factory methods on the base
+          <a href="#result"><code>Result</code></a> class (<code>Success</code> / <code>Failure</code>, <code>Result.cs:62-102</code>). That is what guarantees the
+          invariant the rest of the codebase relies on: a result is <em>always</em> either a clean success or a
+          non-empty failure, never a half-built object. Two details make it airtight. First, the success path is
+          served by a single cached immutable instance (<code>Result.cs:21</code>, <code>Result.cs:62</code>) and the error list is
+          allocated lazily (<code>Result.cs:26</code>, <code>Result.cs:29</code>), so the overwhelmingly common success case allocates
+          nothing. Second, <code>ThrowIfNoErrors</code> (<code>Result.cs:107-115</code>) throws <code>ArgumentException</code> when a failure
+          factory is handed an empty collection, because <code>IsSuccess</code> is derived from the error count
+          (<code>Result.cs:32</code>) and an accidentally-empty collection would otherwise turn an explicit <code>Failure(...)</code>
+          call into a <em>success</em>. Both the non-generic <code>Failure</code> (<code>Result.cs:83-89</code>) and the generic failure
+          constructor (<code>Result.cs:217-221</code>) route through that guard. Likewise, <a href="#error"><code>Error</code></a>&#39;s factory
+          methods are the canonical construction path because they fix the code-to-classification pairing at the
+          call site. This is quiet [Rubric §15, Best Practices &amp; Code Quality] work: the type system and the
           factories, not documentation, keep the envelope well-formed.</p>
-          <p><strong>Making a result survive a round trip.</strong> That same discipline creates a problem the moment a result
-          must be <em>serialized</em>: because <code>Result&lt;T&gt;</code>&#39;s constructors are <code>internal</code> and its properties are
-          get-only, System.Text.Json&#39;s default reflection-based deserializer cannot rehydrate one. That matters
-          because the CQRS query-caching decorator
-          (<a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a>)
-          reads and writes whole handler results through <code>ICacheService</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:162</code>),
+          <h2 id="severity-not-position-classifies-a-failure">Severity, not position, classifies a failure</h2>
+          <p><code>Result.Combine</code> aggregates errors in <strong>evaluation order</strong>, so if a transport picked the first error to
+          classify the whole failure, an incidental validation failure evaluated early could downgrade a real
+          403 or 500 into a 400. <a href="#errortypeseverity"><code>ErrorTypeSeverity</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:30</code>) is the answer: one
+          ranking over <code>ErrorType</code>, held in a <code>FrozenDictionary</code> because the table is fixed at startup and read
+          on every failure path (<code>ErrorTypeSeverity.cs:37-48</code>). The ranks are <code>Unexpected</code> 70, <code>Unauthorized</code>
+          60, <code>Forbidden</code> 50, <code>Conflict</code> 40, <code>NotFound</code> 30, <code>UnprocessableEntity</code> 20, and <code>Invariant</code>,
+          <code>Validation</code> and <code>Failure</code> all 10 (<code>ErrorTypeSeverity.cs:39-47</code>). <code>Rank</code> returns zero for an unmapped
+          type (<code>ErrorTypeSeverity.cs:57</code>), so a category added to <code>ErrorType</code> without a rank here can never
+          silently outrank a real 403 or 500. <code>MostSevere(errors)</code> (<code>ErrorTypeSeverity.cs:69</code>) then picks the
+          representative error with a deliberately index-based loop that keeps the earliest error on a tie
+          (<code>ErrorTypeSeverity.cs:80-95</code>), the comment at <code>ErrorTypeSeverity.cs:83-84</code> explaining that a LINQ
+          <code>MaxBy</code> would allocate an enumerator and a comparer closure on a path that runs for every failure
+          response.</p>
+          <p>The point of hoisting this into <code>MMCA.Common.Shared</code> rather than into one presentation package is that
+          <strong>both</strong> edges classify the same aggregate identically: the HTTP side calls it from
+          <code>ErrorHttpMapping.GetStatusCode(IReadOnlyList&lt;Error&gt;)</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:50-51</code>) and the gRPC
+          side from <code>ToRpcException</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:117</code>). Every error still
+          travels in the payload; ranking selects the status only. This is the 2026-08-26 and 2026-08-27
+          revision of <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a>, and it is
+          [Rubric §9, API &amp; Contract Design] in the small: the meaning of a failure must not depend on the order
+          in which its causes happened to be evaluated.</p>
+          <h2 id="making-a-result-survive-a-round-trip">Making a result survive a round trip</h2>
+          <p>The construction discipline above creates a problem the moment a result must be <em>serialized</em>: because
+          <code>Result&lt;T&gt;</code>&#39;s constructors are <code>internal</code> and its properties are get-only, System.Text.Json&#39;s default
+          reflection-based deserializer cannot rehydrate one. That matters because the CQRS query-caching
+          decorator
+          <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a>
+          writes whole handler results through <code>ICacheService</code>, skipping only failures
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:115,119</code>),
           and those results are <code>Result&lt;...&gt;</code> values (see <a href="group-05-cqrs-pipeline.html">Chapter 5</a> and
-          <a href="group-09-caching.html">Chapter 9</a>). <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a>
-          (Level 2) is the fix: a <code>JsonConverterFactory</code> attached to both <code>Result</code> and <code>Result&lt;T&gt;</code> via
-          <code>[JsonConverter(...)]</code> (<code>Result.cs:17,136</code>) whose <code>CanConvert</code> matches the non-generic <code>Result</code> and any
-          closed <code>Result&lt;T&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:21-23</code>) and
-          whose <code>CreateConverter</code> hands back the right per-type converter
-          (<code>ResultJsonConverterFactory.cs:26-33</code>). It writes a compact <code>{&quot;value&quot;: ..., &quot;errors&quot;: [...]}</code> shape
-          and, crucially, rebuilds the object <em>through the public factory methods</em> (<code>Result.Failure</code> /
-          <code>Result.Success</code>, <code>ResultJsonConverterFactory.cs:52,100</code>), so a round-tripped result obeys exactly the
-          same success-or-non-empty-failure invariant a freshly built one does.
-          <a href="#resultconverter"><code>ResultConverter</code></a> (Level 2, <code>ResultJsonConverterFactory.cs:35</code>) is the concrete
-          <code>JsonConverter&lt;Result&gt;</code> for the non-generic case (a private generic <code>ResultConverter&lt;T&gt;</code> sibling at
-          <code>ResultJsonConverterFactory.cs:63</code> handles the typed case), and both lean on one small helper, the
-          <a href="#propertyreader"><code>PropertyReader</code></a> (Level 0) delegate (<code>ResultJsonConverterFactory.cs:118</code>), a
-          <code>ref Utf8JsonReader</code> callback that the shared <code>ReadObject</code> walker (<code>ResultJsonConverterFactory.cs:121</code>)
-          invokes once per JSON property, so the value- and error-reading logic is written once and reused by
-          both converters. The typed converter is stricter than the untyped one on purpose: an object carrying
-          neither <code>value</code> nor <code>errors</code> is a corrupt or truncated cache entry, so it throws rather than fabricate
-          a success wrapping <code>null</code> (<code>ResultJsonConverterFactory.cs:95-98</code>), while the same empty object is the
-          <em>legitimate</em> success form for the non-generic <code>Result</code> (<code>ResultJsonConverterFactory.cs:37-39,52</code>).
-          Without this converter the distributed result cache could not exist, which makes it quiet
-          <code>[Rubric §12, Performance &amp; Scalability]</code> plumbing.</p>
-          <p><strong>How a failure becomes an HTTP response.</strong> Follow a typical write through the layers. A domain
-          factory or aggregate method validates its inputs and returns <code>Result.Combine(...)</code>; a command handler
-          in the application layer chains follow-on work with <code>BindAsync</code> / <code>Map</code>, so any failure short-circuits
-          the rest of the slice; the controller receives the <code>Result&lt;T&gt;</code> and, on failure, hands the errors to
+          <a href="group-09-caching.html">Chapter 9</a>).</p>
+          <p><a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:15</code>) is the
+          fix: a <code>JsonConverterFactory</code> attached to both <code>Result</code> and <code>Result&lt;T&gt;</code> via <code>[JsonConverter(...)]</code>
+          (<code>Result.cs:18</code>, <code>Result.cs:203</code>) whose <code>CanConvert</code> matches the non-generic <code>Result</code> and any closed
+          <code>Result&lt;T&gt;</code> (<code>ResultJsonConverterFactory.cs:21-23</code>) and whose <code>CreateConverter</code> hands back the right
+          per-type converter (<code>ResultJsonConverterFactory.cs:26-33</code>). It writes a compact
+          <code>{&quot;value&quot;: ..., &quot;errors&quot;: [...]}</code> shape and, crucially, rebuilds the object <em>through the public
+          factory methods</em> (<code>ResultJsonConverterFactory.cs:52</code>, <code>ResultJsonConverterFactory.cs:100</code>), so a
+          round-tripped result obeys exactly the same success-or-non-empty-failure invariant a freshly built one
+          does.</p>
+          <p><a href="#resultconverter"><code>ResultConverter</code></a> (<code>ResultJsonConverterFactory.cs:35</code>) is the concrete
+          <code>JsonConverter&lt;Result&gt;</code> for the non-generic case, and a private generic <code>ResultConverter&lt;T&gt;</code> sibling
+          (<code>ResultJsonConverterFactory.cs:63</code>) handles the typed case. Both lean on one small helper, the
+          <a href="#propertyreader"><code>PropertyReader</code></a> delegate (<code>ResultJsonConverterFactory.cs:118</code>), a
+          <code>ref Utf8JsonReader</code> callback that the shared <code>ReadObject</code> walker
+          (<code>ResultJsonConverterFactory.cs:121-144</code>) invokes once per JSON property, so the value- and
+          error-reading logic is written once and reused by both converters, and both emit their errors through
+          one <code>WriteErrors</code> (<code>ResultJsonConverterFactory.cs:146-153</code>). The typed converter is stricter than the
+          untyped one on purpose: an object carrying neither <code>value</code> nor <code>errors</code> is a corrupt or truncated
+          cache entry, so it throws rather than fabricate a success wrapping <code>null</code>
+          (<code>ResultJsonConverterFactory.cs:95-98</code>), while the same empty object is the <em>legitimate</em> success form
+          for the non-generic <code>Result</code> (<code>ResultJsonConverterFactory.cs:37-39,52</code>). Without this converter the
+          distributed result cache could not exist, which makes it quiet
+          [Rubric §12, Performance &amp; Scalability] plumbing.</p>
+          <h2 id="how-a-failure-becomes-an-http-response">How a failure becomes an HTTP response</h2>
+          <p>Follow a typical write through the layers. A domain factory or aggregate method validates its inputs
+          and returns <code>Result.Combine(...)</code>; a command handler in the application layer chains follow-on work
+          with <code>Bind</code> / <code>BindAsync</code> / <code>Map</code>, so any failure short-circuits the rest of the slice; the controller
+          receives the <code>Result&lt;T&gt;</code> and, on failure, hands the errors to
           <a href="group-12-api-hosting-mapping.html#apicontrollerbase"><code>ApiControllerBase</code></a><code>.HandleFailure</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:25</code>), which reads
-          the <strong>first</strong> error&#39;s <a href="#errortype"><code>ErrorType</code></a> (<code>ApiControllerBase.cs:38</code>, and the comment there says
-          callers should put the most significant error first), maps it through
-          <a href="group-12-api-hosting-mapping.html#errorhttpmapping"><code>ErrorHttpMapping</code></a>&#39;s <code>FrozenDictionary</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:20-30</code>), and renders
-          an <strong>RFC 9457 Problem Details</strong> body with <em>all</em> the errors in an <code>errors</code> extension, optionally
-          localized through <code>IErrorLocalizer</code> (<code>ApiControllerBase.cs:40-50</code>). An empty error list is defended
-          against too: it becomes a 500 rather than a silent 200 (<code>ApiControllerBase.cs:29-35</code>).</p>
-          <p><strong>And how the same failure crosses a service boundary.</strong> On the gRPC side,
-          <a href="group-13-grpc-contracts.html#resultgrpcextensions"><code>ResultGrpcExtensions</code></a> carries a <em>mirror</em> of that
-          table, <code>ErrorType</code> to <code>Grpc.Core.StatusCode</code>, in its own <code>FrozenDictionary</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:33-44</code>), reachable as an
-          extension member <code>ToGrpcStatusCode()</code> (<code>ResultGrpcExtensions.cs:53</code>). A service implementation guards
-          with a single <code>result.ThrowIfFailure()</code> (<code>ResultGrpcExtensions.cs:66</code>), which raises a
-          <code>ResultFailureException</code> that the server interceptor <code>GrpcResultExceptionInterceptor</code> translates into
-          an <code>RpcException</code> with the right status
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:12</code>),
-          and the typed client turns it back into a <code>Result</code> on the far side, so a remote call looks like a
-          local one to application code (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>,
-          <a href="group-13-grpc-contracts.html">Chapter 13</a>). Because both edges are driven by the same eight-member enum,
-          the HTTP and gRPC error shapes stay uniform across every endpoint and every extracted service: there
-          is one source of truth for &quot;what does a not-found look like&quot;, which is the <code>[Rubric §9, API &amp; Contract Design]</code> payoff of putting the classification in the core rather than at each edge.</p>
-          <p><strong>The two exceptions, and why they exist anyway.</strong> A return-value pattern still needs a fallback for
-          the places where you genuinely cannot return one. <a href="#domainexception"><code>DomainException</code></a> (Level 0,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Exceptions/DomainException.cs:9</code>) is the abstract base for
-          domain-layer exceptions, and
-          <a href="#domaininvariantviolationexception"><code>DomainInvariantViolationException</code></a> (Level 1,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Exceptions/DomainInvariantViolationException.cs:9</code>) is its
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35</code>). That method
+          resolves the status from the <strong>most severe</strong> error present, never from position
+          (<code>ApiControllerBase.cs:47-48</code>), through
+          <a href="group-12-api-hosting-mapping.html#errorhttpmapping"><code>ErrorHttpMapping</code></a>&#39;s <code>FrozenDictionary</code> of all nine
+          categories (<code>ErrorHttpMapping.cs:20-31</code>), then renders an <strong>RFC 9457 Problem Details</strong> body carrying
+          <em>all</em> the errors in an <code>errors</code> extension, optionally localized through
+          <a href="group-12-api-hosting-mapping.html#errorlocalizer"><code>ErrorLocalizer</code></a> resolved per request
+          (<code>ApiControllerBase.cs:50-60</code>). An empty error list is defended against too: it becomes a 500 rather
+          than a silent 200 (<code>ApiControllerBase.cs:39-45</code>). The mapping table is shared rather than duplicated so
+          that the controller base and
+          <a href="group-12-api-hosting-mapping.html#unhandledresultfailurefilter"><code>UnhandledResultFailureFilter</code></a> cannot
+          drift (<code>ErrorHttpMapping.cs:10-12</code>).</p>
+          <h2 id="and-how-the-same-failure-crosses-a-service-boundary-or-reaches-the-browser">And how the same failure crosses a service boundary, or reaches the browser</h2>
+          <p>On the gRPC side, <a href="group-13-grpc-contracts.html#resultgrpcextensions"><code>ResultGrpcExtensions</code></a> carries a
+          <em>mirror</em> of that table, <code>ErrorType</code> to <code>Grpc.Core.StatusCode</code>, in its own <code>FrozenDictionary</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:35-47</code>, with <code>Unexpected</code>
+          mapping to <code>StatusCode.Internal</code> at <code>ResultGrpcExtensions.cs:46</code>), reachable as an extension member
+          <code>ToGrpcStatusCode()</code> (<code>ResultGrpcExtensions.cs:56</code>). A service implementation guards with a single
+          <code>result.ThrowIfFailure()</code> (<code>ResultGrpcExtensions.cs:69</code>) or takes the value with <code>UnwrapOrThrow()</code>
+          (<code>ResultGrpcExtensions.cs:86</code>), both raising a
+          <a href="group-13-grpc-contracts.html#resultfailureexception"><code>ResultFailureException</code></a> that the server
+          interceptor <code>GrpcResultExceptionInterceptor</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/Interceptors/GrpcResultExceptionInterceptor.cs:19</code>)
+          translates through <code>ToRpcException</code> (<code>ResultGrpcExtensions.cs:112</code>): the status comes from
+          <code>ErrorTypeSeverity.MostSevere</code> (<code>ResultGrpcExtensions.cs:116-117</code>) and every error is still written
+          into the trailers as <code>error-{i}-code</code>, <code>error-{i}-message</code> and <code>error-{i}-type</code> entries, plus
+          <code>-source</code> / <code>-target</code> when present, so the far side can rebuild the list
+          (<code>ResultGrpcExtensions.cs:124-140</code>). See
+          <a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a> and
+          <a href="group-13-grpc-contracts.html">Chapter 13</a>.</p>
+          <p>The browser gets the same treatment from the other direction. Every HTTP-typed client service in
+          <code>MMCA.Common.UI</code> returns <code>Result</code> end to end:
+          <a href="group-08-auth.html#problemdetailsresultreader"><code>ProblemDetailsResultReader</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:58</code>) parses an
+          RFC 9457 body back into typed errors, and
+          <a href="group-15-common-ui-framework.html#httpresultexecutor"><code>HttpResultExecutor</code></a> converts the <em>absence</em> of a
+          body (connection, DNS, socket, client timeout) into transport errors, so pages branch through
+          <a href="group-15-common-ui-framework.html#resultuiextensions"><code>ResultUiExtensions</code></a> rather than catch. One
+          fidelity limit is worth carrying in your head and is stated in source: the reverse mapping is lossy on
+          400 alone, because the forward map collapses <code>Validation</code>, <code>Invariant</code> and <code>Failure</code> onto it and the
+          reader can only pick <code>Validation</code> back (<code>ProblemDetailsResultReader.cs:50-56</code>), so a client that needs
+          the distinction must consume an endpoint that emits the MMCA error array. Because all three edges are
+          driven by the same nine-member enum and the same severity ranking, there is one source of truth for
+          &quot;what does a not-found look like&quot;, which is the [Rubric §9, API &amp; Contract Design] payoff of putting
+          the classification in the core rather than at each edge.</p>
+          <h2 id="the-two-exceptions-and-why-they-exist-anyway">The two exceptions, and why they exist anyway</h2>
+          <p>A return-value pattern still needs a fallback for the places where you genuinely cannot return one.
+          <a href="#domainexception"><code>DomainException</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Exceptions/DomainException.cs:9</code>) is the abstract base for
+          domain-layer exceptions, with the three conventional protected constructors (<code>DomainException.cs:12</code>,
+          <code>DomainException.cs:16</code>, <code>DomainException.cs:22</code>), and
+          <a href="#domaininvariantviolationexception"><code>DomainInvariantViolationException</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Exceptions/DomainInvariantViolationException.cs:9</code>) is its
           one concrete subclass. Their doc comments are emphatic that these are a <em>last resort</em>: prefer <code>Result</code>
           with <code>Error.Invariant</code> for normal business-rule violations, and reserve the exception for contexts
           where the Result pattern is structurally unavailable, most notably inside aggregate constructors
@@ -300,82 +393,90 @@
           escape, the API layer&#39;s
           <a href="group-12-api-hosting-mapping.html#domainexceptionhandler"><code>DomainExceptionHandler</code></a> converts it to the
           same Problem Details shape (<code>DomainException.cs:3-8</code>), so even the exceptional path lands on a
-          consistent contract. This is the considered version of <code>[Rubric §2, Design Patterns]</code>: exceptions are
-          for the truly exceptional (programming errors, corrupted persistent state), not for control flow.</p>
-          <p><strong>Offset paging: the read-side envelopes.</strong> The read side needs shapes of its own. A query that
-          returns a list wraps it in <a href="#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> (Level 0), a thin
-          <code>[DataContract]</code> record
+          consistent contract. This is the considered version of [Rubric §2, Design Patterns]: exceptions are for
+          the truly exceptional (programming errors, corrupted persistent state), not for control flow.</p>
+          <h2 id="offset-paging-the-read-side-envelopes">Offset paging: the read-side envelopes</h2>
+          <p>The read side needs shapes of its own. A query that returns a list wraps it in
+          <a href="#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a>, a thin <code>[DataContract]</code> record
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/PaginationMetadata.cs:92</code>) whose single
           <code>required Items</code> property (<code>PaginationMetadata.cs:110</code>) is normalized by the constructor from any
           <code>IReadOnlyCollection&lt;T&gt;</code> into a list, reusing the caller&#39;s <code>List&lt;T&gt;</code> when it already is one
           (<code>PaginationMetadata.cs:102-106</code>). When the read is paged,
-          <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a> (Level 1, <code>PaginationMetadata.cs:119</code>) extends
-          that base with one extra required property, <a href="#paginationmetadata"><code>PaginationMetadata</code></a> (Level 0,
-          <code>PaginationMetadata.cs:12</code>), the server-side paging state (<code>TotalItemCount</code>, <code>PageSize</code>,
+          <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a> (<code>PaginationMetadata.cs:119</code>) extends that base
+          with one extra required property, <a href="#paginationmetadata"><code>PaginationMetadata</code></a>
+          (<code>PaginationMetadata.cs:12</code>), the server-side paging state (<code>TotalItemCount</code>, <code>PageSize</code>,
           <code>CurrentPage</code>) plus computed derivations (<code>TotalPageCount</code>, <code>FirstRowOnPage</code>, <code>LastRowOnPage</code>,
-          <code>PaginationMetadata.cs:75-83</code>) that are excluded from the wire with <code>[IgnoreDataMember]</code>. Two details
-          are worth internalizing. The three core values are validated <em>twice</em>, in the constructor
+          <code>PaginationMetadata.cs:75-83</code>) that are excluded from the wire with <code>[IgnoreDataMember]</code>.</p>
+          <p>Two details are worth internalizing. The three core values are validated <em>twice</em>, in the constructor
           (<code>PaginationMetadata.cs:22-31</code>) and again in each <code>init</code> accessor (<code>PaginationMetadata.cs:38-71</code>),
           precisely because object initializers, record <code>with</code> expressions, and System.Text.Json all bypass the
           constructor (the comment at <code>PaginationMetadata.cs:33-35</code> says so). And <code>[DataMember(Order = ...)]</code>
           fixes a deterministic wire order so <code>PaginationMetadata</code> always follows <code>Items</code>
-          (<code>PaginationMetadata.cs:109,138</code>). These envelopes are not part of the success/failure machinery
-          themselves, a paged query handler returns <code>Result&lt;PagedCollectionResult&lt;T&gt;&gt;</code>, composing the two ideas,
-          but they belong in this chapter because they are the canonical <em>shapes</em> that successful reads return.
-          They are also genuinely shared contracts: the controller surface declares
+          (<code>PaginationMetadata.cs:109</code>, <code>PaginationMetadata.cs:138</code>). These envelopes are not part of the
+          success/failure machinery themselves, a paged query handler returns <code>Result&lt;PagedCollectionResult&lt;T&gt;&gt;</code>,
+          composing the two ideas, but they belong in this chapter because they are the canonical <em>shapes</em> that
+          successful reads return. They are also genuinely shared contracts: the controller surface declares
           <code>ActionResult&lt;PagedCollectionResult&lt;TEntityDTO&gt;&gt;</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/IEntityControllerBase.cs:43</code>) and the
-          Blazor client deserializes the very same type
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:46,85</code>), so there is no
-          hand-written mirror DTO to drift.</p>
-          <p><strong>Keyset paging: the same envelope family, a different cost model.</strong> Offset paging answers &quot;give me
-          page 37&quot; and costs the database a scan of the 36 pages before it.
-          <a href="#keysetpagerequest"><code>KeysetPageRequest</code></a> (Level 0,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/KeysetPagination.cs:20</code>) asks the other
+          Blazor client deserializes the very same type in
+          <a href="group-15-common-ui-framework.html#entityservicebasetentitydto-tidentifiertype"><code>EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;</code></a>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:73,111</code>), so there is no
+          hand-written mirror DTO to drift
+          (<a href="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html" target="_blank" rel="noopener">ADR-034</a>,
+          <a href="https://ivanball.github.io/docs/adr/094-client-entity-data-access.html" target="_blank" rel="noopener">ADR-094</a>).</p>
+          <h2 id="keyset-paging-the-same-envelope-family-a-different-cost-model">Keyset paging: the same envelope family, a different cost model</h2>
+          <p>Offset paging answers &quot;give me page 37&quot; and costs the database a scan of the 36 pages before it.
+          <a href="#keysetpagerequest"><code>KeysetPageRequest</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/KeysetPagination.cs:20</code>) asks the other
           question, &quot;give me what comes after this row&quot;, which costs one index seek regardless of depth, at the
           price of losing random page access and a total count (the type&#39;s own doc comment lays this out at
-          <code>KeysetPagination.cs:8-18</code>). The request carries a page size clamped into <code>[1, 1000]</code> in both the
-          constructor and the <code>init</code> accessor (<code>KeysetPagination.cs:26,51,62</code>) so a caller who asks for zero or
-          a million gets a sane page instead of an error, plus <code>SortColumn</code>, <code>Descending</code>, and the opaque
-          <code>Cursor</code> (<code>KeysetPagination.cs:67,71,75</code>). Its answer is
-          <a href="#keysetcollectionresultt"><code>KeysetCollectionResult&lt;T&gt;</code></a> (Level 1, <code>KeysetPagination.cs:85</code>), a sibling
-          of <code>PagedCollectionResult&lt;T&gt;</code> over the same <a href="#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> base that adds
-          a single <code>NextCursor</code> (<code>KeysetPagination.cs:107</code>) and deliberately no total and no page number.
-          <a href="#keysetcursor"><code>KeysetCursor</code></a> (Level 0, <code>KeysetPagination.cs:125</code>) is the static codec for that
-          token: <code>Encode</code> (<code>KeysetPagination.cs:139</code>) builds <code>v1|{hasSortValue}|{sortValue}|{id}</code> with both value
-          segments themselves base64url encoded so a value containing the separator cannot forge one, then
-          base64url encodes the whole payload; <code>TryDecode</code> (<code>KeysetPagination.cs:169</code>) rejects anything it does
-          not understand (wrong version, wrong segment count, invalid base64) rather than silently mis-seeking,
-          and its private base64url helper checks validity before decoding because the BCL&#39;s
-          <code>Base64Url.TryDecodeFromChars</code> <em>throws</em> on an invalid character (<code>KeysetPagination.cs:202-206</code>), which
-          is exactly the input a client-supplied cursor will contain. The cursor is opaque but neither signed
-          nor encrypted, so it must never carry anything the caller may not already see, and by construction it
-          carries only a sort key and an id from a row the caller just received (<code>KeysetPagination.cs:120-123</code>):
-          that is the <code>[Rubric §11, Security]</code> boundary of this design, stated in source. The consumer is the
-          repository layer:
+          <code>KeysetPagination.cs:11-17</code>). The request carries a page size clamped into <code>[1, MaxPageSize]</code> in both
+          the constructor and the <code>init</code> accessor (<code>KeysetPagination.cs:51</code>, <code>KeysetPagination.cs:62</code>) so a
+          caller who asks for zero or a million gets a sane page instead of an error, with <code>MaxPageSize</code> fixed at
+          1000 to mirror the query pipeline&#39;s own unbounded-result ceiling (<code>KeysetPagination.cs:26</code>), plus
+          <code>SortColumn</code>, <code>Descending</code>, and the opaque <code>Cursor</code> (<code>KeysetPagination.cs:67,71,75</code>). Its answer is
+          <a href="#keysetcollectionresultt"><code>KeysetCollectionResult&lt;T&gt;</code></a> (<code>KeysetPagination.cs:85</code>), a sibling of
+          <code>PagedCollectionResult&lt;T&gt;</code> over the same <a href="#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> base that adds a
+          single <code>NextCursor</code> (<code>KeysetPagination.cs:107</code>) and deliberately no total and no page number.</p>
+          <p><a href="#keysetcursor"><code>KeysetCursor</code></a> (<code>KeysetPagination.cs:125</code>) is the static codec for that token.
+          <code>Encode</code> (<code>KeysetPagination.cs:139</code>) builds <code>v1|{hasSortValue}|{sortValue}|{id}</code> with both value
+          segments themselves base64url encoded so a value containing the separator cannot forge one
+          (<code>KeysetPagination.cs:143-150</code>), then base64url encodes the whole payload (<code>KeysetPagination.cs:152</code>).
+          <code>TryDecode</code> (<code>KeysetPagination.cs:169</code>) rejects anything it does not understand, wrong version, wrong
+          segment count, bad flag, invalid base64 (<code>KeysetPagination.cs:174-185</code>), rather than silently
+          mis-seeking, and its private base64url helper checks validity <em>before</em> decoding because the BCL&#39;s
+          <code>Base64Url.TryDecodeFromChars</code> throws on an invalid character rather than returning false, which is
+          exactly the input a client-supplied cursor will contain (<code>KeysetPagination.cs:202-206</code>). The cursor is
+          opaque but neither signed nor encrypted, so it must never carry anything the caller may not already
+          see, and by construction it carries only a sort key and an id from a row the caller just received
+          (<code>KeysetPagination.cs:120-123</code>): that is the [Rubric §11, Security] boundary of this design, stated in
+          source.</p>
+          <p>The consumer is the repository layer:
           <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a><code>.GetPageByCursorAsync</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:369</code>)
-          returns a <code>Result&lt;KeysetCollectionResult&lt;TEntity&gt;&gt;</code>, turning an unknown sort column or a malformed
-          cursor into a <code>Result</code> failure rather than an exception (<code>EFReadRepository.cs:376-403</code>), fetching
-          <code>PageSize + 1</code> rows so the extra row acts as a next-page probe instead of paying for a <code>COUNT</code>
-          (<code>EFReadRepository.cs:408-414</code>), and encoding the last kept row into the next cursor via
-          <a href="group-07-persistence-ef-core.html#keysetquerybuilder"><code>KeysetQueryBuilder</code></a>
-          (<code>EFReadRepository.cs:420-422</code>). Per
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:496</code>)
+          returns a <code>Result&lt;KeysetCollectionResult&lt;TEntity&gt;&gt;</code>, turning an unknown sort column
+          (<code>EFReadRepository.cs:503-512</code>) or a malformed cursor (<code>EFReadRepository.cs:520-528</code>) into a <code>Result</code>
+          failure rather than an exception, fetching <code>PageSize + 1</code> rows so the extra row acts as a next-page
+          probe instead of paying for a <code>COUNT</code> (<code>EFReadRepository.cs:535-541</code>), and encoding the last kept row
+          into the next cursor via <a href="group-07-persistence-ef-core.html#keysetquerybuilder"><code>KeysetQueryBuilder</code></a>
+          (<code>EFReadRepository.cs:546-549</code>). Per
           <a href="https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html" target="_blank" rel="noopener">ADR-055</a> this is a
           repository-level capability only: it is deliberately not exposed on the HTTP query contract of
           <a href="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html" target="_blank" rel="noopener">ADR-034</a>, which still offers
-          offset paging. Both shapes together are the <code>[Rubric §12, Performance &amp; Scalability]</code> story on the
-          read side: no query ever returns an unbounded list, and deep scrolling has a mode that does not
-          degrade with depth.</p>
-          <p><strong>Where this leads.</strong> With these fourteen types you have the full error-and-result vocabulary the rest
-          of the guide assumes. You will see <a href="#result"><code>Result</code></a> returned by the domain building blocks of
+          offset paging. Both shapes together are the [Rubric §12, Performance &amp; Scalability] story on the read
+          side: no query ever returns an unbounded list, and deep scrolling has a mode that does not degrade
+          with depth.</p>
+          <h2 id="where-this-leads">Where this leads</h2>
+          <p>With these sixteen types you have the full error-and-result vocabulary the rest of the guide assumes.
+          You will see <a href="#result"><code>Result</code></a> returned by the domain building blocks of
           <a href="group-02-domain-building-blocks.html">Chapter 2</a> (factory methods that refuse to construct an invalid
-          entity), threaded through the CQRS decorator pipeline of <a href="group-05-cqrs-pipeline.html">Chapter 5</a>,
+          entity), threaded through the CQRS decorator pipeline of <a href="group-05-cqrs-pipeline.html">Chapter 5</a> and
           cached across a Redis round trip by that same pipeline (<a href="group-09-caching.html">Chapter 9</a>), produced by
           the querying and persistence layers of <a href="group-03-querying-specifications.html">Chapter 3</a> and
-          <a href="group-07-persistence-ef-core.html">Chapter 7</a>, and unwrapped at the edges by the API and gRPC layers
-          (<a href="group-12-api-hosting-mapping.html">Chapter 12</a>, <a href="group-13-grpc-contracts.html">Chapter 13</a>). Read this
-          chapter&#39;s type sections next; everything after them takes the railway for granted.</p>
+          <a href="group-07-persistence-ef-core.html">Chapter 7</a>, and unwrapped at the edges by the API, gRPC and UI layers
+          (<a href="group-12-api-hosting-mapping.html">Chapter 12</a>, <a href="group-13-grpc-contracts.html">Chapter 13</a>,
+          <a href="group-15-common-ui-framework.html">Chapter 15</a>). Read this chapter&#39;s type sections next; everything
+          after them takes the railway for granted.</p>
           <h3 id="collectionresultt">CollectionResult&lt;T&gt;</h3>
           <blockquote>
           <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/PaginationMetadata.cs:92</code> · Level 0 · record</p>
@@ -392,7 +493,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: <code>required</code> + <code>init</code> gives &quot;set once, never null&quot; semantics with no hand-written guard on the common path, while the explicit <code>[DataContract]</code> / <code>[DataMember(Order = ...)]</code> pair keeps the serialized shape deterministic instead of leaving it to member-declaration order.</li>
-          <li><strong>Where it&#39;s used</strong>: base of <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a> and <a href="#keysetcollectionresultt"><code>KeysetCollectionResult&lt;T&gt;</code></a>; returned by non-paged collection reads through <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> and the generic controllers of <a href="group-12-api-hosting-mapping.html">Chapter 12</a>.</li>
+          <li><strong>Where it&#39;s used</strong>: base of <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a> and <a href="#keysetcollectionresultt"><code>KeysetCollectionResult&lt;T&gt;</code></a>. Note that it is the <em>base</em> that carries the reuse: no framework read returns a bare <code>CollectionResult&lt;T&gt;</code> today, every list read returns one of the two subtypes (the offset one through <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> and the generic controllers of <a href="group-12-api-hosting-mapping.html">Chapter 12</a>, the keyset one through the repository layer of <a href="group-07-persistence-ef-core.html">Chapter 7</a>).</li>
           </ul>
           <h3 id="domainexception">DomainException</h3>
           <blockquote>
@@ -403,21 +504,25 @@
           <li><strong>Depends on</strong>: <code>System.Exception</code> (BCL) only. It references <a href="#result"><code>Result</code></a> in prose (<code>DomainException.cs:4</code>) but takes no code dependency on it.</li>
           <li><strong>Concept introduced, exceptions reserved for the truly exceptional.</strong> <code>[Rubric §2, Design Patterns]</code> (§2 assesses whether patterns are idiomatic and solve real problems; a classic red flag is <em>exceptions used for control flow where a Result is the convention</em>). The doc comment (<code>DomainException.cs:3-8</code>) is explicit about the ranking: prefer the <a href="#result"><code>Result</code></a> pattern for expected error paths, reserve exceptions for programming errors and corrupted state. So this type exists, but it is the exception to the rule rather than the rule. <code>[Rubric §3, Clean Architecture]</code> also applies: the type lives in <code>MMCA.Common.Shared</code> with zero HTTP coupling, and the status mapping is deferred to the API layer.</li>
           <li><strong>Walkthrough</strong>: three <code>protected</code> constructors, the standard exception constructor set: parameterless (<code>DomainException.cs:12</code>), message (<code>DomainException.cs:16-17</code>), and message plus inner exception (<code>DomainException.cs:22-23</code>). The class is <code>abstract</code>, so you must derive a specific exception rather than throwing the base directly, and the constructors being <code>protected</code> rather than <code>public</code> enforces that at the call site too.</li>
-          <li><strong>Why it&#39;s built this way</strong>: a single domain-exception root lets the edge catch &quot;domain exceptions&quot; as a <em>category</em>. <a href="group-12-api-hosting-mapping.html#domainexceptionhandler"><code>DomainExceptionHandler</code></a> does exactly one type test, <code>exception is not DomainException</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DomainExceptionHandler.cs:27</code>), and converts anything that passes into an HTTP 400 RFC 9457 Problem Details body (<code>DomainExceptionHandler.cs:32-45</code>). One root type means new domain exceptions get correct edge behavior for free. See <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a> for the decision that keeps this path narrow.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a single domain-exception root lets the edge catch &quot;domain exceptions&quot; as a <em>category</em>. <a href="group-12-api-hosting-mapping.html#domainexceptionhandler"><code>DomainExceptionHandler</code></a> does exactly one type test, <code>exception is not DomainException</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DomainExceptionHandler.cs:27</code>), sets HTTP 400 (<code>DomainExceptionHandler.cs:32</code>) and writes an RFC 9457 Problem Details body through <code>IProblemDetailsService</code> (<code>DomainExceptionHandler.cs:33-45</code>). One root type means new domain exceptions get correct edge behavior for free. See <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a> for the decision that keeps this path narrow, including the load-bearing <em>registration order</em> of the handler chain (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:141</code>): ASP.NET Core runs <code>IExceptionHandler</code>s in registration order and stops at the first one that reports the exception handled, so most-specific-first is the mechanism, not a comment.</li>
           <li><strong>Where it&#39;s used</strong>: base of <a href="#domaininvariantviolationexception"><code>DomainInvariantViolationException</code></a> (its only concrete subclass in the framework); caught by <a href="group-12-api-hosting-mapping.html#domainexceptionhandler"><code>DomainExceptionHandler</code></a> in the ordered <code>IExceptionHandler</code> chain of <a href="group-12-api-hosting-mapping.html">Chapter 12</a>.</li>
           </ul>
           <h3 id="errortype">ErrorType</h3>
           <blockquote>
-          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:8</code> · Level 0 · enum</p>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:10</code> · Level 0 · enum</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: an enum that classifies every domain error into one of eight categories, each of which the API layer maps to an HTTP status code.</li>
-          <li><strong>Depends on</strong>: nothing first-party (BCL only). It is the seed of the Result family: <a href="#error"><code>Error</code></a> (Level 1) carries an <code>ErrorType</code>, and <a href="#result"><code>Result</code></a> (Level 2) carries <code>Error</code>s.</li>
-          <li><strong>Concept introduced, the Result pattern.</strong> <code>[Rubric §2, Design Patterns]</code> (§2 assesses whether patterns are idiomatic and solve real problems rather than being pattern theater; here the Result pattern is the codebase&#39;s canonical error-flow mechanism, used by practically every factory method, handler, and controller action in both repos). Instead of throwing for <em>expected</em> failures (validation, not-found, conflict), an operation returns a <a href="#result"><code>Result</code></a> that is either a success or a failure carrying one or more <a href="#error"><code>Error</code></a>s; <code>ErrorType</code> is that pattern&#39;s classification axis. It also touches <code>[Rubric §9, API &amp; Contract Design]</code> (consistent, standardized error responses): the enum&#39;s own doc comment states that the <strong>first</strong> error in a result determines the response status (<code>ErrorType.cs:3-7</code>), so every endpoint produces the same error shape from the same eight categories. And <code>[Rubric §3, Clean Architecture]</code> (dependencies point inward, inner layers stay framework-free): this HTTP-shaped concept lives in the innermost assembly as a <em>pure enum</em> with no reference to ASP.NET, and the translation happens only at the edge. See <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a> for where the pattern sits among the codebase&#39;s committed styles.</li>
-          <li><strong>Walkthrough</strong>: eight members, each documented with the status it is meant to produce (<code>ErrorType.cs:11-32</code>): <code>Validation</code> (400), <code>Invariant</code> (400, a broken business rule), <code>NotFound</code> (404), <code>Conflict</code> (409, for example a duplicate or an already-deleted row), <code>Unauthorized</code> (401), <code>Forbidden</code> (403), <code>UnprocessableEntity</code> (422, for example an attempt to change an immutable field), and <code>Failure</code> (400, the catch-all). No member is given an explicit numeric value: the ordinal order is irrelevant because every consumer keys on the member, never on the integer.</li>
-          <li><strong>Why it&#39;s built this way</strong>: separating <em>classification</em> (this enum) from <em>carrier</em> (<a href="#error"><code>Error</code></a>) from <em>outcome</em> (<a href="#result"><code>Result</code></a>) keeps each piece tiny and lets the same eight categories drive domain logic, HTTP translation, and gRPC translation from one source of truth. <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a> states the rule the enum encodes: the domain never names an HTTP status.</li>
-          <li><strong>Where it&#39;s used</strong>: <a href="#error"><code>Error</code></a>&#39;s eight factory methods each hard-code one member (<code>Error.cs:37-101</code>); <a href="group-12-api-hosting-mapping.html#errorhttpmapping"><code>ErrorHttpMapping</code></a> holds the actual table as a <code>FrozenDictionary&lt;ErrorType, int&gt;</code> built once at startup (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:20-31</code>) and resolves through it with a 400 fallback (<code>ErrorHttpMapping.cs:36-37</code>); <a href="group-12-api-hosting-mapping.html#apicontrollerbase"><code>ApiControllerBase</code></a> reads the first error&#39;s <code>Type</code> and calls that resolver (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:38</code>). On the gRPC boundary, <a href="group-13-grpc-contracts.html#resultgrpcextensions"><code>ResultGrpcExtensions</code></a> performs the equivalent translation (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>).</li>
-          <li><strong>Caveats / not-in-source</strong>: the per-member HTTP status codes written in this enum&#39;s doc comments are <em>documentation</em>, not the mapping. The executable table lives in <code>ErrorHttpMapping.cs:22-29</code> and currently agrees with them member for member.</li>
+          <li><strong>What it is</strong>: an enum that classifies every domain error into one of nine categories, each of which the API layer maps to an HTTP status code and the gRPC layer maps to a status code of its own.</li>
+          <li><strong>Depends on</strong>: nothing first-party (BCL only). It is the seed of the Result family: <a href="#error"><code>Error</code></a> (Level 1) carries an <code>ErrorType</code>, <a href="#errortypeseverity"><code>ErrorTypeSeverity</code></a> (Level 2) ranks one, and <a href="#result"><code>Result</code></a> (Level 2) carries <code>Error</code>s.</li>
+          <li><strong>Concept introduced, the Result pattern.</strong> <code>[Rubric §2, Design Patterns]</code> (§2 assesses whether patterns are idiomatic and solve real problems rather than being pattern theater; here the Result pattern is the codebase&#39;s canonical error-flow mechanism, used by practically every factory method, handler, and controller action in both repos). Instead of throwing for <em>expected</em> failures (validation, not-found, conflict), an operation returns a <a href="#result"><code>Result</code></a> that is either a success or a failure carrying one or more <a href="#error"><code>Error</code></a>s; <code>ErrorType</code> is that pattern&#39;s classification axis. It also touches <code>[Rubric §9, API &amp; Contract Design]</code> (§9 assesses consistent, standardized error responses): every endpoint produces the same error shape out of the same nine categories. And <code>[Rubric §3, Clean Architecture]</code> (dependencies point inward, inner layers stay framework-free): this HTTP-shaped concept lives in the innermost assembly as a <em>pure enum</em> with no reference to ASP.NET, and the translation happens only at the edge. See <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a> for where the pattern sits among the codebase&#39;s committed styles.</li>
+          <li><strong>Walkthrough</strong>: nine members, each documented with the status it is meant to produce (<code>ErrorType.cs:13,16,19,22,25,28,31,34,41</code>): <code>Validation</code> (400), <code>Invariant</code> (400, a broken business rule), <code>NotFound</code> (404), <code>Conflict</code> (409, for example a duplicate or an already-deleted row), <code>Unauthorized</code> (401), <code>Forbidden</code> (403), <code>UnprocessableEntity</code> (422, for example an attempt to change an immutable field), <code>Failure</code> (400, the general/unclassified case), and <code>Unexpected</code> (500). No member is given an explicit numeric value: the ordinal order is irrelevant because every consumer keys on the member, never on the integer.<ul>
+          <li><code>Unexpected</code> is the one member with a policy attached to it in source (<code>ErrorType.cs:36-40</code>, and the matching factory doc at <code>Error.cs:103-108</code>): it is reserved for a <em>genuine server-side fault</em>, the request was well formed and permitted but the server could not complete it. It is explicitly not for business-rule violations. That reservation is what keeps the other eight categories caller-fixable, which is the property the whole enum is designed around.</li>
+          <li>The type-level doc comment (<code>ErrorType.cs:3-9</code>) states the aggregation rule the categories obey: when a result carries several errors, the response status is the one belonging to the <strong>highest-ranked category present</strong>, so an aggregate can never be downgraded by the ordering of its errors. The ranking itself is <a href="#errortypeseverity"><code>ErrorTypeSeverity</code></a>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: separating <em>classification</em> (this enum) from <em>carrier</em> (<a href="#error"><code>Error</code></a>) from <em>severity</em> (<a href="#errortypeseverity"><code>ErrorTypeSeverity</code></a>) from <em>outcome</em> (<a href="#result"><code>Result</code></a>) keeps each piece tiny and lets the same nine categories drive domain logic, HTTP translation, and gRPC translation from one source of truth. <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a> states the rule the enum encodes: the domain never names an HTTP status.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="#error"><code>Error</code></a>&#39;s nine factory methods each hard-code one member (<code>Error.cs:37,46,55,64,73,82,91,100,114</code>); <a href="group-12-api-hosting-mapping.html#errorhttpmapping"><code>ErrorHttpMapping</code></a> holds the HTTP table as a <code>FrozenDictionary&lt;ErrorType, int&gt;</code> built once at startup (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:20-31</code>) and resolves through it with a 400 fallback (<code>ErrorHttpMapping.cs:37-38</code>). On the gRPC boundary, <a href="group-13-grpc-contracts.html#resultgrpcextensions"><code>ResultGrpcExtensions</code></a> performs the mirror translation (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>).</li>
+          <li><strong>Caveats / not-in-source</strong>: the per-member HTTP status codes written in this enum&#39;s doc comments are <em>documentation</em>, not the mapping. The executable table lives in <code>ErrorHttpMapping.cs:22-30</code> and currently agrees with them member for member.</li>
           </ul>
           <h3 id="keysetcursor">KeysetCursor</h3>
           <blockquote>
@@ -434,8 +539,8 @@
           <li><code>TryFromBase64Url</code> (<code>KeysetPagination.cs:195-214</code>) holds the subtle bit and says so in a comment: <code>Base64Url.TryDecodeFromChars</code> <strong>throws</strong> on an invalid character instead of returning <code>false</code>, and a client-supplied cursor is precisely the input that will contain one, so the method calls <code>Base64Url.IsValid</code> first (<code>KeysetPagination.cs:202-206</code>). An empty string short-circuits to a successful empty decode (<code>KeysetPagination.cs:199-200</code>), which is how a cursor with no sort value round-trips.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: the version prefix plus the total-failure <code>Try</code> contract means a malformed or stale cursor becomes a <em>validation failure the caller can see</em>, never a silent reset to the first page. <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> turns a <code>false</code> return into <code>Error.Validation(&quot;Error.InvalidCursor&quot;, ...)</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:393-401</code>). This is the keyset half of <a href="https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html" target="_blank" rel="noopener">ADR-055</a>.</li>
-          <li><strong>Where it&#39;s used</strong>: <code>Encode</code> is called once per page by <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> with the last row&#39;s sort value and id, both rendered invariantly by <a href="group-07-persistence-ef-core.html#keysetquerybuilder"><code>KeysetQueryBuilder</code></a> (<code>EFReadRepository.cs:420-422</code>); <code>TryDecode</code> is called from the same class&#39;s <code>TryBuildSeekPredicate</code> to rebuild the seek predicate (<code>EFReadRepository.cs:440</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: the version prefix plus the total-failure <code>Try</code> contract means a malformed or stale cursor becomes a <em>validation failure the caller can see</em>, never a silent reset to the first page. <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> turns a <code>false</code> return into <code>Error.Validation(&quot;Error.InvalidCursor&quot;, ...)</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:522-527</code>). This is the keyset half of <a href="https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html" target="_blank" rel="noopener">ADR-055</a>.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>Encode</code> is called once per page by <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> with the last row&#39;s sort value and id, both rendered invariantly by <a href="group-07-persistence-ef-core.html#keysetquerybuilder"><code>KeysetQueryBuilder</code></a> (<code>EFReadRepository.cs:547-549</code>); <code>TryDecode</code> is called from the same class&#39;s <code>TryBuildSeekPredicate</code> to rebuild the seek predicate (<code>EFReadRepository.cs:567</code>).</li>
           </ul>
           <h3 id="keysetpagerequest">KeysetPageRequest</h3>
           <blockquote>
@@ -453,8 +558,8 @@
           <li><code>[DataContract]</code> on the record and <code>[DataMember(Order = 1..4)]</code> on the four properties (<code>KeysetPagination.cs:19,58,66,70,74</code>) pin the wire order.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: exactly one sort key is supported, with the entity&#39;s <code>Id</code> as the tie-break, because that is what keeps the seek predicate a single composable comparison. A null <code>SortColumn</code> keys the page on <code>Id</code> alone. The sort column must name a real public property: <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> resolves it through <a href="group-07-persistence-ef-core.html#keysetquerybuilder"><code>KeysetQueryBuilder</code></a> and returns an <code>Error.InvalidEntityField</code> copy carrying the offending column name when it does not (<code>EFReadRepository.cs:376-385</code>), so an unknown name is a validation failure rather than a silently ignored parameter. See <a href="https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html" target="_blank" rel="noopener">ADR-055</a>.</li>
-          <li><strong>Where it&#39;s used</strong>: the sole parameter object of <code>GetPageByCursorAsync</code> on <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:207-210</code>), implemented by <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> (<code>EFReadRepository.cs:369-426</code>) and forwarded by <a href="group-07-persistence-ef-core.html#efreadrepositorydecoratortentity-tidentifiertype"><code>EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;</code></a>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: exactly one sort key is supported, with the entity&#39;s <code>Id</code> as the tie-break, because that is what keeps the seek predicate a single composable comparison. A null <code>SortColumn</code> keys the page on <code>Id</code> alone (stated on the contract at <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:306-309</code>). The sort column must name a real public property: <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> resolves it through <a href="group-07-persistence-ef-core.html#keysetquerybuilder"><code>KeysetQueryBuilder</code></a> and returns an <code>Error.InvalidEntityField</code> copy carrying the offending column name when it does not (<code>EFReadRepository.cs:503-512</code>), so an unknown name is a validation failure rather than a silently ignored parameter. See <a href="https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html" target="_blank" rel="noopener">ADR-055</a>.</li>
+          <li><strong>Where it&#39;s used</strong>: the sole parameter object of <code>GetPageByCursorAsync</code>, declared on <a href="group-07-persistence-ef-core.html#ientityqueriertentity-tidentifiertype"><code>IEntityQuerier&lt;TEntity, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:316-319</code>, inherited by <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> at <code>IRepository.cs:330</code>), implemented by <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> (<code>EFReadRepository.cs:496-553</code>) and forwarded by <a href="group-07-persistence-ef-core.html#efreadrepositorydecoratortentity-tidentifiertype"><code>EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;</code></a> (<code>EFReadRepositoryDecorator.cs:151-152</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: <code>MaxPageSize</code> and <code>MaxUnboundedResultLimit</code> are two independent constants that happen to be equal. Nothing in source ties them together, so a change to one does not move the other.</li>
           </ul>
           <h3 id="paginationmetadata">PaginationMetadata</h3>
@@ -473,7 +578,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: <code>[DataContract]</code> / <code>[DataMember]</code> / <code>[IgnoreDataMember]</code> make the wire shape explicit and stable, so only the three primary values travel and the rest are recomputed on the other side. Constructor-plus-<code>init</code> validation makes an invalid instance unconstructable, which is the same &quot;validate at the boundary of the type&quot; discipline the value objects of <a href="group-02-domain-building-blocks.html">Chapter 2</a> use.</li>
-          <li><strong>Where it&#39;s used</strong>: embedded in <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a>; serialized whole into the <code>X-Pagination</code> response header by <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:172</code>), which also reads <code>TotalItemCount</code> to decide whether an export was truncated (<code>EntityControllerBase.cs:324</code>). Produced by <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>.</li>
+          <li><strong>Where it&#39;s used</strong>: embedded in <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a>; serialized whole into the <code>X-Pagination</code> response header by <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:187</code>), which also reads <code>TotalItemCount</code> to decide whether a CSV export was truncated (<code>EntityControllerBase.cs:340</code>). Built by <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> in one private helper (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:555</code>, called at <code>:332</code>).</li>
           </ul>
           <h3 id="propertyreader">PropertyReader</h3>
           <blockquote>
@@ -493,31 +598,32 @@
           <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Exceptions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Exceptions/DomainInvariantViolationException.cs:9</code> · Level 1 · class</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the concrete exception thrown when a domain invariant is violated in a context where the <a href="#result"><code>Result</code></a> pattern cannot be used, the example the doc comment names being an aggregate root constructor called by EF Core materialization, where the call stack is framework-owned and there is no <code>Result</code> channel to return through.</li>
+          <li><strong>What it is</strong>: the concrete exception for a domain invariant violated in a context where the <a href="#result"><code>Result</code></a> pattern cannot be used, the example the doc comment names being an aggregate root constructor called by EF Core materialization, where the call stack is framework-owned and there is no <code>Result</code> channel to return through.</li>
           <li><strong>Depends on</strong>: <a href="#domainexception"><code>DomainException</code></a> (Level 0).</li>
           <li><strong>Concept</strong>: this is the sanctioned safety valve, and the doc comment ranks it explicitly (<code>DomainInvariantViolationException.cs:3-8</code>): prefer returning <a href="#result"><code>Result</code></a> with an <a href="#error"><code>Error</code></a><code>.Invariant</code> for normal business-rule violations. <code>[Rubric §2, Design Patterns]</code> (§2 flags exceptions used as control flow; this type is the documented last resort, not the default path). Because it derives from <a href="#domainexception"><code>DomainException</code></a>, it inherits the edge behavior for free: <a href="group-12-api-hosting-mapping.html#domainexceptionhandler"><code>DomainExceptionHandler</code></a> maps it to HTTP 400 plus Problem Details without knowing this subclass exists.</li>
           <li><strong>Walkthrough</strong>: three <code>public</code> constructors delegating to the base, matching the standard exception set: parameterless (<code>DomainInvariantViolationException.cs:12-13</code>), message (<code>DomainInvariantViolationException.cs:17-18</code>), and message plus inner exception (<code>DomainInvariantViolationException.cs:23-24</code>). The class is <code>public</code> and <strong>not</strong> <code>sealed</code>, so a consuming module can derive a more specific invariant exception and still land on the same edge handling.</li>
           <li><strong>Why it&#39;s built this way</strong>: making the concrete type public and unsealed while keeping the base abstract with <code>protected</code> constructors gives a two-level shape: one root the edge can catch as a category, one ready-made concrete type nobody has to define, and room underneath it for module-specific refinements.</li>
-          <li><strong>Where it&#39;s used</strong>: thrown from invariant checks that run in contexts with no <code>Result</code> channel, notably entity constructors reached through EF materialization (the domain building blocks of <a href="group-02-domain-building-blocks.html">Chapter 2</a>); caught as a <a href="#domainexception"><code>DomainException</code></a> by the API middleware of <a href="group-12-api-hosting-mapping.html">Chapter 12</a>.</li>
+          <li><strong>Where it&#39;s used</strong>: caught as a <a href="#domainexception"><code>DomainException</code></a> by the API middleware of <a href="group-12-api-hosting-mapping.html">Chapter 12</a>. Read that as <em>capability</em>, not traffic: this is the honest state of the exception path, and it is worth internalizing because it is the strongest evidence that the Result pattern really is the default.</li>
+          <li><strong>Caveats / not-in-source</strong>: there is <strong>no production <code>throw</code> site</strong> for this type anywhere in the workspace today. Every reference outside its own file is a test that needs a sample <code>DomainException</code> to drive the handler chain or a UI error path (for example <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Middleware/ExceptionHandlerTests.cs</code> and <code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Exceptions/DomainExceptionTests.cs</code>). The EF-materialization scenario the doc comment describes is the <em>reason the type exists</em>, not a path the current code takes.</li>
           </ul>
           <h3 id="error">Error</h3>
           <blockquote>
           <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:15</code> · Level 1 · record</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the immutable error value carried by <a href="#result"><code>Result</code></a>. Every error has a machine-readable <code>Code</code>, a human-readable <code>Message</code>, an <a href="#errortype"><code>ErrorType</code></a> that drives the HTTP status at the edge, and optional <code>Source</code> / <code>Target</code> context.</li>
+          <li><strong>What it is</strong>: the immutable error value carried by <a href="#result"><code>Result</code></a>. Every error has a machine-readable <code>Code</code>, a human-readable <code>Message</code>, an <a href="#errortype"><code>ErrorType</code></a> that drives the status at the edge, and optional <code>Source</code> / <code>Target</code> context.</li>
           <li><strong>Depends on</strong>: <a href="#errortype"><code>ErrorType</code></a> (Level 0). No externals beyond the BCL.</li>
           <li><strong>Concept introduced, the error as a value.</strong> <code>[Rubric §2, Design Patterns]</code> (§2 assesses idiomatic patterns that solve real problems): an <code>Error</code> is a <strong>value</strong>, not an exception. It can be constructed, put in a list, threaded through a pipeline, merged with other errors, and inspected, all without a throw, a stack capture, or an unwind. <code>[Rubric §9, API &amp; Contract Design]</code> (§9 assesses consistent, standardized error responses): the triple of <code>Code</code> (for programmatic branching by the client), <code>Message</code> (for humans), and <a href="#errortype"><code>ErrorType</code></a> (for the status selector) gives every endpoint a uniform error shape with no controller deciding how to format anything.</li>
           <li><strong>Walkthrough</strong><ul>
           <li>The type is a positional <code>record</code> with five components (<code>Error.cs:15-20</code>): <code>Code</code>, <code>Message</code>, <code>Type</code>, and the two optional context strings <code>Source</code> and <code>Target</code>, both defaulting to <code>null</code>. Being a record it gets value equality, so two errors with the same components compare equal, which is what makes error assertions in tests trivial.</li>
           <li>Three pre-built <code>static readonly</code> singletons for the ubiquitous cases (<code>Error.cs:23,26,29</code>): <code>Error.NotFound</code>, <code>Error.AlreadyDeleted</code>, and <code>Error.InvalidEntityField</code>. Each is itself built through a factory method, so the singletons cannot drift from the factory contract.</li>
-          <li><strong>Eight factory methods</strong>, one per <a href="#errortype"><code>ErrorType</code></a> member (<code>Error.cs:37,46,55,64,73,82,91,100</code>): <code>Validation</code>, <code>Invariant</code>, <code>NotFoundError</code>, <code>Conflict</code>, <code>Unauthorized</code>, <code>Forbidden</code>, <code>UnprocessableEntity</code>, and <code>Failure</code>. Each hard-codes the matching <code>ErrorType</code>, so a caller cannot pair the wrong classification with a code. Note the one naming wrinkle: the factory is <code>NotFoundError</code> rather than <code>NotFound</code> because the static field already owns that name and C# forbids a field and a method sharing one.</li>
-          <li>Two <code>with</code>-expression helpers (<code>Error.cs:106-107,112-113</code>): <code>WithSource(string)</code> and <code>WithTarget(string)</code> each return a copy with one component replaced, which is how a generic framework error gets enriched with caller context without being mutated.</li>
-          <li>The singletons are <code>record</code>s, so they are also freely refinable at the call site: <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> takes <code>Error.InvalidEntityField with { Message = ..., Source = ..., Target = ... }</code> to report an unknown keyset sort column (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:379-384</code>), keeping the shared <code>Code</code> while specializing everything else.</li>
+          <li><strong>Nine factory methods</strong>, one per <a href="#errortype"><code>ErrorType</code></a> member (<code>Error.cs:37,46,55,64,73,82,91,100,114</code>): <code>Validation</code>, <code>Invariant</code>, <code>NotFoundError</code>, <code>Conflict</code>, <code>Unauthorized</code>, <code>Forbidden</code>, <code>UnprocessableEntity</code>, <code>Failure</code>, and <code>Unexpected</code>. Each hard-codes the matching <code>ErrorType</code>, so a caller cannot pair the wrong classification with a code. Two details worth carrying: the factory is <code>NotFoundError</code> rather than <code>NotFound</code> because the static field already owns that name and C# forbids a field and a method sharing one; and <code>Unexpected</code> carries a written usage policy on the factory itself (<code>Error.cs:103-108</code>), namely that it is for a genuine server-side fault the caller cannot fix by changing the request, with business-rule violations routed to <code>Invariant</code> or <code>Failure</code>.</li>
+          <li>Two <code>with</code>-expression helpers (<code>Error.cs:120-121,126-127</code>): <code>WithSource(string)</code> and <code>WithTarget(string)</code> each return a copy with one component replaced, which is how a generic framework error gets enriched with caller context without being mutated.</li>
+          <li>The singletons are <code>record</code>s, so they are also freely refinable at the call site: <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> takes <code>Error.InvalidEntityField with { Message = ..., Source = ..., Target = ... }</code> to report an unknown keyset sort column (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:505-511</code>), keeping the shared <code>Code</code> while specializing everything else.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: modeling an expected failure as data rather than as control flow is the whole point of <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a>. The pre-built singletons keep the common cases allocation-free, and the factory methods fix the <code>Code</code> to <code>ErrorType</code> pairing at the point of creation so no mapping table is needed anywhere else in the codebase.</li>
-          <li><strong>Where it&#39;s used</strong>: carried by every failing <a href="#result"><code>Result</code></a> in both repos; <a href="group-06-validation.html#validationfailureextensions"><code>ValidationFailureExtensions</code></a> converts each FluentValidation failure into an <code>Error.Validation(...)</code> carrying the rule&#39;s code, message, source, and property name (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Extensions/ValidationFailureExtensions.cs:19-21</code>); <a href="group-12-api-hosting-mapping.html#apicontrollerbase"><code>ApiControllerBase</code></a> reads the first error&#39;s <code>Type</code> for the status and renders the whole list into the Problem Details <code>errors</code> extension, optionally through an <a href="group-12-api-hosting-mapping.html#ierrorlocalizer"><code>IErrorLocalizer</code></a> (<code>ApiControllerBase.cs:38,47-48</code>); <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a> serializes the list as the <code>errors</code> array.</li>
+          <li><strong>Where it&#39;s used</strong>: carried by every failing <a href="#result"><code>Result</code></a> in both repos; <a href="group-06-validation.html#validationfailureextensions"><code>ValidationFailureExtensions</code></a> converts each FluentValidation failure into an <code>Error.Validation(...)</code> carrying the rule&#39;s code, message, source, and property name (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Extensions/ValidationFailureExtensions.cs:21</code>); <a href="group-12-api-hosting-mapping.html#apicontrollerbase"><code>ApiControllerBase</code></a> renders the whole list into the Problem Details <code>errors</code> extension, optionally through an <a href="group-12-api-hosting-mapping.html#ierrorlocalizer"><code>IErrorLocalizer</code></a> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:57-58</code>, projection at <code>ErrorHttpMapping.cs:61-69</code>); <a href="#errortypeseverity"><code>ErrorTypeSeverity</code></a> picks one of them to classify the whole failure; and <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a> serializes the list as the <code>errors</code> array.</li>
           </ul>
           <h3 id="keysetcollectionresultt">KeysetCollectionResult&lt;T&gt;</h3>
           <blockquote>
@@ -533,8 +639,8 @@
           <li>One added property: <code>string? NextCursor { get; init; }</code> tagged <code>[DataMember(Order = 2)]</code> so it serializes after <code>Items</code> (<code>KeysetPagination.cs:106-107</code>). Null means this page is the last one. The doc comment instructs consumers to treat it as opaque and warns that its encoding is versioned (<code>KeysetPagination.cs:102-105</code>).</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: nullable-means-last is what lets the repository skip a count entirely. It fetches <code>PageSize + 1</code> rows as a next-page probe, drops the extra row, and only then emits a cursor (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:408-423</code>); the comment there states the trade explicitly, that a one-row probe is cheaper and more honest than a <code>COUNT</code> over the whole set. See <a href="https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html" target="_blank" rel="noopener">ADR-055</a>.</li>
-          <li><strong>Where it&#39;s used</strong>: the success payload of <code>GetPageByCursorAsync</code>, declared on <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> as <code>Task&lt;Result&lt;KeysetCollectionResult&lt;TEntity&gt;&gt;&gt;</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:207</code>) and returned by <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> (<code>EFReadRepository.cs:425</code>). Note the composition: the <em>outcome</em> is a <a href="#result"><code>Result</code></a>, the <em>payload</em> is this envelope, which is the standard pairing throughout the codebase.</li>
+          <li><strong>Why it&#39;s built this way</strong>: nullable-means-last is what lets the repository skip a count entirely. It fetches <code>PageSize + 1</code> rows as a next-page probe, drops the extra row, and only then emits a cursor (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:535-552</code>); the comment there states the trade explicitly, that a one-row probe is cheaper and more honest than a <code>COUNT</code> over the whole set (<code>EFReadRepository.cs:536-537</code>). See <a href="https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html" target="_blank" rel="noopener">ADR-055</a>.</li>
+          <li><strong>Where it&#39;s used</strong>: the success payload of <code>GetPageByCursorAsync</code>, declared on <a href="group-07-persistence-ef-core.html#ientityqueriertentity-tidentifiertype"><code>IEntityQuerier&lt;TEntity, TIdentifierType&gt;</code></a> as <code>Task&lt;Result&lt;KeysetCollectionResult&lt;TEntity&gt;&gt;&gt;</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:316</code>) and returned by <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> (<code>EFReadRepository.cs:552</code>). Note the composition: the <em>outcome</em> is a <a href="#result"><code>Result</code></a>, the <em>payload</em> is this envelope, which is the standard pairing throughout the codebase.</li>
           </ul>
           <h3 id="pagedcollectionresultt">PagedCollectionResult&lt;T&gt;</h3>
           <blockquote>
@@ -551,41 +657,72 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: <code>required</code> plus a null-checking constructor covers both construction routes (object initializer and direct constructor call), and the explicit <code>Order = 2</code> keeps the wire shape deterministic across the base/derived split, which member-declaration order alone would not guarantee.</li>
-          <li><strong>Where it&#39;s used</strong>: the payload of every offset-paged read. <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> returns <code>ActionResult&lt;PagedCollectionResult&lt;TEntityDTO&gt;&gt;</code> from its list action and copies the metadata into the <code>X-Pagination</code> header (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:144,172</code>); <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> builds it, and the notification read handlers in <code>MMCA.Common.Application</code> return it too.</li>
+          <li><strong>Where it&#39;s used</strong>: the payload of every offset-paged read, and a genuinely <em>shared</em> contract rather than a server-only shape. The controller surface declares <code>Task&lt;ActionResult&lt;PagedCollectionResult&lt;TEntityDTO&gt;&gt;&gt;</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/IEntityControllerBase.cs:43</code>, implemented at <code>EntityControllerBase.cs:157</code>) and copies the metadata into the <code>X-Pagination</code> header (<code>EntityControllerBase.cs:187</code>), while the Blazor client deserializes the very same type (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:73,111</code>), so there is no hand-written mirror DTO to drift. <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> builds it (<code>EntityQueryService.cs:338-342</code>), and the notification read handlers in <code>MMCA.Common.Application</code> return it too.</li>
+          </ul>
+          <h3 id="errortypeseverity">ErrorTypeSeverity</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorTypeSeverity.cs:30</code> · Level 2 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: the single severity ranking over <a href="#errortype"><code>ErrorType</code></a>, and the helper that picks the one representative <a href="#error"><code>Error</code></a> from a failure carrying several. Every transport edge classifies an aggregate failure through this one table.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <a href="#errortype"><code>ErrorType</code></a> (Level 0) and <a href="#error"><code>Error</code></a> (Level 1). Externals: <code>System.Collections.Frozen.FrozenDictionary</code> (BCL).</p>
+          </li>
+          <li><p><strong>Concept introduced, ranking an aggregate failure instead of taking its first error.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (§9 assesses consistent, correct error responses across endpoints) and <code>[Rubric §7, Microservices Readiness]</code> (§7 assesses whether a capability behaves identically once a module is extracted behind a network boundary). Here is the problem this type exists to solve, and it is worth understanding before the code. <a href="#result"><code>Result.Combine</code></a> aggregates errors in <strong>evaluation order</strong>, so a domain factory that checks five fields produces a list ordered by the order the checks happened to run. If the edge classified the whole failure by the <em>first</em> error in that list, an incidental <code>Validation</code> failure could downgrade a real <code>Forbidden</code> or <code>Unexpected</code> in the same list to a 400: the response status would depend on the order somebody wrote the guard clauses. Ranking the <em>categories</em> makes the classification independent of ordering.</p>
+          <p>The second half of the concept is <em>where</em> the ranking lives. It is in <code>MMCA.Common.Shared</code>, the innermost layer, and not inside <code>MMCA.Common.API</code>, because two edges consume it: HTTP and gRPC. Putting the table in one presentation package would leave the other edge to invent its own rule, and the type&#39;s own doc comment names exactly that outcome as the thing to avoid (<code>ErrorTypeSeverity.cs:11-15</code>). This is the small, concrete version of a rule the whole framework follows: anything two transports must agree on belongs below both of them.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong></p>
+          <ul>
+          <li><code>Ranks</code>, a <code>private static readonly FrozenDictionary&lt;ErrorType, int&gt;</code> built once from a dictionary literal (<code>ErrorTypeSeverity.cs:37-48</code>). The ranking, most to least severe: <code>Unexpected</code> 70, <code>Unauthorized</code> 60, <code>Forbidden</code> 50, <code>Conflict</code> 40, <code>NotFound</code> 30, <code>UnprocessableEntity</code> 20, and then <code>Invariant</code>, <code>Validation</code>, and <code>Failure</code> sharing one rank of 10 (<code>ErrorTypeSeverity.cs:39-47</code>). The reasoning for each rung is written onto the type itself as a numbered list (<code>ErrorTypeSeverity.cs:16-25</code>): the server being broken outranks the caller not having proven who they are, which outranks the caller being known but not allowed, and so on down to the three categories the caller can fix by changing the request. <code>FrozenDictionary</code> is the chosen shape because the table is fixed at startup and read on every failure path (<code>ErrorTypeSeverity.cs:33-35</code>).</li>
+          <li><code>Rank(ErrorType)</code> (<code>ErrorTypeSeverity.cs:57</code>) is a one-line <code>GetValueOrDefault(errorType, 0)</code>. The <strong>zero default is load-bearing</strong>, and the doc comment says why (<code>ErrorTypeSeverity.cs:50-53</code>): a category added to <a href="#errortype"><code>ErrorType</code></a> without a rank here ranks <em>lowest</em>, so a new member can never silently outrank a real 403 or 500. The failure mode of forgetting to update this table is a too-low status, which is visible, not a too-high one, which would be a security-shaped surprise.</li>
+          <li><code>MostSevere(IReadOnlyList&lt;Error&gt;)</code> (<code>ErrorTypeSeverity.cs:69-96</code>) selects the representative error. It null-checks (<code>ErrorTypeSeverity.cs:71</code>) and rejects an empty list outright with <code>ArgumentException</code> (<code>ErrorTypeSeverity.cs:73-78</code>), because a failure with no errors is not classifiable and the <a href="#result"><code>Result</code></a> factories already make that state unreachable. It then seeds from <code>errors[0]</code> (<code>ErrorTypeSeverity.cs:80-81</code>) and scans forward keeping strictly greater ranks (<code>ErrorTypeSeverity.cs:85-93</code>). The strict <code>&gt;</code> is what implements &quot;ties keep the earliest error&quot;, so a list of same-rank errors behaves exactly as a positional selection would, which is the compatibility property that made the change safe to make.</li>
+          <li>The scan is a hand-written index loop with a comment defending it (<code>ErrorTypeSeverity.cs:83-84</code>): a LINQ <code>MaxBy</code> would allocate an enumerator plus a comparer closure on a path that runs on <em>every</em> failure response. That is <code>[Rubric §12, Performance &amp; Scalability]</code> reasoning applied at the right scale, a hot path, with the trade written down rather than assumed.</li>
+          </ul>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a> records the decision and its history. Only the <em>status</em> is ranked: every error still travels in the payload, in the Problem Details <code>errors</code> array on HTTP (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69</code>) and in the gRPC trailers on the other edge. The ranking answers exactly one question, &quot;what is this failure, in one word&quot;, and answers it the same way on both transports.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: HTTP resolves a status through it, <code>ErrorHttpMapping.GetStatusCode(IReadOnlyList&lt;Error&gt;)</code> calling <code>MostSevere</code> (<code>ErrorHttpMapping.cs:50-51</code>) on behalf of <a href="group-12-api-hosting-mapping.html#apicontrollerbase"><code>ApiControllerBase</code></a><code>.HandleFailure</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:48</code>). gRPC does the same in <a href="group-13-grpc-contracts.html#resultgrpcextensions"><code>ResultGrpcExtensions</code></a><code>.ToRpcException</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:117</code>, falling back to <code>Internal</code> for the impossible empty case). The UI uses the other half of the type: <a href="group-15-common-ui-framework.html#resultuiextensions"><code>ResultUiExtensions</code></a><code>.LocalizedErrorMessages</code> orders the messages it shows a user by <code>Rank</code> descending, so the most severe error is read first (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:155</code>).</p>
+          </li>
           </ul>
           <h3 id="result">Result</h3>
           <blockquote>
-          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:18</code> · Level 2 · class</p>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:19</code> · Level 2 · class</p>
           </blockquote>
           <ul>
-          <li><p><strong>What it is</strong>: the non-generic railway-oriented outcome type, either a success (no errors) or a failure carrying one or more <a href="#error"><code>Error</code></a> instances. The non-generic form covers void-equivalent operations (invariant checks, deletes, commands with nothing to return); the sealed generic <code>Result&lt;T&gt;</code> in the same file (<code>Result.cs:137</code>) adds a <code>Value</code> on the success path and the functional combinators.</p>
+          <li><p><strong>What it is</strong>: the non-generic railway-oriented outcome type, either a success (no errors) or a failure carrying one or more <a href="#error"><code>Error</code></a> instances. The non-generic form covers void-equivalent operations (invariant checks, deletes, commands with nothing to return); the sealed generic <code>Result&lt;T&gt;</code> in the same file (<code>Result.cs:204</code>) adds a <code>Value</code> on the success path and the full combinator set.</p>
           </li>
-          <li><p><strong>Depends on</strong>: <a href="#error"><code>Error</code></a> (Level 1) and <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a>, which is attached to both classes by a type-level <code>[JsonConverter(typeof(ResultJsonConverterFactory))]</code> (<code>Result.cs:17,136</code>). Externals: <code>System.Collections.Generic</code>, <code>System.Text.Json.Serialization</code> (BCL).</p>
+          <li><p><strong>Depends on</strong>: <a href="#error"><code>Error</code></a> (Level 1) and <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a>, which is attached to both classes by a type-level <code>[JsonConverter(typeof(ResultJsonConverterFactory))]</code> (<code>Result.cs:18,203</code>). Externals: <code>System.Collections.Generic</code>, <code>System.Text.Json.Serialization</code>, <code>System.Diagnostics.CodeAnalysis</code> (BCL).</p>
           </li>
           <li><p><strong>Concept introduced, railway-oriented programming and the combinators.</strong> <code>[Rubric §2, Design Patterns]</code> (the Result pattern as the codebase&#39;s canonical error-flow mechanism, not an exception crutch), <code>[Rubric §9, API &amp; Contract Design]</code> (one structured failure shape behind every endpoint), and <code>[Rubric §12, Performance &amp; Scalability]</code> in the allocation choices below.</p>
-          <p>The <strong>railway metaphor</strong>: picture two parallel tracks, success and failure. Each step takes the current result as input; if it is already a failure the step is skipped and the train stays on the failure track, and if it is a success the step runs and may stay on the success track or switch. Control flows forward with no nested <code>try</code>/<code>catch</code> and no <code>if (result.IsFailure)</code> at every line. <a href="#errortype"><code>ErrorType</code></a> classifies the failure, <a href="#error"><code>Error</code></a> carries it, and <code>Result</code> is the envelope that moves it.</p>
+          <p>The <strong>railway metaphor</strong>: picture two parallel tracks, success and failure. Each step takes the current result as input; if it is already a failure the step is skipped and the train stays on the failure track, and if it is a success the step runs and may stay on the success track or switch. Control flows forward with no nested <code>try</code>/<code>catch</code> and no <code>if (result.IsFailure)</code> at every line. <a href="#errortype"><code>ErrorType</code></a> classifies the failure, <a href="#error"><code>Error</code></a> carries it, <a href="#errortypeseverity"><code>ErrorTypeSeverity</code></a> ranks it when there are several, and <code>Result</code> is the envelope that moves it.</p>
           <p>The non-generic <code>Result</code>:</p>
           <ul>
-          <li>Two shared instances back the cheap paths: <code>CachedSuccess</code> (<code>Result.cs:20</code>) and an empty <code>NoErrors</code> array (<code>Result.cs:21</code>). Errors live in a lazily allocated <code>List&lt;Error&gt;? _errors</code> (<code>Result.cs:25</code>), and the comment above it states the reason (<code>Result.cs:23-24</code>): the success path, which is the overwhelming majority of results created per request, never pays for a list allocation.</li>
-          <li><code>Errors</code> returns the list or falls back to the shared empty array (<code>Result.cs:28</code>); <code>IsSuccess</code> is <code>_errors is null || _errors.Count == 0</code> (<code>Result.cs:31</code>) and <code>IsFailure</code> is its negation (<code>Result.cs:34</code>). Success is therefore <em>derived from the error count</em>, not stored, which is the fact the next bullet exists to protect.</li>
-          <li><code>protected void AddErrors(IEnumerable&lt;Error&gt; errors)</code> (<code>Result.cs:38</code>) is the only mutation point, and it null-coalescing-assigns the list on first use.</li>
-          <li><code>Result.Success()</code> (<code>Result.cs:43</code>) returns the shared singleton; <code>Result.Success&lt;T&gt;(value)</code> (<code>Result.cs:49</code>) wraps a value in a new <code>Result&lt;T&gt;</code>.</li>
-          <li>Four failure factories: <code>Failure&lt;T&gt;(IEnumerable&lt;Error&gt;)</code> (<code>Result.cs:55</code>), <code>Failure(IEnumerable&lt;Error&gt;)</code> (<code>Result.cs:64-70</code>), <code>Failure(Error)</code> (<code>Result.cs:75-76</code>), and <code>Failure&lt;T&gt;(Error)</code> (<code>Result.cs:82-83</code>), the single-error overloads delegating to the collection ones.</li>
-          <li><code>private protected static void ThrowIfNoErrors(Result result)</code> (<code>Result.cs:88-96</code>) is the guard that makes the derived-success design safe. Because <code>IsSuccess</code> is computed from the error count, an accidentally empty collection handed to <code>Failure(...)</code> would otherwise produce a <strong>success</strong> from a call that explicitly asked for a failure, so the guard throws <code>ArgumentException</code> instead. <code>Result.Failure(IEnumerable&lt;Error&gt;)</code> calls it after adding (<code>Result.cs:68</code>), and so does <code>Result&lt;T&gt;</code>&#39;s failure constructor (<code>Result.cs:153</code>).</li>
-          <li><code>Result.Combine(params ReadOnlySpan&lt;Result&gt; results)</code> (<code>Result.cs:105-126</code>) is the aggregate-all-failures combinator: it runs through every input, collects <em>all</em> errors into one list, and returns success only when every input succeeded (<code>Result.cs:114-125</code>). It throws <code>ArgumentException</code> on an empty span, since combining nothing is a logic bug (<code>Result.cs:107-110</code>). Two allocation details: <code>params ReadOnlySpan&lt;Result&gt;</code> means the common call site passes a stack-allocated span rather than an array, and <code>allErrors</code> is only allocated once a failure is actually seen (<code>Result.cs:112,118</code>).</li>
+          <li>Two shared instances back the cheap paths: <code>CachedSuccess</code> (<code>Result.cs:21</code>) and an empty <code>NoErrors</code> array (<code>Result.cs:22</code>). Errors live in a lazily allocated <code>List&lt;Error&gt;? _errors</code> (<code>Result.cs:26</code>), and the comment above it states the reason (<code>Result.cs:24-25</code>): the success path, which is the overwhelming majority of results created per request, never pays for a list allocation.</li>
+          <li><code>Errors</code> returns the list or falls back to the shared empty array (<code>Result.cs:29</code>); <code>IsSuccess</code> is <code>_errors is null || _errors.Count == 0</code> (<code>Result.cs:32</code>) and <code>IsFailure</code> is its negation (<code>Result.cs:35</code>). Success is therefore <em>derived from the error count</em>, not stored, which is the fact the guard two bullets down exists to protect.</li>
+          <li><strong>Implicit lifting.</strong> <code>public static implicit operator Result(Error error)</code> (<code>Result.cs:43</code>) lets a guard clause write <code>return someError;</code> with no factory named, and <code>FromError</code> (<code>Result.cs:49-53</code>) is the named alternate the analyzers require for that operator. The generic type has the same pair plus one more: <code>Error</code> to <code>Result&lt;T&gt;</code> (<code>Result.cs:233-237</code>) and, on the happy path, <code>T</code> to <code>Result&lt;T&gt;</code> (<code>Result.cs:249</code>) so a handler writes <code>return theValue;</code>. Both operators carry a <code>[SuppressMessage]</code> with the reasoning written into the <code>Justification</code> (<code>Result.cs:229-232,245-248</code>), which is worth reading as an example of how this codebase documents an analyzer exception at the point of the exception.</li>
+          <li><code>protected void AddErrors(IEnumerable&lt;Error&gt; errors)</code> (<code>Result.cs:57</code>) is the only mutation point, and it null-coalescing-assigns the list on first use.</li>
+          <li><code>Result.Success()</code> (<code>Result.cs:62</code>) returns the shared singleton; <code>Result.Success&lt;T&gt;(value)</code> (<code>Result.cs:68</code>) wraps a value in a new <code>Result&lt;T&gt;</code>.</li>
+          <li>Four failure factories: <code>Failure&lt;T&gt;(IEnumerable&lt;Error&gt;)</code> (<code>Result.cs:74</code>), <code>Failure(IEnumerable&lt;Error&gt;)</code> (<code>Result.cs:83-89</code>), <code>Failure(Error)</code> (<code>Result.cs:94-95</code>), and <code>Failure&lt;T&gt;(Error)</code> (<code>Result.cs:101-102</code>), the single-error overloads delegating to the collection ones.</li>
+          <li><code>private protected static void ThrowIfNoErrors(Result result)</code> (<code>Result.cs:107-115</code>) is the guard that makes the derived-success design safe. Because <code>IsSuccess</code> is computed from the error count, an accidentally empty collection handed to <code>Failure(...)</code> would otherwise produce a <strong>success</strong> from a call that explicitly asked for a failure, so the guard throws <code>ArgumentException</code> instead. <code>Result.Failure(IEnumerable&lt;Error&gt;)</code> calls it after adding (<code>Result.cs:87</code>), and so does <code>Result&lt;T&gt;</code>&#39;s failure constructor (<code>Result.cs:220</code>).</li>
+          <li><code>Result.Combine(params ReadOnlySpan&lt;Result&gt; results)</code> (<code>Result.cs:124-145</code>) is the aggregate-all-failures combinator: it walks every input, collects <em>all</em> errors into one list, and returns success only when every input succeeded (<code>Result.cs:133-144</code>). It throws <code>ArgumentException</code> on an empty span, since combining nothing is a logic bug (<code>Result.cs:126-129</code>). Two allocation details: <code>params ReadOnlySpan&lt;Result&gt;</code> means the common call site passes a stack-allocated span rather than an array, and <code>allErrors</code> is only allocated once a failure is actually seen (<code>Result.cs:131,137</code>).</li>
+          <li>Three combinators on the valueless type so a void-equivalent step composes the same way: <code>Match</code> (<code>Result.cs:155-161</code>), <code>OnFailure</code>, which runs a side effect on the error list and returns the same instance so it can sit inline in a chain (<code>Result.cs:169-179</code>), and <code>Bind</code> (<code>Result.cs:187-191</code>).</li>
           </ul>
-          <p>The generic <code>Result&lt;T&gt;</code> (<code>Result.cs:137</code>):</p>
+          <p>The generic <code>Result&lt;T&gt;</code> (<code>Result.cs:204</code>):</p>
           <ul>
-          <li><code>sealed class Result&lt;T&gt; : Result</code> adding <code>public T? Value { get; }</code> (<code>Result.cs:140</code>), which is <code>null</code> when the result is a failure.</li>
-          <li>Two <code>internal</code> constructors (<code>Result.cs:144</code> for success, <code>Result.cs:150-154</code> for failure) so only the base class&#39;s static factories can produce an instance. Application code can never write <code>new Result&lt;Order&gt;(...)</code>.</li>
-          <li><code>Match&lt;TResult&gt;(onSuccess, onFailure)</code> (<code>Result.cs:165-173</code>) terminates the railway by collapsing both tracks into one value; both delegates are null-checked (<code>Result.cs:167-168</code>) and exactly one branch runs. This is what a controller action uses to turn a result into an <code>IActionResult</code> in one expression.</li>
-          <li><code>Map&lt;TOut&gt;(mapper)</code> (<code>Result.cs:181-185</code>) transforms the success value and propagates the errors untouched on failure, so a DTO projection needs no <code>if</code>.</li>
-          <li><code>BindAsync&lt;TOut&gt;(binder)</code> (<code>Result.cs:194-198</code>) is the monadic bind for async continuations: on failure it short-circuits and returns the original errors <em>without invoking</em> <code>binder</code>, and otherwise it awaits the next operation (which itself returns a <code>Result&lt;TOut&gt;</code>) with <code>ConfigureAwait(false)</code>.</li>
+          <li><code>sealed class Result&lt;T&gt; : Result</code> adding <code>public T? Value { get; }</code> (<code>Result.cs:207</code>), which is <code>null</code> when the result is a failure.</li>
+          <li>Two <code>internal</code> constructors (<code>Result.cs:211</code> for success, <code>Result.cs:217-221</code> for failure) so only the base class&#39;s static factories can produce an instance. Application code can never write <code>new Result&lt;Order&gt;(...)</code>.</li>
+          <li><code>Match&lt;TResult&gt;(onSuccess, onFailure)</code> (<code>Result.cs:260-268</code>) terminates the railway by collapsing both tracks into one value; both delegates are null-checked and exactly one branch runs. <code>MatchAsync</code> (<code>Result.cs:355-365</code>) is the awaiting counterpart with the same guarantee.</li>
+          <li><code>Map&lt;TOut&gt;(mapper)</code> (<code>Result.cs:276-280</code>) transforms the success value and propagates the errors untouched on failure, so a DTO projection needs no <code>if</code>.</li>
+          <li><code>Bind&lt;TOut&gt;(binder)</code> (<code>Result.cs:302-306</code>) and <code>BindAsync&lt;TOut&gt;(binder)</code> (<code>Result.cs:289-293</code>) are the monadic bind, sync and async: on failure they short-circuit and return the original errors <em>without invoking</em> <code>binder</code>.</li>
+          <li><code>Tap(action)</code> (<code>Result.cs:314-324</code>) runs a side effect on the success value and returns the same instance, and <code>Ensure(predicate, error)</code> (<code>Result.cs:334-345</code>) fails an otherwise-successful chain with a supplied <a href="#error"><code>Error</code></a> when the value does not satisfy a predicate, leaving an already-failed result untouched and never running the predicate.</li>
+          <li>Every combinator short-circuits on failure, at <code>Result.cs:279</code>, <code>:292</code>, <code>:305</code>, and <code>:339-342</code>. That uniformity is the property that makes them composable: you can read a chain top to bottom and know that nothing after the first failure ran.</li>
           </ul>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a> is the decision record. Expected failures are values, not exceptions, because an exception is invisible in the signature, easy to forget to catch, expensive on the throw path, and conflates &quot;we will not do this&quot; with &quot;the process is broken&quot;. The combinator set was kept to three because they cover the three real shapes (terminate, transform, chain), and <code>Combine</code> covers the fourth need, aggregate validation, without forcing callers to interleave checks by hand. Keeping the value-bearing constructors <code>internal</code> and routing everything through the factories plus <code>ThrowIfNoErrors</code> is what makes the central invariant hold by construction: a result is always either a clean success or a non-empty failure, never a half-built object.</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a> is the decision record. Expected failures are values, not exceptions, because an exception is invisible in the signature, easy to forget to catch, expensive on the throw path, and conflates &quot;we will not do this&quot; with &quot;the process is broken&quot;. Keeping the value-bearing constructors <code>internal</code> and routing everything through the factories plus <code>ThrowIfNoErrors</code> is what makes the central invariant hold by construction: a result is always either a clean success or a non-empty failure, never a half-built object. The implicit conversions exist so that discipline costs nothing at the call site.</p>
           </li>
-          <li><p><strong>Where it&#39;s used</strong>: everywhere. Value-object and entity factories return it, for example <a href="group-02-domain-building-blocks.html#address"><code>Address</code></a>&#39;s <code>Create</code> gathers its per-field checks with <code>Result.Combine</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Address.cs:77</code>) as does <a href="group-02-domain-building-blocks.html#addressinvariants"><code>AddressInvariants</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:40</code>); every CQRS handler in <a href="group-05-cqrs-pipeline.html">Chapter 5</a> threads one through the decorator pipeline; every controller action in <a href="group-12-api-hosting-mapping.html">Chapter 12</a> unwraps one; the repository contract of <a href="group-07-persistence-ef-core.html">Chapter 7</a> returns <code>Result&lt;KeysetCollectionResult&lt;TEntity&gt;&gt;</code> for a keyset page; and <a href="group-13-grpc-contracts.html#resultgrpcextensions"><code>ResultGrpcExtensions</code></a> carries one across a process boundary in <a href="group-13-grpc-contracts.html">Chapter 13</a>.</p>
+          <li><p><strong>Where it&#39;s used</strong>: as a <em>return type</em>, everywhere. Value-object and entity factories return it, for example <a href="group-02-domain-building-blocks.html#address"><code>Address</code></a><code>.Create</code> gathers its per-field checks with <code>Result.Combine</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Address.cs:77</code>), as does <a href="group-02-domain-building-blocks.html#addressinvariants"><code>AddressInvariants</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:40</code>); every CQRS handler in <a href="group-05-cqrs-pipeline.html">Chapter 5</a> threads one through the decorator pipeline; every controller action in <a href="group-12-api-hosting-mapping.html">Chapter 12</a> unwraps one; the repository contract of <a href="group-07-persistence-ef-core.html">Chapter 7</a> returns <code>Result&lt;KeysetCollectionResult&lt;TEntity&gt;&gt;</code> for a keyset page; and <a href="group-13-grpc-contracts.html#resultgrpcextensions"><code>ResultGrpcExtensions</code></a> carries one across a process boundary in <a href="group-13-grpc-contracts.html">Chapter 13</a>.</p>
+          </li>
+          <li><p><strong>Caveats / not-in-source</strong>: the two halves of the surface get very different amounts of use, and you should calibrate on that when you read the applications. <code>Result.Combine</code> and direct <code>IsFailure</code> / <code>Errors</code> / <code>Value</code> inspection are the dominant idioms (<code>Result.Combine</code> appears 8 times across 6 files in <code>MMCA.Common/Source</code> and 54 times across 29 files in <code>MMCA.ADC/Source</code>; <code>IsFailure</code> appears 341 times across 123 files in <code>MMCA.ADC/Source</code> alone). The fluent combinators (<code>Match</code>, <code>Map</code>, <code>Bind</code>, <code>BindAsync</code>, <code>Tap</code>, <code>Ensure</code>, <code>OnFailure</code>) are fully implemented and unit-tested in <code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Abstractions/ResultTests.cs</code>, but a search of the workspace finds no production call site for them today. Read them as available surface, not as prevailing style.</p>
           </li>
           </ul>
           <h3 id="resultconverter">ResultConverter</h3>
@@ -611,7 +748,7 @@
           <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Serialization</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:15</code> · Level 2 · class (sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a <code>JsonConverterFactory</code> that produces the right converter for <a href="#result"><code>Result</code></a> or for any closed <code>Result&lt;T&gt;</code>, wired onto both types by a type-level <code>[JsonConverter(typeof(ResultJsonConverterFactory))]</code> attribute (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:17,136</code>).</li>
+          <li><strong>What it is</strong>: a <code>JsonConverterFactory</code> that produces the right converter for <a href="#result"><code>Result</code></a> or for any closed <code>Result&lt;T&gt;</code>, wired onto both types by a type-level <code>[JsonConverter(typeof(ResultJsonConverterFactory))]</code> attribute (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:18,203</code>).</li>
           <li><strong>Depends on</strong>: <a href="#result"><code>Result</code></a>, <a href="#error"><code>Error</code></a>, <a href="#resultconverter"><code>ResultConverter</code></a> and its generic sibling, <a href="#propertyreader"><code>PropertyReader</code></a>. Externals: <code>System.Text.Json</code> (<code>JsonConverterFactory</code>, <code>Utf8JsonReader</code>, <code>Utf8JsonWriter</code>) and <code>System.Activator</code>.</li>
           <li><strong>Concept introduced, the converter factory for an open generic.</strong> A <code>JsonConverter&lt;T&gt;</code> is bound to one closed type, so <code>Result&lt;Order&gt;</code>, <code>Result&lt;CategoryDTO&gt;</code>, and every other closure would each need their own registration. A <code>JsonConverterFactory</code> inverts that: it answers &quot;can I handle this type?&quot; at runtime and manufactures the right closed converter on demand, so one attribute covers every <code>Result&lt;T&gt;</code> in both repos forever. <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (the mechanism exists once rather than per type) and <code>[Rubric §12, Performance &amp; Scalability]</code>, since without it the distributed result cache could not store a handler result at all.</li>
           <li><strong>Walkthrough</strong><ul>
@@ -622,9 +759,69 @@
           <li><code>WriteErrors</code> (<code>ResultJsonConverterFactory.cs:146-153</code>) is the shared writer: it returns without writing anything when the result is a success, and otherwise emits the <code>errors</code> array through the ambient options.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: the Result types deliberately keep internal constructors and get-only properties (the construction discipline described under <a href="#result"><code>Result</code></a>), and the doc comment states the consequence plainly (<code>ResultJsonConverterFactory.cs:7-14</code>): default reflection-based deserialization cannot rehydrate them, so a purpose-built factory is what makes the type round-trippable for the distributed query cache. That cache path is real: <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a> stores a handler&#39;s result through <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a>, and <a href="group-09-caching.html#distributedcacheservice"><code>DistributedCacheService</code></a> writes and reads those values as UTF-8 JSON via <code>JsonSerializer</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:136,139</code>). Centralizing the token bookkeeping in <code>ReadObject</code> / <code>WriteErrors</code> and the callback shape in <a href="#propertyreader"><code>PropertyReader</code></a> keeps the two concrete converters small and structurally parallel.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the Result types deliberately keep internal constructors and get-only properties (the construction discipline described under <a href="#result"><code>Result</code></a>), and the doc comment states the consequence plainly (<code>ResultJsonConverterFactory.cs:7-14</code>): default reflection-based deserialization cannot rehydrate them, so a purpose-built factory is what makes the type round-trippable for the distributed query cache. That cache path is real: <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a> reads and writes whole handler results (a <code>Result&lt;...&gt;</code> in practice) through <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:41-46</code>), and <a href="group-09-caching.html#distributedcacheservice"><code>DistributedCacheService</code></a> writes and reads those values as UTF-8 JSON via <code>JsonSerializer</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:155,158</code>). Centralizing the token bookkeeping in <code>ReadObject</code> / <code>WriteErrors</code> and the callback shape in <a href="#propertyreader"><code>PropertyReader</code></a> keeps the two concrete converters small and structurally parallel.</li>
           <li><strong>Where it&#39;s used</strong>: attached to <a href="#result"><code>Result</code></a> and <code>Result&lt;T&gt;</code> by attribute, so System.Text.Json picks it up automatically wherever a result is serialized, most consequentially on the cache path of <a href="group-09-caching.html">Chapter 9</a> and anywhere a result is written to an HTTP or gRPC payload.</li>
-          <li><strong>Caveats / not-in-source</strong>: the doc comment names Redis specifically (<code>ResultJsonConverterFactory.cs:11-12</code>), but the code path is <code>IDistributedCache</code>-shaped and <a href="group-09-caching.html#distributedcacheservice"><code>DistributedCacheService</code></a> documents Redis only as an example backing store (<code>DistributedCacheService.cs:10</code>). The converter is backing-store agnostic; which store a given host runs is a composition-time choice, not visible here.</li>
+          <li><strong>Caveats / not-in-source</strong>: the doc comment names Redis specifically (<code>ResultJsonConverterFactory.cs:11-12</code>), but the code path is <code>IDistributedCache</code>-shaped and <a href="group-09-caching.html#distributedcacheservice"><code>DistributedCacheService</code></a> documents Redis only as an example backing store (<code>DistributedCacheService.cs:12</code>). The converter is backing-store agnostic; which store a given host runs is a composition-time choice, not visible here.</li>
+          </ul>
+          <h3 id="resultextensions">ResultExtensions</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ResultExtensions.cs:10</code> · Level 3 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: the <code>Task</code>-returning counterparts of the <a href="#result"><code>Result</code></a><code>&lt;T&gt;</code> combinators, so an asynchronous pipeline composes end to end without an intermediate <code>await</code> (and its temporary local) between every step.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <a href="#result"><code>Result</code></a> and <a href="#error"><code>Error</code></a> (Level 1). Externals: <code>System.Threading.Tasks</code> (BCL).</p>
+          </li>
+          <li><p><strong>Concept introduced, lifting combinators over the <code>Task</code> boundary.</strong> The instance combinators on <code>Result&lt;T&gt;</code> are the right shape only when you already <em>have</em> a result. In an async pipeline you usually have a <code>Task&lt;Result&lt;T&gt;&gt;</code> instead, and calling <code>Map</code> on it does not compile: <code>Task&lt;Result&lt;T&gt;&gt;</code> has no <code>Map</code>. The two ways out are to <code>await</code> into a local at every step, which reintroduces the ladder of temporaries the railway was meant to remove, or to define the same combinators as extension methods <strong>on the task</strong>. This type takes the second route. <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (§15 assesses whether the codebase gives callers one consistent way to express a thing rather than two half-shapes) and <code>[Rubric §1, SOLID]</code>, in particular open-closed: these arrive as extension methods on a closed type, so the async surface grows without <code>Result&lt;T&gt;</code> itself changing.</p>
+          <p>The mechanism to internalize is how thin each method is, and why. Each one awaits the incoming task <strong>exactly once</strong>, then delegates to the identical instance combinator (<code>ResultExtensions.cs:3-9</code> states this as the design). Nothing about short-circuiting is re-implemented here: a failed result never runs the supplied delegate because the <em>instance</em> method it forwards to already guarantees that. Duplicating the short-circuit logic in the extension would have created a second place for it to drift, and the pattern here is the alternative worth copying.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: five extension methods, all <code>this Task&lt;Result&lt;T&gt;&gt;</code>, all null-checking both the task and the delegate before awaiting.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Member</th>
+          <th>File:Line</th>
+          <th>What it forwards to</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>BindAsync&lt;T, TOut&gt;(Task&lt;Result&lt;T&gt;&gt;, Func&lt;T, Task&lt;Result&lt;TOut&gt;&gt;&gt;)</code></td>
+          <td><code>ResultExtensions.cs:20-29</code></td>
+          <td><code>Result&lt;T&gt;.BindAsync</code> (<code>Result.cs:289</code>), awaited</td>
+          </tr>
+          <tr>
+          <td><code>BindAsync&lt;T, TOut&gt;(Task&lt;Result&lt;T&gt;&gt;, Func&lt;T, Result&lt;TOut&gt;&gt;)</code></td>
+          <td><code>ResultExtensions.cs:39-48</code></td>
+          <td><code>Result&lt;T&gt;.Bind</code> (<code>Result.cs:302</code>), the synchronous binder overload</td>
+          </tr>
+          <tr>
+          <td><code>MapAsync&lt;T, TOut&gt;(Task&lt;Result&lt;T&gt;&gt;, Func&lt;T, TOut&gt;)</code></td>
+          <td><code>ResultExtensions.cs:58-67</code></td>
+          <td><code>Result&lt;T&gt;.Map</code> (<code>Result.cs:276</code>)</td>
+          </tr>
+          <tr>
+          <td><code>TapAsync&lt;T&gt;(Task&lt;Result&lt;T&gt;&gt;, Func&lt;T, Task&gt;)</code></td>
+          <td><code>ResultExtensions.cs:77-91</code></td>
+          <td>no instance equivalent; it inlines the <code>IsSuccess</code> check and awaits the async side effect (<code>ResultExtensions.cs:85-88</code>)</td>
+          </tr>
+          <tr>
+          <td><code>MatchAsync&lt;T, TResult&gt;(Task&lt;Result&lt;T&gt;&gt;, Func&lt;T, TResult&gt;, Func&lt;IEnumerable&lt;Error&gt;, TResult&gt;)</code></td>
+          <td><code>ResultExtensions.cs:102-113</code></td>
+          <td><code>Result&lt;T&gt;.Match</code> (<code>Result.cs:260</code>)</td>
+          </tr>
+          </tbody></table></div>
+          <ul>
+          <li>The two <code>BindAsync</code> overloads are the reason the chain reads well: one accepts an async binder, the other a synchronous one, so a pipeline can mix &quot;call another service&quot; and &quot;project this in memory&quot; steps without the caller wrapping anything in <code>Task.FromResult</code>.</li>
+          <li><code>TapAsync</code> is the one member with no instance twin, because <code>Result&lt;T&gt;.Tap</code> takes an <code>Action&lt;T&gt;</code> and cannot await. It is the only place in the file that touches <code>IsSuccess</code> and <code>Value</code> directly (<code>ResultExtensions.cs:85-87</code>), and it still returns the awaited result unchanged so it composes like the others.</li>
+          <li>Every <code>await</code> in the file uses <code>ConfigureAwait(false)</code> (<code>ResultExtensions.cs:27,28,46,65,84,87,111</code>), which is the library-wide policy of <a href="https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html" target="_blank" rel="noopener">ADR-049</a>: framework code must not capture a synchronization context.</li>
+          </ul>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a> lists this file as the third tier of the combinator surface, after the non-generic <code>Result</code> and the generic <code>Result&lt;T&gt;</code>. Making these extension methods rather than members of <code>Result&lt;T&gt;</code> is what lets them exist at all: you cannot add an instance method to <code>Task&lt;T&gt;</code>, which is a BCL type. It also keeps the core type free of <code>Task</code>-shaped members it does not need when a caller is already synchronous.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: available to any async pipeline in the Application layer of <a href="group-05-cqrs-pipeline.html">Chapter 5</a>.</p>
+          </li>
+          <li><p><strong>Caveats / not-in-source</strong>: as with the fluent combinators on <a href="#result"><code>Result</code></a>, the surface exists and is fully unit-tested (<code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Abstractions/ResultExtensionsTests.cs</code>), but a search of the workspace finds <strong>no production call site</strong> for <code>MapAsync</code>, <code>TapAsync</code>, <code>MatchAsync</code>, or the task-form <code>BindAsync</code> today; the only matches are in that test file. Treat this section as teaching the intended composition style, not describing prevailing application code.</p>
+          </li>
           </ul>
           <hr>
           <p><a href="index.html">⬅ Index</a>  •  <a href="index.html">Index</a>  •  <a href="group-02-domain-building-blocks.html">Domain Building Blocks (Entities, Value Objects, Aggregates) ➡</a></p>
@@ -633,7 +830,25 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
-
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-a-return-value-instead-of-an-exception">Why a return value instead of an exception</a></li>
+            <li><a href="#three-pieces-classification-carrier-envelope">Three pieces: classification, carrier, envelope</a></li>
+            <li><a href="#the-railway-in-one-picture">The railway, in one picture</a></li>
+            <li><a href="#construction-discipline-and-the-invariant-it-buys">Construction discipline, and the invariant it buys</a></li>
+            <li><a href="#severity-not-position-classifies-a-failure">Severity, not position, classifies a failure</a></li>
+            <li><a href="#making-a-result-survive-a-round-trip">Making a result survive a round trip</a></li>
+            <li><a href="#how-a-failure-becomes-an-http-response">How a failure becomes an HTTP response</a></li>
+            <li><a href="#and-how-the-same-failure-crosses-a-service-boundary-or-reaches-the-browser">And how the same failure crosses a service boundary, or reaches the browser</a></li>
+            <li><a href="#the-two-exceptions-and-why-they-exist-anyway">The two exceptions, and why they exist anyway</a></li>
+            <li><a href="#offset-paging-the-read-side-envelopes">Offset paging: the read-side envelopes</a></li>
+            <li><a href="#keyset-paging-the-same-envelope-family-a-different-cost-model">Keyset paging: the same envelope family, a different cost model</a></li>
+            <li><a href="#where-this-leads">Where this leads</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

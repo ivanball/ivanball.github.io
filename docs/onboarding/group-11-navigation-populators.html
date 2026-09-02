@@ -145,453 +145,672 @@
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="11-navigation-metadata--populators-ef-decoupled-eager-loading">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</h1>
           <p>EF Core gives you <code>.Include()</code> for eager loading, and for a single SQL Server database that is the
-          right tool. But this codebase is a <strong>database-per-service</strong> modular monolith (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>): two related
-          entities can live in <strong>different physical data sources</strong>, different SQL databases, or a Cosmos
-          container that has no JOINs at all, and across that boundary EF&#39;s <code>Include</code> simply cannot produce a
-          JOIN. The relationship is real in the domain model, but the physical storage cannot satisfy it in one
-          query. This chapter is the framework&#39;s answer to that gap: a small, self-contained subsystem that
-          decides <em>which</em> navigations EF can load and <em>which</em> must be hand-loaded, then batch-loads the latter
-          without ever leaking EF or the physical split into the Application or Domain layers. It is the
-          machinery behind <strong><a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> (navigation populators)</strong>, and it sits directly underneath the query
-          pipeline taught in <a href="group-03-querying-specifications.html">Group 03</a>.</p>
+          right tool. But this codebase is a <strong>database-per-service</strong> modular monolith
+          (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>): two related entities
+          can live in <strong>different physical data sources</strong>, different SQL databases, or a Cosmos container that
+          has no JOINs at all, and across that boundary EF&#39;s <code>Include</code> cannot produce a JOIN. The relationship
+          is real in the domain model, but the physical storage cannot satisfy it in one query. This chapter is
+          the framework&#39;s answer to that gap: a small, self-contained subsystem that decides <em>which</em>
+          navigations EF can load and <em>which</em> must be hand-loaded, then batch-loads the latter without leaking
+          EF or the physical split into the Application or Domain layers. It is the machinery behind
+          <strong><a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> (navigation
+          populators)</strong>, and it sits directly underneath the query pipeline taught in
+          <a href="group-03-querying-specifications.html">Group 03</a>.</p>
           <p>The whole feature turns on one piece of metadata you author in the <strong>Domain</strong> layer and one piece the
           framework computes at runtime. In the domain, a navigation property is tagged with
-          <a href="group-11-navigation-populators.html#navigationattribute"><code>NavigationAttribute</code></a>, a plain
-          <code>[AttributeUsage(Property)]</code> marker carrying a single <code>IsCollection</code> flag that says &quot;this is a
-          one-to-many child collection&quot; versus &quot;this is a many-to-one FK reference&quot;. That attribute lives in
-          <code>MMCA.Common.Domain</code> deliberately: the domain entity declares <em>what relationships it has</em> with <strong>zero
-          EF dependency</strong> (<code>[Rubric §3, Clean Architecture]</code>, the inward dependency rule; the domain stays
-          persistence-ignorant). At runtime the framework needs a richer, classified view of those navigations,
-          which it carries in three Application-layer types: the
-          <a href="group-11-navigation-populators.html#navigationtype"><code>NavigationType</code></a> enum (<code>ForeignKey</code> vs
-          <code>ChildCollection</code>), the <a href="group-11-navigation-populators.html#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a>
-          record (one navigation&#39;s name, kind, declaring type, and unwrapped target type), and the
-          <a href="group-11-navigation-populators.html#inavigationmetadata"><code>INavigationMetadata</code></a> contract whose two lists
-          are the heart of the design: <strong><code>SupportedIncludes</code></strong> (navigations EF <em>can</em> JOIN, because both ends share
-          a data source) and <strong><code>UnsupportedIncludes</code></strong> (navigations that need manual loading, because the ends are
-          split). Its mutable builder implementation is
-          <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a>.</p>
-          <p>That split is computed by the <strong><code>NavigationMetadataProvider</code></strong> (covered in
+          <a href="#navigationattribute"><code>NavigationAttribute</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/NavigationAttribute.cs:10</code>), a sealed
+          <code>[AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]</code> marker
+          (<code>NavigationAttribute.cs:9</code>) carrying a single <code>IsCollection</code> init-only flag
+          (<code>NavigationAttribute.cs:16</code>) that says &quot;this is a one-to-many child collection&quot; versus &quot;this is a
+          many-to-one FK reference&quot;. That attribute lives in <code>MMCA.Common.Domain</code> deliberately: the domain
+          entity declares <em>what relationships it has</em> with <strong>zero EF dependency</strong> (<code>[Rubric §3, Clean Architecture]</code>, the inward dependency rule, so the domain stays persistence-ignorant). At runtime the
+          framework needs a richer, classified view of those navigations, which it carries in three
+          Application-layer types declared in one file: the <a href="#navigationtype"><code>NavigationType</code></a> enum
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationMetadata.cs:6</code>, values
+          <code>ForeignKey</code> and <code>ChildCollection</code>), the <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> record
+          (<code>INavigationMetadata.cs:23</code>, one navigation&#39;s property name, kind, declaring type, and unwrapped
+          target type), and the <a href="#inavigationmetadata"><code>INavigationMetadata</code></a> contract
+          (<code>INavigationMetadata.cs:34</code>) whose two read-only lists are the heart of the design:
+          <strong><code>SupportedIncludes</code></strong> (navigations EF <em>can</em> JOIN, because both ends share a data source,
+          <code>INavigationMetadata.cs:37</code>) and <strong><code>UnsupportedIncludes</code></strong> (navigations that need manual loading,
+          because the ends are split, <code>INavigationMetadata.cs:40</code>). Its mutable builder implementation is
+          <a href="#navigationmetadata"><code>NavigationMetadata</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/NavigationMetadata.cs:9</code>), which backs
+          each list with a <code>List&lt;NavigationPropertyInfo&gt;</code> and exposes only <code>internal</code> <code>AddSupported</code> /
+          <code>AddUnsupported</code> / <code>AddSupportedRange</code> / <code>AddUnsupportedRange</code> mutators
+          (<code>NavigationMetadata.cs:22-34</code>), so nothing outside the framework assembly can rewrite a
+          classification after the fact.</p>
+          <p>That split is computed by the <code>NavigationMetadataProvider</code> (covered in
           <a href="group-03-querying-specifications.html#navigationmetadataprovider">Group 03</a>, behind the
           <a href="group-03-querying-specifications.html#inavigationmetadataprovider"><code>INavigationMetadataProvider</code></a> port).
-          Given an entity type and the caller&#39;s <code>includeFKs</code>/<code>includeChildren</code> choice, it reflects over the
-          entity&#39;s public properties, finds the <code>[Navigation]</code>-tagged ones whose collection flag matches the
-          requested kind, unwraps any collection generic to get the real target type, and then asks the
-          infrastructure-side <code>IDataSourceService.HaveIncludeSupport(declaring, target)</code> whether the two entities
-          actually live in the same place. If they do, the navigation goes in <code>SupportedIncludes</code>; if not, into
-          <code>UnsupportedIncludes</code>. Results are cached per <code>(entity type, NavigationType)</code> so the reflection runs once
-          per shape. The crucial architectural point is <em>where the EF knowledge lives</em>: the Application layer
-          classifies &quot;what should be included&quot; without referencing <code>Microsoft.EntityFrameworkCore</code> at all, the
-          only component that knows the physical topology is the data-source service at the Infrastructure
-          boundary (<code>[Rubric §3]</code>, <code>[Rubric §8, Data Architecture]</code>).</p>
-          <p>Once the metadata exists, the <a href="group-03-querying-specifications.html#entityquerypipeline"><code>EntityQueryPipeline</code></a>
-          (Group 03) executes it via a <strong>two-path strategy</strong>, and reading its real code
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:25</code>) is the
-          clearest way to see how the metadata earns its keep. <strong>Path 1 (server-side includes):</strong> if there are
-          <code>SupportedIncludes</code>, each becomes an EF <code>Include</code> call (line 41-42), and, importantly, if any of them
-          is a child <em>collection</em>, the pipeline switches to <code>AsSplitQuery</code> (line 48-49). That split-query line is
-          not cosmetic: paginating a single-query collection-Include makes EF apply <code>Skip</code>/<code>Take</code> to the
+          Given an entity type and the caller&#39;s <code>includeFKs</code>/<code>includeChildren</code> choice, its <code>BuildIncludes&lt;TEntity&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/NavigationMetadataProvider.cs:31</code>)
+          reflects over the entity&#39;s public instance properties, keeps the <code>[Navigation]</code>-tagged ones whose
+          <code>IsCollection</code> flag matches the requested kind (<code>NavigationMetadataProvider.cs:74-80</code>), unwraps
+          <code>ICollection&lt;T&gt;</code> / <code>IReadOnlyCollection&lt;T&gt;</code> to get the real target type
+          (<code>NavigationMetadataProvider.cs:106-116</code>), and then asks the infrastructure-side
+          <code>IDataSourceService.HaveIncludeSupport(declaringType, targetType)</code> whether the two entities actually
+          live in the same place (<code>NavigationMetadataProvider.cs:96-99</code>). If they do, the navigation goes in
+          <code>SupportedIncludes</code>; if not, into <code>UnsupportedIncludes</code>. Results are cached in a
+          <code>ConcurrentDictionary</code> keyed by <code>(entity type, NavigationType)</code> so the reflection runs once per shape,
+          and that cache is deliberately <strong>instance-level rather than static</strong>
+          (<code>NavigationMetadataProvider.cs:22-28</code>): classification depends on the host&#39;s data-source
+          configuration, so a process hosting several service configurations (integration tests, for example)
+          must not share classification results across hosts. The crucial architectural point is <em>where the EF
+          knowledge lives</em>: the Application layer classifies &quot;what should be included&quot; without referencing
+          <code>Microsoft.EntityFrameworkCore</code> at all, and the only component that knows the physical topology is
+          <a href="group-07-persistence-ef-core.html#idatasourceservice"><code>IDataSourceService</code></a> at the Infrastructure
+          boundary (<code>[Rubric §3, Clean Architecture]</code>, <code>[Rubric §8, Data Architecture]</code>).</p>
+          <p>Once the metadata exists, the
+          <a href="group-03-querying-specifications.html#entityquerypipeline"><code>EntityQueryPipeline</code></a> (Group 03) executes it
+          via a <strong>two-path strategy</strong>, and reading its real code
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:13</code>) is the
+          clearest way to see how the metadata earns its keep. Both paths share a front half,
+          <code>ApplyIncludesCriteriaAndFilters</code> (<code>EntityQueryPipeline.cs:119</code>). <strong>Path 1 (server-side includes):</strong>
+          if there are <code>SupportedIncludes</code>, each becomes an EF <code>Include</code> call through the queryable executor
+          (<code>EntityQueryPipeline.cs:131-134</code>), and, importantly, if any of them is a child <em>collection</em>, the
+          pipeline switches to <code>AsSplitQuery</code> (<code>EntityQueryPipeline.cs:140-141</code>). That split-query line is not
+          cosmetic: paginating a single-query collection-<code>Include</code> makes EF apply <code>Skip</code>/<code>Take</code> to the
           JOIN-expanded row set, which truncates child rows and returns empty collections on list reads while
-          by-id reads still work, the exact bug behind the &quot;session list omits SessionSpeakers&quot; symptom, fixed
-          here per R24/§8. After includes, criteria and dynamic filters are applied <em>before</em> materialization so
-          the database does the filtering, then sorting → pagination → field projection all run on the
-          <code>IQueryable</code> and one <code>ToListAsync</code> returns the page. <strong>Path 2 (manual navigation loading):</strong> the moment
-          <code>UnsupportedIncludes.Count != 0</code>, the pipeline cannot trust a JOIN, so it sorts and paginates the base
-          query server-side (loading only the requested page), materializes it, and <em>then</em> invokes a
-          <strong>navigation-populator delegate</strong> on that materialized page (line 106) to fill in the cross-source
-          relationships, paying the manual-load cost on one page of parents, not the whole table, and never as
-          an N+1.</p>
+          by-id reads still work, and the comment above it records exactly that (<code>EntityQueryPipeline.cs:136-139</code>).
+          After includes, specification criteria and dynamic filters are applied <em>before</em> materialization so
+          the database does the filtering (<code>EntityQueryPipeline.cs:143-151</code>). <strong>Path 2 (manual navigation
+          loading):</strong> the moment <code>UnsupportedIncludes.Count != 0</code> the pipeline cannot trust a JOIN
+          (<code>EntityQueryPipeline.cs:53-54</code>), so <code>ExecuteWithManualNavigationAsync</code> (<code>EntityQueryPipeline.cs:161</code>)
+          sorts server-side with a key tie-break for paginated reads (<code>EntityQueryPipeline.cs:175-180</code>),
+          applies paging or, for an unpaginated read, caps the result set at the <code>MaxUnboundedResultLimit</code>
+          ceiling of 1000 rows (<code>EntityQueryPipeline.cs:23</code>, <code>EntityQueryPipeline.cs:184-194</code>), materializes
+          that bounded page, and <em>then</em> invokes a <strong>navigation-populator delegate</strong> on it
+          (<code>EntityQueryPipeline.cs:196-200</code>) to fill in the cross-source relationships. The manual-load cost is
+          paid on one page of parents, not the whole table, and never as an N+1.</p>
           <p>That delegate is the extension point to the second half of the chapter. Its signature,
-          <code>(IReadOnlyCollection&lt;TEntity&gt;, NavigationMetadata, bool includeFKs, bool includeChildren, CancellationToken)</code>, is exactly the contract of
-          <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>,
-          the per-entity port a module implements to load its own cross-source navigations. The <code>in</code> variance
-          makes it contravariant on the entity type; the boolean pair mirrors the metadata provider&#39;s so a
-          populator only loads what the caller asked for. Entities with <strong>no</strong> cross-source navigations don&#39;t need
-          a real implementation: the framework supplies
-          <a href="group-11-navigation-populators.html#nullnavigationpopulatortentity"><code>NullNavigationPopulator&lt;TEntity&gt;</code></a>,
-          a textbook Null Object whose <code>PopulateAsync</code> is a single <code>Task.CompletedTask</code>, so the pipeline always
-          has <em>some</em> populator to call and never branches on null (<code>[Rubric §2, Design Patterns]</code>).</p>
-          <p>The actual batch loading is done by <a href="group-11-navigation-populators.html#navigationloader"><code>NavigationLoader</code></a>,
-          a static helper that exists to kill the N+1 problem. It exposes two methods,
-          <code>LoadFKPropertyAsync</code> (many-to-one: parent holds a nullable FK to a child, e.g. <code>Product.Category</code>) and
-          <code>LoadChildrenPropertyAsync</code> (one-to-many: children hold the parent&#39;s FK, e.g. <code>Order → OrderLines</code>).
-          Both follow the same shape: collect the distinct keys across <em>all</em> parents, <strong>build a
-          <code>WHERE childFK IN (...)</code> predicate as an expression tree at runtime</strong> (so it translates to one SQL
-          statement), run it once through an <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>,
-          group the results into a lookup dictionary, and assign each parent its slice via a callback, <code>O(1)</code>
-          per parent after one query for the whole batch (<code>[Rubric §12, Performance &amp; Scalability]</code>). The
-          compiled grouping selectors are cached in a <code>ConcurrentDictionary</code> keyed by source type plus member
-          path, so repeated calls for the same selector skip <code>Expression.Compile()</code>. Reading
-          <code>NavigationLoader.cs:71-99</code> shows the expression-tree construction in full.</p>
-          <p>Writing a populator by hand for every entity would mean repeating that &quot;is this navigation requested?
-          is it unsupported? which loader?&quot; boilerplate ~30-40 lines per entity, which is what the <strong>declarative
-          layer</strong> removes. A navigation is described once as an
-          <a href="group-11-navigation-populators.html#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a>,
-          a tiny strategy object carrying a <code>PropertyName</code>, a <code>RequiresChildren</code> flag, and a single
-          <code>LoadAsync(entities, IUnitOfWork, ct)</code> method. There are two concrete descriptors, structurally twins:
-          <a href="group-11-navigation-populators.html#childnavigationdescriptortentity-tparentid-tchild-tchildid"><code>ChildNavigationDescriptor&lt;TEntity, TParentId, TChild, TChildId&gt;</code></a>
-          for collections (<code>RequiresChildren =&gt; true</code>, delegates to <code>LoadChildrenPropertyAsync</code>) and
-          <a href="group-11-navigation-populators.html#fknavigationdescriptortentity-tchild-tchildid"><code>FKNavigationDescriptor&lt;TEntity, TChild, TChildId&gt;</code></a>
-          for references (<code>RequiresChildren =&gt; false</code>, <code>TChildId : struct</code> for the nullable FK, delegates to
-          <code>LoadFKPropertyAsync</code>). Each descriptor&#39;s <code>required init</code> properties, the key selectors, the
-          child-FK <em>expression</em> (kept as an <code>Expression</code> precisely so <code>NavigationLoader</code> can turn it into the
-          <code>WHERE … IN</code> predicate), and the assign callback, mean an incomplete descriptor cannot even be
-          constructed (<code>[Rubric §1, SOLID]</code>, <code>[Rubric §15, Best Practices]</code>). The generic
-          <a href="group-11-navigation-populators.html#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a>
-          then drives a <em>list</em> of those descriptors: it early-exits when there are no parents or no
-          unsupported includes, builds an ordinal hash set of the unsupported property names, and for each
-          descriptor loads it only when (a) the requested kind matches <code>RequiresChildren</code> and (b) the property is
-          actually in the unsupported set. Adding a new cross-source navigation becomes &quot;add one descriptor&quot;,
-          not &quot;write a new class&quot; (<code>[Rubric §16, Maintainability]</code>).</p>
-          <p>End to end, then, the runtime flow for a list query is: a module query handler asks the
-          <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>
-          to run; the service calls <code>NavigationMetadataProvider.BuildIncludes</code> to get the supported/unsupported
-          split; it hands that split plus its module&#39;s <code>INavigationPopulator&lt;TEntity&gt;</code> (as the delegate) to
-          <code>EntityQueryPipeline.ExecuteAsync</code>; the pipeline JOINs the supported ones and, if any are unsupported,
-          materializes the page and calls the populator; the populator (almost always a
-          <code>DeclarativeNavigationPopulator</code> built from descriptors in the module&#39;s <code>DependencyInjection.cs</code>)
-          iterates its descriptors and calls <code>NavigationLoader</code> once per cross-source navigation. The concrete
-          consumers live in ADC&#39;s Conference module, for example <code>EventNavigationPopulator</code>
+          <code>Func&lt;IReadOnlyCollection&lt;TEntity&gt;, NavigationMetadata, bool, bool, CancellationToken, Task&gt;</code>
+          (<code>EntityQueryPipeline.cs:43</code>), is exactly the shape of
+          <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationPopulator.cs:9</code>), the
+          per-entity port a module implements to load its own cross-source navigations
+          (<code>INavigationPopulator.cs:20-25</code>). The <code>in</code> variance makes it contravariant on the entity type; the
+          boolean pair mirrors the metadata provider&#39;s so a populator only loads what the caller asked for.
+          Entities with <strong>no</strong> cross-source navigations do not need a real implementation: the framework
+          supplies <a href="#nullnavigationpopulatortentity"><code>NullNavigationPopulator&lt;TEntity&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/NullNavigationPopulator.cs:11</code>), a textbook
+          Null Object whose <code>PopulateAsync</code> is a single <code>Task.CompletedTask</code>
+          (<code>NullNavigationPopulator.cs:14-19</code>), so the pipeline always has <em>some</em> populator to call and never
+          branches on null (<code>[Rubric §2, Design Patterns]</code>). It is registered exactly that way for entities
+          with nothing to hand-load, for example
+          <code>services.TryAddScoped&lt;INavigationPopulator&lt;Question&gt;, NullNavigationPopulator&lt;Question&gt;&gt;()</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:82</code>) and
+          the framework&#39;s own push-notification entity
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:38</code>).</p>
+          <p>The actual batch loading is done by <a href="#navigationloader"><code>NavigationLoader</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/NavigationLoader.cs:21</code>), a static helper
+          that exists to kill the N+1 problem. It exposes two methods: <code>LoadFKPropertyAsync</code>
+          (<code>NavigationLoader.cs:44</code>, many-to-one, the parent holds a nullable FK to a child, e.g.
+          <code>Product.Category</code>) and <code>LoadChildrenPropertyAsync</code> (<code>NavigationLoader.cs:118</code>, one-to-many, children
+          hold the parent&#39;s FK, e.g. <code>Order</code> to <code>OrderLines</code>). Both follow the same shape: collect the distinct
+          keys across <em>all</em> parents (<code>NavigationLoader.cs:54-59</code>, <code>NavigationLoader.cs:129-132</code>), short-circuit
+          by assigning every parent an empty list when there are no keys (<code>NavigationLoader.cs:61-69</code>), <strong>build
+          a <code>WHERE childFK IN (...)</code> predicate as an expression tree at runtime</strong> so it translates to one SQL
+          statement (<code>NavigationLoader.cs:71-78</code>), run it once through an
+          <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>
+          with <code>asTracking: false</code> (<code>NavigationLoader.cs:80-84</code>), group the results into a lookup dictionary
+          (<code>NavigationLoader.cs:87-90</code>), and assign each parent its slice via a callback, <code>O(1)</code> per parent
+          after one query for the whole batch (<code>NavigationLoader.cs:92-99</code>, <code>[Rubric §12, Performance &amp; Scalability]</code>). The compiled grouping selectors are cached in a static <code>ConcurrentDictionary</code>
+          (<code>NavigationLoader.cs:27</code>) keyed by source type plus a parameter-name-independent member path
+          (<code>NavigationLoader.cs:175-207</code>), so repeated calls for the same selector skip <code>Expression.Compile()</code>.</p>
+          <p>Writing a populator by hand for every entity would mean repeating the &quot;is this navigation requested?
+          is it unsupported? which loader?&quot; boilerplate per entity, which is what the <strong>declarative layer</strong>
+          removes. A navigation is described once as an
+          <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Navigation/INavigationDescriptor.cs:10</code>), a
+          small strategy object carrying a <code>PropertyName</code> that must match the EF property name
+          (<code>INavigationDescriptor.cs:13</code>), a <code>RequiresChildren</code> flag (<code>INavigationDescriptor.cs:19</code>), and a
+          single <code>LoadAsync(entities, IUnitOfWork, cancellationToken)</code> method (<code>INavigationDescriptor.cs:24-27</code>).
+          There are two concrete descriptors, structurally twins:
+          <a href="#childnavigationdescriptortentity-tparentid-tchild-tchildid"><code>ChildNavigationDescriptor&lt;TEntity, TParentId, TChild, TChildId&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Navigation/ChildNavigationDescriptor.cs:15</code>)
+          for collections (<code>RequiresChildren =&gt; true</code> at <code>ChildNavigationDescriptor.cs:25</code>, delegating to
+          <code>NavigationLoader.LoadChildrenPropertyAsync</code> at <code>ChildNavigationDescriptor.cs:37-47</code>) and
+          <a href="#fknavigationdescriptortentity-tchild-tchildid"><code>FKNavigationDescriptor&lt;TEntity, TChild, TChildId&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Navigation/FKNavigationDescriptor.cs:14</code>)
+          for references (<code>RequiresChildren =&gt; false</code> at <code>FKNavigationDescriptor.cs:23</code>, constrained
+          <code>where TChildId : struct</code> so the parent&#39;s FK can be nullable at <code>FKNavigationDescriptor.cs:17</code>,
+          delegating to <code>NavigationLoader.LoadFKPropertyAsync</code> at <code>FKNavigationDescriptor.cs:35-45</code>). Each
+          descriptor&#39;s <code>required init</code> properties, the key selector, the child-FK <em>expression</em> (kept as an
+          <code>Expression&lt;Func&lt;...&gt;&gt;</code> precisely so <code>NavigationLoader</code> can turn it into the <code>WHERE ... IN</code> predicate),
+          and the assign callback mean an incomplete descriptor cannot even be constructed
+          (<code>ChildNavigationDescriptor.cs:22-34</code>, <code>FKNavigationDescriptor.cs:20-32</code>, <code>[Rubric §1, SOLID]</code>,
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code>). Both resolve their child repository from
+          <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a> at load time rather than injecting one
+          (<code>ChildNavigationDescriptor.cs:45</code>, <code>FKNavigationDescriptor.cs:43</code>).</p>
+          <p>The generic <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Navigation/DeclarativeNavigationPopulator.cs:14</code>)
+          then drives a <em>list</em> of those descriptors: it takes an <code>IUnitOfWork</code> and an
+          <code>IReadOnlyList&lt;INavigationDescriptor&lt;TEntity&gt;&gt;</code> as primary-constructor parameters
+          (<code>DeclarativeNavigationPopulator.cs:14-17</code>), early-exits when there are no parents or no unsupported
+          includes (<code>DeclarativeNavigationPopulator.cs:27-28</code>), builds an ordinal <code>HashSet&lt;string&gt;</code> of the
+          unsupported property names (<code>DeclarativeNavigationPopulator.cs:30-32</code>), and for each descriptor loads
+          it only when the requested kind matches <code>RequiresChildren</code> <strong>and</strong> the property is actually in the
+          unsupported set (<code>DeclarativeNavigationPopulator.cs:34-41</code>). Adding a new cross-source navigation
+          becomes &quot;add one descriptor&quot;, not &quot;write a new class&quot; (<code>[Rubric §16, Maintainability]</code>). It is the
+          only concrete class in this group left open for inheritance, because module populators subclass it.</p>
+          <p>End to end, the runtime flow for a list query is: a module query handler asks the
+          <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>
+          to run; the service calls <code>NavigationMetadataProvider.BuildIncludes&lt;TEntity&gt;</code> to get the
+          supported/unsupported split
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:282</code>); it hands that
+          split plus its module&#39;s injected <code>INavigationPopulator&lt;TEntity&gt;</code> (as the method-group delegate
+          <code>NavigationPopulator.PopulateAsync</code>) to <code>EntityQueryPipeline.ExecuteAsync</code>
+          (<code>EntityQueryService.cs:316-321</code>); the pipeline JOINs the supported navigations and, if any are
+          unsupported, materializes the page and calls the populator; the populator (almost always a
+          <code>DeclarativeNavigationPopulator</code> built from descriptors) iterates its descriptors and calls
+          <code>NavigationLoader</code> once per cross-source navigation. The same metadata also gates the service&#39;s keyed
+          by-id fast path: requested includes alone do not disqualify a keyed read, but a single unsupported
+          include does, because only the pipeline&#39;s populator can batch-load across physical sources
+          (<code>EntityQueryService.cs:183-187</code>). The concrete consumers live in ADC&#39;s Conference module. For example
+          <a href="group-18-conference-application.html#eventnavigationpopulator"><code>EventNavigationPopulator</code></a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/EventNavigationPopulator.cs:11</code>)
           is <em>just</em> a subclass of <code>DeclarativeNavigationPopulator&lt;Event&gt;</code> constructed with three
-          <code>ChildNavigationDescriptor</code>s for <code>Rooms</code>, <code>EventSpeakers</code>, and <code>EventQuestionAnswers</code>, no imperative
-          loading code at all. Those module-level populators (<a href="group-18-conference-application.html#eventnavigationpopulator"><code>EventNavigationPopulator</code></a>
-          and its <code>Session</code>/<code>Speaker</code>/<code>ConferenceCategory</code> siblings) are taught in
+          <code>ChildNavigationDescriptor</code>s for <code>Rooms</code>, <code>EventSpeakers</code>, and <code>EventQuestionAnswers</code>, with no
+          imperative loading code at all, and
+          <a href="group-18-conference-application.html#sessionnavigationpopulator"><code>SessionNavigationPopulator</code></a>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/SessionNavigationPopulator.cs:13</code>)
+          mixes two <code>FKNavigationDescriptor</code>s (<code>Event</code>, <code>Room</code>) with three <code>ChildNavigationDescriptor</code>s. Each is
+          registered per entity as a scoped service
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:65</code>,
+          <code>DependencyInjection.cs:69</code>), and those module-level populators are taught in
           <a href="group-18-conference-application.html">Group 18</a>.</p>
           <p>Two architectural threads are worth holding onto as you read the per-type sections. First, this
           subsystem is <em>why</em> the database-per-service split is feasible without rewriting query code
-          (<code>[Rubric §7, Microservices Readiness]</code>): when a relationship&#39;s ends move to different sources, the
-          EF model&#39;s <code>CrossDataSourceDegradeConvention</code> drops the FK and navigations, the metadata provider
-          starts reporting that navigation as unsupported, and the populator path picks it up automatically, the
-          application code that issued the query never changes. Second, the design is a clean illustration of
-          keeping policy out of the domain: the <em>what</em> (a <code>[Navigation]</code> marker) lives in Domain, the <em>whether</em>
-          (supported vs unsupported) is computed in Application from an Infrastructure capability check, and the
-          <em>how</em> (batch SQL) is a static helper, three responsibilities, three layers, no EF leakage upward
-          (<code>[Rubric §3, Clean Architecture]</code>, <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>). The trade-off <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> itself names is honest: for a
-          pure single-SQL-database host where <code>Include</code> always works, this is an extra abstraction layer, but it
-          costs nothing at runtime there, because the populator is only invoked when the metadata actually reports
-          an unsupported include, and otherwise the <code>NullNavigationPopulator</code> no-ops.</p>
+          (<code>[Rubric §7, Microservices Readiness]</code>): when a relationship&#39;s ends move to different sources, the EF
+          model&#39;s <a href="group-07-persistence-ef-core.html#crossdatasourcedegradeconvention"><code>CrossDataSourceDegradeConvention</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:33</code>)
+          drops the relationship and ignores the CLR navigation members, routing runtime navigation &quot;through the
+          existing <code>INavigationPopulator</code> batch-loading machinery instead&quot;
+          (<code>CrossDataSourceDegradeConvention.cs:15-17</code>), the metadata provider starts reporting that navigation
+          as unsupported, and the populator path picks it up automatically. The application code that issued the
+          query never changes, and when every entity resolves to the same physical source the convention is a
+          structural no-op (<code>CrossDataSourceDegradeConvention.cs:25-29</code>). Second, the design is a clean
+          illustration of keeping policy out of the domain: the <em>what</em> (a <code>[Navigation]</code> marker) lives in
+          Domain, the <em>whether</em> (supported versus unsupported) is computed in Application from an Infrastructure
+          capability check, and the <em>how</em> (batch SQL) is a static helper. Three responsibilities, three layers,
+          no EF leakage upward (<code>[Rubric §3, Clean Architecture]</code>,
+          <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>). The trade-off ADR-002
+          itself names is honest: for a pure single-SQL-database host where <code>Include</code> always works, this is an
+          extra abstraction layer, but it costs nothing at runtime there, because the populator is only invoked
+          when the metadata actually reports an unsupported include, and otherwise the <code>NullNavigationPopulator</code>
+          no-ops.</p>
           <h3 id="navigationattribute">NavigationAttribute</h3>
           <blockquote>
           <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Attributes</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/NavigationAttribute.cs:10</code> · Level 0 · class (sealed attribute)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: marks a domain entity property as a <strong>navigation</strong> (a relationship to another
-          entity), with a flag for collection vs. single reference.</li>
-          <li><strong>Depends on</strong>: <code>System.Attribute</code> (BCL) only.</li>
-          <li><strong>Concept introduced, navigation metadata decoupled from EF.</strong> <code>[Rubric §2, Design Patterns]</code>
-          (assesses whether patterns are idiomatic and solve a real problem) and <code>[Rubric §3, Clean Architecture]</code> (assesses that dependencies point inward and the domain/application core stays
-          framework-free). <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> (&quot;navigation populators&quot;) is the relevant decision: the application layer
-          needs to know an entity&#39;s navigations (to build EF <code>Include</code> paths and field projections) <strong>without</strong>
-          referencing Infrastructure/EF. Declaring navigations with this <em>domain-level</em> attribute lets
+          entity), with a single flag distinguishing a collection from a single reference.</li>
+          <li><strong>Depends on</strong>: <code>System.Attribute</code> (BCL) only. No first-party dependencies at all, which is the
+          point.</li>
+          <li><strong>Concept introduced, navigation metadata declared in the domain instead of read from EF.</strong>
+          <code>[Rubric §2, Design Patterns]</code> (assesses whether patterns are idiomatic and solve a real problem)
+          and <code>[Rubric §3, Clean Architecture]</code> (assesses that dependencies point inward and the
+          domain/application core stays framework-free).
+          <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> is the governing
+          decision: the Application layer needs to know an entity&#39;s navigations (to build EF <code>Include</code> paths
+          and field projections) <strong>without</strong> referencing Infrastructure or EF Core. Declaring navigations with
+          a <em>domain-level</em> attribute lets
           <a href="group-03-querying-specifications.html#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a>
-          discover them from the <em>domain</em> model, keeping the dependency arrow pointing inward (the doc comment,
-          <code>NavigationAttribute.cs:3-8</code>, says exactly this, discovery is decoupled from EF Core&#39;s own metadata).</li>
-          <li><strong>Walkthrough</strong>: <code>[AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]</code> (line 9); one property <code>bool IsCollection { get; init; }</code> (line 16) distinguishing
-          one-to-many (a child collection) from many-to-one / FK (a single reference). <code>Inherited = false</code>
-          means a derived entity must redeclare its own navigations rather than silently inheriting a base
-          type&#39;s, discovery is explicit, not accidental.</li>
-          <li><strong>Why it&#39;s built this way</strong>: using a domain attribute rather than reading EF&#39;s own metadata means the
-          application layer can resolve includes without an EF reference, the whole point of <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> and a
-          concrete §3 win. The single <code>IsCollection</code> boolean is the same FK-vs-collection axis that
-          <a href="#navigationtype"><code>NavigationType</code></a> classifies one level up.</li>
-          <li><strong>Where it&#39;s used</strong>: read by
+          discover them by reflecting over the domain model, so the dependency arrow keeps pointing inward.
+          The doc comment (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/NavigationAttribute.cs:3-8</code>)
+          states exactly that: discovery is decoupled from EF Core&#39;s own metadata.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>[AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]</code> (line 9).
+          <code>Inherited = false</code> means a derived entity must redeclare its own navigations rather than
+          silently inheriting a base type&#39;s, so discovery is explicit rather than accidental.
+          <code>AllowMultiple = false</code> means one navigation classification per property.</li>
+          <li><code>public bool IsCollection { get; init; }</code> (line 16): <code>true</code> for a one-to-many child collection,
+          <code>false</code> (the default) for a many-to-one FK reference. <code>init</code>-only, so the classification is fixed
+          at the attribute-application site.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: reading EF&#39;s own model metadata would force the Application layer to
+          reference <code>Microsoft.EntityFrameworkCore</code>. A plain domain attribute costs one reflection pass
+          (cached) and buys a framework-free core, which is the concrete §3 win behind
+          <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>. The single
+          <code>IsCollection</code> boolean is the same FK-versus-collection axis that
+          <a href="#navigationtype"><code>NavigationType</code></a> names one level up.</li>
+          <li><strong>Where it&#39;s used</strong>: applied on domain entity properties (for example
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:66</code> and <code>:72</code>
+          tag <code>SpeakerCategoryItems</code> and <code>SpeakerQuestionAnswers</code> with <code>[Navigation(IsCollection = true)]</code>,
+          and <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/Sponsor.cs:48</code> tags the
+          <code>Event</code> reference with a bare <code>[Navigation]</code>). Read by
           <a href="group-03-querying-specifications.html#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a>
-          (Application, higher level) to drive eager-loading and projection; the cross-source navigation
-          populators in this group rely on the metadata it produces.</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/NavigationMetadataProvider.cs:74</code>)
+          to build the metadata every other type in this chapter consumes.</li>
           </ul>
           <h3 id="navigationtype">NavigationType</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationMetadata.cs:6</code> · Level 0 · enum</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a two-value enum (<code>ForeignKey</code>, <code>ChildCollection</code>) classifying navigation properties
-          on domain entities: a <code>ForeignKey</code> navigation is a single-reference many-to-one (e.g.
-          <code>Product.Category</code>); a <code>ChildCollection</code> is a one-to-many (e.g. <code>Order.OrderLines</code>). Used by
-          <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> and <a href="#inavigationmetadata"><code>INavigationMetadata</code></a>
-          to direct the query pipeline&#39;s include strategy.</li>
-          <li><strong>Depends on</strong>: BCL only. Lives in the same file (<code>INavigationMetadata.cs</code>) as
-          <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> and <a href="#inavigationmetadata"><code>INavigationMetadata</code></a>.</li>
-          <li><strong>Concept introduced</strong>: <code>[Rubric §8, Data Architecture]</code> (assesses deliberate persistence and
-          query strategy): the include strategy differs by navigation type. FK navigations are always safe to
-          include eagerly; child collections can cause a Cartesian explosion if multiple collections are
-          <code>Include</code>d simultaneously. The query pipeline consults this enum (via the records that carry it) to
-          decide whether to use EF <code>.Include()</code> or a separate batch-load query.</li>
-          <li><strong>Walkthrough</strong>: <code>ForeignKey</code> (line 9): reference navigation. <code>ChildCollection</code> (line 12): collection
-          navigation. Values are not given explicit integers; switch/branch coverage is by name, not ordinal.</li>
-          <li><strong>Where it&#39;s used</strong>,
+          <li><strong>What it is</strong>: a two-value enum classifying navigation properties. <code>ForeignKey</code> is a
+          single-reference many-to-one (for example <code>Sponsor.Event</code>); <code>ChildCollection</code> is a one-to-many (for
+          example <code>Speaker.SpeakerCategoryItems</code>).</li>
+          <li><strong>Depends on</strong>: BCL only. It shares the file <code>INavigationMetadata.cs</code> with
+          <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> and
+          <a href="#inavigationmetadata"><code>INavigationMetadata</code></a>.</li>
+          <li><strong>Concept</strong>: <code>[Rubric §8, Data Architecture]</code> (assesses a deliberate persistence and query
+          strategy). The two kinds are loaded by two different mechanisms, so the classification has to
+          survive from the domain attribute all the way to the loader: FK navigations resolve by matching a
+          parent&#39;s nullable FK to a child key, child collections resolve by matching children&#39;s FK to the
+          parent key. Those are the two methods on <a href="#navigationloader"><code>NavigationLoader</code></a>, and the two
+          descriptor classes at the end of this chapter.</li>
+          <li><strong>Walkthrough</strong>: <code>ForeignKey</code> (line 9), <code>ChildCollection</code> (line 12). No explicit ordinals are
+          assigned, so the values are the implicit <code>0</code> and <code>1</code> and every branch in the codebase switches on
+          the names, not the numbers.</li>
+          <li><strong>Where it&#39;s used</strong>:
           <a href="group-03-querying-specifications.html#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a>
-          stamps each <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> it builds with this enum; downstream
-          the query pipeline uses it to pick the include strategy at query time.</li>
+          derives it from <code>NavigationAttribute.IsCollection</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/NavigationMetadataProvider.cs:78</code>),
+          stamps it onto each <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> it builds (line 90), and
+          uses it as half of the provider&#39;s cache key (line 28) so the FK and child-collection views of one
+          entity are computed and memoized separately.</li>
           </ul>
           <h3 id="navigationpropertyinfo">NavigationPropertyInfo</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationMetadata.cs:23</code> · Level 1 · record class (sealed)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationMetadata.cs:23</code> · Level 1 · record class (sealed, positional)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: metadata about a single navigation property: its CLR name, type (FK reference vs.
-          child collection), declaring entity type, and target entity type.</li>
-          <li><strong>Depends on</strong>: <a href="#navigationtype"><code>NavigationType</code></a> (Level 0, same file <code>INavigationMetadata.cs:6</code>);
-          <code>System.Type</code> (BCL).</li>
-          <li><strong>Concept</strong>: <code>[Rubric §2, Design Patterns]</code> (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>, navigation populators). The query pipeline
-          needs to decide <em>per-navigation</em> whether to use EF <code>Include</code> (same data source) or a batch populator
-          (cross-source). <code>NavigationPropertyInfo</code> carries the information needed to make that decision; it is
-          the unit of metadata that <a href="#inavigationmetadata"><code>INavigationMetadata</code></a> (same file, line 34) sorts
-          into <code>SupportedIncludes</code> (same source) and <code>UnsupportedIncludes</code> (cross-source). These records are
-          built by
-          <a href="group-03-querying-specifications.html#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a> by
-          reading <a href="#navigationattribute"><code>NavigationAttribute</code></a> off entity properties.</li>
-          <li><strong>Walkthrough</strong>: a positional <code>sealed record class</code> with four members (lines 23-28):
-          <code>PropertyName</code> (the CLR property name on the declaring entity), <code>Type</code>
-          (<a href="#navigationtype"><code>NavigationType</code></a>), <code>DeclaringEntityType</code>, and <code>TargetEntityType</code> (the related
-          type, &quot;unwrapped from collection generics&quot; per the doc comment, i.e. for <code>ICollection&lt;Room&gt;</code> the
-          target is <code>Room</code>, not the collection). Record equality means two infos describing the same navigation
-          compare equal.</li>
-          <li><strong>Where it&#39;s used</strong>: aggregated into an <a href="#inavigationmetadata"><code>INavigationMetadata</code></a> per entity type
-          and consumed by the query service to drive eager-loading and batch-populator selection.</li>
+          <li><strong>What it is</strong>: the metadata unit for a single navigation property: its CLR name, its kind, the
+          entity type that declares it, and the entity type it targets.</li>
+          <li><strong>Depends on</strong>: <a href="#navigationtype"><code>NavigationType</code></a> (Level 0, same file, line 6) and <code>System.Type</code>
+          (BCL).</li>
+          <li><strong>Concept</strong>: <code>[Rubric §2, Design Patterns]</code>
+          (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>). The query pipeline
+          decides <em>per navigation</em> whether EF can <code>Include</code> it (both ends in one data source) or whether a
+          populator must batch-load it (the ends are split). <code>NavigationPropertyInfo</code> carries precisely the
+          four facts that decision needs, and <code>DeclaringEntityType</code>/<code>TargetEntityType</code> are what get handed to
+          the data-source capability check.</li>
+          <li><strong>Walkthrough</strong>: four positional members (lines 23-28). <code>PropertyName</code> is the CLR property name on
+          the declaring entity, and it is the join key against a descriptor&#39;s <code>PropertyName</code> later on.
+          <code>Type</code> is the <a href="#navigationtype"><code>NavigationType</code></a>. <code>DeclaringEntityType</code> and <code>TargetEntityType</code> are
+          <code>System.Type</code>, and the target is <em>unwrapped from collection generics</em>: for a property typed
+          <code>IReadOnlyCollection&lt;SpeakerCategoryItem&gt;</code> the target is <code>SpeakerCategoryItem</code>, not the collection
+          (the unwrapping happens in <code>NavigationMetadataProvider.UnwrapCollectionType</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/NavigationMetadataProvider.cs:106-116</code>,
+          which handles <code>ICollection&lt;T&gt;</code> and <code>IReadOnlyCollection&lt;T&gt;</code>). Being a <code>record class</code> gives value
+          equality for free, so two infos describing the same navigation compare equal.</li>
+          <li><strong>Where it&#39;s used</strong>: constructed by
+          <a href="group-03-querying-specifications.html#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a>
+          (line 90) and accumulated into the two lists of
+          <a href="#inavigationmetadata"><code>INavigationMetadata</code></a> / <a href="#navigationmetadata"><code>NavigationMetadata</code></a>.</li>
           </ul>
           <h3 id="inavigationmetadata">INavigationMetadata</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationMetadata.cs:34</code> · Level 2 · interface</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: categorizes an entity&#39;s navigation properties into two read-only buckets: those that
-          support EF Core <code>.Include()</code> (<code>SupportedIncludes</code>) and those requiring manual batch loading
-          (<code>UnsupportedIncludes</code>). Both expose <code>IReadOnlyList&lt;NavigationPropertyInfo&gt;</code>.</li>
-          <li><strong>Depends on</strong>: <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> /
-          <a href="#navigationtype"><code>NavigationType</code></a> (same file, Levels 1/0).</li>
-          <li><strong>Concept reinforced, the per-entity view of <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> (navigation populators).</strong> <code>[Rubric §2, Design Patterns]</code> and <code>[Rubric §8, Data Architecture]</code> (cross-source navigations cannot be EF-
-          included and must be loaded separately). This is the read-only interface that
-          <a href="#navigationmetadata"><code>NavigationMetadata</code></a> (Level 3) implements; the split between
-          <code>SupportedIncludes</code> and <code>UnsupportedIncludes</code> is the decision that routes a query down the EF-<code>Include</code>
-          path or the manual-populator path. <code>[Rubric §7, Microservices Readiness]</code> is in play too: a
-          navigation lands in <code>UnsupportedIncludes</code> precisely when its two ends live in different physical data
-          sources (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>), so this bucketing is what lets an extracted module keep its object graph hydrated
-          without cross-database foreign keys.</li>
-          <li><strong>Walkthrough</strong>: two members (lines 37, 40): <code>SupportedIncludes</code> (EF <code>.Include()</code>, same source) and
-          <code>UnsupportedIncludes</code> (manual batch loading, cross source). Both are <code>IReadOnlyList&lt;…&gt;</code>, the
-          interface is purely a <em>view</em>; mutation is reserved for the concrete builder.</li>
-          <li><strong>Where it&#39;s used</strong>: consumed by <a href="#navigationmetadata"><code>NavigationMetadata</code></a> (its implementation),
-          by <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a> (which reads
-          <code>UnsupportedIncludes</code> to decide what to load), and by the query pipeline in
-          <a href="group-03-querying-specifications.html">group 03</a> to build include paths per entity query.</li>
+          <li><strong>What it is</strong>: the read-only view that splits an entity&#39;s navigations into two buckets, those EF
+          Core can eager-load with <code>.Include()</code> and those that require manual batch loading.</li>
+          <li><strong>Depends on</strong>: <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> and, transitively,
+          <a href="#navigationtype"><code>NavigationType</code></a> (same file, Levels 1 and 0).</li>
+          <li><strong>Concept reinforced, the per-entity view of
+          <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>.</strong> <code>[Rubric §2, Design Patterns]</code> and <code>[Rubric §8, Data Architecture]</code>: a navigation whose two ends live in
+          different physical data sources cannot become a SQL JOIN, so it has to be a second query. This
+          two-list split <em>is</em> that routing decision, computed once and then obeyed by the whole query path.
+          <code>[Rubric §7, Microservices Readiness]</code> is equally in play: a navigation lands in
+          <code>UnsupportedIncludes</code> exactly when database-per-service
+          (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>) has separated its
+          ends, so this bucketing is what lets an extracted module keep its object graph hydrated without
+          cross-database foreign keys.</li>
+          <li><strong>Walkthrough</strong>: two members, <code>SupportedIncludes</code> (line 37) and <code>UnsupportedIncludes</code> (line 40),
+          both <code>IReadOnlyList&lt;NavigationPropertyInfo&gt;</code>. The interface is purely a view; it declares no
+          mutators at all, which is what forces population to go through the concrete builder below.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by <a href="#navigationmetadata"><code>NavigationMetadata</code></a>. Consumers read the
+          two lists rather than the interface itself in most call sites, because the query path passes the
+          concrete builder type around (see the caveat on the next section).</li>
           </ul>
           <h3 id="navigationmetadata">NavigationMetadata</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/NavigationMetadata.cs:9</code> · Level 3 · class (sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the concrete mutable builder for <a href="#inavigationmetadata"><code>INavigationMetadata</code></a>:
-          maintains two <code>List&lt;NavigationPropertyInfo&gt;</code>, &quot;supported&quot; (EF Core <code>Include</code>) and &quot;unsupported&quot;
-          (cross-data-source, handled by <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>).</li>
-          <li><strong>Depends on</strong>: <a href="#inavigationmetadata"><code>INavigationMetadata</code></a> (Level 2, the interface it implements),
-          <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> (Level 1).</li>
-          <li><strong>Concept reinforced, separating EF-includable from manually-loaded navigations (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>).</strong>
-          <code>[Rubric §8, Data Architecture]</code> (navigations that cross data-source boundaries cannot be EF-included
-          and must be loaded separately). The classic <em>builder with a read-only public view</em> shape: the two
-          backing lists are private, the two <code>IReadOnlyList&lt;…&gt;</code> properties expose them, and all four mutators are
-          <code>internal</code>.
-          <a href="group-03-querying-specifications.html#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a>
-          (Application) reads <code>[Navigation]</code> attributes from the entity type and sorts navigations into the two
-          lists at startup; the query pipeline then uses <code>SupportedIncludes</code> for <code>.Include()</code> and
-          <code>UnsupportedIncludes</code> for <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator</code></a> batch loading.</li>
-          <li><strong>Walkthrough</strong>: two private list fields initialized to <code>[]</code> (lines 11-12); the two read-only
-          properties (lines 15, 18) return them as <code>IReadOnlyList&lt;…&gt;</code>; four <code>internal</code> mutators,
-          <code>AddSupported</code>, <code>AddUnsupported</code>, <code>AddSupportedRange</code>, <code>AddUnsupportedRange</code> (lines 22-34). <code>internal</code>
-          visibility means only <code>NavigationMetadataProvider</code> (same assembly) can populate the object; every
-          external consumer sees only the read-only <a href="#inavigationmetadata"><code>INavigationMetadata</code></a> face. Note the
-          query-side passes the <em>concrete</em> <code>NavigationMetadata</code> (not the interface) into
-          <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator.PopulateAsync</code></a>, populators read
-          <code>UnsupportedIncludes</code> off it.</li>
+          <li><strong>What it is</strong>: the concrete mutable builder behind <a href="#inavigationmetadata"><code>INavigationMetadata</code></a>.
+          It holds two <code>List&lt;NavigationPropertyInfo&gt;</code> (supported and unsupported) and exposes them read-only
+          while keeping every mutator <code>internal</code>.</li>
+          <li><strong>Depends on</strong>: <a href="#inavigationmetadata"><code>INavigationMetadata</code></a> (Level 2, the interface it
+          implements) and <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> (Level 1).</li>
+          <li><strong>Concept reinforced, builder with a read-only public face.</strong> <code>[Rubric §1, SOLID]</code> (the public
+          surface is the minimum a caller needs) and <code>[Rubric §8, Data Architecture]</code>. The two backing lists
+          are private and collection-initialized to <code>[]</code> (lines 11-12); the two <code>IReadOnlyList&lt;...&gt;</code>
+          properties project them (lines 15, 18); the four add methods are <code>internal</code> (lines 22, 26, 30, 34).
+          <code>internal</code> visibility is the enforcement mechanism: only code inside <code>MMCA.Common.Application</code> can
+          fill an instance, which in practice means
+          <a href="group-03-querying-specifications.html#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a> and
+          nothing else. Every module-authored populator receives a fully built instance and can only read it.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>_supportedIncludes</code> / <code>_unsupportedIncludes</code> (lines 11-12): the two backing lists.</li>
+          <li><code>SupportedIncludes</code> (line 15) / <code>UnsupportedIncludes</code> (line 18): the <code>IReadOnlyList&lt;...&gt;</code>
+          projections satisfying the interface.</li>
+          <li><code>AddSupported</code> (line 22) and <code>AddUnsupported</code> (line 26): single-item mutators, used by
+          <code>NavigationMetadataProvider.ClassifyNavigationProperty</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/NavigationMetadataProvider.cs:96-99</code>)
+          right after the data-source capability check decides which bucket a navigation belongs in.</li>
+          <li><code>AddSupportedRange</code> (line 30) and <code>AddUnsupportedRange</code> (line 34): the bulk mutators used by
+          <code>BuildIncludes</code> (same file, lines 38-39 and 45-46) to merge the cached per-kind metadata into the
+          per-request instance.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: the classification is expensive (reflection over every public property
+          plus a data-source lookup) and stable per <code>(entity type, NavigationType)</code>, so the provider caches a
+          built <code>NavigationMetadata</code> per key and copies ranges out of it into a fresh instance per request.
+          A mutable builder with an immutable public face is what makes sharing the cached instance safe.</li>
           <li><strong>Where it&#39;s used</strong>: built by
-          <a href="group-03-querying-specifications.html#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a> at
-          startup; consumed by the query pipeline and passed into every
-          <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator</code></a>&#39;s <code>PopulateAsync</code>.</li>
+          <a href="group-03-querying-specifications.html#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a>,
+          threaded through the <a href="group-03-querying-specifications.html#entityquerypipeline"><code>EntityQueryPipeline</code></a>,
+          and passed by value into every
+          <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>&#39;s <code>PopulateAsync</code>.</li>
+          <li><strong>Caveats</strong>: the populator contract takes the <strong>concrete</strong> <code>NavigationMetadata</code>, not
+          <a href="#inavigationmetadata"><code>INavigationMetadata</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationPopulator.cs:22</code>). The
+          interface therefore documents the shape but is not the type most consumers actually program
+          against.</li>
           </ul>
           <h3 id="inavigationpopulatorin-tentity">INavigationPopulator&lt;in TEntity&gt;</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationPopulator.cs:9</code> · Level 4 · interface</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the manual-loading contract for navigations that EF <code>Include</code> cannot handle (e.g.
-          cross-database / cross-container relationships). Modules implement this to load navigations <em>after</em>
-          the primary entities have been materialized.</li>
-          <li><strong>Depends on</strong>: <a href="#navigationmetadata"><code>NavigationMetadata</code></a> (Level 3, passed into <code>PopulateAsync</code>).</li>
-          <li><strong>Concept reinforced, the consumer side of <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>.</strong> A module&#39;s <code>INavigationPopulator&lt;TEntity&gt;</code>
-          implementation knows how to batch-load related data from a different data source and attach it to the
-          already-materialized entities. <code>[Rubric §2, Design Patterns]</code> (the <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> navigation-populator
-          pattern, a Strategy injected per entity type). <code>[Rubric §7, Microservices Readiness]</code> (cross-service
-          loading without cross-DB foreign keys: when a module is extracted and its related entity lives in
-          another service&#39;s database, this is how the navigation still gets filled). The <code>in TEntity</code>
-          <strong>contravariance</strong> lets a populator typed for a base entity satisfy a request for a derived one.</li>
-          <li><strong>Walkthrough</strong>: one method, <code>PopulateAsync(IReadOnlyCollection&lt;TEntity&gt; entities, NavigationMetadata navigationMetadata, bool includeFKs, bool includeChildren, CancellationToken)</code>
-          (lines 20-25). The <code>includeFKs</code>/<code>includeChildren</code> boolean pair mirrors the query&#39;s include request so
-          the populator only loads what was actually asked for; the <code>IReadOnlyCollection&lt;TEntity&gt;</code> argument is
-          the whole materialized page at once, which is what enables <em>batch</em> loading (one query for all parents)
-          rather than N+1.</li>
-          <li><strong>Why it&#39;s built this way</strong>: see <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>. Defining the port in <code>Application</code> (not <code>Infrastructure</code>)
-          keeps the query pipeline that calls it free of EF; the actual SQL is reached through repository
-          abstractions inside the implementations (<a href="#navigationloader"><code>NavigationLoader</code></a> and the descriptor
-          classes below).</li>
-          <li><strong>Where it&#39;s used</strong>: registered per entity type in DI; the default is
-          <a href="#nullnavigationpopulatortentity"><code>NullNavigationPopulator&lt;TEntity&gt;</code></a> and the generic real
-          implementation is <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a>.
-          Called by the query pipeline (<code>EntityQueryPipeline</code> in
-          <a href="group-03-querying-specifications.html#entityquerypipeline">group 03</a>) after EF materializes the page.</li>
+          <li><strong>What it is</strong>: the manual-loading port for navigations EF <code>Include</code> cannot serve. An
+          implementation receives a page of already-materialized entities and fills in their cross-source
+          relationships.</li>
+          <li><strong>Depends on</strong>: <a href="#navigationmetadata"><code>NavigationMetadata</code></a> (Level 3, a parameter on the single
+          method).</li>
+          <li><strong>Concept reinforced, the consumer side of
+          <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>.</strong> <code>[Rubric §2, Design Patterns]</code> (a Strategy resolved per entity type from DI) and <code>[Rubric §7, Microservices Readiness]</code> (when a module is extracted and the related entity lives in another service&#39;s database,
+          this is how the navigation still gets filled, with no cross-database FK). The <code>in TEntity</code>
+          <strong>contravariance</strong> annotation means a populator written against a base entity type satisfies a
+          request for a derived one.</li>
+          <li><strong>Walkthrough</strong>: one method, <code>PopulateAsync</code> (lines 20-25), taking
+          <code>IReadOnlyCollection&lt;TEntity&gt; entities</code>, a <a href="#navigationmetadata"><code>NavigationMetadata</code></a>, the
+          <code>includeFKs</code> / <code>includeChildren</code> pair, and a <code>CancellationToken</code>. Two design choices are load
+          bearing. First, the parameter is the <strong>whole page at once</strong>, which is what makes batch loading
+          possible: one query per navigation for all parents, instead of one per parent. Second, the two
+          booleans mirror the caller&#39;s original include request, so a populator loads only what was asked for
+          rather than everything it knows how to load.</li>
+          <li><strong>Why it&#39;s built this way</strong>: declaring the port in <code>Application</code> (not <code>Infrastructure</code>) keeps the
+          query pipeline that invokes it free of EF; implementations reach storage through the repository
+          abstractions, via <a href="#navigationloader"><code>NavigationLoader</code></a>. See
+          <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>.</li>
+          <li><strong>Where it&#39;s used</strong>: injected into
+          <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:36</code>, exposed as the
+          <code>NavigationPopulator</code> property at line 93 with a null guard). The service does not call it directly:
+          it passes the <strong>method group</strong> <code>NavigationPopulator.PopulateAsync</code> into the pipeline (lines 320 and
+          534), which declares the parameter as a plain delegate
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:43</code>) and
+          awaits it on the materialized page (line 199). Registered per closed entity type in module DI, for
+          example <code>services.TryAddScoped&lt;INavigationPopulator&lt;Sponsor&gt;, SponsorNavigationPopulator&gt;()</code>-style
+          registrations in each module&#39;s <code>DependencyInjection.cs</code>.</li>
           </ul>
           <h3 id="nullnavigationpopulatortentity">NullNavigationPopulator&lt;TEntity&gt;</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/NullNavigationPopulator.cs:11</code> · Level 5 · class (sealed, generic)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a no-op implementation of <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>
-          used when an entity has no cross-source navigations (nothing requires manual loading).</li>
-          <li><strong>Depends on</strong>: <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a> (Level 4),
+          <li><strong>What it is</strong>: the no-op <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>,
+          registered for entities whose navigations are all EF-resolvable so nothing needs manual loading.</li>
+          <li><strong>Depends on</strong>: <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a> (Level 4) and
           <a href="#navigationmetadata"><code>NavigationMetadata</code></a> (Level 3, in the signature it satisfies).</li>
           <li><strong>Concept introduced, the Null Object pattern.</strong> <code>[Rubric §2, Design Patterns]</code> (assesses idiomatic
-          pattern use). Callers that request a populator for an entity with only same-source navigations receive
-          this no-op instead of having to do a <code>null</code> check or a conditional branch throughout the query
-          pipeline. The pipeline always calls <code>PopulateAsync</code> and never has to know whether it got the real
-          populator or this stub, branchless polymorphism.</li>
-          <li><strong>Walkthrough</strong>: one method whose entire body is <code>=&gt; Task.CompletedTask;</code> (lines 14-19). It accepts
-          the full <code>INavigationPopulator</code> signature and ignores every argument. <code>sealed</code> because there is
-          nothing to extend.</li>
-          <li><strong>Why it&#39;s built this way</strong>: registering this as the <em>default</em> <code>INavigationPopulator&lt;TEntity&gt;</code> (per
-          the doc comment, line 8) means a module that needs no cross-source loading registers nothing extra,
-          yet the pipeline&#39;s call site stays uniform.</li>
-          <li><strong>Where it&#39;s used</strong>: registered as the default <code>INavigationPopulator&lt;TEntity&gt;</code> in DI for entities
-          that don&#39;t need cross-source loading; superseded by
-          <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a> for entities that
-          do.</li>
+          pattern use). Because
+          <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>
+          hard-requires a populator (it throws <code>ArgumentNullException</code> when the constructor argument is null,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:93</code>), every entity
+          must have one registered. A null-object implementation lets the pipeline keep one uniform call site
+          with no null checks and no conditional branch: branchless polymorphism.</li>
+          <li><strong>Walkthrough</strong>: a single expression-bodied method whose entire body is <code>=&gt; Task.CompletedTask;</code>
+          (lines 14-19). It accepts the full contract signature and ignores every argument. <code>sealed</code>, because
+          there is nothing meaningful to extend.</li>
+          <li><strong>Why it&#39;s built this way</strong>: returning the already-completed <code>Task.CompletedTask</code> singleton (rather
+          than <code>async</code> with no awaits) allocates nothing per call, so the no-op path costs essentially
+          nothing on a hot query route (<code>[Rubric §12, Performance &amp; Scalability]</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: registered explicitly per closed entity type with <code>TryAddScoped</code> in module
+          composition, for example
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:38</code> for
+          <code>PushNotification</code>,
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:47</code> for
+          <code>Customer</code>, and
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/DependencyInjection.cs:54</code> for
+          <code>InventoryItem</code>. Entities that do need cross-source loading register a
+          <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a> subclass
+          instead.</li>
+          <li><strong>Caveats</strong>: the doc comment (line 8) describes it as &quot;registered as the default when a module does
+          not provide a custom populator&quot;, but there is no open-generic fallback registration in the
+          framework: each module registers this type explicitly for each entity that needs it. Forgetting the
+          registration surfaces as a DI resolution failure, not as a silent no-op.</li>
           </ul>
           <h3 id="navigationloader">NavigationLoader</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/NavigationLoader.cs:21</code> · Level 6 · class (static)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a static utility for <strong>batch-loading</strong> navigation properties across a collection of
-          parent entities using a single <code>WHERE FK IN (...)</code> query, avoiding the N+1 query pattern.</li>
+          <li><strong>What it is</strong>: the batch-loading engine. Two static methods load a navigation for a whole
+          collection of parents with a single <code>WHERE fk IN (...)</code> query each, and a cache keeps the compiled
+          grouping delegates around.</li>
           <li><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
-          (Level 3, the generic constraint on the child type); <code>IReadRepository&lt;TChildEntity, TChildIdentifierType&gt;</code> (the read port it queries through, in
-          <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype">group 07</a>); BCL
-          <code>System.Linq.Expressions</code> and <code>System.Collections.Concurrent</code>.</li>
-          <li><strong>Concept introduced, expression-tree-based batch loading as N+1 prevention.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses query efficiency and N+1 avoidance). When a navigation populator
-          needs to load 200 sessions&#39; rooms, the naïve approach is 200 individual <code>GetByIdAsync</code> calls (N+1).
-          <code>NavigationLoader</code> instead: (1) collects all distinct FK values from the parent collection; (2) builds
-          a <code>child =&gt; parentIds.Contains(child.ForeignKey)</code> expression tree at runtime; (3) executes a single
-          <code>GetAllAsync(where: lambda, asTracking: false)</code> call (read-only, no change tracking); (4) groups the
-          results into a lookup keyed by FK and assigns the right slice back to each parent. A
-          <code>ConcurrentDictionary</code> caches the compiled FK-selector delegate so the expression-compilation cost is
-          paid only once per distinct expression.</li>
+          (Level 3, the constraint on the child type),
+          <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>
+          (Level 5, the read port it queries through). BCL: <code>System.Linq.Expressions</code> and
+          <code>System.Collections.Concurrent</code>.</li>
+          <li><strong>Concept introduced, runtime expression-tree composition as N+1 prevention.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses query efficiency and N+1 avoidance). Loading the category
+          items for a page of 200 speakers one at a time is 200 round trips. <code>NavigationLoader</code> instead:
+          (1) collects the distinct key values off the parent collection; (2) builds a
+          <code>child =&gt; keys.Contains(child.Fk)</code> expression tree by hand, so EF can translate it to a single SQL
+          <code>IN (...)</code>; (3) executes one repository call; (4) groups the results into a dictionary keyed by the
+          FK and assigns each parent its slice. The expression tree is built rather than written as a lambda
+          because the FK selector is supplied by the caller at runtime, so there is no compile-time lambda to
+          write.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>CompiledExpressionCache</code> (line 27): the static <code>ConcurrentDictionary&lt;string, Delegate&gt;</code> of compiled
-          selectors, shared process-wide.</li>
-          <li><strong><code>LoadFKPropertyAsync</code></strong> (line 44): for FK navigations where the parent references one child (e.g.
-          <code>Product.CategoryId → Category</code>). Collects distinct non-null FK values (lines 54-59); short-circuits
-          to assigning empty lists when there are none (lines 61-69); builds the <code>Contains</code> call against the
-          distinct-id list (lines 72-78); runs the single query (lines 80-84); groups by the compiled selector
-          (lines 87-90) and assigns by each parent&#39;s FK (lines 92-99). Constraint
-          <code>TChildIdentifierType : struct</code> (line 52) is needed because the parent FK is nullable
-          (<code>TChildIdentifierType?</code>) and the <code>HasValue</code>/<code>Value</code> calls require a value type.</li>
-          <li><strong><code>LoadChildrenPropertyAsync</code></strong> (line 118): for collection navigations where children reference the
-          parent (e.g. <code>Order → OrderLines</code>). Same shape, but keyed on the parent&#39;s (non-null) primary key,
-          constraint <code>TParentIdentifierType : notnull</code> (line 125) rather than <code>struct</code>, since a PK is never
-          nullable.</li>
-          <li><strong><code>GetOrCompileExpression</code></strong> (line 175) / <strong><code>GetMemberPath</code></strong> (line 188): the cache key is
-          <code>&quot;{SourceType.FullName}:{memberPath}&quot;</code>, where <code>GetMemberPath</code> walks the <code>MemberExpression</code> chain so
-          the key is <em>parameter-name independent</em>, <code>x =&gt; x.CategoryId</code> and <code>c =&gt; c.CategoryId</code> produce the
-          same key (the doc comment on line 184 calls this out).</li>
+          <li><code>CompiledExpressionCache</code> (line 27): a <code>static readonly ConcurrentDictionary&lt;string, Delegate&gt;</code>,
+          process-wide, holding compiled selectors.</li>
+          <li><strong><code>LoadFKPropertyAsync</code></strong> (line 44) handles the many-to-one direction (a parent holds a nullable
+          FK to one child). Collects distinct non-null FK values (lines 54-59). If there are none it
+          assigns every parent an empty list and returns without querying (lines 61-69). Builds the
+          <code>Contains</code> call over the distinct id list (lines 72-78) and wraps it in an
+          <code>Expression.Lambda&lt;Func&lt;TChildEntity, bool&gt;&gt;</code> (line 78). Runs one
+          <code>GetAllAsync([], where: lambda, asTracking: false, ...)</code> (lines 80-84): the <code>[]</code> is the nested
+          include list (none) and <code>asTracking: false</code> keeps the read out of the change tracker. Groups by
+          the compiled selector (lines 87-90) and assigns per parent, empty list when the FK is null (lines
+          92-99). Constraint <code>TChildIdentifierType : struct</code> (line 52) is what makes the nullable
+          <code>TChildIdentifierType?</code> parent key legal.</li>
+          <li><strong><code>LoadChildrenPropertyAsync</code></strong> (line 118) handles the one-to-many direction (children hold the
+          FK back to the parent). Same four steps, keyed on the parent&#39;s own primary key, so there is no
+          null filtering (lines 129-132) and the constraint is <code>TParentIdentifierType : notnull</code> (line 125)
+          rather than <code>struct</code>.</li>
+          <li><strong><code>GetOrCompileExpression</code></strong> (line 175) builds the cache key as
+          <code>&quot;{TSource.FullName}:{memberPath}&quot;</code> and <code>GetOrAdd</code>s the compiled delegate.</li>
+          <li><strong><code>GetMemberPath</code></strong> (line 188) walks the <code>MemberExpression</code> chain and joins the names with <code>.</code>,
+          so the key is independent of the lambda&#39;s parameter name: <code>x =&gt; x.Category.Name</code> and
+          <code>e =&gt; e.Category.Name</code> both key on <code>&quot;Category.Name&quot;</code> (the doc comment at lines 183-187 says so).
+          A non-member body falls back to <code>expression.ToString()</code> (line 206).</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: building the predicate as an expression tree (rather than a compiled
-          delegate) lets EF translate it to SQL <code>IN (...)</code> server-side; the delegate cache avoids re-compiling
-          the <em>grouping</em> selector on every call. This is <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>&#39;s batch-loading engine.</li>
-          <li><strong>Where it&#39;s used</strong>: called by the descriptor classes in this group
-          (<a href="#childnavigationdescriptortentity-tparentid-tchild-tchildid"><code>ChildNavigationDescriptor</code></a> and
-          <a href="#fknavigationdescriptortentity-tchild-tchildid"><code>FKNavigationDescriptor</code></a>), which is how
-          <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a> and hand-written
-          populators reach it.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the predicate must stay an <strong>expression</strong> so EF translates it to
+          server-side SQL, while the grouping selector must be a <strong>compiled delegate</strong> because it runs in
+          memory over the materialized rows. Those are two different needs from the same
+          <code>Expression&lt;Func&lt;TChild, TKey&gt;&gt;</code> argument, which is why the type both passes it to <code>Where</code> and
+          compiles it. Caching the compiled form means the compilation cost is paid once per distinct
+          selector for the life of the process. This is
+          <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>&#39;s loading engine.</li>
+          <li><strong>Where it&#39;s used</strong>: called only through the two descriptor classes below
+          (<a href="#childnavigationdescriptortentity-tparentid-tchild-tchildid"><code>ChildNavigationDescriptor</code></a> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Navigation/ChildNavigationDescriptor.cs:41</code>
+          and <a href="#fknavigationdescriptortentity-tchild-tchildid"><code>FKNavigationDescriptor</code></a> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Navigation/FKNavigationDescriptor.cs:39</code>),
+          which is how <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a>
+          reaches it.</li>
+          <li><strong>Caveats</strong>: the <code>ToString()</code> fallback in <code>GetMemberPath</code> does include the parameter name, so two
+          structurally identical non-member selectors written with different parameter names would occupy two
+          cache entries. That is a duplicate entry, not a wrong result. The cache is unbounded, and its keys
+          are derived from type names and member paths, both of which are finite per process.</li>
           </ul>
           <h3 id="inavigationdescriptorin-tentity">INavigationDescriptor&lt;in TEntity&gt;</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Navigation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Navigation/INavigationDescriptor.cs:10</code> · Level 8 · interface</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a contract describing a single navigation property that needs <em>manual</em> batch loading,
-          consumed by <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a> to
-          remove per-entity boilerplate.</li>
-          <li><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a> (passed into
-          <code>LoadAsync</code> so the descriptor can resolve a read repository).</li>
-          <li><strong>Concept reinforced, declarative cross-source navigation (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>).</strong> Three members (lines 13-27):
-          <code>PropertyName</code> (must match the EF property name so it can be matched against
-          <code>NavigationMetadata.UnsupportedIncludes</code>), <code>RequiresChildren</code> (whether <code>includeChildren</code>, <code>true</code>, or
-          <code>includeFKs</code>, <code>false</code>, triggers it), and <code>LoadAsync(entities, unitOfWork, ct)</code> which <strong>batch-loads</strong>
-          the navigation for <em>all</em> parents in one query. <code>[Rubric §2, Design Patterns]</code> (Strategy, one
-          descriptor per navigation) and <code>[Rubric §12, Performance]</code> (batch load avoids the N+1 problem). This
-          is the application-layer piece that the query service invokes (via
-          <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator.PopulateAsync</code></a>) for navigations EF can&#39;t
-          <code>Include</code> because the two ends live in different physical databases (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). The <code>in TEntity</code>
-          contravariance matches the populator&#39;s.</li>
+          <li><strong>What it is</strong>: the declaration of one navigation that needs manual loading: what it is called,
+          which include flag turns it on, and how to load it for a batch of parents.</li>
+          <li><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a> (Level 7, passed into
+          <code>LoadAsync</code> so the descriptor can resolve its own read repository rather than capturing one).</li>
+          <li><strong>Concept introduced, the descriptor as a self-contained Strategy.</strong> <code>[Rubric §2, Design Patterns]</code>
+          (Strategy: one descriptor per navigation, interchangeable behind the interface) and <code>[Rubric §12, Performance]</code> (each <code>LoadAsync</code> is one batch query, not one per parent). The <code>in TEntity</code>
+          contravariance mirrors <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>&#39;s.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>PropertyName</code> (line 13): must match the EF/CLR property name, because
+          <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a> matches it by
+          string against <a href="#navigationmetadata"><code>NavigationMetadata.UnsupportedIncludes</code></a>.</li>
+          <li><code>RequiresChildren</code> (line 19): <code>true</code> means the caller&#39;s <code>includeChildren</code> gates this navigation,
+          <code>false</code> means <code>includeFKs</code> does. One boolean instead of a
+          <a href="#navigationtype"><code>NavigationType</code></a> value, because the populator only ever needs to pick between
+          the two flags it was handed.</li>
+          <li><code>LoadAsync(entities, unitOfWork, cancellationToken)</code> (lines 24-27): batch-loads the navigation for
+          all parents. Taking <code>IUnitOfWork</code> as a parameter (rather than a constructor dependency) is what
+          lets descriptors be plain <code>new</code>-ed object literals in a populator&#39;s base-constructor argument list.</li>
+          </ul>
+          </li>
           <li><strong>Why it&#39;s built this way</strong>: declaring each cross-source navigation as a small descriptor lets one
-          generic populator serve every entity, and keeps the descriptor out of Infrastructure: it depends only
-          on <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>, an Application abstraction, and
-          reaches SQL through <a href="#navigationloader"><code>NavigationLoader</code></a> + the read repository.</li>
-          <li><strong>Where it&#39;s used</strong>: implemented by the per-relationship descriptors below
-          (<a href="#childnavigationdescriptortentity-tparentid-tchild-tchildid"><code>ChildNavigationDescriptor</code></a> and
-          <a href="#fknavigationdescriptortentity-tchild-tchildid"><code>FKNavigationDescriptor</code></a>); aggregated by
+          generic populator serve every entity, and keeps the descriptor free of Infrastructure: it depends
+          only on <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>, an Application abstraction,
+          and reaches storage through <a href="#navigationloader"><code>NavigationLoader</code></a> and the read repository
+          (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>).</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by
+          <a href="#childnavigationdescriptortentity-tparentid-tchild-tchildid"><code>ChildNavigationDescriptor&lt;TEntity, TParentId, TChild, TChildId&gt;</code></a>
+          and <a href="#fknavigationdescriptortentity-tchild-tchildid"><code>FKNavigationDescriptor&lt;TEntity, TChild, TChildId&gt;</code></a>;
+          consumed as an <code>IReadOnlyList&lt;INavigationDescriptor&lt;TEntity&gt;&gt;</code> by
           <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a>.</li>
           </ul>
           <blockquote>
-          <p>The next two types, <code>ChildNavigationDescriptor</code> and <code>FKNavigationDescriptor</code>, are a
-          <strong>structurally identical sibling family</strong>: both are sealed
-          <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a> data objects whose <code>LoadAsync</code>
-          delegates to <a href="#navigationloader"><code>NavigationLoader</code></a>. The first teaches the shared shape; the second
-          cross-references it and only calls out what differs. They each get their own <code>###</code> heading so external
-          cross-links resolve.</p>
+          <p>The two concrete descriptors, <code>ChildNavigationDescriptor</code> and <code>FKNavigationDescriptor</code>, are a
+          <strong>structurally identical sibling pair</strong>: both are sealed
+          <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a> data objects with four
+          <code>required init</code> members whose <code>LoadAsync</code> delegates to <a href="#navigationloader"><code>NavigationLoader</code></a>. The
+          <code>ChildNavigationDescriptor</code> section below teaches the shared shape in full;
+          <code>FKNavigationDescriptor</code> (further down, after the populator that consumes them both) lists only
+          what differs. They keep separate <code>###</code> headings so cross-links to each resolve.</p>
           </blockquote>
           <h3 id="childnavigationdescriptortentity-tparentid-tchild-tchildid">ChildNavigationDescriptor&lt;TEntity, TParentId, TChild, TChildId&gt;</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Navigation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Navigation/ChildNavigationDescriptor.cs:15</code> · Level 9 · class (sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the one-to-many <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a>:
-          loads a child <em>collection</em> (e.g. <code>Event.Rooms</code>) by matching children whose FK equals the parent&#39;s
-          primary key. Used with <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a>
-          to load navigations EF cannot resolve via <code>Include</code> (cross-source, per <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>). It captures selectors
-          plus an assign callback; <code>LoadAsync</code> delegates to <a href="#navigationloader"><code>NavigationLoader</code></a>.</li>
-          <li><strong>Depends on</strong>: <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a> (Level 8, the
-          interface it implements); <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
-          (Level 3, the generic constraint on <code>TChild</code>); <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>
-          (Level 7, source of the read repository); <a href="#navigationloader"><code>NavigationLoader</code></a> (Level 6, the
-          batch-loading helper). BCL: <code>System.Linq.Expressions</code>.</li>
-          <li><strong>Concept introduced, descriptor types as strategy + data objects.</strong> <code>[Rubric §2, Design Patterns]</code>
-          (Strategy: a descriptor both <em>describes</em> a relationship and <em>executes</em> its load). Each descriptor is a
-          data object (all configuration via <code>required init</code> properties set at construction) plus one
-          <code>Task LoadAsync(...)</code> method, a minimal Strategy that composes with
-          <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator</code></a> by iteration. The
-          <code>required</code> keyword on <code>PropertyName</code>, <code>ParentKeySelector</code>, <code>ChildForeignKeySelector</code>, and
-          <code>AssignAction</code> means an incomplete descriptor cannot be constructed. <code>[Rubric §4, DDD]</code>
-          (relationships described in the Application layer without EF coupling, the
-          <a href="#navigationattribute"><code>[Navigation]</code></a> attribute marks the property in the domain model; the
-          descriptor loads it in the Application layer).</li>
-          <li><strong>Walkthrough</strong>: four <code>required init</code> properties (lines 22-34): <code>PropertyName</code> (matched against
-          <a href="#navigationmetadata"><code>NavigationMetadata.UnsupportedIncludes</code></a>), <code>ParentKeySelector</code>
-          (<code>Func&lt;TEntity, TParentId&gt;</code>), <code>ChildForeignKeySelector</code> (<code>Expression&lt;Func&lt;TChild, TParentId&gt;&gt;</code>, an
-          <em>expression</em> so <a href="#navigationloader"><code>NavigationLoader</code></a> can translate it into an EF <code>Where</code> predicate),
-          and <code>AssignAction</code> (<code>Action&lt;TEntity, List&lt;TChild&gt;&gt;</code> that writes the loaded list back to each parent).
-          <code>RequiresChildren =&gt; true</code> (line 25) tells the populator this is a collection navigation, loaded only
-          when <code>includeChildren</code> is true. <code>LoadAsync</code> (lines 37-47) delegates to
-          <code>NavigationLoader.LoadChildrenPropertyAsync</code>, pulling the read repository from
-          <code>unitOfWork.GetReadRepository&lt;TChild, TChildId&gt;()</code>. Constraints: <code>TParentId : notnull</code>,
-          <code>TChild : AuditableBaseEntity&lt;TChildId&gt;</code>, <code>TChildId : notnull</code> (lines 17-19).</li>
-          <li><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> motivates the pattern: cross-source includes cannot go through
-          EF <code>Include</code>, but the Application layer must not know about EF or the physical split. The descriptor is
-          the extension point, constructed in Application code (a module&#39;s <code>DependencyInjection.cs</code>, typed against domain
-          entity types) and delegating the actual batch query to <a href="#navigationloader"><code>NavigationLoader</code></a>, which
-          uses the read repository.</li>
-          <li><strong>Where it&#39;s used</strong>: constructed in per-module navigation-populator DI registrations (e.g. an Event
-          module&#39;s populator declaration that loads its child collection of Rooms). Consumed by
-          <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a>.</li>
+          <li><strong>What it is</strong>: the one-to-many descriptor. It loads a child <em>collection</em> (for example
+          <code>Speaker.SpeakerCategoryItems</code>) by fetching every child whose FK matches one of the parents&#39;
+          primary keys.</li>
+          <li><strong>Depends on</strong>: <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a> (Level 8,
+          the interface it implements),
+          <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
+          (Level 3, the constraint on <code>TChild</code>),
+          <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a> (Level 7, the source of the read
+          repository), and <a href="#navigationloader"><code>NavigationLoader</code></a> (Level 6). BCL:
+          <code>System.Linq.Expressions</code>.</li>
+          <li><strong>Concept introduced, configuration objects made total by <code>required</code>.</strong> <code>[Rubric §2, Design Patterns]</code> and <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses whether the language&#39;s own
+          guarantees are used instead of runtime checks). All four members are <code>required init</code>, so the
+          compiler rejects a partially configured descriptor at the construction site; there is no validation
+          code and no way to build an invalid one. <code>[Rubric §4, DDD]</code> also applies: the relationship is
+          <em>declared</em> in the domain with <a href="#navigationattribute"><code>NavigationAttribute</code></a> and <em>loaded</em> in the
+          Application layer here, with neither layer referencing EF.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>PropertyName</code> (line 22): <code>required</code>, matched by string against
+          <a href="#navigationmetadata"><code>NavigationMetadata.UnsupportedIncludes</code></a>.</li>
+          <li><code>RequiresChildren =&gt; true</code> (line 25): a hardcoded expression-bodied property, so this descriptor
+          is always gated on <code>includeChildren</code>.</li>
+          <li><code>ParentKeySelector</code> (line 28): <code>Func&lt;TEntity, TParentId&gt;</code>, a plain delegate because it runs
+          in memory over already-materialized parents.</li>
+          <li><code>ChildForeignKeySelector</code> (line 31): <code>Expression&lt;Func&lt;TChild, TParentId&gt;&gt;</code>, an <strong>expression</strong>
+          rather than a delegate because <a href="#navigationloader"><code>NavigationLoader</code></a> has to translate it into
+          the EF <code>Where</code> predicate.</li>
+          <li><code>AssignAction</code> (line 34): <code>Action&lt;TEntity, List&lt;TChild&gt;&gt;</code>, the write-back callback. Entities
+          expose set-collection methods for this purpose, for example
+          <code>AssignAction = (e, categoryItems) =&gt; e.SetSpeakerCategoryItems(categoryItems)</code> at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerNavigationPopulator.cs:20</code>.</li>
+          <li><code>LoadAsync</code> (lines 37-47): a one-expression delegation to
+          <code>NavigationLoader.LoadChildrenPropertyAsync</code>, resolving the child repository with
+          <code>unitOfWork.GetReadRepository&lt;TChild, TChildId&gt;()</code> (line 45). Note the descriptor holds no
+          repository of its own: it is a value that can be constructed in a field initializer and only
+          touches storage when invoked.</li>
+          <li>Constraints (lines 17-19): <code>TParentId : notnull</code>, <code>TChild : AuditableBaseEntity&lt;TChildId&gt;</code>,
+          <code>TChildId : notnull</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>
+          requires cross-source includes to bypass EF <code>Include</code> without the Application layer knowing about
+          EF or the physical split. Making the descriptor a pure data object with a single delegating method
+          is what lets a module declare its navigations as a collection literal in a constructor argument.</li>
+          <li><strong>Where it&#39;s used</strong>: constructed inline in per-entity populators, for example
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerNavigationPopulator.cs:15</code>
+          and <code>:22</code> (two child collections on <code>Speaker</code>), and
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/ConferenceCategoryNavigationPopulator.cs:15</code>.
+          Consumed by <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a>.</li>
+          </ul>
+          <h3 id="declarativenavigationpopulatortentity">DeclarativeNavigationPopulator&lt;TEntity&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Navigation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Navigation/DeclarativeNavigationPopulator.cs:14</code> · Level 9 · class</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the generic <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>
+          that drives a list of <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a>. It
+          decides <em>when</em> each descriptor runs; the descriptors know <em>how</em>.</li>
+          <li><strong>Depends on</strong>: <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a> (Level 4),
+          <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a> (Level 8),
+          <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a> (Level 7), and
+          <a href="#navigationmetadata"><code>NavigationMetadata</code></a> (Level 3).</li>
+          <li><strong>Concept introduced, declaration over implementation.</strong> <code>[Rubric §2, Design Patterns]</code> (the
+          descriptor list is a tiny declarative program that this class interprets by iteration) and
+          <code>[Rubric §16, Maintainability]</code> (adding a cross-source navigation means adding one object literal
+          to a collection expression, not writing a class). A module&#39;s populator is therefore a subclass with
+          an empty body whose entire content is its base-constructor argument, as at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerNavigationPopulator.cs:13-31</code>.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>Primary constructor (lines 14-17): <code>IUnitOfWork unitOfWork</code> and
+          <code>IReadOnlyList&lt;INavigationDescriptor&lt;TEntity&gt;&gt; descriptors</code>. Both are captured by the primary
+          constructor and used only inside <code>PopulateAsync</code>.</li>
+          <li><code>PopulateAsync</code> (line 20). The guard at line 27 returns immediately when <code>entities.Count == 0</code> or
+          <code>navigationMetadata.UnsupportedIncludes.Count == 0</code>: if every navigation is EF-resolvable, this
+          populator does no work at all, even for an entity that declares descriptors.</li>
+          <li>Lines 30-32 build a <code>HashSet&lt;string&gt;</code> of the unsupported include property names with
+          <code>StringComparer.Ordinal</code>, making the per-descriptor membership test O(1) and case sensitive
+          (ordinal, so <code>PropertyName</code> must match the CLR name exactly, which <code>nameof(...)</code> guarantees at
+          every real call site).</li>
+          <li>Lines 34-41 iterate the descriptors in declaration order:
+          <code>shouldLoad = descriptor.RequiresChildren ? includeChildren : includeFKs</code> (line 36), and the
+          descriptor&#39;s <code>LoadAsync</code> is awaited only when <code>shouldLoad</code> <strong>and</strong> the descriptor&#39;s
+          <code>PropertyName</code> is in the unsupported set (line 37). The two conditions are independent: the
+          caller decides what it wants, the metadata decides what EF cannot do, and only the intersection
+          is loaded.</li>
+          <li><code>.ConfigureAwait(false)</code> on line 39 keeps the loop off the captured synchronization context.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: the descriptors are awaited <strong>sequentially</strong>, one query per navigation
+          per page, which keeps a single <code>IUnitOfWork</code> (and therefore a single <code>DbContext</code>) safe to use, since
+          EF Core forbids concurrent operations on one context. That is a correctness constraint, not an
+          oversight: parallelizing here would require a repository per navigation.
+          <code>[Rubric §12, Performance &amp; Scalability]</code> still holds, because the cost is O(navigations) queries
+          rather than O(parents).</li>
+          <li><strong>Where it&#39;s used</strong>: subclassed once per entity that has cross-source navigations, and the subclass
+          registered as <code>INavigationPopulator&lt;TEntity&gt;</code> in module DI. ADC examples:
+          <a href="group-18-conference-application.html#speakernavigationpopulator"><code>SpeakerNavigationPopulator</code></a>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerNavigationPopulator.cs:13</code>),
+          <a href="group-18-conference-application.html#sponsornavigationpopulator"><code>SponsorNavigationPopulator</code></a>
+          (<code>.../Sponsors/SponsorNavigationPopulator.cs:14</code>), and
+          <a href="group-18-conference-application.html#categoryitemnavigationpopulator"><code>CategoryItemNavigationPopulator</code></a>
+          (<code>.../Categories/CategoryItemNavigationPopulator.cs:13</code>).</li>
+          <li><strong>Caveats</strong>: unlike the descriptors and
+          <a href="#nullnavigationpopulatortentity"><code>NullNavigationPopulator&lt;TEntity&gt;</code></a>, this class is deliberately
+          <strong>not</strong> <code>sealed</code> (line 14), because subclassing is its intended usage pattern. It is also legal to
+          subclass it with an empty descriptor list, which yields a populator that behaves like the null
+          object; <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/OrderNavigationPopulator.cs:13</code>
+          does exactly that with <code>[]</code>.</li>
           </ul>
           <h3 id="fknavigationdescriptortentity-tchild-tchildid">FKNavigationDescriptor&lt;TEntity, TChild, TChildId&gt;</h3>
           <blockquote>
@@ -599,72 +818,48 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the many-to-one sibling of
-          <a href="#childnavigationdescriptortentity-tparentid-tchild-tchildid"><code>ChildNavigationDescriptor</code></a>: loads a
-          single FK <em>reference</em> (e.g. <code>Product.Category</code>) by matching the parent&#39;s nullable FK value to the
-          child&#39;s primary key. Same Strategy + data-object shape as its sibling, see that section for the shared
-          treatment; only the differences are listed below.</li>
-          <li><strong>Depends on</strong>: identical to
-          <a href="#childnavigationdescriptortentity-tparentid-tchild-tchildid"><code>ChildNavigationDescriptor</code></a>:
+          <a href="#childnavigationdescriptortentity-tparentid-tchild-tchildid"><code>ChildNavigationDescriptor</code></a>. It
+          loads a single FK <em>reference</em> (for example <code>Sponsor.Event</code>) by matching each parent&#39;s nullable FK
+          value against the child&#39;s key.</li>
+          <li><strong>Depends on</strong>: identical to its sibling:
           <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a>,
           <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>,
           <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>,
-          <a href="#navigationloader"><code>NavigationLoader</code></a>, <code>System.Linq.Expressions</code>.</li>
-          <li><strong>Walkthrough, what differs</strong>: the constraint is <code>TChildId : struct</code> (line 17) rather than <code>notnull</code>,
-          because a nullable FK requires a value type; <code>ParentKeySelector</code> returns <code>TChildId?</code> (nullable, line
-          26); <code>RequiresChildren =&gt; false</code> (line 23) so the populator loads it when <code>includeFKs</code> (not
-          <code>includeChildren</code>) is true; and <code>LoadAsync</code> (lines 35-46) delegates to
-          <code>NavigationLoader.LoadFKPropertyAsync</code> (the FK overload) instead of the children overload. The
-          <code>PropertyName</code>/<code>ChildForeignKeySelector</code>/<code>AssignAction</code> members and the
-          <code>unitOfWork.GetReadRepository&lt;TChild, TChildId&gt;()</code> call are identical to the sibling.</li>
-          <li><strong>Where it&#39;s used</strong>: constructed in per-module navigation-populator DI registrations for cross-source
-          FK references; consumed by
-          <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a>.</li>
-          </ul>
-          <h3 id="declarativenavigationpopulatortentity">DeclarativeNavigationPopulator&lt;TEntity&gt;</h3>
-          <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Navigation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Navigation/DeclarativeNavigationPopulator.cs:14</code> · Level 9 · class</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: a generic <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a> that
-          eliminates per-entity boilerplate: it accepts a list of
-          <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a> at construction and iterates
-          them in <code>PopulateAsync</code>, calling each descriptor&#39;s <code>LoadAsync</code> only when the metadata marks that
-          navigation as unsupported (i.e. cross-source) <em>and</em> the caller requested the right kind (FK vs.
-          children).</li>
-          <li><strong>Depends on</strong>: <a href="#inavigationdescriptorin-tentity"><code>INavigationDescriptor&lt;in TEntity&gt;</code></a> (Level 8);
-          <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a> (Level 4);
-          <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a> (Level 7);
-          <a href="#navigationmetadata"><code>NavigationMetadata</code></a> (Level 3).</li>
-          <li><strong>Concept introduced, declarative populator as a Composite/Interpreter.</strong> <code>[Rubric §2, Design Patterns]</code> (a list of descriptors is <em>interpreted</em> by iterating them). Before this type existed, each
-          entity that needed cross-source loading required a hand-written
-          <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator</code></a> implementation with repetitive conditional
-          logic. <code>DeclarativeNavigationPopulator</code> replaces that boilerplate with one generic loop over
-          descriptors, the &quot;what to load&quot; is declared in DI registration code, the &quot;how&quot; lives in each
-          descriptor, and the &quot;when&quot; lives in this class. <code>[Rubric §16, Maintainability &amp; Evolvability]</code>
-          (adding a new cross-source navigation means adding one descriptor to a DI registration, not writing a
-          whole new class).</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li>Primary constructor (line 14, <code>DeclarativeNavigationPopulator.cs</code>): parameters <code>unitOfWork</code> and
-          <code>descriptors</code> (<code>IReadOnlyList&lt;INavigationDescriptor&lt;TEntity&gt;&gt;</code>).</li>
-          <li><code>PopulateAsync</code> (line 20): early-exits if <code>entities.Count == 0</code> or
-          <code>navigationMetadata.UnsupportedIncludes.Count == 0</code> (line 27), no work when there is nothing
-          cross-source to load. Builds a <code>HashSet&lt;string&gt;</code> of the unsupported include property names with a
-          case-sensitive <code>StringComparer.Ordinal</code> (lines 30-33). Then for each descriptor (lines 34-41):
-          <code>shouldLoad</code> is <code>descriptor.RequiresChildren ? includeChildren : includeFKs</code>; if <code>shouldLoad</code> and the
-          descriptor&#39;s <code>PropertyName</code> is in the unsupported set, it awaits
-          <code>descriptor.LoadAsync(entities, unitOfWork, ct)</code>. The <code>.ConfigureAwait(false)</code> (line 39) avoids
-          capturing the synchronization context on each iteration.</li>
+          <a href="#navigationloader"><code>NavigationLoader</code></a>, and <code>System.Linq.Expressions</code>.</li>
+          <li><strong>Concept</strong>: the same <code>required init</code> data-object Strategy taught in the
+          <a href="#childnavigationdescriptortentity-tparentid-tchild-tchildid"><code>ChildNavigationDescriptor</code></a> section;
+          only the differences are listed below.</li>
+          <li><strong>Walkthrough, what differs</strong><ul>
+          <li>Three type parameters instead of four (line 14): there is no <code>TParentId</code>, because the join runs
+          on the child&#39;s own key type, which <code>TChildId</code> already names.</li>
+          <li>Constraint <code>TChildId : struct</code> (line 17) rather than <code>notnull</code>, because the parent&#39;s FK is
+          nullable and <code>TChildId?</code> needs a value type.</li>
+          <li><code>ParentKeySelector</code> is <code>Func&lt;TEntity, TChildId?&gt;</code> (line 26), nullable: a parent with no FK set
+          simply receives an empty result.</li>
+          <li><code>RequiresChildren =&gt; false</code> (line 23), so this descriptor is gated on <code>includeFKs</code>.</li>
+          <li><code>LoadAsync</code> (lines 35-45) delegates to <code>NavigationLoader.LoadFKPropertyAsync</code> instead of the
+          children overload; the <code>unitOfWork.GetReadRepository&lt;TChild, TChildId&gt;()</code> resolution (line 43) is
+          identical.</li>
+          <li><code>PropertyName</code> (line 20), <code>ChildForeignKeySelector</code> (line 29), and <code>AssignAction</code> (line 32) are
+          declared exactly as on the sibling.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: the early-exit guard is a real performance optimization: if every
-          navigation is EF-resolvable (no unsupported includes) the populator does literally no work. The hash
-          set makes the per-descriptor property-name check O(1) even with many descriptors. Unlike its siblings
-          this class is <strong>not</strong> <code>sealed</code>, it is intended to be subclassed or used directly per entity type.</li>
-          <li><strong>Where it&#39;s used</strong>: registered as <code>INavigationPopulator&lt;TEntity&gt;</code> for entities with cross-source
-          relationships (e.g. <code>Event</code> → its cross-source <code>Rooms</code> collection), superseding
-          <a href="#nullnavigationpopulatortentity"><code>NullNavigationPopulator&lt;TEntity&gt;</code></a>. Injected into the query service
-          (<a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>)
-          at the composition root and invoked by the query pipeline after EF materializes the page.</li>
+          <li><strong>Where it&#39;s used</strong>: constructed inline in per-entity populators for cross-source FK references, for
+          example
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/SponsorNavigationPopulator.cs:16</code>
+          (<code>Sponsor.Event</code>),
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerCategoryItemNavigationPopulator.cs:15</code>,
+          and
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/CategoryItemNavigationPopulator.cs:15</code>.
+          Consumed by <a href="#declarativenavigationpopulatortentity"><code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code></a>.</li>
+          <li><strong>Caveats</strong>: <code>AssignAction</code> is typed <code>Action&lt;TEntity, List&lt;TChild&gt;&gt;</code> (line 32), a <strong>list</strong>, even
+          though this descriptor represents a single reference. That is because it shares
+          <a href="#navigationloader"><code>NavigationLoader</code></a>&#39;s assign signature with the collection case, so every real
+          FK call site ends in <code>.FirstOrDefault()</code>, as at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sponsors/SponsorNavigationPopulator.cs:21</code>.
+          Note also that the member named <code>ChildForeignKeySelector</code> is in practice the child&#39;s <strong>primary
+          key</strong> selector on this path (<code>child =&gt; child.Id</code> at the same file, line 20): the FK lives on the
+          parent side here, so the name describes the relationship, not the column being selected.</li>
           </ul>
           <hr>
           <p><a href="group-10-notifications.html">⬅ Notifications (Push + In-App Inbox + Email)</a>  •  <a href="index.html">Index</a>  •  <a href="group-12-api-hosting-mapping.html">API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping ➡</a></p>

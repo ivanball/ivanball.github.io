@@ -155,36 +155,36 @@
           <p>The split matters: specifications are trusted and live with the domain, dynamic filters are untrusted and are validated, capped, and reflection-cached at the application boundary.</p>
           <h2 id="the-specification-pattern-the-trusted-predicate">The Specification pattern, the trusted predicate</h2>
           <p><a href="#ispecificationtentity-tidentifiertype"><code>ISpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/ISpecification.cs:12</code>) exposes two faces of one rule: a <code>Criteria</code> expression tree that EF Core translates to SQL, so the filter runs in the database rather than in memory after a full-table load (<code>ISpecification.cs:17</code>), and <code>IsSatisfiedBy(entity)</code> for in-memory evaluation (<code>ISpecification.cs:22</code>). The abstract base <a href="#specificationtentity-tidentifiertype"><code>Specification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:15</code>) leaves <code>Criteria</code> abstract (<code>Specification.cs:23</code>), compiles it lazily on first use, and caches the delegate in a private field (<code>Specification.cs:27</code>, <code>Specification.cs:32</code>), so repeated in-memory checks do not recompile the tree.</p>
-          <p>The three combinators, <a href="#andspecificationtentity-tidentifiertype"><code>AndSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:81</code>), <a href="#orspecificationtentity-tidentifiertype"><code>OrSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:105</code>), and <a href="#notspecificationtentity-tidentifiertype"><code>NotSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:128</code>), each delegate to the internal <a href="#specificationcomposer"><code>SpecificationComposer</code></a> (<code>Specification.cs:146</code>) and cache the composed expression in a per-instance <code>_criteria</code> field rather than rebuilding it on every <code>Criteria</code> read (<code>Specification.cs:88-93</code>, <code>Specification.cs:112-117</code>, <code>Specification.cs:134-135</code>), because the pipeline reads <code>Criteria</code> at least once per request. <code>Combine</code> (<code>Specification.cs:155</code>) takes the left lambda&#39;s own parameter (<code>Specification.cs:167</code>), rebinds the right-hand body onto it, and joins the two with <code>Expression.AndAlso</code> or <code>Expression.OrElse</code> before closing the lambda (<code>Specification.cs:169-173</code>); <code>Negate</code> (<code>Specification.cs:181</code>) wraps the body in <code>Expression.Not</code> while keeping the inner lambda&#39;s parameter (<code>Specification.cs:189-191</code>). The rebinding is done by <a href="#parameterreplacer"><code>ParameterReplacer</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/ParameterReplacer.cs:24</code>), an <code>ExpressionVisitor</code> whose static <code>Replace</code> short-circuits when the two parameters are already the same instance (<code>ParameterReplacer.cs:34</code>, <code>ParameterReplacer.cs:40</code>) and whose <code>VisitParameter</code> swaps the rest (<code>ParameterReplacer.cs:44</code>). Composing by substitution rather than <code>Expression.Invoke</code> is a deliberate portability decision: an <code>InvocationExpression</code> survives into the query tree and several providers (Cosmos among them) refuse to translate one, so an ANDed specification failed on exactly the engines the framework is meant to be portable across (<code>Specification.cs:66-69</code>, <code>ParameterReplacer.cs:12-16</code>). The visitor is <code>internal</code> and reaches the Application layer through <code>InternalsVisibleTo</code> so the cross-source builder shares one copy rather than carrying its own (<code>ParameterReplacer.cs:19-23</code>). <a href="#specificationextensions"><code>SpecificationExtensions</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/SpecificationExtensions.cs:30</code>) puts a fluent face on those three, as <code>extension&lt;TEntity, TIdentifierType&gt;</code> members (<code>SpecificationExtensions.cs:32</code>) exposing <code>And</code> (<code>SpecificationExtensions.cs:48</code>), <code>Or</code> (<code>SpecificationExtensions.cs:68</code>), and <code>Not</code> (<code>SpecificationExtensions.cs:85</code>), so a composed predicate reads left to right instead of inside out.</p>
-          <p>Concrete specifications are how a controller scopes a query to allowed data without trusting the request to do it. ADC has two, both one-liners: <a href="group-18-conference-application.html#publishedeventspecification"><code>PublishedEventSpecification</code></a> is <code>e =&gt; e.IsPublished</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Specifications/PublishedEventSpecification.cs:11</code>, criteria at <code>PublishedEventSpecification.cs:14</code>), and <a href="group-18-conference-application.html#publicsessionstatusspecification"><code>PublicSessionStatusSpecification</code></a> allows the public session-status list (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Specifications/PublicSessionStatusSpecification.cs:20</code>), exposing its predicate as a <code>public static readonly</code> expression (<code>PublicSessionStatusSpecification.cs:23</code>) so the cross-source filter and the visible-session id resolver share one definition rather than each re-deriving BR-49 (<code>Criteria</code> simply returns it at <code>PublicSessionStatusSpecification.cs:27</code>). The framework also ships one ready-made scope: <a href="#ownedbyuserspecificationtentity-tidentifiertype"><code>OwnedByUserSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/OwnedByUserSpecification.cs:20</code>) filters on the audit field <code>CreatedBy</code> as the ownership marker (<code>OwnedByUserSpecification.cs:29-30</code>), and its constraint is deliberately the concrete <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a> rather than an <code>IAuditableEntity</code> interface, because a member access declared on an interface is not guaranteed to map to the entity&#39;s audit column and the criteria must stay EF-translatable (<code>OwnedByUserSpecification.cs:12-16</code>). ADC&#39;s question-answer controllers are its callers, and they show the intended shape: an organizer gets <code>null</code> (no scoping at all), everyone else gets the specification bound to their own user id (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:67-68</code>, and the same pair at <code>SessionQuestionAnswersController.cs:67-68</code>). This is [Rubric §4, Domain-Driven Design] (the rule is a first-class, reusable domain object) and [Rubric §2, Design Patterns] (a textbook Specification), with a [Rubric §11, Security] overtone: an authorization predicate is server-supplied criteria the client cannot tamper with.</p>
-          <p>Two members round the family out for polyglot persistence (<a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>). <a href="#inlinespecificationtentity-tidentifiertype"><code>InlineSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:45</code>) wraps an already-composed <code>Criteria</code> expression as a first-class specification (<code>Specification.cs:51-52</code>), for predicates built at runtime where no hand-written class exists. The static <a href="#crosssourcespecification"><code>CrossSourceSpecification</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:22</code>) builds the cross-source filter: when a dependent entity references a principal that lives in a different physical data source (database-per-service, <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>), a navigating predicate like <code>s =&gt; s.Event.IsPublished</code> cannot be translated, so <code>BuildAsync</code> (<code>CrossSourceSpecification.cs:39</code>) first projects the matching principal keys from the principal&#39;s own source through the read repository&#39;s <code>GetProjectedAsync</code> (<code>CrossSourceSpecification.cs:55-56</code>), materializes them once (<code>CrossSourceSpecification.cs:60</code>), and returns an <code>InlineSpecification</code> (<code>CrossSourceSpecification.cs:62</code>) whose body is an <code>Enumerable.Contains(keys, dependent.ForeignKey)</code> call that translates to <code>IN</code> or <code>ARRAY_CONTAINS</code> (<code>CrossSourceSpecification.cs:74-79</code>). An optional local predicate on the dependent&#39;s own columns is rebound onto the foreign-key selector&#39;s parameter by the shared <code>ParameterReplacer</code> (<code>CrossSourceSpecification.cs:86</code>) and ANDed in (<code>CrossSourceSpecification.cs:87</code>), again without <code>Expression.Invoke</code> so the combined predicate stays translatable on every provider (<code>CrossSourceSpecification.cs:83-85</code>). The doc comment is explicit about the limit: the keys are materialized and embedded in the predicate, so the shape fits bounded principal sets (<code>CrossSourceSpecification.cs:17-20</code>). ADC uses it in production on both of its Session reads, each passing <code>PublicSessionStatusSpecification.StatusCriteria</code> as the local predicate: <a href="group-18-conference-application.html#getpublicsessionfilterhandler"><code>GetPublicSessionFilterHandler</code></a> returns the specification as a query result (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:29-36</code>), and <a href="group-18-conference-application.html#publicconferencevisibility"><code>PublicConferenceVisibility</code></a> uses the same criteria to resolve the visible session ids so a session hidden from the session list cannot stay reachable through a speaker or junction read (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:63-69</code>). The convention this exists to serve is guarded by an opt-in fitness rule, <code>ArchitectureRules.SpecificationsDoNotNavigateToOtherEntities</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Specifications.cs:24</code>), which analyzes only the parameterless specifications it can instantiate (<code>ArchitectureRules.Specifications.cs:38-41</code>) and is exposed to repos as the single-fact base <a href="group-27-testing-infrastructure.html#specificationconventiontestsbase"><code>SpecificationConventionTestsBase</code></a> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/SpecificationConventionTestsBase.cs:10</code>, the fact at <code>SpecificationConventionTestsBase.cs:15-17</code>), which is [Rubric §14, Testability] applied to an architectural rule.</p>
+          <p>The three combinators, <a href="#andspecificationtentity-tidentifiertype"><code>AndSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:81</code>), <a href="#orspecificationtentity-tidentifiertype"><code>OrSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:105</code>), and <a href="#notspecificationtentity-tidentifiertype"><code>NotSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:128</code>), each delegate to the internal <a href="#specificationcomposer"><code>SpecificationComposer</code></a> (<code>Specification.cs:146</code>) and cache the composed expression in a per-instance <code>_criteria</code> field rather than rebuilding it on every <code>Criteria</code> read (<code>Specification.cs:88-93</code>, <code>Specification.cs:112-117</code>, <code>Specification.cs:134-138</code>), because the pipeline reads <code>Criteria</code> at least once per request. <code>Combine</code> (<code>Specification.cs:155</code>) takes the left lambda&#39;s own parameter (<code>Specification.cs:167</code>), rebinds the right-hand body onto it, and joins the two with <code>Expression.AndAlso</code> or <code>Expression.OrElse</code> before closing the lambda (<code>Specification.cs:169-173</code>); <code>Negate</code> (<code>Specification.cs:181</code>) wraps the body in <code>Expression.Not</code> while keeping the inner lambda&#39;s parameter (<code>Specification.cs:189-191</code>). The rebinding is done by <a href="#parameterreplacer"><code>ParameterReplacer</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/ParameterReplacer.cs:24</code>), an <code>ExpressionVisitor</code> whose static <code>Replace</code> short-circuits when the two parameters are already the same instance (<code>ParameterReplacer.cs:34</code>, <code>ParameterReplacer.cs:40</code>) and whose <code>VisitParameter</code> swaps the rest (<code>ParameterReplacer.cs:44</code>). Composing by substitution rather than <code>Expression.Invoke</code> is a deliberate portability decision: an <code>InvocationExpression</code> survives into the query tree and several providers (Cosmos among them) refuse to translate one, so an ANDed specification failed on exactly the engines the framework is meant to be portable across (<code>Specification.cs:65-70</code>, <code>ParameterReplacer.cs:12-16</code>). The visitor is <code>internal</code> and reaches the Application layer through <code>InternalsVisibleTo</code> so the cross-source builder shares one copy rather than carrying its own (<code>ParameterReplacer.cs:18-23</code>). <a href="#specificationextensions"><code>SpecificationExtensions</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/SpecificationExtensions.cs:30</code>) puts a fluent face on those three, as <code>extension&lt;TEntity, TIdentifierType&gt;</code> members (<code>SpecificationExtensions.cs:32</code>) exposing <code>And</code> (<code>SpecificationExtensions.cs:48</code>), <code>Or</code> (<code>SpecificationExtensions.cs:68</code>), and <code>Not</code> (<code>SpecificationExtensions.cs:85</code>), so a composed predicate reads left to right instead of inside out.</p>
+          <p>Concrete specifications are how a controller scopes a query to allowed data without trusting the request to do it. ADC has two, both one-liners: <a href="group-18-conference-application.html#publishedeventspecification"><code>PublishedEventSpecification</code></a> is <code>e =&gt; e.IsPublished</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Specifications/PublishedEventSpecification.cs:11</code>, criteria at <code>PublishedEventSpecification.cs:14</code>), and <a href="group-18-conference-application.html#publicsessionstatusspecification"><code>PublicSessionStatusSpecification</code></a> allows the public session-status list (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Specifications/PublicSessionStatusSpecification.cs:20</code>), exposing its predicate as a <code>public static readonly</code> expression (<code>PublicSessionStatusSpecification.cs:23</code>) so the cross-source filter and the visible-session id resolver share one definition rather than each re-deriving BR-49 (<code>Criteria</code> simply returns it at <code>PublicSessionStatusSpecification.cs:27</code>). The framework also ships one ready-made scope: <a href="#ownedbyuserspecificationtentity-tidentifiertype"><code>OwnedByUserSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/OwnedByUserSpecification.cs:20</code>) filters on the audit field <code>CreatedBy</code> as the ownership marker (<code>OwnedByUserSpecification.cs:29-30</code>), and its constraint is deliberately the concrete <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a> rather than an <code>IAuditableEntity</code> interface, because a member access declared on an interface is not guaranteed to map to the entity&#39;s audit column and the criteria must stay EF-translatable (<code>OwnedByUserSpecification.cs:12-16</code>). ADC&#39;s question-answer controllers are its callers, and they show the intended shape: an organizer gets <code>null</code> (no scoping at all), everyone else gets the specification bound to their own user id (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:75</code>, and the same pair at <code>SessionQuestionAnswersController.cs:97</code>). This is [Rubric §4, Domain-Driven Design] (the rule is a first-class, reusable domain object) and [Rubric §2, Design Patterns] (a textbook Specification), with a [Rubric §11, Security] overtone: an authorization predicate is server-supplied criteria the client cannot tamper with.</p>
+          <p>Two members round the family out for polyglot persistence (<a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>). <a href="#inlinespecificationtentity-tidentifiertype"><code>InlineSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:45</code>) wraps an already-composed <code>Criteria</code> expression as a first-class specification (<code>Specification.cs:51-52</code>), for predicates built at runtime where no hand-written class exists. The static <a href="#crosssourcespecification"><code>CrossSourceSpecification</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:22</code>) builds the cross-source filter: when a dependent entity references a principal that lives in a different physical data source (database-per-service, <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>), a navigating predicate like <code>s =&gt; s.Event.IsPublished</code> cannot be translated, so <code>BuildAsync</code> (<code>CrossSourceSpecification.cs:39</code>) first projects the matching principal keys from the principal&#39;s own source through the read repository&#39;s <code>GetProjectedAsync</code> (<code>CrossSourceSpecification.cs:55-56</code>), materializes them once (<code>CrossSourceSpecification.cs:60</code>), and returns an <code>InlineSpecification</code> (<code>CrossSourceSpecification.cs:62</code>) whose body is an <code>Enumerable.Contains(keys, dependent.ForeignKey)</code> call that translates to <code>IN</code> or <code>ARRAY_CONTAINS</code> (<code>CrossSourceSpecification.cs:74-79</code>). An optional local predicate on the dependent&#39;s own columns is rebound onto the foreign-key selector&#39;s parameter by the shared <code>ParameterReplacer</code> (<code>CrossSourceSpecification.cs:86</code>) and ANDed in (<code>CrossSourceSpecification.cs:87</code>), again without <code>Expression.Invoke</code> so the combined predicate stays translatable on every provider (<code>CrossSourceSpecification.cs:83-85</code>). The doc comment is explicit about the limit: the keys are materialized and embedded in the predicate, so the shape fits bounded principal sets (<code>CrossSourceSpecification.cs:17-20</code>). ADC uses it in production on both of its Session reads, each passing <code>PublicSessionStatusSpecification.StatusCriteria</code> as the local predicate: <a href="group-18-conference-application.html#getpublicsessionfilterhandler"><code>GetPublicSessionFilterHandler</code></a> returns the specification as a query result (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:29-34</code>), and <a href="group-18-conference-application.html#publicconferencevisibility"><code>PublicConferenceVisibility</code></a> uses the same criteria to resolve the visible session ids so a session hidden from the session list cannot stay reachable through a speaker or junction read (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:63-68</code>). The convention this exists to serve is guarded by an opt-in fitness rule, <code>ArchitectureRules.SpecificationsDoNotNavigateToOtherEntities</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Specifications.cs:24</code>), which analyzes only the parameterless specifications it can instantiate (<code>ArchitectureRules.Specifications.cs:37-38</code>) and is exposed to repos as the single-fact base <a href="group-27-testing-infrastructure.html#specificationconventiontestsbase"><code>SpecificationConventionTestsBase</code></a> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/SpecificationConventionTestsBase.cs:10</code>, the fact at <code>SpecificationConventionTestsBase.cs:15-16</code>), which is [Rubric §14, Testability] applied to an architectural rule.</p>
           <h2 id="queryspecification-a-whole-read-in-one-object">QuerySpecification, a whole read in one object</h2>
-          <p>A plain specification is only a predicate, which leaves includes, ordering, paging, and tracking to be threaded through every layer as loose arguments. <a href="#queryspecificationtentity-tidentifiertype"><code>QuerySpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/QuerySpecification.cs:38</code>) carries them instead. State is exposed read-only (<code>OrderBy</code> at <code>QuerySpecification.cs:54</code>, <code>IncludePaths</code> at <code>QuerySpecification.cs:60</code>, <code>Skip</code> and <code>Take</code> at <code>QuerySpecification.cs:63</code> and <code>QuerySpecification.cs:66</code>, <code>AsTracking</code> at <code>QuerySpecification.cs:72</code>, <code>IgnoreQueryFilters</code> at <code>QuerySpecification.cs:82</code>) and assembled through protected builder methods a derived specification calls from its constructor: <code>AddOrderBy</code> (<code>QuerySpecification.cs:90</code>), <code>AddInclude</code> (<code>QuerySpecification.cs:102</code>, which ignores blanks and duplicates), <code>ApplyPaging</code> (<code>QuerySpecification.cs:117</code>, both values floored at zero at <code>QuerySpecification.cs:119-120</code>), <code>WithTracking</code> (<code>QuerySpecification.cs:127</code>), and <code>WithSoftDeleted</code> (<code>QuerySpecification.cs:133</code>). Two design notes are worth carrying forward. The base chain stays <code>QuerySpecification</code> over <code>Specification</code> on purpose, because the fitness rule above keys on that base-type prefix and on a property literally named <code>Criteria</code> (<code>QuerySpecification.cs:29-34</code>). And <code>WithSoftDeleted</code> drops the named <code>SoftDelete</code> global query filter and only that one, so a specification asking for deleted rows can never reach another tenant&#39;s data (<code>QuerySpecification.cs:74-81</code>). Each ordering key is an <a href="#orderexpression"><code>OrderExpression</code></a> (<code>QuerySpecification.cs:150</code>), a record of an untyped <code>LambdaExpression</code> plus a descending flag, declared top-level rather than nested inside the generic class because a nested type is a different type per closed generic, which would stop the repository evaluator from handling an ordering list generically (<code>QuerySpecification.cs:140-144</code>).</p>
-          <p>That object is consumed on the persistence side, not by the pipeline in this chapter. The repository&#39;s <code>ListAsync(specification)</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:151</code>) takes any <code>ISpecification</code>, and <a href="group-07-persistence-ef-core.html#specificationevaluator"><code>SpecificationEvaluator</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/SpecificationEvaluator.cs:20</code>) applies the <code>Criteria</code> always (<code>SpecificationEvaluator.cs:46</code>) and the rest only when the instance is a <code>QuerySpecification</code> (<code>SpecificationEvaluator.cs:48-58</code>). Tracking and soft-delete scope are deliberately not applied there: those choose the base queryable, which only the repository can do, in <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>&#39;s <code>BaseQueryFor</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:312-321</code>), with the concrete reads at <code>EFReadRepository.cs:324</code> and <code>EFReadRepository.cs:337</code>. Aggregate reads (count, exists) pass <code>applyShape: false</code> so counting does not join in includes or count &quot;page 3 of the matches&quot; (<code>SpecificationEvaluator.cs:29-34</code>). Includes go through one shared helper that also opts the query into split-query mode whenever any include targets a collection navigation (<code>SpecificationEvaluator.cs:77</code>, the decision at <code>SpecificationEvaluator.cs:93</code>), so the string-include path and the specification path cannot drift apart (<code>SpecificationEvaluator.cs:69-72</code>).</p>
+          <p>A plain specification is only a predicate, which leaves includes, ordering, paging, and tracking to be threaded through every layer as loose arguments. <a href="#queryspecificationtentity-tidentifiertype"><code>QuerySpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/QuerySpecification.cs:38</code>) carries them instead. State is exposed read-only (<code>OrderBy</code> at <code>QuerySpecification.cs:54</code>, <code>IncludePaths</code> at <code>QuerySpecification.cs:60</code>, <code>Skip</code> and <code>Take</code> at <code>QuerySpecification.cs:63</code> and <code>QuerySpecification.cs:66</code>, <code>AsTracking</code> at <code>QuerySpecification.cs:72</code>, <code>IgnoreQueryFilters</code> at <code>QuerySpecification.cs:82</code>) and assembled through protected builder methods a derived specification calls from its constructor: <code>AddOrderBy</code> (<code>QuerySpecification.cs:90</code>), <code>AddInclude</code> (<code>QuerySpecification.cs:102</code>, which ignores blanks and duplicates at <code>QuerySpecification.cs:104-108</code>), <code>ApplyPaging</code> (<code>QuerySpecification.cs:117</code>, both values floored at zero at <code>QuerySpecification.cs:119-120</code>), <code>WithTracking</code> (<code>QuerySpecification.cs:127</code>), and <code>WithSoftDeleted</code> (<code>QuerySpecification.cs:133</code>). Two design notes are worth carrying forward. The base chain stays <code>QuerySpecification</code> over <code>Specification</code> on purpose, because the fitness rule above keys on that base-type prefix and on a property literally named <code>Criteria</code> (<code>QuerySpecification.cs:29-34</code>). And <code>WithSoftDeleted</code> drops the named <code>SoftDelete</code> global query filter and only that one, so a specification asking for deleted rows can never reach another tenant&#39;s data (<code>QuerySpecification.cs:74-81</code>). Each ordering key is an <a href="#orderexpression"><code>OrderExpression</code></a> (<code>QuerySpecification.cs:150</code>), a record of an untyped <code>LambdaExpression</code> plus a descending flag, declared top-level rather than nested inside the generic class because a nested type is a different type per closed generic, which would stop the repository evaluator from handling an ordering list generically (<code>QuerySpecification.cs:140-144</code>).</p>
+          <p>That object is consumed on the persistence side, not by the pipeline in this chapter. The repository&#39;s <code>ListAsync(specification)</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:260</code>) takes any <code>ISpecification</code>, and <a href="group-07-persistence-ef-core.html#specificationevaluator"><code>SpecificationEvaluator</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/SpecificationEvaluator.cs:20</code>) applies the <code>Criteria</code> always (<code>SpecificationEvaluator.cs:46</code>) and the rest only when the instance is a <code>QuerySpecification</code> (<code>SpecificationEvaluator.cs:48-58</code>). Tracking and soft-delete scope are deliberately not applied there: those choose the base queryable, which only the repository can do, in <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>&#39;s <code>BaseQueryFor</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:439-447</code>, rationale at <code>EFReadRepository.cs:433-438</code>), with the concrete reads at <code>EFReadRepository.cs:451</code> (<code>ListAsync</code>), <code>EFReadRepository.cs:464</code> (the projecting overload, which selects last so a paged specification pages the rows it means to, <code>EFReadRepository.cs:472-476</code>), and <code>EFReadRepository.cs:112</code> (<code>FirstOrDefaultAsync</code>, which keeps the full shape because &quot;first&quot; is only meaningful against a defined order, <code>EFReadRepository.cs:118-119</code>). Aggregate reads (count, exists) pass <code>applyShape: false</code> so counting does not join in includes or count &quot;page 3 of the matches&quot; (<code>SpecificationEvaluator.cs:29-34</code>, the call sites at <code>EFReadRepository.cs:349</code> and <code>EFReadRepository.cs:516</code>). Includes go through one shared helper that also opts the query into split-query mode whenever any include targets a collection navigation (<code>SpecificationEvaluator.cs:77</code>, the decision at <code>SpecificationEvaluator.cs:93</code>), so the string-include path and the specification path cannot drift apart (<code>SpecificationEvaluator.cs:69-72</code>, the delegation at <code>EFReadRepository.cs:426-429</code>).</p>
           <h2 id="dynamic-filtering-one-strategy-per-clr-type">Dynamic filtering, one Strategy per CLR type</h2>
           <p>User filters arrive as a <code>Dictionary&lt;string, (string Operator, string Value)&gt;</code>, property name to operator key plus raw string value, parsed from the query string by <a href="group-12-api-hosting-mapping.html#queryfiltermodelbinder"><code>QueryFilterModelBinder</code></a> at the API edge, which caps a single request at <code>MaxFilters = 50</code> distinct properties (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:34</code>, enforced at <code>QueryFilterModelBinder.cs:61</code>, where surplus entries are dropped rather than rejected). Turning <code>(&quot;Name&quot;, &quot;CONTAINS&quot;, &quot;blazor&quot;)</code> into a <code>.Where()</code> clause depends entirely on the property&#39;s CLR type, so instead of one large <code>switch</code> each type gets an <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6</code>) declaring an <code>Apply</code> method (<code>IFilterStrategy.cs:17</code>), the operator set it supports (<code>IFilterStrategy.cs:24</code>, where the default <code>SupportedOperators</code> is <code>null</code>, meaning operator validation is skipped for custom strategies), and a <code>CanParseValue</code> predicate that defaults to <code>true</code> (<code>IFilterStrategy.cs:44</code>). That last member exists because <code>Apply</code> fails open: a strategy that cannot parse a value silently returns the query unfiltered, so <code>?filter=id:equals:abc</code> returned the whole result set instead of no matches (<code>IFilterStrategy.cs:32-38</code>). Validating the value up front turns that into a 400, and the default of <code>true</code> keeps a custom strategy behaving exactly as before until it opts in.</p>
-          <p>The seven built-ins each override <code>SupportedOperators</code> with a <code>FrozenSet</code>: <a href="#stringfilterstrategy"><code>StringFilterStrategy</code></a> (<code>StringFilterStrategy.cs:12</code>, operators at <code>StringFilterStrategy.cs:14-18</code>: <code>CONTAINS</code>, <code>NOT CONTAINS</code>, <code>EQUALS</code>, <code>NOT EQUALS</code>, <code>STARTS WITH</code>, <code>ENDS WITH</code>, <code>IS EMPTY</code>, <code>IS NOT EMPTY</code>, <code>IN</code>), the numeric trio <a href="#intfilterstrategy"><code>IntFilterStrategy</code></a> (<code>IntFilterStrategy.cs:15</code>), <a href="#longfilterstrategy"><code>LongFilterStrategy</code></a> (<code>LongFilterStrategy.cs:14</code>), and <a href="#decimalfilterstrategy"><code>DecimalFilterStrategy</code></a> (<code>DecimalFilterStrategy.cs:14</code>), which share one operator set (equality, the four comparisons, <code>IN</code>, an inclusive <code>BETWEEN</code> range, and the two presence checks, at <code>IntFilterStrategy.cs:17-22</code> and its two siblings, all parsing invariant-culture), <a href="#datetimefilterstrategy"><code>DateTimeFilterStrategy</code></a> (<code>DateTimeFilterStrategy.cs:13</code>: <code>IS</code>, <code>IS NOT</code>, <code>IS AFTER</code>, <code>IS ON OR AFTER</code>, <code>IS BEFORE</code>, <code>IS ON OR BEFORE</code>, the two presence checks, <code>IN</code>, and <code>BETWEEN</code> at <code>DateTimeFilterStrategy.cs:17-22</code>, parsed with <code>CultureInfo.InvariantCulture</code> at <code>DateTimeFilterStrategy.cs:15</code>), <a href="#boolfilterstrategy"><code>BoolFilterStrategy</code></a> (<code>BoolFilterStrategy.cs:12</code>: <code>IS</code> plus the two presence checks, <code>BoolFilterStrategy.cs:14-17</code>), and <a href="#guidfilterstrategy"><code>GuidFilterStrategy</code></a> (<code>GuidFilterStrategy.cs:13</code>: <code>EQUALS</code>, <code>NOT EQUALS</code>, <code>IN</code>, and the two presence checks at <code>GuidFilterStrategy.cs:15-18</code>; GUIDs have no ordering, so no comparisons). Every value-typed strategy implements <code>CanParseValue</code> by delegating to one shared rule (<code>IntFilterStrategy.cs:25</code>, <code>LongFilterStrategy.cs:24</code>, <code>DecimalFilterStrategy.cs:24</code>, <code>DateTimeFilterStrategy.cs:25</code>, <code>BoolFilterStrategy.cs:20</code>, <code>GuidFilterStrategy.cs:21</code>); <code>StringFilterStrategy</code> declares none, because any string parses. That shared rule lives in the internal <a href="#filtervalueparser"><code>FilterValueParser</code></a> (<code>FilterValueParser.cs:8</code>): <code>CanParse</code> (<code>FilterValueParser.cs:53</code>) says presence checks ignore the value, <code>IN</code> needs at least one parseable item, <code>BETWEEN</code> needs exactly two bounds, and every other operator needs the single scalar to parse (<code>FilterValueParser.cs:58-64</code>). <code>BETWEEN</code> gets its own stricter check (<code>FilterValueParser.cs:76</code>) that keeps empty and unparseable segments in play, because dropping them let <code>&quot;5,abc,10&quot;</code> and <code>&quot;5,,10&quot;</code> validate as a two-bound range and the strategies then applied a pair the caller never asked for (<code>FilterValueParser.cs:70-75</code>). The same class decodes the lists at apply time: <code>ParseList&lt;T&gt;</code> skips unparseable entries rather than failing the request (<code>FilterValueParser.cs:17</code>, the <code>if (parse(part) is { } parsed)</code> guard at <code>FilterValueParser.cs:26</code>), and <code>ParseStringList</code> splits on comma, trimming and dropping empty entries (<code>FilterValueParser.cs:34</code>).</p>
+          <p>The seven built-ins each override <code>SupportedOperators</code> with a <code>FrozenSet</code>: <a href="#stringfilterstrategy"><code>StringFilterStrategy</code></a> (<code>StringFilterStrategy.cs:12</code>, operators at <code>StringFilterStrategy.cs:14-18</code>: <code>CONTAINS</code>, <code>NOT CONTAINS</code>, <code>EQUALS</code>, <code>NOT EQUALS</code>, <code>STARTS WITH</code>, <code>ENDS WITH</code>, <code>IS EMPTY</code>, <code>IS NOT EMPTY</code>, <code>IN</code>), the numeric trio <a href="#intfilterstrategy"><code>IntFilterStrategy</code></a> (<code>IntFilterStrategy.cs:15</code>), <a href="#longfilterstrategy"><code>LongFilterStrategy</code></a> (<code>LongFilterStrategy.cs:14</code>), and <a href="#decimalfilterstrategy"><code>DecimalFilterStrategy</code></a> (<code>DecimalFilterStrategy.cs:14</code>), which share one operator set (equality, the four comparisons, <code>IN</code>, an inclusive <code>BETWEEN</code> range, and the two presence checks, at <code>IntFilterStrategy.cs:17-22</code>, <code>LongFilterStrategy.cs:16-21</code>, and <code>DecimalFilterStrategy.cs:16-21</code>, all parsing invariant-culture), <a href="#datetimefilterstrategy"><code>DateTimeFilterStrategy</code></a> (<code>DateTimeFilterStrategy.cs:13</code>: <code>IS</code>, <code>IS NOT</code>, <code>IS AFTER</code>, <code>IS ON OR AFTER</code>, <code>IS BEFORE</code>, <code>IS ON OR BEFORE</code>, the two presence checks, <code>IN</code>, and <code>BETWEEN</code> at <code>DateTimeFilterStrategy.cs:17-22</code>, parsed with <code>CultureInfo.InvariantCulture</code> at <code>DateTimeFilterStrategy.cs:15</code>), <a href="#boolfilterstrategy"><code>BoolFilterStrategy</code></a> (<code>BoolFilterStrategy.cs:12</code>: <code>IS</code> plus the two presence checks, <code>BoolFilterStrategy.cs:14-17</code>), and <a href="#guidfilterstrategy"><code>GuidFilterStrategy</code></a> (<code>GuidFilterStrategy.cs:13</code>: <code>EQUALS</code>, <code>NOT EQUALS</code>, <code>IN</code>, and the two presence checks at <code>GuidFilterStrategy.cs:15-18</code>; GUIDs have no ordering, so no comparisons). Every value-typed strategy implements <code>CanParseValue</code> by delegating to one shared rule (<code>IntFilterStrategy.cs:25</code>, <code>LongFilterStrategy.cs:24</code>, <code>DecimalFilterStrategy.cs:24</code>, <code>DateTimeFilterStrategy.cs:25</code>, <code>BoolFilterStrategy.cs:20</code>, <code>GuidFilterStrategy.cs:21</code>); <code>StringFilterStrategy</code> declares none, because any string parses. That shared rule lives in the internal <a href="#filtervalueparser"><code>FilterValueParser</code></a> (<code>FilterValueParser.cs:8</code>): <code>CanParse</code> (<code>FilterValueParser.cs:53</code>) says presence checks ignore the value, <code>IN</code> needs at least one parseable item, <code>BETWEEN</code> needs exactly two bounds, and every other operator needs the single scalar to parse (<code>FilterValueParser.cs:58-64</code>). <code>BETWEEN</code> gets its own stricter check (<code>FilterValueParser.cs:76</code>) that keeps empty and unparseable segments in play, because dropping them let <code>&quot;5,abc,10&quot;</code> and <code>&quot;5,,10&quot;</code> validate as a two-bound range and the strategies then applied a pair the caller never asked for (<code>FilterValueParser.cs:70-75</code>). The same class decodes the lists at apply time: <code>ParseList&lt;T&gt;</code> skips unparseable entries rather than failing the request (<code>FilterValueParser.cs:17</code>, the <code>if (parse(part) is { } parsed)</code> guard at <code>FilterValueParser.cs:26</code>), and <code>ParseStringList</code> splits on comma, trimming and dropping empty entries (<code>FilterValueParser.cs:34</code>).</p>
           <p>Every clause is built through <strong>System.Linq.Dynamic.Core</strong> string predicates with parameter placeholders (<code>@0</code>), never string-concatenated values, and every call site passes the one shared <a href="#dynamicqueryconfig"><code>DynamicQueryConfig.Parameterized</code></a> parsing config (<code>DynamicQueryConfig.cs:18</code>, the instance at <code>DynamicQueryConfig.cs:21-24</code>). That flag is not cosmetic: Dynamic LINQ defaults <code>UseParameterizedNamesInDynamicQuery</code> to <code>false</code>, which turns each <code>@0</code> into a <code>ConstantExpression</code> that EF inlines, so one filter value produces one distinct SQL string, one SQL Server plan-cache entry per value, and an EF compiled-query cache miss on every request (<code>DynamicQueryConfig.cs:8-16</code>). With the flag on the value is reached through a member access and EF parameterizes it, and <code>QueryParameterizationTests</code> (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/QueryParameterizationTests.cs:26</code>) is the regression guard, the only test in the suite that inspects the emitted SQL. This is [Rubric §12, Performance &amp; Scalability] hiding inside a one-property config object.</p>
-          <p>The static <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:19</code>) is the registry and dispatcher. It seeds a <code>ConcurrentDictionary&lt;Type, IFilterStrategy&gt;</code> with the built-ins, registering both the value type and its <code>Nullable&lt;&gt;</code> form (<code>QueryFilterService.cs:29-45</code>), keeps a dedicated string instance for string properties and for dotted paths whose leaf type cannot be resolved (<code>QueryFilterService.cs:52</code>, fallback at <code>QueryFilterService.cs:280-283</code>), and exposes <code>RegisterStrategy</code> so a module can add a custom type without touching framework code (<code>QueryFilterService.cs:60</code>, the open/closed principle made literal, [Rubric §1, SOLID]). Reflection is memoized per (entity type, property name) but <strong>hits only</strong> (<code>QueryFilterService.cs:27</code>, <code>LookupProperty</code> at <code>QueryFilterService.cs:235</code>): the probed names come from the client&#39;s query string, so caching misses would let any caller grow a never-evicted static dictionary simply by filtering on names that do not exist, while the request still gets a clean 400 (<code>QueryFilterService.cs:214-221</code>). One shared resolver, <code>ResolvePropertyInfo</code> (<code>QueryFilterService.cs:223</code>), backs both phases so they cannot disagree about what resolves; when they did, a plain rename entry passed validation and was then silently dropped, returning an unfiltered 200 (<code>QueryFilterService.cs:208-213</code>). A dotted path like <code>&quot;Category.Name&quot;</code> is walked segment by segment to its leaf type by <code>ResolveFilterValueType</code> (<code>QueryFilterService.cs:259</code>), so the leaf&#39;s own strategy validates the operator instead of every nested path defaulting to the string strategy (<code>QueryFilterService.cs:153-157</code>).</p>
-          <p>The two phases and their ordering are the security story. <code>ValidateFilters</code> (<code>QueryFilterService.cs:111</code>) runs before the query and returns a <a href="group-01-result-error-handling.html#result"><code>Result</code></a> carrying every <a href="group-01-result-error-handling.html#error"><code>Error</code></a> it found: <code>Filter.Property.NotFound</code> (<code>QueryFilterService.cs:143-147</code>), <code>Filter.Type.NotSupported</code> (<code>QueryFilterService.cs:163-167</code>), <code>Filter.Operator.NotSupported</code> (<code>QueryFilterService.cs:295-299</code>), and <code>Filter.Value.Invalid</code> (<code>QueryFilterService.cs:196-200</code>), the last suppressed when the operator itself was already rejected so one mistake does not produce two errors (<code>QueryFilterService.cs:191-192</code>). A bad filter is therefore a validation failure, not a SQL exception and not a silently widened result set. <code>ApplyFilters</code> (<code>QueryFilterService.cs:76</code>) then builds the actual <code>.Where()</code> chain, resolving the DTO name through the property map first (<code>QueryFilterService.cs:84-86</code>) and skipping any property it cannot resolve (<code>QueryFilterService.cs:90-91</code>). Strategy dispatch plus allow-listing untrusted input against real entity metadata is [Rubric §2, Design Patterns] and [Rubric §11, Security] together.</p>
+          <p>The static <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:21</code>) is the registry and dispatcher. It seeds a <code>ConcurrentDictionary&lt;Type, IFilterStrategy&gt;</code> with the built-ins, registering both the value type and its <code>Nullable&lt;&gt;</code> form (<code>QueryFilterService.cs:31-47</code>), keeps a dedicated string instance used whenever the resolved value type is <code>string</code> (<code>QueryFilterService.cs:53</code>, the dispatch at <code>QueryFilterService.cs:303-306</code>), and exposes <code>RegisterStrategy</code> so a module can add a custom type without touching framework code (<code>QueryFilterService.cs:61</code>, the open/closed principle made literal, [Rubric §1, SOLID]). Reflection is memoized per (entity type, property name) but <strong>hits only</strong> (<code>QueryFilterService.cs:29</code>, <code>LookupProperty</code> at <code>QueryFilterService.cs:257</code>): the probed names come from the client&#39;s query string, so caching misses would let any caller grow a never-evicted static dictionary simply by filtering on names that do not exist, while the request still gets a clean 400 (<code>QueryFilterService.cs:236-243</code>). One shared resolver, <code>ResolvePropertyInfo</code> (<code>QueryFilterService.cs:245</code>), backs both phases so they cannot disagree about what resolves; when they did, a plain rename entry passed validation and was then silently dropped, returning an unfiltered 200 (<code>QueryFilterService.cs:229-235</code>). A dotted path like <code>&quot;Category.Name&quot;</code> is walked segment by segment to its leaf type by <code>ResolveFilterValueType</code> (<code>QueryFilterService.cs:282</code>), so the leaf&#39;s own strategy validates the operator instead of every nested path defaulting to the string strategy (<code>QueryFilterService.cs:161-166</code>). A path whose leaf cannot be reached is failed closed rather than guessed at: validation rejects it as an unknown property (<code>QueryFilterService.cs:171-179</code>) and application skips it (<code>QueryFilterService.cs:97-99</code>), because letting Dynamic LINQ meet an unexpressible filter turns a bad request into a 500 (<code>QueryFilterService.cs:275-281</code>).</p>
+          <p>The two phases and their ordering are the security story. <code>ValidateFilters</code> (<code>QueryFilterService.cs:119</code>) runs before the query and returns a <a href="group-01-result-error-handling.html#result"><code>Result</code></a> carrying every <a href="group-01-result-error-handling.html#error"><code>Error</code></a> it found: <code>Filter.Property.NotFound</code> (<code>QueryFilterService.cs:151-155</code>), <code>Filter.Type.NotSupported</code> (<code>QueryFilterService.cs:185-189</code>), <code>Filter.Operator.NotSupported</code> (<code>QueryFilterService.cs:318-322</code>), and <code>Filter.Value.Invalid</code> (<code>QueryFilterService.cs:218-222</code>), the last suppressed when the operator itself was already rejected so one mistake does not produce two errors (<code>QueryFilterService.cs:213-214</code>). A bad filter is therefore a validation failure, not a SQL exception and not a silently widened result set. <code>ApplyFilters</code> (<code>QueryFilterService.cs:77</code>) then builds the actual <code>.Where()</code> chain, resolving the DTO name through the property map first (<code>QueryFilterService.cs:85-87</code>) and skipping any property it cannot resolve (<code>QueryFilterService.cs:91-92</code>). Strategy dispatch plus allow-listing untrusted input against real entity metadata is [Rubric §2, Design Patterns] and [Rubric §11, Security] together.</p>
           <h2 id="sorting-sparse-fieldsets-and-paging-arithmetic">Sorting, sparse fieldsets, and paging arithmetic</h2>
-          <p><a href="#queryfieldservice"><code>QueryFieldService</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:16</code>) owns the rest of read shaping. <code>ApplySorting</code> (<code>QueryFieldService.cs:155</code>) resolves a DTO sort name through the server-authored map, and otherwise accepts the column <strong>only</strong> when it names a real public property of the entity (<code>QueryFieldService.cs:190-202</code>), falling back to the optional default sort when it does not (<code>QueryFieldService.cs:172-178</code>). That guard is deliberate and documented in the summary (<code>QueryFieldService.cs:120-127</code>): a client-supplied string can never reach Dynamic LINQ to order by nested paths or expressions the DTO does not expose. Map entries, being server-authored, may be expressions: ADC sorts speakers by <code>FullName</code> through an entry that concatenates first and last name (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerEntityQueryService.cs:28-31</code>, wired in by overriding the map at <code>SpeakerEntityQueryService.cs:34</code>). The method also takes an optional <code>tieBreakProperty</code> appended as a final ascending key (<code>QueryFieldService.cs:161</code>, applied by <code>BuildOrdering</code> at <code>QueryFieldService.cs:209</code>, and used alone when no valid sort column was given at <code>QueryFieldService.cs:180-182</code>). It exists because <code>Skip</code>/<code>Take</code> over a non-total <code>ORDER BY</code> is undefined: rows sharing a sort value can come back in a different order per statement, so the same row appears on two consecutive pages while another appears on neither, from data that never changed (<code>QueryFieldService.cs:139-153</code>). The append is repeated-key aware, skipped when the caller already sorted by that very column (<code>QueryFieldService.cs:214-217</code>).</p>
+          <p><a href="#queryfieldservice"><code>QueryFieldService</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:16</code>) owns the rest of read shaping. <code>ApplySorting</code> (<code>QueryFieldService.cs:155</code>) resolves a DTO sort name through the server-authored map, and otherwise accepts the column <strong>only</strong> when it names a real public property of the entity (<code>QueryFieldService.cs:190-202</code>), falling back to the optional default sort when it does not (<code>QueryFieldService.cs:172-178</code>). That guard is deliberate and documented in the summary (<code>QueryFieldService.cs:120-127</code>): a client-supplied string can never reach Dynamic LINQ to order by nested paths or expressions the DTO does not expose. Map entries, being server-authored, may be expressions: ADC sorts speakers by <code>FullName</code> through an entry that concatenates first and last name (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerEntityQueryService.cs:30</code>, wired in by overriding the map at <code>SpeakerEntityQueryService.cs:34</code>). The method also takes an optional <code>tieBreakProperty</code> appended as a final ascending key (<code>QueryFieldService.cs:161</code>, applied by <code>BuildOrdering</code> at <code>QueryFieldService.cs:209</code>, and used alone when no valid sort column was given at <code>QueryFieldService.cs:180-182</code>). It exists because <code>Skip</code>/<code>Take</code> over a non-total <code>ORDER BY</code> is undefined: rows sharing a sort value can come back in a different order per statement, so the same row appears on two consecutive pages while another appears on neither, from data that never changed (<code>QueryFieldService.cs:139-153</code>). The append is repeated-key aware, skipped when the caller already sorted by that very column (<code>QueryFieldService.cs:214-217</code>).</p>
           <p><code>ApplyFieldSelection</code> (<code>QueryFieldService.cs:229</code>) builds a <code>MemberInit</code> <code>Select</code> expression so a <code>fields=name,bio</code> request pulls only those columns from the database ([Rubric §12, Performance &amp; Scalability]), restricted to writable properties because the projection needs setters (<code>QueryFieldService.cs:282-291</code>, the <code>CanWrite</code> filter at <code>QueryFieldService.cs:287</code>). The compiled lambda is cached per (entity type, normalized field set) (<code>QueryFieldService.cs:237</code>, cache at <code>QueryFieldService.cs:280</code>), and a <code>null</code> is cached on purpose to record &quot;this field set projects nothing writable&quot; so the miss is not recomputed per request (<code>QueryFieldService.cs:269-271</code>). <code>ShapeData</code> and <code>ShapeCollectionData</code> (<code>QueryFieldService.cs:75</code>, <code>QueryFieldService.cs:96</code>) produce the wire shape: an <code>ExpandoObject</code> (or a list of them) holding only the requested fields under camelCase keys. To make that cheap on large result sets the service caches a per-type array of <a href="#propertyaccessor"><code>PropertyAccessor</code></a> (<code>QueryFieldService.cs:42</code>), a private <code>readonly record struct</code> bundling each property&#39;s name, its precomputed camelCase key, and a compiled <code>Func&lt;object, object?&gt;</code> getter built with <code>Expression.Lambda(...).Compile()</code> rather than <code>PropertyInfo.GetValue</code> (<code>QueryFieldService.cs:46</code>, built at <code>QueryFieldService.cs:48-65</code>); the field-filtered subset is cached again per field set (<code>QueryFieldService.cs:465</code>, <code>QueryFieldService.cs:471</code>), under an order- and case-insensitive key so <code>name,id</code> and <code>Id, Name</code> share one entry (<code>QueryFieldService.cs:502-503</code>).</p>
           <p>Both field-set caches are bounded, and the reason is the same one that shapes the filter cache. Their key is half client-supplied, so an entity with N properties admits up to 2^N distinct subsets and a caller could grow either dictionary by permuting the list (<code>QueryFieldService.cs:18-38</code>). The cap is a <code>const int MaxCacheEntries = 512</code> per cache (<code>QueryFieldService.cs:39</code>), with deliberately no LRU: past the cap <code>ApplyFieldSelection</code> skips server-side projection rather than admitting another key (<code>QueryFieldService.cs:248-249</code>, and the response is unchanged because shaping still trims the payload), and <code>GetShapedAccessors</code> filters per request instead (<code>QueryFieldService.cs:489-490</code>), which is a scan over an already-compiled accessor array rather than an expression rebuild. Validation mirrors the filter side: <code>Validate&lt;TEntity&gt;</code> rejects unknown field names and (when shaping) read-only properties (<code>QueryFieldService.cs:317</code> and the map-aware overload at <code>QueryFieldService.cs:352</code>, shared body at <code>QueryFieldService.cs:362</code>), and <code>ValidateSortDirection</code> accepts only <code>asc</code> or <code>desc</code> (<code>QueryFieldService.cs:415</code>). Paging arithmetic is small enough to look trivial and is not, which is why it has its own type: <a href="#pagingmath"><code>PagingMath.Clamp</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/PagingMath.cs:32</code>) clamps the page size into <code>[1, maxPageSize]</code> and the page number to at least 1 (<code>PagingMath.cs:37-38</code>), computes the offset in 64-bit (<code>PagingMath.cs:40</code>), and returns <code>(0, 0)</code> for a page beyond the reachable offset range, materializing the empty page that page genuinely holds (<code>PagingMath.cs:42</code>). A 32-bit <code>(pageNumber - 1) * pageSize</code> overflows and wraps negative near <code>int.MaxValue</code>, and SQL Server rejects a negative <code>OFFSET</code> outright, so the request surfaced as a 500 instead of an empty page (<code>PagingMath.cs:8-12</code>). Every paginating caller routes through here rather than open-coding the multiply, because the arithmetic previously lived only inside the pipeline and the handlers that paginate their own queryable each re-derived it in 32-bit (<code>PagingMath.cs:14-17</code>).</p>
           <h2 id="the-pipeline-two-entity-paths-plus-projection-pushdown">The pipeline: two entity paths plus projection pushdown</h2>
           <p><a href="#ientityquerypipeline"><code>IEntityQueryPipeline</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/IEntityQueryPipeline.cs:10</code>) is the execution contract, implemented by the sealed <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:13</code>), which talks to the database through the <a href="group-07-persistence-ef-core.html#iqueryableexecutor"><code>IQueryableExecutor</code></a> abstraction rather than referencing EF Core from the Application layer ([Rubric §3, Clean Architecture]). Its inputs are bundled into <a href="#entityqueryparameterstentity"><code>EntityQueryParameters&lt;TEntity&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryParameters.cs:11</code>), an immutable record carrying the specification <code>Criteria</code>, the dynamic <code>Filters</code>, sort column and direction, <code>Fields</code>, page number and size, the two include flags, and the DTO-to-entity property map (defaulting to an empty <code>FrozenDictionary</code>, <code>EntityQueryParameters.cs:44</code>).</p>
           <p><code>ExecuteAsync</code> (<code>EntityQueryPipeline.cs:39</code>) runs a shared front half, <code>ApplyIncludesCriteriaAndFilters</code> (<code>EntityQueryPipeline.cs:119</code>): add every supported navigation as an <code>.Include()</code> (<code>EntityQueryPipeline.cs:133-134</code>), force <code>AsSplitQuery()</code> when a child collection is among them (<code>EntityQueryPipeline.cs:140-141</code>), then apply the specification criteria and the dynamic filters <strong>before</strong> materializing anything (<code>EntityQueryPipeline.cs:147-151</code>) so the data source does as much of the work as possible. The comment above the split-query switch records the hard-won reason, annotated <code>R24/§8</code>: paginating a single-query collection include truncates child rows because EF applies <code>Skip</code>/<code>Take</code> to the JOIN-expanded set, so list reads returned empty child collections while by-id reads worked (<code>EntityQueryPipeline.cs:136-139</code>). It then branches on whether any requested navigation is unsupported (<code>EntityQueryPipeline.cs:53</code>). <strong>Path 1, server-side includes</strong> (<code>EntityQueryPipeline.cs:216</code>): sort (<code>EntityQueryPipeline.cs:227</code>), count before paging (<code>EntityQueryPipeline.cs:240</code>), <code>Skip</code>/<code>Take</code> (<code>EntityQueryPipeline.cs:241</code>), field-selection <code>Select</code> (<code>EntityQueryPipeline.cs:251</code>), materialize (<code>EntityQueryPipeline.cs:252</code>). <strong>Path 2, manual navigation</strong> (<code>EntityQueryPipeline.cs:161</code>), taken when a requested navigation crosses a physical data source and cannot be joined: sort and page at the database first (<code>EntityQueryPipeline.cs:175</code>, <code>EntityQueryPipeline.cs:187</code>), materialize the page (<code>EntityQueryPipeline.cs:196</code>), then invoke the <code>navigationPopulator</code> callback to batch-load those navigations in a second query (<code>EntityQueryPipeline.cs:199</code>), the <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a> extension point of <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>, and apply field selection in memory afterwards (<code>EntityQueryPipeline.cs:208</code>). Both paths pass the entity key as the sort tie-break, and <strong>only</strong> when the read is paginated (<code>EntityQueryPipeline.cs:36</code>, passed at <code>EntityQueryPipeline.cs:180</code> and <code>EntityQueryPipeline.cs:232</code>): an unpaginated read materializes one capped set in one statement, so it cannot suffer the split-across-pages incoherence, and adding an <code>ORDER BY</code> there would charge every unsorted list read for a sort nobody asked for (<code>EntityQueryPipeline.cs:30-35</code>).</p>
-          <p><code>ExecuteProjectedAsync</code> (<code>EntityQueryPipeline.cs:60</code>) is the third path: for a read whose result type has a registered <a href="group-05-cqrs-pipeline.html#ientitydtoprojectortentity-tentitydto-tidentifiertype"><code>IEntityDTOProjector&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>, criteria, filters, sorting, and paging all run over entity rows (<code>EntityQueryPipeline.cs:73-94</code>) and the projection is applied <strong>last</strong> (<code>EntityQueryPipeline.cs:105</code>), so the provider pages exactly the rows it means to and selects only that page&#39;s columns. Nothing is materialized as an entity and no mapper runs. It handles server-side navigations only: there is no populator hook, because a projection cannot be post-processed row by row, so a query with cross-source includes must use <code>ExecuteAsync</code> instead, and navigation includes are not applied here at all because the projection itself decides what the provider joins and selects (<code>IEntityQueryPipeline.cs:43-48</code>, restated at <code>EntityQueryPipeline.cs:101-104</code>).</p>
+          <p><code>ExecuteProjectedAsync</code> (<code>EntityQueryPipeline.cs:60</code>) is the third path: for a read whose result type has a registered <a href="group-05-cqrs-pipeline.html#ientitydtoprojectortentity-tentitydto-tidentifiertype"><code>IEntityDTOProjector&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>, criteria, filters, sorting, and paging all run over entity rows (<code>EntityQueryPipeline.cs:73-95</code>) and the projection is applied <strong>last</strong> (<code>EntityQueryPipeline.cs:105</code>), so the provider pages exactly the rows it means to and selects only that page&#39;s columns. Nothing is materialized as an entity and no mapper runs. It handles server-side navigations only: there is no populator hook, because a projection cannot be post-processed row by row, so a query with cross-source includes must use <code>ExecuteAsync</code> instead, and navigation includes are not applied here at all because the projection itself decides what the provider joins and selects (<code>IEntityQueryPipeline.cs:43-48</code>, restated at <code>EntityQueryPipeline.cs:101-104</code>).</p>
           <p>All three paths share one [Rubric §12, Performance &amp; Scalability] safety ceiling: an unpaginated query is capped at <code>MaxUnboundedResultLimit</code>, a public <code>const int</code> of 1000 (<code>EntityQueryPipeline.cs:23</code>, applied at <code>EntityQueryPipeline.cs:98</code>, <code>EntityQueryPipeline.cs:193</code>, and <code>EntityQueryPipeline.cs:247</code>), and a paginated call has its page size clamped to that same ceiling inside <code>ApplyPaging</code>, which delegates the offset arithmetic to <code>PagingMath.Clamp</code> (<code>EntityQueryPipeline.cs:271-280</code>). A direct service caller who forgets or oversizes paging therefore can never trigger an unbounded full-table load. The reported total for an unpaginated read is not simply the materialized count: <code>CountUnpaginatedAsync</code> (<code>EntityQueryPipeline.cs:288</code>) returns the materialized count only while it stays under the ceiling and issues a real <code>COUNT</code> otherwise (<code>EntityQueryPipeline.cs:292-294</code>), because at the cap the materialized number is the cap itself and reporting it told callers the set was exactly 1000 rows (<code>EntityQueryPipeline.cs:283-287</code>). Which navigations are eligible, and which path each takes, is decided by <a href="#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/NavigationMetadataProvider.cs:20</code>) behind <a href="#inavigationmetadataprovider"><code>INavigationMetadataProvider</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/INavigationMetadataProvider.cs:9</code>). <code>BuildIncludes</code> asks separately for FK references and child collections (<code>NavigationMetadataProvider.cs:31</code>), and the classifier reflects over the entity&#39;s public properties looking for <a href="group-11-navigation-populators.html#navigationattribute"><code>NavigationAttribute</code></a> (<code>NavigationMetadataProvider.cs:74</code>), unwraps <code>ICollection&lt;T&gt;</code> / <code>IReadOnlyCollection&lt;T&gt;</code> to find the target entity (<code>NavigationMetadataProvider.cs:106</code>), and asks <a href="group-07-persistence-ef-core.html#idatasourceservice"><code>IDataSourceService</code></a> whether the two ends share a JOIN-capable source, sorting each <a href="group-11-navigation-populators.html#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> into the supported or unsupported bucket of <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a> (<code>NavigationMetadataProvider.cs:96-99</code>). Results are cached per (entity type, <a href="group-11-navigation-populators.html#navigationtype"><code>NavigationType</code></a>) in an <strong>instance-level</strong> dictionary, not a static one, precisely so that a process hosting more than one data-source configuration (integration tests, for example) cannot share classifications across hosts (<code>NavigationMetadataProvider.cs:28</code>, rationale at <code>NavigationMetadataProvider.cs:22-27</code>).</p>
           <h2 id="the-query-service-the-public-face">The query service, the public face</h2>
           <p><a href="#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:19</code>) and its concrete <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:31</code>) are what controllers and handlers inject. The service is constructed from <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>, the metadata provider, the pipeline, an <a href="group-12-api-hosting-mapping.html#ientitydtomappertentity-tentitydto-tidentifiertype"><code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (<a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a>), and an <code>INavigationPopulator&lt;TEntity&gt;</code> (<code>EntityQueryService.cs:31-36</code>), and it resolves its <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> from the unit of work through a <code>virtual</code> property (<code>EntityQueryService.cs:87</code>). A second, six-argument constructor adds the optional <code>IEntityDTOProjector</code> (<code>EntityQueryService.cs:69-77</code>): it is a second constructor rather than an optional parameter because the Microsoft DI container has no notion of an optional dependency, so with two overloads it picks the longer one when a projector is registered and the shorter one when it is not (<code>EntityQueryService.cs:51-61</code>).</p>
           <p><code>GetAllAsync</code> (<code>EntityQueryService.cs:248</code>, with a six-parameter convenience overload at <code>EntityQueryService.cs:227</code>) is the four-step orchestration. <strong>(1) Validate</strong> every parameter up front with <code>Result.Combine</code> over the fields, sort-column, sort-direction, and filter validators, so a bad <code>fields</code> fails before any database hit (<code>EntityQueryService.cs:262-267</code>), re-stamping each error with the operation and entity name (<code>EntityQueryService.cs:270-276</code>). <strong>(2) Build the query</strong>: ask the metadata provider which includes are supported (<code>EntityQueryService.cs:282</code>), pack everything into <code>EntityQueryParameters</code> (<code>EntityQueryService.cs:284-296</code>), and pick <code>Repository.Table</code> or <code>TableNoTracking</code> from the <code>asTracking</code> flag (<code>EntityQueryService.cs:298</code>). <strong>(3) Execute</strong> on one of two branches, chosen by <code>CanProject</code> (<code>EntityQueryService.cs:489-492</code>): a registered projector, no tracking request, and no cross-source includes routes to <code>ExecuteProjectedAsync</code> and the mapper is never involved (<code>EntityQueryService.cs:303-313</code>); otherwise <code>ExecuteAsync</code> runs and <code>DTOMapper.MapToDTOs</code> converts the materialized entities (<code>EntityQueryService.cs:316-324</code>). Field shaping deliberately does not disqualify projection, because shaping runs after materialization over whatever object the pipeline produced (<code>EntityQueryService.cs:484-487</code>). <strong>(4) Shape and wrap</strong>: shape <strong>only when a field subset was requested</strong>, otherwise return the typed DTOs as-is to avoid a per-row <code>ExpandoObject</code> allocation and boxing (<code>EntityQueryService.cs:334-336</code>); both forms serialize to the same camelCase JSON, which is why the return type is <code>PagedCollectionResult&lt;object&gt;</code> rather than a typed collection (<a href="group-01-result-error-handling.html#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a>, and the contract note at <code>IEntityQueryService.cs:12-14</code>). The <a href="group-01-result-error-handling.html#paginationmetadata"><code>PaginationMetadata</code></a> comes from <code>BuildPaginationMetadata</code> (<code>EntityQueryService.cs:332</code>, method at <code>EntityQueryService.cs:555</code>), whose job is to describe what the pipeline actually did rather than what the caller asked for: an unpaginated call reports the true total with the page size floored to the rows actually returnable, <code>Math.Min(total, MaxUnboundedResultLimit)</code>, on page 1 (<code>EntityQueryService.cs:569-572</code>), and a paginated call reports <code>Math.Clamp(pageSize, 1, MaxUnboundedResultLimit)</code> on <code>Math.Max(pageNumber, 1)</code> (<code>EntityQueryService.cs:579-582</code>), mirroring exactly the floor and ceiling <code>PagingMath</code> applied. The clamp is recomputed here rather than read back from <code>PagingMath</code>, because that helper&#39;s <code>(0, 0)</code> sentinel for an unreachable page would otherwise advertise <code>PageSize = 0</code> for a perfectly valid page size (<code>EntityQueryService.cs:548-553</code>).</p>
-          <p>The by-id path has a fast lane worth knowing. <code>GetEntityByIdAsync</code> (<code>EntityQueryService.cs:376</code>) validates the fields, then tries <code>TryGetByIdFastPathAsync</code> (<code>EntityQueryService.cs:119</code>), which issues a single keyed <code>TOP 1 WHERE Id = @id</code> through the repository&#39;s include overload (<code>EntityQueryService.cs:135</code>). <code>TryGetFastPathIncludes</code> (<code>EntityQueryService.cs:161</code>) decides eligibility: a field projection, a specification, or a non-default <code>idField</code> disqualifies the request (<code>EntityQueryService.cs:171-176</code>), and so do unsupported (cross-source) navigations, since only the pipeline&#39;s populator can batch-load those (<code>EntityQueryService.cs:184-187</code>, rationale at <code>EntityQueryService.cs:155-159</code>). Requested includes do <strong>not</strong> disqualify it: the repository&#39;s include overload applies the same <code>Include</code> calls and auto-applies <code>AsSplitQuery</code> for a child collection (<code>EFReadRepository.cs:185-198</code>, delegating the split decision to <code>SpecificationEvaluator.cs:93</code>), and disqualifying on includes left the fast path unreachable for every entity that declares a navigation, because the REST by-id action defaults <code>includeFKs</code> to true (<code>EntityQueryService.cs:147-153</code>). The string id is converted with a <code>TypeConverter</code> cached per identifier type (<code>EntityQueryService.cs:198</code>, cache at <code>EntityQueryService.cs:107</code>), and the read runs on the filtered <code>TableNoTracking</code> (<code>EFReadRepository.cs:194</code>), so soft-delete query filters still apply, unlike <code>FindAsync</code> (<code>EntityQueryService.cs:113-117</code>, and the same trap documented at <code>EFReadRepository.cs:176-180</code>). Anything else falls through to the pipeline with a synthetic <code>Id EQUALS &lt;value&gt;</code> filter and returns <code>Error.NotFound</code> when the page comes back empty. <code>GetByIdAsync</code> (<code>EntityQueryService.cs:437</code>) layers DTO mapping and the same shape-only-if-fields rule on top; <code>GetAllForLookupAsync</code> (<code>EntityQueryService.cs:348</code>) returns lightweight <a href="group-12-api-hosting-mapping.html#baselookuptidentifiertype"><code>BaseLookup&lt;TIdentifierType&gt;</code></a> id/name pairs for dropdowns; <code>ExistsAsync</code> (<code>EntityQueryService.cs:467</code>) delegates straight to the repository. The class is built for extension over modification ([Rubric §1, SOLID]): <code>Repository</code> (<code>EntityQueryService.cs:87</code>), <code>DTOToEntityPropertyMap</code> (<code>EntityQueryService.cs:100</code>), and every query method are <code>virtual</code>, so a module subclass such as <a href="group-18-conference-application.html#speakerentityqueryservice"><code>SpeakerEntityQueryService</code></a> (<code>SpeakerEntityQueryService.cs:15</code>) overrides one behavior (<code>SpeakerEntityQueryService.cs:34</code>) without reimplementing the engine.</p>
+          <p>The by-id path has a fast lane worth knowing. <code>GetEntityByIdAsync</code> (<code>EntityQueryService.cs:376</code>) validates the fields (<code>EntityQueryService.cs:386</code>), then tries <code>TryGetByIdFastPathAsync</code> (<code>EntityQueryService.cs:119</code>), which issues a single keyed <code>TOP 1 WHERE Id = @id</code> through the repository&#39;s include overload (<code>EntityQueryService.cs:135</code>). <code>TryGetFastPathIncludes</code> (<code>EntityQueryService.cs:161</code>) decides eligibility: a field projection, a specification, or a non-default <code>idField</code> disqualifies the request (<code>EntityQueryService.cs:171-176</code>), and so do unsupported (cross-source) navigations, since only the pipeline&#39;s populator can batch-load those (<code>EntityQueryService.cs:184-187</code>, rationale at <code>EntityQueryService.cs:155-159</code>). Requested includes do <strong>not</strong> disqualify it: the repository&#39;s include overload applies the same <code>Include</code> calls and auto-applies <code>AsSplitQuery</code> for a child collection (<code>EFReadRepository.cs:312-325</code>, delegating the split decision to <code>SpecificationEvaluator.cs:93</code>), and disqualifying on includes left the fast path unreachable for every entity that declares a navigation, because the REST by-id action defaults <code>includeFKs</code> to true (<code>EntityQueryService.cs:147-153</code>). The string id is converted with a <code>TypeConverter</code> cached per identifier type (<code>EntityQueryService.cs:198</code>, cache at <code>EntityQueryService.cs:107</code>), and the read runs on the filtered <code>TableNoTracking</code> (<code>EFReadRepository.cs:321</code>), so soft-delete query filters still apply, unlike <code>FindAsync</code> (<code>EntityQueryService.cs:113-117</code>, and the same trap documented at <code>EFReadRepository.cs:303-308</code>). Anything else falls through to the pipeline with a synthetic <code>Id EQUALS &lt;value&gt;</code> filter and returns <code>Error.NotFound</code> when the page comes back empty. <code>GetByIdAsync</code> (<code>EntityQueryService.cs:437</code>) layers DTO mapping and the same shape-only-if-fields rule on top; <code>GetAllForLookupAsync</code> (<code>EntityQueryService.cs:348</code>) returns lightweight <a href="group-12-api-hosting-mapping.html#baselookuptidentifiertype"><code>BaseLookup&lt;TIdentifierType&gt;</code></a> id/name pairs for dropdowns; <code>ExistsAsync</code> (<code>EntityQueryService.cs:467</code>) delegates straight to the repository. The class is built for extension over modification ([Rubric §1, SOLID]): <code>Repository</code> (<code>EntityQueryService.cs:87</code>), <code>DTOToEntityPropertyMap</code> (<code>EntityQueryService.cs:100</code>), and every query method are <code>virtual</code>, so a module subclass such as <a href="group-18-conference-application.html#speakerentityqueryservice"><code>SpeakerEntityQueryService</code></a> (<code>SpeakerEntityQueryService.cs:15</code>) overrides one behavior (<code>SpeakerEntityQueryService.cs:34</code>) without reimplementing the engine.</p>
           <h2 id="end-to-end-one-list-request">End to end, one list request</h2>
-          <p>The request reaches a read controller, <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (Group 12), which resolves <code>MaxPageSize</code> per request from <a href="group-14-module-system-composition.html#iapplicationsettings"><code>IApplicationSettings</code></a>, falling back to 500 when unset (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:57-62</code>), clamps the requested page size to it (<code>EntityControllerBase.cs:155</code>), binds <code>?filter=</code> through <code>QueryFilterModelBinder</code> (<code>EntityControllerBase.cs:152</code>), and may supply a server-authored specification for authorization scope. It calls <code>IEntityQueryService.GetAllAsync</code>. The service validates fields, sort, and filters (an early failure short-circuits to an error result), classifies the requested includes, and packages an <code>EntityQueryParameters</code>. <code>EntityQueryPipeline</code> then takes the projection path when a projector is registered and the read qualifies, or one of the two entity paths otherwise, applying the specification criteria plus the dynamic filters as translated, parameterized <code>WHERE</code> clauses, sorting with the key tie-break when paginating, counting, paging through <code>PagingMath</code>, projecting the requested columns, materializing, and batch-loading any cross-source navigations. The service maps to DTOs (or skips mapping entirely on the projected path), shapes only if a field subset was asked for, and returns a <code>Result&lt;PagedCollectionResult&lt;object&gt;&gt;</code> that the controller unwraps into the HTTP body plus an <code>X-Pagination</code> header carrying the serialized metadata (<code>EntityControllerBase.cs:172</code>). One pipeline, every entity, validated input, server-side execution, and a clean extension point for navigations that cross a service boundary ([Rubric §6, CQRS &amp; Event-Driven] on the read side, [Rubric §9, API &amp; Contract Design] for the uniform query contract).</p>
+          <p>The request reaches a read controller, <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (Group 12), which resolves <code>MaxPageSize</code> per request from <a href="group-14-module-system-composition.html#applicationsettings"><code>ApplicationSettings</code></a>, falling back to 500 when unset (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:58-63</code>), clamps the requested page size to it (<code>EntityControllerBase.cs:168</code>), binds <code>?filter=</code> through <code>QueryFilterModelBinder</code> (<code>EntityControllerBase.cs:165</code>), and asks its own <code>GetReadSpecificationAsync</code> hook for a server-authored authorization scope (<code>EntityControllerBase.cs:170</code>). It calls <code>IEntityQueryService.GetAllAsync</code> (<code>EntityControllerBase.cs:172</code>). The service validates fields, sort, and filters (an early failure short-circuits to an error result), classifies the requested includes, and packages an <code>EntityQueryParameters</code>. <code>EntityQueryPipeline</code> then takes the projection path when a projector is registered and the read qualifies, or one of the two entity paths otherwise, applying the specification criteria plus the dynamic filters as translated, parameterized <code>WHERE</code> clauses, sorting with the key tie-break when paginating, counting, paging through <code>PagingMath</code>, projecting the requested columns, materializing, and batch-loading any cross-source navigations. The service maps to DTOs (or skips mapping entirely on the projected path), shapes only if a field subset was asked for, and returns a <code>Result&lt;PagedCollectionResult&lt;object&gt;&gt;</code> that the controller unwraps into the HTTP body plus an <code>X-Pagination</code> header carrying the serialized metadata (<code>EntityControllerBase.cs:187</code>). One pipeline, every entity, validated input, server-side execution, and a clean extension point for navigations that cross a service boundary ([Rubric §6, CQRS &amp; Event-Driven] on the read side, [Rubric §9, API &amp; Contract Design] for the uniform query contract).</p>
           <h2 id="also-filed-here-best-effort-dispatch-and-the-upcaster-registry">Also filed here: best-effort dispatch and the upcaster registry</h2>
-          <p>Four types in this group are not part of the read path at all; they are co-located in <code>MMCA.Common.Application/Services</code> and are grouped by that folder. <a href="#besteffort"><code>BestEffort</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:25</code>) runs a side effect that must never fail its caller (cache eviction after a committed command, a fire-and-forget notification, an eviction broadcast onto the bus): <code>ExecuteAsync</code> awaits the action and turns any non-cancellation failure into exactly one Warning plus one metric increment instead of an exception that would roll back or 500 an operation whose real work already succeeded (<code>BestEffort.cs:45</code>, the swallow at <code>BestEffort.cs:65-71</code>). Cancellation is explicitly <strong>not</strong> swallowed: when the caller&#39;s own token is the reason the action stopped, the <code>OperationCanceledException</code> is rethrown so a host shutdown unwinds promptly (<code>BestEffort.cs:59-64</code>, rationale at <code>BestEffort.cs:11-17</code>). The two companions carry the telemetry: <a href="#besteffortlog"><code>BestEffortLog</code></a> (<code>BestEffort.cs:79</code>) is the source-generated Warning message, kept separate so the public helper need not be <code>partial</code> (<code>BestEffort.cs:81-84</code>), and <a href="#besteffortmetrics"><code>BestEffortMetrics</code></a> (<code>BestEffort.cs:99</code>) owns the <code>MMCA.Common.BestEffort</code> meter and its <code>besteffort.dispatch.failed</code> counter, tagged by a low-cardinality <code>operation</code> name (<code>BestEffort.cs:102-115</code>). It is its own meter rather than a counter folded into the CQRS metrics so an operator can drop or keep it independently of the RED metrics (<code>BestEffort.cs:92-97</code>). Callers span both apps: Store&#39;s output-cache eviction (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/OutputCacheEvictionExtensions.cs:36</code>) and ADC&#39;s live broadcasts and cache-eviction handlers (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:68</code>, <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:45</code>). This is [Rubric §13, Observability &amp; Operability] (a quietly broken side effect becomes a metric, not a line in a log nobody reads) and [Rubric §29, Resilience &amp; Business Continuity] (a non-essential failure degrades instead of propagating).</p>
-          <p>The fourth co-located type is <code>EventUpcasterRegistry</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EventUpcasterRegistry.cs:30</code>), the default <code>IEventUpcasterRegistry</code>, which belongs to the integration-event story rather than to querying. It indexes every registered <code>IEventUpcaster</code> by its source contract and rejects a duplicate source, a self-mapping upcaster, or a chain cycle at construction time, throwing an <code>InvalidOperationException</code> that names the offenders (<code>EventUpcasterRegistry.cs:50-79</code>); it precomputes each chain&#39;s terminal type once, because the graph is static after DI is built (<code>EventUpcasterRegistry.cs:133</code>); and it preserves the event envelope across every hop by stamping <code>MessageId</code> and <code>DateOccurred</code> from the pre-hop instance onto the upcasted one through cached <code>PropertyInfo</code> handles (<code>EventUpcasterRegistry.cs:36</code>, <code>EventUpcasterRegistry.cs:169</code>), so consumer-side inbox deduplication stays keyed on the id the producer published.</p>
+          <p>Four types in this group are not part of the read path at all; they are co-located in <code>MMCA.Common.Application/Services</code> and are grouped by that folder. <a href="#besteffort"><code>BestEffort</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:25</code>) runs a side effect that must never fail its caller (cache eviction after a committed command, a fire-and-forget notification, an eviction broadcast onto the bus): <code>ExecuteAsync</code> awaits the action and turns any non-cancellation failure into exactly one Warning plus one metric increment instead of an exception that would roll back or 500 an operation whose real work already succeeded (<code>BestEffort.cs:45</code>, the swallow at <code>BestEffort.cs:65-71</code>). Cancellation is explicitly <strong>not</strong> swallowed: when the caller&#39;s own token is the reason the action stopped, the <code>OperationCanceledException</code> is rethrown so a host shutdown unwinds promptly (<code>BestEffort.cs:59-64</code>, rationale at <code>BestEffort.cs:11-17</code>). The two companions carry the telemetry: <a href="#besteffortlog"><code>BestEffortLog</code></a> (<code>BestEffort.cs:79</code>) is the source-generated Warning message, kept separate so the public helper need not be <code>partial</code> (<code>BestEffort.cs:75-78</code>), and <a href="#besteffortmetrics"><code>BestEffortMetrics</code></a> (<code>BestEffort.cs:99</code>) owns the <code>MMCA.Common.BestEffort</code> meter and its <code>besteffort.dispatch.failed</code> counter, tagged by a low-cardinality <code>operation</code> name (<code>BestEffort.cs:102-115</code>). It is its own meter rather than a counter folded into the CQRS metrics so an operator can drop or keep it independently of the RED metrics (<code>BestEffort.cs:92-97</code>). Callers span the framework and both apps: the framework&#39;s own output-cache eviction (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:86</code>) and ADC&#39;s live broadcasts and cache-eviction handlers (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:68</code>, <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:45</code>, <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:131</code>). This is [Rubric §13, Observability &amp; Operability] (a quietly broken side effect becomes a metric, not a line in a log nobody reads) and [Rubric §29, Resilience &amp; Business Continuity] (a non-essential failure degrades instead of propagating).</p>
+          <p>The fourth co-located type is <a href="#eventupcasterregistry"><code>EventUpcasterRegistry</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EventUpcasterRegistry.cs:30</code>), the default <code>IEventUpcasterRegistry</code>, which belongs to the integration-event story rather than to querying. It indexes every registered <code>IEventUpcaster</code> by its source contract and rejects a duplicate source, a self-mapping upcaster, or a chain cycle at construction time, throwing an <code>InvalidOperationException</code> that names the offenders (<code>EventUpcasterRegistry.cs:50-82</code>, the cycle check at <code>EventUpcasterRegistry.cs:148-154</code>); it precomputes each chain&#39;s terminal type once, because the graph is static after DI is built (<code>EventUpcasterRegistry.cs:133</code>); and it preserves the event envelope across every hop by stamping <code>MessageId</code> and <code>DateOccurred</code> from the pre-hop instance onto the upcasted one through cached <code>PropertyInfo</code> handles (<code>EventUpcasterRegistry.cs:36</code>, <code>EventUpcasterRegistry.cs:169</code>), so consumer-side inbox deduplication stays keyed on the id the producer published.</p>
           <h3 id="besteffortlog">BestEffortLog</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:79</code> · Level 0 · class (internal, static, partial)</p>
@@ -200,7 +200,7 @@
           message template on every call; the <code>[LoggerMessage]</code> attribute instead makes the compiler emit a
           strongly-typed, allocation-free <code>DispatchFailed</code> method with the template pre-parsed and the event
           wired up once. The type has to be <code>partial</code> for the generator to add the body, which is exactly why
-          it is a separate companion class: the doc comment (<code>BestEffort.cs:76-77</code>) records that the reason is
+          it is a separate companion class: the doc comment (<code>BestEffort.cs:75-78</code>) records that the reason is
           to keep the public <a href="#besteffort"><code>BestEffort</code></a> helper from having to be <code>partial</code> itself.</li>
           <li><strong>Walkthrough</strong>: one member.
           <code>[LoggerMessage(Level = LogLevel.Warning, Message = &quot;Best-effort operation &#39;{Operation}&#39; failed and was swallowed; the caller&#39;s outcome is unaffected&quot;)]</code> over
@@ -210,7 +210,9 @@
           parameter is passed to the logger as the exception rather than concatenated into the text.</li>
           <li><strong>Why it&#39;s built this way</strong>: Warning, not Error, is the deliberate level. The caller&#39;s real work has
           already succeeded (that is the whole premise of a best-effort dispatch), so an Error would page
-          someone for an outcome that is by definition not a failure of the operation.</li>
+          someone for an outcome that is by definition not a failure of the operation.
+          <a href="https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html" target="_blank" rel="noopener">ADR-096</a> records the
+          helper&#39;s contract that this log is half of.</li>
           <li><strong>Where it&#39;s used</strong>: called from the catch-all arm of
           <a href="#besteffort"><code>BestEffort.ExecuteAsync</code></a> (<code>BestEffort.cs:70</code>) and nowhere else.</li>
           </ul>
@@ -245,7 +247,7 @@
           </li>
           <li><strong>Why it&#39;s built this way</strong>: a host exports the counter by registering the meter name, and the
           Aspire service defaults do that already (<code>AddMeter(&quot;MMCA.Common.BestEffort&quot;)</code> at
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:170</code>). Note the meter name is
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:199</code>). Note the meter name is
           duplicated there as a string literal rather than referenced, because the Aspire package has no
           reference to Application; the class doc (<code>BestEffort.cs:90-91</code>) records that duplication as
           deliberate.</li>
@@ -265,7 +267,7 @@
           camelCase JSON name, and a compiled <code>Func&lt;object, object?&gt;</code> getter, so a property value can be read
           without per-call reflection.</li>
           <li><strong>Depends on</strong>: nothing first-party. <code>System.Reflection</code>, <code>System.Linq.Expressions</code>,
-          <code>System.Text.Json</code> (<code>JsonNamingPolicy</code>) (BCL).</li>
+          <code>System.Text.Json</code> (<code>JsonNamingPolicy</code>) from the BCL.</li>
           <li><strong>Concept introduced, compile-once expression delegates instead of per-call reflection.</strong>
           <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses whether hot paths avoid avoidable per-request
           work): <code>PropertyInfo.GetValue</code> allocates an argument array on <em>every</em> invocation, and shaping a
@@ -278,7 +280,7 @@
           a small immutable tuple of values: no heap allocation per element, structural equality for free.</li>
           <li><strong>Walkthrough</strong>: the whole type is one positional declaration,
           <code>private readonly record struct PropertyAccessor(string PropertyName, string CamelCaseName, Func&lt;object, object?&gt; GetValue)</code> (<code>QueryFieldService.cs:46</code>).<ul>
-          <li><code>PropertyName</code> is the raw CLR name (<code>:61</code>) and is what a requested <code>?fields=</code> entry is matched
+          <li><code>PropertyName</code> is the raw CLR name (<code>:61</code>) and is what a requested <code>fields=</code> entry is matched
           against, case-insensitively, when the accessor array is filtered down to the requested subset in
           <code>FilterAccessorsByFields</code> (<code>:447-453</code>, the <code>StringComparer.OrdinalIgnoreCase</code> match at <code>:452</code>).</li>
           <li><code>CamelCaseName</code> is computed once at construction with <code>CamelCase.ConvertName(prop.Name)</code> (<code>:61</code>,
@@ -326,40 +328,47 @@
           <code>ExecuteAsync(string operation, ILogger logger, Func&lt;CancellationToken, Task&gt; action, CancellationToken cancellationToken = default)</code> (<code>BestEffort.cs:45-49</code>):<ul>
           <li>Guards first: <code>ArgumentException.ThrowIfNullOrWhiteSpace(operation)</code> and two
           <code>ArgumentNullException.ThrowIfNull</code> calls (<code>BestEffort.cs:51-53</code>). A programming error in the call
-          itself still throws; only the <em>action&#39;s</em> failures are swallowed.</li>
+          itself still throws; only the <em>action&#39;s</em> failures are swallowed (pinned by
+          <code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/BestEffortTests.cs:132</code>).</li>
           <li><code>await action(cancellationToken).ConfigureAwait(false)</code> (<code>BestEffort.cs:57</code>), the action is
           genuinely awaited, so this is not a fire-and-forget <code>Task</code> the runtime might lose.</li>
           <li><code>catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }</code>
           (<code>BestEffort.cs:59-64</code>), the one exception that is <strong>not</strong> swallowed. The filter is the load-bearing
           detail: it rethrows only when the <em>caller&#39;s own</em> token is the reason, so a host shutdown or an
           abandoned request unwinds promptly, while an action that cancels itself for an unrelated reason
-          falls through to the swallow arm (pinned by
-          <code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/BestEffortTests.cs:99</code> and <code>:118</code>,
-          one test per side of that distinction).</li>
+          falls through to the swallow arm (<code>BestEffortTests.cs:99</code> and <code>:118</code>, one test per side of that
+          distinction).</li>
           <li><code>catch (Exception ex)</code> (<code>BestEffort.cs:65-71</code>), the terminal arm:
           <a href="#besteffortmetrics"><code>BestEffortMetrics.RecordFailure(operation)</code></a> then
           <a href="#besteffortlog"><code>BestEffortLog.DispatchFailed(logger, operation, ex)</code></a>. Nothing is rethrown.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: the class doc (<code>BestEffort.cs:11-17</code>) states the caller&#39;s obligation
-          that follows from the cancellation rule: a side effect that must outlive the request should be
-          passed <code>CancellationToken.None</code>, not the request token. Store&#39;s output-cache eviction does exactly
-          that, with the reason in a comment: the write has committed, so a client that disconnected
-          mid-response must not abandon the cache cleanup
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/OutputCacheEvictionExtensions.cs:34-40</code>).
-          Keeping <code>operation</code> a low-cardinality constant is the other obligation, because it becomes a metric
-          tag (<code>BestEffort.cs:20-22</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: ADC Engagement&#39;s real-time and cache-eviction paths, all of which broadcast or
-          evict after the aggregate has already been saved:
-          <code>UserSessionBookmarkCacheEvictionHandler.cs:68</code>,
-          <code>SubmitQuestionHandler.cs:131</code>, <code>ModerateQuestionHandler.cs:136</code>,
-          <code>SessionQuestionUpvoteChangedHandler.cs:52</code>, <code>LivePollVoteChangedHandler.cs:51</code> (all under
-          <code>MMCA.ADC/Source/Modules/Engagement/</code>), and the SignalR publish processor
-          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:45</code>;
-          plus Store&#39;s output-cache eviction helper (<code>OutputCacheEvictionExtensions.cs:36</code>). Its own behavior
-          is pinned by <code>BestEffortTests.cs:13</code>.</li>
+          <li><strong>Why it&#39;s built this way</strong>:
+          <a href="https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html" target="_blank" rel="noopener">ADR-096</a> records the
+          contract this helper is the single implementation of. The class doc (<code>BestEffort.cs:11-17</code>) states
+          the caller&#39;s obligation that follows from the cancellation rule: a side effect that must outlive the
+          request should be passed <code>CancellationToken.None</code>, not the request token. The framework&#39;s own
+          output-cache eviction does exactly that, with the reason in the doc comment (the write has
+          committed, so a client that disconnected mid-response must not abandon the cleanup):
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:60-70</code>,
+          with the <code>CancellationToken.None</code> argument at <code>:90</code>. Keeping <code>operation</code> a low-cardinality constant
+          is the other obligation, because it becomes a metric tag (<code>BestEffort.cs:20-22</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: the framework&#39;s own <code>TryEvictTagsAsync</code> extension
+          (<code>OutputCacheEvictionExtensions.cs:78-92</code>, the helper call at <code>:86</code>), and ADC Engagement&#39;s real-time
+          and cache-eviction paths, all of which broadcast or evict after the aggregate has already been
+          saved. Under <code>MMCA.ADC/Source/Modules/Engagement/</code>:
+          <code>MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:68</code>,
+          <code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:131</code>,
+          <code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:138</code>,
+          <code>MMCA.ADC.Engagement.Application/SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:52</code>,
+          <code>MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:51</code>, and
+          the SignalR publish processor
+          <code>MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:45</code>. Its own behavior is
+          pinned by <a href="group-27-testing-infrastructure.html#bestefforttests"><code>BestEffortTests</code></a>
+          (<code>BestEffortTests.cs:13</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: nothing here retries. A swallowed side effect is gone, not queued, so
-          anything that must eventually happen belongs in the outbox (ADR-003) rather than here.</li>
+          anything that must eventually happen belongs in the outbox
+          (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>) rather than here.</li>
           </ul>
           <hr>
           <h3 id="eventupcasterregistry">EventUpcasterRegistry</h3>
@@ -376,7 +385,7 @@
           interface it implements), <a href="group-05-cqrs-pipeline.html#ieventupcaster"><code>IEventUpcaster</code></a>,
           <a href="group-04-events-outbox.html#iintegrationevent"><code>IIntegrationEvent</code></a>,
           <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a> (only for the <code>nameof</code> of the two envelope
-          properties); <code>System.Collections.Concurrent</code> (<code>ConcurrentDictionary</code>), <code>System.Reflection</code>
+          properties); <code>System.Collections.Concurrent</code> (<code>ConcurrentDictionary</code>) and <code>System.Reflection</code>
           (<code>PropertyInfo</code>) from the BCL.</li>
           <li><strong>Concept introduced, upcasting a retired event contract.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
           assesses how well the event model handles change over time, and <code>[Rubric §7, Microservices Readiness]</code> assesses whether producers and consumers can deploy independently. Both meet here. Once
@@ -385,10 +394,10 @@
           messages written before the change. Upcasting resolves that without a flag day. An author registers
           a small mapper that converts <code>Foo</code> into <code>FooV2</code>
           (<code>services.AddEventUpcaster&lt;Foo, FooV2, FooUpcaster&gt;()</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:283-290</code>), and this registry
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:551-558</code>), and this registry
           converts on the way in so that exactly one handler shape exists in the codebase, the newest one.
           Registrations compose: V1 to V2 plus V2 to V3 delivers a V1 message to the V3 handler
-          (<code>DependencyInjection.cs:271</code>).
+          (<code>DependencyInjection.cs:539</code>).
           <code>[Rubric §15, Best Practices &amp; Code Quality]</code> covers the failure model: a bad registration graph is
           a programming error, so it throws at construction naming the offenders instead of returning a
           <a href="group-01-result-error-handling.html#result"><code>Result</code></a>; the class remarks (<code>:14-20</code>) call that the
@@ -432,7 +441,7 @@
           both values from the pre-hop instance onto the new one (<code>:177-178</code>). <code>Writable</code> (<code>:181-182</code>) is the
           filter that caches a handle only when <code>CanWrite</code> is true, so a target that does not expose the
           property simply gets nothing written rather than throwing. Both properties are <code>init</code>-only on
-          <code>BaseDomainEvent</code>
+          <a href="group-04-events-outbox.html#basedomainevent"><code>BaseDomainEvent</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:28</code> and <code>:35</code>), which
           reflection can still set.</li>
           <li><code>Describe</code> (<code>:184</code>, <code>:186</code>) renders a type or an upcaster instance as its <code>FullName</code>, which is what
@@ -440,9 +449,11 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html" target="_blank" rel="noopener">ADR-090</a>
-          records the registration model. Envelope preservation is deliberately the registry&#39;s job rather than
-          the upcaster author&#39;s (remarks, <code>:21-28</code>): an upcaster maps payload fields only, and consumer-side
-          inbox deduplication is keyed on the <code>MessageId</code> the producer published
+          records the registration model, and the <code>AddEventUpcaster</code> remarks restate the policy it implements:
+          a breaking event-shape change is a NEW event type plus a consumer-side upcaster
+          (<code>DependencyInjection.cs:527-528</code>). Envelope preservation is deliberately the registry&#39;s job rather
+          than the upcaster author&#39;s (remarks, <code>:21-28</code>): an upcaster maps payload fields only, and
+          consumer-side inbox deduplication is keyed on the <code>MessageId</code> the producer published
           (<a href="https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html" target="_blank" rel="noopener">ADR-021</a>), so leaving the
           copy to each author would make dedup depend on every author remembering. Making it automatic also
           makes it idempotent: an author who does copy the envelope just gets the same values written twice,
@@ -451,16 +462,16 @@
           pins.</li>
           <li><strong>Where it&#39;s used</strong>: registered unconditionally as a singleton by <code>AddApplication</code>
           (<code>services.TryAddSingleton&lt;IEventUpcasterRegistry, EventUpcasterRegistry&gt;()</code>,
-          <code>DependencyInjection.cs:40</code>), and populated by each <code>AddEventUpcaster&lt;TSource, TTarget, TUpcaster&gt;()</code>
+          <code>DependencyInjection.cs:41</code>), and populated by each <code>AddEventUpcaster&lt;TSource, TTarget, TUpcaster&gt;()</code>
           call, which appends the upcaster through <code>TryAddEnumerable</code>
-          (<code>DependencyInjection.cs:283-290</code>, the descriptor at <code>:288</code>). Both delivery paths consume it: the
+          (<code>DependencyInjection.cs:551-558</code>, the descriptor at <code>:556</code>). Both delivery paths consume it: the
           in-process branch of <a href="group-04-events-outbox.html#domaineventdispatcher"><code>DomainEventDispatcher</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/DomainEventDispatcher.cs:62</code>, resolved
           through a <code>Lazy&lt;IEventUpcasterRegistry?&gt;</code> at <code>:32-33</code> so a host without one still works) and the
           broker-side
           <a href="group-07-persistence-ef-core.html#upcastingintegrationeventconsumertevent"><code>UpcastingIntegrationEventConsumer&lt;TEvent&gt;</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/UpcastingIntegrationEventConsumer.cs:65</code>
-          and <code>:72</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/UpcastingIntegrationEventConsumer.cs:72</code>
+          for the probe and <code>:79</code> for the walk).
           <a href="group-07-persistence-ef-core.html#eventupcasterstartupvalidator"><code>EventUpcasterStartupValidator</code></a>
           exists purely to force construction at host start
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/EventUpcasterStartupValidator.cs:27</code>
@@ -494,7 +505,7 @@
           (<code>ExpandoObject</code>), <code>System.Reflection</code>, <code>System.Text.Json</code>, <code>System.Collections.Concurrent</code>.</p>
           </li>
           <li><p><strong>Concept introduced, sparse fieldsets and a four-cache metadata layer.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (assesses whether clients can ask for exactly the data they need): a
-          <code>?fields=id,name</code> request narrows both the SQL <code>SELECT</code> and the JSON payload. <code>[Rubric §12, Performance &amp; Scalability]</code>: four static <code>ConcurrentDictionary</code> caches back everything.</p>
+          <code>fields=id,name</code> request narrows both the SQL <code>SELECT</code> and the JSON payload. <code>[Rubric §12, Performance &amp; Scalability]</code>: four static <code>ConcurrentDictionary</code> caches back everything.</p>
           <ul>
           <li><code>PropertiesCache</code> (<code>Type -&gt; PropertyInfo[]</code>, <code>:41</code>) for the validation and projection paths.</li>
           <li><code>AccessorCache</code> (<code>Type -&gt; PropertyAccessor[]</code>, <code>:42</code>) for the shaping path, built by
@@ -583,10 +594,11 @@
           </ol>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: <code>Validate</code> and <code>ValidateSortDirection</code> are called by
-          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a> before the database is
-          touched (<code>EntityQueryService.cs:262-266</code>, <code>:354</code>, <code>:386</code>); <code>ShapeCollectionData</code> and <code>ShapeData</code> are
-          called after mapping (<code>EntityQueryService.cs:336</code>, <code>:463</code>); <code>ApplySorting</code> and <code>ApplyFieldSelection</code>
-          are called inside <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a>
+          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>
+          before the database is touched (<code>EntityQueryService.cs:262-266</code>, <code>:354</code>, <code>:386</code>);
+          <code>ShapeCollectionData</code> and <code>ShapeData</code> are called after mapping (<code>EntityQueryService.cs:336</code>, <code>:463</code>);
+          <code>ApplySorting</code> and <code>ApplyFieldSelection</code> are called inside
+          <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:81</code>, <code>:175</code>,
           <code>:208</code>, <code>:227</code>, <code>:251</code>).</p>
           </li>
@@ -614,6 +626,7 @@
           <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>,
           <a href="#ispecificationtentity-tidentifiertype"><code>ISpecification&lt;TEntity, TIdentifierType&gt;</code></a>,
           <a href="#entityqueryparameterstentity"><code>EntityQueryParameters&lt;TEntity&gt;</code></a>,
+          <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a>,
           <a href="#queryfieldservice"><code>QueryFieldService</code></a>, <a href="#queryfilterservice"><code>QueryFilterService</code></a>,
           <a href="group-01-result-error-handling.html#paginationmetadata"><code>PaginationMetadata</code></a>,
           <a href="group-01-result-error-handling.html#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a>,
@@ -735,9 +748,22 @@
           records the generic read layer&#39;s trade-offs.</li>
           <li><strong>Where it&#39;s used</strong>: injected as the query service of the read controllers
           (<a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>)
-          in both apps, and subclassed per module wherever a default must change.</li>
+          in both apps, and subclassed per module wherever a default must change. The canonical override is a
+          property map: <code>ProductEntityQueryService</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductEntityQueryService.cs:15</code>)
+          chains to the five-argument constructor (<code>:21-22</code>) and overrides <code>DTOToEntityPropertyMap</code> (<code>:35</code>)
+          with a single <code>&quot;CategoryName&quot; -&gt; &quot;Category.Name&quot;</code> entry (<code>:29-32</code>); <code>CategoryEntityQueryService</code>
+          and ADC&#39;s <code>SpeakerEntityQueryService</code> follow the same shape
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/CategoryEntityQueryService.cs:21</code>,
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerEntityQueryService.cs:21</code>).
+          Behavior is pinned by
+          <a href="group-27-testing-infrastructure.html#entityqueryservicetests"><code>EntityQueryServiceTests</code></a>,
+          <a href="group-27-testing-infrastructure.html#entityqueryserviceprojectiontests"><code>EntityQueryServiceProjectionTests</code></a>,
+          and <a href="group-27-testing-infrastructure.html#entityqueryserviceresolutiontests"><code>EntityQueryServiceResolutionTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: this class does not clamp the page size it <em>applies</em> (the clamp lives
-          in <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a>&#39;s <code>ApplyPaging</code>), but it does clamp the page size
+          in <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a>&#39;s <code>ApplyPaging</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:271-281</code>),
+          but it does clamp the page size
           it <em>reports</em>: <code>BuildPaginationMetadata</code> (<code>:555-583</code>) recomputes the clamp rather than reading it
           back from <a href="#pagingmath"><code>PagingMath</code></a>, because that helper returns a <code>(0, 0)</code> sentinel for an
           unreachable offset and reporting that take would advertise <code>PageSize = 0</code> for a perfectly valid
@@ -849,7 +875,7 @@
           <code>List&lt;T&gt;</code> rather than an array matters downstream: LINQ Dynamic binds it as the receiver of a
           <code>Contains</code> call. Putting <code>CanParse</code> here rather than in each strategy is what keeps the <em>validation</em>
           rule and the <em>application</em> rule from drifting apart, which is exactly the class of bug
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> documents at <code>QueryFilterService.cs:176-179</code>.</li>
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> documents at <code>QueryFilterService.cs:198-202</code>.</li>
           <li><strong>Where it&#39;s used</strong>: every value strategy that supports <code>IN</code> or <code>BETWEEN</code> routes through
           <code>ParseList</code>: <a href="#datetimefilterstrategy"><code>DateTimeFilterStrategy</code></a> (<code>DateTimeFilterStrategy.cs:59</code>,
           <code>:66</code>), <a href="#decimalfilterstrategy"><code>DecimalFilterStrategy</code></a> (<code>DecimalFilterStrategy.cs:55</code>, <code>:62</code>),
@@ -913,7 +939,7 @@
           out-of-tree implementer.</li>
           <li><strong>Where it&#39;s used</strong>: implemented by the seven built-in strategies below; the registry, the
           dispatch, and the up-front validation all live in <a href="#queryfilterservice"><code>QueryFilterService</code></a>
-          (<code>QueryFilterService.cs:191</code>, <code>:194</code> for the two validation hooks).</li>
+          (<code>QueryFilterService.cs:194</code>, <code>:195</code> for the two validation hooks).</li>
           </ul>
           <hr>
           <blockquote>
@@ -1023,7 +1049,7 @@
           filter, and a boolean has no ordering, so no comparison operators exist to support; the null checks
           are the meaningful extra for a <code>bool?</code> column.</li>
           <li><strong>Where it&#39;s used</strong>: registered against both <code>typeof(bool)</code> and <code>typeof(bool?)</code> in
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:33-34</code>). Note that the two keys
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:35-36</code>). Note that the two keys
           get <strong>two separate instances</strong>, not one shared instance. Behavior is pinned by
           <code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/Filtering/BoolFilterStrategyTests.cs</code>.</li>
           <li><strong>Caveats / not-in-source</strong>: there is no <code>IN</code> arm, since a boolean set is degenerate.</li>
@@ -1062,7 +1088,7 @@
           <code>IN</code>/<code>BETWEEN</code> into a helper keeps the main switch under the analyzers&#39; cyclomatic-complexity
           ceiling (the inline comment at <code>:45</code> records the reason).</li>
           <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(DateTime)</code> and <code>typeof(DateTime?)</code> in
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:39-40</code>), as two instances.</li>
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:41-42</code>), as two instances.</li>
           <li><strong>Caveats / not-in-source</strong>: nothing here normalizes to UTC: the parsed value is used as given
           (<code>DateTimeStyles.None</code>), so the caller is responsible for supplying a value in the column&#39;s kind.</li>
           </ul>
@@ -1091,7 +1117,7 @@
           codebase, so the filter type matches the storage type exactly and no precision is lost at the
           boundary.</li>
           <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(decimal)</code> and <code>typeof(decimal?)</code> in
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:41-42</code>).</li>
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:43-44</code>).</li>
           </ul>
           <hr>
           <h3 id="guidfilterstrategy">GuidFilterStrategy</h3>
@@ -1115,8 +1141,10 @@
           <li><strong>Why it&#39;s built this way</strong>: GUIDs have no meaningful ordering, so no comparison or range operators
           are provided; equality, membership, and presence are the full useful set for an opaque identifier.</li>
           <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(Guid)</code> and <code>typeof(Guid?)</code> in
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:43-44</code>). It is the strategy that
-          serves by-id filtering wherever an entity&#39;s identifier alias resolves to <code>Guid</code>.</li>
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:45-46</code>). It is the strategy that
+          serves by-id filtering wherever an entity&#39;s identifier alias resolves to <code>Guid</code>, and it is what the
+          class doc comment on <a href="#queryfilterservice"><code>QueryFilterService</code></a> points at when it says
+          <code>&quot;Category.Id&quot;</code> now filters as a Guid rather than as a string (<code>QueryFilterService.cs:15-17</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: no ordering operators and no <code>BETWEEN</code>, since a GUID range is
           meaningless.</li>
           </ul>
@@ -1147,7 +1175,7 @@
           strategy carries the by-id and by-parent-id filtering for the majority of entities, which is why it
           gets the full comparison/<code>IN</code>/<code>BETWEEN</code> surface.</li>
           <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(int)</code> and <code>typeof(int?)</code> in
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:35-36</code>); reached indirectly by
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:37-38</code>); reached indirectly by
           <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>&#39;s synthetic
           <code>Id EQUALS</code> filter (<code>EntityQueryService.cs:408-411</code>) whenever the identifier alias is <code>int</code> and the
           by-id fast path did not apply.</li>
@@ -1181,7 +1209,14 @@
           <li><strong>Why it&#39;s built this way</strong>: mirroring the <code>int</code> strategy keeps the numeric operator vocabulary
           identical whether a key is 32-bit or 64-bit, so a client never has to know the underlying width.</li>
           <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(long)</code> and <code>typeof(long?)</code> in
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:37-38</code>).</li>
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:39-40</code>).</li>
+          <li><strong>Caveats / not-in-source</strong>: <code>TryParse</code> and <code>ParseLong</code> here pass only
+          <code>CultureInfo.InvariantCulture</code> and no explicit <code>NumberStyles</code> (<code>:42-43</code>, <code>:68-69</code>), matching
+          <a href="#decimalfilterstrategy"><code>DecimalFilterStrategy</code></a> (<code>DecimalFilterStrategy.cs:42-43</code>, <code>:68-69</code>) but
+          not <a href="#intfilterstrategy"><code>IntFilterStrategy</code></a>, which spells out <code>NumberStyles.Integer</code>
+          (<code>IntFilterStrategy.cs:43-44</code>, <code>:69-70</code>). Whether that difference in the call produces any
+          difference in what a 64-bit filter accepts is not determinable from source: it depends on the BCL
+          overload&#39;s own default style, which is not visible here.</li>
           </ul>
           <hr>
           <h3 id="stringfilterstrategy">StringFilterStrategy</h3>
@@ -1189,8 +1224,9 @@
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/StringFilterStrategy.cs:12</code> · Level 1 · class (internal, sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> for <code>string</code> properties, and the fallback
-          strategy for any nested property path whose leaf type cannot be resolved by reflection.</li>
+          <li><strong>What it is</strong>: the <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> for <code>string</code> properties, flat or at the
+          leaf of a dotted path. It is the widest operator surface after the four ten-operator numeric and
+          date strategies, and the only one whose operators are text predicates rather than comparisons.</li>
           <li><strong>Depends on</strong>: <a href="#ifilterstrategy"><code>IFilterStrategy</code></a>, <a href="#filtervalueparser"><code>FilterValueParser</code></a>,
           <a href="#dynamicqueryconfig"><code>DynamicQueryConfig</code></a>; <code>System.Collections.Frozen</code>,
           <code>System.Linq.Dynamic.Core</code>.</li>
@@ -1203,28 +1239,32 @@
           the match still runs in the database. <code>[Rubric §12, Performance &amp; Scalability]</code>: <code>CONTAINS</code>
           translates to a leading-wildcard <code>LIKE</code>, which cannot use a normal B-tree index, that is a known
           cost of the convenience, not a defect of this class.</li>
-          <li><strong>Walkthrough</strong>: <code>SupportedOperators</code> (<code>:14-18</code>) is the nine-entry frozen set, second-largest in
-          the family behind the four ten-operator numeric/date strategies. This is the only built-in strategy
-          that does <strong>not</strong> override <code>CanParseValue</code>, so it inherits the interface default of <code>true</code>
-          (<code>IFilterStrategy.cs:44</code>): every raw string is a usable string value, so there is nothing to
-          reject. <code>Apply&lt;T&gt;</code> (<code>:20-30</code>) handles the six value-taking text operators, then delegates the rest
-          to <code>ApplyPresenceOrSet</code> (<code>:34-41</code>); the inline comment (<code>:32-33</code>) records why, the split keeps each
-          method under the cyclomatic-complexity ceiling the analyzers enforce as errors.
+          <li><strong>Walkthrough</strong>: <code>SupportedOperators</code> (<code>:14-18</code>) is the nine-entry frozen set. This is the only
+          built-in strategy that does <strong>not</strong> override <code>CanParseValue</code>, so it inherits the interface default
+          of <code>true</code> (<code>IFilterStrategy.cs:44</code>): every raw string is a usable string value, so there is nothing
+          to reject. <code>Apply&lt;T&gt;</code> (<code>:20-30</code>) handles the six value-taking text operators, then delegates the
+          rest to <code>ApplyPresenceOrSet</code> (<code>:34-41</code>); the inline comment (<code>:32-33</code>) records why, the split keeps
+          each method under the cyclomatic-complexity ceiling the analyzers enforce as errors.
           <code>ApplyPresenceOrSet</code> covers <code>IS EMPTY</code>, <code>IS NOT EMPTY</code>, and routes <code>IN</code> to <code>ApplyIn</code> (<code>:43-47</code>),
           which uses <a href="#filtervalueparser"><code>FilterValueParser.ParseStringList</code></a> (<code>:45</code>) and emits the same
           <code>@0.Contains({property})</code> receiver-inverted form as the other <code>IN</code> strategies.</li>
           <li><strong>Why it&#39;s built this way</strong>: the class doc comment (<code>:6-11</code>) still describes this strategy as the
           one used &quot;for nested property paths (e.g. <code>Category.Name</code>) regardless of the target type, since
-          LINQ Dynamic evaluates the full path as a string expression.&quot; The code no longer routes <em>every</em>
-          dotted path here: <a href="#queryfilterservice"><code>QueryFilterService.ResolveFilterValueType</code></a>
-          (<code>QueryFilterService.cs:259-278</code>) walks the path to its leaf and picks the leaf&#39;s own strategy, and
-          only falls back to this one when a segment cannot be resolved (<code>ResolveStrategy</code>, <code>:280-283</code>, maps
-          a <code>null</code> value type to <code>StringStrategy</code>). <strong>Trust the code here, not the doc comment</strong>: a filter on
-          <code>&quot;Category.Id&quot;</code> now gets <a href="#intfilterstrategy"><code>IntFilterStrategy</code></a>&#39;s operator set, not this one&#39;s.</li>
+          LINQ Dynamic evaluates the full path as a string expression.&quot; <strong>Trust the code, not that doc
+          comment</strong>: it describes an arrangement the code no longer has.
+          <a href="#queryfilterservice"><code>QueryFilterService.ResolveFilterValueType</code></a>
+          (<code>QueryFilterService.cs:282-301</code>) walks a dotted path to its leaf and returns the leaf&#39;s own type,
+          and <code>ResolveStrategy</code> (<code>:303-306</code>) hands back this strategy only when that resolved type is
+          <code>typeof(string)</code>. A path whose leaf cannot be walked no longer falls back here at all: it now fails
+          closed (<code>ResolveFilterValueType</code> returns <code>null</code>, and both callers reject or skip the filter,
+          <code>QueryFilterService.cs:171-179</code> and <code>:98-99</code>). So <code>&quot;Category.Id&quot;</code> on a Guid key gets
+          <a href="#guidfilterstrategy"><code>GuidFilterStrategy</code></a>&#39;s operator set, and <code>&quot;Category.Nonexistent&quot;</code> gets a 400
+          rather than this strategy&#39;s operator set.</li>
           <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(string)</code> in
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:32</code>), and held a second time as
-          the dedicated <code>StringStrategy</code> field (<code>QueryFilterService.cs:52</code>) that <code>ResolveStrategy</code> returns for
-          string properties and unresolvable paths (<code>:280-283</code>).</li>
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:34</code>), and held a second time as
+          the dedicated <code>StringStrategy</code> field (<code>QueryFilterService.cs:53</code>) that <code>ResolveStrategy</code> returns for
+          any resolved value type equal to <code>typeof(string)</code> (<code>:303-306</code>). Behavior is pinned by
+          <code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/Filtering/StringFilterStrategyTests.cs</code>.</li>
           <li><strong>Caveats / not-in-source</strong>: nothing here escapes LIKE wildcards, so a <code>%</code> inside a <code>CONTAINS</code>
           value reaches the database as part of the pattern. The value is still a bound parameter (rule 1 of
           the family preamble), so this is a matching-semantics detail, not an injection vector.</li>
@@ -1232,7 +1272,7 @@
           <hr>
           <h3 id="queryfilterservice">QueryFilterService</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:19</code> · Level 3 · class (public, static)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:21</code> · Level 3 · class (public, static)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the static registry plus dispatcher that applies and validates dynamic filters. It
@@ -1247,84 +1287,109 @@
           <a href="group-01-result-error-handling.html#error"><code>Error</code></a>; <code>System.Reflection</code>,
           <code>System.Collections.Concurrent</code>.</li>
           <li><strong>Concept introduced, the strategy registry plus a validate-before-execute boundary.</strong> <code>[Rubric §2, Design Patterns]</code> and <code>[Rubric §1, SOLID]</code> (Open/Closed): the <code>Strategies</code>
-          <code>ConcurrentDictionary</code> (<code>:29-45</code>) seeds thirteen entries, one per supported CLR type including each
+          <code>ConcurrentDictionary</code> (<code>:31-47</code>) seeds thirteen entries, one per supported CLR type including each
           nullable variant (string, bool/bool?, int/int?, long/long?, DateTime/DateTime?, decimal/decimal?,
-          Guid/Guid?), and <code>RegisterStrategy(Type, IFilterStrategy)</code> (<code>:60-65</code>) lets a host add a type at
+          Guid/Guid?), and <code>RegisterStrategy(Type, IFilterStrategy)</code> (<code>:61-66</code>) lets a host add a type at
           startup without editing this file. <code>[Rubric §9, API &amp; Contract Design]</code> (assesses validation at the
-          right boundary): <code>ValidateFilters</code> runs the property, operator, and value checks <em>before</em> the query
-          is built, so a bad filter becomes a precise validation failure rather than a LINQ Dynamic parse
-          exception at execution time or, worse, a silently widened result set.</li>
+          right boundary): <code>ValidateFilters</code> runs the property, path, type, operator, and value checks
+          <em>before</em> the query is built, so a bad filter becomes a precise validation failure rather than a
+          LINQ Dynamic parse exception at execution time or, worse, a silently widened result set.</li>
+          <li><strong>Concept introduced, resolving a nested filter path to its leaf, and failing closed when it will
+          not resolve.</strong> The class doc comment states the rule (<code>:13-19</code>): a dotted path such as
+          <code>&quot;Category.Name&quot;</code> is walked segment by segment, the <strong>leaf&#39;s</strong> type picks the strategy (so
+          <code>&quot;Category.Id&quot;</code> filters as a Guid rather than as a string), and a path whose leaf cannot be reached
+          is rejected by <code>ValidateFilters</code> as an unknown property. That second half is the fail-closed
+          posture: <code>ResolveFilterValueType</code> returning <code>null</code> is treated as &quot;the entity does not have this
+          property&quot;, not as &quot;guess at the string strategy&quot;. <code>[Rubric §11, Security]</code> (assesses whether
+          malformed input can widen a response): guessing would have let a filter the query cannot express
+          disappear, returning an unfiltered 200. <code>[Rubric §9, API &amp; Contract Design]</code>: the alternative
+          failure, letting Dynamic LINQ blow up at query-build time, turns a bad request into a 500, which
+          the comment at <code>:161-165</code> records as the bug this design closes.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>PropertyCache</code> (<code>:27</code>): <code>ConcurrentDictionary&lt;(Type EntityType, string PropertyName), PropertyInfo&gt;</code>, so a reflected lookup is paid once per entity/property pair. Read the doc comment
-          (<code>:21-26</code>) and <code>LookupProperty&lt;TEntity&gt;</code> (<code>:235-246</code>) together: <strong>only successful lookups are
-          memoized</strong>. Caching misses too would let any caller grow a process-lifetime static dictionary
-          without bound simply by filtering on names that do not exist, and because the request still gets
-          a clean 400 the growth would be invisible in error metrics. A miss now costs one reflection
-          lookup, bounded per request by <code>MaxFilters = 50</code> in
+          <li><code>PropertyCache</code> (<code>:29</code>): <code>ConcurrentDictionary&lt;(Type EntityType, string PropertyName), PropertyInfo&gt;</code>, so a reflected lookup is paid once per entity/property pair. Read the doc comment
+          (<code>:23-28</code>) and <code>LookupProperty&lt;TEntity&gt;</code> (<code>:257-268</code>) together: <strong>only successful lookups are
+          memoized</strong> (<code>if (resolved is not null) PropertyCache[key] = resolved;</code>, <code>:264-265</code>). Caching
+          misses too would let any caller grow a process-lifetime static dictionary without bound simply by
+          filtering on names that do not exist, and because the request still gets a clean 400 the growth
+          would be invisible in error metrics. A miss now costs one reflection lookup, bounded per request
+          by <code>MaxFilters = 50</code> in
           <a href="group-12-api-hosting-mapping.html#queryfiltermodelbinder"><code>QueryFilterModelBinder</code></a>. This is an
           unbounded-memory-growth defense, <code>[Rubric §11, Security]</code> and <code>[Rubric §12, Performance &amp; Scalability]</code>.</li>
-          <li><code>StringStrategy</code> (<code>:52</code>): a dedicated <a href="#stringfilterstrategy"><code>StringFilterStrategy</code></a> instance
-          held apart from the table, returned by <code>ResolveStrategy</code> for string properties and for any path
-          whose leaf type could not be resolved.</li>
-          <li><code>ApplyFilters&lt;TEntity&gt;</code> (<code>:76-101</code>): for each <code>(property, (op, value))</code> it translates the DTO name
-          through <code>dtoToEntityPropertyMap</code> (<code>:84-86</code>), resolves the <code>PropertyInfo</code> through
-          <code>ResolvePropertyInfo</code> (<code>:88</code>) and <strong>silently skips</strong> an unresolvable property (<code>:90-91</code>),
-          uppercases the operator once (<code>:93</code>, the caller-side half of the
-          <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> contract), then resolves the strategy from the <em>value type</em>
-          (<code>ResolveStrategy(ResolveFilterValueType&lt;TEntity&gt;(...))</code>, <code>:95</code>) and applies it (<code>:97</code>).</li>
-          <li><code>ValidateFilters&lt;TEntity&gt;</code> (<code>:111-126</code>): returns success for a null/empty filter map (<code>:115-116</code>),
+          <li><code>StringStrategy</code> (<code>:53</code>): a dedicated <a href="#stringfilterstrategy"><code>StringFilterStrategy</code></a> instance
+          held apart from the table, returned by <code>ResolveStrategy</code> whenever the resolved value type is
+          <code>typeof(string)</code> (its doc comment at <code>:49-52</code> names both cases: a flat string property, or a
+          nested path whose leaf is one).</li>
+          <li><code>ApplyFilters&lt;TEntity&gt;</code> (<code>:77-109</code>): for each <code>(property, (op, value))</code> it translates the DTO name
+          through <code>dtoToEntityPropertyMap</code> (<code>:85-87</code>), resolves the <code>PropertyInfo</code> through
+          <code>ResolvePropertyInfo</code> (<code>:89</code>) and <strong>silently skips</strong> an unresolvable property (<code>:91-92</code>), then
+          resolves the <em>value</em> type through <code>ResolveFilterValueType</code> and skips again when the path leaf
+          cannot be reached (<code>:97-99</code>). The comment above that second skip (<code>:94-96</code>) is explicit about the
+          reasoning: <code>ValidateFilters</code> rejects both cases, so reaching here means the caller never
+          validated, and applying a filter the query cannot express is worse than dropping it. Only then
+          does it uppercase the operator once (<code>:101</code>, the caller-side half of the
+          <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> contract), resolve the strategy from the value type
+          (<code>:103</code>), and apply it when one exists (<code>:104-105</code>).</li>
+          <li><code>ValidateFilters&lt;TEntity&gt;</code> (<code>:119-134</code>): returns success for a null/empty filter map (<code>:123-124</code>),
           otherwise runs <code>ValidateSingleFilter</code> per entry and collects <strong>all</strong> errors into one
-          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (<code>:123-125</code>), so a client sees every problem
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (<code>:131-133</code>), so a client sees every problem
           at once rather than one per round trip.</li>
-          <li><code>ValidateSingleFilter&lt;TEntity&gt;</code> (<code>:128-174</code>) produces four distinct error codes:
-          <code>Filter.Property.NotFound</code> when reflection cannot resolve the property (<code>:143-148</code>),
-          <code>Filter.Type.NotSupported</code> when no strategy is registered for the resolved value type
-          (<code>:163-168</code>), then delegates to <code>ValidateOperatorSupported</code> (<code>:285-301</code>) for
-          <code>Filter.Operator.NotSupported</code> (<code>:295-300</code>) and <code>ValidateValueParseable</code> (<code>:181-202</code>) for
-          <code>Filter.Value.Invalid</code> (<code>:196-201</code>).</li>
-          <li><code>ValidateValueParseable</code> (<code>:181-202</code>) is the guard behind rule 3 of the family preamble. Its doc
-          comment (<code>:176-179</code>) states the bug it closes: without it the strategy returns the query
+          <li><code>ValidateSingleFilter&lt;TEntity&gt;</code> (<code>:136-196</code>) is a four-gate ladder, each gate returning early so
+          one filter never yields two errors about the same mistake. Gate one: reflection cannot resolve
+          the property at all, <code>Filter.Property.NotFound</code> (<code>:149-157</code>). Gate two: the property resolves but
+          the dotted path&#39;s leaf does not, which emits the <strong>same</strong> <code>Filter.Property.NotFound</code> code with a
+          message naming the path (<code>:171-179</code>), because to the client both are &quot;that property is not
+          there&quot;. Gate three: no strategy is registered for the resolved value type,
+          <code>Filter.Type.NotSupported</code> (<code>:183-191</code>). Gate four: it delegates to <code>ValidateOperatorSupported</code>
+          (<code>:194</code>) for <code>Filter.Operator.NotSupported</code> and <code>ValidateValueParseable</code> (<code>:195</code>) for
+          <code>Filter.Value.Invalid</code>. Every error carries <code>source: nameof(ValidateFilters)</code> so the origin is
+          identifiable in a problem-details payload.</li>
+          <li><code>ValidateValueParseable</code> (<code>:203-224</code>) is the guard behind rule 3 of the family preamble. Its doc
+          comment (<code>:198-202</code>) states the bug it closes: without it the strategy returns the query
           unfiltered, so a malformed value <strong>widened</strong> the response to the full result set instead of
           narrowing it to no matches. It deliberately stays silent when the operator itself is already
-          invalid (<code>:191-192</code>), so one bad filter does not produce two errors describing the same mistake.</li>
-          <li><code>ResolvePropertyInfo</code> (<code>:223-230</code>): probes the DTO-facing name first, then the mapped entity name
-          (its root segment for a dotted path). The doc comment (<code>:204-221</code>) records why both paths share
-          it: application and validation used to disagree on the fallback order, so a plain rename entry
-          such as <code>[&quot;Name&quot;] = &quot;Title&quot;</code> passed validation and was then <strong>silently dropped</strong>, returning an
-          unfiltered result set with a 200.</li>
-          <li><code>ResolveFilterValueType&lt;TEntity&gt;</code> (<code>:259-278</code>): for a flat property this is the property&#39;s own
-          type (<code>:261-262</code>); for a dotted path it walks each segment to the <strong>leaf&#39;s</strong> type (<code>:264-277</code>),
-          starting from the path&#39;s own root rather than from the already-resolved property (<code>:266-268</code>,
-          because for a nested path the DTO-facing name and the path root need not agree). It returns
-          <code>null</code> when a segment cannot be walked, and the remarks (<code>:253-258</code>) explain the fallback: callers
-          then use the string strategy, which is what every dotted path used to get unconditionally, so an
-          unresolvable path keeps working exactly as before rather than newly failing validation. The
-          comment in <code>ValidateSingleFilter</code> (<code>:153-157</code>) states the bug this fixed: routing every dotted
-          path to the string strategy let a nested non-string leaf pass validation for a string-only
-          operator (say <code>IS EMPTY</code> on <code>&quot;Category.Id&quot;</code>) and then fail inside Dynamic LINQ at query-build
-          time, a 500 for what is really a bad request.</li>
-          <li><code>ResolveStrategy</code> (<code>:280-283</code>): <code>null</code> or <code>typeof(string)</code> maps to <code>StringStrategy</code>, everything
-          else is a <code>GetValueOrDefault</code> on the table.</li>
+          invalid (<code>:213-214</code>, with the reason at <code>:211-212</code>), so one bad filter does not produce two
+          errors describing the same mistake.</li>
+          <li><code>ResolvePropertyInfo</code> (<code>:245-252</code>): probes the DTO-facing name first, then the mapped entity name
+          (its root segment for a dotted path, <code>:247-249</code>). The doc comment (<code>:226-244</code>) records why both
+          the apply path and the validate path share it: they used to disagree on the fallback order, so a
+          plain rename entry such as <code>[&quot;Name&quot;] = &quot;Title&quot;</code> passed validation and was then <strong>silently
+          dropped</strong>, returning an unfiltered result set with a 200.</li>
+          <li><code>ResolveFilterValueType&lt;TEntity&gt;</code> (<code>:282-301</code>): for a flat property this is the property&#39;s own
+          type (<code>:284-285</code>); for a dotted path it walks each segment to the <strong>leaf&#39;s</strong> type (<code>:287-300</code>),
+          starting from the path&#39;s own root rather than from the already-resolved property (<code>:289-291</code>,
+          because for a nested path the DTO-facing name and the path root need not agree). The walk stops
+          the moment a segment is not a public instance property of the preceding segment&#39;s type
+          (<code>:293-298</code>), and the remarks (<code>:275-281</code>) spell out that the <code>null</code> result is a <em>fail-closed</em>
+          signal, not a fallback: validation rejects it as an unknown property and application skips it.</li>
+          <li><code>ResolveStrategy</code> (<code>:303-306</code>): <code>typeof(string)</code> maps to <code>StringStrategy</code>, everything else is a
+          <code>GetValueOrDefault</code> on the table, so an unregistered type yields <code>null</code> and gate three of the
+          validation ladder fires.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: validating up front converts would-be runtime exceptions and silently
-          widened responses into precise validation errors at the API boundary, and the property cache
-          amortises resolution to first use per process while refusing to memoize client-controlled misses.</li>
+          widened responses into precise validation errors at the API boundary; the property cache amortises
+          resolution to first use per process while refusing to memoize client-controlled misses; and
+          resolving a nested path to its leaf type is what lets one operator vocabulary apply uniformly to
+          flat and nested properties without the string strategy standing in for everything.</li>
           <li><strong>Where it&#39;s used</strong>: <code>ValidateFilters</code> is called from
           <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService.GetAllAsync</code></a>
-          (<code>EntityQueryService.cs:266</code>); <code>ApplyFilters</code> is called inside
-          <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a> on both of its paths, before materialization
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:266</code>);
+          <code>ApplyFilters</code> is called inside <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a> on both of its paths,
+          before materialization
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:77</code> for the
           projected path and <code>:151</code> for the entity path). The filter map itself is produced at the API edge by
           <a href="group-12-api-hosting-mapping.html#queryfiltermodelbinder"><code>QueryFilterModelBinder</code></a>. Its own behavior
-          is pinned by four test classes under
+          is pinned by three test classes under
           <code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/Filtering/</code> (<code>QueryFilterServiceTests</code>,
-          <code>QueryFilterServiceValidateTests</code>, <code>QueryFilterServicePropertyCacheTests</code>, plus the per-strategy
-          suites).</li>
+          <code>QueryFilterServiceValidateTests</code>, <code>QueryFilterServicePropertyCacheTests</code>), on top of the seven
+          per-strategy suites in the same folder.</li>
           <li><strong>Caveats / not-in-source</strong>: this is a <strong>static class</strong>, not a DI-resolved service, so
-          <code>RegisterStrategy</code> mutates process-global state and is only safe at startup. Nullable variants are
-          registered as separate instances rather than a shared one (<code>:32-44</code>), which costs a few extra
-          objects but keeps the table declaration flat.</li>
+          <code>RegisterStrategy</code> mutates process-global state and is only safe at startup; there is no
+          deregistration and no per-tenant table. Nullable variants are registered as separate instances
+          rather than a shared one (<code>:34-46</code>), which costs a few extra objects but keeps the table
+          declaration flat. <code>ResolveFilterValueType</code> walks only public instance properties
+          (<code>BindingFlags.Public | BindingFlags.Instance</code>, <code>:296</code>), so a path through a non-public member is
+          unreachable by design.</li>
           </ul>
           <h3 id="entityqueryparameterstentity">EntityQueryParameters&lt;TEntity&gt;</h3>
           <blockquote>
@@ -1682,7 +1747,9 @@
           <code>List&lt;T&gt;</code>. Erasing the key type is what lets the ordering list be homogeneous; the repository-side
           evaluator binds each selector back to its concrete key type by reflection when it builds the
           <code>OrderBy</code>/<code>ThenBy</code> chain
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/SpecificationEvaluator.cs:130-140</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/SpecificationEvaluator.cs:148-149</code>,
+          which calls <code>MakeGenericMethod(typeof(TEntity), keySelector.ReturnType)</code> and invokes the resulting
+          <code>Queryable</code> method).
           <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses whether a design choice that costs type
           safety is deliberate and documented): the doc comment on the parameter (<code>:145-148</code>) states exactly
           this trade.</li>
@@ -1690,8 +1757,9 @@
           <li><code>KeySelector</code> (<code>:145-148</code>), the lambda, added by the protected builder
           <code>QuerySpecification.AddOrderBy</code> (<code>QuerySpecification.cs:94</code>).</li>
           <li><code>Descending</code> (<code>:149</code>), whether this key sorts descending. The evaluator turns the first entry into
-          <code>OrderBy</code>/<code>OrderByDescending</code> and every later one into <code>ThenBy</code>/<code>ThenByDescending</code>
-          (<code>SpecificationEvaluator.cs:113-118</code>).
+          <code>OrderBy</code>/<code>OrderByDescending</code> and every later one into <code>ThenBy</code>/<code>ThenByDescending</code>: the loop passes
+          <code>isFirst: i == 0</code> (<code>SpecificationEvaluator.cs:113-118</code>) and a tuple <code>switch</code> picks the method name
+          from the <code>(isFirst, descending)</code> pair (<code>SpecificationEvaluator.cs:140-145</code>).
           The remarks (<code>:140-144</code>) explain why it is a <strong>top-level</strong> type rather than a member nested inside
           the generic specification: a nested type of a generic class is a different type per closed generic,
           which would stop the evaluator from handling an ordering list generically.</li>
@@ -1735,14 +1803,14 @@
           <li><strong>Why it&#39;s built this way</strong>: it is <code>internal</code> by design (the remarks say so at <code>:18-23</code>) because it
           is an implementation detail of specification composition, not part of the framework&#39;s public
           surface. <code>MMCA.Common.Application</code> sees it through <code>InternalsVisibleTo</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/MMCA.Common.Domain.csproj:11</code>), which is what lets the
-          Application-layer cross-source builder share this one visitor instead of carrying a private copy of
-          it. That sharing is itself the fix for a real duplication: the same six lines used to exist twice.</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/MMCA.Common.Domain.csproj:11</code>, whose comment at <code>:7-10</code>
+          records the reason), which is what lets the Application-layer cross-source builder share this one
+          visitor instead of carrying a private copy of it.</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#specificationcomposer"><code>SpecificationComposer.Combine</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:171</code>), which is the
           path every <a href="#andspecificationtentity-tidentifiertype"><code>AndSpecification</code></a> and
           <a href="#orspecificationtentity-tidentifiertype"><code>OrSpecification</code></a> takes; and
-          <a href="#crosssourcespecification"><code>CrossSourceSpecification.BuildCriteria</code></a>
+          <a href="#crosssourcespecification"><code>CrossSourceSpecification</code></a><code>.BuildCriteria</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:86</code>),
           which rebinds an optional local predicate onto the foreign-key selector&#39;s parameter before ANDing
           the two bodies.</li>
@@ -1763,7 +1831,7 @@
           query criterion <em>is</em> a domain object. <code>[Rubric §3, Clean Architecture]</code> assesses whether the domain
           expresses rules while infrastructure translates them: <code>Criteria</code> is a pure expression tree the domain
           owns, and EF Core (an outer layer) is what turns it into SQL. A <strong>specification</strong> is a named,
-          composable query criterion: instead of scattering <code>Where(e =&gt; e.OwnerId == userId)</code> throughout the
+          composable query criterion: instead of scattering <code>Where(e =&gt; e.CreatedBy == userId)</code> throughout the
           codebase, you write <code>new OwnedByUserSpecification&lt;...&gt;(userId)</code> once and reuse it. The doc comment
           (<code>ISpecification.cs:5-8</code>) lists the three use sites: authorization filtering, query scoping, and
           domain validation.</li>
@@ -1783,7 +1851,8 @@
           <li><strong>Where it&#39;s used</strong>: implemented by the abstract base
           <a href="#specificationtentity-tidentifiertype"><code>Specification&lt;TEntity, TIdentifierType&gt;</code></a> (next section),
           which is what the composites and every module-specific specification derive from (e.g. ADC&#39;s
-          <a href="group-18-conference-application.html#publishedeventspecification"><code>PublishedEventSpecification</code></a>);
+          <a href="group-18-conference-application.html#publicsessionstatusspecification"><code>PublicSessionStatusSpecification</code></a>,
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Specifications/PublicSessionStatusSpecification.cs:20</code>);
           taken directly as the parameter type of the combinators
           (<a href="#andspecificationtentity-tidentifiertype"><code>AndSpecification</code></a>,
           <a href="#orspecificationtentity-tidentifiertype"><code>OrSpecification</code></a>,
@@ -1793,7 +1862,7 @@
           <a href="#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>
           (for example <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:40</code>),
           and of the repository&#39;s specification-driven reads
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:324</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:451</code>).</li>
           </ul>
           <hr>
           <h3 id="specificationtentity-tidentifiertype">Specification&lt;TEntity, TIdentifierType&gt;</h3>
@@ -1814,7 +1883,8 @@
           scattered <code>if</code>s). The pattern is dual-purpose: because <code>Criteria</code> is an expression tree (not a
           compiled delegate), EF Core can translate it to SQL, so <code>Where(spec.Criteria)</code> becomes a <code>WHERE</code> clause
           in the database; for in-memory use, <code>IsSatisfiedBy</code> compiles the same expression once and caches the
-          result. One object, two evaluation modes, zero duplicate logic.</li>
+          result. One object, two evaluation modes, zero duplicate logic. The class doc states the dual purpose
+          outright (<code>Specification.cs:6-12</code>).</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>protected Specification() { }</code> (<code>Specification.cs:20</code>), a do-nothing protected constructor so only
           subclasses (and the composites below) can construct one.</li>
@@ -1823,7 +1893,7 @@
           must define.</li>
           <li><code>private Func&lt;TEntity, bool&gt;? _compiled</code> (<code>Specification.cs:27</code>), the lazily-compiled delegate,
           cached to avoid recompiling the expression tree on every <code>IsSatisfiedBy</code> call (expression compilation
-          is expensive).</li>
+          is expensive; the comment at <code>:25-26</code> says so).</li>
           <li><code>public virtual bool IsSatisfiedBy(TEntity entity)</code> (<code>Specification.cs:30</code>): <code>_compiled ??= Criteria.Compile();</code> then <code>return _compiled(entity);</code> (<code>Specification.cs:32-33</code>). First call
           compiles; subsequent calls reuse the delegate. It is <code>virtual</code>, so a subclass could override it,
           though none in the workspace does.</li>
@@ -1833,7 +1903,7 @@
           keeps query business rules in the domain layer, where they are testable without an EF context or a
           database, and the domain stays free of any EF reference (the expression tree is plain BCL). The
           per-instance compile cache pays off for a specification instance that is reused, which the
-          combinators below now match: they cache their composed <code>Criteria</code> per instance too.</li>
+          combinators below match: they cache their composed <code>Criteria</code> per instance too.</li>
           <li><strong>Where it&#39;s used</strong>: base class for
           <a href="#inlinespecificationtentity-tidentifiertype"><code>InlineSpecification</code></a>, the composites
           <a href="#andspecificationtentity-tidentifiertype"><code>AndSpecification</code></a> /
@@ -1841,8 +1911,11 @@
           <a href="#notspecificationtentity-tidentifiertype"><code>NotSpecification</code></a>, the read-shape base
           <a href="#queryspecificationtentity-tidentifiertype"><code>QuerySpecification</code></a>, the ownership filter
           <a href="#ownedbyuserspecificationtentity-tidentifiertype"><code>OwnedByUserSpecification</code></a>, and every
-          module-specific access-control specification. Behavior is pinned by
-          <code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Specifications/SpecificationTests.cs:30</code>.</li>
+          module-specific access-control specification. It is also the declared return type of ADC&#39;s
+          specification-building query handlers (for example
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:50-51</code>,
+          where the handler contracts are <code>Result&lt;Specification&lt;Session, SessionIdentifierType&gt;&gt;</code>). Behavior is
+          pinned by <code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Specifications/SpecificationTests.cs:30</code>.</li>
           </ul>
           <hr>
           <h3 id="specificationcomposer">SpecificationComposer</h3>
@@ -1858,14 +1931,15 @@
           <a href="group-02-domain-building-blocks.html#ibaseentitytidentifiertype"><code>IBaseEntity&lt;TIdentifierType&gt;</code></a>
           (the <code>TEntity</code> constraint); <code>System.Linq.Expressions</code> (BCL).</li>
           <li><strong>Concept introduced, one composition algorithm instead of three copies.</strong> <code>[Rubric §16, Maintainability]</code> assesses whether a rule with a subtle correctness argument is written once. And,
-          Or and Not differ by exactly one expression node, so before this type existed each combinator
-          carried its own copy of the parameter-rebinding logic and each copy was a place the
-          <code>Expression.Invoke</code> mistake could come back. Collapsing them into <code>Combine</code> (parameterized by the
-          binary-operator factory) and <code>Negate</code> leaves one implementation to reason about and one to test.</li>
+          Or and Not differ by exactly one expression node, so a per-combinator copy of the parameter-rebinding
+          logic would be three places the <code>Expression.Invoke</code> mistake could come back. Collapsing them into
+          <code>Combine</code> (parameterized by the binary-operator factory) and <code>Negate</code> leaves one implementation to
+          reason about and one to test. The type doc (<code>Specification.cs:141-145</code>) names the invariant it
+          guarantees: the composed tree contains no <code>InvocationExpression</code>.</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>Combine&lt;TEntity, TIdentifierType&gt;(spec1, spec2, Func&lt;Expression, Expression, BinaryExpression&gt; combine)</code> (<code>Specification.cs:155-174</code>): null-guards both specifications (<code>:162-163</code>), takes the
           <strong>left</strong> lambda&#39;s parameter as the one both sides will share (<code>:167</code>), rebinds the right body onto
-          it with <a href="#parameterreplacer"><code>ParameterReplacer.Replace</code></a> (<code>:171</code>), applies the caller&#39;s operator
+          it with <a href="#parameterreplacer"><code>ParameterReplacer</code></a><code>.Replace</code> (<code>:171</code>), applies the caller&#39;s operator
           factory to the two bodies (<code>:169-171</code>), and re-wraps the result as
           <code>Expression.Lambda&lt;Func&lt;TEntity, bool&gt;&gt;(body, parameter)</code> (<code>:173</code>). The operator factory is how one
           method serves both <code>Expression.AndAlso</code> and <code>Expression.OrElse</code>.</li>
@@ -1919,28 +1993,29 @@
           (<code>Specification.cs:81-83</code>), with two members:<ul>
           <li><code>private Expression&lt;Func&lt;TEntity, bool&gt;&gt;? _criteria</code> (<code>:88</code>), the per-instance cache.</li>
           <li><code>public override Expression&lt;Func&lt;TEntity, bool&gt;&gt; Criteria =&gt; _criteria ??= SpecificationComposer.Combine&lt;TEntity, TIdentifierType&gt;(spec1, spec2, Expression.AndAlso)</code>
-          (<code>:91-93</code>). The <code>??=</code> is the second half of the remarks (<code>:71-75</code>): the previous implementation
-          rebuilt the whole tree on <strong>every</strong> <code>Criteria</code> read, and the query pipeline reads it at least once
-          per request, so the composed expression is now built once per instance. Each instance still owns
-          its own cache, so two separately constructed composites never share a tree
-          (<code>SpecificationCompositionTests.cs:130</code>).</li>
+          (<code>:91-93</code>). The <code>??=</code> is the second half of the remarks (<code>:71-75</code>): rebuilding the whole tree on
+          <strong>every</strong> <code>Criteria</code> read would repeat that work at least once per request, so the composed
+          expression is built once per instance. Each instance still owns its own cache, so two separately
+          constructed composites never share a tree (<code>SpecificationCompositionTests.cs:130</code>).</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: combinators let query callers compose access rules
-          (<code>new AndSpecification(ownerSpec, activeSpec)</code>) without the query service knowing the predicate
-          internals, and composing at the <em>expression-tree</em> level (not by combining compiled <code>Func</code>s) preserves
-          database translation throughout the composition. Keeping it <code>sealed</code> signals it is a leaf
-          implementation, not meant for further subclassing.</li>
-          <li><strong>Where it&#39;s used</strong>: it is the one combinator with production call sites. ADC&#39;s
-          <a href="group-20-conference-api-grpc.html#sessionscontroller"><code>SessionsController</code></a> ANDs the public-session
-          filter with the speaker-scoped filter when a <code>SpeakerId</code> filter is present
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:118</code>)
-          and <a href="group-20-conference-api-grpc.html#speakerscontroller"><code>SpeakersController</code></a> does the same for its
-          own public/filtered pair (<code>.../Controllers/SpeakersController.cs:174</code>), each passing the composite as
-          the <code>specification</code> argument to the query service; ADC&#39;s
+          <li><strong>Why it&#39;s built this way</strong>: combinators let query callers compose access rules without the query
+          service knowing the predicate internals, and composing at the <em>expression-tree</em> level (not by
+          combining compiled <code>Func</code>s) preserves database translation throughout the composition. Keeping it
+          <code>sealed</code> signals it is a leaf implementation, not meant for further subclassing.</li>
+          <li><strong>Where it&#39;s used</strong>: it is the one combinator with production call sites, and all of them reach it
+          through the fluent <a href="#specificationextensions"><code>SpecificationExtensions</code></a><code>.And</code> rather than the
+          constructor. ADC&#39;s <a href="group-20-conference-api-grpc.html#sessionscontroller"><code>SessionsController</code></a> ANDs the
+          public-session filter with the speaker-scoped filter when a <code>SpeakerId</code> filter is present
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:126-128</code>,
+          the composite then passed as the <code>specification</code> argument at <code>:187</code>) and
+          <a href="group-20-conference-api-grpc.html#speakerscontroller"><code>SpeakersController</code></a> does the same for its own
+          public/filtered pair (<code>.../Controllers/SpeakersController.cs:171-173</code>); ADC&#39;s
           <a href="group-18-conference-application.html#publicconferencevisibility"><code>PublicConferenceVisibility</code></a> ANDs the
-          shared status allow-list with an id-list <code>InlineSpecification</code> when resolving eligible session ids
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:141-143</code>).
+          shared status allow-list with an id-list
+          <a href="#inlinespecificationtentity-tidentifiertype"><code>InlineSpecification</code></a> when resolving eligible session
+          ids
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:149</code>).
           Combinator behavior is pinned by
           <code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Specifications/SpecificationTests.cs:49</code> and by the
           composition suite (<code>SpecificationCompositionTests.cs:102</code> for the build-once property, <code>:147</code> for the
@@ -1983,7 +2058,7 @@
           (<a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>&#39;s polyglot model is what
           makes that composition necessary).</li>
           <li><strong>Where it&#39;s used</strong>: returned by
-          <a href="#crosssourcespecification"><code>CrossSourceSpecification.BuildAsync</code></a> to wrap the
+          <a href="#crosssourcespecification"><code>CrossSourceSpecification</code></a><code>.BuildAsync</code> to wrap the
           <code>localPredicate AND principalKeys.Contains(fk)</code> expression it assembles
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:62-63</code>);
           and, across ADC Conference, by every filter handler that resolves ids first (over gRPC or from a
@@ -1993,7 +2068,9 @@
           <a href="group-18-conference-application.html#getspeakersbyeventfilterhandler"><code>GetSpeakersByEventFilterHandler</code></a>
           (<code>.../Speakers/UseCases/GetSpeakersByEventFilter/GetSpeakersByEventFilterHandler.cs:53</code>), and
           <a href="group-18-conference-application.html#getpublicspeakerfilterhandler"><code>GetPublicSpeakerFilterHandler</code></a>
-          (<code>.../Speakers/UseCases/GetPublicSpeakerFilter/GetPublicSpeakerFilterHandler.cs:31</code>).</li>
+          (<code>.../Speakers/UseCases/GetPublicSpeakerFilter/GetPublicSpeakerFilterHandler.cs:31</code>); and by
+          <a href="group-18-conference-application.html#publicconferencevisibility"><code>PublicConferenceVisibility</code></a> for its
+          event-scope id list (<code>.../Common/PublicConferenceVisibility.cs:149</code>).</li>
           </ul>
           <hr>
           <h3 id="notspecificationtentity-tidentifiertype">NotSpecification&lt;TEntity, TIdentifierType&gt;</h3>
@@ -2017,8 +2094,8 @@
           the <code>specification</code> argument to the query service. No production call site in the workspace today; it
           is exercised by <code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Specifications/SpecificationTests.cs:99</code>
           and <code>:110</code>, nested inside a composition at <code>SpecificationTests.cs:122</code>, checked for invocation-freedom
-          at <code>SpecificationCompositionTests.cs:65</code>, and wrapping the ownership filter at
-          <code>OwnedByUserSpecificationTests.cs:72</code>.</li>
+          at <code>SpecificationCompositionTests.cs:65</code>, for the build-once property at <code>:122</code>, and wrapping the
+          ownership filter at <code>OwnedByUserSpecificationTests.cs:72</code>.</li>
           </ul>
           <hr>
           <h3 id="orspecificationtentity-tidentifiertype">OrSpecification&lt;TEntity, TIdentifierType&gt;</h3>
@@ -2029,7 +2106,7 @@
           <li><strong>What it is</strong>: the disjunctive composite combinator: it ORs two specifications so its <code>Criteria</code> is
           satisfied when either child is. Structurally identical to
           <a href="#andspecificationtentity-tidentifiertype"><code>AndSpecification</code></a> (read that section for the mechanism);
-          it differs by one argument.</li>
+          it differs by one argument to the composer.</li>
           <li><strong>Depends on</strong>: identical to <code>AndSpecification</code> (<code>Specification.cs:105-108</code>).</li>
           <li><strong>Walkthrough</strong>: the <code>_criteria</code> cache field (<code>:112</code>) and the getter
           <code>Criteria =&gt; _criteria ??= SpecificationComposer.Combine&lt;TEntity, TIdentifierType&gt;(spec1, spec2, Expression.OrElse)</code> (<code>:115-117</code>), the And getter with <code>Expression.OrElse</code> (a short-circuiting logical
@@ -2057,14 +2134,14 @@
           <a href="group-02-domain-building-blocks.html#ibaseentitytidentifiertype"><code>IBaseEntity&lt;TIdentifierType&gt;</code></a>
           (the <code>TEntity</code> constraint); <code>System.Linq.Expressions</code> (BCL).</li>
           <li><strong>Concept introduced, the specification as the whole read, not just the predicate.</strong> <code>[Rubric §4, DDD]</code> and <code>[Rubric §5, Vertical Slice]</code> both apply: a named class such as
-          <code>RecentOpenTicketsSpecification</code> now encodes the filter, the includes, the ordering and the page in
-          one domain object that the application layer passes around as a value, instead of a handler
-          assembling five arguments at every call site. The class doc carries the canonical example
+          <code>RecentOpenTicketsSpecification</code> encodes the filter, the includes, the ordering and the page in one
+          domain object that the application layer passes around as a value, instead of a handler assembling
+          five arguments at every call site. The class doc carries the canonical example
           (<code>QuerySpecification.cs:15-28</code>). <code>[Rubric §11, Security]</code> covers the soft-delete opt-in: bringing
           deleted rows into scope drops the named <code>SoftDelete</code> filter and <strong>only</strong> that one, so the tenant
           filter stays in force and a specification asking for deleted rows can never reach another tenant&#39;s
           data (<code>:74-82</code>, enforced repository-side at
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:312-321</code>).</li>
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:445-447</code>).</li>
           <li><strong>Walkthrough</strong>: state is exposed read-only and assembled through protected builders a derived
           specification calls from its constructor.<ul>
           <li>Backing fields <code>_orderBy</code> and <code>_includePaths</code> (<code>:43-44</code>) with the read-only projections
@@ -2095,10 +2172,11 @@
           <a href="group-07-persistence-ef-core.html#specificationevaluator"><code>SpecificationEvaluator</code></a>, which pattern-matches
           a plain <code>ISpecification</code> against this type (<code>SpecificationEvaluator.cs:48</code>) and, when it matches,
           applies the includes (<code>:51</code>), the ordering chain (<code>:52</code>) and the <code>Skip</code>/<code>Take</code> window (<code>:54-58</code>);
-          aggregate reads pass <code>applyShape: false</code> so a count never joins in includes or pages (<code>:29-34</code>). The
-          tracking and soft-delete flags are consumed one level up, in <code>EFReadRepository.BaseQueryFor</code>
-          (<code>EFReadRepository.cs:312-321</code>), which chooses <code>Table</code> vs <code>TableNoTracking</code> and drops the named
-          soft-delete filter. Behavior is pinned by
+          aggregate reads pass <code>applyShape: false</code> so a count never joins in includes or pages (<code>:29-34</code>, with
+          the call sites at <code>EFReadRepository.cs:349</code> and <code>:516</code>). The tracking and soft-delete flags are
+          consumed one level up, in <code>EFReadRepository.BaseQueryFor</code> (<code>EFReadRepository.cs:439-448</code>), which
+          chooses <code>Table</code> vs <code>TableNoTracking</code> (<code>:443</code>) and drops the named soft-delete filter (<code>:445-447</code>).
+          Behavior is pinned by
           <code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Specifications/QuerySpecificationTests.cs:14</code>,
           including the defaults (<code>:55</code>) and the fact that it still composes like any other specification
           (<code>:68</code>, <code>:138</code>).</li>
@@ -2153,19 +2231,25 @@
           composes with them (<a href="#notspecificationtentity-tidentifiertype"><code>NotSpecification</code></a> inverts it,
           <a href="#andspecificationtentity-tidentifiertype"><code>AndSpecification</code></a> narrows it further) with no extra
           machinery.</li>
-          <li><strong>Where it&#39;s used</strong>: ADC Conference&#39;s two question-answer controllers, which apply it for every
-          non-organizer caller (BR-9: organizers see all, attendees see only their own):
+          <li><strong>Where it&#39;s used</strong>: ADC Conference&#39;s two question-answer controllers, each of which builds it for
+          every non-organizer caller from a single overridden read hook, so all of that controller&#39;s read
+          actions (list, paged, lookup, by-id) are scoped from one place and another attendee&#39;s answer is a 404
+          rather than a redacted record:
           <a href="group-20-conference-api-grpc.html#sessionquestionanswerscontroller"><code>SessionQuestionAnswersController</code></a>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:67-68</code>,
-          passed as the <code>specification</code> argument on its list, paged and by-id reads at
-          <code>SessionQuestionAnswersController.cs:81</code>, <code>:109</code> and <code>:145</code>) and
-          <a href="group-20-conference-api-grpc.html#eventquestionanswerscontroller"><code>EventQuestionAnswersController</code></a>
-          (<code>.../Controllers/EventQuestionAnswersController.cs:67-68</code>). Both read the caller&#39;s id from
-          <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a>. Behavior is pinned by
+          (BR-9, <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:96-97</code>)
+          and <a href="group-20-conference-api-grpc.html#eventquestionanswerscontroller"><code>EventQuestionAnswersController</code></a>
+          (BR-8, <code>.../Controllers/EventQuestionAnswersController.cs:74-75</code>). Both read the caller&#39;s role and id
+          from <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> and return <code>null</code> for an organizer.
+          Behavior is pinned by
           <code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Specifications/OwnedByUserSpecificationTests.cs:8</code>,
-          which asserts not only the in-memory outcome but the <em>shape</em> of the expression (an <code>Equal</code> binary node
-          whose left side is a <code>MemberExpression</code> for <code>CreatedBy</code> over the lambda parameter,
-          <code>OwnedByUserSpecificationTests.cs:55-68</code>), which is exactly what keeps it translatable.</li>
+          which asserts not only the in-memory outcome (<code>:30</code>, <code>:38</code>) but the <em>shape</em> of the expression (an
+          <code>Equal</code> binary node whose left side is a <code>MemberExpression</code> for <code>CreatedBy</code> over the lambda parameter,
+          <code>OwnedByUserSpecificationTests.cs:55</code>), which is exactly what keeps it translatable, plus the
+          queryable-filtering case at <code>:83</code>.</li>
+          <li><strong>Caveats / not-in-source</strong>: the read hook the two ADC controllers override is named
+          <code>GetExportSpecification()</code> (<code>SessionQuestionAnswersController.cs:96</code>); its doc comment describes it as
+          the framework&#39;s synchronous read hook applied to every read action. Whether that name still matches
+          its breadth is a naming question the source does not resolve.</li>
           </ul>
           <hr>
           <h3 id="specificationextensions">SpecificationExtensions</h3>
@@ -2185,15 +2269,15 @@
           <li><strong>Concept introduced, the C# <code>extension(T)</code> block.</strong> The whole class body is a single
           <code>extension&lt;TEntity, TIdentifierType&gt;(ISpecification&lt;TEntity, TIdentifierType&gt; specification)</code> block
           (<code>SpecificationExtensions.cs:32-34</code>) carrying its own generic constraints, with the three members
-          declared inside it as ordinary instance-looking methods. This is the C# 14 extension-member syntax
-          the workspace uses throughout (see the primer&#39;s <code>extension(T)</code> note): the receiver is named once on
-          the block rather than repeated as a <code>this</code> parameter on every method, and the constraints are stated
+          declared inside it as ordinary instance-looking methods. This is the extension-member syntax the
+          workspace uses throughout (see the primer&#39;s <code>extension(T)</code> note): the receiver is named once on the
+          block rather than repeated as a <code>this</code> parameter on every method, and the constraints are stated
           once. <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses idiomatic use of current language
           features) and <code>[Rubric §16, Maintainability]</code>.</li>
           <li><strong>Walkthrough</strong>: three members, each a thin factory that null-guards both the receiver and the
           argument before constructing the corresponding combinator.<ul>
           <li><code>And(ISpecification&lt;TEntity, TIdentifierType&gt; other)</code> returning
-          <code>AndSpecification&lt;TEntity, TIdentifierType&gt;</code> (<code>:48-54</code>).</li>
+          <code>AndSpecification&lt;TEntity, TIdentifierType&gt;</code> (<code>:48-54</code>), guards at <code>:50-51</code>, construction at <code>:53</code>.</li>
           <li><code>Or(ISpecification&lt;TEntity, TIdentifierType&gt; other)</code> returning
           <code>OrSpecification&lt;TEntity, TIdentifierType&gt;</code> (<code>:68-74</code>).</li>
           <li><code>Not()</code> returning <code>NotSpecification&lt;TEntity, TIdentifierType&gt;</code> (<code>:85-90</code>).
@@ -2201,15 +2285,23 @@
           composing without a cast.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: the class doc (<code>:5-28</code>) contrasts the two spellings directly, nested
+          <li><strong>Why it&#39;s built this way</strong>: the class doc (<code>:5-29</code>) contrasts the two spellings directly, nested
           constructors versus the fluent chain, and closes with the performance note that follows from the
           combinators&#39; per-instance caching: hold on to the composed specification (a field, a local) rather
           than rebuilding it per request if the composition itself is on a hot path.</li>
-          <li><strong>Where it&#39;s used</strong>: no production call site in the workspace today; every current composition uses
-          the constructors directly (see <a href="#andspecificationtentity-tidentifiertype"><code>AndSpecification</code></a>). The
+          <li><strong>Where it&#39;s used</strong>: <code>And</code> is the spelling every production composition in the workspace uses.
+          ADC&#39;s <a href="group-20-conference-api-grpc.html#sessionscontroller"><code>SessionsController</code></a> writes
+          <code>publicSpecification.And(speakerResult.Value!)</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:128</code>),
+          <a href="group-20-conference-api-grpc.html#speakerscontroller"><code>SpeakersController</code></a> writes
+          <code>publicSpecification.And(filterResult.Value!)</code> (<code>.../Controllers/SpeakersController.cs:173</code>), and
+          <a href="group-18-conference-application.html#publicconferencevisibility"><code>PublicConferenceVisibility</code></a> chains
+          <code>.And(new InlineSpecification&lt;Session, SessionIdentifierType&gt;(...))</code>
+          (<code>.../Common/PublicConferenceVisibility.cs:149</code>). All three guard the null case first, because the
+          extension throws on a null receiver. <code>Or</code> and <code>Not</code> have no production call site today. The whole
           fluent surface is exercised by
           <code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Specifications/SpecificationCompositionTests.cs:220</code>,
-          <code>:230</code>, <code>:239</code>, the left-to-right chain at <code>:248</code>, and the null guards at <code>:258</code>.</li>
+          <code>:230</code>, <code>:239</code>, the left-to-right chain at <code>:248</code>, and the null guards at <code>:258</code> and <code>:268</code>.</li>
           </ul>
           <hr>
           <h3 id="ientityqueryservicetentity-tentitydto-tidentifiertype">IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</h3>
@@ -2274,9 +2366,9 @@
           (<code>IEntityQueryService.cs:143-146</code>), a cheap existence check. Note it returns a bare <code>Task&lt;bool&gt;</code>, not
           a <code>Result</code>: absence is an answer, not a failure. <code>ignoreQueryFilters</code> bypasses the global query
           filters (soft-delete), which is how a uniqueness check can still see a soft-deleted row.
-          Note that all four scoped reads take the <strong>interface</strong> <code>ISpecification&lt;TEntity, TIdentifierType&gt;</code>,
-          not the abstract base class, so any implementation (including a hand-rolled one that does not derive
-          from <a href="#specificationtentity-tidentifiertype"><code>Specification</code></a>) can scope a read.</li>
+          All four scoped reads take the <strong>interface</strong> <code>ISpecification&lt;TEntity, TIdentifierType&gt;</code>, not the
+          abstract base class (<code>:40</code>, <code>:63</code>, <code>:110</code>, <code>:131</code>), so any implementation (including a hand-rolled one
+          that does not derive from <a href="#specificationtentity-tidentifiertype"><code>Specification</code></a>) can scope a read.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: a single generic read contract over every entity lets the generic
@@ -2288,12 +2380,16 @@
           <a href="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html" target="_blank" rel="noopener">ADR-034</a> records the
           trade-offs of the generic read layer.</li>
           <li><strong>Where it&#39;s used</strong>: implemented by
-          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>,
-          which delegates navigation classification to
-          <a href="#inavigationmetadataprovider"><code>INavigationMetadataProvider</code></a> and the heavy lifting to
-          <a href="#ientityquerypipeline"><code>IEntityQueryPipeline</code></a>; consumed by every read endpoint through the generic
-          controller base (G12), for example ADC&#39;s
-          <a href="group-20-conference-api-grpc.html#sessionscontroller"><code>SessionsController</code></a>.</li>
+          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:31</code>), which takes
+          <a href="#inavigationmetadataprovider"><code>INavigationMetadataProvider</code></a> and
+          <a href="#ientityquerypipeline"><code>IEntityQueryPipeline</code></a> as constructor dependencies (<code>:33-34</code>) and delegates
+          navigation classification and query execution to them; consumed by every read endpoint through the
+          generic controller base (G12), for example ADC&#39;s
+          <a href="group-20-conference-api-grpc.html#sessionscontroller"><code>SessionsController</code></a>, which passes its
+          specification as the <code>specification</code> argument at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:148</code>
+          and <code>:187</code>.</li>
           </ul>
           <hr>
           <h3 id="crosssourcespecification">CrossSourceSpecification</h3>
@@ -2331,7 +2427,9 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Specifications.cs:24</code>),
           which ADC subclasses through
           <a href="group-27-testing-infrastructure.html#specificationconventiontestsbase"><code>SpecificationConventionTestsBase</code></a>
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/SpecificationConventionTests.cs:8</code>).</li>
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/SpecificationConventionTests.cs:8</code>). Note the
+          rule analyzes only parameterless specifications, whose <code>Criteria</code> it can instantiate and inspect
+          (<code>ArchitectureRules.Specifications.cs:18-20</code>).</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>BuildAsync&lt;TDependent, TDependentId, TPrincipal, TPrincipalId&gt;(IUnitOfWork unitOfWork, Expression&lt;Func&lt;TPrincipal, bool&gt;&gt; principalPredicate, Expression&lt;Func&lt;TDependent, TPrincipalId&gt;&gt; dependentForeignKey, Expression&lt;Func&lt;TDependent, bool&gt;&gt;? localPredicate = null, CancellationToken = default)</code> (<code>CrossSourceSpecification.cs:39-64</code>), four type parameters: the dependent plus its id, and
           the principal plus its id (which is also the dependent&#39;s FK type). Constraints require
@@ -2339,7 +2437,8 @@
           null-guarded up front (<code>:50-52</code>).</li>
           <li>Resolves keys: <code>unitOfWork.GetReadRepository&lt;TPrincipal, TPrincipalId&gt;()</code> (<code>:54</code>) then
           <code>GetProjectedAsync(p =&gt; p.Id, principalPredicate, asTracking: false, cancellationToken)</code> (<code>:55-57</code>),
-          materialized once into a list (<code>:60</code>) so the predicate embeds a stable collection EF can translate.</li>
+          materialized once into a list (<code>:60</code>) so the predicate embeds a stable collection EF can translate;
+          the result is wrapped as an <code>InlineSpecification</code> (<code>:62-63</code>).</li>
           <li><code>BuildCriteria</code> (<code>:66-91</code>) reuses the FK selector&#39;s own parameter (<code>:71</code>) and builds
           <code>Enumerable.Contains(keys, fk)</code> via <code>Expression.Call</code> (<code>:74-79</code>); if a <code>localPredicate</code> is supplied
           it is rebound onto that same parameter via <a href="#parameterreplacer"><code>ParameterReplacer</code></a> (<code>:86</code>) and
@@ -2356,16 +2455,18 @@
           straight into the existing <a href="#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService</code></a>
           and read-repository <code>specification</code> argument.</li>
           <li><strong>Where it&#39;s used</strong>: two ADC Conference call sites, both resolving published <code>Event</code> ids and filtering
-          <code>Session.EventId IN (...)</code> ANDed with the shared status allow-list
+          <code>Session.EventId IN (...)</code> with the shared status allow-list
           <a href="group-18-conference-application.html#publicsessionstatusspecification"><code>PublicSessionStatusSpecification</code></a><code>.StatusCriteria</code>
-          (BR-49: status unset or <code>Accepted</code>; the event scoping is BR-108):
+          passed as the <code>localPredicate</code> (BR-49: status unset or <code>Accepted</code>,
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Specifications/PublicSessionStatusSpecification.cs:23</code>):
           <a href="group-18-conference-application.html#getpublicsessionfilterhandler"><code>GetPublicSessionFilterHandler</code></a>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:29</code>),
-          which supplies the specification for the public session reads, and
+          (<code>.../Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:29</code>, with the
+          <code>localPredicate</code> at <code>:34</code>), which supplies the specification for the public session reads, and
           <a href="group-18-conference-application.html#publicconferencevisibility"><code>PublicConferenceVisibility</code></a><code>.GetVisibleSessionIdsAsync</code>
-          (<code>.../Common/PublicConferenceVisibility.cs:62</code>), which uses the identical criteria to resolve the
-          visible session ids so a session hidden from the session list cannot stay reachable through a speaker
-          or junction read.</li>
+          (<code>.../Common/PublicConferenceVisibility.cs:57</code>, the call at <code>:63-64</code> and the same <code>localPredicate</code> at
+          <code>:68</code>), which uses the identical criteria to resolve the visible session ids so a session hidden from
+          the session list cannot stay reachable through a speaker or junction read (the comment at <code>:61-62</code>
+          says exactly that).</li>
           <li><strong>Caveats / not-in-source</strong>: the matching keys are materialized and embedded in the predicate, so this
           fits <strong>small/bounded</strong> principal sets (the common &quot;published events&quot;, &quot;active tenants&quot; shape); an
           unbounded principal set would inline a very large <code>IN</code> list. The class doc

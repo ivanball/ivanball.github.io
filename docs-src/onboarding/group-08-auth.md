@@ -8,8 +8,13 @@ serves one of nine moving parts: **minting and validating JWTs**
 [`RsaJwksProvider`](#rsajwksprovider) / [`IJwksProvider`](#ijwksprovider)); **the shared login /
 register / refresh workflow** ([`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser),
 [`IAuthenticationService`](#iauthenticationservice),
-[`AuthenticationValidators`](#authenticationvalidators)); **the contracts an app's `User` aggregate
-exposes to those shared workflows** ([`IAuthUser`](#iauthuser),
+[`AuthenticationValidators`](#authenticationvalidators)); **multi-device refresh sessions**
+([`RefreshSession`](#refreshsession), [`IRefreshSessionStore`](#irefreshsessionstore),
+[`RefreshSessionSettings`](#refreshsessionsettings),
+[`RefreshSessionSummaryResponse`](#refreshsessionsummaryresponse), and the two workflow-private
+helpers [`IssuedSession`](#issuedsession) and
+[`SessionStampingTokenService`](#sessionstampingtokenservice)); **the contracts an app's `User`
+aggregate exposes to those shared workflows** ([`IAuthUser`](#iauthuser),
 [`IPasswordChangeableUser`](#ipasswordchangeableuser), [`IUserPreferences`](#iuserpreferences),
 [`IErasableUser`](#ierasableuser)); **password material**
 ([`PasswordHasher`](#passwordhasher) / [`IPasswordHasher`](#ipasswordhasher)); **brute-force and
@@ -21,8 +26,9 @@ rate-limit protection** ([`LoginProtectionService`](#loginprotectionservice) /
 [`PasswordResetEntry`](#passwordresetentry), [`PasswordResetSettings`](#passwordresetsettings));
 **reading the current caller's identity from claims**
 ([`CurrentUserService`](#currentuserservice) / [`ICurrentUserService`](#icurrentuserservice),
+[`ClaimsPrincipalExtensions`](#claimsprincipalextensions),
 [`ClaimBasedUserIdProvider`](#claimbaseduseridprovider), [`AuthClaimTypes`](#authclaimtypes)); **the
-authorization model** (roles, permissions, and resource ownership under
+authorization model** (permissions and resource ownership under
 [`AuthorizationExtensions`](#authorizationextensions),
 [`PermissionAuthorizationHandler`](#permissionauthorizationhandler), and
 [`OwnerOrAdminFilter`](#owneroradminfilter)); and the HttpOnly **session-cookie** machinery
@@ -32,12 +38,16 @@ authorization model** (roles, permissions, and resource ownership under
 authenticated across a cold navigation.
 
 The governing decisions are [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)
-(dual-fetch login and cross-service token validation via JWKS),
-[ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html) (one rotating
-refresh token with reuse detection),
+(dual-fetch login and cross-service token validation via JWKS, with RS256 as the default because it
+survives extraction),
+[ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html) (hashed,
+rotating, per-device refresh sessions, which supersedes the storage model of
+[ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html) while keeping its
+rotation and reuse-detection policy),
 [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)
 (brute-force protection),
-[ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) (password hashing),
+[ADR-102](https://ivanball.github.io/docs/adr/102-pbkdf2-only-password-hashing.html) (PBKDF2-only
+password hashing, superseding [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html)),
 [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) (the cache-backed
 forgot-password token),
 [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)
@@ -45,130 +55,137 @@ forgot-password token),
 [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)
 (resource-ownership authorization),
 [ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html) (the browser
-session-cookie scheme), and
+session-cookie scheme),
 [ADR-051](https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html) (how each render
-head holds and reacquires a token). The rubric lenses are dominated by [Rubric §11, Security], with
-supporting [Rubric §7, Microservices Readiness] and [Rubric §10, Cross-Cutting]. Auth surfaces all of
-its expected failures (bad password, lockout, expired session, rejected reset token) as
+head holds and reacquires a token), and
+[ADR-047](https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html) (runtime
+revocation for a soft-deleted account). The rubric lenses are dominated by [Rubric §11, Security],
+with supporting [Rubric §7, Microservices Readiness] and [Rubric §10, Cross-Cutting]. Auth surfaces
+all of its expected failures (bad password, lockout, expired session, rejected reset token) as
 [`Result`](group-01-result-error-handling.md#result) failures, never exceptions, so reading the
 [Result pattern](group-01-result-error-handling.md#result) first pays off here.
 
 ## Tokens: one signing switch, two validation worlds
 
-The framework mints two credentials on every successful login: a short-lived **access token** (a JWT,
-15 minutes by default,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:42`) and an opaque,
+The framework mints two credentials on every successful sign-in: a short-lived **access token** (a
+JWT, 15 minutes by default,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:61`) and an opaque,
 random **refresh token** (64 bytes of `RandomNumberGenerator` output, Base64-encoded, valid 7 days by
-default, `TokenService.cs:106-107`, `JwtSettings.cs:45`), both produced by
+default, `TokenService.cs:119-122`, `JwtSettings.cs:64`), both produced by
 [`TokenService`](#tokenservice)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:23`). The access token
-carries a fixed claim spine: `sub`, `jti`, `iat`, a custom `user_id`, plus name, email, and role
-(`TokenService.cs:76-85`), and the app adds its own claims (for example `speaker_id` or `customer_id`)
-through the `additionalClaims` parameter (`TokenService.cs:87-90`). The port
-[`ITokenService`](#itokenservice)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:25`). The access token
+carries a fixed claim spine: `sub`, `jti`, `iat`, plus name, email, and role
+(`TokenService.cs:91-100`), and the app adds its own claims (for example `speaker_id` or
+`customer_id`) through the `additionalClaims` parameter (`TokenService.cs:102-105`). `sub` is the
+single carrier of the user identifier: the duplicate custom claim that used to ride alongside it is
+gone, because two values that can disagree is two claim names every reader has to know
+(`TokenService.cs:88-90`). The port [`ITokenService`](#itokenservice)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ITokenService.cs:8`)
 publishes both lifetimes as default interface members pinned to the same 15-minute / 7-day baseline
 (`ITokenService.cs:33`, `ITokenService.cs:40`), so a hand-written test double reports the same expiry
 the production settings would, while the concrete service derives them from the bound settings
-(`TokenService.cs:111`, `TokenService.cs:114`).
+(`TokenService.cs:126`, `TokenService.cs:129`).
 
 The load-bearing design choice is a single configuration switch,
-[`IJwtSettings`](group-14-module-system-composition.md#ijwtsettings)`.SigningAlgorithm`
-(`TokenService.cs:53`). In **monolith mode** it defaults to
-[`JwtSigningAlgorithm`](group-14-module-system-composition.md#jwtsigningalgorithm)`.HS256`
-(`JwtSettings.cs:22`): one symmetric Base64 secret both signs and validates, because issuer and
-validator are the same process (`TokenService.cs:166-178`). In **microservice mode** it is `RS256`:
-the Identity service signs with an RSA private key and every other service validates against the
-matching public key, which it fetches over JWKS. An issuer with no explicit public key configured
+[`JwtSettings`](group-14-module-system-composition.md#jwtsettings)`.SigningAlgorithm`
+(`TokenService.cs:65`). It defaults to
+[`JwtSigningAlgorithm`](group-14-module-system-composition.md#jwtsigningalgorithm)`.RS256`
+(`JwtSettings.cs:30`): the Identity service signs with an RSA private key and every other service
+validates against the matching public key, which it fetches over JWKS. A single-host monolith opts
+into `HS256` explicitly, where one symmetric Base64 secret both signs and validates because issuer
+and validator are the same process (`TokenService.cs:65-76`, `TokenService.cs:181-193`). Asymmetric
+is the default precisely because it is the shape that survives extraction: a compromised non-Identity
+service can verify tokens but cannot forge them. An issuer with no explicit public key configured
 derives one from its own private-key parameters so it can still self-validate during refresh
-(`TokenService.cs:199-213`). Key material is materialized once in the constructor and the owned `RSA`
-handles are disposed with the service (`TokenService.cs:33-34`, `TokenService.cs:160-164`), so token
-operations never re-parse a PEM. The settings class enforces the pairing rather than trusting the
-host: it implements `IValidatableObject` and rejects an HS256 secret shorter than 32 characters or an
-RS256 configuration with no private key (`JwtSettings.cs:51-66`). That asymmetric split is exactly
-what lets a module be extracted without every service holding a signing key: a compromised
-non-Identity service can verify tokens but cannot forge them.
+(`TokenService.cs:217-231`), and the key id from
+[`JwksSettings`](group-14-module-system-composition.md#jwkssettings) travels into every RS256 token's
+`kid` header so a validator reading the published document selects the right key by name rather than
+trying each in turn (`TokenService.cs:210-214`). Key material is materialized once in the constructor
+and the owned `RSA` handles are disposed with the service (`TokenService.cs:35-36`,
+`TokenService.cs:175-179`), so token operations never re-parse a PEM. The settings class enforces the
+pairing rather than trusting the host: it implements `IValidatableObject` and rejects an HS256 secret
+shorter than 32 characters or an RS256 configuration with no private key (`JwtSettings.cs:70-85`).
 
 The public half is served by [`RsaJwksProvider`](#rsajwksprovider)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:15`), which lazily builds
 a `JsonWebKeySet` from a PEM key (inline or read from a path) configured through
-[`JwksSettings`](group-14-module-system-composition.md#jwkssettings) (`RsaJwksProvider.cs:15`,
-`RsaJwksProvider.cs:58-73`), behind the [`IJwksProvider`](#ijwksprovider) port
+[`JwksSettings`](group-14-module-system-composition.md#jwkssettings) (`RsaJwksProvider.cs:28-56`,
+`RsaJwksProvider.cs:58-74`), behind the [`IJwksProvider`](#ijwksprovider) port
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:11`). Publishing is off by
 default, and when disabled or unconfigured the provider returns an *empty* key set
 (`RsaJwksProvider.cs:30-33`, `RsaJwksProvider.cs:36-39`) so the endpoint stays queryable but a
 non-issuer host advertises nothing. The cache is a `Lazy<JsonWebKeySet>` in `PublicationOnly` mode
-rather than the default `ExecutionAndPublication` (`RsaJwksProvider.cs:22-23`): the default caches a
+rather than the default `ExecutionAndPublication` (`RsaJwksProvider.cs:17-23`): the default caches a
 factory *exception* forever, so a single transient IO failure reading the PEM would brick the endpoint
 (and with it cross-service auth) until the process restarted. The endpoint itself,
 `/.well-known/jwks.json`, is mapped in the API layer by
 [`JwksEndpointExtensions`](group-12-api-hosting-mapping.md#jwksendpointextensions)
 (path constant at
 `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/JwksEndpointExtensions.cs:20`, mapped
-anonymously at `JwksEndpointExtensions.cs:31`), paired with the OIDC discovery document from
+anonymously at `JwksEndpointExtensions.cs:33-39`), paired with the OIDC discovery document from
 [`OidcDiscoveryEndpointExtensions`](group-12-api-hosting-mapping.md#oidcdiscoveryendpointextensions)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/OidcDiscoveryEndpointExtensions.cs:27`);
 [`OpenIdConnectMetadataWarmupTask`](group-16-aspire-orchestration.md#openidconnectmetadatawarmuptask)
 pre-fetches that document as a startup warm-up task
-(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:21`,
-`OpenIdConnectMetadataWarmupTask.cs:35-46`) so the first authenticated request on a cold replica does
-not pay the discovery round trip. Validation pins the expected algorithm so an attacker cannot force
-an algorithm swap: `GetPrincipalFromExpiredToken` sets `ValidAlgorithms` to the single configured
-value (`TokenService.cs:136`) and then re-checks the token header after `ValidateToken` returns
-(`TokenService.cs:145-149`). Only the lifetime check is skipped there (`TokenService.cs:131`), because
-the method exists to read claims out of an already-expired token during refresh.
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:21`) so the
+first authenticated request on a cold replica does not pay the discovery round trip. Validation pins
+the expected algorithm so an attacker cannot force an algorithm swap: `GetPrincipalFromExpiredToken`
+sets `ValidAlgorithms` to the single configured value (`TokenService.cs:151`) and then re-checks the
+token header after `ValidateToken` returns (`TokenService.cs:160-164`). Only the lifetime check is
+skipped there (`TokenService.cs:146`), because the method exists to read claims out of an
+already-expired token during refresh.
 
 ## The shared authentication workflow
 
-Login, registration, refresh, and revocation are not re-implemented per app. They live once in
-[`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser)
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34`), an abstract
+Login, registration, refresh, revocation, and device listing are not re-implemented per app. They
+live once in [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:50`), an abstract
 base each app's Identity module seals over its concrete `User` aggregate. The base owns the sequence;
 the sealed subclass supplies the genuinely app-specific pieces through abstract and virtual hooks:
 `FindUntrackedByEmailAsync` and `EmailExistsAsync` (written against the concrete `User` so EF
-translation is unchanged, `AuthenticationServiceBase.cs:313`, `AuthenticationServiceBase.cs:319`),
-`CreateUser` (`AuthenticationServiceBase.cs:322`), `CreateAccessToken`
-(`AuthenticationServiceBase.cs:325`), the two optional candidate gates
-(`AuthenticationServiceBase.cs:328-333`), the post-commit `OnUserRegisteredAsync`
-(`AuthenticationServiceBase.cs:339`), and the overridable "refresh user vanished" error
-(`AuthenticationServiceBase.cs:347`, 401 by default because a token for a deleted user is
+translation is unchanged, `AuthenticationServiceBase.cs:502`, `AuthenticationServiceBase.cs:508`),
+`CreateUser` (`AuthenticationServiceBase.cs:511`), `CreateAccessToken`
+(`AuthenticationServiceBase.cs:514`), the two optional candidate gates
+(`AuthenticationServiceBase.cs:549-554`), the post-commit `OnUserRegisteredAsync`
+(`AuthenticationServiceBase.cs:560`), and the overridable "refresh user vanished" error
+(`AuthenticationServiceBase.cs:568`, 401 by default because a token for a deleted user is
 indistinguishable from an invalid one). Both token lifetimes are read from
 [`ITokenService`](#itokenservice) with a defensive fallback to the 15-minute / 7-day baseline for a
-misconfigured host or a test double (`AuthenticationServiceBase.cs:61-70`).
+misconfigured host or a test double (`AuthenticationServiceBase.cs:99-108`).
 
-`LoginAsync` (`AuthenticationServiceBase.cs:73`) shows the shape. It validates the request first, then
-runs the [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)
-lockout check (`AuthenticationServiceBase.cs:84`), then does the **dual-fetch**: an untracked,
-no-change-tracking query to verify the password cheaply (`AuthenticationServiceBase.cs:96`,
-`AuthenticationServiceBase.cs:112`), and only on success a second *tracked* re-fetch so the rotated
-refresh token can be persisted through `SaveChangesAsync` (`AuthenticationServiceBase.cs:120`,
-`AuthenticationServiceBase.cs:292-306`). The email is normalized through the
-[`Email`](group-02-domain-building-blocks.md#email) value object before the query so the EF predicate
-compares same-typed converted values (`AuthenticationServiceBase.cs:92`). Soft-deleted accounts fall
-out through EF global query filters and return the same generic 401 as a wrong password
-(`AuthenticationServiceBase.cs:97-102`), so the API never reveals whether an email exists, and a
-successful login clears the attempt counters (`AuthenticationServiceBase.cs:128`).
+`LoginAsync` (`AuthenticationServiceBase.cs:118`) shows the shape. It validates the request first,
+then runs the [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)
+lockout check (`AuthenticationServiceBase.cs:130`), then does the **dual-fetch**: an untracked,
+no-change-tracking query to verify the password cheaply (`AuthenticationServiceBase.cs:141`,
+`AuthenticationServiceBase.cs:158`), and only on success a second *tracked* re-fetch of the instance
+the app's `CreateAccessToken` hook mints from, which is also what turns a race that deleted the
+account between the two steps into a clean 404 (`AuthenticationServiceBase.cs:166-175`). The email is
+normalized through the [`Email`](group-02-domain-building-blocks.md#email) value object before the
+query so the EF predicate compares same-typed converted values
+(`AuthenticationServiceBase.cs:138`). Soft-deleted accounts fall out through EF global query filters
+and return the same generic 401 as a wrong password (`AuthenticationServiceBase.cs:142-149`), so the
+API never reveals whether an email exists, and a successful login clears the attempt counters
+(`AuthenticationServiceBase.cs:178`) before handing off to the shared token-issue path
+(`AuthenticationServiceBase.cs:180`).
 
-`RegisterAsync` (`AuthenticationServiceBase.cs:134`) rate-limits by source IP, rejects a duplicate
-email as a conflict, hashes the password, saves, and only then runs the app's post-commit hook and
-counts the registration (`AuthenticationServiceBase.cs:146-215`). The up-front email check is a
-check-then-act, so two concurrent registrations for the same address both pass it and the loser only
-fails on the insert. The save is therefore wrapped in a deliberately broad catch that re-checks the
-address and, if it now exists, returns the *same* conflict the serialized path would have produced,
-rethrowing anything else (`AuthenticationServiceBase.cs:172-200`); the shared failure factory keeps
-the two paths indistinguishable to the caller (`AuthenticationServiceBase.cs:355`). The catch is broad
-because the Application layer has no EF Core dependency by layer rule and cannot name
+`RegisterAsync` (`AuthenticationServiceBase.cs:184`) rate-limits by source IP, rejects a duplicate
+email as a conflict, hashes the password, saves, and only then runs the app's post-commit hook, counts
+the registration, and opens the session (`AuthenticationServiceBase.cs:196-260`). The up-front email
+check is a check-then-act, so two concurrent registrations for the same address both pass it and the
+loser only fails on the insert. The save is therefore wrapped in a deliberately broad catch that
+re-checks the address and, if it now exists, returns the *same* conflict the serialized path would
+have produced, rethrowing anything else (`AuthenticationServiceBase.cs:221-249`); the shared failure
+factory keeps the two paths indistinguishable to the caller (`AuthenticationServiceBase.cs:749`). The
+catch is broad because the Application layer has no EF Core dependency by layer rule and cannot name
 `DbUpdateException`; the re-check is what narrows it, and it deliberately runs on
 `CancellationToken.None` so a cancelled save can still be classified
-(`AuthenticationServiceBase.cs:194`). `RefreshTokenAsync`
-(`AuthenticationServiceBase.cs:218`) extracts claims from the *expired* access token (signature still
-verified, only lifetime skipped, `AuthenticationServiceBase.cs:230`), then compares the presented
-refresh token against the stored one; a mismatch or an expired stored token is treated as reuse and
-*revokes* the stored token to force re-authentication (`AuthenticationServiceBase.cs:259-266`,
-[ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html) / BR-206). Every
-failure path returns a [`Result`](group-01-result-error-handling.md#result) rather than throwing,
-matching the framework-wide Result pattern (see
-[primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
+(`AuthenticationServiceBase.cs:243`). `RefreshTokenAsync` (`AuthenticationServiceBase.cs:264`)
+extracts claims from the *expired* access token (signature still verified, only lifetime skipped,
+`AuthenticationServiceBase.cs:277`), reads the identifier off `sub` through
+[`ClaimsPrincipalExtensions`](#claimsprincipalextensions) (`AuthenticationServiceBase.cs:288`), and
+then resolves the presented refresh token to its session row. Every failure path returns a
+[`Result`](group-01-result-error-handling.md#result) rather than throwing, matching the framework-wide
+Result pattern (see [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
 
 The request and response DTOs for these flows ([`LoginRequest`](#loginrequest),
 [`RegisterRequest`](#registerrequest), [`RefreshTokenRequest`](#refreshtokenrequest),
@@ -181,7 +198,7 @@ dispatched straight through its command handler at the controller layer rather t
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:11`), the same is
 true of the forgot/reset pair below ([`ForgotPasswordRequest`](#forgotpasswordrequest),
 [`ResetPasswordRequest`](#resetpasswordrequest)), and `ExternalLoginAsync` has a default interface
-implementation that *rejects* the call (`IAuthenticationService.cs:66-74`) because OAuth account
+implementation that *rejects* the call (`IAuthenticationService.cs:130-138`) because OAuth account
 linking stays coupled to the app's own `User` factory. `OAuthCodeExchangeRequest` carries only an
 opaque single-use code
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/OAuthCodeExchangeRequest.cs:11`) precisely so the
@@ -198,15 +215,126 @@ presence-and-shape checks so a rejection never reveals which field was wrong
 while the `IValidator<RegisterRequest>` the bundle requires is supplied by each app
 (`AuthenticationValidators.cs:16-19`).
 
+## Refresh sessions: one row per device
+
+A refresh token is no longer a column on the user row. Every issue opens its own
+[`RefreshSession`](#refreshsession)
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/RefreshSession.cs:31`), so signing in on a phone
+leaves a laptop signed in, and the store holds only the token's digest: `Create` hashes on the way in
+so the plaintext never reaches a property (`RefreshSession.cs:112-145`), and `HashToken` is an
+unsalted, deterministic SHA-256 rendered as 64 upper-case hex characters precisely because lookups are
+*by* hash (`RefreshSession.cs:160-164`, width constant at `RefreshSession.cs:34`). The encoding is
+part of the contract, not an implementation detail: the type's own remarks give the byte-for-byte SQL
+Server equivalent a consumer's data migration has to reproduce (`RefreshSession.cs:151-157`). The row
+is deliberately *not* an aggregate: no audit stamps, no soft-delete flag, no concurrency token, like
+`OutboxMessage` and `AuditTrailEntry`, because rows are only ever inserted or revoked and no global
+query filter may hide a revoked row from the reuse check (`RefreshSession.cs:22-29`). `Revoke` is
+idempotent by refusal, so the first reason and instant recorded are the ones kept
+(`RefreshSession.cs:174-189`), and the four reason constants (`Rotated`, `SignedOut`, `ReuseDetected`,
+`SessionCapExceeded`, `RefreshSession.cs:46-55`) are what an operator reads afterwards.
+
+Rotation leaves a chain, and the chain is the security mechanism. Using a session revokes it and
+records the successor in `ReplacedByTokenHash` (`RefreshSession.cs:79`), so presenting an
+already-rotated token lands on a *revoked* row rather than on nothing: that is the
+[ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html) reuse signal, and
+the workflow answers it by revoking every live session the user holds
+(`AuthenticationServiceBase.cs:600-607`, `AuthenticationServiceBase.cs:702-712`). The three
+rejections behind the single generic error are deliberately different in what they *do*
+(`AuthenticationServiceBase.cs:572-612`): an unknown hash, or one belonging to another account, is
+failed alone, since revoking the family on it would let anyone holding one of this user's expired
+access tokens sign them out everywhere by posting a random string; a revoked row revokes the family;
+an expired row is an ordinary end of life, so that device re-authenticates while the others keep
+working. Two requests presenting the same still-live token are covered by the same rule: rotation is
+claimed atomically through [`IRefreshSessionStore`](#irefreshsessionstore)`.TryRotateAsync`
+(`AuthenticationServiceBase.cs:682-696`), and the request that loses the claim is answered exactly
+like a replay because a caller cannot tell the two apart.
+
+[`IRefreshSessionStore`](#irefreshsessionstore)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IRefreshSessionStore.cs:21`) is the narrow
+persistence port: add, find by hash (revoked and expired rows included, which is load-bearing for
+reuse detection, `IRefreshSessionStore.cs:28-37`), list a user's un-revoked sessions
+(`IRefreshSessionStore.cs:45`), find one of a user's sessions by id with the owner *inside* the query
+so another account's id is indistinguishable from a nonexistent one (`IRefreshSessionStore.cs:49-62`),
+save, and `TryRotateAsync` (`IRefreshSessionStore.cs:95`). Implementations must return **tracked**
+instances, because revocation is a mutation on an instance the store handed out and a no-tracking read
+would drop it at save time (`IRefreshSessionStore.cs:16-19`). The default `TryRotateAsync` body
+(revoke in memory, add, save) is atomic only per instance, which is all an in-memory or test store can
+offer; the shipped EF implementation
+[`EFRefreshSessionStore`](group-07-persistence-ef-core.md#efrefreshsessionstore) overrides it with a
+conditional `ExecuteUpdateAsync` the database arbitrates
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:108-133`).
+That is the [Rubric §8, Data Architecture] half of the story, and the store is registered scoped
+alongside the unit of work it shares a `DbContext` with, so a login and its session insert commit
+together (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:143-149`).
+
+The workflow around the port is small and worth reading end to end.
+`IssueTokensAsync` (`AuthenticationServiceBase.cs:471`) opens the session *before* it mints the access
+token, because the token carries the session's id and a session only has an id once it has been
+created (`AuthenticationServiceBase.cs:481-495`); `OpenSessionAsync`
+(`AuthenticationServiceBase.cs:620`) mints the refresh token, builds the row, and first enforces the
+per-user cap by revoking the oldest live sessions
+(`AuthenticationServiceBase.cs:642`, `AuthenticationServiceBase.cs:722-735`), so one account cannot
+grow the table without bound while a legitimate sign-in never fails. Both helpers return
+[`IssuedSession`](#issuedsession) (`AuthenticationServiceBase.cs:758`), the private pair of "the
+plaintext token, which exists nowhere else" and "the row id". The id reaches the client as the
+standard `sid` claim, stamped by [`SessionStampingTokenService`](#sessionstampingtokenservice)
+(`AuthenticationServiceBase.cs:770`), a pass-through `ITokenService` armed for the duration of the
+app's `CreateAccessToken` call (`AuthenticationServiceBase.cs:535-546`,
+`AuthenticationServiceBase.cs:789-799`). Doing it with a wrapper rather than by changing the hook's
+signature is what makes the claim additive: every existing subclass keeps compiling and starts
+emitting `sid` with no edit. `GetSessionsAsync` (`AuthenticationServiceBase.cs:398`) projects the
+user's live sessions into [`RefreshSessionSummaryResponse`](#refreshsessionsummaryresponse)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RefreshSessionSummaryResponse.cs:23`), newest first,
+flagging the caller's own device by comparing against the token's `sid`
+(`AuthenticationServiceBase.cs:406-419`); the response deliberately omits the token hash and the
+rotation link, since nothing a client does with a session needs anything but its id
+(`RefreshSessionSummaryResponse.cs:6-11`). `RevokeSessionByIdAsync`
+(`AuthenticationServiceBase.cs:436`) signs one device out and treats an already-revoked row as a
+success that writes nothing, because a device list clicked twice is the most ordinary duplicate in the
+feature (`AuthenticationServiceBase.cs:449-454`), while `RevokeTokenAsync`
+(`AuthenticationServiceBase.cs:333`) degrades to signing every device out when the presented token does
+not identify a live session of this user's (`AuthenticationServiceBase.cs:346-364`). Those methods
+surface on [`IAuthenticationService`](#iauthenticationservice) (`IAuthenticationService.cs:78`,
+`IAuthenticationService.cs:95`, `IAuthenticationService.cs:114`) and are exposed by
+[`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase) as `revoke`, `my-sessions`,
+and a per-session route
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:142`,
+`AuthControllerBase.cs:173`, `AuthControllerBase.cs:220`).
+
+[`RefreshSessionSettings`](#refreshsessionsettings)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:9`) is where a host
+tunes the model: `MaxActiveSessionsPerUser` (default 10, range 1 to 1000,
+`RefreshSessionSettings.cs:34-35`), `RetentionDays` (default 30, `RefreshSessionSettings.cs:71-72`),
+`CleanupIntervalHours` (default 6, `RefreshSessionSettings.cs:79-80`), the `DataSourceName` that says
+which database carries the table (`RefreshSessionSettings.cs:51-52`), and `Enabled`
+(`RefreshSessionSettings.cs:25`), which gates the *model*, not the workflow: the service that owns
+identity sets it, every other service in a modular host leaves it alone, and that is what keeps the
+table, its migrations, and its sweep in exactly one database. Retention is not decoration: the
+settings' own remarks state that the sweep bounds reuse detection, because once a revoked row is
+swept, a replay of its token reads as an unknown token and fails alone
+(`RefreshSessionSettings.cs:59-66`). The hosted sweep
+[`RefreshSessionCleanupService`](group-07-persistence-ef-core.md#refreshsessioncleanupservice)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:48`)
+is registered only when the flag is set, so a service with no `RefreshSessions` table never starts a
+sweep over a table it does not have
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:151-158`), and the mapping
+itself is opt-in through
+[`RefreshSessionModelBuilderExtensions`](group-07-persistence-ef-core.md#refreshsessionmodelbuilderextensions)`.ApplyRefreshSessionConfiguration`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionModelBuilderExtensions.cs:34`).
+This whole cluster is [Rubric §7, Microservices Readiness] as much as [Rubric §11, Security]: the
+credential store is one service's table, not a column every service's user model has to carry.
+
 ## What the app's User aggregate must expose
 
 The shared workflows never see an app's `User` class. They see four small Domain-layer contracts, each
 sized to one workflow, which is the [Rubric §1, SOLID] interface-segregation story in miniature.
 [`IAuthUser`](#iauthuser)
-(`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:10`) is the login/refresh surface:
-password hash and salt, the current refresh token and its expiry, and the two mutators
-`UpdateRefreshToken` / `RevokeRefreshToken` (`IAuthUser.cs:14-30`). Profile fields, roles, and linked
-aggregates stay app-specific and are reached only through the per-app hooks.
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:16`) is now the *password* surface and
+nothing else: the hash and the salt whose length once selected an algorithm (`IAuthUser.cs:19-23`).
+Refresh tokens are deliberately absent, and the interface says why: they used to live here as a single
+plaintext column, which capped every account at one signed-in device and put a usable credential in the
+users table (`IAuthUser.cs:9-14`). Profile fields, roles, and linked aggregates stay app-specific and
+are reached only through the per-app hooks.
 [`IPasswordChangeableUser`](#ipasswordchangeableuser)
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IPasswordChangeableUser.cs:11`) extends it with
 `ChangePassword` (`IPasswordChangeableUser.cs:19`), because both the rotation workflow and the reset
@@ -227,13 +355,13 @@ which is the null-means-unchanged contract stated on
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30`) is the subtlest of the four. It
 extends [`IAnonymizable`](group-02-domain-building-blocks.md#ianonymizable) and *redeclares* `Delete()`
 (`IErasableUser.cs:37`) rather than inheriting it from `AuditableBaseEntity<TId>`, because an app
-`User` commonly **hides** the base method (`public new Result Delete()`) to also revoke the refresh
-token. A hidden method is not an override, so a shared workflow calling through the class constraint
+`User` commonly **hides** the base method (`public new Result Delete()`) to add account-specific
+behavior. A hidden method is not an override, so a shared workflow calling through the class constraint
 would silently run the base implementation and skip that behavior; routing the call through this
-interface makes the interface map resolve to the most derived `Delete()` (`IErasableUser.cs:11-29`).
+interface makes the interface map resolve to the most derived `Delete()` (`IErasableUser.cs:11-24`).
 The base entity deliberately does not implement the interface, so a consumer that forgets to add it
-fails the generic constraint at compile time instead of losing behavior at run time. These four
-contracts are consumed by the shared handler bases in group 14:
+fails the generic constraint at compile time instead of losing behavior at run time
+(`IErasableUser.cs:25-28`). These four contracts are consumed by the shared handler bases in group 14:
 [`ChangePasswordHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#changepasswordhandlerbasetuser-tcommand)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:24`),
 [`ChangePreferencesHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#changepreferenceshandlerbasetuser-tcommand)
@@ -252,14 +380,15 @@ each of which constrains `TUser` to the matching contract.
 Password material is handled by [`PasswordHasher`](#passwordhasher)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12`), which hashes with
 PBKDF2-HMAC-SHA512 at 600,000 iterations (OWASP 2023 guidance, `PasswordHasher.cs:24`) over a 32-byte
-random salt (`PasswordHasher.cs:15`, `PasswordHasher.cs:34`) and verifies in constant time via
-`CryptographicOperations.FixedTimeEquals` (`PasswordHasher.cs:58`) to close the timing side channel. It
-stays backward-compatible with an older HMAC-SHA512 scheme by branching on salt length (128 bytes means
-legacy, anything else means PBKDF2, `PasswordHasher.cs:27`, `PasswordHasher.cs:52-54`), so existing
-hashes still verify without a forced reset
-([ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html)). That is a compact
-[Rubric §11, Security] story: modern KDF, constant-time compare, and a migration path in one small
-type, all behind the [`IPasswordHasher`](#ipasswordhasher) port
+random salt (`PasswordHasher.cs:15`, `PasswordHasher.cs:31`) into a 64-byte output
+(`PasswordHasher.cs:18`), and verifies in constant time via
+`CryptographicOperations.FixedTimeEquals` (`PasswordHasher.cs:53`) to close the timing side channel.
+PBKDF2 is now the *only* path: the legacy single-round HMAC branch, and with it the algorithm
+selection keyed on stored salt length, is gone
+([ADR-102](https://ivanball.github.io/docs/adr/102-pbkdf2-only-password-hashing.html)), so one
+algorithm derives and verifies every stored credential (`PasswordHasher.cs:7-10`,
+`PasswordHasher.cs:57-63`). That is a compact [Rubric §11, Security] story: a modern KDF and a
+constant-time compare in one small type, all behind the [`IPasswordHasher`](#ipasswordhasher) port
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IPasswordHasher.cs:6`) so
 the algorithm can be strengthened without touching an Application handler.
 
@@ -277,7 +406,7 @@ exponential-backoff lockout capped at `MaxLockoutSeconds` (default 300,
 `LoginProtectionSettings.cs:24`), with a deliberately clamped shift exponent so a persistent attacker
 cannot wrap the TTL back to something small (`LoginProtectionService.cs:88`), and it rate-limits
 registrations per source IP (default 10 per 60-minute window, `LoginProtectionSettings.cs:37-43`,
-`LoginProtectionService.cs:101-134`). Every setting carries a `[Range]` attribute, which is what makes
+`LoginProtectionService.cs:101-136`). Every setting carries a `[Range]` attribute, which is what makes
 the clamp argument airtight: `MaxLockoutSeconds` cannot exceed 3600 (`LoginProtectionSettings.cs:23`),
 and `1 << 30` already dwarfs that. The [`ILoginProtectionService`](#iloginprotectionservice) port
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ILoginProtectionService.cs:10`) is what the
@@ -313,7 +442,7 @@ implementation, [`PasswordResetTokenService`](#passwordresettokenservice)
   `MaxValidationAttempts` (`PasswordResetTokenService.cs:132-153`, default 5,
   `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/PasswordResetSettings.cs:36`). The rewrite
   after a wrong guess uses the record's *remaining* lifetime rather than a fresh one
-  (`PasswordResetTokenService.cs:148-152`), so guessing cannot extend the redeemable window.
+  (`PasswordResetTokenService.cs:146-152`), so guessing cannot extend the redeemable window.
 - **A per-email request throttle.** A counter carrying the window's TTL caps how often one address can
   trigger an email (`PasswordResetTokenService.cs:66-77`, default 3 per 60 minutes,
   `PasswordResetSettings.cs:40`, `PasswordResetSettings.cs:44`), and a successful redemption deletes
@@ -322,16 +451,16 @@ implementation, [`PasswordResetTokenService`](#passwordresettokenservice)
 
 Keys are built from an `Email`-normalized identity for the same reason
 [`LoginProtectionService`](#loginprotectionservice) does it
-(`PasswordResetTokenService.cs:40-53`). The cached record, [`PasswordResetEntry`](#passwordresetentry)
+(`PasswordResetTokenService.cs:34-53`). The cached record, [`PasswordResetEntry`](#passwordresetentry)
 (`PasswordResetTokenService.cs:171`), is deliberately all JSON primitives: cache values round-trip
 through `System.Text.Json`, so a value object or a `byte[]` member would not survive a distributed
-backing store. Token material is 32 random bytes, Base64Url-encoded
-(`PasswordResetTokenService.cs:30`, `PasswordResetTokenService.cs:79`), redeemable for
+backing store (`PasswordResetTokenService.cs:162-166`). Token material is 32 random bytes, Base64Url
+encoded (`PasswordResetTokenService.cs:30`, `PasswordResetTokenService.cs:79`), redeemable for
 `TokenLifetimeMinutes` (default 30, `PasswordResetSettings.cs:29`), and every rejection (unknown,
 expired, mismatched, attempt-capped) collapses into one generic failure
 (`PasswordResetTokenService.cs:155-159`). The settings bind from the `PasswordReset` configuration
 section and the service is registered scoped in Infrastructure DI (`PasswordResetSettings.cs:13`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:139-143`).
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:137-141`).
 
 The workflow around the port lives in the group-14 handler bases, and it is where the
 anti-enumeration rule is enforced.
@@ -340,91 +469,99 @@ anti-enumeration rule is enforced.
 resolves the account through its one abstract lookup, issues a token, and mails it through
 [`IEmailSender`](group-10-notifications.md#iemailsender) (`ForgotPasswordHandlerBase.cs:83-88`), but a
 malformed address, an address with no account, a throttled request, and a failed send all log and
-return success alike (`ForgotPasswordHandlerBase.cs:57-62`, `ForgotPasswordHandlerBase.cs:65-69`,
-`ForgotPasswordHandlerBase.cs:72-76`, `ForgotPasswordHandlerBase.cs:90-95`). The only 400 comes from
+return success alike (`ForgotPasswordHandlerBase.cs:59-62`, `ForgotPasswordHandlerBase.cs:67-70`,
+`ForgotPasswordHandlerBase.cs:74-77`, `ForgotPasswordHandlerBase.cs:90-96`). The only 400 comes from
 [`ForgotPasswordRequestValidator`](#forgotpasswordrequestvalidator)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ForgotPasswordRequestValidator.cs:11`),
 which inspects the shape of the address and nothing else. The email carries both a prefilled link
 (composed from `PasswordResetSettings.ResetUrl`, deliberately not required so a host that has not
-configured a UI base still boots, `PasswordResetSettings.cs:25`) and the raw token, because a client
-without deep linking (the MAUI head) needs it typed into the reset page by hand
-(`ForgotPasswordHandlerBase.cs:123-133`).
+configured a UI base still boots, `PasswordResetSettings.cs:25`,
+`ForgotPasswordHandlerBase.cs:144-147`) and the raw token, because a client without deep linking (the
+MAUI head) needs it typed into the reset page by hand (`ForgotPasswordHandlerBase.cs:123`).
 [`ResetPasswordHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:30`)
 consumes the token *before* the save on a stated trade-off (leaving it live until the write succeeds
 opens a replay window; a token burned by a later invariant failure costs the user one more reset
-request, `ResetPasswordHandlerBase.cs:61-67`), hashes through [`IPasswordHasher`](#ipasswordhasher)
+request, `ResetPasswordHandlerBase.cs:58-68`), hashes through [`IPasswordHasher`](#ipasswordhasher)
 and writes the credential through the aggregate's `ChangePassword`
 (`ResetPasswordHandlerBase.cs:79-80`), then clears the login-protection counters so a user who reset
 *because* of a lockout is not left locked out (`ResetPasswordHandlerBase.cs:89`).
 [`ResetPasswordRequestValidator`](#resetpasswordrequestvalidator)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ResetPasswordRequestValidator.cs:12`)
 includes the same [`StrongPasswordRules<T>`](group-06-validation.md#strongpasswordrulest) that
-registration and change-password use (`ResetPasswordRequestValidator.cs:40`), so a reset is not a way
+registration and change-password use (`ResetPasswordRequestValidator.cs:23`), so a reset is not a way
 around the complexity policy. The endpoints are
 [`PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>`](group-12-api-hosting-mapping.md#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:43`):
-both actions are `[AllowAnonymous]` and rate-limited per IP exactly as login and register are,
-`forgot-password` answers 202 for any well-formed request
-(`PasswordResetAuthControllerBase.cs:75-92`), and `reset-password` collapses every rejection into a
-single 401 (`PasswordResetAuthControllerBase.cs:99-117`).
+both actions are `[AllowAnonymous]` and rate-limited per IP exactly as login and register are
+(`PasswordResetAuthControllerBase.cs:77-78`, `PasswordResetAuthControllerBase.cs:101-102`),
+`forgot-password` answers 202 for any well-formed request (`PasswordResetAuthControllerBase.cs:79`,
+`PasswordResetAuthControllerBase.cs:92`), and `reset-password` collapses every rejection into a single
+401 (`PasswordResetAuthControllerBase.cs:105`).
 
 ## Reading identity from claims
 
 Once a request is authenticated, downstream code needs the caller's identity without re-parsing the
-JWT. [`CurrentUserService`](#currentuserservice)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:13`) is the scoped
-adapter over `IHttpContextAccessor`: it exposes the `ClaimsPrincipal`, the parsed `user_id`, and the
-first role claim, caching the parsed values behind a per-request `Lazy<T>` (`CurrentUserService.cs:18`,
-`CurrentUserService.cs:26`) and reading the same custom `user_id` claim that
-[`TokenService`](#tokenservice) emits. Every parse is pinned to `CultureInfo.InvariantCulture`
-(`CurrentUserService.cs:23`, `CurrentUserService.cs:45`) to match the writer: the token was formatted
-invariantly, so reading it under the request culture would misread separators. Its generic
-`GetClaimValue<T>` (`CurrentUserService.cs:39`) is what the ownership filter uses to read app-specific
-owner claims. The interface itself, [`ICurrentUserService`](#icurrentuserservice)
+JWT, and it needs one answer no matter which pipeline produced the principal. That is the job of
+[`ClaimsPrincipalExtensions`](#claimsprincipalextensions)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:18`): `FindUserIdValue`
+reads the raw `sub` claim and falls back to the `ClaimTypes.NameIdentifier` form the JWT bearer
+handler maps it onto (`ClaimsPrincipalExtensions.cs:26-28`), `GetUserId` parses that value through
+`IParsable<T>` in the invariant culture so the solution-wide identifier alias can change shape without
+editing any reader (`ClaimsPrincipalExtensions.cs:40-44`), and `FindSessionId` reads the `sid` claim,
+treating absence as an ordinary "the caller's own device is unknown" rather than an error
+(`ClaimsPrincipalExtensions.cs:56-60`). [`AuthClaimTypes`](#authclaimtypes)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:7`) names the three claim types
+this group cares about: the framework-custom `"permission"` (`AuthClaimTypes.cs:15`) used by the
+authorization model below, plus the standard `sub` (`AuthClaimTypes.cs:25`) and `sid`
+(`AuthClaimTypes.cs:38`), each documented with the pipeline caveat that motivates reading it through
+the extensions.
+
+[`CurrentUserService`](#currentuserservice)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:16`) is the scoped
+adapter over `IHttpContextAccessor`: it exposes the `ClaimsPrincipal`, the parsed user id, and the
+first role claim, caching the parsed values behind a per-request `Lazy<T>`
+(`CurrentUserService.cs:18-22`) and reading the identifier through the shared extensions
+(`CurrentUserService.cs:19`). Its generic `GetClaimValue<T>` (`CurrentUserService.cs:34`) is what the
+ownership filter uses to read app-specific owner claims, and it parses in the invariant culture
+because claims are machine-written and the ambient request culture must not decide how a separator
+reads (`CurrentUserService.cs:38-40`). The interface itself,
+[`ICurrentUserService`](#icurrentuserservice)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:9`),
 carries the multi-role logic as *default interface members*: `Roles` reads every role claim across the
 three claim-type spellings the JWT middleware may produce and falls back to the single `Role` property
 when a hand-written double populates only that (`ICurrentUserService.cs:45-64`), and `IsInRole` does a
 case-insensitive membership check over that set (`ICurrentUserService.cs:88-89`). A sibling adapter,
 [`ClaimBasedUserIdProvider`](#claimbaseduseridprovider)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:9`), plugs the
-same `user_id` claim into SignalR's `IUserIdProvider` so `Clients.User(userId)` routes hub messages to
-the right connections (`ClaimBasedUserIdProvider.cs:11`, `ClaimBasedUserIdProvider.cs:14`).
-[`AuthClaimTypes`](#authclaimtypes)
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:7`) names the one framework-custom
-claim beyond the BCL set, `"permission"` (`AuthClaimTypes.cs:15`), used by the authorization model
-below.
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:11`), plugs
+the same identifier into SignalR's `IUserIdProvider` so `Clients.User(userId)` routes hub messages to
+the right connections (`ClaimBasedUserIdProvider.cs:14-15`).
 
-## Authorization: roles, permissions, ownership
+## Authorization: permissions and ownership
 
-The framework supports three overlapping authorization styles, wired together by the single
+There is **one** authorization model here, and it is capabilities, not role names. The single
 `AddAuthorizationPolicies()` extension in [`AuthorizationExtensions`](#authorizationextensions)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:12`,
-`AuthorizationExtensions.cs:22`). The simplest is **named role policies**:
-[`AuthorizationPolicies`](#authorizationpolicies) defines the four constant policy names
-(`RequireOrganizer`, `RequireAttendee`, `RequireAdmin`, `RequireAuthenticated`,
-`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationPolicies.cs:14-23`) that
-controllers reference through `[Authorize(Policy = ...)]`, registered against the role names in
-[`RoleNames`](#rolenames) (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:12`) at
-`AuthorizationExtensions.cs:24-32`. `RoleNames` carries five constants across both apps (`Organizer`,
-`Attendee`, `ContentEditor`, `Admin`, `Customer`, `RoleNames.cs:15-31`); `ContentEditor` has no
-dedicated named policy and is expected to be reached through permissions instead. Roles themselves get
-a value-object base, [`RoleValue`](#rolevalue)
+`AuthorizationExtensions.cs:23`) wires the whole mechanism: the handler, the on-demand policy
+provider, and the shared registry (`AuthorizationExtensions.cs:25-36`). Role *names* still exist as
+data, in [`RoleNames`](#rolenames)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:12`, five constants across both apps:
+`Organizer`, `Attendee`, `ContentEditor`, `Admin`, `Customer`, `RoleNames.cs:15-31`), and roles get a
+value-object base, [`RoleValue`](#rolevalue)
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:25`), so each app can fix its own role
 set with case-insensitive, type-guarded equality (`RoleValue.cs:90-96`), a frozen interned lookup
 (`RoleValue.cs:75-84`), and `Result`-returning validation (`RoleValue.cs:42`) while staying
-dependency-free enough to use from Blazor WASM.
+dependency-free enough to use from Blazor WASM. What no longer exists is a shipped policy per role:
+an endpoint states the capability it needs and the registry maps roles to capabilities
+([ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)).
 
-The richer style is **permission-based** authorization
-([ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)), so endpoints
-depend on capabilities rather than role names. [`HasPermissionAttribute`](#haspermissionattribute)
+[`HasPermissionAttribute`](#haspermissionattribute)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:13`) marks a
 controller or action with a permission such as `"sessions:manage"`; under the hood it is an
 `AuthorizeAttribute` whose policy name is `perm:sessions:manage`
 ([`PermissionPolicy`](#permissionpolicy)`.NameFor`,
 `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicy.cs:12`,
-`PermissionPolicy.cs:17`, applied at `HasPermissionAttribute.cs:18`). Rather than pre-registering a
+`PermissionPolicy.cs:17`, applied at `HasPermissionAttribute.cs:17-18`). Rather than pre-registering a
 named policy per permission, [`PermissionPolicyProvider`](#permissionpolicyprovider)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:13`)
 materializes those policies on demand for any `perm:` name and falls through to the default provider
@@ -445,27 +582,49 @@ role-to-permission map with case-insensitive role keys and ordinal permission va
 [`PermissionRegistryBuilder`](#permissionregistrybuilder)
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistryBuilder.cs:8`); each module
 contributes only its own grants through `AddPermissions(...)`
-(`AuthorizationExtensions.cs:54-62`), duplicate grants union rather than collide
-(`PermissionRegistryBuilder.cs:32-39`), and the shared registry is built lazily on first resolve, after
-every module has registered (`AuthorizationExtensions.cs:68-81`). That module-local contribution is the
+(`AuthorizationExtensions.cs:47-55`), duplicate grants union rather than collide
+(`PermissionRegistryBuilder.cs:25-42`), and the shared registry is built lazily on first resolve, after
+every module has registered (`AuthorizationExtensions.cs:61-74`). That module-local contribution is the
 [Rubric §7, Microservices Readiness] touch: an extracted service carries only its own permission
 grants.
 
-The third style is **resource ownership**. [`OwnerOrAdminFilter`](#owneroradminfilter)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:30`) is an action
+The same capabilities reach *inside* the CQRS pipeline, not just the HTTP boundary: a command or query
+that implements [`IRequiresPermission`](group-05-cqrs-pipeline.md#irequirespermission) is checked by
+[`AuthorizationCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#authorizationcommanddecoratortcommand-tresult)
+and
+[`AuthorizationQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#authorizationquerydecoratortquery-tresult)
+against the same registry. Because those decorators are registered unconditionally, a host with no
+Identity module and no grants would fail to activate every handler in the pipeline, which is what
+[`UnconfiguredPermissionRegistry`](#unconfiguredpermissionregistry)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/UnconfiguredPermissionRegistry.cs:20`) exists to
+prevent: it is registered with `TryAdd`, so a host that called `AddAuthorizationPolicies()` keeps its
+own registry and never constructs this one
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:124`). It grants nothing, so a
+permission-gated request is *denied* rather than allowed (`UnconfiguredPermissionRegistry.cs:28-42`),
+and it says so exactly once, in a log message naming the call that would fix it
+(`UnconfiguredPermissionRegistry.cs:49-60`). The warning is deferred to the first real check rather
+than raised at startup, because a host with no permission-gated request is correctly configured: it
+simply never needs a registry (`UnconfiguredPermissionRegistry.cs:44-48`). Fail-closed plus a
+diagnosable message is the [Rubric §11, Security] and [Rubric §13, Observability & Operability]
+reading of that type.
+
+The second style is **resource ownership**. [`OwnerOrAdminFilter`](#owneroradminfilter)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:31`) is an action
 filter for endpoints that mix admin and owner access (carts, orders, bookmarks). It lets a bypass role
-through (`OwnerOrAdminFilter.cs:42`), then compares the caller's owner claim against the resource id
-taken from either the route or a bound argument (`OwnerOrAdminFilter.cs:48`,
-`OwnerOrAdminFilter.cs:88-106`), returning 403 otherwise. The important property is that it **denies by
-default**: when the owner claim is missing (`OwnerOrAdminFilter.cs:50-54`) or the owner parameter
+through (`OwnerOrAdminFilter.cs:43`), then compares the caller's owner claim against the resource id
+taken from either the route or a bound argument (`OwnerOrAdminFilter.cs:49`,
+`OwnerOrAdminFilter.cs:93-111`), returning 403 otherwise. The important property is that it **denies by
+default**: when the owner claim is missing (`OwnerOrAdminFilter.cs:51-55`) or the owner parameter
 cannot be resolved at all, the request is rejected rather than waved through
-(`OwnerOrAdminFilter.cs:56-70`), because "nothing to compare" must not read as "nothing to enforce". An
+(`OwnerOrAdminFilter.cs:57-71`), because "nothing to compare" must not read as "nothing to enforce". An
 action that legitimately has no owner parameter opts out explicitly with
 [`AllowMissingOwnerAttribute`](#allowmissingownerattribute)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:21`),
 honored from either the action or its declaring controller via endpoint metadata
-(`OwnerOrAdminFilter.cs:83-84`, `AllowMissingOwnerAttribute.cs:20`). The filter's vocabulary (claim
-type, bypass role, route parameter) is configurable through
+(`OwnerOrAdminFilter.cs:82-85`, `AllowMissingOwnerAttribute.cs:20`), and the attribute's own remarks
+require the application site to name the guard that replaces the check
+(`AllowMissingOwnerAttribute.cs:15-19`). The filter's vocabulary (claim type, bypass role, route
+parameter) is configurable through
 [`OwnerOrAdminFilterOptions`](#owneroradminfilteroptions)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:11`) whose
 defaults preserve the original `customer_id` / `Admin` / `id` behavior
@@ -518,7 +677,7 @@ allowance (`CookieSessionRefresher.cs:59`, `CookieSessionRefresher.cs:154-183`);
 exchanges the refresh cookie at the API's `auth/refresh` endpoint server-to-server
 (`CookieSessionRefresher.cs:127-130`), so the refresh token never reaches browser JS. It then writes
 the rotated pair back as cookies and stashes the fresh access token on `HttpContext.Items`
-(`CookieSessionRefresher.cs:86-91`) so the *current* request's authentication reads the new token:
+(`CookieSessionRefresher.cs:87-91`) so the *current* request's authentication reads the new token:
 [`CookieTokenReader`](#cookietokenreader) checks that item before falling back to the request cookie
 (`CookieTokenReader.cs:17`, `CookieTokenReader.cs:27-33`). Concurrent refreshes are collapsed into a
 single flight by a [`KeyedSemaphoreStripe`](#keyedsemaphorestripe) keyed on the refresh token plus a
@@ -530,11 +689,11 @@ call, so a single semaphore serialized every unrelated user's cold navigation be
 was in flight (`CookieSessionRefresher.cs:44-49`); two unrelated tokens sharing a stripe is harmless
 because the grace cache is re-checked per token after acquiring
 (`CookieSessionRefresher.cs:104-108`). A transport failure is not cached and renders the request
-anonymously rather than throwing a 500 out of SSR (`CookieSessionRefresher.cs:113-122`,
+anonymously rather than throwing a 500 out of SSR (`CookieSessionRefresher.cs:117-122`,
 `CookieSessionRefresher.cs:147-151`). The same refresher backs the same-origin
 `POST /auth/session/token` endpoint the browser polls to hydrate its in-memory token
 (`SessionCookieEndpoints.cs:45-60`), guarded by `SameSite=Lax` plus a `Sec-Fetch-Site` cross-site
-rejection (`SessionCookieEndpoints.cs:44`, `SessionCookieEndpoints.cs:66-70`) and returning
+rejection (`SessionCookieEndpoints.cs:48-51`, `SessionCookieEndpoints.cs:68-70`) and returning
 [`SessionTokenResponse`](#sessiontokenresponse) (`CookieSessionRefresher.cs:20`), the browser-safe
 projection of the internal [`SessionTokenResult`](#sessiontokenresult)
 (`CookieSessionRefresher.cs:14`) that deliberately omits the refresh token. This whole cluster is
@@ -550,7 +709,7 @@ Three members of this group belong to the privacy surface that sits beside erasu
 GDPR/CCPA export envelope: a document `FormatVersion` consumers read before parsing
 (`UserDataExportDTO.cs:22`), the generation instant, the subject id, an app-owned `Subject` snapshot
 typed as `object` so each app decides which of its own fields are portable
-(`UserDataExportDTO.cs:39-40`), and an ordered list of
+(`UserDataExportDTO.cs:40`), and an ordered list of
 [`UserDataExportSectionDTO`](#userdataexportsectiondto) envelopes (`UserDataExportDTO.cs:48`,
 `UserDataExportDTO.cs:61`). Each section reports `Available` explicitly (`UserDataExportDTO.cs:72`) so
 a reader can tell "this subject has no data here" apart from "this contributor could not be reached",
@@ -560,11 +719,9 @@ instead of denying the subject their whole export, which is the [Rubric §30, Co
 Governance] point of the shape. [`PrivacyFeatures`](#privacyfeatures)
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/PrivacyFeatures.cs:6`) holds the single flag name
 `Privacy.DataExport` (`PrivacyFeatures.cs:9`) that keeps the whole surface off until a host turns it
-on: it is applied as a `[FeatureGate]` on
-[`DataExportControllerBase<TQuery>`](group-12-api-hosting-mapping.md#dataexportcontrollerbasetquery)
-alongside an `[Authorize]` requiring an authenticated caller
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:58-60`),
-with the owner-or-privileged-role check enforced independently in the handler. The composing workflow
+on, applied as a `[FeatureGate]` on
+[`DataExportControllerBase<TQuery>`](group-12-api-hosting-mapping.md#dataexportcontrollerbasetquery).
+The composing workflow
 ([`ExportUserDataHandlerBase<TUser, TQuery>`](group-14-module-system-composition.md#exportuserdatahandlerbasetuser-tquery)
 and the [`IUserDataExportSection`](group-14-module-system-composition.md#iuserdataexportsection)
 contributors) lives in group 14
@@ -572,7 +729,7 @@ contributors) lives in group 14
 
 ## Shared primitives and adjacent members
 
-Four group members are general-purpose primitives that landed in this chapter because of how the
+Several group members are general-purpose primitives that landed in this chapter because of how the
 dependency grouping fell, though one of them is now load-bearing for auth.
 [`KeyedSemaphoreStripe`](#keyedsemaphorestripe)
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22`) and its
@@ -586,47 +743,75 @@ removing it lets caller-supplied keys grow the table without bound
 (`KeyedSemaphoreStripe.cs:7-16`). Its consumers today are
 [`CookieSessionRefresher`](#cookiesessionrefresher) (above, `CookieSessionRefresher.cs:62`),
 the [`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:92`),
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:90`),
 [`CachingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult)
-(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:197`),
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:247`),
 [`MemoryCacheService`](group-09-caching.md#memorycacheservice)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/MemoryCacheService.cs:38`), and the
 default `GetOrCreateAsync` lock table on
 [`ICacheService`](group-09-caching.md#icacheservice)
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:142-145`).
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:145`).
 [`InProcessDistributedLock`](group-14-module-system-composition.md#inprocessdistributedlock) is the
 deliberate exception: it keys on the exact key in a `ConcurrentDictionary` instead, because its
 contract has a *bounded* wait, and stripe false-sharing would turn that into a spurious
 "held elsewhere" answer for a key nobody holds
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/InProcessDistributedLock.cs:19-24`).
+
+Three HTTP and convention helpers sit in `MMCA.Common.Shared` for the same structural reason: both
+ends of an exchange need them and the two packages do not reference each other.
+[`IdempotencyHeaders`](#idempotencyheaders)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/IdempotencyHeaders.cs:13`) is a two-constant class
+holding `Idempotency-Key` and `X-Idempotent-Replay`, read by the API filter and written by the UI
+service bases (`IdempotencyHeaders.cs:19`, `IdempotencyHeaders.cs:25`).
+[`ConcurrencyETag`](#concurrencyetag)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:24`) translates between the EF
+Core `rowversion` token and the HTTP entity tag that represents it: `Format` renders the base64 of the
+raw token as a **weak** tag (`ConcurrencyETag.cs:40-45`), weak on purpose because the same row version
+renders differently under a `fields=` projection and a strong tag would be promising byte-for-byte
+equality it cannot deliver (`ConcurrencyETag.cs:12-18`), and the parse side tolerates the weak prefix
+and the quotes while treating a blank value, the `*` wildcard, and a non-base64 payload alike as "no
+concrete token" for the caller to classify (`ConcurrencyETag.cs:27-33`, `ConcurrencyETag.cs:52-60`).
+[`ProblemDetailsResultReader`](#problemdetailsresultreader)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:58`) is the client-side
+inverse of the API's error contract: it turns a response body back into
+[`Error`](group-01-result-error-handling.md#error) values, synthesizing a status-derived code
+(`Http.404` and friends, `ProblemDetailsResultReader.cs:65`) when the payload carries no
+machine-readable code, and it is explicit that the reverse mapping is lossy for 400, where Validation,
+Invariant and Failure all collapse onto one status
+(`ProblemDetailsResultReader.cs:50-56`). [`ModuleNameConventions`](#modulenameconventions)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Conventions/ModuleNameConventions.cs:10`) derives a type's
+owning module from its namespace under the `MMCA.{App}.{Module}.{Layer}` convention
+(`ModuleNameConventions.cs:38-45`); it lives in Shared because both persistence (schema and data-source
+names) and the Application-layer CQRS logging decorators need it, and Application may not reference
+Infrastructure (`ModuleNameConventions.cs:6-8`). Its layer list deliberately omits `Shared`
+(`ModuleNameConventions.cs:17`) so a framework namespace never resolves to a phantom module.
 [`IcsEvent`](#icsevent) and [`IcsCalendarBuilder`](#icscalendarbuilder)
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsEvent.cs:15`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:12`) build RFC 5545
 calendar (`.ics`) exports from UTC-normalized event times, with 75-octet line folding and CRLF endings
 (`IcsCalendarBuilder.cs:14` for the `MaxLineOctets` budget; the folding and the `\r\n` writes both live
-in `AppendLine`, `IcsCalendarBuilder.cs:83-104`). [`IdempotencyHeaders`](#idempotencyheaders)
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/IdempotencyHeaders.cs:13`) is a two-constant class
-holding `Idempotency-Key` and `X-Idempotent-Replay`, in Shared because the API filter reads them and
-the UI service bases write them and those two packages do not reference each other
-(`IdempotencyHeaders.cs:19`, `IdempotencyHeaders.cs:25`).
+in `AppendLine`, `IcsCalendarBuilder.cs:83-104`).
 
 Two genuine auth members sit at the edge of the group.
 [`ISoftDeletedUserValidator`](#isoftdeleteduservalidator)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ISoftDeletedUserValidator.cs:7`)
 is the small contract the API's
 [`SoftDeletedUserMiddleware`](group-12-api-hosting-mapping.md#softdeletedusermiddleware) uses to reject
-an otherwise-valid token whose backing account has since been soft-deleted (BR-133), implemented by
-each Identity module so Common never takes a cross-module domain reference. Its fast path is
-[`SoftDeletedUserCache`](#softdeletedusercache)
+an otherwise-valid token whose backing account has since been soft-deleted (BR-133,
+[ADR-047](https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html)),
+implemented by each Identity module so Common never takes a cross-module domain reference. Its fast
+path is [`SoftDeletedUserCache`](#softdeletedusercache)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:17`), which owns both the
-key shape and the 30-second marker lifetime (`SoftDeletedUserCache.cs:29`, `SoftDeletedUserCache.cs:43`)
+key shape and the 30-second marker lifetime (`SoftDeletedUserCache.cs:29`, `SoftDeletedUserCache.cs:42`)
 so the module that deletes an account writes exactly the key the middleware reads; the marker only has
 to outlive the window between the delete committing and the next validator query, and the 15-minute
-access-token lifetime bounds the rest of the exposure. The key is formatted invariantly on purpose,
-because a culture-sensitive identifier would be written under one request's culture and missed under
-another (`SoftDeletedUserCache.cs:37-43`). The controller surface that drives everything above
+access-token lifetime bounds the rest of the exposure (`SoftDeletedUserCache.cs:22-28`). The key is
+formatted invariantly on purpose, because a culture-sensitive identifier would be written under one
+request's culture and missed under another (`SoftDeletedUserCache.cs:36-43`). The controller surface
+that drives everything above
 ([`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase),
 [`OAuthControllerBase`](group-12-api-hosting-mapping.md#oauthcontrollerbase),
+[`UserAccountAuthControllerBase<TChangePasswordCommand, TChangePreferencesCommand>`](group-12-api-hosting-mapping.md#useraccountauthcontrollerbasetchangepasswordcommand-tchangepreferencescommand),
 [`PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>`](group-12-api-hosting-mapping.md#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand),
 [`ExternalAuthExtensions`](group-12-api-hosting-mapping.md#externalauthextensions)) and the gRPC token
 forwarding ([`JwtForwardingClientInterceptor`](group-13-grpc-contracts.md#jwtforwardingclientinterceptor))
@@ -643,10 +828,10 @@ live in later groups; this chapter is the engine those endpoints call into.
   read (never constructed) by [`OwnerOrAdminFilter`](#owneroradminfilter).
 - **Concept introduced, the explicit opt-out that makes deny-by-default safe.** `[Rubric §11,
   Security]` (assesses whether a guard fails closed rather than open) and `[Rubric §34, Architecture
-  Governance & Documentation]` (the exemption is written down at the site it applies to, so it can be
-  audited later). The filter this attribute exempts from denies the request when it cannot resolve an
-  owner parameter, because "no owner to compare" must not read as "no restriction"
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:6-12`).
+  Governance & Documentation]` (assesses whether a deliberate exemption is written down where it
+  applies, so it can be audited later). The filter this attribute exempts from denies the request when
+  it cannot resolve an owner parameter, because "no owner to compare" must not read as "no restriction"
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:6-13`).
   Deny-by-default only works if the genuinely parameter-less actions have a way to say so, and that is
   the entire job of this type. The doc comment names the two shapes that qualify: a collection endpoint
   whose rows are already narrowed to the caller by an ownership specification, and an action restricted
@@ -658,72 +843,46 @@ live in later groups; this chapter is the engine those endpoints call into.
   application; `AllowMultiple = false` because a second copy would mean nothing; `Inherited = true` so a
   controller base class can carry it. It holds no data: presence in the endpoint metadata is the entire
   signal, which is exactly what `OwnerOrAdminFilter.HasAllowMissingOwner` looks for
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:83-84`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:84-85`).
 - **Why it's built this way**: an empty marker keeps the opt-out cheap to apply and impossible to
   mis-configure, but the `<remarks>` block
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:15-19`)
   is the load-bearing half of the design: applying it is an *assertion* that the action is guarded
   elsewhere, so every application site is expected to name the replacement guard in a comment. That
-  turns a silent hole into a reviewable claim ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) records the audit that produced the current
-  application sites).
+  turns a silent hole into a reviewable claim ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)
+  records the audit that produced the current application sites).
 - **Where it's used**: honored by [`OwnerOrAdminFilter`](#owneroradminfilter) through endpoint
-  metadata. In MMCA.Store it marks three actions on
-  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/ShoppingCartsController.cs:61,86,123`
-  and four on
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/CustomersController.cs:47,59,76,93`,
-  the latter with the replacing guard named in an inline comment
-  (`CustomersController.cs:46`).
-- **Caveats / not-in-source**: nothing enforces the assertion. No analyzer or test checks that an action
-  carrying this attribute really is guarded another way; the guarantee is a review convention, not a
-  compile-time or runtime rule.
-
-### AuthorizationPolicies
-> MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationPolicies.cs:11` · Level 0 · class (static)
-
-- **What it is**: a static holder of the four named-policy string constants controllers pass to
-  `[Authorize(Policy = ...)]`: `RequireOrganizer`, `RequireAttendee`, `RequireAdmin`, and
-  `RequireAuthenticated`.
-- **Depends on**: nothing first-party (BCL `System.Diagnostics.CodeAnalysis` for the suppression only).
-- **Concept introduced, named role/authentication policies.** `[Rubric §11, Security]` (assesses
-  whether authorization is centralized and declarative rather than scattered `if (role == "Admin")`
-  checks) and `[Rubric §9, API & Contract Design]` (endpoints declare their access requirement in an
-  attribute). ASP.NET Core authorization has two styles: *named policies* (a string key registered once,
-  referenced by attribute) and ad-hoc role checks. This class is the registry of the named keys; the
-  policies they map to are wired in [`AuthorizationExtensions`](#authorizationextensions). The doc
-  comment (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationPolicies.cs:5-9`)
-  explains why these are `const string` and not an `enum`: attribute arguments must be compile-time
-  constants, and only a `const` qualifies.
-- **Walkthrough**: four `public const string` fields
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationPolicies.cs:14-23`), each
-  defined as `nameof(itself)` so the constant value equals its own name (`RequireOrganizer` is the
-  string `"RequireOrganizer"`), which keeps the registered policy name and the referencing constant in
-  sync by construction. The class carries a scoped `[SuppressMessage(... "S2339" ...)]`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationPolicies.cs:10`) that
-  silences the "prefer an enum over constants" analyzer with an inline justification, exactly the
-  attribute-argument constraint above.
-- **Why it's built this way**: centralizing the policy names in one type means a controller cannot
-  reference a policy that was never registered by a typo, the name flows from this constant into both
-  the `[Authorize]` attribute and the registration call.
-- **Where it's used**: referenced by controllers via `[Authorize(Policy = AuthorizationPolicies.X)]`
-  and registered as real policies in [`AuthorizationExtensions.AddAuthorizationPolicies`](#authorizationextensions).
+  metadata. In MMCA.Store it marks four actions on
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/ShoppingCartsController.cs:98,113,142,178`
+  and five on
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/CustomersController.cs:49,61,78,110,131`,
+  both controllers naming the replacing guard in an inline comment next to the attribute
+  (`ShoppingCartsController.cs:93-97`, `CustomersController.cs:48`).
+- **Caveats / not-in-source**: nothing enforces the assertion. No analyzer or compile-time rule checks
+  that an action carrying this attribute really is guarded another way; the guarantee is a review
+  convention. Store closes the specific gap it opens with a hand-written `RequireResolvableOwner()` gate
+  on the collection reads (`ShoppingCartsController.cs:80-90`), but that gate is per-controller code,
+  not something the attribute demands.
 
 ### OwnerOrAdminFilterOptions
 > MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:11` · Level 0 · class (options)
 
 - **What it is**: a host-configurable options object that supplies the three vocabulary values
   [`OwnerOrAdminFilter`](#owneroradminfilter) needs: which claim carries the caller's owner id, which
-  role bypasses the ownership check, and which route/argument parameter names the resource owner.
+  role bypasses the ownership check, and which route or argument parameter names the resource owner.
 - **Depends on**: nothing first-party.
 - **Concept introduced, externalizing a filter's vocabulary through the options pattern.**
-  `[Rubric §11, Security]` (the ownership rule is real but its identifiers are configuration, not
-  hard-code) and `[Rubric §16, Maintainability]` (one host reuses the framework filter with a
-  different claim/role without a fork). Before [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) (cited in the doc comment,
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:4`) the
-  filter hard-coded MMCA.Store's `customer_id` / `Admin` / `id` triple; extracting them into an
-  `IOptions<T>`-bound class lets an app with a different ownership vocabulary (say a `UserId` claim
-  with an `Organizer` bypass keyed by a `userId` route value) reconfigure it via
-  `services.Configure<OwnerOrAdminFilterOptions>(...)`.
-- **Walkthrough**: three mutable auto-properties, each seeded with the legacy default so an unchanged
+  `[Rubric §11, Security]` (assesses whether the ownership rule is enforced consistently; here the rule
+  is fixed in code while its identifiers are configuration) and `[Rubric §16, Maintainability]`
+  (assesses whether a second host can reuse a component without forking it). The doc comment cites
+  [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:4`):
+  the filter used to hard-code MMCA.Store's `customer_id` / `Admin` / `id` triple, and moving those into
+  an `IOptions<T>`-bound class lets an app with a different ownership vocabulary (a `UserId` claim with
+  an `Organizer` bypass keyed by a `userId` route value) reconfigure it via
+  `services.Configure<OwnerOrAdminFilterOptions>(...)`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:5-9`).
+- **Walkthrough**: three mutable auto-properties, each seeded with the original default so an unchanged
   host needs no configuration: `OwnerClaimType` = `"customer_id"`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:14`),
   `BypassRole` = `"Admin"`
@@ -732,16 +891,20 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:24`). The
   last one's doc comment
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:19-23`)
-  spells out that the parameter is looked up as a route value first and a model-bound query/body
+  spells out that the parameter is looked up as a route value first and a model-bound query or body
   argument second, which is exactly the two-step lookup the filter performs.
 - **Why it's built this way**: `get; set;` (not `init`) is the shape the ASP.NET Core options binder
   expects, so the values can arrive from `appsettings` or a `Configure` callback; defaults on every
-  property preserve backward compatibility.
+  property mean adding the options type broke no existing host.
 - **Where it's used**: injected as `IOptions<OwnerOrAdminFilterOptions>` into
-  [`OwnerOrAdminFilter`](#owneroradminfilter). MMCA.ADC's Engagement module is the first host to
-  configure it rather than take the defaults, pointing the shared filter at a `user_id` claim, the
-  `Organizer` bypass role, and a `userId` query argument
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:44`).
+  [`OwnerOrAdminFilter`](#owneroradminfilter)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:33`). MMCA.ADC's
+  Engagement module is the host that configures it rather than taking the defaults, pointing the shared
+  filter at `ClaimTypes.NameIdentifier`, the `Organizer` bypass role, and a `userId` parameter
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:45,53-55`); the
+  comment above those assignments explains why `NameIdentifier` and not the raw `sub` claim is the type
+  the principal actually carries by the time the filter runs
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:47-52`).
 
 ### PermissionPolicy
 > MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicy.cs:9` · Level 0 · class (static)
@@ -750,12 +913,14 @@ live in later groups; this chapter is the engine those endpoints call into.
   into the ASP.NET Core policy name `"perm:sessions:manage"`, and back.
 - **Depends on**: nothing first-party.
 - **Concept introduced, permission policies as prefixed policy names.** `[Rubric §11, Security]`
-  (permission-based authorization, capabilities rather than roles) and `[Rubric §2, Design Patterns]`
-  (a tiny naming convention that lets an on-demand provider recognize its own policies). Rather than
-  pre-register one named policy per permission, the codebase encodes the permission *inside* the
-  policy name behind a reserved prefix; [`PermissionPolicyProvider`](#permissionpolicyprovider) then
-  materializes any policy whose name starts with that prefix on demand. This class owns the two ends of
-  that encoding.
+  (assesses whether authorization is expressed as capabilities rather than hard-coded role checks) and
+  `[Rubric §2, Design Patterns]` (assesses deliberate use of a known pattern; here a reserved-prefix
+  naming convention is what lets an on-demand provider recognize its own policies). Rather than
+  pre-register one named policy per permission, the codebase encodes the permission *inside* the policy
+  name behind a reserved prefix; [`PermissionPolicyProvider`](#permissionpolicyprovider) then
+  materializes any policy whose name starts with that prefix on demand
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicy.cs:3-8`). This class
+  owns both ends of that encoding.
 - **Walkthrough**: `Prefix` = `"perm:"`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicy.cs:12`), the reserved
   marker; and `NameFor(string permission)`
@@ -765,7 +930,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   string, and [`PermissionPolicyProvider`](#permissionpolicyprovider) strips `Prefix` back off to
   recover the permission.
 - **Why it's built this way**: a single shared prefix constant means the attribute that *writes* the
-  policy name and the provider that *reads* it cannot disagree, they reference the same
+  policy name and the provider that *reads* it cannot disagree; both reference
   `PermissionPolicy.Prefix`.
 - **Where it's used**: by [`HasPermissionAttribute`](#haspermissionattribute) (encode) and
   [`PermissionPolicyProvider`](#permissionpolicyprovider) (decode).
@@ -777,55 +942,60 @@ live in later groups; this chapter is the engine those endpoints call into.
   principal must hold for a given policy to succeed.
 - **Depends on**: `Microsoft.AspNetCore.Authorization.IAuthorizationRequirement` (framework).
 - **Concept introduced, the requirement/handler pair.** `[Rubric §11, Security]` and `[Rubric §2,
-  Design Patterns]` (the ASP.NET Core authorization model splits *what is required* from *how it is
-  checked*). A requirement is a passive data object; a matching `AuthorizationHandler<T>` decides
-  whether it is satisfied. This type is the passive half; [`PermissionAuthorizationHandler`](#permissionauthorizationhandler)
-  is the active half.
+  Design Patterns]` (assesses whether the ASP.NET Core authorization model is used as designed: it
+  splits *what is required* from *how it is checked*). A requirement is a passive data object; a
+  matching `AuthorizationHandler<T>` decides whether it is satisfied. This type is the passive half;
+  [`PermissionAuthorizationHandler`](#permissionauthorizationhandler) is the active half, as the doc
+  comment states
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionRequirement.cs:5-9`).
 - **Walkthrough**: a `sealed` class implementing `IAuthorizationRequirement`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionRequirement.cs:10`). Its
   constructor
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionRequirement.cs:14`) guards
-  with `ArgumentException.ThrowIfNullOrWhiteSpace(permission)` and stores it into the read-only
-  `Permission` property
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionRequirement.cs:14-18`) guards
+  with `ArgumentException.ThrowIfNullOrWhiteSpace(permission)`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionRequirement.cs:16`) and
+  stores the value into the get-only `Permission` property
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionRequirement.cs:21`), so a
   requirement can never carry an empty permission.
 - **Why it's built this way**: keeping `Permission` immutable and non-empty means the handler can trust
   it without re-validating; the requirement is a value carrier with no behavior of its own.
 - **Where it's used**: attached to a policy by [`PermissionPolicyProvider`](#permissionpolicyprovider)
-  and evaluated by [`PermissionAuthorizationHandler`](#permissionauthorizationhandler).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:43`) and
+  evaluated by [`PermissionAuthorizationHandler`](#permissionauthorizationhandler).
 
 ### HasPermissionAttribute
 > MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:13` · Level 1 · class (sealed attribute)
 
 - **What it is**: an `[Authorize]`-derived attribute that requires the authenticated principal to hold
-  a named permission, applied to a controller or action.
+  a named permission, applied to a controller or an action.
 - **Depends on**: [`PermissionPolicy`](#permissionpolicy) (to build the policy name);
   `Microsoft.AspNetCore.Authorization.AuthorizeAttribute` (framework base).
 - **Concept introduced, capability-based endpoint authorization.** `[Rubric §11, Security]` (assesses
   whether endpoints depend on *capabilities* rather than hard-coded role names) and `[Rubric §7,
-  Microservices Readiness]` (permissions travel as claims, so an extracted service authorizes without
-  knowing the issuer's role taxonomy). The doc comment
+  Microservices Readiness]` (assesses whether a module can be lifted out on its own; permissions travel
+  as claims or through a per-module registry, so an extracted service authorizes without embedding the
+  issuer's role taxonomy). The doc comment
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:5-11`)
   states the intent directly: prefer `[HasPermission("sessions:manage")]` over role-based
-  `[Authorize(Policy = ...)]` so an endpoint declares the *capability* it needs, and the mapping from
-  roles to that capability lives in one registry ([`IPermissionRegistry`](#ipermissionregistry)).
+  `[Authorize(Policy = ...)]` so an endpoint declares the *capability* it needs, with the mapping from
+  roles to that capability living in one registry ([`IPermissionRegistry`](#ipermissionregistry)).
 - **Walkthrough**: `sealed class HasPermissionAttribute : AuthorizeAttribute`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:13`) with
   `[AttributeUsage(... AllowMultiple = true, Inherited = true)]`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:12`) so
   several permission requirements can stack on one target and subclasses inherit them. The constructor
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:17-18`)
-  chains to the base with `PermissionPolicy.NameFor(permission)`, so setting the base `Policy` to
+  chains to the base with `PermissionPolicy.NameFor(permission)`: setting the inherited `Policy` to
   `"perm:<permission>"` is what routes the check through
-  [`PermissionPolicyProvider`](#permissionpolicyprovider); it also stores the bare `permission` on the
-  read-only `Permission` property
+  [`PermissionPolicyProvider`](#permissionpolicyprovider). It also stores the bare `permission` on the
+  get-only `Permission` property
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:21`).
 - **Why it's built this way**: deriving from `AuthorizeAttribute` (rather than inventing a filter)
-  means the standard MVC authorization pipeline picks it up for free; the permission is encoded into
-  the inherited `Policy` string so no per-permission policy registration is needed.
-- **Where it's used**: on controllers/actions across the apps; its policy name is resolved by
+  means the standard MVC authorization pipeline picks it up for free, and encoding the permission into
+  the inherited `Policy` string is what removes the per-permission registration step.
+- **Where it's used**: on controllers and actions across both apps; its policy name is resolved by
   [`PermissionPolicyProvider`](#permissionpolicyprovider) and satisfied by
-  [`PermissionAuthorizationHandler`](#permissionauthorizationhandler), against the grants each module
+  [`PermissionAuthorizationHandler`](#permissionauthorizationhandler) against the grants each module
   declares through [`AuthorizationExtensions.AddPermissions`](#authorizationextensions).
 
 ### PermissionAuthorizationHandler
@@ -835,14 +1005,16 @@ live in later groups; this chapter is the engine those endpoints call into.
   principal satisfies a [`PermissionRequirement`](#permissionrequirement), either because it carries
   the permission as an explicit claim or because one of its roles grants it.
 - **Depends on**: [`PermissionRequirement`](#permissionrequirement),
-  [`IPermissionRegistry`](#ipermissionregistry) (injected role-to-permission map, taken as a primary
+  [`IPermissionRegistry`](#ipermissionregistry) (the role-to-permission map, taken as a primary
   constructor parameter at
   `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:13`),
-  [`AuthClaimTypes`](#authclaimtypes) (the permission claim type); `System.Security.Claims`.
+  [`AuthClaimTypes`](#authclaimtypes) (the permission claim type,
+  `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:15`); `System.Security.Claims`.
 - **Concept introduced, resolving a permission through claim-or-role.** `[Rubric §11, Security]`
-  (two independent grant paths: a direct permission claim, and role-derived permissions) and
-  `[Rubric §7, Microservices Readiness]` (the handler reads roles out of the token regardless of how
-  the JWT middleware mapped the role claim type, so it survives inbound-claim-mapping being on or off).
+  (assesses correctness of the grant decision; there are two independent grant paths, a direct
+  permission claim and a role-derived one) and `[Rubric §7, Microservices Readiness]` (assesses whether
+  a service stands alone; the handler reads roles out of the token regardless of how the JWT middleware
+  mapped the role claim type, so it survives inbound-claim mapping being on or off).
 - **Walkthrough**: `HandleRequirementAsync`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:17`)
   null-guards both arguments
@@ -858,20 +1030,22 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:42-48`)
   gathers role values across three possible claim types: the standard `ClaimTypes.Role` URI plus the
   raw `"role"` and `"roles"` claims, so roles are found whether or not the JWT bearer middleware mapped
-  them. The inline comment at
+  them. The comment at
   `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:38-41`
-  states the rationale and flags the deliberate duplication: this is the same rule
+  states the rationale and flags the deliberate duplication: this is the same predicate
   [`ICurrentUserService.Roles`](#icurrentuserservice) applies
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:49-55`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:45,49-55`),
   restated here because the handler runs on the raw principal and has no `ICurrentUserService` to read
   from.
 - **Why it's built this way**: never calling `context.Fail()` (only `context.Succeed`) is the
-  ASP.NET Core convention that lets multiple handlers vote independently, this handler abstains rather
+  ASP.NET Core convention that lets multiple handlers vote independently: this handler abstains rather
   than vetoes when it cannot grant. Reading three role claim types defensively decouples the check from
   the host's token-mapping configuration.
 - **Where it's used**: registered as an `IAuthorizationHandler` singleton by
-  [`AuthorizationExtensions.AddAuthorizationPolicies`](#authorizationextensions); invoked by the
-  authorization middleware for every policy that carries a [`PermissionRequirement`](#permissionrequirement).
+  [`AuthorizationExtensions.AddAuthorizationPolicies`](#authorizationextensions)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:31-32`);
+  invoked by the authorization middleware for every policy that carries a
+  [`PermissionRequirement`](#permissionrequirement).
 
 ### PermissionPolicyProvider
 > MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:13` · Level 1 · class (sealed)
@@ -884,34 +1058,41 @@ live in later groups; this chapter is the engine those endpoints call into.
   [`PermissionRequirement`](#permissionrequirement); `Microsoft.AspNetCore.Authorization`,
   `Microsoft.Extensions.Options`.
 - **Concept introduced, on-demand policy materialization.** `[Rubric §11, Security]` and `[Rubric §16,
-  Maintainability]` (a system with an open-ended set of permissions cannot pre-register a named policy
-  for each, so the policy is built from its own name at resolution time). The doc comment
+  Maintainability]` (assesses whether the design scales without repetitive registration; a system with
+  an open-ended set of permissions cannot pre-register a named policy for each, so the policy is built
+  from its own name at resolution time). The doc comment
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:6-12`)
   explains the design: `"perm:*"` names are materialized here, and every other name falls through to
-  the default provider so the named role policies in [`AuthorizationPolicies`](#authorizationpolicies)
-  keep working unchanged.
+  the default provider, so a policy the application registers itself is still resolved the usual way.
 - **Walkthrough**: the constructor
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:19-20`) wraps
-  a `DefaultAuthorizationPolicyProvider` built from the ambient `AuthorizationOptions`, kept as the
-  fallback. `GetDefaultPolicyAsync` and `GetFallbackPolicyAsync`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:19-20`)
+  wraps a `DefaultAuthorizationPolicyProvider` built from the ambient `AuthorizationOptions` and keeps
+  it in `_fallbackPolicyProvider`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:15`).
+  `GetDefaultPolicyAsync` and `GetFallbackPolicyAsync`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:23-28`)
   delegate straight to that fallback. `GetPolicyAsync`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:31`) is
-  the interesting one: it rejects a null/blank name outright
+  the interesting one: it rejects a null or blank name outright
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:33`), and
   if the name does not start with `PermissionPolicy.Prefix` it defers to the fallback
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:35-38`);
-  otherwise it slices the prefix off with a range expression
+  otherwise it slices the prefix off with the range expression
   `policyName[PermissionPolicy.Prefix.Length..]`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:40`) and
   builds a policy that requires an authenticated user plus a fresh `PermissionRequirement(permission)`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:41-44`).
+  Note the `RequireAuthenticatedUser()` at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:42`: it
+  makes anonymous requests fail with a challenge before the handler ever runs, which is why the handler
+  can treat "not authenticated" as a plain abstain.
 - **Why it's built this way**: composing over `DefaultAuthorizationPolicyProvider` rather than
-  replacing it means all pre-registered policies survive; only the `perm:` namespace is intercepted.
-  This is what lets [`HasPermissionAttribute`](#haspermissionattribute) work for any permission string
-  without a registration step.
-- **Where it's used**: registered (via `Replace`) as the single `IAuthorizationPolicyProvider` by
-  [`AuthorizationExtensions.AddAuthorizationPolicies`](#authorizationextensions).
+  reimplementing it means all pre-registered policies survive; only the `perm:` namespace is
+  intercepted. That is what lets [`HasPermissionAttribute`](#haspermissionattribute) work for any
+  permission string without a registration step.
+- **Where it's used**: installed (via `Replace`) as the single `IAuthorizationPolicyProvider` by
+  [`AuthorizationExtensions.AddAuthorizationPolicies`](#authorizationextensions)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:33-34`).
 - **Caveats / not-in-source**: a policy object is built on every `GetPolicyAsync` call for a `perm:`
   name; no cache is present in this type, and whether ASP.NET Core caches the result upstream is not
   determinable from this source file.
@@ -919,101 +1100,120 @@ live in later groups; this chapter is the engine those endpoints call into.
 ### AuthorizationExtensions
 > MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:12` · Level 3 · class (static, extension block)
 
-- **What it is**: the DI wiring that registers the whole authorization model in one call: the four
-  named role/authentication policies plus the permission-based mechanism (handler, on-demand provider,
-  and the accumulating permission registry).
-- **Depends on**: [`AuthorizationPolicies`](#authorizationpolicies) (the policy names),
-  [`PermissionAuthorizationHandler`](#permissionauthorizationhandler),
-  [`PermissionPolicyProvider`](#permissionpolicyprovider), [`IPermissionRegistry`](#ipermissionregistry) /
-  [`PermissionRegistryBuilder`](#permissionregistrybuilder), [`RoleNames`](#rolenames);
-  `Microsoft.Extensions.DependencyInjection`.
-- **Concept, `extension(T)` DI members and lazy registry accumulation.** `[Rubric §10, Cross-Cutting
-  Concerns]` (authorization set up once for every host) and `[Rubric §7, Microservices Readiness]`
-  (each module contributes only the permissions it owns, so an extracted module carries its own grants).
-  The `extension(IServiceCollection services)` block
+- **What it is**: the DI wiring for the whole authorization model, in two calls: one that turns on
+  ASP.NET Core authorization and installs the permission mechanism (handler, on-demand provider,
+  registry), and one each module uses to declare its role-to-permission grants.
+- **Depends on**: [`PermissionAuthorizationHandler`](#permissionauthorizationhandler),
+  [`PermissionPolicyProvider`](#permissionpolicyprovider), [`IPermissionRegistry`](#ipermissionregistry)
+  and [`PermissionRegistryBuilder`](#permissionregistrybuilder);
+  `Microsoft.Extensions.DependencyInjection` plus its `Extensions` namespace for `TryAddEnumerable`.
+- **Concept introduced, `extension(T)` DI members and lazy registry accumulation.** `[Rubric §10,
+  Cross-Cutting Concerns]` (assesses whether a concern is configured once for every host rather than
+  re-wired per application) and `[Rubric §7, Microservices Readiness]` (assesses per-module
+  self-sufficiency: each module contributes only the permissions it owns, so an extracted module
+  carries its own grants). The `extension(IServiceCollection services)` block
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:14`) is the
-  C# `extension(T)` DI idiom taught in the [primer](00-primer.md#c-extensiont-types--read-this-once):
-  it adds `AddAuthorizationPolicies` and `AddPermissions` directly onto `IServiceCollection`.
+  C# `extension(T)` DI idiom taught in the [primer](00-primer.md#c-extensiont-types-read-this-once):
+  it adds `AddAuthorizationPolicies` and `AddPermissions` directly onto `IServiceCollection`. The
+  doc comment states the model plainly
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:16-21`):
+  permissions are *the* authorization model here, an endpoint states the capability it needs and the
+  registry maps roles to capabilities, so no policy name has to be pre-registered per role.
 - **Walkthrough**
   - `AddAuthorizationPolicies()`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:22`):
-    registers the four named policies through `AddAuthorizationBuilder()`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:24-32`),
-    mapping each [`AuthorizationPolicies`](#authorizationpolicies) constant to a
-    `RequireRole(RoleNames.X)` (or `RequireAuthenticatedUser()` for `RequireAuthenticated`). It then
-    wires the permission mechanism: `TryAddEnumerable` for the
-    [`PermissionAuthorizationHandler`](#permissionauthorizationhandler) as a singleton
-    `IAuthorizationHandler`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:38-39`),
-    and `Replace` to install [`PermissionPolicyProvider`](#permissionpolicyprovider) as the transient
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:23`):
+    calls `services.AddAuthorization()`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:25`) to
+    bring in the framework's authorization services, then wires the permission mechanism:
+    `TryAddEnumerable` adds [`PermissionAuthorizationHandler`](#permissionauthorizationhandler) as a
+    singleton `IAuthorizationHandler`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:31-32`),
+    `Replace` installs [`PermissionPolicyProvider`](#permissionpolicyprovider) as the transient
     `IAuthorizationPolicyProvider`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:40-41`),
-    then ensures the registry exists
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:42`). The
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:33-34`),
+    and `EnsurePermissionRegistry(services)` guarantees a registry exists
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:35`). The
     inline comment
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:34-37`)
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:27-30`)
     records why the mechanism ships here: every host that wires authentication gets it for free, and
     consumers only have to declare their grants.
   - `AddPermissions(Action<PermissionRegistryBuilder> configure)`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:54`): the
-    per-module entry point for declaring role-to-permission grants. It guards the callback, fetches the
-    shared builder via `EnsurePermissionRegistry`, and invokes `configure(builder)` so the module's
-    grants accumulate
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:56-61`).
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:47`): the
+    per-module entry point for declaring grants. It guards the callback
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:49`),
+    fetches the shared builder via `EnsurePermissionRegistry`, and invokes `configure(builder)` so the
+    module's grants accumulate
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:51-52`).
     The doc comment
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:47-53`)
-    notes it is safe to call once per module: grants union into a single registry (the union happens in
-    [`PermissionRegistryBuilder.Grant`](#permissionregistrybuilder),
-    `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistryBuilder.cs:32-39`).
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:40-46`)
+    notes it is safe to call once per module because grants union into a single registry; the union
+    itself happens in [`PermissionRegistryBuilder.Grant`](#permissionregistrybuilder)
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistryBuilder.cs:32-39`).
   - `EnsurePermissionRegistry(IServiceCollection)`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:68`): the
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:61`): the
     idempotent core. If a [`PermissionRegistryBuilder`](#permissionregistrybuilder) is already
     registered as a singleton instance it returns that existing one
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:70-74`);
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:63-67`);
     otherwise it creates one, registers it, and registers [`IPermissionRegistry`](#ipermissionregistry)
-    as a singleton whose factory calls `builder.Build()` lazily
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:76-80`).
+    as a singleton whose factory calls `builder.Build()`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:69-71`).
     Because the registry is built on first *resolve*, every module's `AddPermissions` call has already
-    contributed by the time any request evaluates a permission.
+    contributed by the time any request evaluates a permission, which is the point the comment at
+    `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:58-60`
+    makes.
 - **Why it's built this way**: `TryAddEnumerable` lets the permission handler coexist with any other
-  authorization handlers; `Replace` guarantees exactly one policy provider (the permission-aware one);
-  and the lazy `builder.Build()` factory is what makes module registration order irrelevant, all grants
-  are collected before the first `Build()`.
+  authorization handlers a host registers; `Replace` guarantees exactly one policy provider (the
+  permission-aware one); and the lazy `builder.Build()` factory is what makes module registration order
+  irrelevant, since all grants are collected before the first `Build()`.
 - **Where it's used**: `AddAuthorizationPolicies()` is called at the end of both framework
-  authentication-wiring helpers, `AddForwardedJwtBearer`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:187`,
-  the call at `WebApplicationBuilderExtensions.cs:241`) and `AddCommonAuthentication`
-  (`WebApplicationBuilderExtensions.cs:257`, the call at `WebApplicationBuilderExtensions.cs:291`), so a
-  host that wires authentication through either gets the authorization model without an explicit call. `AddPermissions(...)` is called by each module that owns permissions: in
-  MMCA.ADC by Conference
+  authentication-wiring helpers, so a host that wires authentication through either gets the
+  authorization model without an explicit call: `AddForwardedJwtBearerCore`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:470`,
+  the call at `WebApplicationBuilderExtensions.cs:521`) and `AddCommonAuthentication`
+  (`WebApplicationBuilderExtensions.cs:538`, the call at `WebApplicationBuilderExtensions.cs:572`).
+  `AddPermissions(...)` is called by each module that owns permissions: in MMCA.ADC by Conference
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41`), Engagement
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:51`), and Identity
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:44`).
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:58`), Identity
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:44`) and Notification
+  (`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:38`), and in
+  MMCA.Store by Catalog
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/DependencyInjection.cs:41`), Sales
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/DependencyInjection.cs:40`) and Identity
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/DependencyInjection.cs:42`).
+- **Caveats / not-in-source**: a host that never calls either method has no `IPermissionRegistry`
+  registered at all. That case is covered elsewhere in this group by
+  [`UnconfiguredPermissionRegistry`](#unconfiguredpermissionregistry), whose diagnostic message names
+  these two methods as the fix
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/UnconfiguredPermissionRegistry.cs:59`).
 
 ### OwnershipHelper
-> MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10` · Level 8 · class (static)
+> MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10` · Level 9 · class (static)
 
 - **What it is**: static helpers a controller calls to scope a query to the current user's own data,
   returning a specification that filters by owner id, or `null` when the caller holds the privileged
   bypass role and should see everything.
-- **Depends on**: [`ICurrentUserService`](#icurrentuserservice) (Application,
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:1`, the
-  current-user/claims boundary described later in this group). The specification it hands back is
-  typically a [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype),
+- **Depends on**: [`ICurrentUserService`](#icurrentuserservice) (Application layer, imported at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:1`). The
+  specification it hands back is typically a
+  [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype),
   though the helper itself never says so (see caveats).
-- **Concept introduced, ownership scoping at the query level (as distinct from the filter's gate).**
-  `[Rubric §11, Security]` (row-level data isolation, a non-admin caller can only read their own rows)
-  and `[Rubric §1, SOLID]` (the helper produces a specification; the repository applies it). Where
-  [`OwnerOrAdminFilter`](#owneroradminfilter) *blocks* a request that names someone else's id, this
-  helper *narrows the result set* so a list endpoint returns only the caller's rows without them
-  passing any id at all. [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) calls these the two enforcement points of one ownership axis:
-  reject-one versus filter-many.
+- **Concept introduced, ownership scoping at the query level, as distinct from the filter's gate.**
+  `[Rubric §11, Security]` (assesses row-level data isolation: a non-admin caller can only read their
+  own rows) and `[Rubric §1, SOLID]` (assesses separation of responsibility: the helper *produces* a
+  specification, the repository *applies* it). Where [`OwnerOrAdminFilter`](#owneroradminfilter)
+  *blocks* a request that names someone else's id, this helper *narrows the result set* so a list
+  endpoint returns only the caller's rows without them passing any id at all.
+  [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) calls these
+  the two enforcement points of one ownership axis: reject-one for single-resource routes, filter-many
+  for collection routes.
 - **Walkthrough**
   - `IsAdmin(ICurrentUserService, string bypassRole = "Admin")`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:17`):
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:17`): a
     case-insensitive compare of the current user's `Role` against the bypass role
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:20`); this is the
-    same predicate [`OwnerOrAdminFilter`](#owneroradminfilter) reuses so the two stay consistent.
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:20`). The default
+    argument is `"Admin"`, and hosts with a different vocabulary pass their own (MMCA.ADC passes
+    `Organizer`); [`OwnerOrAdminFilter`](#owneroradminfilter) reuses this same method so the gate and
+    the scoping agree on who bypasses.
   - `GetOwnershipSpecification<TSpec, TId>(...)`
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:34`): the general
     form. It returns `null` for a bypass-role caller
@@ -1029,25 +1229,32 @@ live in later groups; this chapter is the engine those endpoints call into.
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:63`): the
     convenience overload that fixes `TId` to `int` and the claim to `"customer_id"`
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:67`), matching the
-    legacy default vocabulary.
-- **Why it's built this way**: returning `null` for admins (rather than a "match everything"
-  specification) lets the caller skip the filter entirely on the privileged path; producing a
-  specification (not running the query) keeps the helper in the API layer while the actual filtering
-  runs in the query pipeline.
-- **Where it's used**: called from controller query actions that must isolate a caller's data (in
-  MMCA.Store, the shopping-cart and order list endpoints per [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)); its `IsAdmin` overload is also
-  the bypass check inside [`OwnerOrAdminFilter`](#owneroradminfilter)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:42`).
+    default vocabulary.
+- **Why it's built this way**: returning `null` for bypass-role callers (rather than a "match
+  everything" specification) lets the caller skip filtering entirely on the privileged path; producing a
+  specification rather than running the query keeps the helper in the API layer while the actual
+  filtering runs in the query pipeline.
+- **Where it's used**: called from MMCA.Store controller query actions that must isolate a caller's
+  data. `ShoppingCartsController` exposes both an `IsAdmin` property and a private
+  `GetOwnershipSpecification()` over it
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/ShoppingCartsController.cs:64,66-68`),
+  and `OrdersController` does the same
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrdersController.cs:62,65`). Its
+  `IsAdmin` method is also the bypass check inside [`OwnerOrAdminFilter`](#owneroradminfilter)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:43`).
 - **Caveats / not-in-source**: two gaps are worth knowing. `TSpec` is an open generic with only a
   `class` constraint
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:39`), so the helper
   does not itself require the returned type to be a specification: that contract is the caller's. And a
   non-admin caller whose claim is missing or unparseable also gets `null`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:51`), which means
-  no scoping, so callers must not read `null` as "admin" ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) lists this among its trade-offs).
+  no scoping, so callers must not read `null` as "admin". Store closes that in the controller with a
+  `RequireResolvableOwner()` gate that forbids the second case explicitly
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/ShoppingCartsController.cs:80-90`);
+  the helper itself does not distinguish them.
 
 ### OwnerOrAdminFilter
-> MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:30` · Level 9 · class (sealed action filter)
+> MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:31` · Level 10 · class (sealed action filter)
 
 - **What it is**: an MVC async action filter that lets a request proceed only if the caller holds the
   bypass role or owns the resource named by the request, returning 403 Forbidden otherwise.
@@ -1055,77 +1262,94 @@ live in later groups; this chapter is the engine those endpoints call into.
   [`OwnerOrAdminFilterOptions`](#owneroradminfilteroptions) (the vocabulary),
   [`AllowMissingOwnerAttribute`](#allowmissingownerattribute) (the opt-out it honors),
   [`ICurrentUserService`](#icurrentuserservice) (claims); `Microsoft.AspNetCore.Mvc.Filters`,
-  `Microsoft.Extensions.Options`.
+  `Microsoft.Extensions.Options`, `System.Globalization`.
 - **Concept introduced, per-request ownership enforcement as a filter, and deny-by-default.**
-  `[Rubric §11, Security]` (a resource-level access gate that runs before the action body, and one that
-  fails closed) and `[Rubric §10, Cross-Cutting Concerns]` (the ownership rule is expressed once as a
-  filter and attached to any controller that mixes admin and owner access, rather than re-coded in each
-  action). This is the *gate* counterpart to [`OwnershipHelper`](#ownershiphelper)'s *query scoping*:
-  the helper narrows a list; this filter blocks an attempt to read or mutate a specific id the caller
-  does not own ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html), cited at
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:14`). The
-  deny-by-default half is the newer and more important lesson, and the class doc comment spells it out
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:16-22`): a gate
+  `[Rubric §11, Security]` (assesses whether a resource-level access gate runs before the action body
+  and whether it fails closed) and `[Rubric §10, Cross-Cutting Concerns]` (assesses whether the rule is
+  expressed once and attached, rather than re-coded in each action). This is the *gate* counterpart to
+  [`OwnershipHelper`](#ownershiphelper)'s *query scoping*: the helper narrows a list, this filter blocks
+  an attempt to read or mutate a specific id the caller does not own
+  ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html), cited at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:15`). The
+  deny-by-default half is the more important lesson, and the class doc comment spells it out
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:16-23`): a gate
   that treats "nothing to compare" as "nothing to enforce" silently stops guarding every action whose
   parameter is optional, non-integer, or carried inside a bound model.
 - **Walkthrough**: `OnActionExecutionAsync`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:35`) null-guards
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:36`) null-guards
   its arguments and reads the current `settings = options.Value`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:37-40`), then
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:38-41`), then
   walks four decisions in order:
   1. **Bypass role**: if `OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)` it calls
      `next()` and returns
-     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:42-46`).
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:43-47`).
   2. **Missing owner claim**: it reads the caller's owner id with
      `currentUserService.GetClaimValue<int>(settings.OwnerClaimType)`
-     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:48`) and
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:49`) and
      short-circuits to `ForbidResult` when the claim is absent
-     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:50-54`).
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:51-55`).
   3. **Unresolvable owner parameter**: if `TryGetOwnerParameter` cannot produce an int, the request is
      denied unless the endpoint carries
      [`AllowMissingOwnerAttribute`](#allowmissingownerattribute), in which case it falls through to
      `next()`
-     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:56-70`). Note
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:57-71`). Note
      the ordering: the opt-out excuses only a *missing* parameter, and it is checked after the claim
      check, so an `[AllowMissingOwner]` action still requires a valid owner claim.
   4. **Mismatch**: a resolved parameter that does not equal the claim value yields `ForbidResult`
-     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:72-76`); only
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:73-77`); only
      an exact match reaches `await next()`
-     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:78`).
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:79`).
 
   Two private helpers back that flow. `HasAllowMissingOwner`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:83-84`) reads
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:84-85`) reads
   `context.ActionDescriptor.EndpointMetadata.OfType<AllowMissingOwnerAttribute>()`, which is how one
   lookup covers the attribute whether it sits on the action or on its declaring controller: MVC has
-  already composed both into the metadata (comment at `OwnerOrAdminFilter.cs:81-82`).
+  already composed both into the metadata (comment at `OwnerOrAdminFilter.cs:82-83`).
   `TryGetOwnerParameter`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:88-106`) resolves
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:93-111`) resolves
   the id from the route values first
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:90-94`) and,
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:95-100`) and,
   failing that, from the model-bound action arguments
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:97-101`), parsing
-  each with `int.TryParse` and reporting failure by returning `false`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:104-105`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:102-107`),
+  reporting failure by setting `value = 0` and returning `false`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:109-110`). Both
+  parses pass `NumberStyles.Integer` and `CultureInfo.InvariantCulture` explicitly
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:97,104`); the
+  comment above the method states the convention
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:90-92`): an
+  owner id off the wire is not a number the request's ambient culture formatted, so the host's
+  `CurrentCulture` must not decide which strings are ids.
 - **Why it's built this way**: denying on an unresolvable parameter, with an explicit attribute as the
   only escape, converts a silent failure mode into a visible one: the action either compares an owner id
-  or documents the guard that replaces the comparison ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)'s deny-by-default decision and the audit
-  table that came with it). Reading the vocabulary from injected options keeps a single filter reusable
-  across hosts, and checking the route before the bound arguments means a conventional `/{id}` route
-  costs one dictionary lookup.
+  or documents the guard that replaces the comparison
+  ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)'s
+  deny-by-default decision and the audit table that came with it). Reading the vocabulary from injected
+  options keeps a single filter reusable across hosts, and checking the route before the bound arguments
+  means a conventional `/{id}` route costs one dictionary lookup.
 - **Where it's used**: registered scoped by `AddAPI`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:68`, alongside
-  `IdempotencyFilter`, because it depends on scoped services) and applied per controller as
-  `[ServiceFilter(typeof(OwnerOrAdminFilter))]`, per the remarks at
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:24-29`. Applying
-  it at controller level covers every action on that controller, so adoption is an audit of the whole
-  controller: MMCA.Store guards `ShoppingCartsController` and `CustomersController` this way, and the
-  actions with no owner parameter carry [`AllowMissingOwnerAttribute`](#allowmissingownerattribute).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:78`, next to
+  `IdempotencyFilter` at `DependencyInjection.cs:77`, because both depend on scoped services) and
+  applied as `[ServiceFilter(typeof(OwnerOrAdminFilter))]`, per the remarks at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:25-30`. MMCA.Store
+  applies it at controller level on `ShoppingCartsController`
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/ShoppingCartsController.cs:49`) and
+  `CustomersController`
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/CustomersController.cs:34`),
+  which covers every action on those controllers, so adoption there was an audit of the whole controller
+  and the actions with no owner parameter carry
+  [`AllowMissingOwnerAttribute`](#allowmissingownerattribute). MMCA.ADC instead applies it per action, on
+  two `BookmarksController` endpoints
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/BookmarksController.cs:84,105`),
+  against the Engagement vocabulary configured at
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:45-56`.
 - **Caveats / not-in-source**: the owner id is parsed as `int` only
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:92,99`), and the
-  claim is read as `GetClaimValue<int>` (`OwnerOrAdminFilter.cs:48`); a host whose owner id is a `Guid`
-  or a string cannot use this filter as-is. It also assumes the owner parameter *is* the owning id, which
-  holds for a cart or a customer profile but not for a resource with its own id and a foreign-key owner
-  ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) lists orders as that case, handled with a specification or an explicit per-id check instead).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:97,104`), and the
+  claim is read as `GetClaimValue<int>` (`OwnerOrAdminFilter.cs:49`), so a host whose owner id is a
+  `Guid` or a string cannot use this filter as-is. It also assumes the owner parameter *is* the owning
+  id, which holds for a cart or a customer profile but not for a resource with its own id and a
+  foreign-key owner
+  ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) lists orders
+  as that case, handled with a specification or an explicit per-id check instead).
 
 ### SessionCookieRequest
 > MMCA.Common.API · `MMCA.Common.API.SessionCookies` · `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:72` · Level 0 · record
@@ -1555,18 +1779,6 @@ live in later groups; this chapter is the engine those endpoints call into.
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:112`, chained onto the host's
   `AddAuthentication(SessionCookieAuthenticationHandler.SchemeName)` call on the preceding line.
 
-### IAuthUser
-> MMCA.Common.Domain · `MMCA.Common.Domain.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:10` · Level 0 · interface
-
-- **What it is**: the deliberately minimal credential and refresh-token surface an Identity module's `User` aggregate exposes to the shared [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) workflow. It is the contract that lets the framework's authentication plumbing read password material and rotate refresh tokens without knowing anything app-specific about the user (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:3-9`).
-- **Depends on**: nothing first-party; the BCL only (`byte[]`, `DateTime`). Implemented by each app's `User` aggregate (see [User](group-24-identity-module.md#user)).
-- **Concept introduced: the inverted user contract.** Rather than the shared auth workflow depending on a concrete `User` class, `User` implements a small interface the framework owns. Profile fields, roles, linked aggregates, and claim sources stay app-specific: the shared workflow reaches those only through per-app hooks (`CreateAccessToken`, `CreateUser`), never through this contract (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:5-8`). `[Rubric §1, SOLID]` assesses interface segregation and dependency inversion, and this is a textbook case: the interface is exactly the credential surface and nothing more. `[Rubric §11, Security]` assesses credential and session handling, and here the password hash, its salt, and the refresh-token lifecycle are the entire contract, which makes the security-relevant surface of a `User` aggregate readable in one screen.
-- **Walkthrough**: read the six members in two groups.
-  - Password material: `byte[] PasswordHash` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:14`) and `byte[] PasswordSalt` (`:17`), where the salt length is what selects the verify algorithm (see [PasswordHasher](#passwordhasher)). The scoped `#pragma warning disable CA1819` (`:12`, restored on `:18`) knowingly returns arrays, to mirror [IPasswordHasher](#ipasswordhasher)'s `byte[]` shape and the EF-mapped `varbinary` columns rather than force a defensive copy on every read.
-  - Refresh-token state: nullable `string? RefreshToken` (`:21`) and `DateTime? RefreshTokenExpiry` (`:24`), both null when the token was never issued or has been revoked. Two mutators carry the rotation and revocation rules: `UpdateRefreshToken(string refreshToken, DateTime expiry)` (`:27`, BR-205) and `RevokeRefreshToken()` (`:30`, BR-206/216). Note that the state is read-only through properties and changed only through the two methods: the aggregate keeps control of the transition.
-- **Why it's built this way**: keeping the contract in Domain and keeping it small is what makes the shared auth workflow reusable across Store and ADC (both `User` aggregates implement it) while each aggregate stays free to model everything else its own way. See [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) for the dual-fetch auth model this contract feeds and [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) for the password-material policy.
-- **Where it's used**: it is half the generic constraint on the shared login and refresh workflow, `where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IAuthUser` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:41`), which calls `UpdateRefreshToken` on issue and rotation (`:168`, `:298`) and `RevokeRefreshToken` on reuse detection and revocation (`:261`, `:282`). It is also the base of [IPasswordChangeableUser](#ipasswordchangeableuser).
-
 ### IPasswordHasher
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IPasswordHasher.cs:6` · Level 0 · interface
 
@@ -1575,7 +1787,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Concept introduced: hash and salt kept apart.** `[Rubric §11, Security]` assesses credential handling. Returning the hash and the salt as two distinct `byte[]` members (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IPasswordHasher.cs:11`) rather than one concatenated blob keeps the storage contract explicit: the caller persists two columns, and `VerifyPassword` (`:18`) is unambiguous about what it re-derives and compares. Because the algorithm and its parameters live entirely behind this interface, they can be strengthened without touching a single Application handler ([ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) sets the current hashing policy, applied inside [PasswordHasher](#passwordhasher)).
 - **Walkthrough**: `(byte[] Hash, byte[] Salt) HashPassword(string password)` (`:11`) returns a named value tuple the caller stores as two fields. `bool VerifyPassword(string password, byte[] hash, byte[] salt)` (`:18`) re-derives from the supplied salt and compares. The interface declares no iteration count, algorithm identifier, or format version: every one of those is the concrete's business.
 - **Why it's built this way**: a two-method port is the `[Rubric §1, SOLID]` dependency-inversion story in miniature. Swapping the key-derivation function or raising the iteration count is an Infrastructure change, invisible to the register, login, and change-password use cases that only ever see this contract.
-- **Where it's used**: constructor-injected into [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:37`), which calls `VerifyPassword` on the login path (`:112`) and `HashPassword` on registration (`:159`); into the shared [ChangePasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#changepasswordhandlerbasetuser-tcommand), which verifies the current password (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:55`) before hashing the new one (`:61`); and into the per-app Identity services and handlers that derive from those, for example ADC's [AuthenticationService](group-24-identity-module.md#authenticationservice) (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:38`) and its `ChangePasswordHandler` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:19`).
+- **Where it's used**: constructor-injected into [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:53`), which calls `VerifyPassword` on the login path (`:159`) and `HashPassword` on registration (`:210`); into the shared [ChangePasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#changepasswordhandlerbasetuser-tcommand), which verifies the current password (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:55`) before hashing the new one (`:61`); into [ResetPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand), which hashes the replacement after the token redeems (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:79`); and into the per-app Identity services, handlers and seeders that derive from those, for example ADC's [AuthenticationService](group-24-identity-module.md#authenticationservice) (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:47`), its `ChangePasswordHandler` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:19`) and its module seeder (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:33`, which needs the hasher because seed data carries plaintext credentials).
 
 ### ISoftDeletedUserValidator
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ISoftDeletedUserValidator.cs:7` · Level 0 · interface
@@ -1584,27 +1796,83 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Depends on**: BCL plus the solution-wide `UserIdentifierType` alias (`:15`). See [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to) for the alias convention and [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) for soft-delete versus erasure. The generic implementation is [SoftDeletedUserValidator<TUser>](group-14-module-system-composition.md#softdeleteduservalidatortuser).
 - **Concept introduced: closing the stateless-token window.** `[Rubric §11, Security]` assesses whether revocation is timely. A JWT is stateless: once signed it stays valid until `exp`, even if the account behind it was deleted a minute later. This port lets middleware re-ask the question on every authenticated request and fail the request when the answer is yes, with no per-handler code. The comment at `:5` states the second motive: the interface is declared in Application and implemented against the app's own `User` aggregate precisely so the middleware never takes a cross-module domain reference. That is the same dependency inversion as the other ports in this group, applied to a cross-module read.
 - **Walkthrough**: one member, `Task<bool> IsUserSoftDeletedAsync(UserIdentifierType userId, CancellationToken cancellationToken = default)` (`:15`). One question, one answer, cancellable.
-- **Where it's used**: [SoftDeletedUserMiddleware](group-12-api-hosting-mapping.md#softdeletedusermiddleware) resolves it lazily from the request scope (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:75` calls `context.RequestServices.GetService<ISoftDeletedUserValidator>()`, so a host that registers no implementation simply skips the check; the reason is stated at `:43-44`). Both apps register the shared generic against their own user type: `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:35` and `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:41`, both as `TryAddScoped<ISoftDeletedUserValidator, SoftDeletedUserValidator<User>>()`.
+- **Where it's used**: [SoftDeletedUserMiddleware](group-12-api-hosting-mapping.md#softdeletedusermiddleware) resolves it lazily from the request scope (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:75` calls `context.RequestServices.GetService<ISoftDeletedUserValidator>()`, so a host that registers no implementation simply skips the check; the reason is stated at `:43`) and queries it on a cache miss (`:113-115`). Both apps register the shared generic against their own user type: `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:35` and `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:43`, both as `TryAddScoped<ISoftDeletedUserValidator, SoftDeletedUserValidator<User>>()`.
+
+### IssuedSession
+> MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:758` · Level 0 · record (private sealed, nested)
+
+- **What it is**: the two-field result of opening or rotating a refresh session: the plaintext refresh token the client is handed, and the id of the session row it belongs to. It is a `private sealed record` nested inside [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:758`), not part of the framework's public surface.
+- **Depends on**: nothing beyond the BCL (`string`, `Guid`). It is produced and consumed entirely inside its declaring class.
+- **Concept introduced: the plaintext token exists in exactly one place, and it is a return value.** `[Rubric §11, Security]` assesses how a bearer credential is stored. [RefreshSession](#refreshsession) rows keep only a digest (`RefreshSession.HashToken`, used at `:349` and `:593` to *look up* by hash), so once a session is persisted the raw token cannot be recovered from the store at all. The type comment says exactly this (`:753-757`): the plaintext "exists nowhere else". Modelling the hand-off as a small record rather than an out-parameter or a tuple is what keeps that fact readable: every method that can produce a token returns `Result<IssuedSession>`, so the compiler shows you the complete list of places raw token material is in flight. `[Rubric §15, Best Practices & Code Quality]` also applies: a positional record gives value equality and immutability for free, and `Guid SessionId` names what would otherwise be an anonymous second tuple element.
+- **Walkthrough**: one positional declaration, `IssuedSession(string RefreshToken, Guid SessionId)` (`:758`). `RefreshToken` is what goes back to the caller in the [AuthenticationResponse](#authenticationresponse); `SessionId` is what the access token's `sid` claim carries, which is why the session must be created before the token is minted (`:481-483`).
+- **Why it's built this way**: the pairing is load-bearing rather than incidental. A caller that received only the token could not stamp `sid`, and a caller that received only the id could not answer the client. Returning both together removes the ordering mistake where a token is minted for a session that does not exist yet.
+- **Where it's used**: returned by `OpenSessionAsync` (`:620`, constructed at `:645`) and `RotateAsync` (`:659`, constructed at `:698`); unwrapped by `IssueTokensAsync` (`:492-493`) and by `RefreshTokenAsync` (`:327-328`), each of which reads `SessionId` to mint the access token and `RefreshToken` to fill the response.
 
 ### ITokenService
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ITokenService.cs:8` · Level 0 · interface
 
 - **What it is**: the token-minting port called by the login and refresh use cases. It builds a signed JWT access token from explicit identity facts, generates an opaque refresh token, publishes the two token lifetimes, and recovers the `ClaimsPrincipal` from an expired-but-validly-signed access token.
-- **Depends on**: `System.Security.Claims` (BCL, `:1`) and the `UserIdentifierType` alias. Its Infrastructure adapter is [TokenService](#tokenservice), which signs with the RSA key surfaced by [IJwksProvider](#ijwksprovider).
+- **Depends on**: `System.Security.Claims` (BCL, `:1`) and the `UserIdentifierType` alias. Its Infrastructure adapter is [TokenService](#tokenservice), which signs with the RSA key surfaced by [IJwksProvider](#ijwksprovider); [SessionStampingTokenService](#sessionstampingtokenservice) is a second, internal implementation that decorates the first.
 - **Concept introduced: token creation as an Infrastructure detail.** `[Rubric §3, Clean Architecture]` assesses whether library-specific types stay out of the inner layers: the handlers call this contract and never see `System.IdentityModel.Tokens.Jwt`. `GetPrincipalFromExpiredToken` (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ITokenService.cs:48`) is the linchpin of the refresh flow: it validates the signature while deliberately ignoring lifetime, so an expired access token can still identify the user whose tokens are being rotated, returning `null` when the token is invalid (`:47`).
-- **Walkthrough**: `GenerateAccessToken(UserIdentifierType userId, string email, string role, string fullName, IEnumerable<Claim>? additionalClaims = null)` (`:17-22`) takes the minimum claim set as typed parameters rather than a ready-made principal, with an escape hatch for module-specific claims. `GenerateRefreshToken()` (`:26`) returns a cryptographically random base64 string. Two **default interface members** publish the lifetimes: `AccessTokenLifetime` (`:33`, defaulting to 15 minutes) and `RefreshTokenLifetime` (`:40`, defaulting to 7 days), both documented as the BR-205 baseline. The comments at `:28-32` and `:35-39` explain the split: the real implementation derives both from the bound JWT settings, so the expiry reported to a client matches the token's actual `exp`, while the defaults keep hand-written test doubles on the baseline instead of forcing every double to implement two more members. `GetPrincipalFromExpiredToken(string token)` (`:48`) closes the set.
-- **Why it's built this way**: the explicit-parameter overload is a `[Rubric §11, Security]` guardrail. The token's contents are a deliberate list, not whatever claims happened to ride in on an inbound principal. Surfacing the lifetimes through the same port removes the duplication where a caller would hard-code an expiry that could drift from the signed `exp`. Note the consumer still guards: [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) falls back to the same 15-minute and 7-day baselines when an implementation reports a non-positive lifetime (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:61-70`).
-- **Where it's used**: the shared login, register, and refresh paths (`AuthenticationServiceBase.cs:168` and `:214` stamp the refresh-token and access-token expiries from those lifetimes, `:230` reads the expired principal, and `:297`/`:305` do the same on the rotation path) and, through them, each app's Identity authentication service, for example `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:100` (access token with the `speaker_id` claim) and `:225` (refresh token). The rotated pair produced here is what [CookieSessionRefresher](#cookiesessionrefresher) later exchanges on the browser's behalf.
+- **Walkthrough**: `GenerateAccessToken(UserIdentifierType userId, string email, string role, string fullName, IEnumerable<Claim>? additionalClaims = null)` (`:17-22`) takes the minimum claim set as typed parameters rather than a ready-made principal, with an escape hatch for module-specific claims. `GenerateRefreshToken()` (`:26`) returns a cryptographically random base64 string. Two **default interface members** publish the lifetimes: `AccessTokenLifetime` (`:33`, defaulting to 15 minutes) and `RefreshTokenLifetime` (`:40`, defaulting to 7 days), both documented as the BR-205 baseline. The comments at `:28-32` and `:35-39` explain the split: the real implementation derives both from the bound JWT settings, so the expiry reported to a client matches the token's actual `exp`, while the defaults keep hand-written test doubles on the baseline instead of forcing every double to implement two more members. That derivation is visible in the concrete: `TimeSpan.FromMinutes(_jwtSettings.AccessTokenExpirationMinutes)` and `TimeSpan.FromDays(_jwtSettings.RefreshTokenExpirationDays)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:126` and `:129`). `GetPrincipalFromExpiredToken(string token)` (`:48`) closes the set.
+- **Why it's built this way**: the explicit-parameter overload is a `[Rubric §11, Security]` guardrail. The token's contents are a deliberate list, not whatever claims happened to ride in on an inbound principal. Surfacing the lifetimes through the same port removes the duplication where a caller would hard-code an expiry that could drift from the signed `exp`. Note the consumer still guards: [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) falls back to the same 15-minute and 7-day baselines when an implementation reports a non-positive lifetime (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:99-108`).
+- **Where it's used**: injected into [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (`AuthenticationServiceBase.cs:52`), which reads the expired principal on refresh (`:278`), mints refresh tokens when opening and rotating sessions (`:627`, `:667`), and re-exposes a *wrapped* instance to subclasses through its `TokenService` property (`:82`). Each app's Identity service mints from that property, for example `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:117-118` (access token plus the `speaker_id` claim). The rotated pair produced here is what [CookieSessionRefresher](#cookiesessionrefresher) later exchanges on the browser's behalf.
 
 ### PasswordResetSettings
 > MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/PasswordResetSettings.cs:10` · Level 0 · class (sealed)
 
 - **What it is**: the bound options object for the forgot-password workflow: where the reset page lives, how long a token stays redeemable, how many wrong guesses a token tolerates, and how often one address may ask for a reset (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/PasswordResetSettings.cs:6-9`).
 - **Depends on**: `System.ComponentModel.DataAnnotations` for the range attributes and `System.Diagnostics.CodeAnalysis` for one scoped suppression (BCL, `:1-2`). Nothing first-party. Read by the implementation behind [IPasswordResetTokenService](#ipasswordresettokenservice) and by the shared [ForgotPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand).
-- **Concept: validated options whose defaults keep an unconfigured host bootable.** `[Rubric §10, Cross-Cutting Concerns]` assesses whether policy knobs are configuration rather than constants buried in a handler, and `[Rubric §11, Security]` assesses whether the security-relevant knobs (token lifetime, attempt cap, request throttle) are bounded rather than free-form. Every numeric member carries a `[Range]` attribute, and the host binds the section with `ValidateDataAnnotations().ValidateOnStart()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:139-142`), so a typo such as `TokenLifetimeMinutes: 0` fails the host at startup instead of silently issuing tokens that are already expired.
+- **Concept: validated options whose defaults keep an unconfigured host bootable.** `[Rubric §10, Cross-Cutting Concerns]` assesses whether policy knobs are configuration rather than constants buried in a handler, and `[Rubric §11, Security]` assesses whether the security-relevant knobs (token lifetime, attempt cap, request throttle) are bounded rather than free-form. Every numeric member carries a `[Range]` attribute, and the host binds the section with `ValidateDataAnnotations().ValidateOnStart()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:137-140`), so a typo such as `TokenLifetimeMinutes: 0` fails the host at startup instead of silently issuing tokens that are already expired.
 - **Walkthrough**: `const string SectionName = "PasswordReset"` (`:13`) names the configuration section the host binds. `ResetUrl` (`:25`) defaults to `string.Empty` and is **deliberately not** `[Required]`: the doc comment (`:15-20`) records that a host which has not configured a UI base must still boot, and an empty value degrades to a token-only email the user pastes into the reset page by hand. That degradation is visible in the caller, which emits the bare token when the URL is blank and otherwise appends `?email=...&token=...` (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:145-147`). The property carries a scoped `CA1056` suppression (`:21-24`) explaining why it is a `string` and not a `System.Uri`: it is bound from `PasswordReset__ResetUrl`, concatenated with a query string, and the empty default is not a valid `Uri`. The four numeric knobs follow: `TokenLifetimeMinutes` (`:29`, `[Range(1, 1440)]`, default 30), `MaxValidationAttempts` (`:36`, `[Range(1, 100)]`, default 5), `MaxRequestsPerEmail` (`:40`, `[Range(1, 100)]`, default 3), and `RequestWindowMinutes` (`:44`, `[Range(1, 1440)]`, default 60). All five members are `init`-only, so the bound instance is immutable afterwards.
 - **Why it's built this way**: the defaults are a working policy on their own, so adopting the feature costs a registration call and no configuration at all, while the `[Range]` bounds plus `ValidateOnStart` make the one genuinely dangerous class of misconfiguration (a zero or negative lifetime, an unbounded attempt cap) unreachable. The decision to keep the whole reset credential in configuration and cache rather than in schema is [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html).
-- **Where it's used**: bound in the framework's Infrastructure registration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:139-142`); consumed by [PasswordResetTokenService](#passwordresettokenservice) as a snapshot field (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:32`) for the request window, the throttle ceiling, the token lifetime, and the attempt cap; and exposed to the shared forgot-password handler as a protected `Settings` property (`ForgotPasswordHandlerBase.cs:48`) that states the expiry in the email body (`:125`) and renders the link (`:145-147`).
+- **Where it's used**: bound in the framework's Infrastructure registration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:137-140`, immediately before the token service that reads it is registered at `:141`); consumed by [PasswordResetTokenService](#passwordresettokenservice) as a snapshot field (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:32`) for the request window, the throttle ceiling, the token lifetime, and the attempt cap; and exposed to the shared forgot-password handler as a protected `Settings` property (`ForgotPasswordHandlerBase.cs:48`) that states the expiry in the email body (`:125`) and renders the link (`:145-147`).
+
+### RefreshSessionSettings
+> MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:9` · Level 0 · class (sealed)
+
+- **What it is**: the bound options object for multi-device refresh sessions: whether this host owns the `RefreshSessions` table, which database carries it, how many live sessions one user may hold, and how long dead session rows are retained before a sweep deletes them (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:5-8`). A host that omits the section gets the defaults.
+- **Depends on**: `System.ComponentModel.DataAnnotations` (BCL, `:1`). Nothing first-party. Read by [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser), by [EFRefreshSessionStore](group-07-persistence-ef-core.md#efrefreshsessionstore), by [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext), and by [RefreshSessionCleanupService](group-07-persistence-ef-core.md#refreshsessioncleanupservice).
+- **Concept introduced: a flag that places a table rather than switching a feature.** `[Rubric §8, Data Architecture]` assesses whether each table has exactly one owning database, and `[Rubric §7, Microservices Readiness]` assesses whether that ownership survives splitting a modular host into services. The doc comment on `Enabled` states the distinction precisely (`:20-23`): the flag "gates the model, not the workflow". The workflow always issues, rotates and revokes sessions; `Enabled` decides which host maps the table, runs its migrations, and sweeps it. In a modular host the service that owns identity sets it to `true` and every other service leaves it `false`, which is what keeps one table in one database instead of one per service. The `Scheduler:Enabled` precedent is named in the same comment as the pattern being followed.
+- **Walkthrough**: six members, all `init`-only.
+  - `const string SectionName = "RefreshSessions"` (`:12`) names the configuration section.
+  - `Enabled` (`:25`) defaults to `false`. Two places read it: the model gate in [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext), which enables the table only when the flag is set **and** the context instance's physical source name equals `DataSourceName` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:295-298`), and the hosted-service registration, which starts the retention sweep only when the flag is set (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:154-158`, whose comment explains that registering it unconditionally would start a sweep in every service of a modular host, all but one of which has no table to sweep).
+  - `MaxActiveSessionsPerUser` (`:35`, `[Range(1, 1000)]`, default 10) caps live sessions per user. The comment (`:28-33`) records the deliberate behavior at the ceiling: signing in on device number cap + 1 **revokes the oldest live session rather than refusing the login**, so the table is bounded without a legitimate sign-in ever failing.
+  - `DataSourceName` (`:52`, `[MinLength(1)]`, default `"Default"`) names the logical data source whose database holds the table. The comment (`:37-49`) is worth reading in full: the value answers two questions that must agree, which context *maps* the table and which context the shipped [IRefreshSessionStore](#irefreshsessionstore) reads and writes through, and naming a source that does not exist fails loudly on the first session query rather than reading the wrong database. It is ignored for routing when the consumer ships its own entity configuration for the session entity.
+  - `RetentionDays` (`:72`, `[Range(0, 3650)]`, default 30) is measured from the instant a session died (its revocation, or its expiry when never revoked), so a live session is never a sweep candidate. The comment (`:59-66`) states the constraint that makes the number security-relevant: retention **bounds reuse detection**, because BR-206 catches a replayed refresh token by landing on its revoked row, and a swept row turns that replay into an unknown token that fails alone instead of revoking the family. Thirty days sits well past the seven-day refresh-token lifetime for exactly that reason. `0` keeps every row forever (`:67-69`).
+  - `CleanupIntervalHours` (`:80`, `[Range(1, 168)]`, default 6) is how often the sweep runs, ignored when `RetentionDays` is `0`, and matches the outbox sweep cadence because the deadline is measured in days (`:74-77`).
+- **Why it's built this way**: the same `AddOptions(...).Bind(...).ValidateDataAnnotations().ValidateOnStart()` treatment as every other settings class in the framework (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:145-148`) means an out-of-range cap or a negative retention window fails the host at startup, not at the first login. Defaulting `Enabled` to `false` is the safe direction for a multi-service host: a service that never opts in never grows a table it does not own.
+- **Where it's used**: bound at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:145-148`; injected as `IOptions<RefreshSessionSettings>` into [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:58`, read for the cap at `:115`), into [EFRefreshSessionStore](group-07-persistence-ef-core.md#efrefreshsessionstore) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:34`), and into [RefreshSessionCleanupService](group-07-persistence-ef-core.md#refreshsessioncleanupservice) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:51`, snapshotted at `:54`). The design-time context helper supplies an instance so `dotnet ef` can build a model that includes the table (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:149-150`). Each app's Identity service takes it as a required constructor dependency and passes it through, for example `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:53`.
+
+### SessionStampingTokenService
+> MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:770` · Level 1 · class (private sealed, nested)
+
+- **What it is**: a pass-through [ITokenService](#itokenservice) that appends the current refresh session's `sid` claim to every access token minted while it is armed, and behaves as the plain inner service the rest of the time. It is a `private sealed class` nested inside [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:770`).
+- **Depends on**: [ITokenService](#itokenservice) (the contract it implements and the inner instance it wraps, `:770`), [AuthClaimTypes](#authclaimtypes) for the `sid` claim name (`:797`), and the BCL (`System.Security.Claims`, `System.Globalization.CultureInfo`).
+- **Concept introduced: a decorator used to make a new claim additive.** `[Rubric §2, Design Patterns]` assesses idiomatic pattern use, and this is the Decorator pattern applied to a very specific compatibility problem. Access tokens now need to name the session they belong to, but the claim set is produced by the app's own `CreateAccessToken` hook. The obvious fix, adding a session-id parameter to that hook, is a compile break in every consumer for a claim the app has no decision to make about, and the remarks say so (`:765-769`, and again at `:520-525`). Wrapping the token service instead means the base arms the wrapper around the hook call and the claim appears in tokens minted by subclasses that were never edited. `[Rubric §16, Maintainability & Evolvability]` is the payoff: an additive protocol change with a zero-line consumer diff.
+- **Walkthrough**: a primary constructor takes the `inner` service (`:770`).
+  - `Guid? CurrentSessionId { get; set; }` (`:773`) is the arming switch: a session id stamps, `null` mints unchanged. The remarks on the caller explain why a plain mutable field is safe here (`:526-530`): the authentication service is resolved per request (scoped, like the unit of work it saves through) and one request issues one token at a time.
+  - `AccessTokenLifetime` (`:776`) and `RefreshTokenLifetime` (`:779`) forward straight to `inner`, so the lifetime the base reports is still the JWT settings' value.
+  - `GenerateAccessToken(...)` (`:782-800`) is the only member with behavior. When not armed it delegates verbatim (`:789-792`). When armed it copies the app's `additionalClaims` into a new `List<Claim>` (`:796`, so the caller's sequence is never mutated), appends `AuthClaimTypes.SessionId` formatted as `sessionId.ToString("D", CultureInfo.InvariantCulture)` (`:797`), and delegates with the extended list (`:799`). The `"D"` format is not incidental: the comment (`:794-795`) records that it is the canonical hyphenated Guid form and the one `ClaimsPrincipalExtensions.FindSessionId` parses back ([ClaimsPrincipalExtensions](#claimsprincipalextensions)).
+  - `GenerateRefreshToken()` (`:803`) and `GetPrincipalFromExpiredToken(string token)` (`:806-807`) are plain forwards.
+- **Why it's built this way**: putting the stamping behind an `ITokenService` rather than inside the base's own method keeps the app hook's signature and semantics untouched while still guaranteeing the claim on the tokens the framework's own flows mint. The escape hatch is documented (`:528-530`): an app that mints from its own injected `ITokenService` reference produces a valid token with no `sid`, and can restore the claim by overriding `CreateAccessTokenForSession`.
+- **Where it's used**: constructed once per authentication service instance (`:67`), surfaced to subclasses as the protected `TokenService` property (`:82`, whose remarks state that minting through the property is what puts `sid` on the token), and armed and disarmed around the hook call in `CreateAccessTokenForSession` (`:535-546`, with the `finally` at `:542-545` guaranteeing disarm even when the hook throws).
+
+### UnconfiguredPermissionRegistry
+> MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/UnconfiguredPermissionRegistry.cs:20` · Level 1 · class (internal sealed partial)
+
+- **What it is**: the fallback [IPermissionRegistry](#ipermissionregistry) for a host that wired the CQRS pipeline without declaring any role-to-permission grants. It grants nothing, so a permission-gated command or query is **denied** rather than allowed, and it logs one warning naming the call that would fix it (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/UnconfiguredPermissionRegistry.cs:6-11`).
+- **Depends on**: [IPermissionRegistry](#ipermissionregistry) (`:21`), [IRequiresPermission](group-05-cqrs-pipeline.md#irequirespermission) by reference in the doc comment (`:9`), and `Microsoft.Extensions.Logging` for the source-generated log message (`:1`).
+- **Concept introduced: failing closed, and only where it costs nothing.** `[Rubric §11, Security]` assesses the direction a misconfiguration fails in: a registry that answered "no permission model, therefore allow" would silently open every gated request, so this one denies. `[Rubric §13, Observability & Operability]` assesses whether an operator can tell why: the log message spells out the remedy verbatim (`:57-60`, naming `AddAuthorizationPolicies()` / `AddPermissions(...)` and the required ordering before `AddApplicationDecorators()`). The second half of the doc comment (`:12-17`) is the more interesting teaching point and is an availability story rather than a security one: the two authorization decorators are registered **unconditionally** and take an `IPermissionRegistry` constructor dependency, so without any registration the whole pipeline fails to activate and a small app with no Identity module answers 500 on **every** read, not only the gated ones. This type turns a total activation failure into a correct, noisy denial on the subset of requests that actually declare a permission.
+- **Walkthrough**: two fields and three methods, no configuration.
+  - `private static readonly HashSet<string> None = []` (`:23`) is the single empty grant set every call returns, and `private int _warned` (`:25`) is the one-time-warning latch.
+  - `GetPermissions(string role)` (`:28-32`) warns then returns `None`.
+  - `HasPermission(IEnumerable<string> roles, string permission)` (`:35-42`) argument-guards both parameters (`:37-38`) before warning and returning `false`, so a caller bug still surfaces as an `ArgumentException` rather than being swallowed by the stub.
+  - `WarnOnce()` (`:49-55`) uses `Interlocked.Exchange(ref _warned, 1) == 0` (`:51`) so concurrent requests produce exactly one log line. The comment (`:44-48`) explains why the warning is deferred to the first check instead of emitted at startup: a host with no permission-gated request is **correctly** configured and simply never needs a registry, so warning at boot would cry wolf.
+  - `LogNoPermissionsConfigured` (`:57-60`) is a `[LoggerMessage]` source-generated `Warning`, which is why the class is `partial`.
+- **Why it's built this way**: it is registered with `TryAddSingleton` from inside `AddApplicationDecorators()` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:124`), and the surrounding comment (`:119-123`) states both halves of the rule: `TryAdd` so a host that already declared its grants (via `AddAuthorizationPolicies()` or `AddPermissions(...)`, both of which run before this call) keeps its own registry and never constructs this type, and *here* rather than in `AddApplication()` so the registration lands exactly where the decorators that need it are wired.
+- **Where it's used**: nowhere by name outside that one registration. It is reached only through the [IPermissionRegistry](#ipermissionregistry) dependency of the authorization command and query decorators in the CQRS pipeline (see [group 05](group-05-cqrs-pipeline.md)).
+- **Caveats / not-in-source**: `internal`, so it is not part of the framework's public API and cannot be referenced or asserted against from a consumer's code.
 
 ### ILoginProtectionService
 > MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ILoginProtectionService.cs:10` · Level 3 · interface
@@ -1618,17 +1886,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 
   All five take a `CancellationToken` with a `default` argument, per convention.
 - **Why it's built this way**: keeping the protection policy behind an interface lets the shared authentication workflow compose it in while the concrete cache mechanics stay in the implementation; the null-IP skip keeps the limiter from becoming an availability hazard ([ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)).
-- **Where it's used**: injected into [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (constructor parameter at `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:38`), which calls all five across its login and registration flows (`:84`, `:99`, `:114`, `:128`, `:146`, `:207`). The concrete, cache-backed [LoginProtectionService](#loginprotectionservice) (tuned by [LoginProtectionSettings](#loginprotectionsettings)) implements it, and the framework registers that pairing at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:137`.
-
-### IPasswordChangeableUser
-> MMCA.Common.Domain · `MMCA.Common.Domain.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IPasswordChangeableUser.cs:11` · Level 3 · interface
-
-- **What it is**: the password-rotation surface an Identity module's `User` aggregate exposes to the shared [ChangePasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#changepasswordhandlerbasetuser-tcommand) workflow. It is one method on top of [IAuthUser](#iauthuser) (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IPasswordChangeableUser.cs:5-10`).
-- **Depends on**: [IAuthUser](#iauthuser) (its base interface, `:11`) and [Result](group-01-result-error-handling.md#result) from `MMCA.Common.Shared.Abstractions` (`:1`).
-- **Concept: capability interfaces layered by workflow.** `[Rubric §1, SOLID]` assesses interface segregation, and this is the pattern applied twice over: a `User` that only ever authenticates implements [IAuthUser](#iauthuser); a `User` whose app offers self-service password change implements this one and gets `PasswordHash` and `PasswordSalt` along with it, because the workflow must verify the current credential before writing the new one (the XML comment states exactly this reason, `:8-9`). Inheritance here encodes a real dependency between capabilities rather than a taxonomy. `[Rubric §4, DDD]` also applies: the method returns [Result](group-01-result-error-handling.md#result), so the aggregate can refuse the change (an invariant failure) instead of the handler assuming success.
-- **Walkthrough**: one member, `Result ChangePassword(byte[] newPasswordHash, byte[] newPasswordSalt)` (`:19`). The aggregate receives already-hashed material, never a plaintext password: hashing is the handler's job via [IPasswordHasher](#ipasswordhasher), so no plaintext ever reaches the Domain layer or an EF change tracker.
-- **Why it's built this way**: keeping the hash-and-salt pair as the parameter shape mirrors [IAuthUser](#iauthuser)'s two properties and [IPasswordHasher](#ipasswordhasher)'s tuple return, so the whole chain from handler to aggregate speaks one vocabulary. See [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html).
-- **Where it's used**: as the generic constraint `where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IPasswordChangeableUser` on the shared change-password workflow (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:28`), which verifies the current password (`:55`), hashes the new one (`:61`), and calls `ChangePassword` with the result (`:62`). The forgot-password sibling workflow, [ResetPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand), writes the new material on the redeem path after [IPasswordResetTokenService](#ipasswordresettokenservice) has identified the account.
+- **Where it's used**: injected into [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (constructor parameter at `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:54`), which calls all five across its login and registration flows: `CheckLockoutAsync` (`:131`), `IncrementFailedAttemptsAsync` on both the unknown-email and wrong-password branches (`:146`, `:161`), `ResetFailedAttemptsAsync` on success (`:178`), `CheckRegistrationRateLimitAsync` (`:197`) and `IncrementRegistrationCountAsync` (`:256`). The concrete, cache-backed [LoginProtectionService](#loginprotectionservice) (tuned by [LoginProtectionSettings](#loginprotectionsettings), bound at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:131-134`) implements it, and the framework registers that pairing at `:135`.
 
 ### IPasswordResetTokenService
 > MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IPasswordResetTokenService.cs:10` · Level 3 · interface
@@ -1641,34 +1899,32 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Walkthrough**: two members.
   - `Task<Result<string>> IssueAsync(string email, UserIdentifierType userId, CancellationToken cancellationToken = default)` (`:23`) returns the **raw** token to email, or a failure when the per-email request throttle has been exceeded. The doc comment (`:12-15`) states the replace semantics: issuing overwrites any token already outstanding for that address, so requesting a new link immediately stops the older one from working. The `userId` parameter is what the token resolves back to at redeem time, which is why the redeem call never has to trust an identifier supplied by the caller.
   - `Task<Result<UserIdentifierType>> ValidateAndConsumeAsync(string email, string token, CancellationToken cancellationToken = default)` (`:36`) validates the presented token against the outstanding record and **consumes it on success**, so a token never redeems twice (`:25-28`), returning the account the token belongs to.
-- **Why it's built this way**: taking `email` on both methods, rather than treating the token as self-describing, is what lets the implementation key its records by address and enforce the per-address throttle and the one-active-token rule at the same key. Returning `Result<UserIdentifierType>` rather than a boolean means the redeem handler gets the account identity from the token store itself. See [PasswordResetTokenService](#passwordresettokenservice) for the mechanics the port hides: a 32-byte random token, only its SHA-256 stored, a fixed-time comparison, an attempt counter rewritten with the **remaining** lifetime so a wrong guess cannot extend the window, and removal of both the token record and the request counter on success.
-- **Where it's used**: injected into the shared [ForgotPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand) (constructor parameter at `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:37`, called at `:72`, where a throttled issue is logged and still answered as success) and into [ResetPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand) (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:33`, redeemed at `:62`). Both apps' sealed subclasses take the same dependency, for example ADC's [ForgotPasswordHandler](group-24-identity-module.md#forgotpasswordhandler) (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:22`) and [ResetPasswordHandler](group-24-identity-module.md#resetpasswordhandler) (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordHandler.cs:21`). The framework registers the concrete as scoped at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:143`.
+- **Why it's built this way**: taking `email` on both methods, rather than treating the token as self-describing, is what lets the implementation key its records by address and enforce the per-address throttle and the one-active-token rule at the same key. Returning `Result<UserIdentifierType>` rather than a boolean means the redeem handler gets the account identity from the token store itself. See [PasswordResetTokenService](#passwordresettokenservice) for the mechanics the port hides: a 32-byte random token (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:30`), only its digest stored, an attempt counter, and an address normalized through [Email](group-02-domain-building-blocks.md#email) before it becomes a cache key (`:34-45`) so `User@x.com` and `user@x.com` cannot hold independent tokens for one account.
+- **Where it's used**: injected into the shared [ForgotPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand) (constructor parameter at `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:37`, called at `:72`, where a throttled issue is logged and still answered as success) and into [ResetPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand) (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:33`, redeemed at `:61-62`). Both apps' sealed subclasses take the same dependency, for example ADC's [ForgotPasswordHandler](group-24-identity-module.md#forgotpasswordhandler) and [ResetPasswordHandler](group-24-identity-module.md#resetpasswordhandler). The framework registers the concrete as scoped at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:141`.
 
-### IUserPreferences
-> MMCA.Common.Domain · `MMCA.Common.Domain.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IUserPreferences.cs:10` · Level 3 · interface
+### IRefreshSessionStore
+> MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IRefreshSessionStore.cs:21` · Level 4 · interface
 
-- **What it is**: the stored UI-preference surface an Identity module's `User` aggregate exposes to the shared preference read and write workflows: preferred culture, preferred theme, and a single method that replaces both (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IUserPreferences.cs:5-9`).
-- **Depends on**: [Result](group-01-result-error-handling.md#result) from `MMCA.Common.Shared.Abstractions` (`:1`). Nothing else; it is deliberately not tied to [IAuthUser](#iauthuser), because preferences are orthogonal to credentials.
-- **Concept: null as "not chosen".** `[Rubric §27, i18n]` assesses whether locale is a first-class, persisted user choice rather than a per-session guess, and `[Rubric §19, State Management]` assesses where such UI state lives. Both properties are nullable, and the contract states that `null` means the user has not chosen that preference (`:7-8`), which is what lets the UI fall back to a browser or host default without needing a separate "is set" flag. See [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) for the culture model and [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html) for the theme model.
-- **Walkthrough**: `string? PreferredCulture` (for example `"es"`, `:13`) and `string? PreferredTheme` (`"light"` or `"dark"`, `:16`) are read-only. `Result UpdatePreferences(string? preferredCulture, string? preferredTheme)` (`:25`) replaces **both** at once. The subtlety is documented at `:18-21`: because the method is a whole-object replace, the shared workflow always passes the currently stored value for any field the request left `null`, so writing one preference never silently clears the other. That read-then-merge is visible in the caller (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePreferences/ChangePreferencesHandlerBase.cs:53`).
-- **Why it's built this way**: one replace method keeps the aggregate's invariant check in a single place, and pushing the merge into the workflow keeps the null-means-unchanged policy out of every app's `User`. Returning [Result](group-01-result-error-handling.md#result) lets the aggregate reject an unsupported culture or theme value.
-- **Where it's used**: the read workflow constrains `where TUser : AuditableBaseEntity<UserIdentifierType>, IUserPreferences` and projects both properties into a response (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/GetPreferences/GetUserPreferencesHandlerBase.cs:23`, `:44`); the write workflow constrains `where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IUserPreferences` (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePreferences/ChangePreferencesHandlerBase.cs:26`). Both are cross-linked as [GetUserPreferencesHandlerBase<TUser>](group-14-module-system-composition.md#getuserpreferenceshandlerbasetuser) and [ChangePreferencesHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#changepreferenceshandlerbasetuser-tcommand).
+- **What it is**: persistence for [RefreshSession](#refreshsession) rows, the multi-device replacement for the single plaintext refresh-token column a user aggregate used to carry (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IRefreshSessionStore.cs:5-7`). Sessions are added, looked up by token hash or by id, listed per user, rotated, and saved.
+- **Depends on**: [RefreshSession](#refreshsession) from `MMCA.Common.Domain.Auth` (`:1`) and the `UserIdentifierType` alias. The shipped implementation is [EFRefreshSessionStore](group-07-persistence-ef-core.md#efrefreshsessionstore); the test doubles are [InMemoryRefreshSessionStore](group-27-testing-infrastructure.md#inmemoryrefreshsessionstore) and [FakeRefreshSessionStore](group-27-testing-infrastructure.md#fakerefreshsessionstore).
+- **Concept introduced: a repository whose contract is deliberately missing an `Update`.** `[Rubric §1, SOLID]` assesses interface segregation, and `[Rubric §8, Data Architecture]` assesses whether the persistence contract expresses the aggregate's rules. The doc comment (`:8-15`) explains the shape: sessions are mutated only through `RefreshSession.Revoke` on instances **this store returned**, so an implementation that tracks its entities persists a revocation with no update method at all. The requirement that makes that safe is stated as a contract obligation, not left implicit: implementations must return **tracked** instances, because a no-tracking read would accept revocations and rotations and drop them silently at save time (`:16-19`). This is the same trap called out for composed EF queries elsewhere in the framework, promoted here to interface documentation.
 
-### IErasableUser
-> MMCA.Common.Domain · `MMCA.Common.Domain.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30` · Level 4 · interface
-
-- **What it is**: the erasure surface an Identity module's `User` aggregate exposes to the shared [DeleteUserHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#deleteuserhandlerbasetuser-tcommand) workflow: soft-delete the row, then irreversibly anonymize the personal data it still holds (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:6-10`).
-- **Depends on**: [IAnonymizable](group-02-domain-building-blocks.md#ianonymizable) (its base, contributing `Result Anonymize()`, `:1` and `:30`) and [Result](group-01-result-error-handling.md#result) (`:2`).
-- **Concept introduced: why a `Delete()` that already exists on the base entity is redeclared here.** This is the most instructive comment in the file and it is worth reading in full (`:11-29`). [AuditableBaseEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) already has a `Delete()`. But an app's `User` may **hide** it (`public new Result Delete()`) to couple account-specific behavior to deletion, typically revoking the refresh token so outstanding sessions die immediately. A hidden method is not an override. C# member lookup on a generic type parameter prefers the members of its **class** constraint, so a shared workflow writing `user.Delete()` would bind to the base implementation and silently skip the app's version. Redeclaring `Delete()` on this interface and invoking it **through the interface** forces interface dispatch, which resolves to the most derived member the app type maps onto `IErasableUser`. `[Rubric §1, SOLID]` (Liskov: the hidden method is exactly the substitutability hazard this closes) and `[Rubric §15, Best Practices & Code Quality]` both apply, and this is a case where the language rule, not a style preference, dictates the design. The second paragraph (`:25-28`) adds the compile-time guarantee: the base entity deliberately does **not** implement this interface, so a consumer that forgets to declare it fails the generic constraint at compile time rather than losing behavior at run time.
-- **Walkthrough**: one declared member, `Result Delete()` (`:37`), documented as soft-delete plus whatever the app couples to deletion (`:32-35`), returning a failure when the account is already deleted (`:36`). Inherited from [IAnonymizable](group-02-domain-building-blocks.md#ianonymizable) is `Result Anonymize()`, which must be idempotent. The two-step order is visible in the caller: cast once to the interface (`IErasableUser erasable = user;`, `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:88`, with the reason spelled out at `:83-87`), `erasable.Delete()` first (`:89`), the app's own tail hook next (`OnAfterSoftDeleteAsync`, `:95`), then `erasable.Anonymize()` (`:103`), each short-circuiting on failure.
-- **Why it's built this way**: soft-delete alone hides a row but retains its personal data, so it does not satisfy an erasure request; anonymize-in-place overwrites the personal fields while keeping the row so foreign keys and the audit trail survive ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)). Splitting the two into separate members lets the workflow run app-specific work between them. `[Rubric §30, Compliance, Privacy & Data Governance]` assesses exactly this: an erasure path that does not destroy referential integrity.
-- **Where it's used**: the generic constraint `where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IErasableUser` on the shared delete-user workflow (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:41`), implemented by each app's [User](group-24-identity-module.md#user) aggregate.
+  The second concept is **lookup by hash, never by token** (`:37`). The store never sees plaintext: callers hash first with `RefreshSession.HashToken` and search on the digest, which is what lets the table hold only digests. `[Rubric §11, Security]` applies directly.
+- **Walkthrough**: six members.
+  - `AddAsync(RefreshSession session, ...)` (`:26`) stages an insert.
+  - `FindByTokenHashAsync(string tokenHash, ...)` (`:37`) finds by digest **including revoked and expired rows**, and the comment (`:28-32`) marks that as load-bearing: a rotated token that comes back is found on its revoked row, which is the BR-206 reuse signal, so a store that filtered revoked rows out would report a replay as "unknown token" and never revoke the family.
+  - `GetUnrevokedByUserAsync(UserIdentifierType userId, ...)` (`:45-47`) returns the user's un-revoked sessions oldest first, expired ones included since they still occupy a row, which is what makes both family revocation and cap eviction deterministic (`:39-41`).
+  - `FindByIdAsync(Guid id, UserIdentifierType userId, ...)` (`:59-62`) takes the owner as part of the **query** rather than as a check the caller performs afterwards. The comment (`:50-53`) gives the reason: a session id is a value a client hands back, so scoping the query to the owner is what makes another account's id indistinguishable from a nonexistent one. That is an authorization decision encoded in a signature.
+  - `SaveChangesAsync(...)` (`:67`) persists staged inserts and revocations.
+  - `TryRotateAsync(RefreshSession presented, RefreshSession successor, DateTime revokedAt, ...)` (`:95-113`) is the one exception to the no-update rule, and it ships a **default interface implementation**. It argument-guards both sessions (`:101-102`), revokes the presented session as `RefreshSession.ReasonRotated` linked to the successor's hash (`:104`), then stages and saves the successor (`:109-110`). The `bool` return is the whole point (`:73-79`): two requests presenting the same still-live token both read an un-revoked row, so a check-then-act rotation would mint two successors from one token and the presented row could never fire reuse detection again. Returning `false` tells the caller it lost the claim, which is indistinguishable from a replay and gets the same answer. The default body is atomic only per instance, which is all an in-memory or test store can offer; the shipped EF store replaces it with a conditional `ExecuteUpdateAsync` the database arbitrates (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:108` and `:126`), as the comment at `:80-84` says.
+- **Why it's built this way**: hashed-at-rest, per-device session rows are what turn refresh-token rotation into something a user can inspect and revoke per device, and what let reuse detection revoke a whole family ([ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html), BR-205/206). Keeping the contract in Application means the workflow that uses it is independent of EF, so an extracted Identity service can bring its own store. Making rotation a *claim* rather than a mutation is the difference between a race that mints two live tokens and a race one side of which is answered as a replay.
+- **Where it's used**: registered as scoped against the EF implementation at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:149`, with the comment (`:143-144`) noting the lifetime is deliberate: scoped, like the unit of work it shares a `DbContext` with, so a login and its session insert commit together. Consumed throughout [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (injected at `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:57`, exposed to subclasses at `:88`) for single-device sign-out (`:348-350`), session listing (`:404`), targeted revocation (`:441`), reuse resolution (`:592-594`), rotation (`:682-684`), family revocation (`:708`) and cap eviction (`:725`).
 
 ### SoftDeletedUserCache
 > MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:17` · Level 4 · class (static)
 
-- **What it is**: the shared cache contract for the **soft-deleted user marker** (BR-133): the key shape, the marker lifetime, and a one-call helper that writes it. The API middleware reads the marker on every authenticated request; the module that soft-deletes a user writes it (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:6-10`).
-- **Depends on**: [ICacheService](group-09-caching.md#icacheservice) (`:2`), the `UserIdentifierType` alias, and `System.Globalization.CultureInfo` (BCL, `:1`).
+- **What it is**: the shared cache contract for the **soft-deleted user marker** (BR-133): the key shape, the marker lifetime, and a one-call helper that writes it. The API middleware reads the marker on every authenticated request; the module that soft-deletes a user writes it (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:6-9`).
+- **Depends on**: [ICacheService](group-09-caching.md#icacheservice) from `MMCA.Common.Application.Interfaces` (`:2`), the `UserIdentifierType` alias, and `System.Globalization.CultureInfo` (BCL, `:1`).
 - **Concept introduced: revoking a stateless credential without a per-request lookup.** `[Rubric §11, Security]` assesses whether a revoked principal actually loses access, and `[Rubric §10, Cross-Cutting Concerns]` assesses whether such a concern is factored so both ends share one definition. A JWT is a bearer credential: signature validation never asks "is this account still active?", so soft-deleting a user leaves an already-issued access token passing validation until it expires ([ADR-047](https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html)). The textbook fixes (a deny-list, or an account-status query on every request) reintroduce exactly the per-request state that stateless JWT was chosen to avoid. This type is the middle path: a short-lived cache marker written at deletion time and read cheaply on the hot path.
 
   The `remarks` (`:11-16`) explain why the constants live in the **Application** layer rather than next to the middleware that reads them: a downstream application deleting an account has to write the exact same key the middleware reads, and a private constant in the presentation layer is unreachable from an application-layer command handler. Same reasoning as [IdempotencyHeaders](#idempotencyheaders), applied one layer up.
@@ -1677,120 +1933,129 @@ live in later groups; this chapter is the engine those endpoints call into.
   - `KeyFor(UserIdentifierType userId)` (`:42-43`) builds `user:deleted:{userId}` through `string.Create(CultureInfo.InvariantCulture, ...)`. The remarks (`:36-41`) name the bug this prevents: an identifier renders differently under some cultures (digit shapes, group separators), so a culture-sensitive key would be written under one request's culture and missed under another, silently letting a deleted user keep making requests. This is a case where the analyzer rule about culture-invariant formatting is guarding a security property, not just a formatting nicety.
   - `MarkDeletedAsync(ICacheService cache, UserIdentifierType userId, CancellationToken cancellationToken = default)` (`:53-61`) null-guards the cache (`:58`) and writes `true` under `KeyFor(userId)` for `MarkerDuration` (`:60`). It returns the task without awaiting, so there is no extra async state machine for a one-call passthrough.
 - **Why it's built this way**: publishing the key shape and the TTL as framework API is what keeps the writer and the reader honest, and it is a precondition for the module boundary in [ADR-047](https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html): Identity owns the delete, every service hosts the middleware, and the only thing they share is a cache entry rather than a database. `[Rubric §7, Microservices Readiness]` applies directly: an extracted service can enforce the revocation without a reference to the Identity database.
-- **Where it's used**: read by [SoftDeletedUserMiddleware](group-12-api-hosting-mapping.md#softdeletedusermiddleware), which builds the key (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:85`), short-circuits with 401 when the marker is `true` (`:104`), and on a miss falls back to the validator query and caches **that** answer, deleted or not, for the same `MarkerDuration` (`:132`). Written by the Identity delete path: ADC's [DeleteUserHandler](group-24-identity-module.md#deleteuserhandler) queues it as an after-commit action (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:68-73`, inside the `OnAfterSoftDeleteAsync` override at `:46`) and swallows a cache fault so a failed marker cannot turn a successful erasure into an error the caller would retry.
-- **Caveats / not-in-source**: the marker is best effort on both ends by design. The middleware fails **open** on a cache outage, falling through to the validator query and proceeding if that is also unavailable, and the writer logs and continues on a cache fault. The exposure that leaves is bounded by the access-token lifetime, which is the trade-off ADR-047 accepts explicitly. ADC's handler is the only writer in the source tree today; MMCA.Store soft-deletes users without writing the marker, so there the middleware's own validator-query fallback is what enforces BR-133.
+- **Where it's used**: read by [SoftDeletedUserMiddleware](group-12-api-hosting-mapping.md#softdeletedusermiddleware), which builds the key (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:85`), short-circuits with 401 when the marker is `true` (`:102-105`), and on a miss falls back to the validator query (`:113-115`) and caches **that** answer, deleted or not, for the same `MarkerDuration` (`:132`). Written by the Identity delete path: ADC's [DeleteUserHandler](group-24-identity-module.md#deleteuserhandler) queues it as an after-commit action (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:72-74`, inside the `OnAfterSoftDeleteAsync` override at `:46`) and swallows a cache fault so a failed marker cannot turn a successful erasure into an error the caller would retry.
+- **Caveats / not-in-source**: the marker is best effort on both ends by design. The middleware fails **open** on a cache outage, falling through to the validator query (`:95-100`) and proceeding if that is also unavailable (`:118-125`), and the writer logs and continues on a cache fault. The exposure that leaves is bounded by the access-token lifetime, which is the trade-off ADR-047 accepts explicitly. ADC's handler is the only writer in the source tree today; MMCA.Store soft-deletes users without writing the marker, so there the middleware's own validator-query fallback is what enforces BR-133.
 
 ### AuthenticationValidators
 > MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationValidators.cs:16` · Level 5 · class (sealed)
 
 - **What it is**: a tiny **parameter object** that bundles the three FluentValidation validators the authentication workflow needs (login, registration, refresh) into one injectable dependency.
 - **Depends on**: FluentValidation's `IValidator<T>` (NuGet, `:1`) over the request DTOs [LoginRequest](#loginrequest), [RegisterRequest](#registerrequest), and [RefreshTokenRequest](#refreshtokenrequest) (all in `MMCA.Common.Shared.Auth`, `:2`).
-- **Concept introduced: the parameter object as a constructor-arity guardrail.** `[Rubric §1, SOLID]` assesses whether a class stays a single, cohesive responsibility rather than sprawling into a god class, and `[Rubric §16, Maintainability & Evolvability]` assesses whether cross-cutting dependencies are grouped so a class can grow without exploding its constructor. The doc comment (`:6-12`) states the exact motive: collapsing three closely-related dependencies into one keeps the app's `AuthenticationService` **below the application-service constructor-arity ceiling** (a god-class analyzer guardrail) without giving up per-request validation. Because the request DTOs already live in `MMCA.Common.Shared.Auth`, the bundle is app-agnostic, which is why it could be hoisted out of the apps into the framework.
+- **Concept introduced: the parameter object as a constructor-arity guardrail.** `[Rubric §1, SOLID]` assesses whether a class stays a single, cohesive responsibility rather than sprawling into a god class, and `[Rubric §16, Maintainability & Evolvability]` assesses whether cross-cutting dependencies are grouped so a class can grow without exploding its constructor. The doc comment (`:6-11`) states the exact motive: collapsing three closely-related dependencies into one keeps the app's `AuthenticationService` **below the application-service constructor-arity ceiling** (a god-class analyzer guardrail) without giving up per-request validation. Because the request DTOs already live in `MMCA.Common.Shared.Auth`, the bundle is app-agnostic, which is why it could be hoisted out of the apps into the framework. The pressure is real rather than theoretical: even with the bundle, ADC's subclass constructor takes nine parameters (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:44-53`).
 - **Walkthrough**: a primary constructor takes the three `IValidator<T>` instances (`:16-19`), and three get-only properties surface them by name: `Login` (`:22`), `Register` (`:25`), and `Refresh` (`:28`), each assigned from its matching constructor parameter. There is no logic here; the type exists purely to shrink the dependency footprint of its consumer.
 - **Why it's built this way**: a `sealed` grouping type with get-only properties is the cheapest way to fold three cohesive dependencies into one constructor slot, so the workflow base can validate each request shape without pushing its constructor over the arity limit; DI resolves the three underlying validators and composes them into this one object. Two of the three ([LoginRequestValidator](#loginrequestvalidator), [RefreshTokenRequestValidator](#refreshtokenrequestvalidator)) come from the framework assembly, while `IValidator<RegisterRequest>` is satisfied by the app's own `RegisterRequestValidator`, so the bundle is the point where framework and app validation meet.
-- **Where it's used**: injected into [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (constructor parameter at `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:40`), whose `LoginAsync`, `RegisterAsync`, and `RefreshTokenAsync` call `validators.Login` (`:77`), `validators.Register` (`:139`), and `validators.Refresh` (`:222`) respectively before doing any work.
+- **Where it's used**: injected into [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (constructor parameter at `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:56`), whose `LoginAsync`, `RegisterAsync`, and `RefreshTokenAsync` call `validators.Login` (`:124`), `validators.Register` (`:190`), and `validators.Refresh` (`:270`) respectively before doing any work. It is registered by each app's Identity module rather than by the framework, since one of its three dependencies is app-owned: `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:34` and `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:42`, both `TryAddScoped<AuthenticationValidators>()`.
 
 ### IAuthenticationService
 > MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:11` · Level 5 · interface
 
-- **What it is**: the application-layer contract for the Identity module's authentication workflows: login, registration, token refresh, token revocation, and external (OAuth) login.
-- **Depends on**: [LoginRequest](#loginrequest), [RefreshTokenRequest](#refreshtokenrequest), [RegisterRequest](#registerrequest), [AuthenticationResponse](#authenticationresponse), [Result](group-01-result-error-handling.md#result), [Error](group-01-result-error-handling.md#error), and the `UserIdentifierType` alias (`:1-2`).
-- **Concept introduced: default interface methods for optional capabilities.** `[Rubric §1, SOLID]` (interface segregation and dependency inversion): `ExternalLoginAsync` (`:66-74`) ships a **default implementation** in the interface itself that returns a not-supported [Error](group-01-result-error-handling.md#error) (`"Auth.ExternalLoginNotSupported"`, `:74`). An implementation that does not offer OAuth (a stub host, or a deployment with social login disabled) inherits that failure for free and need not override anything, so the interface stays one piece while the capability is opt-in ([ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html)). `[Rubric §11, Security]`: login, registration, and refresh all return `Result<AuthenticationResponse>`, so auth outcomes flow as values and no exception leaks credential detail to the caller.
-- **Walkthrough**: five methods, all async, all taking a `CancellationToken`.
-  - `LoginAsync(LoginRequest)` returns `Result<AuthenticationResponse>` (`:19`).
-  - `RegisterAsync(RegisterRequest, string? ipAddress = null)` (`:30`); the optional `ipAddress` feeds [ILoginProtectionService](#iloginprotectionservice)'s registration rate limit.
-  - `RefreshTokenAsync(RefreshTokenRequest)` (`:41`) rotates the token pair.
-  - `RevokeTokenAsync(UserIdentifierType userId)` returns `Result` (`:51`) and revokes a user's refresh token, returning a not-found error when there is none.
-  - `ExternalLoginAsync(loginProvider, providerKey, email, firstName, lastName)` (`:66`), the default-implemented OAuth path; finds an account by provider and key or creates one from claims.
+- **What it is**: the application-layer contract for the Identity module's authentication workflows: login, registration, token refresh, per-device and global session revocation, session listing, and external (OAuth) login.
+- **Depends on**: [LoginRequest](#loginrequest), [RefreshTokenRequest](#refreshtokenrequest), [RegisterRequest](#registerrequest), [AuthenticationResponse](#authenticationresponse), [RefreshSessionSummaryResponse](#refreshsessionsummaryresponse), [Result](group-01-result-error-handling.md#result), [Error](group-01-result-error-handling.md#error), and the `UserIdentifierType` alias (`:1-2`).
+- **Concept introduced: default interface methods for optional capabilities.** `[Rubric §1, SOLID]` (interface segregation and dependency inversion): `ExternalLoginAsync` (`:130-138`) ships a **default implementation** in the interface itself that returns a not-supported [Error](group-01-result-error-handling.md#error) (`"Auth.ExternalLoginNotSupported"`, `:138`). An implementation that does not offer OAuth (a stub host, or a deployment with social login disabled) inherits that failure for free and need not override anything, so the interface stays one piece while the capability is opt-in ([ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html)). `[Rubric §11, Security]`: login, registration, and refresh all return `Result<AuthenticationResponse>`, so auth outcomes flow as values and no exception leaks credential detail to the caller.
+
+  The second concept the signatures teach is that a session is a **device**, not a user. `LoginAsync`, `RegisterAsync` and `RefreshTokenAsync` all take optional `ipAddress` and `userAgent` (`:24-25`, `:32-33`, `:47-48`) recorded on the session row, and the doc comments state the invariant each time: signing in opens a session for the calling device and leaves the user's other devices signed in (`:14-15`), and refreshing rotates the presenting device's session only (`:43-44`).
+- **Walkthrough**: eight methods, all async, all ending in a `CancellationToken`.
+  - `LoginAsync(LoginRequest, string? ipAddress = null, string? userAgent = null, ...)` returns `Result<AuthenticationResponse>` (`:22-26`).
+  - `RegisterAsync(RegisterRequest, string? ipAddress = null, string? userAgent = null, ...)` (`:36-40`); the `ipAddress` does double duty, feeding [ILoginProtectionService](#iloginprotectionservice)'s registration rate limit and the new session row (`:32`).
+  - `RefreshTokenAsync(RefreshTokenRequest, ...)` (`:51-55`) exchanges an expired access token plus a valid refresh token for a rotated pair.
+  - `RevokeTokenAsync(UserIdentifierType userId, string? refreshToken = null, ...)` (`:66-69`) signs **one device** out. The documented fallback is the interesting part (`:58-60`): passing no token, or one that does not belong to this user, revokes every session the user holds, which the comment calls the safe reading of "log me out" from a caller that cannot produce its refresh token.
+  - `RevokeAllSessionsAsync(UserIdentifierType userId, ...)` (`:78-80`) signs every device out: a password change, an admin lockout, or an explicit "sign out everywhere".
+  - `GetSessionsAsync(UserIdentifierType userId, Guid? currentSessionId = null, ...)` (`:95-98`) lists live sessions newest first with the caller's own device marked. `currentSessionId` is the caller token's `sid` claim and is used only to set `RefreshSessionSummaryResponse.IsCurrent`; passing `null` marks no row (`:88-91`).
+  - `RevokeSessionByIdAsync(UserIdentifierType userId, Guid sessionId, ...)` (`:114-117`) revokes one named device. The remarks (`:103-108`) fix two behaviors as contract: an unknown id and another account's id both return `NotFound` and are indistinguishable, so a caller cannot probe for another user's sessions; and revoking an **already-revoked** session succeeds and changes nothing, because a device list a user is clicking through is exactly where a duplicate request comes from.
+  - `ExternalLoginAsync(loginProvider, providerKey, email, firstName, lastName, ...)` (`:130-138`), the default-implemented OAuth path.
 
   The doc comment (`:6-9`) also records a scope decision: **password change is not on this interface**. It is dispatched directly through its own command handler at the controller layer.
-- **Why it's built this way**: concentrating the token-issuing workflows behind one port keeps the Identity controllers thin and lets the protection and rate-limit policy ([ILoginProtectionService](#iloginprotectionservice)) compose in; the default OAuth method keeps the contract stable across hosts that do and do not enable social login.
+- **Why it's built this way**: concentrating the token-issuing and session-management workflows behind one port keeps the Identity controllers thin and lets the protection and rate-limit policy ([ILoginProtectionService](#iloginprotectionservice)) compose in; the default OAuth method keeps the contract stable across hosts that do and do not enable social login. Encoding the anti-probing and idempotent-revoke rules in `remarks` rather than leaving them to an implementation makes them testable expectations of every implementer.
 - **Where it's used**: implemented by [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (which realises every member except the default `ExternalLoginAsync`) and, through it, by each app's sealed [AuthenticationService](group-24-identity-module.md#authenticationservice); consumed by the Identity API controllers.
 
 ### AuthenticationServiceBase<TUser>
-> MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34` · Level 8 · class (abstract)
+> MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:50` · Level 8 · class (abstract)
 
-- **What it is**: the **shared authentication workflow** (login, registration, token refresh and rotation, revocation) hoisted once into the framework, generic over the app's `User` aggregate. It realises [IAuthenticationService](#iauthenticationservice) and leaves the genuinely app-specific decisions to a small set of `abstract` and `virtual` hooks a sealed subclass overrides.
-- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) and [IRepository<TEntity, TIdentifierType>](group-07-persistence-ef-core.md#irepositorytentity-tidentifiertype) (persistence, G07), [ITokenService](#itokenservice), [IPasswordHasher](#ipasswordhasher), [ILoginProtectionService](#iloginprotectionservice), [AuthenticationValidators](#authenticationvalidators) (this group), the [IAuthUser](#iauthuser) credential contract plus [AuditableAggregateRootEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) as the `TUser` constraint (`:41`), [Email](group-02-domain-building-blocks.md#email) (normalizing the login and register address), [Result](group-01-result-error-handling.md#result) and [Error](group-01-result-error-handling.md#error), the request and response DTOs ([LoginRequest](#loginrequest), [RegisterRequest](#registerrequest), [RefreshTokenRequest](#refreshtokenrequest), [AuthenticationResponse](#authenticationresponse)), and the BCL `TimeProvider` (injected at `:39`, never `DateTime.UtcNow`, so the clock is testable).
-- **Concept introduced: the Template Method that de-duplicates a whole vertical slice.** `[Rubric §2, Design Patterns]` assesses idiomatic pattern use: this is a textbook **Template Method**, the invariant sequence of an operation living in the base while the variable steps are deferred to subclass hooks. `[Rubric §16, Maintainability & Evolvability]` (DRY across services) and `[Rubric §1, SOLID]` also apply: the doc comment (`:11-32`) records that the app Identity modules previously duplicated this workflow at roughly 70 to 95 percent line-identity, so folding it here means a fix to the lockout order or the rotation logic is written once. `[Rubric §11, Security]`: the base encodes the security posture directly, validate first, an [ILoginProtectionService](#iloginprotectionservice) lockout and rate-limit gate ([ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)), an untracked-then-tracked dual fetch ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)), and refresh-token rotation with **reuse detection** ([ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html), BR-205/206). `[Rubric §7, Microservices Readiness]`: the workflow depends only on ports, so it runs unchanged whether the Identity module is in-monolith or its own service.
+- **What it is**: the **shared authentication workflow** (login, registration, refresh-token rotation, per-device and global revocation, session listing) hoisted once into the framework, generic over the app's `User` aggregate. It realises [IAuthenticationService](#iauthenticationservice) and leaves the genuinely app-specific decisions to a small set of `abstract` and `virtual` hooks a sealed subclass overrides.
+- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) and [IRepository<TEntity, TIdentifierType>](group-07-persistence-ef-core.md#irepositorytentity-tidentifiertype) (persistence, G07), [ITokenService](#itokenservice), [IPasswordHasher](#ipasswordhasher), [ILoginProtectionService](#iloginprotectionservice), [AuthenticationValidators](#authenticationvalidators), [IRefreshSessionStore](#irefreshsessionstore) and `IOptions<`[RefreshSessionSettings](#refreshsessionsettings)`>` (all eight constructor parameters, `:50-58`), the [IAuthUser](#iauthuser) credential contract plus [AuditableAggregateRootEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) as the `TUser` constraint (`:59`), [RefreshSession](#refreshsession) (the session aggregate it creates and revokes), [Email](group-02-domain-building-blocks.md#email) (normalizing the login and register address), [ClaimsPrincipalExtensions](#claimsprincipalextensions) (`principal.GetUserId()`, `:288`), [Result](group-01-result-error-handling.md#result) and [Error](group-01-result-error-handling.md#error), the request and response DTOs, and the BCL `TimeProvider` (injected at `:55`, never `DateTime.UtcNow`, so the clock is testable).
+- **Concept introduced: the Template Method that de-duplicates a whole vertical slice.** `[Rubric §2, Design Patterns]` assesses idiomatic pattern use: this is a textbook **Template Method**, the invariant sequence of an operation living in the base while the variable steps are deferred to subclass hooks. `[Rubric §16, Maintainability & Evolvability]` (DRY across services) and `[Rubric §1, SOLID]` also apply: the doc comment (`:14-19`) records that the app Identity modules previously duplicated this workflow at roughly 70 to 95 percent line-identity, so a fix to the lockout order or the rotation logic is written once. `[Rubric §11, Security]`: the base encodes the security posture directly, validate first, an [ILoginProtectionService](#iloginprotectionservice) lockout and rate-limit gate ([ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)), an untracked-then-tracked dual fetch ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)), and refresh-token rotation with **reuse detection** ([ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html), BR-205/206). `[Rubric §7, Microservices Readiness]`: the workflow depends only on ports, so it runs unchanged whether the Identity module is in-monolith or its own service.
+
+  **The session model is the other concept to absorb before reading the code** (`:35-47`). Refresh tokens are not a column on the user: every issue opens its own [RefreshSession](#refreshsession) row, the store holds only `RefreshSession.HashToken` digests, and rotation revokes the presented session and links it to its successor. Presenting an already-rotated token therefore lands on a revoked row, which is the reuse signal that revokes the user's whole live family (BR-206). Two requests presenting the same live token at the same instant get the same treatment, because the rotation is claimed atomically through `IRefreshSessionStore.TryRotateAsync` and the loser is answered as a replay rather than handed a second successor. An expired session is **not** a reuse signal and fails alone. A per-user cap evicts the oldest live session on a new sign-in so one account cannot grow the table without bound.
 - **Walkthrough** (members in teaching order):
-  - **Constructor and protected accessors** (`:34-54`): a primary constructor takes the six collaborators; protected read-only properties re-expose `UnitOfWork` (`:44`), `TokenService` (`:47`), `TimeProvider` (`:50`) and a `Repository` (`:53-54`) resolved lazily as `unitOfWork.GetRepository<TUser, UserIdentifierType>()`, so subclass hooks and app-level flows (external login) reuse them without re-injecting.
-  - **Token lifetimes** (`:61-70`): `virtual` `AccessTokenLifetime` and `RefreshTokenLifetime` read through to [ITokenService](#itokenservice) (which derives them from `Jwt:AccessTokenExpirationMinutes` and `Jwt:RefreshTokenExpirationDays`), so the expiry reported to the client matches the JWT's actual `exp`. A non-positive value, meaning a hand-written test double or a misconfigured host, falls back to the BR-205 defaults of 15 minutes and 7 days (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ITokenService.cs:33` and `:40` carry the same defaults on the port).
-  - **`LoginAsync`** (`:73-131`): validate the request (`:77-81`), check lockout (`:84`, ADR-029 and BR-212), normalize the raw email into an [Email](group-02-domain-building-blocks.md#email) value object (`:92`) so the EF predicate compares same-typed converted values (an invalid address yields a null value object that simply matches no user, which is the invalid-credentials answer anyway). **Step 1** is an *untracked* fetch via the `FindUntrackedByEmailAsync` hook (`:96`) to verify credentials without change-tracker overhead; a null result increments failed attempts and returns a generic 401 (`:97-102`). An app gate runs before password verification (`:106`, with no failed-attempt increment so the pre-hoist behavior is preserved), then `passwordHasher.VerifyPassword` (`:112`). **Step 2** is a *tracked* re-fetch by id (`:120`) so the new refresh token can be persisted, followed by `ResetFailedAttemptsAsync` (`:128`) and `IssueTokensAsync` (`:130`).
-  - **`RegisterAsync`** (`:134-215`): validate (`:139-143`), IP rate-limit (`:146`, ADR-029 and BR-213), reject a duplicate email through the `EmailExistsAsync` hook (`:153-157`), hash the password (`:159`), build the user through the `CreateUser` hook (`:160`), mint and store a refresh token (`:167-168`), `AddAsync` (`:170`) and `SaveChangesAsync` (`:174`), then run the `OnUserRegisteredAsync` post-commit hook (`:204`) to pick up the instance the first access token is minted from, increment the IP registration count (`:207`), and return the token pair (`:211-214`).
+  - **Constructor and protected accessors** (`:50-92`): a primary constructor takes the eight collaborators; a private field wraps the injected token service in a [SessionStampingTokenService](#sessionstampingtokenservice) (`:67`); protected read-only properties re-expose `UnitOfWork` (`:70`), the *wrapped* `TokenService` (`:82`, whose remarks explain that minting through this property is what puts `sid` on the token), `TimeProvider` (`:85`), `RefreshSessions` (`:88`), and a `Repository` resolved lazily as `unitOfWork.GetRepository<TUser, UserIdentifierType>()` (`:91-92`).
+  - **Lifetimes and cap** (`:99-115`): `virtual` `AccessTokenLifetime` and `RefreshTokenLifetime` read through to [ITokenService](#itokenservice) (which derives them from `Jwt:AccessTokenExpirationMinutes` and `Jwt:RefreshTokenExpirationDays`), falling back to the BR-205 defaults of 15 minutes and 7 days on a non-positive value, meaning a hand-written test double or a misconfigured host. `virtual MaxActiveSessionsPerUser` (`:115`) reads `RefreshSessions:MaxActiveSessionsPerUser`.
+  - **`LoginAsync`** (`:118-181`): validate the request (`:124-128`), check lockout (`:131`, ADR-029 and BR-212), normalize the raw email into an [Email](group-02-domain-building-blocks.md#email) value object (`:139`) so the EF predicate compares same-typed converted values (an invalid address yields a null value object that simply matches no user, which is the invalid-credentials answer anyway). **Step 1** is an *untracked* fetch via the `FindUntrackedByEmailAsync` hook (`:143`) to verify credentials without change-tracker overhead; a null result increments failed attempts and returns a generic 401 (`:144-149`). An app gate runs before password verification (`:153`, with no failed-attempt increment so the pre-hoist behavior is preserved), then `passwordHasher.VerifyPassword` (`:159`). **Step 2** is a *tracked* re-fetch by id (`:170`). Read the comment there (`:166-169`): now that refresh tokens live in their own rows, this fetch is purely about the instance the app's `CreateAccessToken` hook mints from, and the second lookup is what turns a race that deleted the account between the two steps into a clean 404. Then `ResetFailedAttemptsAsync` (`:178`) and `IssueTokensAsync` (`:180`).
+  - **`RegisterAsync`** (`:184-261`): validate (`:190-194`), IP rate-limit (`:197`, ADR-029 and BR-213), reject a duplicate email through the `EmailExistsAsync` hook (`:204-208`), hash the password (`:210`), build the user through the `CreateUser` hook (`:211`), `AddAsync` (`:219`) and `SaveChangesAsync` (`:223`), run the `OnUserRegisteredAsync` post-commit hook (`:253`) to pick up the instance the first access token is minted from, increment the IP registration count (`:256`), and open the session last (`:260`). The final comment (`:258-259`) explains that ordering: the session row carries the user id, which a store-generated key only has once the insert has run.
 
-    The save is wrapped in a deliberately **broad** `catch (Exception)` (`:172-200`, with a scoped `CA1031` suppression at `:176-178`) whose comment is the teaching material. The email lookup above is a check-then-act: two concurrent registrations for the same address both pass it, and the loser only fails on the insert, against the unique index every consumer puts on `Email` (ADC unfiltered, Store filtered on `IsDeleted`). Without the catch, that race surfaces as a generic 500 instead of the 409 a serialized pair would have produced. The catch cannot name `DbUpdateException`, because Application has no EF Core dependency by layer rule, so the **re-check is what narrows it** (`:194`): if the address exists now, the concurrent registration is the cause and the caller gets the same conflict the serial path returns through the shared `EmailAlreadyExistsFailure()` helper; anything else rethrows untouched (`:199`) and still reaches the exception middleware. The re-check passes `CancellationToken.None` on purpose (`:192-194`): it has to run even when the caller's token is what aborted the save, or a cancelled save could never be classified.
-  - **`RefreshTokenAsync`** (`:218-269`): validate (`:222-226`), pull claims from the *expired* JWT via `tokenService.GetPrincipalFromExpiredToken` (`:230`, signature still checked, only lifetime skipped), read the `user_id` claim (`:237-242`), load the tracked user (`:244`), run the refresh app gate (`:251`), then the security-critical check (`:259`): if the stored `RefreshToken` does not match or has expired, this is treated as **token reuse (potential theft)**, so `user.RevokeRefreshToken()` is called and saved (`:261-262`, BR-206) before returning a 401. A clean match issues a rotated pair through `IssueTokensAsync` (`:268`).
-  - **`RevokeTokenAsync`** (`:272-286`): load by id, `RevokeRefreshToken()`, save; a missing user yields `Error.NotFound` targeted at `typeof(TUser).Name` (`:279`).
-  - **`IssueTokensAsync`** (`:292-306`): the shared rotation used by login and refresh, and reusable by an app-level external-login flow. It mints an access token via the `CreateAccessToken` hook (`:296`), generates a new refresh token (`:297`), stamps its expiry off `TimeProvider` (`:298`), saves (`:300`), and returns the response (`:302-305`).
-  - **The hooks**: four are `abstract`, so a subclass must supply them. `FindUntrackedByEmailAsync` (`:313`) and `EmailExistsAsync` (`:319`) are deliberately written against the app's concrete `User` so EF translates the predicate byte-for-byte as before, and the second explicitly leaves the app to decide whether soft-deleted accounts count (`ignoreQueryFilters: true` blocks re-registration of an erased address, `:315-318`); `CreateUser` (`:322`) runs the app's domain factory; `CreateAccessToken` (`:325`) mints the app's claim set (for example `speaker_id` versus `customer_id`). Four `virtual` hooks default to a no-op: `ValidateLoginCandidateAsync` (`:328`) and `ValidateRefreshCandidateAsync` (`:332`) add extra gates such as a deactivated-account check; `OnUserRegisteredAsync` (`:339`) runs the post-commit side-effect (publish an integration event, or re-fetch a linked id); and `CreateRefreshUserMissingError` (`:347`) defaults the vanished-user case to 401 (a token for a missing user is indistinguishable from an invalid one) while letting an app return 404 where its public contract already promises it. One `private static` helper, `EmailAlreadyExistsFailure()` (`:355-357`), returns the `Auth.EmailAlreadyExists` conflict so the up-front check and the race recovery are indistinguishable to the caller.
-- **Why it's built this way**: the untracked-then-tracked dual fetch keeps the common credential-verification path off the change tracker (cheaper, and soft-deleted accounts fall out via EF query filters returning the generic 401) while still giving a tracked instance to persist the new token ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)). Refresh-token reuse detection (revoke on mismatch) is the BR-206 defence against a stolen token being replayed ([ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html)). Password material flows through [IAuthUser](#iauthuser)'s `PasswordHash` and `PasswordSalt` ([ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html)), and the whole workflow depends only on abstractions, so it is identical whether the module runs in-process or as an extracted service.
-- **Where it's used**: subclassed by each app's sealed [AuthenticationService](group-24-identity-module.md#authenticationservice), for example `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:35`, which binds `TUser = User`, adds the Attendee default role (BR-45) and the `speaker_id` claim (BR-209, built at `:249-252`), and re-lists `IAuthenticationService` so it can re-implement `RegisterAsync` and `ExternalLoginAsync` outright: ADC raises its registration side-effects inside one transactional unit rather than through the `OnUserRegisteredAsync` hook, because the identity column means the id does not exist until the first save (`AuthenticationService.cs:16-32`). MMCA.Store supplies its own subclass with a `customer_id` claim. Consumed by the Identity API controllers via the [IAuthenticationService](#iauthenticationservice) port.
-- **Caveats / not-in-source**: the `user_id` claim is parsed with `int.TryParse` (`:238`), so the refresh flow assumes `UserIdentifierType` is `int` (the framework alias today, per [ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)); an app that redefined the alias would need to override the refresh handling. `ExternalLoginAsync` is intentionally **not** overridden here: the base inherits the interface's default not-supported failure, and OAuth account linking stays in the app subclass because it is coupled to the app's `User` factory surface (doc comment, `:30-31`).
+    The save is wrapped in a deliberately **broad** `catch (Exception)` (`:221-249`, with a scoped `CA1031` suppression at `:225-227`) whose comment is the teaching material. The email lookup above is a check-then-act: two concurrent registrations for the same address both pass it, and the loser only fails on the insert, against the unique index every consumer puts on `Email` (ADC unfiltered, Store filtered on `IsDeleted`). Without the catch, that race surfaces as a generic 500 instead of the 409 a serialized pair would have produced. The catch cannot name `DbUpdateException`, because Application has no EF Core dependency by layer rule, so the **re-check is what narrows it** (`:243`): if the address exists now, the concurrent registration is the cause and the caller gets the same conflict the serial path returns through the shared `EmailAlreadyExistsFailure()` helper; anything else rethrows untouched (`:248`) and still reaches the exception middleware. The re-check passes `CancellationToken.None` on purpose (`:241-243`): it has to run even when the caller's token is what aborted the save, or a cancelled save could never be classified.
+  - **`RefreshTokenAsync`** (`:264-330`): validate (`:270-274`), pull claims from the *expired* JWT via `tokenService.GetPrincipalFromExpiredToken` (`:278`, signature still checked, only lifetime skipped), read the identifier with `principal.GetUserId()` (`:288`; the comment at `:285-287` notes it rides the standard `sub` claim, also accepts the `NameIdentifier` form the bearer handler maps it to, and parses through `IParsable` so the identifier alias can change shape without editing this file), load the tracked user (`:295`), run the refresh app gate (`:302`), resolve the session behind the presented token (`:309-310`), rotate it (`:317`), and answer with a token pair whose access token carries the **successor's** `sid` (`:326-329`, comment at `:323-325`: a client's current-device marker follows the rotation instead of pointing at the session the rotation just revoked).
+  - **`RevokeTokenAsync`** (`:333-371`): load the user, and when a refresh token was supplied, look up its session by hash (`:348-350`). Only a **live session belonging to this user** identifies the device to sign out (`:356-358`); anything else (unknown token, another account's token, an already-revoked row) leaves the caller unidentifiable, so the request degrades to revoking every live session rather than reporting success for a revocation that reached nothing (`:352-355`, then `:367`).
+  - **`RevokeAllSessionsAsync`** (`:374-389`): the unconditional form of the same thing.
+  - **`GetSessionsAsync`** (`:398-422`): reads the same "un-revoked sessions for this user" query the cap and family revocation use, then drops expired rows in memory with `IsActiveAt(now)` (`:409`) and orders newest first with `Id` as the tie-break (`:410-411`). The remarks (`:392-396`) explain why the filtering is in memory: the store returns expired-but-unrevoked rows on purpose, and a device list must not offer a user a device that can no longer authenticate.
+  - **`RevokeSessionByIdAsync`** (`:436-460`): the ownership check *is* the store query (`:441`, scoped to the user), so another account's id and a nonexistent id produce the same `NotFound` (`:444-449`); an already-revoked session returns success without writing (`:451-454`).
+  - **`IssueTokensAsync`** (`:471-495`): the shared open-and-respond used by login and registration, and reusable by an app-level external-login flow. It opens the session **before** minting the access token, because the token carries the session's id (`:481-483`), saves (`:489`), and returns the response.
+  - **The private mechanics**: `ResolveRotatableSessionAsync` (`:581-613`) is where the three rejections differ behind one identical error, and its comment (`:571-579`) is the single most important paragraph in the file. An unknown hash, or one belonging to another account, is failed **alone** (`:596-599`), because revoking the family on it would let anyone holding one of this user's expired access tokens sign them out everywhere by posting a random token. A **revoked** row means this exact token was already rotated away or signed out and has come back, which is the BR-206 reuse signal that revokes every live session (`:601-608`). An **expired** row is an ordinary end of life and fails alone (`:610-612`). `OpenSessionAsync` (`:620-646`) mints a token, creates the session, enforces the cap, and stages the insert, returning an [IssuedSession](#issuedsession). `RotateAsync` (`:659-699`) mints the successor and claims the rotation through `TryRotateAsync` (`:682-684`); losing the claim is answered exactly like a replay (`:686-696`). `RevokeLiveSessionsAsync` (`:702-713`) revokes without saving. `EnforceSessionCapAsync` (`:722-735`) revokes the oldest live sessions while the user is at or over the cap; the comment (`:715-720`) notes expired-but-unrevoked rows do not count against the cap because they authenticate nobody, and age out through the retention sweep instead. `InvalidRefreshTokenError()` (`:741-742`) and `EmailAlreadyExistsFailure()` (`:749-751`) are the two shared failures that keep distinct internal paths indistinguishable to a caller.
+  - **The hooks**: four are `abstract`, so a subclass must supply them. `FindUntrackedByEmailAsync` (`:502`) and `EmailExistsAsync` (`:508`) are deliberately written against the app's concrete `User` so EF translates the predicate byte-for-byte as before, and the second explicitly leaves the app to decide whether soft-deleted accounts count (`ignoreQueryFilters: true` blocks re-registration of an erased address, `:504-507`); `CreateUser` (`:511`) runs the app's domain factory; `CreateAccessToken` (`:514`) mints the app's claim set (for example `speaker_id` versus `customer_id`). Five `virtual` members can be overridden: `CreateAccessTokenForSession` (`:535-546`) arms the stamping wrapper around the hook call; `ValidateLoginCandidateAsync` (`:549`) and `ValidateRefreshCandidateAsync` (`:553`) add extra gates such as a deactivated-account check; `OnUserRegisteredAsync` (`:560`) runs the post-commit side-effect; and `CreateRefreshUserMissingError` (`:568`) defaults the vanished-user case to 401 (a token for a missing user is indistinguishable from an invalid one) while letting an app return 404 where its public contract already promises it.
+- **Why it's built this way**: the untracked-then-tracked dual fetch keeps the common credential-verification path off the change tracker (cheaper, and soft-deleted accounts fall out via EF query filters returning the generic 401) while still giving a tracked instance to mint from ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)). Per-device session rows with hashed tokens, rotation, family revocation on reuse, and a per-user cap are the BR-205/206 model ([ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html)). Password material flows through [IAuthUser](#iauthuser)'s `PasswordHash` and `PasswordSalt` ([ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html)), and the whole workflow depends only on abstractions, so it is identical whether the module runs in-process or as an extracted service.
+- **Where it's used**: subclassed by each app's sealed [AuthenticationService](group-24-identity-module.md#authenticationservice), for example `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:44`, which binds `TUser = User`, adds the Attendee default role (BR-45) and the `speaker_id` claim (BR-209, built at `:275`), and re-lists `IAuthenticationService` (`:63`) so it can re-implement `RegisterAsync` and `ExternalLoginAsync` outright: ADC raises its registration side-effects inside one transactional unit rather than through the `OnUserRegisteredAsync` hook, because the identity column means the id does not exist until the first save (`AuthenticationService.cs:26-37`). MMCA.Store supplies its own subclass with a `customer_id` claim. Consumed by the Identity API controllers via the [IAuthenticationService](#iauthenticationservice) port.
+- **Caveats / not-in-source**: `ExternalLoginAsync` is intentionally **not** overridden here: the base inherits the interface's default not-supported failure, and OAuth account linking stays in the app subclass because it is coupled to the app's `User` factory surface (doc comment, `:33-34`).
 
 ### ICurrentUserService
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:9` · Level 8 · interface
 
 - **What it is**: the Application layer's read-only window onto the authenticated caller: the raw `ClaimsPrincipal`, a strongly-typed `UserId`, the caller's first role, the full role set, a generic typed-claim reader, and a role-membership helper. It answers "who is calling?" without any handler ever touching `HttpContext`.
 - **Depends on**: `System.Security.Claims` and `IParsable<T>` (BCL, `:1`) plus the solution-wide `UserIdentifierType` alias (`:15`); see [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to). It references [RoleNames](#rolenames) in documentation only (`:80`). Its adapter is [CurrentUserService](#currentuserservice) in Infrastructure.
-- **Concept introduced: the caller-identity port with behavior on the interface.** `[Rubric §3, Clean Architecture]` assesses whether inner layers stay free of transport types, and `[Rubric §1, SOLID]` (interface segregation) whether a contract exposes only what its clients need. A handler must know the caller to run ownership checks and to stamp audit fields, but it must not depend on `IHttpContextAccessor`, which would drag ASP.NET Core into the Application project. This interface is that inversion. What makes it worth studying is the use of **default interface members**: `Roles` (`:45-64`) and `IsInRole` (`:88-89`) ship real implementations on the contract, so every implementer and every hand-written test double inherits correct multi-role behavior instead of re-deriving it.
+- **Concept introduced: the caller-identity port with behavior on the interface.** `[Rubric §3, Clean Architecture]` assesses whether inner layers stay free of transport types, and `[Rubric §1, SOLID]` (interface segregation) whether a contract exposes only what its clients need. A handler must know the caller to run ownership checks and to stamp audit fields, but it must not depend on `IHttpContextAccessor`, which would drag ASP.NET Core into the Application project. This interface is that inversion, and the adapter is the only place the accessor appears (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:16`, `:25`). What makes it worth studying is the use of **default interface members**: `Roles` (`:45-64`) and `IsInRole` (`:88-89`) ship real implementations on the contract, so every implementer and every hand-written test double inherits correct multi-role behavior instead of re-deriving it.
 - **Walkthrough**: `ClaimsPrincipal User` (`:12`) exposes the full principal for advanced inspection. `UserIdentifierType? UserId` (`:15`) is the typed identifier, nullable because an unauthenticated request has no user. `string? Role` (`:22`) is documented as the **first** role claim only, with the remarks at `:18-21` steering callers to `Roles` or `IsInRole` for membership checks. `Roles` (`:45-64`) is the interesting member: it reads every role claim, accepting each claim type the JWT middleware may produce (`ClaimTypes.Role` when inbound claim mapping is on, or the raw `role` / `roles` claim when it is off, `:50-53`), falls back to a single-element list built from `Role` when the principal yields nothing (`:62`), and null-guards `User` even though the property is declared non-nullable (`:49`). The long remarks at `:27-44` justify both accommodations from the nature of a default interface member: it runs against *every* implementation, including a hand-written double or a mock that stubs only `Role`, where reading claims alone would have reported no roles and silently turned an authorization check into a denial, and dereferencing a null principal would have turned it into a `NullReferenceException`. Claims win when present, so a genuine multi-role principal is still read in full. `T? GetClaimValue<T>(string claimType) where T : struct, IParsable<T>` (`:73-74`) parses a named claim into any parsable value type and returns `null` when the claim is missing or unparseable, which is how a module reads its own claim (the doc names `speaker_id`, `:68`) without Common ever knowing that claim exists. `IsInRole(string roleName)` (`:88-89`) is `Roles.Any(role => string.Equals(role, roleName, StringComparison.OrdinalIgnoreCase))`.
 - **Why it's built this way**: the remarks at `:82-87` record the reasoning behind `IsInRole` checking every claim rather than comparing against `Role`. Comparing against the first role alone matched only whichever role happened to be listed first, which is latent today because tokens carry a single role, and would have surfaced silently as an authorization denial the moment a second role was added. Typing `UserId` as the per-app alias instead of a generic parameter keeps the interface concrete and easy to mock while staying correct for each app. `[Rubric §11, Security]` and `[Rubric §15, Best Practices & Code Quality]` both apply.
-- **Where it's used**: injected into command handlers for ownership checks, into [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext) for `CreatedBy` and `LastModifiedBy` stamping, and into this group's authorization filters and permission handlers.
+- **Where it's used**: registered as scoped against [CurrentUserService](#currentuserservice) at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:541`. It supplies the `Roles` set the CQRS authorization decorators check permissions against (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/AuthorizationCommandDecorator.cs:28`, and its query twin; see [group 05](group-05-cqrs-pipeline.md)); it is how audit fields get their actor, since [DbContextFactory](group-07-persistence-ef-core.md#dbcontextfactory) passes `_currentUserService.UserId` into every save (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:57`, used at `:248`, `:291`, `:330`, `:352` and `:414`); and it backs the ownership check in [OwnerOrAdminFilter](#owneroradminfilter) and the framework's account controllers.
 - **Caveats / not-in-source**: `Role` deliberately reports only the first role claim; treat it as a display value and use `Roles` or `IsInRole` for any decision.
 
 ### AuthenticationRequest
 > MMCA.Common.Shared · `MMCA.Common.Shared` · `MMCA.Common/Source/Core/MMCA.Common.Shared/AuthenticationRequest.cs:15` · Level 0 · record struct
 
-- **What it is**: a device-aware authentication request shape for mobile/MAUI clients. It carries device metadata (id, form factor, platform, model, manufacturer, name, type) alongside the user's email so that sessions and tokens can be tracked per device (`MMCA.Common/Source/Core/MMCA.Common.Shared/AuthenticationRequest.cs:3-14`).
+- **What it is**: a device-aware authentication request shape for mobile/MAUI clients. It carries device metadata (id, form factor, platform, model, manufacturer, name, type) alongside the user's email so that sessions and tokens can be tracked per device (`MMCA.Common/Source/Core/MMCA.Common.Shared/AuthenticationRequest.cs:3-5`).
 - **Depends on**: nothing first-party. Eight positional `string` parameters and the BCL only.
 - **Concept**: an immutable `readonly record struct` request DTO. The `readonly record struct` gives value-based equality and a compact, copy-by-value payload for something that crosses the wire once per login, and the eight positional parameters (`MMCA.Common/Source/Core/MMCA.Common.Shared/AuthenticationRequest.cs:15-23`) show the same request shape scaling from bare credentials to a credential-plus-context payload. `[Rubric §11, Security]` assesses credential handling and session management: capturing device identity at authentication time is the precondition for per-device session tracking, which is what the XML doc states the type exists for (`MMCA.Common/Source/Core/MMCA.Common.Shared/AuthenticationRequest.cs:4-5`).
 - **Walkthrough**: the whole type is one positional constructor with eight `string` members (`MMCA.Common/Source/Core/MMCA.Common.Shared/AuthenticationRequest.cs:15-23`): `DeviceId`, `Email`, `DeviceFormFactor`, `DevicePlatform`, `DeviceModel`, `DeviceManufacturer`, `DeviceName`, `DeviceType`. Note that `Email` is the plain `string` here and not the [Email](group-02-domain-building-blocks.md#email) value object: this is a transport shape, and normalization happens further in. It is also the only type in the root `MMCA.Common.Shared` namespace; the rest of the auth request family lives under `MMCA.Common.Shared.Auth`.
 - **Why it's built this way**: a struct record keeps a small, short-lived login payload allocation-free while still giving structural equality and a `with`-expression copy for free; every member being `string` keeps it trivially serializable by any client transport.
-- **Caveats / not-in-source**: this type has **no first-party consumer in the workspace source today**. A search across all four .NET repos finds `AuthenticationRequest` only in its own declaration file (plus onboarding/inventory documents), so the device fields are a published contract awaiting a caller rather than an active login path. Treat the per-device revocation story as the documented intent (`MMCA.Common/Source/Core/MMCA.Common.Shared/AuthenticationRequest.cs:3-5`), not as shipped behavior.
+- **Caveats / not-in-source**: this type has **no first-party consumer in the workspace source today**. A search across all four .NET repos finds `AuthenticationRequest` only in its own declaration file, so the device fields are a published contract awaiting a caller rather than an active login path. The per-device story that did ship is [RefreshSession](#refreshsession), which captures IP and user-agent rather than these eight fields; treat the device-metadata contract as documented intent (`MMCA.Common/Source/Core/MMCA.Common.Shared/AuthenticationRequest.cs:3-5`), not as shipped behavior.
 
----
+### IAuthUser
+> MMCA.Common.Domain · `MMCA.Common.Domain.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:16` · Level 0 · interface
 
-### ClaimBasedUserIdProvider
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:9` · Level 0 · class
-
-- **What it is**: a SignalR `IUserIdProvider` that extracts the `user_id` JWT claim from a `HubConnectionContext`, so that `IHubContext<THub>.Clients.User(userId)` routes push messages to the right WebSocket connections (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:5-8`).
-- **Depends on**: `Microsoft.AspNetCore.SignalR.IUserIdProvider` (ASP.NET Core). Consumed by [NotificationHub](group-10-notifications.md#notificationhub) and [SignalRPushNotificationSender](group-10-notifications.md#signalrpushnotificationsender).
-- **Concept**: `[Rubric §11, Security]` assesses that identity is derived from the token and not from client-supplied input, and `[Rubric §10, Cross-Cutting]` assesses whether such plumbing is centralized once. SignalR's default `IUserIdProvider` keys connections by the `NameIdentifier` claim. This codebase instead stamps a custom `user_id` claim on every JWT (see [TokenService](#tokenservice), `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:81`), so without a matching provider `Clients.User(userId)` would resolve zero connections and every targeted push would silently vanish.
-- **Walkthrough**: `const string UserIdClaimType = "user_id"` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:11`) keeps the claim name identical to the issuer's. `GetUserId(HubConnectionContext connection)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:14-15`) returns `connection.User?.FindFirst(UserIdClaimType)?.Value`. The null-conditional chain means an unauthenticated connection (no principal, or no claim) yields `null`, and SignalR then treats the connection as having no user rather than throwing during connection setup.
-- **Why it's built this way**: `sealed`, one claim in and one nullable string out. Naming the claim in a `const` on the reader side, matching the literal on the writer side, is what keeps the issuer and the connection router from drifting apart.
-- **Where it's used**: registered as `services.TryAddSingleton<IUserIdProvider, ClaimBasedUserIdProvider>()` in Infrastructure DI (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:561`); called by SignalR's connection manager on every server-initiated `Clients.User(...)`.
-
----
+- **What it is**: the deliberately minimal **credential** surface an Identity module's `User` aggregate exposes to the shared [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) workflow. Two properties, both password material. It is the contract that lets the framework's authentication plumbing verify and replace a password without knowing anything app-specific about the user (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:3-8`).
+- **Depends on**: nothing first-party; the BCL only (`byte[]`). Implemented transitively through [IPasswordChangeableUser](#ipasswordchangeableuser) by each app's `User` aggregate (see [User](group-24-identity-module.md#user)).
+- **Concept introduced: the inverted user contract.** Rather than the shared auth workflow depending on a concrete `User` class, `User` implements a small interface the framework owns. Profile fields, roles, linked aggregates, and claim sources stay app-specific: the shared workflow reaches those only through per-app hooks (`CreateAccessToken`, `CreateUser`), never through this contract (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:6-8`). `[Rubric §1, SOLID]` assesses interface segregation and dependency inversion, and this is a textbook case: the interface is exactly the credential surface and nothing more. `[Rubric §11, Security]` assesses credential handling, and the whole security-relevant surface of a `User` aggregate is now readable in five lines.
+- **Concept: a contract that got smaller on purpose.** The `<para>` block (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:9-14`) is the most instructive part of the file, because it records what is deliberately **absent**. Refresh tokens used to be members here: one plaintext `RefreshToken` column plus its expiry, per user. Two problems followed from that shape, and both are named in source. One user row could hold one token, so signing in on a phone signed the same account out of a laptop. And the column held a **usable bearer credential** in the users table, so a database read was enough to mint access tokens. Both are gone: sessions are rows in [RefreshSession](#refreshsession), hashed at rest and reached through [IRefreshSessionStore](#irefreshsessionstore), so this interface covers passwords only ([ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html)). `[Rubric §16, Maintainability]` applies to the removal itself: shrinking a framework contract is a breaking change for every consumer, and it was taken because the alternative was a security and UX defect baked into the contract shape.
+- **Walkthrough**: two members, both `byte[]` and both read-only.
+  - `byte[] PasswordHash` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:20`), the PBKDF2 hash produced by [IPasswordHasher](#ipasswordhasher).
+  - `byte[] PasswordSalt` (`:23`), the salt paired with it.
+  - Both sit inside a scoped `#pragma warning disable CA1819` (`:18`, restored on `:24`) that knowingly returns arrays, to mirror [IPasswordHasher](#ipasswordhasher)'s `byte[]` tuple and the EF-mapped `varbinary` columns rather than force a defensive copy on every read. The suppression's justification is written on the disable line itself, which is the convention this codebase uses everywhere it takes an analyzer exception.
+  - There is no mutator. Writing new material is the separate capability [IPasswordChangeableUser](#ipasswordchangeableuser) adds, so an aggregate that only ever authenticates never exposes a way to change its own password.
+- **Why it's built this way**: keeping the contract in Domain and keeping it small is what makes the shared auth workflow reusable across Store and ADC (both `User` aggregates satisfy it) while each aggregate stays free to model everything else its own way. See [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) for the password-material policy, [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) for the dual-fetch auth model this contract feeds, and [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html) for the refresh-token move.
+- **Where it's used**: it is half the generic constraint on the shared login and registration workflow, `where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IAuthUser` (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:59`), which reads both properties on the login path (`:159`) and writes the pair on registration (`:210`). It is also the base of [IPasswordChangeableUser](#ipasswordchangeableuser), and the shape hand-written test doubles copy (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Auth/AuthenticationServiceBaseTests.cs:972`).
+- **Caveats / not-in-source**: the doc comment on `PasswordSalt` still says the salt's length selects the verify algorithm (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:22`). That was true while [PasswordHasher](#passwordhasher) also verified a legacy HMAC-SHA512 format; the current implementation has one algorithm and one salt size (`SaltSize = 32`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:15`, with no legacy branch) per [ADR-102](https://ivanball.github.io/docs/adr/102-pbkdf2-only-password-hashing.html). The comment is stale; the code is the contract.
 
 ### IJwksProvider
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:11` · Level 0 · interface
 
 - **What it is**: the abstraction that returns the active `JsonWebKeySet` served at `/.well-known/jwks.json`. Implementations materialize the public signing key(s) in the JWK format that other services consume to validate access tokens (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:5-10`).
-- **Depends on**: `Microsoft.IdentityModel.Tokens.JsonWebKeySet` (NuGet). Implemented by [RsaJwksProvider](#rsajwksprovider); configured by [JwksSettings](group-14-module-system-composition.md#jwkssettings) and served by [JwksEndpointExtensions](group-12-api-hosting-mapping.md#jwksendpointextensions).
+- **Depends on**: `Microsoft.IdentityModel.Tokens.JsonWebKeySet` (NuGet, `:1`). Implemented by [RsaJwksProvider](#rsajwksprovider); configured by [JwksSettings](group-14-module-system-composition.md#jwkssettings) and served by [JwksEndpointExtensions](group-12-api-hosting-mapping.md#jwksendpointextensions).
 - **Concept introduced: publishing a public key instead of sharing a secret.** `[Rubric §11, Security]` assesses key management and blast radius, and `[Rubric §7, Microservices Readiness]` assesses whether a module can be lifted out without a rewrite. In an extracted-service topology, symmetric HS256 would require every service to hold the same secret, so any one compromised service can mint tokens for all of them. The asymmetric alternative ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)) keeps the RSA private key inside the Identity service and publishes only the public key at a well-known URL; peers fetch it and validate signatures without ever being able to sign. `IJwksProvider` is how the Identity API obtains that public key set to serve.
-- **Walkthrough**: a single synchronous member, `JsonWebKeySet GetJsonWebKeySet()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:19`). Synchronous is the deliberate shape because key material is resolved once and cached in-process by the implementation. The doc comment sets a contract that the implementation must honor: return an **empty** key set rather than throwing when no signing key is configured (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:13-18`), so `/.well-known/jwks.json` stays a valid, pollable URL even in a host where JWKS publishing is off.
-- **Why it's built this way**: an interface here lets tests inject a pre-built key set with no file I/O, and the empty-set contract makes the endpoint safe to map unconditionally instead of behind a feature check.
-- **Where it's used**: registered as `services.TryAddSingleton<IJwksProvider, RsaJwksProvider>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:154`) immediately after the `JwksSettings` options binding (`:150-153`); the JWKS minimal-API endpoint calls it, and consuming services fetch the resulting document through `AddForwardedJwtBearer` at startup.
-
----
+- **Walkthrough**: a single synchronous member, `JsonWebKeySet GetJsonWebKeySet()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:19`). Synchronous is the deliberate shape because key material is resolved once and cached in-process by the implementation. The doc comment sets a contract that the implementation must honor: return an **empty** key set rather than throwing when no signing key is configured (`:13-17`), so `/.well-known/jwks.json` stays a valid, pollable URL even in a host where JWKS publishing is off.
+- **Why it's built this way**: an interface here lets tests inject a pre-built key set with no file IO, and the empty-set contract makes the endpoint safe to map unconditionally instead of behind a feature check.
+- **Where it's used**: registered as `services.TryAddSingleton<IJwksProvider, RsaJwksProvider>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:169`) immediately after the `JwksSettings` options binding (`:165-168`); the JWKS minimal-API endpoint calls it, and consuming services fetch the resulting document through `AddForwardedJwtBearer` at startup (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/IJwksProvider.cs:9`).
 
 ### LoginProtectionSettings
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:9` · Level 0 · class
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:9` · Level 0 · class (sealed)
 
-- **What it is**: strongly typed, `[Range]`-validated configuration for brute-force login lockout and registration rate limiting, bound from the `LoginProtection` configuration section (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:5-8`).
-- **Depends on**: `System.ComponentModel.DataAnnotations` for `[Range]` (BCL). Consumed by [LoginProtectionService](#loginprotectionservice) through `IOptions<LoginProtectionSettings>`.
+- **What it is**: strongly typed, `[Range]`-validated configuration for brute-force login lockout and registration rate limiting, bound from the `LoginProtection` configuration section (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:5-7`).
+- **Depends on**: `System.ComponentModel.DataAnnotations` for `[Range]` (BCL, `:1`). Consumed by [LoginProtectionService](#loginprotectionservice) through `IOptions<LoginProtectionSettings>`.
 - **Concept**: `[Rubric §11, Security]` assesses whether brute-force defenses exist and are tunable, and this settings class is where the policy numbers live rather than being hard-coded into a handler. `[Rubric §16, Maintainability]` also applies in a small way: five `init`-only properties with defaults mean an app that configures nothing still gets a safe policy, and an app that configures one value inherits the rest.
 - **Walkthrough**: `const string SectionName = "LoginProtection"` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:12`) names the bound section. Two concerns follow.
-  - Account lockout: `MaxFailedAttempts` (default 5, `[Range(1, 100)]`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:17-18`), `MaxLockoutSeconds` (default 300, `[Range(1, 3600)]`, `:23-24`), `FailedAttemptWindowMinutes` (default 30, `[Range(1, 1440)]`, `:30-31`). The window comment (`:27-28`) is load-bearing for understanding the service: the attempt counter resets by cache expiration, not by a sweep job.
+  - Account lockout: `MaxFailedAttempts` (default 5, `[Range(1, 100)]`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:17-18`), `MaxLockoutSeconds` (default 300, `[Range(1, 3600)]`, `:23-24`), `FailedAttemptWindowMinutes` (default 30, `[Range(1, 1440)]`, `:30-31`). The window comment (`:26-29`) is load-bearing for understanding the service: the attempt counter resets by cache expiration, not by a sweep job.
   - Registration rate limiting: `MaxRegistrationsPerIpPerHour` (default 10, `[Range(1, 10000)]`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:36-37`) and `RegistrationRateLimitWindowMinutes` (default 60, `[Range(1, 1440)]`, `:42-43`).
-- **Why it's built this way**: `sealed` with `init`-only properties gives an immutable options object. Every property carries a `[Range]`, and the registration wires `.ValidateDataAnnotations().ValidateOnStart()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:133-136`), so an obviously unsafe value such as `MaxFailedAttempts = 0` fails the host at startup instead of quietly disabling lockout until someone notices in production. The `MaxLockoutSeconds` upper bound of 3600 is also what lets [LoginProtectionService](#loginprotectionservice) reason about its shift-clamp safely.
-- **Where it's used**: bound and validated in `AddInfrastructure` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:133-136`) immediately before [LoginProtectionService](#loginprotectionservice) is registered (`:137`). Its sibling [PasswordResetSettings](#passwordresetsettings) is bound in exactly the same shape three lines later (`:139-142`).
-
----
+- **Why it's built this way**: `sealed` with `init`-only properties gives an immutable options object. Every property carries a `[Range]`, and the registration wires `.ValidateDataAnnotations().ValidateOnStart()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:131-134`), so an obviously unsafe value such as `MaxFailedAttempts = 0` fails the host at startup instead of quietly disabling lockout until someone notices in production. The `MaxLockoutSeconds` upper bound of 3600 is also what lets [LoginProtectionService](#loginprotectionservice) reason about its shift-clamp safely.
+- **Where it's used**: bound and validated in `AddInfrastructure` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:131-134`) immediately before [LoginProtectionService](#loginprotectionservice) is registered (`:135`). Its sibling [PasswordResetSettings](#passwordresetsettings) is bound in exactly the same shape two lines later (`:137-140`), as is [RefreshSessionSettings](#refreshsessionsettings) (`:145-148`).
 
 ### PasswordResetEntry
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:171` · Level 0 · record
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:171` · Level 0 · record (internal sealed)
 
 - **What it is**: the cached reset record behind the forgot-password flow: what [PasswordResetTokenService](#passwordresettokenservice) writes into the cache when a reset token is issued, and reads back when one is redeemed. It is `internal sealed`, declared as a second type at the bottom of its service's file (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:171-175`).
 - **Depends on**: nothing first-party except the `UserIdentifierType` alias (the per-module `global using` identifier alias taught in the primer, [ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)). Four positional parameters, all BCL primitives.
@@ -1800,162 +2065,185 @@ live in later groups; this chapter is the engine those endpoints call into.
   - `UserIdentifierType UserId` (`:173`): the account the token redeems to (`:168`). Storing the id in the record is what lets redemption resolve the user without a second lookup by email.
   - `int FailedAttempts` (`:174`): wrong tokens presented against this record so far (`:169`), the counter the attempt cap is enforced against.
   - `long ExpiresAtUnixSeconds` (`:175`): when the record expires (`:170`). This one exists for a specific reason explained at the rewrite site: when a failed attempt bumps the counter, the record is re-cached with the **remaining** lifetime computed from this field, so a wrong guess cannot extend how long the token stays redeemable (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:138`, `:146-152`).
-- **Why it's built this way**: being a `record` gives the non-destructive `with` expression that the attempt counter update relies on (`entry with { FailedAttempts = attempts }`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:150`), so the rewrite is a copy rather than a mutation. Being `internal` keeps a cache-layout detail out of the package's public API: nothing outside the Infrastructure assembly should be able to construct or read one. See [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) for why the reset lifecycle lives in the cache at all.
+- **Why it's built this way**: being a `record` gives the non-destructive `with` expression that the attempt-counter update relies on (`entry with { FailedAttempts = attempts }`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:150`), so the rewrite is a copy rather than a mutation. Being `internal` keeps a cache-layout detail out of the package's public API: nothing outside the Infrastructure assembly should be able to construct or read one. See [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) for why the reset lifecycle lives in the cache at all.
 - **Where it's used**: written by `IssueAsync` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:82-88`), read by `ValidateAndConsumeAsync` (`:100`), and rewritten by `RecordFailedAttemptAsync` (`:148-152`). It appears nowhere else.
 
----
-
-### PasswordHasher
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12` · Level 1 · class
-
-- **What it is**: the [IPasswordHasher](#ipasswordhasher) implementation. It hashes new passwords with PBKDF2-HMAC-SHA512 at 600,000 iterations (OWASP 2023 guidance) and verifies against both the current PBKDF2 format and a legacy HMAC-SHA512 format, choosing the algorithm from the stored salt length (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:7-11`).
-- **Depends on**: [IPasswordHasher](#ipasswordhasher) (the Application port, imported on `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:3`); `System.Security.Cryptography` (`Rfc2898DeriveBytes`, `RandomNumberGenerator`, `HMACSHA512`, `CryptographicOperations`) and `System.Text.Encoding` (BCL).
-- **Concept introduced: password hashing with a salt-length-encoded algorithm selector.** `[Rubric §11, Security]` assesses credential-at-rest protection, and this type is the clearest expression of it in the framework. Three deliberate choices are visible in source: a work factor high enough to make offline brute force expensive (`Iterations = 600_000`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:24`), constant-time comparison to defeat timing side channels (`:56-58`), and a migration path that upgrades old hashes without adding a flag column. The salt-length trick is the teaching point: a PBKDF2 salt is 32 bytes (`SaltSize`, `:15`) while a legacy HMAC-SHA512 salt is the 128-byte HMAC key (`LegacyHmacSaltSize`, `:27`), so the stored salt itself records which algorithm produced the hash. No schema change, no ambiguity, and no way for the two formats to be confused.
-- **Walkthrough**
-  - Constants first: `SaltSize = 32` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:15`), `HashSize = 64` (512 bits, `:18`), `Iterations = 600_000` (`:24`), `LegacyHmacSaltSize = 128` (`:27`).
-  - `HashPassword(string password)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:30`): guards blank input with `ArgumentException.ThrowIfNullOrWhiteSpace` (`:32`), draws a fresh 32-byte salt from `RandomNumberGenerator.GetBytes` (`:34`, a CSPRNG rather than `Random`), derives the hash via `Rfc2898DeriveBytes.Pbkdf2` with SHA512 (`:35-40`), and returns the `(Hash, Salt)` tuple (`:42`). New passwords are always PBKDF2: nothing writes the legacy format.
-  - `VerifyPassword(string password, byte[] hash, byte[] salt)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:46`): null-guards all three arguments (`:48-50`), selects the algorithm by `salt.Length == LegacyHmacSaltSize` (`:52-54`), and compares with `CryptographicOperations.FixedTimeEquals` (`:58`) so the comparison always walks the full length regardless of where the first difference occurs. Note the PBKDF2 branch derives `hash.Length` bytes rather than `HashSize` (`:54`), so a stored hash of a different length still verifies.
-  - `ComputePbkdf2Hash` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:62`) and `ComputeLegacyHash` (`:71`, `using var hmac = new HMACSHA512(salt)`) are the two private algorithm bodies.
-- **Why it's built this way**: verification stays backward-compatible with pre-existing HMAC hashes so a deployment can migrate lazily, while every write is PBKDF2, so the stored population converges on the strong format as users log in and change passwords, with no data migration and no downtime. `FixedTimeEquals` and the 600k iteration count are the concrete OWASP-aligned defenses; [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) records the policy.
-- **Where it's used**: registered `services.TryAddSingleton<IPasswordHasher, PasswordHasher>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:475`); called by the shared change-password workflow (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:55` verify, `:61` re-hash), by the forgot-password reset workflow (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:79`, which hashes but never verifies: possession of the reset token replaces knowledge of the old password), and by each Identity module's register and login handlers, against the `PasswordHash`/`PasswordSalt` exposed by [IAuthUser](#iauthuser).
-
----
-
 ### RsaJwksProvider
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:15` · Level 1 · class
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:15` · Level 1 · class (sealed)
 
 - **What it is**: the production [IJwksProvider](#ijwksprovider). It builds a `JsonWebKeySet` from a PEM-encoded RSA public key configured via [JwksSettings](group-14-module-system-composition.md#jwkssettings), and returns an empty set when publishing is disabled (the default) or no key is configured (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:8-13`).
-- **Depends on**: [IJwksProvider](#ijwksprovider); [JwksSettings](group-14-module-system-composition.md#jwkssettings) via `IOptions<JwksSettings>`; `System.Security.Cryptography.RSA` and `Microsoft.IdentityModel.Tokens` (`JsonWebKeySet`, `RsaSecurityKey`, `JsonWebKeyConverter`, `SecurityAlgorithms`).
+- **Depends on**: [IJwksProvider](#ijwksprovider); [JwksSettings](group-14-module-system-composition.md#jwkssettings) via `IOptions<JwksSettings>` (`:2`, `:4`, `:15`); `System.Security.Cryptography.RSA` and `Microsoft.IdentityModel.Tokens` (`JsonWebKeySet`, `RsaSecurityKey`, `JsonWebKeyConverter`, `SecurityAlgorithms`).
 - **Concept**: this reinforces the JWKS story introduced on [IJwksProvider](#ijwksprovider) (`[Rubric §11, Security]`, `[Rubric §7, Microservices Readiness]`, [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)) and adds one lesson of its own about caching failure. The PEM parse cost is paid once and memoized in a `Lazy<JsonWebKeySet>` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:22-23`), but the mode is `LazyThreadSafetyMode.PublicationOnly`, not the default `ExecutionAndPublication`. The comment above it (`:17-21`) explains why, and it is worth internalizing: the default `Lazy<T>` caches a factory **exception** forever, so a single transient IO failure reading the PEM file would brick `/.well-known/jwks.json` (and with it cross-service auth) until the process restarts. `PublicationOnly` caches only a successful result and lets a later call retry; concurrent factory runs are harmless here because `BuildKeySet` is pure and disposes its own `RSA`. That is `[Rubric §29, Resilience]` reasoning applied to one field declaration.
 - **Walkthrough**
   - Primary constructor takes `IOptions<JwksSettings> options` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:15`) and the `Lazy<JsonWebKeySet>` captures it (`:22-23`); `GetJsonWebKeySet()` is just `_cachedKeySet.Value` (`:26`).
   - `BuildKeySet(JwksSettings settings)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:28`) short-circuits to an empty `JsonWebKeySet` when `!settings.Enabled` (`:30-33`) or when the resolved PEM is blank (`:36-39`). Those are the two paths that satisfy the [IJwksProvider](#ijwksprovider) never-throw contract.
-  - With a key present it imports the PEM into a disposable `RSA` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:41-42`), exports **only** the public parameters (`ExportParameters(includePrivateParameters: false)`, `:44`) into an `RsaSecurityKey` tagged with the configured `KeyId` (`:46`), converts it with `JsonWebKeyConverter.ConvertFromRSASecurityKey` (`:49`), marks it `Use = "sig"` and `Alg = SecurityAlgorithms.RsaSha256` (`:50-51`) so consumers know the key's purpose and algorithm, and adds it to a fresh key set (`:53-55`).
-  - `ResolvePem(JwksSettings settings)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:58`) prefers the inline `RsaPublicKeyPem` (`:60-63`) and otherwise reads `RsaPublicKeyPath` from disk with a synchronous `File.ReadAllText` (`:70`), justified in the comment because the read happens on the first request and its success is cached, while a failure is deliberately not cached (`:67-69`).
-- **Why it's built this way**: exporting only the public parameters guarantees the private key can never reach the JWKS document even by accident. The inline-PEM-or-path pair supports both secrets-manager injection (env var or config) and a volume-mounted key file, which are the two deployment shapes the framework's samples use. `sealed`, and registered singleton (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:154`) so the cache is process-wide.
+  - With a key present it imports the PEM into a disposable `RSA` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:41-42`), exports **only** the public parameters (`ExportParameters(includePrivateParameters: false)`, `:44`) into an `RsaSecurityKey` tagged with the configured `KeyId` (`:44-47`), converts it with `JsonWebKeyConverter.ConvertFromRSASecurityKey` (`:49`), marks it `Use = "sig"` and `Alg = SecurityAlgorithms.RsaSha256` (`:50-51`) so consumers know the key's purpose and algorithm, and adds it to a fresh key set (`:53-55`).
+  - `ResolvePem(JwksSettings settings)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:58`) prefers the inline `RsaPublicKeyPem` (`:60-63`) and otherwise reads `RsaPublicKeyPath` from disk with a synchronous `File.ReadAllText` (`:70`), justified in the comment because the read happens on the first request and its success is cached, while a failure is deliberately not cached (`:67-69`). With neither configured it returns `null` (`:73`), which is what lands `BuildKeySet` on the empty-set path.
+- **Why it's built this way**: exporting only the public parameters guarantees the private key can never reach the JWKS document even by accident. The inline-PEM-or-path pair supports both secrets-manager injection (env var or config) and a volume-mounted key file, which are the two deployment shapes the framework's samples use. `sealed`, and registered singleton (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:169`) so the cache is process-wide.
 - **Where it's used**: the JWKS minimal-API endpoint calls `GetJsonWebKeySet()` per request; see [JwksEndpointExtensions](group-12-api-hosting-mapping.md#jwksendpointextensions).
 
----
+### IPasswordChangeableUser
+> MMCA.Common.Domain · `MMCA.Common.Domain.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IPasswordChangeableUser.cs:11` · Level 3 · interface
 
-### TokenService
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:23` · Level 2 · class
+- **What it is**: the password-rotation surface an Identity module's `User` aggregate exposes to the shared [ChangePasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#changepasswordhandlerbasetuser-tcommand) workflow. It is one method on top of [IAuthUser](#iauthuser) (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IPasswordChangeableUser.cs:5-9`).
+- **Depends on**: [IAuthUser](#iauthuser) (its base interface, `:11`) and [Result](group-01-result-error-handling.md#result) from `MMCA.Common.Shared.Abstractions` (`:1`).
+- **Concept: capability interfaces layered by workflow.** `[Rubric §1, SOLID]` assesses interface segregation, and this is the pattern applied twice over: a `User` that only ever authenticates satisfies [IAuthUser](#iauthuser); a `User` whose app offers self-service password change implements this one and gets `PasswordHash` and `PasswordSalt` along with it, because the workflow must verify the current credential before writing the new one (the XML comment states exactly this reason, `:7-9`). Inheritance here encodes a real dependency between capabilities rather than a taxonomy. `[Rubric §4, DDD]` also applies: the method returns [Result](group-01-result-error-handling.md#result), so the aggregate can refuse the change (an invariant failure) instead of the handler assuming success.
+- **Walkthrough**: one member, `Result ChangePassword(byte[] newPasswordHash, byte[] newPasswordSalt)` (`:19`). The aggregate receives already-hashed material, never a plaintext password: hashing is the handler's job via [IPasswordHasher](#ipasswordhasher), so no plaintext ever reaches the Domain layer or an EF change tracker.
+- **Why it's built this way**: keeping the hash-and-salt pair as the parameter shape mirrors [IAuthUser](#iauthuser)'s two properties and [IPasswordHasher](#ipasswordhasher)'s tuple return, so the whole chain from handler to aggregate speaks one vocabulary. See [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html).
+- **Where it's used**: as the generic constraint `where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IPasswordChangeableUser` on the shared change-password workflow (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:28`), which verifies the current password (`:55`), hashes the new one (`:61`), and calls `ChangePassword` with the result (`:62`). The forgot-password sibling, [ResetPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand), calls the same member on the redeem path after [IPasswordResetTokenService](#ipasswordresettokenservice) has identified the account (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:79-80`). Both apps' [User](group-24-identity-module.md#user) aggregates declare it (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34-35`, `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:29-30`), which is also how they pick up [IAuthUser](#iauthuser).
 
-- **What it is**: the JWT token service. It mints access tokens (user id, email, role, full name, plus optional extra claims), generates cryptographically random refresh tokens, exposes both token lifetimes, and validates expired tokens for the refresh flow. It supports both symmetric HS256 and asymmetric RS256 signing, selected once at construction (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:11-22`).
-- **Depends on**: [ITokenService](#itokenservice); [IJwtSettings](group-14-module-system-composition.md#ijwtsettings); [JwtSigningAlgorithm](group-14-module-system-composition.md#jwtsigningalgorithm); `System.IdentityModel.Tokens.Jwt`, `Microsoft.IdentityModel.Tokens`, `System.Security.Cryptography`, and `TimeProvider` (BCL) for testable timestamps.
-- **Concept introduced: dual-algorithm JWT issuance and an intentional lifetime bypass.** `[Rubric §11, Security]` assesses token issuance, refresh handling, and algorithm-confusion defense. Two security-critical choices are explicit in source. First, `GetPrincipalFromExpiredToken` sets `ValidateLifetime = false` on purpose (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:131`) under a scoped `#pragma warning disable CA5404` whose comment states the reason: the refresh flow must read claims out of an already-expired access token (`:130`). Second, validation pins the algorithm with `ValidAlgorithms = [_validationAlgorithm]` (`:136`) **and** re-checks the token header's `Alg` after validation succeeds (`:145-146`), which is the defense against the classic algorithm-substitution attack where an attacker takes the public RS256 key and uses it as an HS256 shared secret. `[Rubric §7, Microservices Readiness]` also applies: RS256 is the extracted-service mode ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)), where the issuer signs with its private key and publishes the public key via [RsaJwksProvider](#rsajwksprovider) so peers validate without a shared secret; HS256 is the monolith default.
+### IUserPreferences
+> MMCA.Common.Domain · `MMCA.Common.Domain.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IUserPreferences.cs:10` · Level 3 · interface
+
+- **What it is**: the stored UI-preference surface an Identity module's `User` aggregate exposes to the shared preference read and write workflows: preferred culture, preferred theme, and a single method that replaces both (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IUserPreferences.cs:5-8`).
+- **Depends on**: [Result](group-01-result-error-handling.md#result) from `MMCA.Common.Shared.Abstractions` (`:1`). Nothing else; it is deliberately not tied to [IAuthUser](#iauthuser), because preferences are orthogonal to credentials.
+- **Concept: null as "not chosen".** `[Rubric §27, i18n]` assesses whether locale is a first-class, persisted user choice rather than a per-session guess, and `[Rubric §19, State Management]` assesses where such UI state lives. Both properties are nullable, and the contract states that `null` means the user has not chosen that preference (`:7-8`), which is what lets the UI fall back to a browser or host default without needing a separate "is set" flag. See [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) for the culture model and [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html) for the theme model.
+- **Walkthrough**: `string? PreferredCulture` (for example `"es"`, `:13`) and `string? PreferredTheme` (`"light"` or `"dark"`, `:16`) are read-only. `Result UpdatePreferences(string? preferredCulture, string? preferredTheme)` (`:25`) replaces **both** at once. The subtlety is documented at `:18-21`: because the method is a whole-object replace, the shared workflow always passes the currently stored value for any field the request left `null`, so writing one preference never silently clears the other. That read-then-merge is visible in the caller (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePreferences/ChangePreferencesHandlerBase.cs:53`).
+- **Why it's built this way**: one replace method keeps the aggregate's invariant check in a single place, and pushing the merge into the workflow keeps the null-means-unchanged policy out of every app's `User`. Returning [Result](group-01-result-error-handling.md#result) lets the aggregate reject an unsupported culture or theme value.
+- **Where it's used**: the read workflow constrains `where TUser : AuditableBaseEntity<UserIdentifierType>, IUserPreferences` and projects both properties into a response (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/GetPreferences/GetUserPreferencesHandlerBase.cs:23`, `:44`); the write workflow constrains `where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IUserPreferences` (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePreferences/ChangePreferencesHandlerBase.cs:26`). Both are cross-linked as [GetUserPreferencesHandlerBase<TUser>](group-14-module-system-composition.md#getuserpreferenceshandlerbasetuser) and [ChangePreferencesHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#changepreferenceshandlerbasetuser-tcommand), and both apps' [User](group-24-identity-module.md#user) aggregates implement the interface.
+
+### RefreshSession
+> MMCA.Common.Domain · `MMCA.Common.Domain.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/RefreshSession.cs:31` · Level 3 · class (sealed)
+
+- **What it is**: one refresh-token session, meaning a single device's right to mint access tokens for one user, held as a **hash** of the issued refresh token. A user has as many rows as they have signed-in devices, so signing in on a phone no longer signs the same account out of a laptop (BR-205/206, `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/RefreshSession.cs:7-10`).
+- **Depends on**: [Result](group-01-result-error-handling.md#result) and [Error](group-01-result-error-handling.md#error) (`:3`), the `UserIdentifierType` alias, and from the BCL `System.Security.Cryptography.SHA256`, `System.Text.Encoding`, and `Convert.ToHexString` (`:1-2`). Persisted by [EFRefreshSessionStore](group-07-persistence-ef-core.md#efrefreshsessionstore) behind [IRefreshSessionStore](#irefreshsessionstore), mapped by [RefreshSessionModelBuilderExtensions](group-07-persistence-ef-core.md#refreshsessionmodelbuilderextensions), swept by [RefreshSessionCleanupService](group-07-persistence-ef-core.md#refreshsessioncleanupservice), tuned by [RefreshSessionSettings](#refreshsessionsettings).
+- **Concept introduced: a refresh token is a credential, so store its digest and make reuse detectable.** `[Rubric §11, Security]` assesses how a long-lived credential is stored, rotated, and revoked, and this one class carries three separate properties that are each worth understanding on their own.
+  - **Hash at rest.** The plaintext refresh token exists only in the response that hands it to the client; the row keeps `TokenHash` (`:63-64`), so a database read cannot mint tokens (`:11-15`). That forces one design consequence the comment calls out explicitly: because lookups are **by hash**, the digest must be unsalted and deterministic. A per-row salt would make the token unfindable. This is the opposite trade-off from [PasswordHasher](#passwordhasher), and legitimately so: a refresh token is 64 random bytes from a CSPRNG rather than a human-chosen password, so there is no dictionary to run against it and no value in slowing the digest down.
+  - **Rotation leaves a chain.** Using a session revokes it and records its successor in `ReplacedByTokenHash` (`:16-21`, `:75-79`). The point is not bookkeeping: presenting an already-rotated token lands on a **revoked row** rather than on nothing, and that difference is the signal that a token was replayed. A stolen-and-replayed token therefore triggers revocation of the whole family instead of failing quietly (BR-206 reuse detection, [ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html)).
+  - **Framework bookkeeping, not an aggregate.** The class comment (`:22-29`) is explicit that this is a flat record like [OutboxMessage](group-04-events-outbox.md#outboxmessage) and [AuditTrailEntry](group-07-persistence-ef-core.md#audittrailentry): no audit stamps, no soft-delete flag, no concurrency token. The reason matters for `[Rubric §8, Data Architecture]`: rows are never deleted or edited except to be revoked, and **no global query filter may hide a revoked row**, because the reuse check depends on finding it. It is also mapped only where a consumer opts in (`ApplyRefreshSessionConfiguration`), since sessions belong to the Identity module's database rather than to every data source ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) database-per-service).
 - **Walkthrough**
-  - Fields (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:25-34`): settings, `TimeProvider`, the `SigningCredentials`, the `SecurityKey` used for validation, the pinned algorithm string, and two nullable owned `RSA` handles. The comment on `:31-32` is the reason `Dispose` exists at all: the `RsaSecurityKey` wrappers hold weak references to those `RSA` objects, so someone must own them.
-  - Constructor (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:47`): materializes signing and validation keys once. For `JwtSigningAlgorithm.RS256` it calls `BuildRsaCredentials` and pins `SecurityAlgorithms.RsaSha256` (`:53-58`); otherwise `BuildHmacCredentials` and `HmacSha256` (`:59-63`). `timeProvider` is optional and falls back to `TimeProvider.System` (`:51`) so tests can construct the service directly with a fake clock.
-  - `GenerateAccessToken` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:67`): builds a seven-claim set of `sub`, `jti`, `iat`, the custom `user_id`, name, email, and role (`:76-85`), appends any caller-supplied claims (`:87-90`), and writes a `JwtSecurityToken` whose issuer, audience, `notBefore` and `expires` come from settings and the injected clock (`:92-100`). Both the `sub` and `user_id` claims are formatted with `CultureInfo.InvariantCulture` (`:78`, `:81`), which is the writer half of the contract that [CurrentUserService](#currentuserservice) reads back invariantly.
-  - `GenerateRefreshToken` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:104`): 64 random bytes from `RandomNumberGenerator.GetBytes`, Base64-encoded (`:106-107`). It is an opaque bearer string, not a JWT: nothing is derived from it, it is only compared against the stored value.
-  - `AccessTokenLifetime` and `RefreshTokenLifetime` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:111`, `:114`) project the configured minutes and days as `TimeSpan`s so callers such as the shared auth workflow compute expiry without re-reading settings.
-  - `GetPrincipalFromExpiredToken` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:123`): validates issuer, audience, signing key and algorithm but not lifetime (`:125-137`), then applies the post-validation `Alg` re-check (`:145-149`). Any exception is swallowed and returns `null` (`:153-156`), so a malformed or forged token produces a plain "no principal" answer rather than leaking a parser exception to the caller.
-  - `Dispose` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:160`): releases both owned `RSA` handles.
-  - `BuildHmacCredentials` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:166`) throws `InvalidOperationException` when `SecretForKey` is missing (`:168-172`) and Base64-decodes it into a `SymmetricSecurityKey` (`:175`). `BuildRsaCredentials` (`:180`) throws when `RsaPrivateKeyPem` is missing (`:183-187`), imports the private key, and then resolves a validation key: the configured `RsaPublicKeyPem` when present, otherwise the public parameters derived from the private key (`:196-210`), so an issuer configured with only a private key can still self-validate its own tokens during refresh. Both nested `try`/`catch` blocks dispose the partially-created `RSA` before rethrowing (`:215-225`), so a bad PEM does not leak a native key handle. Missing key material therefore fails at construction, meaning at host startup, not on the first login.
-- **Why it's built this way**: see [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) for the RS256 rationale. The DI lifetime is worth reading in full at the registration site (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:468-474`): the service is `TryAddSingleton` because a scoped lifetime disposed the underlying `RSA` at end-of-request while `Microsoft.IdentityModel.Tokens`' static `CryptoProviderCache` still held the cached `AsymmetricSignatureProvider` wrapping it, throwing `ObjectDisposedException` on the next RS256 sign. Singleton is safe because the constructor depends only on the singleton `IJwtSettings` and the service is stateless afterwards.
-- **Where it's used**: the shared [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser) login/refresh flow and each Identity module's auth handlers. The `user_id` claim it emits is exactly what [CurrentUserService](#currentuserservice) and [ClaimBasedUserIdProvider](#claimbaseduseridprovider) read back.
+  - **Width and reason constants** (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/RefreshSession.cs:33-55`): `TokenHashLength = 64` (the width of a hex-encoded SHA-256 digest, `:34`), `IpAddressMaxLength = 45` (sized to fit an IPv4-mapped IPv6 literal, `:37`), `UserAgentMaxLength = 512` (`:40`), `ReasonRevokedMaxLength = 64` (`:43`), and the four revocation reasons `ReasonRotated` (`:46`), `ReasonSignedOut` (`:49`), `ReasonReuseDetected` (`:52`), and `ReasonSessionCap` (`:55`). Publishing the widths as `public const` on the Domain type is what lets the EF configuration derive every column width from the same numbers (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionModelBuilderExtensions.cs:47`, `:52`, `:56-58`) rather than repeating magic numbers in a mapping file.
+  - **State** (`:57-92`): `Id` defaults to a fresh `Guid` (`:58`); `UserId`, `TokenHash`, `CreatedAt` and `ExpiresAt` are `required` and `init`-only (`:61-70`), so a session cannot be constructed without them and cannot be rewritten afterwards. The three mutable members carry `private set` and change only through `Revoke`: `RevokedAt` (`:73`), `ReplacedByTokenHash` (`:79`), `ReasonRevoked` (`:82`). `IpAddress` (`:89`) and `UserAgent` (`:92`) are optional `init`-only capture. The comment on `IpAddress` (`:84-88`) is a good example of documenting what a field is **not** for: it identifies a session in a "your devices" list and gives an audit trail for a revocation, and it is never part of a validation decision, so a mobile client changing networks is not signed out.
+  - **Derived state**: `IsRevoked => RevokedAt is not null` (`:95`) and `IsActiveAt(DateTime utcNow) => !IsRevoked && ExpiresAt > utcNow` (`:99`). Passing the instant in rather than reading a clock keeps the type free of ambient time, which is what makes it directly unit-testable (see [RefreshSessionTests](group-27-testing-infrastructure.md#refreshsessiontests)).
+  - **`Create(...)`** (`:112-145`), the factory returning `Result<RefreshSession>` in the framework's standard shape (see the primer on factory methods and the [Result](group-01-result-error-handling.md#result) pattern). Two guards: a blank token fails with `RefreshSession.TokenRequired` (`:120-126`), and an expiry at or before creation fails with `RefreshSession.ExpiryInPast` (`:128-134`), both `Error.Validation`. On success it hashes the token on the way in (`:139`), so **the plaintext never reaches a property**, and truncates the two optional capture fields to their column widths (`:142-143`). Truncating in the factory rather than trusting the caller is what keeps an oversized `User-Agent` header from turning a login into a database error.
+  - **`HashToken(string refreshToken)`** (`:160-164`): `Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)))`, guarded by `ArgumentException.ThrowIfNullOrWhiteSpace` (`:162`). The `<remarks>` (`:151-157`) is the one piece of this file to read twice: the encoding is **part of the contract, not an implementation detail**, because a consumer's data migration has to reproduce it exactly to carry existing tokens over. It even gives the T-SQL equivalent, `CONVERT(char(64), HASHBYTES('SHA2_256', CONVERT(varchar(max), Token)), 2)`, and explains both halves of why it matches: style 2 emits upper-case hex with no `0x` prefix, and the `varchar` conversion is what makes the hashed bytes UTF-8 rather than SQL Server's default UTF-16. `[Rubric §8, Data Architecture]` and `[Rubric §34, Architecture Governance & Documentation]` both apply here: a hash format that a migration must reproduce is a published contract, and it is documented as one.
+  - **`Revoke(DateTime revokedAt, string reason, string? replacedByTokenHash = null)`** (`:174-189`): the only mutator. It is **idempotent by refusal** (`:166-169`), returning `Error.Invariant("RefreshSession.AlreadyRevoked", ...)` when the session is already revoked (`:176-182`) rather than silently overwriting, so the first reason and instant recorded are the ones kept. That matters for forensics: a session revoked by reuse detection must not have that reason overwritten by a later sign-out. On success it stamps the instant, the truncated reason, and the successor hash (`:184-186`).
+  - `Truncate` (`:191-192`) is the shared private helper, returning the value unchanged when it is null, empty, or already short enough.
+- **Why it's built this way**: [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html) records the move from one plaintext refresh-token column on the user row to a session table, and [ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html) the rotation-and-reuse-detection model the chain implements. Keeping the class free of audit stamps and soft-delete is deliberate rather than an omission, and keeping `Create`/`Revoke` as the only ways in and out means every row in the table was validated and every revoked row carries a reason.
+- **Where it's used**: [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) is the main consumer. It hashes a presented token to look the session up (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:349`, `:593`), creates one per login (`:628`) and per rotation (`:668`), revokes on sign-out (`:360`, `:367`, `:385`, `:456`), revokes the live family on reuse detection (`:603`, `:691`), and evicts the oldest session with `ReasonSessionCap` when a user exceeds `RefreshSessions:MaxActiveSessionsPerUser` (`:733`, documented at `:111`). Rotation itself is a claim rather than a plain mutation: [IRefreshSessionStore](#irefreshsessionstore)`.TryRotateAsync` revokes with `ReasonRotated` and links the successor (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IRefreshSessionStore.cs:104`; the EF implementation does it as a conditional `ExecuteUpdate`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:129`, `:142`). The table is mapped through `ApplyRefreshSessionConfiguration` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:680`), and the account-deletion path deliberately does **not** revoke sessions (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:82-86`): the refresh flow re-fetches the user through the soft-delete query filter, so an erased account's sessions stop working the moment the delete commits.
 
----
+### IErasableUser
+> MMCA.Common.Domain · `MMCA.Common.Domain.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30` · Level 4 · interface
+
+- **What it is**: the erasure surface an Identity module's `User` aggregate exposes to the shared [DeleteUserHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#deleteuserhandlerbasetuser-tcommand) workflow: soft-delete the row, then irreversibly anonymize the personal data it still holds (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:6-9`).
+- **Depends on**: [IAnonymizable](group-02-domain-building-blocks.md#ianonymizable) (its base, contributing `Result Anonymize()`, `:1` and `:30`) and [Result](group-01-result-error-handling.md#result) (`:2`).
+- **Concept introduced: why a `Delete()` that already exists on the base entity is redeclared here.** This is the most instructive comment in the file and it is worth reading in full (`:11-29`). [AuditableBaseEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) already has a `Delete()`. But an app's `User` may **hide** it (`public new Result Delete()`) to couple account-specific behavior to deletion. A hidden method is not an override, and C# member lookup on a generic type parameter prefers the members of its **class** constraint, so a shared workflow writing `user.Delete()` would bind to the base implementation and silently skip the app's version. Because the app `User` lists this interface in its own base list, the interface map resolves to the most derived `Delete()` declared on the app type, so invoking it **through the interface** forces interface dispatch and reaches exactly the member the app intended. `[Rubric §1, SOLID]` (Liskov: the hidden method is exactly the substitutability hazard this closes) and `[Rubric §15, Best Practices & Code Quality]` both apply, and this is a case where a language rule, not a style preference, dictates the design. The second paragraph (`:25-28`) adds the compile-time guarantee: the base entity deliberately does **not** implement this interface, so a consumer that forgets to declare it fails the generic constraint at compile time rather than losing behavior at run time.
+- **Walkthrough**: one declared member, `Result Delete()` (`:37`), documented as soft-delete plus whatever the app couples to deletion (`:32-34`), returning a failure when the account is already deleted (`:36`). Inherited from [IAnonymizable](group-02-domain-building-blocks.md#ianonymizable) is `Result Anonymize()`, which must be idempotent. The two-step order is visible in the caller: cast once to the interface (`IErasableUser erasable = user;`, `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:93`, with the reason spelled out at `:88-92`), `erasable.Delete()` first (`:94`), the app's own tail hook next (`OnAfterSoftDeleteAsync`, `:101`), then `erasable.Anonymize()` (`:108`), each short-circuiting on failure.
+- **Why it's built this way**: soft-delete alone hides a row but retains its personal data, so it does not satisfy an erasure request; anonymize-in-place overwrites the personal fields while keeping the row so foreign keys and the audit trail survive ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)). Splitting the two into separate members lets the workflow run app-specific work between them, which the handler documents as the only point where an app can both read the personal data and know the delete succeeded (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:21-22`). `[Rubric §30, Compliance, Privacy & Data Governance]` assesses exactly this: an erasure path that does not destroy referential integrity.
+- **Where it's used**: the generic constraint `where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IErasableUser` on the shared delete-user workflow (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:41`), implemented by each app's [User](group-24-identity-module.md#user) aggregate (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34-35`, `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:29-30`).
+- **Caveats / not-in-source**: the interface's own comment says an app typically hides `Delete()` to revoke the refresh token (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:16`, `:34`). That phrasing predates the move to [RefreshSession](#refreshsession) rows and no longer describes either app. ADC is the only consumer that hides the method, and its version calls `base.Delete()` and raises a `UserDeleted` domain event (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:341-350`), with the XML comment there stating outright that sessions are not touched and do not need to be. MMCA.Store does not hide `Delete()` at all. The load-bearing lesson (interface dispatch over a possibly-hidden base member) is unchanged; the example in the comment is stale.
 
 ### LoginProtectionService
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:19` · Level 5 · class
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:19` · Level 5 · class (sealed)
 
 - **What it is**: the cache-backed brute-force and rate-limiting service: exponential-backoff account lockout after repeated login failures, plus a per-IP registration rate limit (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:9-18`).
-- **Depends on**: [ILoginProtectionService](#iloginprotectionservice) (the Application port); [LoginProtectionSettings](#loginprotectionsettings) via `IOptions<>`; [ICacheService](group-09-caching.md#icacheservice); [Result](group-01-result-error-handling.md#result) and [Error](group-01-result-error-handling.md#error); and the [Email](group-02-domain-building-blocks.md#email) value object, used purely as a normalizer.
-- **Concept introduced: counter keys must be normalized the same way the lookup is.** `[Rubric §11, Security]` assesses brute-force protection and rate limiting; `[Rubric §10, Cross-Cutting]` assesses whether it is one shared service rather than logic copied per endpoint. Two mechanisms in this file deserve close reading.
-  - **Key normalization** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:25-43`): `NormalizeIdentity` runs the supplied address through [Email](group-02-domain-building-blocks.md#email)`.Create` and uses the normalized value (`:39-41`). Without it, the counter keys are built from raw request input while the user lookup runs against the normalized value object, so `User@x.com`, `user@x.com` and `" user@x.com "` resolve to one account but get **independent** attempt counters, and an attacker defeats the [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) backoff just by varying capitalization. A malformed address (which never matches a user but still increments a counter) falls back to the same trim-and-lowercase shape (`:41`) so its attempts collapse onto one key too. The `#pragma warning disable CA1308` (`:40`) is scoped and justified: lowercase is the RFC 5321 normalization `Email` itself performs. [PasswordResetTokenService](#passwordresettokenservice) copies this helper verbatim and cites this type as the reason (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:34-38`).
-  - **The lockout curve** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:80-89`): `excessAttempts = newCount - MaxFailedAttempts` (`:82`) drives `lockoutSeconds = Math.Min(1 << Math.Min(excessAttempts, 30), MaxLockoutSeconds)` (`:88`), doubling the lockout per excess failure (1s, 2s, 4s, and so on) up to the configured cap. The inner `Math.Min(excessAttempts, 30)` clamps the shift exponent, and the comment explains why (`:84-87`): C# masks an `int` shift count to five bits, so `1 << 31` is negative and `1 << 32` wraps back to `1`, which would silently shrink the lockout for a sufficiently persistent attacker. Since `1 << 30` already exceeds the `[Range(1, 3600)]` cap on [LoginProtectionSettings](#loginprotectionsettings)`.MaxLockoutSeconds`, deep excess always lands on the cap.
+- **Depends on**: [ILoginProtectionService](#iloginprotectionservice) (the Application port); [LoginProtectionSettings](#loginprotectionsettings) via `IOptions<>` (`:21`, snapshotted at `:23`); [ICacheService](group-09-caching.md#icacheservice) (`:20`); [Result](group-01-result-error-handling.md#result) and [Error](group-01-result-error-handling.md#error) (`:4`); and the [Email](group-02-domain-building-blocks.md#email) value object, used purely as a normalizer (`:5`).
+- **Concept introduced: counter keys must be normalized the same way the lookup is.** `[Rubric §11, Security]` assesses brute-force protection and rate limiting; `[Rubric §10, Cross-Cutting Concerns]` assesses whether it is one shared service rather than logic copied per endpoint. Two mechanisms in this file deserve close reading.
+  - **Key normalization** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:34-43`, documented at `:25-33`): `NormalizeIdentity` runs the supplied address through [Email](group-02-domain-building-blocks.md#email)`.Create` and uses the normalized value (`:39-41`). Without it, the counter keys are built from raw request input while the user lookup runs against the normalized value object, so `User@x.com`, `user@x.com` and `" user@x.com "` resolve to one account but get **independent** attempt counters, and an attacker defeats the [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) backoff just by varying capitalization. A malformed address (which never matches a user but still increments a counter) falls back to the same trim-and-lowercase shape (`:41`) so its attempts collapse onto one key too. The `#pragma warning disable CA1308` (`:40`) is scoped and justified: lowercase is the RFC 5321 normalization `Email` itself performs. [PasswordResetTokenService](#passwordresettokenservice) copies this helper verbatim and cites this type as the reason (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:34-38`).
+  - **The lockout curve** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:80-90`): `excessAttempts = newCount - MaxFailedAttempts` (`:82`) drives `lockoutSeconds = Math.Min(1 << Math.Min(excessAttempts, 30), MaxLockoutSeconds)` (`:88`), doubling the lockout per excess failure (1s, 2s, 4s, and so on) up to the configured cap. The inner `Math.Min(excessAttempts, 30)` clamps the shift exponent, and the comment explains why (`:84-87`): C# masks an `int` shift count to five bits, so `1 << 31` is negative and `1 << 32` wraps back to `1`, which would silently shrink the lockout for a sufficiently persistent attacker. Since `1 << 30` already exceeds the `[Range(1, 3600)]` cap on [LoginProtectionSettings](#loginprotectionsettings)`.MaxLockoutSeconds`, deep excess always lands on the cap.
 - **Walkthrough**
-  - Key builders: `LockoutKey` produces `login:lockout:{normalized}` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:45`), `AttemptsKey` produces `login:attempts:{normalized}` (`:47`), `RegistrationKey` produces `registration:ip:{ipAddress}` (`:136`).
+  - Key builders: `LockoutKey` produces `login:lockout:{normalized}` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:45`), `AttemptsKey` produces `login:attempts:{normalized}` (`:47`), `RegistrationKey` produces `registration:ip:{ipAddress}` (`:136`, and note this one is **not** normalized: an IP literal is already canonical).
   - `CheckLockoutAsync(string email, CancellationToken)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:50`): reads the boolean lockout key (`:53`) and returns `Error.Unauthorized("Auth.TooManyAttempts", ...)` when set, otherwise `Result.Success()` (`:55-60`). A cache miss is treated as not locked out (`?? false`), so a cache outage fails open on lockout rather than locking everyone out.
   - `IncrementFailedAttemptsAsync` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:64`): increments the attempts key with the `FailedAttemptWindowMinutes` TTL (`:75-78`), and once the count reaches `MaxFailedAttempts` writes the lockout key with the exponential TTL (`:80-90`).
   - `ResetFailedAttemptsAsync` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:94`): removes both keys on a successful login (`:96-97`).
-  - `CheckRegistrationRateLimitAsync(string? ipAddress, ...)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:101`): a null or empty IP is unrestricted (`:103-106`); otherwise it compares the per-IP count against `MaxRegistrationsPerIpPerHour` and fails with `Auth.RegistrationRateLimitExceeded` (`:111-116`).
+  - `CheckRegistrationRateLimitAsync(string? ipAddress, ...)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:101`): a null or empty IP is unrestricted (`:103-106`); otherwise it compares the per-IP count against `MaxRegistrationsPerIpPerHour` and fails with `Auth.RegistrationRateLimitExceeded` (`:109-116`).
   - `IncrementRegistrationCountAsync` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:120`): no-ops on a missing IP (`:122-125`) and otherwise increments the per-IP counter with the `RegistrationRateLimitWindowMinutes` TTL (`:130-133`). The comment (`:127-129`) notes the TTL is refreshed on every write, so the window slides rather than staying anchored to the first registration, which only ever tightens the limit.
-- **Why it's built this way**: reusing [ICacheService](group-09-caching.md#icacheservice) (Redis in production, in-memory fallback) instead of a bespoke store keeps the service thin and lets counters expire naturally by TTL rather than needing a sweep job; `IOptions<>` keeps every threshold configurable per environment. Registered scoped (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:137`).
+- **Why it's built this way**: reusing [ICacheService](group-09-caching.md#icacheservice) (Redis in production, in-memory fallback) instead of a bespoke store keeps the service thin and lets counters expire naturally by TTL rather than needing a sweep job; `IOptions<>` keeps every threshold configurable per environment ([ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)). Registered scoped (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:135`).
+- **Where it's used**: injected into [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:54`), which calls all five members across its login and registration flows: the lockout check (`:131`), an increment on both the unknown-user and wrong-password branches (`:146`, `:161`), the reset on success (`:178`), and the registration rate-limit check and increment (`:197`, `:256`). Incrementing on the unknown-user branch as well as the wrong-password branch is what keeps the endpoint from becoming a user-enumeration oracle by timing or by lockout behavior.
 - **Caveats / not-in-source**: the increment is documented in source as **not atomic** on the distributed cache today (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:66-74`). [DistributedCacheService](group-09-caching.md#distributedcacheservice)`.IncrementAsync` is a read-modify-write, because the Redis `INCR` it used to issue wrote a plain string key while `IDistributedCache` reads entries back as hashes, and the mismatch made the counter unreadable (`WRONGTYPE`). The accepted cost: genuinely parallel attempts can overwrite each other's increments, so a concurrent burst can stay under `MaxFailedAttempts`. Sequential guessing, which is what a credential-stuffing run against one account looks like, still trips the lockout. The comment names the two ways to close the gap (a Lua script that increments within the hash layout, or moving counters off `IDistributedCache`); neither is implemented today.
 
----
-
 ### PasswordResetTokenService
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:26` · Level 5 · class
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:26` · Level 5 · class (sealed)
 
-- **What it is**: the [IPasswordResetTokenService](#ipasswordresettokenservice) implementation, and the whole forgot-password token lifecycle in one file: issue a single-use token for an address, throttle how often one address can ask, hash the token at rest, cap wrong guesses, and consume the token on a successful redeem (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:12-25`).
-- **Depends on**: [IPasswordResetTokenService](#ipasswordresettokenservice) (the Application port); [PasswordResetSettings](#passwordresetsettings) via `IOptions<>`; [ICacheService](group-09-caching.md#icacheservice); [PasswordResetEntry](#passwordresetentry) (its cached record); [Result](group-01-result-error-handling.md#result) and [Error](group-01-result-error-handling.md#error); the [Email](group-02-domain-building-blocks.md#email) value object as a normalizer; and from the BCL `SHA256`, `RandomNumberGenerator`, `CryptographicOperations`, and `System.Buffers.Text.Base64Url`.
+- **What it is**: the [IPasswordResetTokenService](#ipasswordresettokenservice) implementation, and the whole forgot-password token lifecycle in one file: issue a single-use token for an address, throttle how often one address can ask, hash the token at rest, cap wrong guesses, and consume the token on a successful redeem (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:12-24`).
+- **Depends on**: [IPasswordResetTokenService](#ipasswordresettokenservice) (the Application port, `:5`); [PasswordResetSettings](#passwordresetsettings) via `IOptions<>` (`:28`, snapshotted at `:32`); [ICacheService](group-09-caching.md#icacheservice) (`:6`, `:27`); [PasswordResetEntry](#passwordresetentry) (its cached record); [Result](group-01-result-error-handling.md#result) and [Error](group-01-result-error-handling.md#error) (`:7`); the [Email](group-02-domain-building-blocks.md#email) value object as a normalizer (`:8`); and from the BCL `SHA256`, `RandomNumberGenerator`, `CryptographicOperations`, and `System.Buffers.Text.Base64Url` (`:1-3`).
 - **Concept introduced: a reset token is a bearer credential, so treat it like a password.** `[Rubric §11, Security]` assesses credential issuance and redemption; `[Rubric §8, Data Architecture]` assesses picking the right store for the right lifetime. Four properties are designed in, and the class doc lists all four up front (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:15-24`).
-  - **Hashed at rest.** Only `SHA256.HashData(...)` of the token is stored (`:55-56`, `:83`), so a cache dump does not hand out working reset links. Unlike a password, a reset token is high-entropy (32 random bytes, `:30`, `:79`) and short-lived, which is why a plain digest is sufficient here where [PasswordHasher](#passwordhasher) needs 600,000 PBKDF2 iterations: there is no dictionary to run against a 256-bit random value.
+  - **Hashed at rest.** Only `SHA256.HashData(...)` of the token is stored (`:55-56`, `:83`), so a cache dump does not hand out working reset links. Like [RefreshSession](#refreshsession) and unlike a password, a reset token is high-entropy (32 random bytes, `:30`, `:79`) and short-lived, which is why a plain digest is sufficient here where [PasswordHasher](#passwordhasher) needs 600,000 PBKDF2 iterations: there is no dictionary to run against a 256-bit random value.
   - **One active token per email.** The key is derived purely from the address (`:51`), so `SetAsync` overwrites (`:88`) and an older link stops working the moment a newer one is requested.
   - **Attempt cap.** Wrong tokens are counted on the record and the record is discarded at `MaxValidationAttempts` (`:140-144`), which turns the token into a credential you cannot grind at.
   - **No schema change, no sweeper.** The whole lifecycle rides [ICacheService](group-09-caching.md#icacheservice), so expiry is the cache TTL rather than a background job over a table ([ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html)). Compare [LoginProtectionService](#loginprotectionservice), which reaches the same conclusion for lockout counters.
 - **Walkthrough**
   - Primary constructor takes `ICacheService cacheService` and `IOptions<PasswordResetSettings> settings` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:26-28`), snapshotting `settings.Value` into `_settings` (`:32`). `TokenByteLength = 32` (`:30`) is the only other constant.
-  - `NormalizeIdentity` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:40-49`) is the same [Email](group-02-domain-building-blocks.md#email)`.Create`-then-fallback shape as [LoginProtectionService](#loginprotectionservice), and its doc comment cites that type as the reason (`:34-38`): keys built from raw request input would give `User@x.com` and `user@x.com` independent tokens **and** independent request counters while resolving to one account. Two key builders follow: `TokenKey` produces `pwdreset:token:{normalized}` (`:51`) and `RequestKey` produces `pwdreset:req:{normalized}` (`:53`). `HashToken` is the shared SHA-256 helper (`:55-56`).
+  - `NormalizeIdentity` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:40-49`) is the same [Email](group-02-domain-building-blocks.md#email)`.Create`-then-fallback shape as [LoginProtectionService](#loginprotectionservice), and its doc comment cites that type as the reason (`:34-39`): keys built from raw request input would give `User@x.com` and `user@x.com` independent tokens **and** independent request counters while resolving to one account. Two key builders follow: `TokenKey` produces `pwdreset:token:{normalized}` (`:51`) and `RequestKey` produces `pwdreset:req:{normalized}` (`:53`). `HashToken` is the shared SHA-256 helper (`:55-56`).
   - `IssueAsync(string email, UserIdentifierType userId, CancellationToken)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:59`): throttle first. It increments the per-email request counter with the `RequestWindowMinutes` TTL (`:66-69`) and fails with `Error.Unauthorized("Auth.ResetThrottled", ...)` once the count exceeds `MaxRequestsPerEmail` (`:71-77`). Only then does it mint the token: 32 CSPRNG bytes rendered with `Base64Url.EncodeToString` (`:79`, URL-safe because the token travels in a query string), builds a [PasswordResetEntry](#passwordresetentry) holding the Base64 digest, the user id, a zero attempt count and the absolute expiry as Unix seconds (`:82-86`), caches it under the token key with the configured lifetime (`:88`), and returns the **raw** token to the caller to email (`:90`). The raw token exists only in that return value: it is never written anywhere.
-  - `ValidateAndConsumeAsync(string email, string token, CancellationToken)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:94`): loads the entry (`:100`) and returns `InvalidToken()` when there is none (`:101-104`). A `FormatException` decoding the stored Base64 removes the unreadable record rather than leaving it to expire (`:107-116`). The comparison is `CryptographicOperations.FixedTimeEquals` over the two digests (`:118`), the same timing-side-channel defense [PasswordHasher](#passwordhasher) uses, with `token ?? string.Empty` so a null token hashes rather than throwing. A mismatch records a failed attempt and returns the same generic failure (`:120-121`). On a match it removes **both** the token key and the address's request counter (`:126-127`), so a successful reset does not leave the user throttled out of a later legitimate request (`:124-125`), and returns the entry's `UserId` (`:129`).
+  - `ValidateAndConsumeAsync(string email, string token, CancellationToken)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:94`): loads the entry (`:99-100`) and returns `InvalidToken()` when there is none (`:101-104`). A `FormatException` decoding the stored Base64 removes the unreadable record rather than leaving it to expire (`:107-116`). The comparison is `CryptographicOperations.FixedTimeEquals` over the two digests (`:118`), the same timing-side-channel defense [PasswordHasher](#passwordhasher) uses, with `token ?? string.Empty` so a null token hashes rather than throwing. A mismatch records a failed attempt and returns the same generic failure (`:120-121`). On a match it removes **both** the token key and the address's request counter (`:126-127`), so a successful reset does not leave the user throttled out of a later legitimate request (`:124-125`), and returns the entry's `UserId` (`:129`).
   - `RecordFailedAttemptAsync` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:132`): computes `attempts = entry.FailedAttempts + 1` and the remaining lifetime from `ExpiresAtUnixSeconds` (`:137-138`). At `MaxValidationAttempts`, or once the remaining lifetime is non-positive, it deletes the record (`:140-144`). Otherwise it rewrites the entry with `entry with { FailedAttempts = attempts }` and a TTL of the **remaining** seconds, not a fresh lifetime (`:146-152`), because a wrong guess must not be able to extend how long the token stays redeemable.
   - `InvalidToken()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:155-159`) is the single failure factory: unknown, expired, mismatched and attempt-capped all collapse to one `Auth.InvalidResetToken` error with one message. That uniformity is deliberate: distinct errors would make the endpoint an oracle for which addresses have an outstanding reset.
 - **Why it's built this way**: [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) records the decision. It extends [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) (the cache-backed protection idiom reused here) and sits beside [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html), which decided how a password is stored but not how a user who has lost one gets a new one. Keeping the token out of the database is what makes the feature additive: no migration, no new table, and nothing to reap.
-- **Where it's used**: registered `services.TryAddScoped<IPasswordResetTokenService, PasswordResetTokenService>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:143`), directly after the `PasswordResetSettings` binding (`:139-142`). [`ForgotPasswordHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand) calls `IssueAsync` and emails the resulting link (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:72`); [`ResetPasswordHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand) calls `ValidateAndConsumeAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:61-63`) **before** the save, because leaving the token live until the write succeeds would open a replay window (`:58-60`). It is unit-tested by [PasswordResetTokenServiceTests](group-27-testing-infrastructure.md#passwordresettokenservicetests).
+- **Where it's used**: registered `services.TryAddScoped<IPasswordResetTokenService, PasswordResetTokenService>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:141`), directly after the `PasswordResetSettings` binding (`:137-140`). [ForgotPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand) calls `IssueAsync` and emails the resulting link (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:72`); [ResetPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand) calls `ValidateAndConsumeAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:61-63`) **before** the save, because leaving the token live until the write succeeds would open a replay window, and a token burned by a later invariant failure only costs the user one more reset request (`:58-60`). It is unit-tested by [PasswordResetTokenServiceTests](group-27-testing-infrastructure.md#passwordresettokenservicetests).
 - **Caveats / not-in-source**: the per-email request throttle inherits [LoginProtectionService](#loginprotectionservice)'s non-atomic increment, and the source says so where it matters (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:64-65`): concurrent requests can undercount, which loosens the throttle but never tightens it. The failed-attempt rewrite is a read-modify-write too, so a burst of simultaneous wrong guesses can lose increments against the attempt cap; sequential guessing still trips it.
-
----
-
-### CurrentUserService
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:13` · Level 9 · class
-
-- **What it is**: the scoped, per-request implementation of [ICurrentUserService](#icurrentuserservice). It extracts the current user's id, role, principal, and arbitrary typed claims from the JWT in the HTTP context (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:8-12`).
-- **Depends on**: [ICurrentUserService](#icurrentuserservice); `Microsoft.AspNetCore.Http.IHttpContextAccessor`, `System.Security.Claims`, and `System.Globalization` (BCL). The `user_id` claim it reads is emitted by [TokenService](#tokenservice).
-- **Concept introduced: scoped claim extraction with lazy per-request caching, parsed invariantly.** `[Rubric §11, Security]` assesses correct claim extraction, `[Rubric §12, Performance]` the cost of doing it repeatedly, and `[Rubric §27, i18n]` the culture trap. The service is registered scoped (one instance per request, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:467`) and wraps `_userId` and `_role` in `Lazy<T>` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:18`, `:26`), so `HttpContext.User` is walked at most once per request no matter how many handlers, filters, and `SaveChangesAsync` calls ask. The i18n point is the one most codebases get wrong: claims are machine-written by [TokenService](#tokenservice) under `CultureInfo.InvariantCulture`, so they must be **read** invariantly too. Both `int.TryParse` for the user id (`:23`) and `T.TryParse` for generic claims (`:45`) pass `CultureInfo.InvariantCulture` explicitly, with comments explaining that parsing under the ambient request culture misreads separators for decimal, double and `DateTime` claim types (`:21-22`, `:43-44`). Reading the custom `user_id` claim type (`:16`) rather than the standard `sub` keeps the claim contract with [TokenService](#tokenservice) explicit.
-- **Walkthrough**
-  - Primary constructor takes `IHttpContextAccessor httpContextAccessor` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:13`), captured directly by the lazy initializers.
-  - `User` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:30`): returns the `ClaimsPrincipal`, or a fresh empty one when there is no HTTP context, so background jobs and hosted services resolving the same interface get an anonymous principal instead of a `NullReferenceException`.
-  - `UserId` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:33`): `_userId.Value`, a `UserIdentifierType?` produced by the lazy on `:18-24`; `null` when the claim is absent or not an invariant integer.
-  - `Role` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:36`): `_role.Value`, the `ClaimTypes.Role` claim read on `:26-27`.
-  - `GetClaimValue<T>(string claimType)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:39-46`): generic over `T : struct, IParsable<T>`, using the static-abstract `T.TryParse` so any parsable value type (`int`, `Guid`, `DateTime`, and so on) can be read from a named claim, returning `null` when the claim is absent or unparseable. This is not cached: it is a fresh lookup per call, unlike `UserId` and `Role`.
-- **Why it's built this way**: scoped lifetime plus `Lazy<T>` gives a stable per-request snapshot at minimal cost, and the empty-principal fallback makes the service safe to resolve outside a request pipeline. Keeping the parse culture invariant on both sides of the token is what stops a Spanish or German request culture from silently failing to read a claim the issuer wrote.
-- **Where it's used**: injected into command handlers and controllers throughout both apps for ownership checks, and into `ApplicationDbContext.SaveChangesAsync` to supply the acting user id for audit-field stamping.
 
 ### AuthClaimTypes
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:7` · Level 0 · class (static)
 
-- **What it is**: a one-constant holder for the framework's custom JWT claim type names, sitting
-  alongside the standard `System.Security.Claims.ClaimTypes` values
+- **What it is**: the three claim-type name constants the framework's own token vocabulary rests on,
+  sitting alongside the standard `System.Security.Claims.ClaimTypes` values
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:3-7`).
-- **Depends on**: nothing first-party at runtime; the doc comment points at
-  [`IPermissionRegistry`](#ipermissionregistry) for the role-derived half of the model.
-- **Concept introduced, custom claim types for capability-based authorization.** `[Rubric §11,
-  Security]` assesses how authentication and authorization are modeled and what facts a principal
-  carries. The standard `ClaimTypes` set covers identity (name, email, role); this framework layers
-  *permissions* (fine-grained capabilities) on top. `AuthClaimTypes.Permission`
-  (`AuthClaimTypes.cs:15`, value `"permission"`) is the claim type a token uses to carry a single
-  granted capability. The load-bearing design note is in the doc comment (`AuthClaimTypes.cs:9-14`):
-  permission claims are honored **in addition to** the permissions a role confers through
-  [`IPermissionRegistry`](#ipermissionregistry), and baking them into the token is explicitly
-  *optional*, because role-derived permissions work without them. So a token can stay small (roles
-  only) and still authorize against capabilities, which is what makes the model in
-  [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) backward
-  compatible with the pre-existing role policies.
-- **Walkthrough**: a single `public const string Permission = "permission"` (`AuthClaimTypes.cs:15`).
-  `const` (not `static readonly`) so the value is usable in attribute arguments and in patterns that
-  require compile-time constants, the same reason [`RoleNames`](#rolenames) and
-  [`AuthorizationPolicies`](#authorizationpolicies) use `const`.
+- **Depends on**: nothing first-party at runtime. Its doc comments point at
+  [IPermissionRegistry](#ipermissionregistry) for the role-derived half of the permission model
+  (`AuthClaimTypes.cs:12`) and at
+  [ClaimsPrincipalExtensions](#claimsprincipalextensions)`.FindUserIdValue` for the reader that
+  papers over claim-name mapping (`AuthClaimTypes.cs:22`).
+- **Concept introduced, a claim vocabulary owned by the framework rather than by each reader.**
+  `[Rubric §11, Security]` assesses how authentication and authorization are modeled and which facts a
+  principal is allowed to carry; `[Rubric §16, Maintainability]` assesses single points of change. A
+  claim type is just a string, so writer and reader agreeing on it is a convention with no compiler
+  behind it. Putting all three names in one `const` holder is what makes the token issuer and every
+  reader provably agree.
+  - `Permission` (`AuthClaimTypes.cs:15`, value `"permission"`) carries a single granted capability.
+    The load-bearing design note is in its doc comment (`AuthClaimTypes.cs:9-14`): permission claims
+    are honored **in addition to** the permissions a role confers through
+    [IPermissionRegistry](#ipermissionregistry), and baking them into the token is explicitly
+    *optional*, because role-derived permissions work without them. A token can therefore stay small
+    (roles only) and still authorize against capabilities, which is what makes the model in
+    [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) backward
+    compatible with plain role checks.
+  - `Subject` (`AuthClaimTypes.cs:25`, value `"sub"`) is the single authoritative carrier of the user
+    identifier in every token the framework mints. The doc comment states the trap that follows
+    (`AuthClaimTypes.cs:17-24`): one value reaches readers under two different claim types, because
+    the JWT bearer handler maps inbound `sub` onto `ClaimTypes.NameIdentifier` while a handler that
+    materializes an identity straight from a token's claims leaves the raw `sub` in place.
+  - `SessionId` (`AuthClaimTypes.cs:38`, value `"sid"`) is the RFC 7519 / OpenID Connect session id:
+    the identifier of the refresh session the access token was minted for, which is to say the
+    *device* behind the token (`AuthClaimTypes.cs:27-31`). It is **additive, never required**
+    (`AuthClaimTypes.cs:32-36`): rotation mints a new session and therefore a new `sid`, a token
+    issued before the claim shipped simply carries none, and nothing validates it. A missing or
+    unparsable value degrades to "no current session known", never to a rejected token.
+- **Walkthrough**: three `public const string` fields and nothing else. `const` rather than
+  `static readonly` so the values are usable in attribute arguments and in patterns that require
+  compile-time constants, the same reason [RoleNames](#rolenames) uses `const`.
 - **Why it's built this way**:
   [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) makes the
-  permission layer opt-in. Keeping the claim type as one shared constant means the writer (a token
-  service that chooses to embed capabilities) and the reader (the authorization handler) cannot drift
-  apart on the string.
-- **Where it's used**: read by
-  [`PermissionAuthorizationHandler`](#permissionauthorizationhandler), which first checks
-  `context.User.HasClaim(AuthClaimTypes.Permission, requirement.Permission)` before falling back to
-  the registry
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:29-30`),
-  and described (without being named) in the [`HasPermissionAttribute`](#haspermissionattribute) doc
-  comment as the "explicit permission claim" alternative to the role-derived path
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:5-11`).
-- **Caveats / not-in-source**: no shipped token issuer in this repo writes a permission claim. Across
-  both applications and the framework there are exactly four references to the constant (its
-  declaration, the handler's doc comment at `PermissionAuthorizationHandler.cs:9`, the handler's
-  check at `:29`, and one test), and the only writer in the tree is a test that hands the claim to a
+  permission layer opt-in, and
+  [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html) adds the
+  per-device session identity that `sid` names. Keeping the claim types as shared constants means the
+  writer and the reader cannot drift apart on a string.
+- **Where it's used**:
+  - `Permission` is read by [PermissionAuthorizationHandler](#permissionauthorizationhandler), which
+    checks `context.User.HasClaim(AuthClaimTypes.Permission, requirement.Permission)` before falling
+    back to the registry
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:29-30`),
+    and is described (without being named) in the
+    [HasPermissionAttribute](#haspermissionattribute) doc comment as the "explicit permission claim"
+    alternative to the role-derived path
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:5-11`).
+  - `Subject` is written by [TokenService](#tokenservice) as `JwtRegisteredClaimNames.Sub`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:94`, with the
+    one-carrier rationale at `:88-91`) and read through
+    [ClaimsPrincipalExtensions](#claimsprincipalextensions) by
+    [CurrentUserService](#currentuserservice), [ClaimBasedUserIdProvider](#claimbaseduseridprovider),
+    the [IdempotencyFilter](group-12-api-hosting-mapping.md#idempotencyfilter), and the rate-limit
+    partitioner.
+  - `SessionId` is stamped by the private
+    [SessionStampingTokenService](#sessionstampingtokenservice) decorator inside
+    [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser)
+    (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:797`) and read
+    back by `FindSessionId` for the "my sessions" endpoint
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:185`).
+- **Caveats / not-in-source**: no shipped token issuer in this repo writes a `Permission` claim.
+  Across both applications and the framework there are exactly four references to that constant (its
+  declaration, the handler's doc comment at `PermissionAuthorizationHandler.cs:9`, the handler's check
+  at `:29`, and one test), and the only writer in the tree is a test that hands the claim to a
   principal directly
   (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Authorization/PermissionAuthorizationHandlerTests.cs:30`).
   The claim path is real and covered, but every deployed grant today flows through roles.
@@ -1980,20 +2268,21 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Why it's built this way**: value semantics keep the type cheap, but they have one consequence
   worth internalizing before you reuse the shape. A struct has no null, so a cache miss returns
   `default(AuthenticationResponse)` rather than `null`, and
-  [`OAuthControllerBase`](group-12-api-hosting-mapping.md#oauthcontrollerbase) therefore detects a
+  [OAuthControllerBase](group-12-api-hosting-mapping.md#oauthcontrollerbase) therefore detects a
   missing exchange entry by testing `string.IsNullOrEmpty(response.AccessToken)`, with the reason
   written down at the call site
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:151-154`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:163-166`).
 - **Where it's used**: produced by
-  [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser) at the end of registration
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:211`) and from
-  the shared `IssueTokensAsync` helper that login, refresh, and app-level external-login flows all
-  funnel through (`AuthenticationServiceBase.cs:292,302`); declared as the 200/201 response type on
-  the three [`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase) endpoints
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:58,80,101`);
-  consumed by [`AuthUIService`](group-15-common-ui-framework.md#authuiservice),
-  [`DirectApiTokenRefresher`](group-15-common-ui-framework.md#directapitokenrefresher), and
-  [`CookieSessionRefresher`](#cookiesessionrefresher).
+  [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) from the shared
+  `IssueTokensAsync` helper that login and registration both funnel through
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:180,260,471,491`)
+  and directly at the end of a rotation (`AuthenticationServiceBase.cs:326`); declared as the 200/201
+  response type on the three [AuthControllerBase](group-12-api-hosting-mapping.md#authcontrollerbase)
+  token endpoints
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:71,95,118`);
+  consumed by [AuthUIService](group-15-common-ui-framework.md#authuiservice),
+  [DirectApiTokenRefresher](group-15-common-ui-framework.md#directapitokenrefresher), and
+  [CookieSessionRefresher](#cookiesessionrefresher).
 
 ### ChangePasswordRequest
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ChangePasswordRequest.cs:8` · Level 0 · record struct (readonly)
@@ -2002,22 +2291,24 @@ live in later groups; this chapter is the engine those endpoints call into.
   password change (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ChangePasswordRequest.cs:3-10`).
 - **Depends on**: nothing first-party.
 - **Concept**: the same `readonly record struct` DTO shape introduced by
-  [`AuthenticationResponse`](#authenticationresponse). `[Rubric §11, Security]`: requiring the current
+  [AuthenticationResponse](#authenticationresponse). `[Rubric §11, Security]`: requiring the current
   password re-proves the caller's identity before a credential change, so a stolen session alone
   cannot lock the owner out. The strength rules for `NewPassword` are deliberately *not* here; they
   live in each app's validator (see
-  [`ChangePasswordRequestValidator`](group-24-identity-module.md#changepasswordrequestvalidator)),
+  [ChangePasswordRequestValidator](group-24-identity-module.md#changepasswordrequestvalidator)),
   which is what lets Store and ADC differ on policy while sharing the contract.
 - **Walkthrough**: two positional parameters (`ChangePasswordRequest.cs:8-10`); no body.
 - **Where it's used**: bound as the body of the shared `PUT password` endpoint on
-  [`UserAccountAuthControllerBase<TChangePasswordCommand, TChangePreferencesCommand>`](group-12-api-hosting-mapping.md#useraccountauthcontrollerbasetchangepasswordcommand-tchangepreferencescommand)
+  [UserAccountAuthControllerBase<TChangePasswordCommand, TChangePreferencesCommand>](group-12-api-hosting-mapping.md#useraccountauthcontrollerbasetchangepasswordcommand-tchangepreferencescommand)
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/UserAccountAuthControllerBase.cs:86,92`),
-  carried by each app's [`ChangePasswordCommand`](group-24-identity-module.md#changepasswordcommand)
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordCommand.cs:14`
-  and its Store twin), and validated by ADC's
+  reached only through the `IUserScopedCommand<ChangePasswordRequest>` constraint on the app's command
+  (`UserAccountAuthControllerBase.cs:47`); carried by each app's
+  [ChangePasswordCommand](group-24-identity-module.md#changepasswordcommand)
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordCommand.cs:14-15`
+  and its Store twin); validated by ADC's
   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/ChangePasswordRequestValidator.cs:11`,
   which requires a non-empty `CurrentPassword` (`:15-16`) and includes the shared
-  [`StrongPasswordRules<T>`](group-06-validation.md#strongpasswordrulest) for `NewPassword` (`:18`).
+  [StrongPasswordRules<T>](group-06-validation.md#strongpasswordrulest) for `NewPassword` (`:18`).
 - **Caveats / not-in-source**: nothing in this type prevents the password strings from reaching a log.
   That is an operational convention (PII masking plus the "never log the body" habit), not a
   compile-time or runtime guarantee.
@@ -2029,7 +2320,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   stored UI preferences
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ChangePreferencesRequest.cs:3-10`).
 - **Depends on**: nothing first-party. It is the write-side counterpart of
-  [`UserPreferencesResponse`](#userpreferencesresponse).
+  [UserPreferencesResponse](#userpreferencesresponse).
 - **Concept introduced, null-means-unchanged partial update.** `[Rubric §9, API & Contract Design]`
   assesses how a contract expresses partial intent, and `[Rubric §19, State Management]` assesses
   where user state lives and who may overwrite it. A naive "PUT the whole preferences object" endpoint
@@ -2052,25 +2343,25 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Why it's built this way**: the payload record was byte-identical in both applications' Identity
   modules and was hoisted here, while the *command* record stayed app-side because ADC marks it
   `ICacheInvalidating` and Store does not. That split is spelled out in the handler base's remarks
-  (`ChangePreferencesHandlerBase.cs:16-22`), and it is a good illustration of the framework's hoisting
+  (`ChangePreferencesHandlerBase.cs:18`), and it is a good illustration of the framework's hoisting
   rule: share the shape, leave the per-app policy behind.
 - **Where it's used**: the body of the shared `PUT preferences` endpoint
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/UserAccountAuthControllerBase.cs:112-118`),
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/UserAccountAuthControllerBase.cs:112,118`),
   which hands it to the app's command through the abstract `CreateChangePreferencesCommand` factory
-  (`UserAccountAuthControllerBase.cs:77,126`); the generic constraint that ties the two together is
+  (`UserAccountAuthControllerBase.cs:77-79,126`); the generic constraint that ties the two together is
   `where TChangePreferencesCommand : IUserScopedCommand<ChangePreferencesRequest>`
   (`UserAccountAuthControllerBase.cs:48`). It is consumed by
-  [`ChangePreferencesHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#changepreferenceshandlerbasetuser-tcommand)
+  [ChangePreferencesHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#changepreferenceshandlerbasetuser-tcommand)
   and carried by each app's
-  [`ChangePreferencesCommand`](group-24-identity-module.md#changepreferencescommand)
+  [ChangePreferencesCommand](group-24-identity-module.md#changepreferencescommand)
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePreferences/ChangePreferencesCommand.cs:14-15`).
 - **Caveats / not-in-source**: this type validates nothing. Rejecting an unknown culture such as
   `"xx"` or an unknown theme such as `"blue"` is the domain's job, inside `UpdatePreferences` on the
-  `User` aggregate behind [`IUserPreferences`](#iuserpreferences)
-  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IUserPreferences.cs:25`), which returns a
-  [`Result`](group-01-result-error-handling.md#result) the handler propagates. Note also that the
-  Blazor UI does **not** send this exact type: `ApiUserPreferenceWriter` declares its own private
-  `UserPreferencesRequest(string? Culture, string? Theme)` wire record
+  `User` aggregate behind [IUserPreferences](#iuserpreferences), which returns a
+  [Result](group-01-result-error-handling.md#result) the handler propagates. Note also that the
+  Blazor UI does **not** send this exact type:
+  [ApiUserPreferenceWriter](group-15-common-ui-framework.md#apiuserpreferencewriter) declares its own
+  private `UserPreferencesRequest(string? Culture, string? Theme)` wire record
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/ApiUserPreferenceWriter.cs:29,65`), so
   the two shapes agree by convention rather than by a shared reference.
 
@@ -2080,7 +2371,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **What it is**: a single-field request `(string Email)` that starts a password reset
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ForgotPasswordRequest.cs:3-9`).
 - **Depends on**: nothing first-party. It pairs with
-  [`ResetPasswordRequest`](#resetpasswordrequest), which completes the flow this one starts.
+  [ResetPasswordRequest](#resetpasswordrequest), which completes the flow this one starts.
 - **Concept introduced, the anti-enumeration contract.** `[Rubric §11, Security]` assesses whether an
   endpoint leaks facts an attacker can harvest, and `[Rubric §9, API & Contract Design]` assesses
   whether a contract's shape matches the answer it is allowed to give. A password-reset entry point is
@@ -2092,16 +2383,17 @@ live in later groups; this chapter is the engine those endpoints call into.
   - the request validator checks only the **shape** of the address, and its doc comment says exactly
     why it stops there, because a 400 on an unknown address would be the oracle the always-accepted
     response exists to close
-    (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ForgotPasswordRequestValidator.cs:6-16`);
+    (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ForgotPasswordRequestValidator.cs:6-9,13-16`);
   - the handler returns `Result.Success()` for a malformed address, an address with no account, a
     throttled request, and a failed send alike, logging the real reason instead of returning it
-    (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:57-99`);
+    (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:61,69,76,95,99`);
   - the endpoint answers `202 Accepted` on every well-formed request
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:79,92`).
 - **Walkthrough**: one positional `string Email` (`ForgotPasswordRequest.cs:8-9`); no body, no
   validation attributes, no normalization. Normalizing the address is the handler's job, through
   `Email.Create(command.Request.Email)` (`ForgotPasswordHandlerBase.cs:57`), which is what lets the
-  DTO stay a raw wire shape while the value object owns the parsing rules.
+  DTO stay a raw wire shape while the [Email](group-02-domain-building-blocks.md#email) value object
+  owns the parsing rules.
 - **Why it's built this way**:
   [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) records the
   cache-backed reset design this request opens. Keeping the payload to a single field means there is
@@ -2109,24 +2401,25 @@ live in later groups; this chapter is the engine those endpoints call into.
   comment puts it where a reader meets it before the handler.
 - **Where it's used**: bound as the body of the anonymous, rate-limited `POST forgot-password` action
   on
-  [`PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>`](group-12-api-hosting-mapping.md#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:75-84`),
+  [PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>](group-12-api-hosting-mapping.md#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:75,83`),
   which turns it into the app's command through an abstract factory (`:61`) constrained to
-  [`ICommandWithRequest<out TRequest>`](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest)
+  [ICommandWithRequest<out TRequest>](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest)
   (`:46`); shape-validated by
-  [`ForgotPasswordRequestValidator`](#forgotpasswordrequestvalidator); handled by
-  [`ForgotPasswordHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand);
-  posted by [`AuthUIService`](group-15-common-ui-framework.md#authuiservice)'s
+  [ForgotPasswordRequestValidator](#forgotpasswordrequestvalidator); handled by
+  [ForgotPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand);
+  posted by [AuthUIService](group-15-common-ui-framework.md#authuiservice)'s
   `RequestPasswordResetAsync`, deliberately over a bearer-free client so a signed-in caller does not
   bind the reset to the current session
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:289-293`).
-- **Caveats / not-in-source**: only MMCA.ADC wires this vertical today. ADC has a
-  [`ForgotPasswordCommand`](group-24-identity-module.md#forgotpasswordcommand)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:191,199`).
+- **Caveats / not-in-source**: both applications now wire this vertical. ADC has a
+  [ForgotPasswordCommand](group-24-identity-module.md#forgotpasswordcommand)
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordCommand.cs:12-13`)
   and a derived controller
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/PasswordResetController.cs:36`);
-  MMCA.Store has no forgot-password command or controller in the tree, so the framework half ships
-  unused there.
+  Store has the same pair
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordCommand.cs:11`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/PasswordResetController.cs:33`).
 
 ### IPermissionRegistry
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/IPermissionRegistry.cs:13` · Level 0 · interface
@@ -2134,18 +2427,18 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **What it is**: the abstraction that maps roles to the fine-grained permissions they grant, and the
   single place that knows which roles confer which capabilities
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/IPermissionRegistry.cs:3-13`).
-- **Depends on**: nothing first-party; its remarks reference [`RoleNames`](#rolenames) for the
+- **Depends on**: nothing first-party; its remarks reference [RoleNames](#rolenames) for the
   case-insensitivity rule.
 - **Concept introduced, permission (capability) authorization over role checks.** `[Rubric §11,
   Security]` assesses the authorization model, and `[Rubric §1, SOLID]` assesses dependency inversion:
-  endpoints depend on an abstraction, not on a role name. Instead of scattering `[Authorize(Roles =
-  "Organizer")]` across endpoints, code authorizes against a *permission* (a capability such as
-  `sessions:manage`) and this registry translates a principal's roles into the permissions they hold.
-  The payoff is decoupling: adding a role or reshaping who-can-do-what is a registry change, not an
-  edit to every endpoint (`IPermissionRegistry.cs:4-7`). The remarks also fix the comparison rules
-  (`IPermissionRegistry.cs:9-12`): role lookups are case-insensitive, permission values are compared
-  ordinally, and implementations are expected to be immutable and thread-safe. Those three sentences
-  are what let the implementation be a frozen, lock-free structure.
+  endpoints depend on an abstraction, not on a role name. Instead of scattering
+  `[Authorize(Roles = "Organizer")]` across endpoints, code authorizes against a *permission* (a
+  capability such as `sessions:manage`) and this registry translates a principal's roles into the
+  permissions they hold. The payoff is decoupling: adding a role or reshaping who-can-do-what is a
+  registry change, not an edit to every endpoint (`IPermissionRegistry.cs:4-7`). The remarks also fix
+  the comparison rules (`IPermissionRegistry.cs:9-12`): role lookups are case-insensitive, permission
+  values are compared ordinally, and implementations are expected to be immutable and thread-safe.
+  Those three sentences are what let the implementation be a frozen, lock-free structure.
 - **Walkthrough**: two members. `GetPermissions(string role)` (`IPermissionRegistry.cs:20`) returns
   the permission set for a role, or an empty set for an unknown role, never a throw
   (`IPermissionRegistry.cs:15-17`). `HasPermission(IEnumerable<string> roles, string permission)`
@@ -2156,11 +2449,11 @@ live in later groups; this chapter is the engine those endpoints call into.
   decision. An empty-set-on-miss contract keeps callers branchless, and pushing the who-grants-what
   knowledge behind one interface is the capability-security expression of the framework's habit of
   hiding decision logic behind an abstraction.
-- **Where it's used**: implemented by [`PermissionRegistry`](#permissionregistry) (built via
-  [`PermissionRegistryBuilder`](#permissionregistrybuilder)); registered as a lazily-built singleton by
-  [`AuthorizationExtensions`](#authorizationextensions)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:78`) and
-  injected into [`PermissionAuthorizationHandler`](#permissionauthorizationhandler)
+- **Where it's used**: implemented by [PermissionRegistry](#permissionregistry) (built via
+  [PermissionRegistryBuilder](#permissionregistrybuilder)); registered as a lazily-built singleton by
+  [AuthorizationExtensions](#authorizationextensions)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:71`) and
+  injected into [PermissionAuthorizationHandler](#permissionauthorizationhandler)
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:13`).
 
 ### LoginRequest
@@ -2170,18 +2463,20 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/LoginRequest.cs:3-10`).
 - **Depends on**: nothing first-party.
 - **Concept**: the `readonly record struct` DTO introduced by
-  [`AuthenticationResponse`](#authenticationresponse). `[Rubric §11, Security]`: the doc comment
+  [AuthenticationResponse](#authenticationresponse). `[Rubric §11, Security]`: the doc comment
   (`LoginRequest.cs:7`) records the rule that the password travels over TLS and is never logged. That
   convention is enforced operationally, not by this type, but the intent is documented at the source
   where a reader will meet it.
 - **Walkthrough**: two positional parameters (`LoginRequest.cs:8-10`); no body.
-- **Where it's used**: shape-validated by [`LoginRequestValidator`](#loginrequestvalidator)
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/LoginRequestValidator.cs`), then
-  handled by [`AuthenticationServiceBase<TUser>.LoginAsync`](#authenticationservicebasetuser)
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:73`), which is
-  reached through
-  [`AuthControllerBase.LoginAsync`](group-12-api-hosting-mapping.md#authcontrollerbase)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:61-65`).
+- **Where it's used**: shape-validated by [LoginRequestValidator](#loginrequestvalidator), which is
+  deliberately minimal (non-empty plus address shape) so that no field-level 400 hints at which half
+  of the credential was wrong
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/LoginRequestValidator.cs:6-10,15-20`);
+  then handled by [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser)`.LoginAsync`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:118-119`), which
+  is reached through [AuthControllerBase](group-12-api-hosting-mapping.md#authcontrollerbase)'s
+  `POST login`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:67,74-75`).
 
 ### OAuthCodeExchangeRequest
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/OAuthCodeExchangeRequest.cs:11` · Level 0 · record struct (readonly)
@@ -2195,26 +2490,88 @@ live in later groups; this chapter is the engine those endpoints call into.
   into places that are logged or replayed. The doc comment (`OAuthCodeExchangeRequest.cs:3-9`)
   explains *why* the indirection exists: the server mints an opaque code after the external-provider
   callback succeeds and carries *that* in the redirect URL, so the access and refresh tokens never
-  appear in the address bar, browser history, the `Referer` header, or server access logs.
-  [ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html) records the same
-  reasoning as a decision, and
+  appear in the address bar, browser history, the `Referer` header, or server access logs. The mint
+  side is right there in the controller, with the same reasoning as a comment
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:126-133`).
+  [ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html) records the decision,
+  and
   [ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)
   extends the pattern to the native mobile callback.
 - **Walkthrough**: one positional `string Code` (`OAuthCodeExchangeRequest.cs:11-12`).
 - **Why it's built this way**: the code is worthless once redeemed, which is the property that makes
   putting it in a URL acceptable.
-  [`OAuthControllerBase.ExchangeAsync`](group-12-api-hosting-mapping.md#oauthcontrollerbase) rejects a
-  blank code
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:144-147`),
-  looks the code up in [`ICacheService`](group-09-caching.md#icacheservice)
-  (`OAuthControllerBase.cs:149-153`), and then removes it so a replayed code cannot mint a second
-  token pair (`OAuthControllerBase.cs:159-160`); an unknown, burned, or expired code all return the
-  same HTTP 400 with a deliberately non-specific message (`OAuthControllerBase.cs:165-170`). The
-  action is also marked `[NonIdempotent]` with the reason inline: replaying a stored response would
-  defeat the burn and let a leaked code mint the same tokens again (`OAuthControllerBase.cs:137`).
+  [OAuthControllerBase](group-12-api-hosting-mapping.md#oauthcontrollerbase)`.ExchangeAsync` rejects a
+  blank code (`OAuthControllerBase.cs:156-159`), looks the code up in
+  [ICacheService](group-09-caching.md#icacheservice) (`OAuthControllerBase.cs:161-169`), and then
+  removes it so a replayed code cannot mint a second token pair (`OAuthControllerBase.cs:171-172`); an
+  unknown, burned, or expired code all return the same HTTP 400 with a deliberately non-specific
+  message (`OAuthControllerBase.cs:177-180`). The action is also marked `[NonIdempotent]` with the
+  reason inline: replaying a stored response would defeat the burn and let a leaked code mint the same
+  tokens again (`OAuthControllerBase.cs:149`).
 - **Where it's used**: the body of the OAuth `exchange` endpoint
-  (`OAuthControllerBase.cs:136-142`), called by the UI's `/auth/oauth-complete` page after the
-  provider redirect lands (`OAuthControllerBase.cs:126,130-131`).
+  (`OAuthControllerBase.cs:148,152-154`), called by the UI's `/auth/oauth-complete` page after the
+  provider redirect lands (`OAuthControllerBase.cs:136-139,142-143`).
+
+### RefreshSessionSummaryResponse
+> MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RefreshSessionSummaryResponse.cs:23` · Level 0 · record (sealed)
+
+- **What it is**: one row of a user's "signed-in devices" list, describing a live refresh session in
+  the terms a person can recognize it by
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RefreshSessionSummaryResponse.cs:3-5`).
+- **Depends on**: nothing first-party at compile time. It is the sanitized projection of the
+  [RefreshSession](#refreshsession) entity, and its `IsCurrent` flag is computed from the `sid` claim
+  named by [AuthClaimTypes](#authclaimtypes)`.SessionId`.
+- **Concept introduced, the sanitized read model over a credential-bearing entity.** `[Rubric §11,
+  Security]` assesses what a response is allowed to expose, and `[Rubric §9, API & Contract Design]`
+  assesses whether a contract carries exactly the fields its consumers need. The entity behind this
+  row holds the material the refresh-token reuse check runs on: a `TokenHash`
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/RefreshSession.cs:64`) and the rotation link
+  `ReplacedByTokenHash` (`RefreshSession.cs:79`). Both are deliberately **absent** from this response,
+  and the doc comment states the reasoning (`RefreshSessionSummaryResponse.cs:6-11`): shipping either
+  would hand every caller a queryable index of another session's credentials-at-rest for no gain,
+  since nothing a client does with a session needs anything but its id. The rule is enforced by a
+  reflection assertion rather than by review habit: a test asserts the type's property names contain
+  neither `TokenHash` nor `ReplacedByTokenHash`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Auth/RefreshSessionManagementTests.cs:196-199`).
+  This is the read-model half of the "never project a secret" discipline; the same instinct is what
+  keeps password hashes out of every user DTO.
+- **Walkthrough**: six positional parameters on a `sealed record`
+  (`RefreshSessionSummaryResponse.cs:23-29`), documented one by one at `:13-22`.
+  - `SessionId` (`Guid`) is the value a per-device sign-out is addressed to (`:13`), which is why it
+    is the only identifying field the row needs.
+  - `CreatedAt` and `ExpiresAt` (`DateTime`, both UTC) say when this device signed in and when the
+    session stops being usable even if never revoked (`:14-15`).
+  - `IpAddress` and `UserAgent` are nullable and explicitly labeled **informational** (`:16-17`):
+    they are what a human recognizes a device by, and nothing authorizes on them.
+  - `IsCurrent` (`bool`) marks the session the calling access token was minted for. The doc comment
+    records the degradation rule (`:18-22`): it is always `false` for a caller whose token predates
+    the `sid` claim, because nothing then identifies the caller's own device.
+- **Why it's built this way**:
+  [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html) introduces the
+  per-device refresh session, and
+  [ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html) is the rotation
+  scheme whose hashes this response must not leak. `IsCurrent` is computed server-side rather than
+  guessed by the client, which is what keeps the UI from having to parse a token to know which row is
+  its own: the service compares each session id against a `currentSessionId` argument
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:418`), and the
+  interface documents that passing `null` simply marks no row as current
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:88-92`).
+- **Where it's used**: produced by
+  [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser)`.GetSessionsAsync`, which
+  reads unrevoked sessions from [IRefreshSessionStore](#irefreshsessionstore), filters to those active
+  at the current instant, orders newest-first, and projects each into this record
+  (`AuthenticationServiceBase.cs:398-421`); returned by the `GET my-sessions` endpoint on
+  [AuthControllerBase](group-12-api-hosting-mapping.md#authcontrollerbase), which supplies the
+  caller's own session via `User.FindSessionId()`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:173-185`);
+  fetched client-side by [AuthUIService](group-15-common-ui-framework.md#authuiservice)`.GetSessionsAsync`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:226,233`) and
+  rendered by the [Sessions](group-15-common-ui-framework.md#sessions) page, which uses `IsCurrent` to
+  disable the revoke action on the caller's own row
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Sessions.razor.cs:38,108-110,179`).
+- **Caveats / not-in-source**: `IpAddress` and `UserAgent` are whatever the client sent at issue time
+  and are stored verbatim; nothing in this type or the projection validates, geolocates, or
+  canonicalizes them, so a spoofed user-agent shows up as-is in the device list.
 
 ### RefreshTokenRequest
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RefreshTokenRequest.cs:9` · Level 0 · record struct (readonly)
@@ -2224,30 +2581,34 @@ live in later groups; this chapter is the engine those endpoints call into.
   re-authentication (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RefreshTokenRequest.cs:3-11`).
 - **Depends on**: nothing first-party.
 - **Concept**: the `readonly record struct` DTO shape from
-  [`AuthenticationResponse`](#authenticationresponse). `[Rubric §11, Security]`: this is the request
+  [AuthenticationResponse](#authenticationresponse). `[Rubric §11, Security]`: this is the request
   half of [ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html)'s
   rotation scheme. Carrying the expired token lets the server reconstruct the principal cheaply, while
   the opaque refresh token is what actually gates the rotation, so possession of an expired access
   token alone buys nothing.
-- **Walkthrough**: two positional parameters (`RefreshTokenRequest.cs:9-11`); no body.
+- **Walkthrough**: two positional parameters (`RefreshTokenRequest.cs:9-11`); no body. Both are
+  required to be non-empty, and the validator's doc comment says why each is needed: the access token
+  for claim extraction, the refresh token for rotation verification
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/RefreshTokenRequestValidator.cs:6-9,14-18`).
 - **Where it's used**: shape-validated by
-  [`RefreshTokenRequestValidator`](#refreshtokenrequestvalidator), handled by
-  [`AuthenticationServiceBase<TUser>.RefreshTokenAsync`](#authenticationservicebasetuser)
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:218`), which
-  rejects an unreadable token or missing claims with an `Auth.InvalidToken` failure before it ever
-  looks at the refresh token (`AuthenticationServiceBase.cs:234,241`); exposed by
-  [`AuthControllerBase.RefreshAsync`](group-12-api-hosting-mapping.md#authcontrollerbase)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:103-104`).
+  [RefreshTokenRequestValidator](#refreshtokenrequestvalidator), handled by
+  [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser)`.RefreshTokenAsync`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:264-265`), which
+  rejects an unreadable token or a principal with no usable user id with an `Auth.InvalidToken`
+  failure before it ever looks at the refresh token (`AuthenticationServiceBase.cs:281-282,288-292`);
+  exposed by [AuthControllerBase](group-12-api-hosting-mapping.md#authcontrollerbase)'s
+  `POST refresh`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:115,120-121`).
 
 ### ResetPasswordRequest
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ResetPasswordRequest.cs:9` · Level 0 · record struct (readonly)
 
 - **What it is**: `(string Email, string Token, string NewPassword)`, the payload that completes a
   password reset by redeeming the single-use token that
-  [`ForgotPasswordRequest`](#forgotpasswordrequest) caused to be mailed
+  [ForgotPasswordRequest](#forgotpasswordrequest) caused to be mailed
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ResetPasswordRequest.cs:3-12`).
 - **Depends on**: nothing first-party; the `readonly record struct` shape from
-  [`AuthenticationResponse`](#authenticationresponse).
+  [AuthenticationResponse](#authenticationresponse).
 - **Concept, the three-field redemption payload and the single collapsed failure.** `[Rubric §11,
   Security]`: the address is carried alongside the token so the server can verify that the token was
   issued *for that address* rather than trusting the token in isolation, which is what the handler's
@@ -2256,38 +2617,38 @@ live in later groups; this chapter is the engine those endpoints call into.
   The anti-enumeration discipline that governs the forgot half continues here in a different form:
   an unknown, expired, mismatched or attempt-capped token and a vanished account all collapse to one
   `Auth.InvalidResetToken` 401 with the same message, so the response distinguishes none of them
-  (`ResetPasswordHandlerBase.cs:17-22,95-99`). One ordering decision is worth internalizing: the token
-  is consumed *before* the save, and the comment says why (`ResetPasswordHandlerBase.cs:58-60`),
-  because leaving it live until the write succeeds would open a replay window in which the same token
-  is redeemed twice; a token burned by a later invariant failure costs the user one more reset
-  request, which is the cheaper failure.
+  (`ResetPasswordHandlerBase.cs:17-22,64-68,73-77,95-99`). One ordering decision is worth
+  internalizing: the token is consumed *before* the save, and the comment says why
+  (`ResetPasswordHandlerBase.cs:58-60`), because leaving it live until the write succeeds would open a
+  replay window in which the same token is redeemed twice; a token burned by a later invariant failure
+  costs the user one more reset request, which is the cheaper failure.
 - **Walkthrough**: three positional parameters (`ResetPasswordRequest.cs:9-12`); no body. The doc
   comment repeats the never-logged rule for `NewPassword` (`ResetPasswordRequest.cs:8`), the same
-  convention [`LoginRequest`](#loginrequest) states.
+  convention [LoginRequest](#loginrequest) states.
 - **Why it's built this way**: the new password goes through the *same*
-  [`StrongPasswordRules<T>`](group-06-validation.md#strongpasswordrulest) that registration and
+  [StrongPasswordRules<T>](group-06-validation.md#strongpasswordrulest) that registration and
   change-password use, so a reset cannot become a way around the complexity policy
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ResetPasswordRequestValidator.cs:7-23`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ResetPasswordRequestValidator.cs:7-11,16-23`).
   Reusing one rule set rather than restating it per endpoint is the reason the policy cannot drift.
   [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) covers the
   token side.
 - **Where it's used**: bound as the body of the anonymous, rate-limited `POST reset-password` action
   on
-  [`PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>`](group-12-api-hosting-mapping.md#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand),
-  which answers 204 on success (`PasswordResetAuthControllerBase.cs:99-117`); shape-validated by
-  [`ResetPasswordRequestValidator`](#resetpasswordrequestvalidator); handled by
-  [`ResetPasswordHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand),
+  [PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>](group-12-api-hosting-mapping.md#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand),
+  which answers 204 on success
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:99,103,108,117`);
+  shape-validated by [ResetPasswordRequestValidator](#resetpasswordrequestvalidator); handled by
+  [ResetPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand),
   which hashes the new password, lets the aggregate apply its own invariants, saves, and then clears
-  the account's lockout so a user who reset *because* of a lockout is not still locked out
-  (`ResetPasswordHandlerBase.cs:79-89`); posted by
-  [`AuthUIService`](group-15-common-ui-framework.md#authuiservice)'s `ResetPasswordAsync`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:316-319`). ADC
-  carries it in a [`ResetPasswordCommand`](group-24-identity-module.md#resetpasswordcommand) marked
+  the account's failed-attempt count so a user who reset *because* of a lockout is not still locked
+  out (`ResetPasswordHandlerBase.cs:79-80,86,88-89`); posted by
+  [AuthUIService](group-15-common-ui-framework.md#authuiservice)'s `ResetPasswordAsync`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:208,218`). ADC
+  carries it in a [ResetPasswordCommand](group-24-identity-module.md#resetpasswordcommand) marked
   `ICacheInvalidating`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordCommand.cs:14-15`).
-- **Caveats / not-in-source**: as with the forgot half, MMCA.Store has no reset-password command or
-  controller in the tree; ADC is the only app that wires this vertical
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/PasswordResetController.cs:39`).
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordCommand.cs:14-15`);
+  Store carries its own, without that marker
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordCommand.cs:12`).
 
 ### RoleNames
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:12` · Level 0 · class (static)
@@ -2302,8 +2663,8 @@ live in later groups; this chapter is the engine those endpoints call into.
   nobody while looking correct. Referencing `RoleNames.Organizer` instead of `"Organizer"` moves that
   class of bug to compile time. The remarks also record that role comparisons should be
   **case-insensitive** (`RoleNames.cs:10`, pointing at
-  [`ICurrentUserService`](#icurrentuserservice)`.IsInRole`), which is the same equality contract
-  [`RoleValue`](#rolevalue) and [`PermissionRegistry`](#permissionregistry) implement.
+  [ICurrentUserService](#icurrentuserservice)`.IsInRole`), which is the same equality contract
+  [RoleValue](#rolevalue) and [PermissionRegistry](#permissionregistry) implement.
 - **Walkthrough**: five `public const string` fields. `Organizer` (`RoleNames.cs:15`), `Attendee`
   (`RoleNames.cs:18`), and `ContentEditor` (`RoleNames.cs:25`) are ADC roles; `Admin`
   (`RoleNames.cs:28`) and `Customer` (`RoleNames.cs:31`) are Store roles. `ContentEditor` is
@@ -2316,19 +2677,25 @@ live in later groups; this chapter is the engine those endpoints call into.
   content-management slice, one extra line rather than an edit to every attribute
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43-44,50`).
 - **Why it's built this way**: `const` rather than `static readonly` so the values can appear in
-  attribute arguments such as `[Authorize(Roles = RoleNames.Organizer)]`, which require compile-time
-  constants. Keeping both apps' roles in one shared file is a deliberate trade: a small amount of
-  irrelevance for each consumer in exchange for one authoritative list.
-- **Where it's used**: the named role policies in
-  [`AuthorizationExtensions.AddAuthorizationPolicies`](#authorizationextensions)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:24-32`),
-  the per-app role types ([`UserRole`](group-24-identity-module.md#userrole);
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:20-30` and
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/UserRole.cs:17-20`), and each
+  attribute and option initializers that require compile-time constants. Keeping both apps' roles in
+  one shared file is a deliberate trade: a small amount of irrelevance for each consumer in exchange
+  for one authoritative list.
+- **Where it's used**: the per-app role types
+  ([UserRole](group-24-identity-module.md#userrole);
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:20,23,30` and
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/UserRole.cs:17,20`), each
   module's permission grants
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43-50`,
-  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:53-54`,
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:46-47`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41-50`,
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:58-61`,
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:44-47`), and the
+  ownership-filter bypass role in ADC's Engagement module
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:54`).
+- **Caveats / not-in-source**: [AuthorizationExtensions](#authorizationextensions) registers no named
+  role policies today: `AddAuthorizationPolicies` wires only ASP.NET Core's authorization services and
+  the permission mechanism
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:23-38`,
+  with the "permissions are the one authorization model" statement at `:17-20`). Role names therefore
+  reach authorization only through the registry, not through a pre-registered policy per role.
 
 ### UserPreferencesResponse
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/UserPreferencesResponse.cs:9` · Level 0 · record (sealed)
@@ -2337,7 +2704,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   the server hands back when a returning user signs in
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/UserPreferencesResponse.cs:3-9`).
 - **Depends on**: nothing first-party. It is the exact mirror of
-  [`ChangePreferencesRequest`](#changepreferencesrequest).
+  [ChangePreferencesRequest](#changepreferencesrequest).
 - **Concept**: the null-means-absent convention. Where the request's `null` means "leave unchanged",
   the response's `null` means the user has never chosen that preference
   (`UserPreferencesResponse.cs:4-5`). `[Rubric §9, API & Contract Design]` assesses whether the same
@@ -2355,31 +2722,117 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Application.Tests/Users/UseCases/GetUserPreferencesHandlerTests.cs:46,60`).
 - **Why it's built this way**: like its request twin, the response record was byte-identical in both
   applications' Identity modules and was hoisted into Shared, which is what let the read side become a
-  shared base generic only in the `User` aggregate rather than in the query and the response too
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/GetPreferences/GetUserPreferencesHandlerBase.cs:21`).
+  shared base generic parameterized only on the `User` aggregate rather than on the query and the
+  response too
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/GetPreferences/GetUserPreferencesHandlerBase.cs:21-22`).
 - **Where it's used**: produced by
-  [`GetUserPreferencesHandlerBase<TUser>`](group-14-module-system-composition.md#getuserpreferenceshandlerbasetuser)
+  [GetUserPreferencesHandlerBase<TUser>](group-14-module-system-composition.md#getuserpreferenceshandlerbasetuser)
   from the aggregate's `PreferredCulture`/`PreferredTheme` (`GetUserPreferencesHandlerBase.cs:44`),
   against a
-  [`GetUserPreferencesQuery`](group-14-module-system-composition.md#getuserpreferencesquery); declared
+  [GetUserPreferencesQuery](group-14-module-system-composition.md#getuserpreferencesquery); declared
   as the 200 response of the shared `GET preferences` endpoint on
-  [`UserAccountAuthControllerBase<TChangePasswordCommand, TChangePreferencesCommand>`](group-12-api-hosting-mapping.md#useraccountauthcontrollerbasetchangepasswordcommand-tchangepreferencescommand)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/UserAccountAuthControllerBase.cs:138-140`).
-- **Caveats / not-in-source**: the handler reads through `GetReadRepository`, not the write repository,
-  and the remarks note this was a deliberate correction of a disagreement between the two app copies
-  (ADC read, Store write), so Store gained a no-tracking read on adoption
-  (`GetUserPreferencesHandlerBase.cs:16-20,39`). As with the request twin, the Blazor client does not
-  deserialize into this type: `ApiUserPreferenceReader` reads `auth/preferences` into its own UI-side
-  `UserPreferences` record and falls back to an empty one for anonymous users or any error
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/ApiUserPreferenceReader.cs:18,39-42`).
+  [UserAccountAuthControllerBase<TChangePasswordCommand, TChangePreferencesCommand>](group-12-api-hosting-mapping.md#useraccountauthcontrollerbasetchangepasswordcommand-tchangepreferencescommand)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/UserAccountAuthControllerBase.cs:138,140,142`).
+- **Caveats / not-in-source**: the handler reads through `GetReadRepository`, not the write
+  repository, and the remarks note this was a deliberate correction of a disagreement between the two
+  app copies (ADC read, Store write), so Store gained a no-tracking read on adoption
+  (`GetUserPreferencesHandlerBase.cs:16,39`). As with the request twin, the Blazor client does not
+  deserialize into this type:
+  [ApiUserPreferenceReader](group-15-common-ui-framework.md#apiuserpreferencereader) reads
+  `auth/preferences` into its own UI-side `UserPreferences` record and falls back to an empty one for
+  anonymous users or any transport error
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/ApiUserPreferenceReader.cs:18,39-40,44-48`).
+
+### ClaimsPrincipalExtensions
+> MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:18` · Level 1 · class (static)
+
+- **What it is**: the one place the framework reads identity claims off a `ClaimsPrincipal`: the raw
+  user-id value, the parsed user id, and the refresh-session id
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:6-18`).
+- **Depends on**: [AuthClaimTypes](#authclaimtypes) for the two claim names it reads
+  (`ClaimsPrincipalExtensions.cs:27,58`); the solution-wide `UserIdentifierType` alias; BCL
+  `System.Security.Claims` and `System.Globalization` (`ClaimsPrincipalExtensions.cs:1-2`).
+- **Concept introduced, one reader for a claim that arrives under two names.** `[Rubric §11,
+  Security]` assesses whether identity resolution is correct and uniform, and `[Rubric §16,
+  Maintainability]` assesses whether a fragile detail is centralized or copy-pasted. The trap is
+  ASP.NET Core's inbound claim mapping. Tokens carry the user identifier in the standard `sub` claim
+  only, but that single value reaches readers under two different claim types depending on which
+  pipeline produced the principal (`ClaimsPrincipalExtensions.cs:8-16`):
+  - the JWT bearer handler maps inbound `sub` onto `ClaimTypes.NameIdentifier`, the long
+    `http://schemas.xmlsoap.org/...` URI;
+  - a handler that materializes an identity straight from a token's claims leaves the raw `sub` in
+    place. [SessionCookieAuthenticationHandler](#sessioncookieauthenticationhandler) is exactly that
+    case: it builds `new ClaimsIdentity(jwt.Claims, ...)` from the decoded token
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieAuthenticationHandler.cs:60-61`).
+
+  A reader that hard-codes either name works under one pipeline and silently returns "anonymous" under
+  the other, and "silently anonymous" in an authorization path is the worst failure shape available.
+  Routing every framework reader through `FindUserIdValue` makes both shapes resolve identically, and
+  means a consumer that changes its claim mapping does not lose the current user
+  (`ClaimsPrincipalExtensions.cs:13-15`). Note the deliberate use of C#'s classic `this`-parameter
+  extension methods here rather than the `extension(T)` blocks the codebase uses for DI registration:
+  these are plain static helpers on a BCL type.
+- **Walkthrough**: three extension methods, all null-tolerant by construction (every parameter is
+  `ClaimsPrincipal?`, so a null principal yields null rather than throwing).
+  - `FindUserIdValue(this ClaimsPrincipal?)` (`ClaimsPrincipalExtensions.cs:26-28`) is the primitive:
+    `principal?.FindFirst(AuthClaimTypes.Subject)?.Value ?? principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value`.
+    Raw `sub` wins, the mapped `NameIdentifier` is the fallback, and a principal carrying neither
+    yields `null`.
+  - `GetUserId(this ClaimsPrincipal?)` (`ClaimsPrincipalExtensions.cs:40-44`) parses that value into
+    the module's `UserIdentifierType` and returns `null` when the claim is absent or unparsable. It
+    parses through `IParsable<TSelf>.TryParse` in `CultureInfo.InvariantCulture`, which the remarks
+    justify twice over (`:34-38`): it matches the writer (claims are formatted invariantly) and it
+    stays correct if the solution-wide identifier alias changes shape, so the helper does not have to
+    be rewritten when an app moves from `int` to `Guid`.
+  - `FindSessionId(this ClaimsPrincipal?)` (`ClaimsPrincipalExtensions.cs:56-60`) reads the `sid`
+    claim and `Guid.TryParse`s it. The remarks make the degradation explicit (`:50-54`): `null` is an
+    ordinary answer, not an error, because tokens issued before `sid` shipped carry no such claim, and
+    every reader treats its absence as "the caller's own session is unknown". Nothing authenticates on
+    this value.
+- **Why it's built this way**: [TokenService](#tokenservice) records the other half of the story in a
+  comment (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:88-91`): a
+  duplicate custom user-id claim used to ride alongside `sub`, which meant two values that could
+  disagree and two claim names every reader had to know. Collapsing the writer to one claim
+  (`TokenService.cs:94`) is only safe because one reader absorbs the mapping difference, which is this
+  type. The `sid` half comes from
+  [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html).
+- **Where it's used**: broadly, and always instead of a hand-rolled claim lookup.
+  [CurrentUserService](#currentuserservice) resolves the ambient user id through `GetUserId()`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:12,19`);
+  [ClaimBasedUserIdProvider](#claimbaseduseridprovider) uses `FindUserIdValue()` to key SignalR
+  connections
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:15`); the
+  [IdempotencyFilter](group-12-api-hosting-mapping.md#idempotencyfilter) uses it to scope an
+  idempotency key to a caller
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:487`);
+  [CurrentUserTargetingContextAccessor](group-12-api-hosting-mapping.md#currentusertargetingcontextaccessor)
+  uses it for feature-flag targeting
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/CurrentUserTargetingContextAccessor.cs:17,86`);
+  rate-limit partitioning uses it to build a per-user partition
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:92`);
+  [AuthControllerBase](group-12-api-hosting-mapping.md#authcontrollerbase) uses `FindSessionId()` to
+  tell the session list which row is the caller's own
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:185`);
+  [AuthenticationServiceBase<TUser>](#authenticationservicebasetuser) uses `GetUserId()` on the
+  principal recovered from an expired access token during rotation
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:285-288`); and
+  [TestPrincipal](group-27-testing-infrastructure.md#testprincipal) writes `sub` precisely so test
+  principals resolve the same way real ones do
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/TestPrincipal.cs:19,27`).
+- **Caveats / not-in-source**: MMCA.Store's Sales UI module defines its own unrelated
+  `ClaimsPrincipalExtensions` in a different namespace
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Extensions/ClaimsPrincipalExtensions.cs:9`);
+  do not confuse the two when reading a `using` list. Also note `GetUserId` returns a nullable value
+  type, so `is { } userId` pattern-matching (as ADC's Blazor pages use) is the idiomatic call shape,
+  not a `!` dereference.
 
 ### PermissionRegistry
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistry.cs:10` · Level 1 · class (sealed)
 
 - **What it is**: the immutable, thread-safe implementation of
-  [`IPermissionRegistry`](#ipermissionregistry), backed by a frozen role-to-permissions map
+  [IPermissionRegistry](#ipermissionregistry), backed by a frozen role-to-permissions map
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistry.cs:5-10`).
-- **Depends on**: [`IPermissionRegistry`](#ipermissionregistry); `System.Collections.Frozen`
+- **Depends on**: [IPermissionRegistry](#ipermissionregistry); `System.Collections.Frozen`
   (`FrozenDictionary` and `FrozenSet`, BCL, `PermissionRegistry.cs:1`).
 - **Concept introduced, `Frozen*` collections for read-optimized immutable lookups.** `[Rubric §12,
   Performance & Scalability]` assesses hot-path data-structure choices. A `FrozenDictionary` or
@@ -2404,19 +2857,20 @@ live in later groups; this chapter is the engine those endpoints call into.
   allocation-free, lock-free concurrent reads, which suits a startup-built structure hit on every
   authorized request
   ([ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)).
-- **Where it's used**: constructed by [`PermissionRegistryBuilder.Build`](#permissionregistrybuilder)
-  and registered as the [`IPermissionRegistry`](#ipermissionregistry) singleton in
-  [`AuthorizationExtensions`](#authorizationextensions)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:76-78`);
-  read by [`PermissionAuthorizationHandler`](#permissionauthorizationhandler).
+- **Where it's used**: constructed by [PermissionRegistryBuilder](#permissionregistrybuilder)`.Build`
+  and registered as the [IPermissionRegistry](#ipermissionregistry) singleton in
+  [AuthorizationExtensions](#authorizationextensions)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:69-71`);
+  read by [PermissionAuthorizationHandler](#permissionauthorizationhandler)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:13,30`).
 
 ### PermissionRegistryBuilder
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistryBuilder.cs:8` · Level 2 · class (sealed)
 
 - **What it is**: a mutable accumulator that collects role-to-permission grants and freezes them into
-  an immutable [`PermissionRegistry`](#permissionregistry)
+  an immutable [PermissionRegistry](#permissionregistry)
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistryBuilder.cs:3-8`).
-- **Depends on**: [`PermissionRegistry`](#permissionregistry), its build target.
+- **Depends on**: [PermissionRegistry](#permissionregistry), its build target.
 - **Concept introduced, the builder pattern for multi-module contribution.** `[Rubric §2, Design
   Patterns]` assesses idiomatic pattern use and `[Rubric §7, Microservices Readiness]` assesses whether
   a module can declare only what it owns. The builder separates the *accumulation* phase (mutable,
@@ -2435,136 +2889,280 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`:32-39`), and returns `this` for chaining (`:41`): additive and idempotent, so a duplicate grant
   from a second module is a no-op. `Build()` (`PermissionRegistryBuilder.cs:46`) projects the grants
   into an `IReadOnlyDictionary<string, IReadOnlySet<string>>` (keeping the case-insensitive comparer)
-  and hands it to the [`PermissionRegistry`](#permissionregistry) constructor
+  and hands it to the [PermissionRegistry](#permissionregistry) constructor
   (`PermissionRegistryBuilder.cs:48-53`).
 - **Why it's built this way**: mutable while assembling, immutable once built is the safe way to let
   independent modules compose one shared authorization table at startup without any shared mutable
   state at runtime.
-- **Where it's used**: [`AuthorizationExtensions`](#authorizationextensions) registers exactly one
+- **Where it's used**: [AuthorizationExtensions](#authorizationextensions) registers exactly one
   builder instance and a lazily-built singleton registry over it, so the registry is materialized on
   first resolve, after every module has contributed
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:65-81`);
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:58-74`);
   modules reach it through `AddPermissions(...)`, which is deliberately safe to call once per module
-  (`AuthorizationExtensions.cs:48-62`), as MMCA.ADC's Conference, Engagement, and Identity modules
+  (`AuthorizationExtensions.cs:40-55`), as MMCA.ADC's Conference, Engagement, and Identity modules
   each do
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41-51`,
-  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:51-54`,
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41-50`,
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:58-61`,
   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:44-47`).
 - **Caveats / not-in-source**: the lazy build means a `Grant` call made after the first
-  `IPermissionRegistry` resolve would silently not take effect; the API doc says to call before the
-  host is built (`AuthorizationExtensions.cs:50`), but nothing enforces it at runtime.
+  [IPermissionRegistry](#ipermissionregistry) resolve would silently not take effect; the API doc says
+  to call before the host is built (`AuthorizationExtensions.cs:43`), but nothing enforces it at
+  runtime.
 
 ### RoleValue
+
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:25` · Level 3 · class (abstract)
 
-- **What it is**: the abstract base for a role value object: it stores a canonical string, provides
-  case-insensitive value equality and hashing, and offers validation against a per-app set of known
-  role names (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:6-25`).
+- **What it is**: the abstract base for a role value object. It stores one canonical string, gives it
+  case-insensitive value equality and hashing, and offers a shared validation helper against a
+  per-app set of known role names
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:6-25`).
 - **Depends on**: [`Result`](group-01-result-error-handling.md#result) and
   [`Error`](group-01-result-error-handling.md#error) from `MMCA.Common.Shared.Abstractions`
-  (`RoleValue.cs:2`), plus `System.Collections.Frozen` (`RoleValue.cs:1`). It references
-  [`RoleNames`](#rolenames) in its documentation. Conceptually a value object (see
-  [`ValueObject`](group-02-domain-building-blocks.md#valueobject)) but deliberately not derived from
-  that base.
-- **Concept introduced, a value object as an abstract class with type-guarded equality.** `[Rubric §4,
-  Domain-Driven Design]` assesses whether identity-less concepts are modeled as value objects, and
-  `[Rubric §1, SOLID]` applies to how the hierarchy is left open. Roles are stored as plain strings and
-  emitted as JWT claims; this type gives them value semantics without a database identity. It
-  deliberately does **not** implement `IEquatable<T>` (`RoleValue.cs:17-23`): the remarks cite Sonar
-  S4035, an unsealed `IEquatable<T>` breaks the equality contract for subclasses. Instead equality is
-  the `object.Equals` override, type-guarded so two roles are equal only when they are the *same
-  concrete type* with the same case-insensitive value (`RoleValue.cs:90-93`), and a sealed derived type
-  may safely add a strongly-typed `IEquatable<TSelf>` plus `==`/`!=` on top, which ADC's `UserRole`
-  does (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:17,78`). It lives
-  in `MMCA.Common.Shared` so it stays dependency-free and usable from Blazor WebAssembly as well as
-  Domain, with each app deriving a concrete role type that fixes its own role set
-  (`RoleValue.cs:11-16`).
-- **Walkthrough**: a get-only `Value` (`RoleValue.cs:28`) set by the protected constructor
-  (`RoleValue.cs:32`). The static `Validate(role, knownRoles, source)` (`RoleValue.cs:42`) returns
-  `Result.Success()` when the role is in the app's known set, otherwise a
+  (`RoleValue.cs:2`), plus `System.Collections.Frozen` from the BCL (`RoleValue.cs:1`). Its doc
+  comments point at [`RoleNames`](#rolenames) for the canonical strings (`RoleValue.cs:9`) and at
+  `ICurrentUserService.IsInRole` for the comparison semantics it matches (`RoleValue.cs:16`).
+  Conceptually a value object (see [`ValueObject`](group-02-domain-building-blocks.md#valueobject))
+  but deliberately not derived from that base, for a reason the next bullet unpacks.
+- **Concept introduced, a value object as an abstract class with type-guarded equality.**
+  `[Rubric §4, Domain-Driven Design]` assesses whether identity-less concepts are modeled as value
+  objects rather than bare primitives, and `[Rubric §1, SOLID]` applies to how an open hierarchy is
+  left safe to extend. A role has no database identity: two "Organizer" values are the same role, so
+  the type is defined by its value, which is exactly the value-object shape. Two design decisions
+  make this base unusual, and both are written into the source:
+  1. **No `IEquatable<T>` on the base** (`RoleValue.cs:17-23`). The remarks cite Sonar S4035: an
+     unsealed type implementing `IEquatable<T>` breaks the equality contract, because a subclass
+     instance compared through the base-typed interface can report an equality the derived type
+     would reject. Instead equality is the plain `object.Equals` override, and it is type-guarded:
+     `GetType() == other.GetType()` before the value comparison (`RoleValue.cs:90-93`), so a role of
+     one concrete type is never equal to a same-valued role of another. A *sealed* derived type is
+     then free to layer a strongly-typed `IEquatable<TSelf>` plus `==`/`!=` on top, which is what
+     ADC's `UserRole` does
+     (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:17,77-83`).
+  2. **It does not derive from [`ValueObject`](group-02-domain-building-blocks.md#valueobject)**, and
+     that is a fitness-rule consequence, not an oversight. `ValueObjectsAreImmutableSealedInShared`
+     requires every concrete class whose base type starts with
+     `MMCA.Common.Shared.ValueObjects.ValueObject` to be sealed, immutable, *and* to live in the
+     Shared layer
+     (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Immutability.cs:56-72`).
+     A concrete role type lives in its app's Domain layer
+     (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:5`), so deriving
+     from `ValueObject` would fail that rule in every app. Keeping the base in `MMCA.Common.Shared`
+     with its own equality also keeps it dependency-free and therefore usable from Blazor WebAssembly
+     and UI code as well as Domain (`RoleValue.cs:11-16`). The same trade-off is made by
+     [`Enumeration<TEnumeration>`](group-02-domain-building-blocks.md#enumerationtenumeration), whose
+     own remarks name `RoleValue` as the shipped precedent
+     (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:25-29`).
+
+  `[Rubric §11, Security]` applies too, because role strings arrive as JWT claim values whose casing
+  is not under this codebase's control. Every comparison here is `OrdinalIgnoreCase`, so an
+  authorization check does not silently miss on `"organizer"` against `"Organizer"`.
+- **Walkthrough**: a get-only `Value` (`RoleValue.cs:28`) assigned by the protected constructor
+  (`RoleValue.cs:32`), so an instance is immutable and only a derived type can create one. The static
+  `Validate(role, knownRoles, source)` (`RoleValue.cs:42`) null-guards the supplied set
+  (`RoleValue.cs:44`), then returns `Result.Success()` when the role is known, otherwise a
   [`Result`](group-01-result-error-handling.md#result) failure carrying an
-  [`Error`](group-01-result-error-handling.md#error) of kind `Invariant` coded `User.Role.Invalid`
-  (`RoleValue.cs:46-52`). The membership test itself is the private `IsKnown`
-  (`RoleValue.cs:63-65`), and it is more careful than it first looks: the fast path is the supplied
-  set's own `Contains` (correct and O(1) for the intended `OrdinalIgnoreCase` sets, with a
-  `role ?? string.Empty` coalesce so a null role becomes a clean failure rather than a
-  `NullReferenceException`), and a miss falls back to an explicit case-insensitive scan so that a set
-  built with the *default ordinal* comparer still validates case-insensitively as the contract
-  promises (`RoleValue.cs:55-62`). Role sets hold a handful of entries, so the fallback is negligible
-  and only runs on a miss. The protected generic `BuildLookup<TRole>(params roles)`
-  (`RoleValue.cs:75`) freezes the supplied singletons into a case-insensitive `FrozenDictionary` keyed
-  by `Value` (`RoleValue.cs:80-83`), so a derived type can back its `FromString`/`IsValid` members
-  with interned instances instead of re-allocating. `ToString` returns the value (`RoleValue.cs:87`),
-  and `GetHashCode` uses the ordinal-ignore-case hash (`RoleValue.cs:96`) so it stays consistent with
-  `Equals`, which is the contract a dictionary key depends on.
+  [`Error`](group-01-result-error-handling.md#error) of kind `Invariant`, coded `User.Role.Invalid`,
+  with the caller's method name as `source` and `role` as `target` (`RoleValue.cs:46-52`). The
+  membership test is the private `IsKnown` (`RoleValue.cs:63-65`) and it is more careful than it
+  first looks: the fast path is the supplied set's own `Contains` (correct and O(1) for the intended
+  `OrdinalIgnoreCase` sets, with a `role ?? string.Empty` coalesce so a null role becomes a clean
+  failure rather than a `NullReferenceException`), and a miss falls back to an explicit
+  case-insensitive `Any` scan, so a set built with the *default* ordinal comparer still validates
+  case-insensitively as the contract promises (`RoleValue.cs:55-62`). Role sets hold a handful of
+  entries, so the fallback is negligible and only ever runs on a miss. The protected generic
+  `BuildLookup<TRole>(params TRole[] roles)` (`RoleValue.cs:75`) freezes the supplied singletons into
+  a case-insensitive `FrozenDictionary` keyed by `Value` (`RoleValue.cs:80-83`), so a derived type
+  can back its `FromString`/`IsValid` members with interned instances instead of re-allocating on
+  every parse. `ToString` returns the value (`RoleValue.cs:87`), and `GetHashCode` uses the
+  ordinal-ignore-case hash (`RoleValue.cs:96`) so it stays consistent with `Equals`, which is the
+  contract any dictionary or `HashSet` key depends on.
 - **Why it's built this way**: the abstract-class-plus-type-guard shape is how you share equality
   behavior across an open hierarchy of value objects without violating the equality contract, and the
-  S4035 rationale is documented inline so a future reader does not "helpfully" add `IEquatable<T>` to
-  the base.
+  S4035 rationale is documented inline (`RoleValue.cs:17-23`) so a future reader does not
+  "helpfully" add `IEquatable<T>` to the base. The comparer-agnostic `IsKnown` fallback exists
+  because `Validate` accepts any `IReadOnlySet<string>`: the type cannot see how the caller built the
+  set, so it enforces its own promise instead of trusting the caller's comparer. That behavior is
+  pinned by test, including the default-comparer case
+  (`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Auth/RoleValueTests.cs:18`), the
+  `OrdinalIgnoreCase` case (`RoleValueTests.cs:30`), a null role (`RoleValueTests.cs:59`), and a null
+  role set throwing (`RoleValueTests.cs:67`).
 - **Where it's used**: the two apps consume it differently, and the difference is instructive.
-  ADC derives a full sealed value object,
-  [`UserRole`](group-24-identity-module.md#userrole), which fixes three roles (Organizer, Attendee,
-  ContentEditor), interns them through `BuildLookup`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:20-33`), and exposes
-  `FromString`/`IsValid` over that frozen lookup (`UserRole.cs:51-65`) plus a case-insensitive
-  `IsOrganizer` for raw claim strings (`UserRole.cs:76`). Store's `UserRole` is a **static class**
-  rather than a subclass: it fixes Admin and Customer as string constants over an
-  `OrdinalIgnoreCase` set and calls the shared `RoleValue.Validate` helper for its `IsValid`
+  ADC derives a full sealed value object, [`UserRole`](group-24-identity-module.md#userrole), which
+  fixes three roles (Organizer, Attendee, ContentEditor), interns them through `BuildLookup`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:20-33`), exposes
+  `FromString` returning a `Result<UserRole>` and `IsValid` over that frozen lookup
+  (`UserRole.cs:51-65`), and adds a case-insensitive `IsOrganizer` for raw claim strings
+  (`UserRole.cs:75`) plus the sealed-type `IEquatable<UserRole>` and `==`/`!=` operators the base
+  leaves to subclasses (`UserRole.cs:77-89`). Store's `UserRole` is a **static class**, not a
+  subclass: it fixes Admin and Customer as string properties over an `OrdinalIgnoreCase` set and
+  calls the shared `RoleValue.Validate` helper for its `IsValid`
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/UserRole.cs:14,26-30,37`), so
   it inherits the rule set (case-insensitive membership, the `User.Role.Invalid` code) without
-  inheriting the type. Both key their known-role sets off the [`RoleNames`](#rolenames) constants.
+  inheriting the type. Both key their known-role sets off the [`RoleNames`](#rolenames) constants,
+  and [`PermissionRegistryBuilder`](#permissionregistrybuilder) keeps its role keys on the same
+  case-insensitive comparer to match
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistryBuilder.cs:11`).
 
 ### RegisterRequest
+
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RegisterRequest.cs:13` · Level 4 · record struct (readonly)
 
 - **What it is**: the registration payload for a new account: email, password, first and last name,
   and an optional postal address
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RegisterRequest.cs:5-18`).
 - **Depends on**: [`Address`](group-02-domain-building-blocks.md#address) from
-  `MMCA.Common.Shared.ValueObjects` (`RegisterRequest.cs:1`), which is what puts this Level 0-shaped
-  DTO at Level 4.
-- **Concept**: the `readonly record struct` DTO shape from
-  [`AuthenticationResponse`](#authenticationresponse). `[Rubric §9, API & Contract Design]`. The
-  optional `Address? Address = null` parameter (`RegisterRequest.cs:18`) shows that positional record
-  structs support default values, so a caller that has no address omits it rather than needing a
-  second overload or a null literal.
-- **Walkthrough**: five positional parameters (`RegisterRequest.cs:13-18`): four strings plus the
-  nullable [`Address`](group-02-domain-building-blocks.md#address). The strings arrive raw: no
-  validation attributes, no normalization. Shape checking is the validator's job and semantic
-  conversion is the domain factory's, which is why
-  [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser) hands the request to an
-  abstract `CreateUser(RegisterRequest request, byte[] passwordHash, byte[] passwordSalt)` that each
-  app implements against its own `User` aggregate
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:322`, called at
-  `:160`).
+  `MMCA.Common.Shared.ValueObjects` (`RegisterRequest.cs:1`), which is the only reason this
+  otherwise Level 0-shaped DTO sits at Level 4.
+- **Concept**: the `readonly record struct` request shape introduced by
+  [`LoginRequest`](#loginrequest); see that section for the value semantics. `[Rubric §9, API &
+  Contract Design]` assesses whether the wire contract is explicit and evolvable. The optional
+  `Address? Address = null` parameter (`RegisterRequest.cs:18`) is the notable detail here:
+  positional record structs support default parameter values, so a caller with no address simply
+  omits it rather than needing a second overload or a null literal at the call site. That default is
+  what lets one shared contract serve two apps with different profile shapes (see **Where it's
+  used**).
+- **Walkthrough**: five positional parameters and no body (`RegisterRequest.cs:13-18`): four strings
+  plus the nullable [`Address`](group-02-domain-building-blocks.md#address). The strings arrive raw,
+  with no validation attributes and no normalization. Shape checking is the validator's job and
+  semantic conversion is the domain factory's, which is the codebase's standing division of labor:
+  ADC's [`RegisterRequestValidator`](group-24-identity-module.md#registerrequestvalidator) composes
+  reusable rule sets over the four strings and applies `AddressValidator` only `When` the address is
+  non-null
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/RegisterRequestValidator.cs:16-23`),
+  while [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser) hands the whole request
+  to an abstract `CreateUser(RegisterRequest request, byte[] passwordHash, byte[] passwordSalt)` that
+  each app implements against its own `User` aggregate
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:511`). Note
+  that `Password` is a plain `string` on the contract and never travels past the hashing call:
+  `RegisterAsync` turns it into a hash and salt pair, and that pair, not the password, is what
+  reaches `CreateUser` and the aggregate (`AuthenticationServiceBase.cs:210-211`).
+  `[Rubric §11, Security]`.
 - **Where it's used**:
   [`AuthenticationServiceBase<TUser>.RegisterAsync`](#authenticationservicebasetuser)
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:134`) and
-  the `register` endpoint on
-  [`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:84-85`), plus
-  each app's register form.
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:184-185`), the
+  `register` endpoint on [`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase),
+  which binds it `[FromBody]` on an anonymous, rate-limited, idempotent POST
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:91-100`), and
+  each app's register form. The two apps' `CreateUser` overrides show why the address is optional:
+  Store passes `request.Address` straight into `User.Create`
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:52-60`),
+  while ADC ignores it entirely and creates the user from email, names, hash, salt, and the default
+  `UserRole.Attendee`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:107-114`).
+
+### ConcurrencyETag
+
+> MMCA.Common.Shared · `MMCA.Common.Shared.Http` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:24` · Level 0 · class (static)
+
+- **What it is**: the translator between the framework's optimistic-concurrency token (the EF Core
+  `rowversion` byte array carried by [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware))
+  and the HTTP entity tag that represents that token on the wire. It owns three header constants plus
+  a `Format`/`TryParse` pair
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ConcurrencyETag.cs:24-105`).
+- **Depends on**: nothing first-party at runtime (the doc comment references
+  [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) at `ConcurrencyETag.cs:7`).
+  BCL only: `Convert.ToBase64String`, `Convert.TryFromBase64Chars`, `ReadOnlySpan<char>`, and
+  `[NotNullWhen]` from `System.Diagnostics.CodeAnalysis` (`ConcurrencyETag.cs:1`).
+- **Concept introduced, the HTTP conditional-request boundary for optimistic concurrency.**
+  Optimistic concurrency itself is introduced at
+  [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware): a client echoes back the
+  row version it last saw so a stale write is refused. This type is where that value becomes an HTTP
+  citizen, and two decisions recorded in its own doc comment are the whole design. First, the tag is
+  **always weak** (`W/"..."`, `ConcurrencyETag.cs:12-18`): a strong entity tag promises byte-for-byte
+  equality of the representation, and this one does not, because the same row version renders
+  differently under a `fields=` projection and says nothing about serializer formatting. Weak is the
+  honest strength for a token that answers "is this the same version of the resource", which is
+  exactly what `If-Match` asks. Second, the payload is base64 of the raw token
+  (`ConcurrencyETag.cs:19-22`), so the round trip is lossless and the value stays inside the
+  quoted-string grammar RFC 9110 defines for an entity tag. `[Rubric §9, API & Contract Design]`
+  assesses whether the framework speaks the standard protocol rather than inventing a private one:
+  preconditions here travel in the headers HTTP already defines, so a generic client library can
+  participate. `[Rubric §8, Data Architecture]` covers concurrency control as a deliberate
+  persistence concern. This is also the same shared-wire-literal placement rule
+  [`IdempotencyHeaders`](#idempotencyheaders) follows, and the doc comment says so: it lives in Shared
+  "because both ends of the exchange need it: the API reads an `If-Match` value with it and the UI
+  services write one with it" (`ConcurrencyETag.cs:8-9`).
+- **Walkthrough**:
+  - Three constants name the protocol: `IfMatchHeaderName = "If-Match"` (`ConcurrencyETag.cs:27`),
+    `ETagHeaderName = "ETag"` (`:30`), and `Wildcard = "*"` (`:33`), the `If-Match` value that matches
+    any current version.
+  - `Format(byte[] rowVersion)` (`:40`) null-guards (`:42`) and returns
+    `string.Concat("W/\"", Convert.ToBase64String(rowVersion), "\"")` (`:44`), so a token renders as,
+    for example, `W/"AAAAAAAAB9E="`.
+  - `TryParse(string? value, out byte[]? rowVersion)` (`:62`) is deliberately forgiving on the way in
+    and strict about what counts as success. It nulls the out parameter first (`:64`), returns `false`
+    for a blank value (`:66-69`), then takes only the **first** entry of a comma-separated list
+    (`:71-77`). The remark explains why (`:57-61`): a conditional write here is a single-version
+    precondition, since there is one row version to compare against, so a list beyond its first entry
+    has no meaning. It then trims (`:79`), strips a case-insensitive `W/` prefix (`:81-84`), strips the
+    surrounding quotes when both are present (`:86-89`), and fails on an empty remainder (`:91-94`).
+  - Decoding is allocation-conscious: it sizes a buffer from the candidate length (`:96`), calls
+    `Convert.TryFromBase64Chars` and rejects both a decode failure and a zero-length result (`:97-100`),
+    then slices the buffer to the bytes actually written (`:102`).
+  - The contract on `false` is spelled out in the doc (`:52-56`): a blank value, the wildcard, and
+    anything that is not base64 all return `false`, and **the caller decides which of those is an error
+    in its context**. That is what lets
+    [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute) treat a
+    wildcard as "no precondition" while treating unparsable input as a 400.
+- **Why it's built this way**:
+  [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) is the governing
+  record. It picks the header as the one transport because HTTP already defines `ETag` and `If-Match`
+  for precisely this exchange (`Website/docs-src/adr/035-optimistic-concurrency.md:23-24,147`), and it
+  states the Shared placement as a deliberate consequence: the type lives in `MMCA.Common.Shared.Http`
+  "rather than in the API package precisely so both ends of the exchange can use it"
+  (`035-optimistic-concurrency.md:124-128`). Keeping the wire format in one static class means the
+  reader side and the writer side cannot disagree about weakness, base64, or list handling; pushing
+  the error decision to the caller keeps the parser free of HTTP status opinions.
+- **Where it's used**: server side,
+  [`EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#entitycontrollerbasetentity-tentitydto-tidentifiertype)`.SetConcurrencyETag`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:471`) writes
+  `Response.Headers[ConcurrencyETag.ETagHeaderName] = ConcurrencyETag.Format(rowVersion)`
+  (`EntityControllerBase.cs:479`) after a successful by-id read (`EntityControllerBase.cs:436`), and
+  the CRUD base does the same after a create
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:111`);
+  [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute) reads the
+  request header
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:106`),
+  compares against the wildcard (`:110`) and decodes with `TryParse` (`:116`). Client side,
+  [`EntityServiceBase<TEntityDTO, TIdentifierType>`](group-15-common-ui-framework.md#entityservicebasetentitydto-tidentifiertype)
+  formats the tag
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:199`) and attaches it
+  as `If-Match` (`EntityServiceBase.cs:394`), as do ADC's
+  [`EventService`](group-21-conference-ui.md#eventservice)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/EventService.cs:29,41`),
+  [`SessionQuestionUIService`](group-23-engagement-live-layer.md#sessionquestionuiservice)
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/SessionQuestionUIService.cs:133,142`)
+  and [`LivePollUIService`](group-23-engagement-live-layer.md#livepolluiservice)
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/LivePollUIService.cs:197,206`).
+  Framework coverage is `ConcurrencyETagTests`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Http/ConcurrencyETagTests.cs:16,21,33,47`), and
+  ADC's integration bases build their `If-Match` values through the same helper
+  (`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Infrastructure/ConferenceIntegrationTestBase.cs:48,58,62`).
+- **Caveats / not-in-source**: the `ETag` this type renders exists to be echoed back on the next
+  write. Nothing here implements conditional **GET**: no code path compares an inbound `If-None-Match`
+  against it, which ADR-035 records explicitly
+  (`Website/docs-src/adr/035-optimistic-concurrency.md:182-184`).
 
 ### IcsEvent
 
 > MMCA.Common.Shared · `MMCA.Common.Shared.Calendars` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsEvent.cs:15` · Level 0 · record
 
-- **What it is**: one calendar entry handed to
-  [`IcsCalendarBuilder`](#icscalendarbuilder): a stable `Uid`, a `Summary`, a UTC start and end, and
-  two optional strings for description and location
+- **What it is**: one calendar entry handed to [`IcsCalendarBuilder`](#icscalendarbuilder): a stable
+  `Uid`, a `Summary`, a UTC start and end, and two optional strings for description and location
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsEvent.cs:15-21`).
 - **Depends on**: nothing first-party; `System.DateTimeOffset` (BCL).
 - **Concept introduced, the UTC-only calendar contract.** `[Rubric §9, API & Contract Design]`
   assesses whether a contract states its own invariants rather than leaving them to convention. The
   invariant here is written into the type's own doc comment: "Times are UTC by contract"
   (`IcsEvent.cs:4`). RFC 5545 lets a calendar carry local times paired with a `VTIMEZONE` block that
-  restates the zone's DST rules inside the document; getting that block right (and keeping it right
-  as tzdata moves) is a well-known source of bugs. By declaring the two timestamps
-  `DateTimeOffset` and requiring them to already be UTC instants, this record pushes the wall-clock
-  to UTC conversion onto the caller, which is where the zone knowledge actually lives, and lets the
-  builder emit plain `Z`-suffixed timestamps with no `VTIMEZONE` machinery at all (`IcsEvent.cs:5-7`).
-  The `Uid` carries a second contract: calendar clients de-duplicate re-imports by it, so it must be
-  globally unique and *stable* across exports of the same thing (`IcsEvent.cs:9`).
+  restates the zone's DST rules inside the document; getting that block right (and keeping it right as
+  tzdata moves) is a well-known source of bugs. By declaring the two timestamps `DateTimeOffset` and
+  requiring them to already be UTC instants, this record pushes the wall-clock to UTC conversion onto
+  the caller, which is where the zone knowledge actually lives, and lets the builder emit plain
+  `Z`-suffixed timestamps with no `VTIMEZONE` machinery at all (`IcsEvent.cs:5-7`). The `Uid` carries a
+  second contract: calendar clients de-duplicate re-imports by it, so it must be globally unique and
+  *stable* across exports of the same thing (`IcsEvent.cs:9`).
 - **Walkthrough**: a positional `sealed record` with six parameters and no body. `Uid`, `Summary`,
   `StartsAtUtc`, `EndsAtUtc` are required by position; `Description` and `Location` default to `null`
   (`IcsEvent.cs:16-21`), which is how the builder decides to omit the corresponding lines entirely
@@ -2572,20 +3170,20 @@ live in later groups; this chapter is the engine those endpoints call into.
   that the auth DTOs in this group use: entries are built into a collection and enumerated once, so
   there is no per-call allocation to avoid.
 - **Why it's built this way**: the framework ships no calendar NuGet dependency, so the shape of an
-  entry is the framework's to define. Keeping it to the six fields every calendar client honors is
-  the same minimal-subset judgement the builder documents at
+  entry is the framework's to define. Keeping it to the six fields every calendar client honors is the
+  same minimal-subset judgement the builder documents at
   `MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:7-10`. No ADR governs
   calendar export; the decision lives in these two files' doc comments.
 - **Where it's used**: ADC's Conference module builds entries from sessions in
   [`CalendarExportMapper`](group-18-conference-application.md#calendarexportmapper), which does the
-  event-zone to UTC conversion the contract demands and composes the `Uid` as
-  `session-{id}@atldevcon`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:31-44`).
-  The mapped entries reach
+  event-zone to UTC conversion the contract demands (its `ToUtc` helper at
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:47`)
+  and composes the `Uid` as `session-{id}@atldevcon` (`CalendarExportMapper.cs:31-44`, the id at
+  `:38`). The mapped entries reach
   [`ExportSessionCalendarHandler`](group-18-conference-application.md#exportsessioncalendarhandler)
-  (`ExportSessionCalendarHandler.cs:59-61`) and
+  (`.../ExportCalendar/ExportSessionCalendarHandler.cs:51-54`) and
   [`ExportEventCalendarHandler`](group-18-conference-application.md#exporteventcalendarhandler)
-  (`ExportEventCalendarHandler.cs:54,61`).
+  (`.../ExportCalendar/ExportEventCalendarHandler.cs:46-53`).
 - **Caveats / not-in-source**: nothing in the type enforces that `StartsAtUtc` and `EndsAtUtc` really
   carry a zero offset, that the end follows the start, or that the `Uid` is unique. All three are
   contract-by-documentation; the only enforcement is the mapper that produces them.
@@ -2595,44 +3193,120 @@ live in later groups; this chapter is the engine those endpoints call into.
 > MMCA.Common.Shared · `MMCA.Common.Shared.Http` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Http/IdempotencyHeaders.cs:13` · Level 0 · class (static)
 
 - **What it is**: the two HTTP header names of the idempotency protocol, as `const string`s:
-  `Idempotency-Key` (the request header a client sends) and `X-Idempotent-Replay` (the response
-  header a server appends when it served a cached body)
+  `Idempotency-Key` (the request header a client sends) and `X-Idempotent-Replay` (the response header
+  a server appends when it served a cached body)
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/IdempotencyHeaders.cs:19,25`).
 - **Depends on**: nothing.
 - **Concept introduced, the shared wire-literal.** `[Rubric §16, Maintainability]` assesses whether a
   fact that two components must agree on has exactly one home. `[Rubric §9, API & Contract Design]`
   assesses whether the protocol between client and server is expressed explicitly. Both ends of this
-  protocol are first-party but live in packages that do not reference each other: the filter that
-  reads the key ships in `MMCA.Common.API`, the service bases that write it ship in `MMCA.Common.UI`.
-  The doc comment states the consequence plainly: "Hard-coding the string in both places is exactly
-  the drift this constant exists to prevent" (`IdempotencyHeaders.cs:8-12`). Putting the literal in
+  protocol are first-party but live in packages that do not reference each other: the filter that reads
+  the key ships in `MMCA.Common.API`, the service bases that write it ship in `MMCA.Common.UI`. The doc
+  comment states the consequence plainly: "Hard-coding the string in both places is exactly the drift
+  this constant exists to prevent" (`IdempotencyHeaders.cs:8-12`). Putting the literal in
   `MMCA.Common.Shared`, the one assembly both sides already depend on, is the standard placement rule
-  for cross-layer constants in this framework and is the same reasoning that puts the auth request
-  DTOs there.
+  for cross-layer constants in this framework, and it is the same rule
+  [`ConcurrencyETag`](#concurrencyetag) and the auth request DTOs follow.
 - **Walkthrough**: a `static class` with two `const string` fields and nothing else
   (`IdempotencyHeaders.cs:13-26`). `const` rather than `static readonly` so the values can appear in
-  attribute arguments and constant patterns, matching
-  [`AuthClaimTypes`](#authclaimtypes) and [`RoleNames`](#rolenames) in this group.
+  attribute arguments and constant patterns, matching [`AuthClaimTypes`](#authclaimtypes) and
+  [`RoleNames`](#rolenames) in this group.
 - **Why it's built this way**:
-  [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html) defines the protocol:
-  the client supplies the key, and a server that replays a cached response adds
+  [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html) defines the protocol: the
+  client supplies the key, and a server that replays a cached response adds
   `X-Idempotent-Replay: true` so the caller can tell a replay from a fresh execution
   (`Website/docs-src/adr/017-request-idempotency.md:31,46`).
-- **Where it's used**: server side, [`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter)
-  re-exports the request header name as a public property
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:72`), reads it
-  in the one helper both filter stages share (`IdempotencyFilter.cs:167`), and appends the replay
-  header when it serves a cached response (`IdempotencyFilter.cs:387`);
-  [`NotificationsController`](group-10-notifications.md#notificationscontroller) reads the same
-  request header directly
+- **Where it's used**: server side,
+  [`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter) re-exports the request
+  header name as a public property
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:73`), reads it in
+  the one helper both filter stages share (`IdempotencyFilter.cs:165`), and appends the replay header
+  when it serves a cached response (`IdempotencyFilter.cs:383`);
+  [`NotificationsController`](group-10-notifications.md#notificationscontroller) reads the same request
+  header directly
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Notifications/NotificationsController.cs:62`).
-  Client side, [`EntityServiceBase<TEntityDTO, TIdentifierType>`](group-15-common-ui-framework.md#entityservicebasetentitydto-tidentifiertype)
+  Client side,
+  [`EntityServiceBase<TEntityDTO, TIdentifierType>`](group-15-common-ui-framework.md#entityservicebasetentitydto-tidentifiertype)
   attaches a generated key on retried writes
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:199`), as do ADC's
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:386`), as do ADC's
   [`SessionQuestionUIService`](group-23-engagement-live-layer.md#sessionquestionuiservice)
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/SessionQuestionUIService.cs:75`)
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/SessionQuestionUIService.cs:73`)
   and [`LivePollUIService`](group-23-engagement-live-layer.md#livepolluiservice)
-  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/LivePollUIService.cs:96,143`).
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/LivePollUIService.cs:93,156`).
+
+### ModuleNameConventions
+
+> MMCA.Common.Shared · `MMCA.Common.Shared.Conventions` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Conventions/ModuleNameConventions.cs:10` · Level 0 · class (static)
+
+- **What it is**: one function, `GetModuleName(Type)`, that reads a CLR type's namespace and returns
+  the module that owns it, following the workspace naming convention `MMCA.{App}.{Module}.{Layer}`
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Conventions/ModuleNameConventions.cs:10-51`).
+  `MMCA.Store.Sales.Domain.Orders` gives `"Sales"`; `MMCA.ADC.Conference.Application.Sessions` gives
+  `"Conference"`; a type outside that shape gives `null`.
+- **Depends on**: nothing first-party; `System.Array.FindIndex`/`Array.Exists` and `string.Split` (BCL).
+- **Concept introduced, convention over configuration, with the convention hoisted to one function.**
+  `[Rubric §16, Maintainability]` assesses whether a rule two subsystems must agree on has one
+  implementation. `[Rubric §7, Microservices Readiness]` assesses whether module ownership is a
+  first-class, machine-readable fact rather than a naming habit. Two very different subsystems need to
+  answer "which module does this type belong to": persistence, which turns the answer into a SQL schema
+  name and a logical data-source name, and the CQRS logging decorators, which stamp it into every log
+  scope. The class doc names the constraint that forced the hoist: Application "may not reference
+  Infrastructure" (`ModuleNameConventions.cs:6-8`), so the derivation cannot live beside the
+  persistence code that first needed it. `[Rubric §3, Clean Architecture]` in miniature: the rule moved
+  down to `MMCA.Common.Shared`, the assembly every layer may see, rather than up into a layer that
+  would have inverted the dependency. The alternative (each subsystem parsing namespaces its own way)
+  is the drift the test file names explicitly: the two callers "must never disagree"
+  (`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Conventions/ModuleNameConventionsTests.cs:10-11`).
+- **Walkthrough**:
+  - `NonDomainLayerSegments` is a private `static readonly string[]` holding `Application`,
+    `Infrastructure`, `API`, `UI` (`ModuleNameConventions.cs:17`). What is *absent* is the load-bearing
+    part, and the comment says so: `Shared` is deliberately not in the list, so framework namespaces
+    such as `MMCA.Common.Shared.*` cannot resolve to a phantom module (`:13-16`).
+  - `GetModuleName` (`:38`) splits the namespace, defaulting to an empty array when the type has none
+    (`:40`), so a compiler-generated or global-namespace type is handled without a null check at the
+    call site.
+  - **Rule one, `Domain` at any position past the first segment** (`:41-46`). This is the original
+    persistence rule, and the remark records that it is kept byte-for-byte so schema and data-source
+    names do not move (`:26-28`). `domainIndex >= 1` is the guard: a namespace that *starts* with
+    `Domain` has nothing preceding it to name.
+  - **Rule two, the other layer segments, only at the fourth segment or later** (`:48-50`). The
+    `layerIndex >= 3` test is what makes `MMCA.Common.Application.*` return `null` rather than the
+    phantom `"Common"`: in that namespace `Application` sits at index 2, below the threshold, while in
+    `MMCA.ADC.Conference.Application` it sits at index 3 and yields `"Conference"` (`:29-31`).
+  - Every comparison is `StringComparison.OrdinalIgnoreCase` (`:42,49`), and the first matching
+    segment wins (`:22-23`), so a module that happens to be named after a layer word resolves
+    deterministically rather than by accident of ordering.
+- **Why it's built this way**: no ADR governs the derivation; the rationale is entirely in the class
+  doc comment and in the test file's summary. The asymmetric threshold (any position for `Domain`, index
+  3 or later for the rest) is not elegance, it is compatibility: relaxing the `Domain` rule would rename
+  live SQL schemas, and tightening the others is what keeps framework namespaces module-less.
+- **Where it's used**: two subsystems, exactly as the doc comment claims.
+  [`LoggingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#loggingquerydecoratortquery-tresult)
+  and
+  [`LoggingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#loggingcommanddecoratortcommand-tresult)
+  each resolve it into a `private static readonly string ModuleName`, falling back to `"unknown"`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:74`,
+  `.../LoggingCommandDecorator.cs:76`) and push it into the log scope
+  (`LoggingQueryDecorator.cs:25,67`, `LoggingCommandDecorator.cs:26,69`). Because the field is `static`
+  on a closed generic, the namespace parse happens once per query or command type rather than per
+  execution, which the doc comment calls out (`LoggingQueryDecorator.cs:69-73`). On the persistence
+  side, the internal `NamespaceConventions` wrapper delegates straight to it
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/NamespaceConventions.cs:20-21`), and
+  that wrapper is what
+  [`EntityTypeConfiguration<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationtentity-tidentifiertype)
+  uses for the SQL Server schema name (falling back to `dbo`,
+  `.../Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:66`) and the Cosmos container
+  name (`EntityTypeConfiguration.cs:87`), and what
+  [`EntityDataSourceRegistry`](group-07-persistence-ef-core.md#entitydatasourceregistry) uses to derive
+  a logical database name when no `[UseDatabase]` attribute overrides it
+  (`.../DataSources/EntityDataSourceRegistry.cs:181`).
+- **Caveats / not-in-source**: the parse keys on the type's own namespace and never on its type
+  arguments, so `List<SalesFakeAggregate>` resolves to `null` rather than `"Sales"`; that is pinned by
+  test rather than by anything visible in the method
+  (`ModuleNameConventionsTests.cs:46-48`). The "framework namespaces resolve to no module" behavior has
+  no direct test in this file either: the comment records that it is pinned indirectly, by the
+  `LoggingCommandDecorator` tests asserting a scope of `"unknown"` for their own fake command
+  (`ModuleNameConventionsTests.cs:41-44`).
 
 ### PrivacyFeatures
 
@@ -2644,34 +3318,41 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Depends on**: nothing first-party.
 - **Concept introduced, the feature flag as a shared constant.** `[Rubric §30, Compliance / Privacy /
   Data Governance]` assesses how the codebase handles data-subject rights and how deliberately those
-  surfaces are turned on. `[Rubric §10, Cross-Cutting Concerns]` assesses whether concerns like
-  feature gating are applied uniformly rather than ad hoc. A data-subject access endpoint returns a
-  complete dossier of one person's personal data, so it is the last endpoint that should default to
-  reachable. Naming the flag once, in the assembly every layer can see, lets the attribute that
-  gates the controller and any host configuration that enables it refer to the same string. The
-  flag's own evaluation is the `Microsoft.FeatureManagement` `[FeatureGate]` attribute, whose
-  behavior is not this type's concern; see
+  surfaces are turned on. `[Rubric §10, Cross-Cutting Concerns]` assesses whether concerns like feature
+  gating are applied uniformly rather than ad hoc. A data-subject access endpoint returns a complete
+  dossier of one person's personal data, so it is the last endpoint that should default to reachable.
+  Naming the flag once, in the assembly every layer can see, lets the attribute that gates the
+  controller and the host configuration that enables it refer to the same string. The flag's own
+  evaluation is the `Microsoft.FeatureManagement` `[FeatureGate]` attribute, whose behavior is not this
+  type's concern; see
   [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html).
-- **Walkthrough**: a `static class` containing a single `public const string DataExport =
-  "Privacy.DataExport";` (`PrivacyFeatures.cs:6-10`). The dotted name is a namespace convention for
-  the flag key, not C# syntax: it is one opaque string as far as the feature manager is concerned.
+- **Walkthrough**: a `static class` containing a single
+  `public const string DataExport = "Privacy.DataExport";` (`PrivacyFeatures.cs:6-10`). The dotted name
+  is a namespace convention for the flag key, not C# syntax: it is one opaque string as far as the
+  feature manager is concerned.
 - **Why it's built this way**:
   [ADR-076](https://ivanball.github.io/docs/adr/076-data-subject-export.html) makes the whole export
-  capability opt-in, and records the gate explicitly: a host that has not turned the feature on gets
-  a 404 from the endpoint rather than an unauthorized-looking 403
-  (`Website/docs-src/adr/076-data-subject-export.md:116`).
-- **Where it's used**:
-  [`DataExportControllerBase<TQuery>`](group-12-api-hosting-mapping.md#dataexportcontrollerbasetquery)
-  carries `[FeatureGate(PrivacyFeatures.DataExport)]` on the class
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:59`),
-  with the rationale in the same file's remarks (`DataExportControllerBase.cs:50-55`).
-- **Caveats / not-in-source**: no `appsettings*.json` anywhere in the workspace declares a
-  `Privacy.DataExport` flag, and neither ADC's nor Store's `UsersController` derives from
-  `DataExportControllerBase` (both declare their own `ExportAsync` action:
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:158-161`,
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs:36-39`).
-  The gate is therefore framework behavior that no deployed endpoint currently exhibits, which
-  ADR-076 itself records (`Website/docs-src/adr/076-data-subject-export.md:185`).
+  capability opt-in and records the gate explicitly: a host that has not turned the feature on gets a
+  404 from the endpoint rather than an unauthorized-looking 403
+  (`Website/docs-src/adr/076-data-subject-export.md:124`).
+- **Where it's used**: the framework side is
+  [`DataExportControllerBase<TQuery>`](group-12-api-hosting-mapping.md#dataexportcontrollerbasetquery),
+  which carries `[FeatureGate(PrivacyFeatures.DataExport)]` on the class
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:58`)
+  with the rationale in the same file's remarks (`DataExportControllerBase.cs:52-53`). Both apps
+  subclass that base with a thin, route-only controller:
+  [`UsersDataExportController`](group-24-identity-module.md#usersdataexportcontroller)
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersDataExportController.cs:26-35`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersDataExportController.cs:28-38`),
+  and both Identity service hosts turn the flag on in configuration
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:21`,
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/appsettings.json:18`). ADC's config carries
+  the operational warning beside it: the flag "must stay true: with the flag off the endpoint 404s and
+  ADC has no other DSAR surface" (`MMCA.ADC/.../appsettings.json:17-19`).
+- **Caveats / not-in-source**: those two `appsettings.json` files are the only places in the workspace
+  that declare the flag. Both apps deploy the endpoint from their Identity **service** host, so the
+  deployed path is covered, but any other host that mounted the controller would serve a 404 until it
+  added its own `FeatureManagement` entry.
 
 ### Releaser
 
@@ -2683,27 +3364,26 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Depends on**: nested inside [`KeyedSemaphoreStripe`](#keyedsemaphorestripe); implements
   `System.IDisposable`; wraps a `System.Threading.SemaphoreSlim` (BCL).
 - **Concept introduced, the disposable-scope handle over a manual acquire/release pair.**
-  `[Rubric §15, Best Practices & Code Quality]` assesses whether resource lifetimes are expressed so
-  the compiler enforces them. A raw `SemaphoreSlim` requires `WaitAsync` and `Release` to be paired
-  by hand, and the pairing has to survive an exception in between; forgetting the `finally` deadlocks
-  every later caller on that semaphore permanently. Returning a handle turns the pairing into a
-  `using` statement, which the compiler expands to a `try/finally` for you. The caller's whole
-  contract becomes one line, and the doc comment says so: "Await the call inside a `using` statement
-  so the release happens even when the guarded work throws"
-  (`KeyedSemaphoreStripe.cs:53-55`). `[Rubric §12, Performance & Scalability]`: making it a
-  `readonly record struct` means the handle costs one machine word on the stack rather than a heap
-  allocation on the hot path of every cache read.
-- **Walkthrough**: one private field, `SemaphoreSlim? _stripe` (`KeyedSemaphoreStripe.cs:80`), set by
-  an `internal` constructor so only the enclosing stripe set can hand out a live handle
-  (`KeyedSemaphoreStripe.cs:82`). `Dispose` is `_stripe?.Release()` (`KeyedSemaphoreStripe.cs:85`).
-  The null-conditional is load-bearing rather than defensive noise: a struct always has a
-  parameterless `default` form that no constructor ever ran for, so `default(Releaser).Dispose()` is
-  reachable C# and must be a no-op instead of a `NullReferenceException`. The doc comment states that
-  guarantee (`KeyedSemaphoreStripe.cs:84`).
+  `[Rubric §15, Best Practices & Code Quality]` assesses whether resource lifetimes are expressed so the
+  compiler enforces them. A raw `SemaphoreSlim` requires `WaitAsync` and `Release` to be paired by hand,
+  and the pairing has to survive an exception in between; forgetting the `finally` deadlocks every later
+  caller on that semaphore permanently. Returning a handle turns the pairing into a `using` statement,
+  which the compiler expands to a `try/finally` for you. The caller's whole contract becomes one line,
+  and the doc comment says so: "Await the call inside a `using` statement so the release happens even
+  when the guarded work throws" (`KeyedSemaphoreStripe.cs:53-55`). `[Rubric §12, Performance &
+  Scalability]`: making it a `readonly record struct` means the handle costs one machine word on the
+  stack rather than a heap allocation on the hot path of every cache read.
+- **Walkthrough**: one private field, `SemaphoreSlim? _stripe` (`KeyedSemaphoreStripe.cs:80`), set by an
+  `internal` constructor so only the enclosing stripe set can hand out a live handle
+  (`KeyedSemaphoreStripe.cs:82`). `Dispose` is `_stripe?.Release()` (`KeyedSemaphoreStripe.cs:85`). The
+  null-conditional is load-bearing rather than defensive noise: a struct always has a parameterless
+  `default` form that no constructor ever ran for, so `default(Releaser).Dispose()` is reachable C# and
+  must be a no-op instead of a `NullReferenceException`. The doc comment states that guarantee
+  (`KeyedSemaphoreStripe.cs:84`).
 - **Why it's built this way**: synchronous `IDisposable` rather than `IAsyncDisposable` because
   `SemaphoreSlim.Release` does not block. Contrast the distributed path, where
-  [`InProcessDistributedLock`](group-14-module-system-composition.md#inprocessdistributedlock)
-  returns an `IAsyncDisposable?`
+  [`InProcessDistributedLock`](group-14-module-system-composition.md#inprocessdistributedlock) returns
+  an `IAsyncDisposable?`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/InProcessDistributedLock.cs:42`),
   because releasing a lock held in a remote store is I/O.
 - **Where it's used**: every caller of `AcquireAsync`, always inside a `using`:
@@ -2712,11 +3392,15 @@ live in later groups; this chapter is the engine those endpoints call into.
   [`CookieSessionRefresher`](#cookiesessionrefresher) at
   `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:102`,
   [`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter) at
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:208`,
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:206`, and the
+  [`ICacheService`](group-09-caching.md#icacheservice) `GetOrCreateAsync` default implementation at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:112`.
   [`CachingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult)
-  at `MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:89`,
-  and the [`ICacheService`](group-09-caching.md#icacheservice) `GetOrCreateAsync` default
-  implementation at `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:112`.
+  is the one caller that names the type explicitly: its `TryAcquirePopulateLockAsync` returns
+  `KeyedSemaphoreStripe.Releaser?`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:176`,
+  acquiring at `:182` or, under a budget, `:189`), so the nullable handle can carry "no lock was taken"
+  as a value rather than as a separate flag.
 
 ### UserDataExportSectionDTO
 
@@ -2724,52 +3408,56 @@ live in later groups; this chapter is the engine those endpoints call into.
 
 - **What it is**: one section of a data-subject export package: a `SectionName`, an `Available` flag,
   an opaque `Data` payload, and an `UnavailableReason`
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:61-89`). It is the
-  envelope around whatever one contributor holds about the subject.
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:61-89`). It is the envelope
+  around whatever one contributor holds about the subject.
 - **Depends on**: nothing first-party;
   `System.Runtime.Serialization.DataContractAttribute`/`DataMemberAttribute` (BCL). It is the element
   type of [`UserDataExportDTO.Sections`](#userdataexportdto).
-- **Concept introduced, "no data" is not the same fact as "not retrieved".** `[Rubric §29, Resilience
-  & Business Continuity]` assesses how a composite operation behaves when one contributor is down.
+- **Concept introduced, "no data" is not the same fact as "not retrieved".** `[Rubric §29, Resilience &
+  Business Continuity]` assesses how a composite operation behaves when one contributor is down.
   `[Rubric §30, Compliance / Privacy / Data Governance]` assesses whether a data-subject right can be
   honored under partial failure. A naive export either fails whole when any peer is unreachable
-  (denying the subject the data that *is* available) or silently omits the failed section (telling
-  the subject, falsely, that nothing is held there). This envelope refuses both: a section that could
-  not be produced is still present in the document, reporting `Available = false`, and the doc
-  comment records the distinction the reader must draw: false "means the section is incomplete and
-  the export can be retried later; it does not mean the subject has no data here"
-  (`UserDataExportDTO.cs:68-69`). This is the shape
-  [ADR-096](https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html) calls best-effort,
-  applied to a read.
+  (denying the subject the data that *is* available) or silently omits the failed section (telling the
+  subject, falsely, that nothing is held there). This envelope refuses both: a section that could not be
+  produced is still present in the document, reporting `Available = false`, and the doc comment records
+  the distinction the reader must draw: false "means the section is incomplete and the export can be
+  retried later; it does not mean the subject has no data here" (`UserDataExportDTO.cs:68-69`). This is
+  the shape [ADR-096](https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html) calls
+  best-effort, applied to a read.
 - **Walkthrough**: four `init`-only properties, ordered explicitly with `[DataMember(Order = n)]`
-  (`UserDataExportDTO.cs:64,71,79,87`) so the serialized field order is a stated part of the
-  contract rather than a reflection accident. `SectionName` and `Available` are `required`
+  (`UserDataExportDTO.cs:64,71,79,87`) so the serialized field order is a stated part of the contract
+  rather than a reflection accident. `SectionName` and `Available` are `required`
   (`UserDataExportDTO.cs:65,72`), so a section envelope cannot be constructed without answering both
-  questions. `Data` is typed `object?` for the same reason `UserDataExportDTO.Subject` is: the
-  framework owns the envelope, the contributor owns the payload shape, and `System.Text.Json`
-  serializes an `object`-typed property by its runtime type (`UserDataExportDTO.cs:74-78`). The
-  fourth property carries the section's most security-sensitive rule:
-  `UnavailableReason` is "a short, caller-safe explanation" that "never carries exception messages,
-  stack traces, connection strings, or peer addresses: this string is handed to the data subject"
-  (`UserDataExportDTO.cs:82-86`).
+  questions. `Data` is typed `object?` for the same reason `UserDataExportDTO.Subject` is: the framework
+  owns the envelope, the contributor owns the payload shape, and `System.Text.Json` serializes an
+  `object`-typed property by its runtime type (`UserDataExportDTO.cs:74-78`). The fourth property
+  carries the section's most security-sensitive rule: `UnavailableReason` is "a short, caller-safe
+  explanation" that "never carries exception messages, stack traces, connection strings, or peer
+  addresses: this string is handed to the data subject" (`UserDataExportDTO.cs:82-86`).
 - **Why it's built this way**:
   [ADR-076](https://ivanball.github.io/docs/adr/076-data-subject-export.html) settled the three
-  questions neither app had answered, one of which was exactly "what an export does when one
-  contributing source is unavailable"
-  (`Website/docs-src/adr/076-data-subject-export.md:44-46`). Degrading one section preserves the
-  legal deadline on the rest of the document.
+  questions neither app had answered, the first of which was exactly what an export does when one
+  contributing source is unavailable
+  (`Website/docs-src/adr/076-data-subject-export.md:52-53`). Degrading one section preserves the legal
+  deadline on the rest of the document, and the ADR names the trade-off it accepts in return: an export
+  that looks successful can be incomplete, which is what the `Available` flag exists to disclose
+  (`076-data-subject-export.md:84-88`).
 - **Where it's used**: produced by
   [`ExportUserDataHandlerBase<TUser, TQuery>`](group-14-module-system-composition.md#exportuserdatahandlerbasetuser-tquery)
-  on both paths: from a successful
+  on both paths of its per-section `try/catch`: from a successful
   [`UserDataExportSectionResult`](group-14-module-system-composition.md#userdataexportsectionresult)
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs:177-183`)
-  and from the `catch` that degrades a throwing contributor, where the reason is the fixed string on
+  and from the `catch` that degrades a throwing contributor
+  (`ExportUserDataHandlerBase.cs:185-197`), where the reason is the fixed string on
   [`UserDataExportSectionDefaults`](group-14-module-system-composition.md#userdataexportsectiondefaults)
-  rather than anything derived from the exception (`ExportUserDataHandlerBase.cs:185-197`). Collected
-  into [`UserDataExportDTO.Sections`](#userdataexportdto) at `ExportUserDataHandlerBase.cs:104-116`.
+  rather than anything derived from the exception (`:196`) and the exception detail goes to the log
+  instead (`:190`). The envelopes are collected into [`UserDataExportDTO.Sections`](#userdataexportdto)
+  at `ExportUserDataHandlerBase.cs:104,116`. The contributors themselves implement
+  [`IUserDataExportSection`](group-14-module-system-composition.md#iuserdataexportsection)
+  (`ExportUserDataHandlerBase.cs:167`).
 - **Caveats / not-in-source**: nothing prevents an envelope from setting `Available = true` and a
-  non-null `UnavailableReason` at the same time, or `Available = false` with a payload. The
-  consistency is a convention the producing handler upholds, not a type invariant.
+  non-null `UnavailableReason` at the same time, or `Available = false` with a payload. The consistency
+  is a convention the producing handler upholds, not a type invariant.
 
 ### ForgotPasswordRequestValidator
 
@@ -2782,36 +3470,39 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Depends on**: [`ForgotPasswordRequest`](#forgotpasswordrequest); `FluentValidation`'s
   `AbstractValidator<T>` (NuGet).
 - **Concept introduced, validation that deliberately stops short.** `[Rubric §11, Security]` assesses
-  whether the system leaks facts an attacker can use, and account enumeration is the classic leak:
-  if "forgot password" answers differently for a registered and an unregistered address, the endpoint
+  whether the system leaks facts an attacker can use, and account enumeration is the classic leak: if
+  "forgot password" answers differently for a registered and an unregistered address, the endpoint
   becomes a membership oracle. The forgot-password endpoint answers `202 Accepted` unconditionally
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:79,92`),
   and this validator is the place that could quietly undo it: a rule that checked whether the address
-  belongs to an account would turn a miss into a `400`, which is the same oracle by a different
-  status code. The class doc comment names that trap and refuses it: a 400 there "would be the
-  enumeration oracle the always-accepted response exists to close"
-  (`ForgotPasswordRequestValidator.cs:7-9`). `[Rubric §24, Forms / Validation / UX Safety]`: shape
+  belongs to an account would turn a miss into a `400`, which is the same oracle by a different status
+  code. The class doc comment names that trap and refuses it: a 400 there "would be the enumeration
+  oracle the always-accepted response exists to close" (`ForgotPasswordRequestValidator.cs:7-9`), and
+  the controller's own remarks agree that only a malformed payload may reach 400
+  (`PasswordResetAuthControllerBase.cs:28-30`). `[Rubric §24, Forms / Validation / UX Safety]`: shape
   validation still runs, so a genuinely malformed address gets a useful client-side message without
   costing an email send.
 - **Walkthrough**: an expression-bodied constructor with a single chained rule,
-  `RuleFor(x => x.Email).NotEmpty().EmailAddress()`, each stage carrying an explicit
-  `WithMessage` (`ForgotPasswordRequestValidator.cs:13-16`). The messages are literal English strings
-  rather than resource lookups, which is how every validator in this assembly is written.
+  `RuleFor(x => x.Email).NotEmpty().EmailAddress()`, each stage carrying an explicit `WithMessage`
+  (`ForgotPasswordRequestValidator.cs:13-16`). The messages are literal English strings rather than
+  resource lookups, which is how every validator in this assembly is written.
 - **Why it's built this way**: the reset flow itself is
   [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html); the
   uniform-response posture it depends on is only as strong as its weakest responder, and a validator
   runs before the handler does.
 - **Where it's used**: registered by assembly scan.
   `services.AddValidatorsFromAssemblyContaining<ClassReference>()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:48`) picks up every
-  validator in `MMCA.Common.Application`, with the comment explaining why it must happen here rather
-  than in the per-module scan (`DependencyInjection.cs:45-47`). The resolved `IValidator<ForgotPasswordRequest>`
-  is then consumed indirectly: an app's forgot-password command implements `ICommandWithRequest<ForgotPasswordRequest>`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:49`) picks up every validator
+  in `MMCA.Common.Application`, with the comment explaining why it must happen here rather than in the
+  per-module scan (`DependencyInjection.cs:46-48`). The resolved `IValidator<ForgotPasswordRequest>` is
+  then consumed indirectly: an app's forgot-password command implements
+  `ICommandWithRequest<ForgotPasswordRequest>`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:42`),
-  and [`CommandRequestValidator<TCommand, TRequest>`](group-06-validation.md#commandrequestvalidatortcommand-trequest)
+  and
+  [`CommandRequestValidator<TCommand, TRequest>`](group-06-validation.md#commandrequestvalidatortcommand-trequest)
   bridges the command's `Request` property to this validator
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommandRequestValidator.cs:22-26`),
-  auto-registered for every such command at `DependencyInjection.cs:196-210`.
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommandRequestValidator.cs:37-39`),
+  auto-registered for every such command at `DependencyInjection.cs:252-268`.
 
 ### IcsCalendarBuilder
 
@@ -2822,64 +3513,62 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:22-41`).
 - **Depends on**: [`IcsEvent`](#icsevent); `System.Text.StringBuilder`, `System.Text.Encoding`, and
   `System.Globalization.CultureInfo` (BCL). No NuGet package.
-- **Concept introduced, the deterministic pure builder.** `[Rubric §14, Testability]` assesses
-  whether behavior can be asserted without a harness. This type takes `dtStamp` as a parameter rather
-  than reading a clock, and the doc comment states the consequence: "Deterministic by design: the
-  caller supplies `dtStamp`, so identical inputs produce identical output"
-  (`IcsCalendarBuilder.cs:10-11`). That makes the whole document byte-assertable, which is exactly
-  what the suite in
-  `MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Calendars/IcsCalendarBuilderTests.cs` does,
-  including a determinism test that builds twice and compares (`IcsCalendarBuilderTests.cs:140-141`).
+- **Concept introduced, the deterministic pure builder.** `[Rubric §14, Testability]` assesses whether
+  behavior can be asserted without a harness. This type takes `dtStamp` as a parameter rather than
+  reading a clock, and the doc comment states the consequence: "Deterministic by design: the caller
+  supplies `dtStamp`, so identical inputs produce identical output" (`IcsCalendarBuilder.cs:9-10`).
+  That makes the whole document byte-assertable, which is exactly what the suite in
+  `MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Calendars/IcsCalendarBuilderTests.cs` does, including
+  a determinism test that builds twice and compares (`IcsCalendarBuilderTests.cs:138-143`).
   `[Rubric §32, Dependency & Supply-Chain]` assesses what the framework takes on as a dependency.
-  Emitting an ICS file is a few hundred lines of string handling; taking a calendar library for it
-  would add a transitive surface to `MMCA.Common.Shared`, the assembly every other package depends
-  on. The type instead states its scope as "the subset every calendar app imports reliably"
-  (`IcsCalendarBuilder.cs:7-10`).
+  Emitting an ICS file is a few hundred lines of string handling; taking a calendar library for it would
+  add a transitive surface to `MMCA.Common.Shared`, the assembly every other package depends on. The
+  type instead states its scope as "the subset every calendar app imports reliably"
+  (`IcsCalendarBuilder.cs:7-9`).
 - **Walkthrough**:
   - `MaxLineOctets = 75` (`IcsCalendarBuilder.cs:14`) is RFC 5545's content-line limit, counted in
     octets rather than characters.
-  - `Build` (`IcsCalendarBuilder.cs:22`) guards both inputs (`ThrowIfNullOrWhiteSpace` on the product
-    id, `ThrowIfNull` on the events, `:24-25`), then writes the fixed calendar preamble
-    `VERSION:2.0`, an escaped `PRODID`, `CALSCALE:GREGORIAN`, and `METHOD:PUBLISH`
-    (`:28-32`), loops the entries in the order given (`:34-37`), and closes the document (`:39`).
-    Note that an empty collection is legal: it produces a valid, entry-less calendar, which
-    `IcsCalendarBuilderTests.cs:149` pins.
+  - `Build` (`:22`) guards both inputs (`ThrowIfNullOrWhiteSpace` on the product id, `ThrowIfNull` on
+    the events, `:24-25`), then writes the fixed calendar preamble `VERSION:2.0`, an escaped `PRODID`,
+    `CALSCALE:GREGORIAN`, and `METHOD:PUBLISH` (`:28-32`), loops the entries in the order given
+    (`:34-37`), and closes the document (`:39`). Note that an empty collection is legal: it produces a
+    valid, entry-less calendar, which `IcsCalendarBuilderTests.cs:151` pins.
   - `AppendEvent` (`:43`) writes the five mandatory `VEVENT` lines: `UID`, `DTSTAMP`, `DTSTART`,
-    `DTEND`, `SUMMARY` (`:46-50`). `DESCRIPTION` and `LOCATION` are emitted only when the optional
-    field is not null *or whitespace* (`:52-60`), so an all-blank location does not leave a stray
-    empty property in the document.
+    `DTEND`, `SUMMARY` (`:46-50`). `DESCRIPTION` and `LOCATION` are emitted only when the optional field
+    is not null *or whitespace* (`:52-60`), so an all-blank location does not leave a stray empty
+    property in the document.
   - `FormatUtc` (`:65`) is where the UTC-only contract shows up on the wire: it converts through
-    `UtcDateTime` and formats `yyyyMMdd'T'HHmmss'Z'` under `InvariantCulture`. The invariant culture
-    is not optional decoration; a non-Gregorian or non-ASCII-digit current culture would otherwise
-    corrupt the timestamp.
-  - `EscapeText` (`:69`) implements RFC 5545 section 3.3.11 TEXT escaping. Order matters and is
-    correct here: backslash is escaped *first* (`:71`), so the backslashes introduced by the later
-    replacements are not double-escaped. Semicolon and comma follow (`:72-73`), then all three
-    newline forms collapse to the literal `\n` sequence (`:74-76`), CRLF before its parts so a
-    Windows line break does not become two escapes.
+    `UtcDateTime` and formats `yyyyMMdd'T'HHmmss'Z'` under `InvariantCulture` (`:66`). The invariant
+    culture is not optional decoration; a non-Gregorian or non-ASCII-digit current culture would
+    otherwise corrupt the timestamp.
+  - `EscapeText` (`:69`) implements RFC 5545 section 3.3.11 TEXT escaping. Order matters and is correct
+    here: backslash is escaped *first* (`:71`), so the backslashes introduced by the later replacements
+    are not double-escaped. Semicolon and comma follow (`:72-73`), then all three newline forms collapse
+    to the literal escaped-`n` sequence (`:74-76`), CRLF before its parts so a Windows line break does
+    not become two escapes.
   - `AppendLine` (`:83`) is the subtlest method: RFC 5545 folding. It walks the string counting UTF-8
     *octets* per character, treating a surrogate pair as one unit (`:89-90`), and when the next
     character would push the line past 75 octets it emits `CRLF` plus a single space and resets the
-    counter to `1` (`:92-96`). Two details are easy to get wrong and are handled: a fold never splits
-    a multi-byte character (because the decision is made per character, before appending), and the
+    counter to `1` (`:92-96`). Two details are easy to get wrong and are handled: a fold never splits a
+    multi-byte character (because the decision is made per character, before appending), and the
     continuation line's leading space counts against its own budget, which the inline comment states
     (`:95`). Every line, folded or not, ends in `CRLF` (`:103`).
 - **Why it's built this way**: no ADR covers calendar export; the rationale is entirely in the doc
-  comments cited above. The minimal-subset choice is the same instinct as the
-  [`IcsEvent`](#icsevent) UTC contract: avoid the parts of the specification whose correctness would
-  need continuous maintenance.
+  comments cited above. The minimal-subset choice is the same instinct as the [`IcsEvent`](#icsevent)
+  UTC contract: avoid the parts of the specification whose correctness would need continuous
+  maintenance.
 - **Where it's used**: ADC's Conference module only, from
-  [`ExportSessionCalendarHandler`](group-18-conference-application.md#exportsessioncalendarhandler)
-  for a single session
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandler.cs:59-61`)
-  and [`ExportEventCalendarHandler`](group-18-conference-application.md#exporteventcalendarhandler)
-  for a whole event
-  (`.../ExportEventCalendarHandler.cs:61`), both passing
-  [`CalendarExportMapper`](group-18-conference-application.md#calendarexportmapper)'s
-  `ProductId` constant `-//MMCA//AtlDevCon//EN` (`CalendarExportMapper.cs:17`).
+  [`ExportSessionCalendarHandler`](group-18-conference-application.md#exportsessioncalendarhandler) for
+  a single session
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandler.cs:51-54`)
+  and [`ExportEventCalendarHandler`](group-18-conference-application.md#exporteventcalendarhandler) for
+  a whole event (`.../ExportCalendar/ExportEventCalendarHandler.cs:46-53`), both passing
+  [`CalendarExportMapper`](group-18-conference-application.md#calendarexportmapper)'s `ProductId`
+  constant `-//MMCA//AtlDevCon//EN` (`.../ExportCalendar/CalendarExportMapper.cs:17`).
 - **Caveats / not-in-source**: both ADC handlers pass `DateTimeOffset.UtcNow` for `dtStamp`
-  (`ExportEventCalendarHandler.cs:61`) rather than an injected `TimeProvider`, so the determinism the
-  builder guarantees is available to its own tests but not exercised through the handlers.
+  (`ExportSessionCalendarHandler.cs:54`, `ExportEventCalendarHandler.cs:53`) rather than an injected
+  `TimeProvider`, so the determinism the builder guarantees is available to its own tests but not
+  exercised through the handlers.
 
 ### KeyedSemaphoreStripe
 
@@ -2890,75 +3579,74 @@ live in later groups; this chapter is the engine those endpoints call into.
   gets back a [`Releaser`](#releaser) to dispose
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22-86`).
 - **Depends on**: its own nested [`Releaser`](#releaser); `System.Threading.SemaphoreSlim` (BCL).
-- **Concept introduced, lock striping.** `[Rubric §12, Performance & Scalability]` assesses how
-  shared state is guarded under concurrency and what that guard costs. The naive way to lock per key
-  is a `ConcurrentDictionary<string, SemaphoreSlim>`, and the class doc comment lays out why that
-  shape is a trap, in the code rather than in tribal memory (`KeyedSemaphoreStripe.cs:8-15`):
+- **Concept introduced, lock striping.** `[Rubric §12, Performance & Scalability]` assesses how shared
+  state is guarded under concurrency and what that guard costs. The naive way to lock per key is a
+  `ConcurrentDictionary<string, SemaphoreSlim>`, and the class doc comment lays out why that shape is a
+  trap, in the code rather than in tribal memory (`KeyedSemaphoreStripe.cs:8-15`):
   - If you **remove** the entry when the last holder releases, you open a race. Caller A looks the
-    semaphore up, then B releases and removes it, then A waits on an object no longer in the table
-    while C creates a fresh one and takes that. A and C now both run the guarded section, which is
-    precisely what the lock existed to prevent.
-  - If you **never remove** it, the table grows without bound, and the keys here are
-    caller-supplied (an idempotency key, a parameterized cache key), so that is an
-    attacker-influenced memory leak.
+    semaphore up, then B releases and removes it, then A waits on an object no longer in the table while
+    C creates a fresh one and takes that. A and C now both run the guarded section, which is precisely
+    what the lock existed to prevent.
+  - If you **never remove** it, the table grows without bound, and the keys here are caller-supplied
+    (an idempotency key, a parameterized cache key), so that is an attacker-influenced memory leak.
 
-  Striping sidesteps both by never creating or destroying anything: the table is allocated once at
-  the declared width and every key maps into it forever. The price is stated honestly in the same
-  comment: two unrelated keys can collide on a stripe and briefly serialize against each other. That
-  is harmless for the double-check-locking callers this exists for, because each one re-checks its
-  own key's state after acquiring (`KeyedSemaphoreStripe.cs:13-15`).
+  Striping sidesteps both by never creating or destroying anything: the table is allocated once at the
+  declared width and every key maps into it forever. The price is stated honestly in the same comment:
+  two unrelated keys can collide on a stripe and briefly serialize against each other. That is harmless
+  for the double-check-locking callers this exists for, because each one re-checks its own key's state
+  after acquiring (`KeyedSemaphoreStripe.cs:13-15`).
 - **Walkthrough**:
-  - `DefaultWidth = 256` (`:25`), described as "ample concurrency without a meaningful memory cost";
-    256 `SemaphoreSlim` instances is a fixed, small, one-time allocation.
+  - `DefaultWidth = 256` (`:25`), described as "ample concurrency without a meaningful memory cost"
+    (`:24`); 256 `SemaphoreSlim` instances is a fixed, small, one-time allocation.
   - The parameterless constructor chains to the width-taking one (`:30-33`). The real constructor
-    validates with `ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(width, 0)` (`:39`), then
-    eagerly fills the array with binary semaphores, `new SemaphoreSlim(1, 1)` (`:42-46`). Eager fill
-    is what removes every later allocation and every later race: after the constructor there is no
-    mutation of the table at all, which is why the type is safe to share without any lock of its own.
+    validates with `ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(width, 0)` (`:39`), then eagerly
+    fills the array with binary semaphores, `new SemaphoreSlim(1, 1)` (`:42-46`). Eager fill is what
+    removes every later allocation and every later race: after the constructor there is no mutation of
+    the table at all, which is why the type is safe to share without any lock of its own.
   - `Width` is a get-only property (`:50`), exposed so tests can reason about collisions; one test
-    computes the exact stripe index a key lands on
-    (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/CookieSessionRefresherTests.cs:288-291`).
+    computes the exact stripe index a key lands on, precisely so it "cannot flake on the
+    one-in-`DefaultWidth` collision"
+    (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/CookieSessionRefresherTests.cs:270,291`).
   - `AcquireAsync` (`:60`) resolves the stripe, awaits `WaitAsync(cancellationToken)` with
     `ConfigureAwait(false)` per
-    [ADR-049](https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html) (`:63`),
-    and wraps the semaphore in a `Releaser` (`:64`). The parameter doc draws a line worth
-    remembering: the token "Cancels the wait, not the work that follows it" (`:58`).
-  - `GetStripe` (`:67`) does the hashing: `(uint)string.GetHashCode(key, StringComparison.Ordinal) %
-    (uint)Width` (`:73`). Two deliberate choices, both commented (`:71-72`). `StringComparison.Ordinal`
-    is passed explicitly rather than relying on the default, which keeps the mapping culture-independent.
-    And the sign is folded by casting to `uint` rather than calling `Math.Abs`, because
-    `int.MinValue` has no positive counterpart and `Math.Abs` would throw on it.
+    [ADR-049](https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html) (`:63`), and
+    wraps the semaphore in a `Releaser` (`:64`). The parameter doc draws a line worth remembering: the
+    token "Cancels the wait, not the work that follows it" (`:58`).
+  - `GetStripe` (`:67`) does the hashing:
+    `(uint)string.GetHashCode(key, StringComparison.Ordinal) % (uint)Width` (`:73`). Two deliberate
+    choices, both commented (`:71-72`). `StringComparison.Ordinal` is passed explicitly rather than
+    relying on the default, which keeps the mapping culture-independent. And the sign is folded by
+    casting to `uint` rather than calling `Math.Abs`, because `int.MinValue` has no positive counterpart
+    and `Math.Abs` would throw on it.
 - **Why it's built this way**: the class is a hoisted shared primitive rather than a private helper
   because five separate call sites needed the same guard.
   [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html) records its role in the
   idempotency filter explicitly: the striped semaphore is the fallback for a host that registers no
   `IDistributedLock`, and the ADR reproduces the same two-defects argument
-  (`Website/docs-src/adr/017-request-idempotency.md:59-65`). The scaling limit is stated there too:
-  a process-local lock only serializes duplicates that land on the same replica
-  (`017-request-idempotency.md:93`), which is why
+  (`Website/docs-src/adr/017-request-idempotency.md:59-65`). The scaling limit is stated there too: a
+  process-local lock only serializes duplicates that land on the same replica
+  (`017-request-idempotency.md:91-93`), which is why
   [`IDistributedLock`](group-05-cqrs-pipeline.md#idistributedlock) is preferred when present
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:33-37`).
-- **Where it's used**: five holders, all `static` or instance fields that live for the lifetime of
-  their owner, matching the remark that instances are "intended to be held in a static field for the
-  process lifetime" and that stripes are never disposed (`KeyedSemaphoreStripe.cs:18-21`):
-  [`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter) (`IdempotencyFilter.cs:92`),
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:34-37`).
+- **Where it's used**: five holders, all `static` or instance fields that live for the lifetime of their
+  owner, matching the remark that instances are "intended to be held in a static field for the process
+  lifetime" and that stripes are never disposed (`KeyedSemaphoreStripe.cs:18-21`):
+  [`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter) (`IdempotencyFilter.cs:90`),
   [`CookieSessionRefresher`](#cookiesessionrefresher)
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:62`),
   [`MemoryCacheService`](group-09-caching.md#memorycacheservice)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/MemoryCacheService.cs:38`), the
   `CacheKeyLocks` holder behind [`ICacheService`](group-09-caching.md#icacheservice)'s
   `GetOrCreateAsync` default implementation
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:145`), and the
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:142-145`), and the
   `QueryCacheKeyLocks` holder behind
   [`CachingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult)
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:197`).
-  [`InProcessDistributedLock`](group-14-module-system-composition.md#inprocessdistributedlock) cites
-  the same reasoning in its own doc comment (`InProcessDistributedLock.cs:20`).
-- **Caveats / not-in-source**: .NET randomizes string hash codes per process, so the stripe a given
-  key lands on differs between runs. That is invisible to correctness (any key consistently maps to
-  one stripe *within* a process) but it means collision behavior cannot be reproduced across
-  processes, which the caching tests call out
-  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Interfaces/CacheServiceGetOrCreateTests.cs:178-179`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:244-247`).
+  [`InProcessDistributedLock`](group-14-module-system-composition.md#inprocessdistributedlock) cites the
+  same reasoning in its own doc comment (`InProcessDistributedLock.cs:20`).
+- **Caveats / not-in-source**: .NET randomizes string hash codes per process, so the stripe a given key
+  lands on differs between runs. That is invisible to correctness (any key consistently maps to one
+  stripe *within* a process) but it means collision behavior cannot be reproduced across processes.
 
 ### LoginRequestValidator
 
@@ -2969,36 +3657,42 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/LoginRequestValidator.cs:15-20`).
 - **Depends on**: [`LoginRequest`](#loginrequest); `FluentValidation`'s `AbstractValidator<T>`.
 - **Concept**: the same "validation that deliberately stops short" posture introduced by
-  [`ForgotPasswordRequestValidator`](#forgotpasswordrequestvalidator). `[Rubric §11, Security]`: the
-  doc comment is explicit that the minimalism is a security property, not laziness. Credential
-  verification "happens in the authentication service to avoid leaking information about which field
-  was wrong" (`LoginRequestValidator.cs:7-9`). Notice what is *absent*: no `PasswordRules<T>` or
-  `StrongPasswordRules<T>` include. Applying the complexity policy at login would tell an attacker
-  that a candidate password could not possibly be the stored one, and would lock out any account
-  whose password predates the current policy. Complexity belongs on the *writing* paths only, which
-  is why [`ResetPasswordRequestValidator`](#resetpasswordrequestvalidator) includes it and this one
-  does not.
+  [`ForgotPasswordRequestValidator`](#forgotpasswordrequestvalidator). `[Rubric §11, Security]`: the doc
+  comment is explicit that the minimalism is a security property, not laziness. Credential verification
+  "happens in the authentication service to avoid leaking information about which field was wrong"
+  (`LoginRequestValidator.cs:7-9`). Notice what is *absent*: no
+  [`PasswordRules<T>`](group-06-validation.md#passwordrulest) or
+  [`StrongPasswordRules<T>`](group-06-validation.md#strongpasswordrulest) include. Applying the
+  complexity policy at login would tell an attacker that a candidate password could not possibly be the
+  stored one, and would lock out any account whose password predates the current policy. Complexity
+  belongs on the *writing* paths only, which is why
+  [`ResetPasswordRequestValidator`](#resetpasswordrequestvalidator) includes it and this one does not.
 - **Walkthrough**: a block-bodied constructor with two independent `RuleFor` chains
-  (`LoginRequestValidator.cs:15-20`), each stage given an explicit `WithMessage`. FluentValidation
-  runs both rule sets and reports every failure, so a request missing both fields returns two errors
-  rather than one.
-- **Why it's built this way**: uniform failure responses for authentication are the same discipline
-  as the forgot-password 202, applied to a different endpoint. The complementary defence against
-  guessing at scale is the per-IP rate-limit policy the login action carries
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:54-57`), which
-  is [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html).
+  (`LoginRequestValidator.cs:15-20`), each stage given an explicit `WithMessage`. FluentValidation runs
+  both rule sets and reports every failure, so a request missing both fields returns two errors rather
+  than one.
+- **Why it's built this way**: uniform failure responses for authentication are the same discipline as
+  the forgot-password 202, applied to a different endpoint. The complementary defence against guessing
+  at scale is the per-IP rate-limit policy the login action carries,
+  `[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:70`, with the
+  posture stated in the class remarks at `:19-21`), which is
+  [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html).
 - **Where it's used**: registered by the assembly scan at
-  `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:48` (which names this class
-  in its comment, `DependencyInjection.cs:45`), then injected as `IValidator<LoginRequest>` into
+  `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:49` (which names this class in
+  its comment, `DependencyInjection.cs:46`), then injected as `IValidator<LoginRequest>` into
   [`AuthenticationValidators`](#authenticationvalidators), the parameter object that bundles the three
   auth validators
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationValidators.cs:17,22`), which is
-  in turn what [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser) consumes.
-- **Caveats / not-in-source**: `AuthenticationValidators` also requires an
-  `IValidator<RegisterRequest>` (`AuthenticationValidators.cs:18`), but `MMCA.Common.Application`
-  ships no `RegisterRequestValidator`: the only one in the tree is app-level
-  ([`RegisterRequestValidator`](group-24-identity-module.md#registerrequestvalidator)). The bundle
-  therefore only resolves in a host whose own Application assembly has been scanned as well.
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationValidators.cs:17,22`), which is in
+  turn what [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser) consumes.
+- **Caveats / not-in-source**: `AuthenticationValidators` also requires an `IValidator<RegisterRequest>`
+  (`AuthenticationValidators.cs:18,25`), but `MMCA.Common.Application` ships no
+  `RegisterRequestValidator`: the only ones in the tree are app-level
+  ([`RegisterRequestValidator`](group-24-identity-module.md#registerrequestvalidator) at
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/RegisterRequestValidator.cs:12`
+  and
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/Validation/RegisterRequestValidator.cs:13`).
+  The bundle therefore only resolves in a host whose own Application assembly has been scanned as well.
 
 ### RefreshTokenRequestValidator
 
@@ -3011,22 +3705,20 @@ live in later groups; this chapter is the engine those endpoints call into.
   `AbstractValidator<T>`.
 - **Concept**: the shape is the one
   [`ForgotPasswordRequestValidator`](#forgotpasswordrequestvalidator) introduced. What this validator
-  teaches is *why both* fields are mandatory, which the doc comment states: the expired access token
-  is needed "for claim extraction" and the refresh token "for rotation verification"
-  (`RefreshTokenRequestValidator.cs:7-8`). `[Rubric §11, Security]`: refresh-token rotation
-  ([ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html)) verifies the
-  presented refresh token against the one stored for the *identity carried by the access token*, so
-  a request missing either half cannot be evaluated at all. Deliberately absent: any JWT
-  well-formedness or signature check. Parsing a token is the token service's job, and doing it here
-  would duplicate the trust boundary in a layer that has no key material.
+  teaches is *why both* fields are mandatory, which the doc comment states: the expired access token is
+  needed "for claim extraction" and the refresh token "for rotation verification"
+  (`RefreshTokenRequestValidator.cs:7-8`). `[Rubric §11, Security]`: rotation verifies the presented
+  refresh token against the one stored for the *identity carried by the access token*, so a request
+  missing either half cannot be evaluated at all. Deliberately absent: any JWT well-formedness or
+  signature check. Parsing a token is the token service's job, and doing it here would duplicate the
+  trust boundary in a layer that has no key material.
 - **Walkthrough**: two single-stage `RuleFor(...).NotEmpty()` chains with explicit messages
   (`RefreshTokenRequestValidator.cs:14-18`).
-- **Why it's built this way**: keeping the validator to presence checks leaves exactly one place
-  where a token's authenticity is decided, which is what makes the refresh endpoint's failure
-  responses uniform.
+- **Why it's built this way**: keeping the validator to presence checks leaves exactly one place where a
+  token's authenticity is decided, which is what makes the refresh endpoint's failure responses uniform.
 - **Where it's used**: picked up by the same assembly scan
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:48`, named in the comment
-  at `:46`) and injected as `IValidator<RefreshTokenRequest>` into
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:49`, named in the comment at
+  `:47`) and injected as `IValidator<RefreshTokenRequest>` into
   [`AuthenticationValidators`](#authenticationvalidators)
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationValidators.cs:19,28`).
 
@@ -3040,37 +3732,37 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Depends on**: [`ResetPasswordRequest`](#resetpasswordrequest);
   [`StrongPasswordRules<T>`](group-06-validation.md#strongpasswordrulest); `FluentValidation`'s
   `AbstractValidator<T>` and its `Include` composition.
-- **Concept introduced, composing a rule set with `Include`.** `[Rubric §11, Security]` assesses
-  whether a policy holds on every path that can change the guarded value, and `[Rubric §1, SOLID]`
-  the single-responsibility split that makes that possible. A password-complexity policy is only a
-  policy if *every* write path enforces it; if registration demands an uppercase letter and reset
-  does not, reset is a documented downgrade route. FluentValidation's `Include` merges another
-  validator's rules for the same model type into this one, so the policy can live in exactly one
-  class and be pulled into each writer. The doc comment states the intent: the new password goes
-  through "the same `StrongPasswordRules<T>` the registration and change-password requests use, so a
-  reset cannot be a way around the complexity policy" (`ResetPasswordRequestValidator.cs:8-10`).
-  `StrongPasswordRules<T>` is generic over the containing model and takes a selector expression, which
-  is what lets one rule set attach to a differently-shaped request each time
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:97-108`): it
+- **Concept introduced, composing a rule set with `Include`.** `[Rubric §11, Security]` assesses whether
+  a policy holds on every path that can change the guarded value, and `[Rubric §1, SOLID]` the
+  single-responsibility split that makes that possible. A password-complexity policy is only a policy if
+  *every* write path enforces it; if registration demands an uppercase letter and reset does not, reset
+  is a documented downgrade route. FluentValidation's `Include` merges another validator's rules for the
+  same model type into this one, so the policy can live in exactly one class and be pulled into each
+  writer. The doc comment states the intent: the new password goes through "the same
+  `StrongPasswordRules<T>` the registration and change-password requests use, so a reset cannot be a way
+  around the complexity policy" (`ResetPasswordRequestValidator.cs:8-10`). `StrongPasswordRules<T>` is
+  generic over the containing model and takes a selector expression, which is what lets one rule set
+  attach to a differently-shaped request each time
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:188-199`): it
   enforces non-empty, 8 to 128 characters, and one each of uppercase, lowercase, digit, and
   non-alphanumeric.
 - **Walkthrough**: three statements in a block-bodied constructor
-  (`ResetPasswordRequestValidator.cs:13-24`). `Email` gets `NotEmpty().EmailAddress()` (`:16-18`),
+  (`ResetPasswordRequestValidator.cs:14-24`). `Email` gets `NotEmpty().EmailAddress()` (`:16-18`),
   matching the forgot-password half so the two steps agree on what an address is. `Token` gets
-  `NotEmpty()` with a reset-specific message (`:20-21`); no format check, because the token's
-  validity is a lookup, not a shape. Then `Include(new StrongPasswordRules<ResetPasswordRequest>(x
-  => x.NewPassword))` (`:23`) grafts the seven policy rules onto the `NewPassword` field. Note the
-  contrast with the weaker sibling
-  [`PasswordRules<T>`](group-06-validation.md#passwordrulest)
-  (`CommonValidationRules.cs:83-90`), which enforces length only; reset deliberately takes the strong
-  one.
+  `NotEmpty()` with a reset-specific message (`:20-21`); no format check, because the token's validity is
+  a lookup, not a shape. Then
+  `Include(new StrongPasswordRules<ResetPasswordRequest>(x => x.NewPassword))` (`:23`) grafts the seven
+  policy rules onto the `NewPassword` field. Note the contrast with the weaker sibling
+  [`PasswordRules<T>`](group-06-validation.md#passwordrulest) (`CommonValidationRules.cs:174-181`), which
+  enforces length only; reset deliberately takes the strong one.
 - **Why it's built this way**: the reset flow is
-  [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html), and the
-  hashing the accepted password ends up under is
-  [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html). Neither is this
-  validator's concern, which is the point: it only decides whether the candidate is policy-compliant.
+  [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html), and the hashing
+  the accepted password ends up under is
+  [ADR-102](https://ivanball.github.io/docs/adr/102-pbkdf2-only-password-hashing.html) (which supersedes
+  ADR-032). Neither is this validator's concern, which is the point: it only decides whether the
+  candidate is policy-compliant.
 - **Where it's used**: registered by the assembly scan
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:48`) and reached through
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:49`) and reached through
   [`CommandRequestValidator<TCommand, TRequest>`](group-06-validation.md#commandrequestvalidatortcommand-trequest)
   for any command implementing `ICommandWithRequest<ResetPasswordRequest>`, the constraint
   [`ResetPasswordHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand)
@@ -3081,73 +3773,528 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:108`),
   which is why a policy failure surfaces as the documented `400`
   (`PasswordResetAuthControllerBase.cs:104`) while a bad token collapses to `401`
-  (`PasswordResetAuthControllerBase.cs:96-97,105`).
+  (`PasswordResetAuthControllerBase.cs:97,105`).
 
 ### UserDataExportDTO
 
 > MMCA.Common.Shared · `MMCA.Common.Shared.Privacy` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:15` · Level 1 · record
 
-- **What it is**: the whole data-subject export package: a format version, a generation timestamp,
-  the subject's id, an app-owned snapshot of the account itself, and a list of
+- **What it is**: the whole data-subject export package: a format version, a generation timestamp, the
+  subject's id, an app-owned snapshot of the account itself, and a list of
   [`UserDataExportSectionDTO`](#userdataexportsectiondto) envelopes
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/UserDataExportDTO.cs:15-49`).
-- **Depends on**: [`UserDataExportSectionDTO`](#userdataexportsectiondto); the
-  `UserIdentifierType` alias ([ADR-085](https://ivanball.github.io/docs/adr/085-identifier-type-aliases-revisited.html));
+- **Depends on**: [`UserDataExportSectionDTO`](#userdataexportsectiondto); the `UserIdentifierType` alias
+  ([ADR-085](https://ivanball.github.io/docs/adr/085-identifier-type-aliases-revisited.html));
   `System.Runtime.Serialization` attributes (BCL).
 - **Concept introduced, the versioned, PII-by-design document.** `[Rubric §30, Compliance / Privacy /
   Data Governance]` assesses how personal data is classified and handled. Most DTOs in this codebase
-  carry incidental personal data; this one *is* personal data end to end, and the type says so in
-  bold in its own summary: "This document is **PII by design**. It exists to hand a data subject
-  everything an app holds about them, so it must only ever be produced for the account owner (or a
-  privileged role) and must never be logged, cached, or persisted by the pipeline that serves it"
-  (`UserDataExportDTO.cs:9-12`). That single comment is what makes three otherwise-invisible
-  decisions legible: the query is not `IQueryCacheable`, so the caching decorator never sees it
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs:42-45`);
+  carry incidental personal data; this one *is* personal data end to end, and the type says so in bold
+  in its own summary: "This document is **PII by design**. It exists to hand a data subject everything
+  an app holds about them, so it must only ever be produced for the account owner (or a privileged role)
+  and must never be logged, cached, or persisted by the pipeline that serves it"
+  (`UserDataExportDTO.cs:9-11`). That single comment is what makes three otherwise-invisible decisions
+  legible: the query is not `IQueryCacheable`, so the caching decorator never sees it
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs:43-44`);
   the degradation path logs the exception but hands the subject a generic reason
-  (`ExportUserDataHandlerBase.cs:187-190`); and the controller serializes to bytes and returns a
-  file rather than an `ObjectResult`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:104-110`).
-  `[Rubric §9, API & Contract Design]`: `FormatVersion` versions "the export document shape itself
-  (not the app's data)" (`UserDataExportDTO.cs:18-19`), so a consumer parsing an old file can detect
-  an envelope change rather than guess at it.
-- **Walkthrough**: five `init`-only properties under `[DataContract]`, each with an explicit
+  (`ExportUserDataHandlerBase.cs:188-196`); and the controller serializes to bytes and returns a file
+  rather than an `ObjectResult`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:101-109`).
+  `[Rubric §9, API & Contract Design]`: `FormatVersion` versions "the export document shape itself (not
+  the app's data)" (`UserDataExportDTO.cs:18-19`), so a consumer parsing an old file can detect an
+  envelope change rather than guess at it.
+- **Walkthrough**: five `init`-only properties under `[DataContract]` (`:14`), each with an explicit
   `[DataMember(Order = n)]` (`UserDataExportDTO.cs:21,25,29,39,47`) pinning field order into the
   contract.
-  - `FormatVersion`, `GeneratedOn`, and `UserId` are `required` (`:22,26,30`), so the envelope cannot
-    be constructed without them.
-  - `Subject` is `object?` (`:40`), and the doc comment gives the full reasoning: the framework owns
-    the envelope, each app owns which of its own fields are portable personal data, and an
-    `object`-typed property serializes by its *runtime* type under `System.Text.Json` (`:32-38`).
-    That last clause is the mechanism that makes the erasure of the static type harmless. `null` is
-    legal and means the app publishes no subject fields.
+  - `FormatVersion`, `GeneratedOn`, and `UserId` are `required` (`:22,26,30`), so the envelope cannot be
+    constructed without them.
+  - `Subject` is `object?` (`:40`), and the doc comment gives the full reasoning: the framework owns the
+    envelope, each app owns which of its own fields are portable personal data, and an `object`-typed
+    property serializes by its *runtime* type under `System.Text.Json` (`:32-38`). That last clause is
+    the mechanism that makes the erasure of the static type harmless. `null` is legal and means the app
+    publishes no subject fields.
   - `Sections` defaults to an empty collection expression, `= []` (`:48`), so an export with no
     registered contributors is a well-formed document rather than a null-bearing one. Order is the
-    section registration order, which the comment makes part of the contract (`:42-45`).
+    section registration order, which the comment makes part of the contract (`:42-46`).
 - **Why it's built this way**:
-  [ADR-076](https://ivanball.github.io/docs/adr/076-data-subject-export.html) hoisted this shape out
-  of two near-identical app implementations. It is the export half of the data-subject obligation
-  whose erasure half was settled by
-  [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html), which explicitly
-  scoped export out and left it to consumers
-  (`Website/docs-src/adr/076-data-subject-export.md:16-19`).
+  [ADR-076](https://ivanball.github.io/docs/adr/076-data-subject-export.html) hoisted this shape out of
+  two near-identical app implementations. It is the export half of the data-subject obligation whose
+  erasure half was settled by
+  [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html), which explicitly scoped
+  export out and left it to consumers
+  (`Website/docs-src/adr/076-data-subject-export.md:21-23`).
 - **Where it's used**: it is the result type of the export query all the way through the stack.
   [`ExportUserDataHandlerBase<TUser, TQuery>`](group-14-module-system-composition.md#exportuserdatahandlerbasetuser-tquery)
-  implements `IQueryHandler<TQuery, Result<UserDataExportDTO>>`
-  (`ExportUserDataHandlerBase.cs:53`), stamps `CurrentFormatVersion = "1.0"` into it
-  (`ExportUserDataHandlerBase.cs:61,112`), and takes `GeneratedOn` from an injected `TimeProvider`
-  rather than a static clock (`ExportUserDataHandlerBase.cs:113`).
+  implements `IQueryHandler<TQuery, Result<UserDataExportDTO>>` (`ExportUserDataHandlerBase.cs:53`),
+  stamps `CurrentFormatVersion = "1.0"` into it (`ExportUserDataHandlerBase.cs:61,112`), and takes
+  `GeneratedOn` from an injected `TimeProvider` rather than a static clock
+  (`ExportUserDataHandlerBase.cs:113`).
   [`DataExportControllerBase<TQuery>`](group-12-api-hosting-mapping.md#dataexportcontrollerbasetquery)
-  declares it as the 200 response type (`DataExportControllerBase.cs:79`) and derives the download
-  file name from the package's own `GeneratedOn` so the file name and the document can never disagree
-  (`DataExportControllerBase.cs:126-135`). Both apps subclass the handler
+  declares it as the 200 response type (`DataExportControllerBase.cs:78`) and derives the download file
+  name from the package's own `GeneratedOn` so the file name and the document can never disagree
+  (`DataExportControllerBase.cs:109,124-134`). Both apps subclass the handler
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs:35`,
   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs:39`)
-  and expose it from their own `UsersController.ExportAsync`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:158-161`,
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs:36-39`).
-- **Caveats / not-in-source**: the "never logged, cached, or persisted" rule is a documented
-  discipline, not something the type or an analyzer enforces. Nothing stops a future handler from
-  marking its export query cacheable; the only guard today is that no shipped query does.
+  and expose it through their own
+  [`UsersDataExportController`](group-24-identity-module.md#usersdataexportcontroller)
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersDataExportController.cs:27`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersDataExportController.cs:29`).
+
+### ProblemDetailsResultReader
+
+> MMCA.Common.Shared · `MMCA.Common.Shared.Http` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:58` · Level 3 · class (static)
+
+- **What it is**: the client-side inverse of the API's error edge. It reads an RFC 9457 Problem Details
+  body (or a non-JSON body, or no body at all) and turns it back into the
+  [`Error`](group-01-result-error-handling.md#error) list and failed
+  [`Result`](group-01-result-error-handling.md#result) the server started from
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:58-476`).
+- **Depends on**: [`Error`](group-01-result-error-handling.md#error),
+  [`Result`](group-01-result-error-handling.md#result) and
+  [`ErrorType`](group-01-result-error-handling.md#errortype) from `MMCA.Common.Shared.Abstractions`
+  (`ProblemDetailsResultReader.cs:4`); BCL only otherwise: `System.Text.Json`,
+  `System.Collections.Frozen`, `System.Net.Http.HttpResponseMessage`, `System.Globalization`
+  (`:1-3`).
+- **Concept introduced, closing the Result round trip across an HTTP hop.** The framework's error
+  currency is a `Result` carrying typed `Error`s, and
+  [ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html) makes that the whole point:
+  business failures are values, not exceptions. HTTP does not carry `Result`s, so
+  [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) projects a failure into
+  Problem Details on the way out. Without a reader, the client half of that trip is lossy in the worst
+  way: a Blazor page would see "500" or an `HttpRequestException` where the server said
+  "Session.AlreadyClosed, Conflict". This type is the missing half. `[Rubric §9, API & Contract Design]`
+  assesses whether the contract is honored symmetrically at both ends; `[Rubric §29, Resilience &
+  Business Continuity]` assesses whether a caller degrades usefully rather than crashing, which is why
+  every unreadable-body path still yields exactly one usable `Error`. Its **placement** is the same rule
+  [`IdempotencyHeaders`](#idempotencyheaders) and [`ConcurrencyETag`](#concurrencyetag) follow, stated in
+  the doc comment: the client half of the round trip is `MMCA.Common.UI`, "which references Shared only"
+  (`ProblemDetailsResultReader.cs:15-18`), so the reader lives in Shared and uses nothing beyond the BCL.
+  The doc comment also enumerates the four payload shapes it understands and, crucially, states its own
+  **fidelity limit** in the same breath (`:20-56`): only the MMCA error array is lossless; the other
+  three derive the `ErrorType` from the status code, "which is **lossy for 400 Bad Request**".
+- **Walkthrough**:
+  - Three public `const string` codes name the synthesized failures: `StatusErrorCodePrefix = "Http."`
+    (`:65`), `EmptyResponseCode = "Http.EmptyResponse"` (`:71`), and
+    `MalformedResponseCode = "Http.MalformedResponse"` (`:77`). They are public precisely so tests and
+    callers can branch on them without re-spelling the literal.
+  - A block of private `const`s holds every JSON member name it looks for (`:79-88`), so the wire
+    vocabulary is declared once.
+  - `StatusCodeToErrorType` is a `FrozenDictionary<int, ErrorType>` (`:96-106`), documented as "the exact
+    reverse of `ErrorHttpMapping.ErrorTypeToStatusCode`" (`:91-92`). That forward map really does collapse
+    three types onto 400 (`Validation`, `Invariant` and `Failure`, at
+    `MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:22,23,29`), which is
+    exactly why the reverse is lossy there and picks `Validation`.
+  - `FromHttpStatusCode(int)` (`:128`) is the public reverse mapping: a dictionary hit wins (`:130-133`),
+    any other 4xx becomes `Failure`, anything else (5xx included) becomes `Unexpected` (`:135`).
+  - `ParseProblemDetails(int, string?)` (`:153`) is the pure core, and the doc says why it is separated
+    from the HTTP surface: "no HTTP, no I/O, no allocation of an `HttpResponseMessage`, so it can be
+    tested directly against captured payloads" (`:139-141`), which is `[Rubric §14, Testability]` made
+    structural. Its flow: a blank body synthesizes one error (`:155-158`); a `JsonException` is caught
+    and does the same, with the comment naming the real-world cases ("a bare challenge, an HTML error
+    page, a proxy response", `:161-169`); a root that is not a JSON object likewise (`:174-177`).
+    Otherwise it resolves the effective status (`:179`) and the fallback type (`:180`), then branches on
+    the `errors` member: an array goes to `ReadErrorArray` (`:186-188`), an object to
+    `ReadValidationDictionary` (`:190-192`). Parsed errors win only when the list is non-empty
+    (`:195-198`); otherwise it falls through to a synthesized error carrying `detail` or `title`
+    (`:201`).
+  - `ResolveStatus` (`:419`) is a small but deliberate affordance: a caller that passes a non-positive
+    status gets the status read out of the body's own `status` member instead (`:426-430`), which is what
+    makes the parser usable against a captured payload with no response object around it.
+  - `ReadErrorArray` (`:319`) maps each object element through `ReadErrorObject` and, notably, still
+    salvages a degraded array of plain strings (`:331-336`). `ReadErrorObject` (`:342`) reads `code`,
+    `message`, `type`, `source` and `target`, with a three-step fallback for the message
+    (`message`, then `code`, then the generic default) so an `Error` is never constructed with an empty
+    one (`:348-353`).
+  - `ReadValidationDictionary` (`:356`) handles the standard ASP.NET Core shape. The key becomes
+    `Validation.{propertyName}`, or bare `Validation` for an object-level rule with an empty key
+    (`:363-365`), and the property name is carried separately as `Target` (`:366`). A value may be an
+    array of messages or a single one, and both paths funnel through `AddValidationError` (`:368-378`),
+    which silently ignores non-string and blank entries (`:391-400`).
+  - `ParseErrorType` (`:403`) is the one place an inbound string becomes an enum, and it is
+    defensive in the right way: `Enum.TryParse` with `ignoreCase: true` **plus** `Enum.IsDefined`
+    (`:405-406`). Without the second check `TryParse` would happily accept an arbitrary numeric string and
+    hand back an undefined enum value.
+  - `ToFailureResult` (`:212`) lifts the parsed errors into a failed `Result`. `ReadAsync` (`:223`)
+    short-circuits on a 2xx to `Result.Success()` (`:229-232`) and otherwise parses the body.
+    `ReadAsync<T>` (`:257`) is the value-returning overload: a non-success status parses errors (`:269`),
+    a blank 2xx body is a *failure* coded `EmptyResponseCode` (`:272-279`), a body that deserializes to
+    `null` is the same failure with a different message (`:284-289`), and a `JsonException` becomes
+    `MalformedResponseCode` (`:292-295`). The "204 is a failure here" rule is stated in the doc with its
+    escape hatch: use the non-generic overload for endpoints that legitimately answer without a body
+    (`:241-246`).
+  - `ReadBodyAsync` (`:298`) buffers the content as a string and swallows an `HttpRequestException` back
+    to `null` (`:311-316`), with the comment explaining the judgement: a truncated body should still
+    report the status-level failure rather than surface a transport exception "from a reader".
+  - `TryGetProperty` (`:444`) does case-insensitive member lookup, trying the exact name first and only
+    then enumerating (`:453-459`). The doc gives the reason (`:438-443`): the wire form is camelCase, but
+    a hand-assembled or differently-configured payload can be PascalCase, and a reader that understood
+    only one "would silently drop every error field".
+- **Why it's built this way**:
+  [ADR-094](https://ivanball.github.io/docs/adr/094-client-entity-data-access.html) is the governing
+  record. It states that the client dispatch "returns a `Result`; it does not throw", hands the response
+  to this reader in both service-base overloads, and records what the change replaced: the client used
+  to pull domain wording out of the body and **rethrow** it as a `DomainInvariantViolationException`
+  before falling back to `EnsureSuccessStatusCode`, and that helper "is deleted, not deprecated"
+  (`Website/docs-src/adr/094-client-entity-data-access.md:81-92`).
+- **Where it's used**: it is the single funnel for every framework-shaped HTTP read on the client.
+  [`EntityServiceBase<TEntityDTO, TIdentifierType>`](group-15-common-ui-framework.md#entityservicebasetentitydto-tidentifiertype)
+  uses both overloads
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:339,367`, documented at
+  `:304,321,347`),
+  [`ChildEntityServiceBase`](group-15-common-ui-framework.md#childentityservicebase) uses all three call
+  shapes
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/ChildEntityServiceBase.cs:42,58,77`), and the
+  notification inbox service does the same
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationInboxService.cs:53,72,91,109`).
+  ADC's hand-written UI services call it directly rather than going through a base, for example
+  [`UserService`](group-24-identity-module.md#userservice)
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Services/UserService.cs:64,90,112,139,156`),
+  [`SpeakerDashboardService`](group-21-conference-ui.md#speakerdashboardservice)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/SpeakerDashboardService.cs:102`),
+  [`CategoryItemLookupService`](group-21-conference-ui.md#categoryitemlookupservice)
+  (`.../Services/CategoryItemLookupService.cs:51`) and
+  [`SessionQuestionUIService`](group-23-engagement-live-layer.md#sessionquestionuiservice)
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/SessionQuestionUIService.cs:35,54,80`).
+  The round trip is pinned end to end by `ProblemDetailsRoundTripTests`, which serializes a real failure
+  through the API edge and reads it back with `ParseProblemDetails`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Controllers/ProblemDetailsRoundTripTests.cs:47,71,86,125`).
+- **Caveats / not-in-source**: `ErrorHttpMapping` is `internal` to `MMCA.Common.API`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:14`) and this reader
+  lives in `MMCA.Common.Shared`, so the two dictionaries cannot reference each other. Nothing in the type
+  system keeps the reverse map aligned when a new `ErrorType` or status is added to the forward one; the
+  alignment rests on the doc comment (`ProblemDetailsResultReader.cs:91-94`) and on the round-trip test.
+  The `[Rubric §16, Maintainability]` reading is that this is a knowingly accepted duplication, priced
+  against giving Shared a reference to the API package.
+
+### PasswordHasher
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12` · Level 1 · class
+
+- **What it is**: the framework's one credential hasher. It derives a hash for a new password and
+  verifies a candidate password against a stored `(hash, salt)` pair, using PBKDF2-HMAC-SHA512 at
+  600,000 iterations. PBKDF2 is the *only* algorithm in the type: every hash it writes and every hash
+  it verifies goes through the same derivation
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:7-11`).
+- **Depends on**: [`IPasswordHasher`](#ipasswordhasher), the Application-layer port it implements
+  (imported at
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:3`, declared at
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IPasswordHasher.cs:6`).
+  Externals are BCL only: `System.Security.Cryptography` (`Rfc2898DeriveBytes`,
+  `RandomNumberGenerator`, `CryptographicOperations`) and `System.Text.Encoding`.
+- **Concept introduced: a password is stored as a deliberately slow, salted one-way derivation.**
+  `[Rubric §11, Security]` assesses credential-at-rest protection, and this 64-line type is where the
+  framework makes its whole stance on it. Three decisions are visible in source and each one answers a
+  specific attack. A per-credential 32-byte salt drawn from a CSPRNG
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:15`, `:31`) means two
+  users who pick the same password get different stored hashes, so a precomputed rainbow table buys an
+  attacker nothing. A 600,000-iteration work factor
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:24`, OWASP 2023
+  guidance for PBKDF2-HMAC-SHA512) makes each guess in an offline cracking run cost real CPU time,
+  which is the only defense once a dump has left the building. And `FixedTimeEquals` (`:53`) compares
+  the full buffer regardless of where the first byte differs, so the *duration* of a failed login
+  carries no information about how close the guess was. `[Rubric §16, Maintainability]` applies to the
+  shape rather than the crypto: one algorithm, no version flag, no per-app copy, so the question
+  "which primitive authenticated this login" has exactly one answer everywhere.
+- **Walkthrough**
+  - Three private constants carry the whole policy: `SaltSize = 32` (256 bits,
+    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:15`),
+    `HashSize = 64` (512 bits, `:18`), and `Iterations = 600_000` (`:24`). Changing the policy is a
+    one-line edit; reading it takes no archaeology.
+  - `HashPassword(string password)`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:27`) rejects null,
+    empty and whitespace-only input up front with `ArgumentException.ThrowIfNullOrWhiteSpace` (`:29`),
+    draws a fresh salt from `RandomNumberGenerator.GetBytes(SaltSize)` (`:31`, the cryptographic RNG
+    and not `Random`), derives 64 bytes via `Rfc2898DeriveBytes.Pbkdf2` over the UTF-8 password bytes
+    (`:32-37`), and returns the `(Hash, Salt)` named tuple (`:39`). The salt is generated here rather
+    than accepted from the caller, so no call site can accidentally reuse one.
+  - `VerifyPassword(string password, byte[] hash, byte[] salt)`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:43`) guards all
+    three arguments (`:45-47`), recomputes the derivation over the *stored* salt (`:49`), and returns
+    `CryptographicOperations.FixedTimeEquals(computedHash, hash)` (`:53`). Note the third argument at
+    `:49`: it derives `hash.Length` bytes, not `HashSize`, so the comparison is made at whatever length
+    the stored hash actually has instead of failing on a length mismatch.
+  - `ComputePbkdf2Hash(string password, byte[] salt, int outputLength)`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:57-63`) is the
+    single expression-bodied derivation both public members route through, which is what keeps the
+    write path and the verify path from ever drifting apart.
+- **Why it's built this way**: the type used to carry a second verification branch, an HMAC-SHA512
+  recompute selected at verify time by reading the stored salt length, kept alive for credentials
+  written under an older scheme.
+  [ADR-102](https://ivanball.github.io/docs/adr/102-pbkdf2-only-password-hashing.html) records its
+  removal and supersedes
+  [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html): the legacy branch verified
+  a single-round digest offering none of the offline-cracking resistance the rest of the design argues
+  for, and keying algorithm selection on a data property meant the credential row, not configuration,
+  decided which primitive ran. With the legacy corpus gone, deleting the branch made the stored format
+  and the executing primitive the same fact. The remaining shape (no per-app hasher, no algorithm
+  parameter on the port) is what lets `[Rubric §11, Security]` be assessed once for both applications.
+- **Where it's used**: registered as `services.TryAddSingleton<IPasswordHasher, PasswordHasher>()`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:549`); the type is
+  stateless, so a singleton is safe. Consumers reach it through the port:
+  [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser) takes it as a constructor
+  parameter (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:53`),
+  verifies on login (`:159`, and a failure there increments the brute-force counter at `:160`) and
+  hashes on registration (`:210`);
+  [`ChangePasswordHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#changepasswordhandlerbasetuser-tcommand)
+  verifies the current password then re-hashes the new one
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:26`,
+  `:55`, `:61`); and
+  [`ResetPasswordHandlerBase<TUser, TCommand>`](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand)
+  only hashes
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:32`,
+  `:79`), because possession of the reset token stands in for knowledge of the old password.
+- **Caveats / not-in-source**: `VerifyPassword` returns a plain `bool`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:43`), so there is no
+  "this row was derived with a lower work factor, rehash it" signal on the successful-login path.
+  Verification recomputes with the current `Iterations` constant (`:61`), so raising it invalidates
+  previously stored hashes, and nothing in this file or its call sites migrates them.
+
+### TokenService
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:25` · Level 2 · class
+
+- **What it is**: the JWT issuer. It mints signed access tokens carrying the user id, email, role and
+  display name (plus any extra claims a caller supplies), generates opaque random refresh tokens,
+  projects both configured lifetimes as `TimeSpan`s, and re-reads an already-expired access token
+  during the refresh flow. It signs with RSA-SHA256 or HMAC-SHA256, decided once at construction from
+  configuration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:12-24`).
+- **Depends on**: [`ITokenService`](#itokenservice) (the port it implements) and `IDisposable`;
+  [`JwtSettings`](group-14-module-system-composition.md#jwtsettings),
+  [`JwtSigningAlgorithm`](group-14-module-system-composition.md#jwtsigningalgorithm) and
+  [`JwksSettings`](group-14-module-system-composition.md#jwkssettings), all bound through
+  `IOptions<T>` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:55-58`).
+  Externals: `System.IdentityModel.Tokens.Jwt` (`JwtSecurityToken`, `JwtSecurityTokenHandler`),
+  `Microsoft.IdentityModel.Tokens` (`SigningCredentials`, `SecurityKey`, `TokenValidationParameters`),
+  `System.Security.Cryptography` (`RSA`, `RandomNumberGenerator`), and `TimeProvider` for the clock.
+- **Concept introduced: asymmetric issuance, and one deliberate hole in validation.**
+  `[Rubric §11, Security]` assesses token issuance and algorithm-confusion defense, and two choices
+  here are worth reading slowly. First, `GetPrincipalFromExpiredToken` sets `ValidateLifetime = false`
+  on purpose (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:146`) under
+  a narrowly scoped `#pragma warning disable CA5404` (`:145`, restored at `:147`) whose comment states
+  why: the refresh flow's whole job is reading claims out of a token that has already expired. Every
+  other check stays on (`:142-144`). Second, the algorithm is pinned twice: `ValidAlgorithms` limits
+  validation to the one algorithm this instance was built for (`:151`), and the token header's `alg` is
+  re-compared with an ordinal string comparison *after* validation succeeds (`:160-161`). That pair is
+  the defense against algorithm substitution, where an attacker takes the RSA *public* key (which is
+  published on purpose) and presents it as an HMAC shared secret.
+  `[Rubric §7, Microservices Readiness]` applies to the algorithm switch itself: RS256, the default,
+  lets an extracted service validate a token without ever holding the issuer's private key, because it
+  fetches the public key from the JWKS document that [`RsaJwksProvider`](#rsajwksprovider) publishes
+  ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)). HS256 remains
+  available for a single-process monolith, where issuer and validator are the same host and a shared
+  secret costs nothing (`:16-23`). `[Rubric §14, Testability]` shows up in the constructor: the clock
+  is an injected `TimeProvider` with a `TimeProvider.System` fallback (`:63`), so a test can assert
+  `iat`/`nbf`/`exp` without waiting for wall-clock time to pass.
+- **Walkthrough**
+  - Fields (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:27-36`): the
+    settings snapshot, the `TimeProvider`, the `SigningCredentials` used to sign, the `SecurityKey` and
+    algorithm string used to validate, and two nullable owned `RSA` handles. The comment at `:33-34`
+    explains why `IDisposable` is on the class at all: `RsaSecurityKey` does not own the `RSA` it
+    wraps, so something has to.
+  - The constructor
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:55-76`) materializes
+    all key material exactly once, so no token operation re-parses a PEM. For
+    `JwtSigningAlgorithm.RS256` it builds RSA credentials and pins `SecurityAlgorithms.RsaSha256`
+    (`:65-70`); the key id it passes is `jwksSettings?.Value.KeyId` falling back to a default
+    `JwksSettings` instance (`:68`), which is how the same `kid` ends up on both the token and the
+    published JWK (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:46`).
+    Otherwise it builds HMAC credentials and pins `HmacSha256` (`:73-74`).
+  - `GenerateAccessToken(userId, email, role, fullName, additionalClaims)`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:79-116`) reads the
+    clock once (`:86`), then builds six claims (`:92-100`): `sub` (the user id, formatted with
+    `CultureInfo.InvariantCulture`), `jti` (a fresh GUID, so a token is individually identifiable),
+    `iat` as Unix seconds, and the standard name, email and role claims. The comment at `:88-91` is the
+    design note worth internalizing: `sub` is the *only* carrier of the user id. A duplicate custom
+    claim used to ride alongside it, which meant two values that could disagree and two claim names
+    every reader had to know; readers now go through
+    [`ClaimsPrincipalExtensions`](#claimsprincipalextensions) instead. Caller-supplied claims are
+    appended (`:102-105`), then a `JwtSecurityToken` is assembled with issuer, audience, `notBefore`
+    from the injected clock and `expires` at `now + AccessTokenExpirationMinutes` (`:107-113`) and
+    serialized (`:115`).
+  - `GenerateRefreshToken()`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:119-123`) returns 64
+    CSPRNG bytes Base64-encoded. It is not a JWT and carries no claims: it is an opaque bearer string
+    whose only property is being unguessable, and the store it is compared against is what gives it
+    meaning.
+  - `AccessTokenLifetime` and `RefreshTokenLifetime`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:126`, `:129`) project
+    the configured minutes and days, so callers computing an expiry timestamp never re-read settings
+    and never disagree with the token just minted.
+  - `GetPrincipalFromExpiredToken(string token)`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:138-172`) builds the
+    validation parameters described above (`:140-152`), validates (`:158`), applies the
+    post-validation `alg` re-check and returns `null` when the token is not a `JwtSecurityToken` or the
+    header disagrees (`:160-164`), and swallows every exception into `null` (`:168-171`). A malformed,
+    forged, or wrong-issuer token therefore produces a plain "no principal" answer rather than a parser
+    exception leaking to the caller.
+  - `Dispose()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:175-179`)
+    releases both owned `RSA` handles.
+  - `BuildHmacCredentials`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:181-193`) throws
+    `InvalidOperationException` when `SecretForKey` is missing (`:183-187`) and Base64-decodes it into
+    a `SymmetricSecurityKey` used for both signing and validation (`:190-192`).
+  - `BuildRsaCredentials`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:195-250`) throws when
+    `RsaPrivateKeyPem` is missing (`:199-203`), imports the private key (`:205-208`), and stamps the
+    key id on the signing key (`:214`) so every RS256 token carries a `kid` header. The comment at
+    `:210-213` gives the reason: a validator reading the published JWKS selects the key by name, and
+    without a `kid` it has to try every published key, which stops working the moment a rotation
+    publishes two. The validation key prefers the configured `RsaPublicKeyPem` and otherwise derives
+    the public parameters from the private key (`:223-231`), so an issuer configured with only a
+    private key still validates its own tokens during refresh; it carries the same key id (`:236`).
+    Both nested `try`/`catch` blocks dispose the partially built `RSA` before rethrowing (`:239-243`,
+    `:245-249`), so a bad PEM does not leak a native handle. Because all of this runs in the
+    constructor, missing or malformed key material fails at host startup, not on the first login.
+- **Why it's built this way**:
+  [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) records the
+  asymmetric-issuance rationale. The DI lifetime deserves its own read at the registration site
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:542-548`): the comment
+  there records that a scoped lifetime disposed the underlying `RSA` at end-of-request while the static
+  `CryptoProviderCache` in `Microsoft.IdentityModel.Tokens` still held the cached
+  `AsymmetricSignatureProvider` wrapping it, throwing `ObjectDisposedException` on the next RS256 sign.
+  Singleton is correct because the constructor depends only on singleton options and the service is
+  stateless afterwards.
+- **Where it's used**: registered as `services.TryAddSingleton<ITokenService, TokenService>()`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:548`) and consumed
+  through the port by [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser): the
+  lifetime feeds the response's expiry
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:99-100`, with a
+  15-minute floor when the setting is non-positive), the refresh flow reads the expired token (`:278`),
+  and refresh tokens are minted at `:627` and `:667`. That base also wraps this service in a private
+  `SessionStampingTokenService` pass-through
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:770`) which
+  appends the [`AuthClaimTypes`](#authclaimtypes)`.SessionId` (`sid`) claim through the
+  `additionalClaims` parameter when a session is armed (`:782-800`, the claim added at `:797`), so
+  per-device session identity is layered on without this type knowing about sessions at all. The `sub`
+  claim it writes is what [`CurrentUserService`](#currentuserservice) and
+  [`ClaimBasedUserIdProvider`](#claimbaseduseridprovider) read back.
+- **Caveats / not-in-source**: nothing here rotates or reloads key material. The keys are read once in
+  the constructor
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:55-76`) and the
+  instance is a singleton, so a key change takes a host restart. Refresh-token storage, rotation and
+  revocation are not in this file either: it only produces the random string.
+
+### ClaimBasedUserIdProvider
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:11` · Level 8 · class
+
+- **What it is**: a two-line SignalR `IUserIdProvider` that tells the hub infrastructure which user a
+  connection belongs to, by reading the identity claim off the connection's principal
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:6-10`).
+- **Depends on**: `Microsoft.AspNetCore.SignalR` (`IUserIdProvider`, `HubConnectionContext`) and
+  [`ClaimsPrincipalExtensions`](#claimsprincipalextensions) for `FindUserIdValue`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:1-2`).
+- **Concept**: `[Rubric §11, Security]` assesses that identity is derived from the validated token and
+  never from client-supplied input, and `[Rubric §10, Cross-Cutting]` assesses whether that derivation
+  is centralized once. SignalR keys its user-targeted sends on whatever string an `IUserIdProvider`
+  returns; the built-in provider reads `ClaimTypes.NameIdentifier`. This framework mints the user id
+  only into `sub` (see [`TokenService`](#tokenservice),
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:94`), and whether that
+  survives as `sub` or arrives mapped to `NameIdentifier` depends on which handler authenticated the
+  connection. Routing through the shared extension is what makes both shapes resolve identically, so a
+  consumer that changes its inbound claim mapping does not silently start delivering zero
+  notifications.
+- **Walkthrough**: the entire type is `GetUserId(HubConnectionContext connection)`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:14-15`), an
+  expression body returning `connection?.User.FindUserIdValue()`. Two null paths are handled without a
+  branch: a null connection short-circuits to `null`, and `FindUserIdValue` is an extension on a
+  nullable `ClaimsPrincipal` that returns `null` when neither claim is present
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:26-28`). An
+  unauthenticated connection therefore has no user id, and SignalR treats it as belonging to no user
+  rather than failing connection setup.
+- **Why it's built this way**: the value returned here is compared as a *string* against the string a
+  sender passes to `Clients.User(...)`, so both sides must format the identifier the same way. The raw
+  claim value is used verbatim on this side, and the sender formats with `CultureInfo.InvariantCulture`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SignalRPushNotificationSender.cs:20`),
+  matching the invariant formatting the token writer used
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:94`). Keeping the whole
+  provider to one delegating line is what makes that three-way agreement checkable at a glance.
+- **Where it's used**: registered as
+  `services.TryAddSingleton<IUserIdProvider, ClaimBasedUserIdProvider>()`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:633`), in the same block
+  that swaps the null notification implementations for the SignalR-backed ones (`:630-632`). SignalR's
+  connection manager calls it on every connection, and it is what makes
+  [`SignalRPushNotificationSender`](group-10-notifications.md#signalrpushnotificationsender) reach the
+  right sockets on [`NotificationHub`](group-10-notifications.md#notificationhub)
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SignalRPushNotificationSender.cs:18-22`
+  for the single-user send and `:25-34` for the batched multi-user send).
+
+### CurrentUserService
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:16` · Level 9 · class
+
+- **What it is**: the per-request implementation of [`ICurrentUserService`](#icurrentuserservice). It
+  answers "who is calling" by reading claims off the current HTTP request's principal: the raw
+  `ClaimsPrincipal`, the typed user id, the role, and any other parsable claim by name
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:9-15`).
+- **Depends on**: [`ICurrentUserService`](#icurrentuserservice) (the Application port) and
+  [`ClaimsPrincipalExtensions`](#claimsprincipalextensions) for the identity read
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:4-5`); externals
+  are `Microsoft.AspNetCore.Http.IHttpContextAccessor`, `System.Security.Claims` and
+  `System.Globalization`. The claims it reads are the ones [`TokenService`](#tokenservice) writes.
+- **Concept introduced: a scoped identity snapshot, computed lazily and parsed invariantly.**
+  `[Rubric §3, Clean Architecture]` applies first: application code needs the caller's identity but
+  must not reference `HttpContext`, so the port lives in Application and this HTTP-aware implementation
+  lives in Infrastructure, which is the only place `IHttpContextAccessor` appears.
+  `[Rubric §12, Performance & Scalability]` explains the `Lazy<T>` fields
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:18`, `:21`):
+  because the service is registered scoped
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:541`), the claim walk
+  happens at most once per request no matter how many handlers, filters and save operations ask.
+  `[Rubric §27, i18n]` covers the trap most codebases miss: claim values are machine-written under
+  `CultureInfo.InvariantCulture`, so they must be *read* invariantly too, or a request running under a
+  culture with different separators misreads decimal, double and `DateTime` claims. Both parse paths
+  say so explicitly (`:40`, with the comment at `:38-39`, and the identifier parse inside
+  `ClaimsPrincipalExtensions.GetUserId` at
+  `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:43`).
+- **Walkthrough**
+  - The primary constructor takes `IHttpContextAccessor httpContextAccessor`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:16`) and is
+    captured directly by the lazy initializers, so there is no field boilerplate.
+  - `_userId`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:18-19`) defers
+    to `ClaimsPrincipalExtensions.GetUserId`, which reads `sub` first and falls back to the mapped
+    `ClaimTypes.NameIdentifier`
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:26-28`) before
+    parsing into `UserIdentifierType`. That indirection is the reason a JWT-bearer request and a
+    session-cookie request resolve to the same user.
+  - `_role`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:21-22`) caches
+    the first `ClaimTypes.Role` claim.
+  - `User` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:25`)
+    returns the principal, substituting a fresh empty `ClaimsPrincipal` when there is no HTTP context.
+    That fallback is what makes the service safe to resolve from a background job or hosted service:
+    callers get an anonymous principal instead of a `NullReferenceException`.
+  - `UserId` and `Role`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:28`, `:31`) are
+    one-line projections of the two lazies, both nullable, both `null` when unauthenticated.
+  - `GetClaimValue<T>(string claimType)`
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:34-41`) is
+    constrained to `T : struct, IParsable<T>` and calls the static abstract `T.TryParse`, so any
+    parsable value type (`int`, `Guid`, `DateTime`) can be lifted out of a named claim without Common
+    knowing what the claim means. It returns `null` for an absent or unparsable claim, and unlike
+    `UserId`/`Role` it is a fresh lookup on every call.
+- **Why it's built this way**: scoped lifetime plus `Lazy<T>` yields a stable per-request identity
+  snapshot at minimal cost, while the empty-principal fallback keeps the same abstraction usable
+  outside a request. Reading identity through the shared extension rather than a hand-rolled
+  `FindFirst("sub")` is the load-bearing part: it is what stops a consumer's claim-mapping choice from
+  silently emptying the current user
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:9-16`).
+- **Where it's used**: registered as
+  `services.TryAddScoped<ICurrentUserService, CurrentUserService>()`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:541`). The
+  highest-traffic consumer is
+  [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory), which takes it as a
+  constructor dependency
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:42`,
+  `:57`) and passes `UserId` into every save so audit fields are stamped with the acting user (`:248`,
+  `:291`, `:330`, `:352`, `:414`);
+  [`EFRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#efrepositorytentity-tidentifiertype)
+  accepts it as an optional dependency
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:25`).
+  Application handlers in both apps inject the port for ownership checks and caller-scoped queries.
+- **Caveats / not-in-source**: this class implements four members. `Roles` and `IsInRole` are default
+  interface members on the port
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:45`,
+  `:88`), not overridden here, so multi-role behavior is defined on the interface rather than in this
+  file. Outside an HTTP request `HttpContext` is null and `UserId` is therefore `null`, which means a
+  save performed by a background worker stamps no acting user; nothing in this file substitutes a
+  system identity.
 
 
 ---
