@@ -154,6 +154,18 @@
           are untouched. Unset (default) keeps them, so a host that does not opt in sees no change. Anything but
           a boolean <code>true</code> keeps the family, so a typo cannot silently blind it. On the MMCA apps this cut total
           Log Analytics ingestion ~70% (AppMetrics is ~80% of the workspace bill).</li>
+          <li><strong>Health-probe traces are dropped by default.</strong> On a Container Apps deployment the platform&#39;s
+          liveness / readiness probes, the gateway&#39;s downstream <code>/alive</code> aggregate, YARP active health checks
+          and the availability web test are 100% of the <code>AppRequests</code> rows and most of <code>AppDependencies</code> (the
+          health check&#39;s SQL <code>SELECT 1</code> and Redis PING under each probe), and <code>Telemetry:TracesSampleRatio</code>
+          does not reduce them. <code>Telemetry:FilterProbeTelemetry</code> (default <code>true</code>, v1.182.0) makes
+          <code>ConfigureOpenTelemetry</code> refuse inbound <code>/alive</code>, <code>/health</code> and <code>/health/*</code> requests in the ASP.NET
+          Core instrumentation, refuse outbound calls to the same paths in the HttpClient instrumentation, and
+          un-record the dependency spans hanging off a probe request through <code>ProbeTelemetryFilterProcessor</code>
+          (same mechanism as the outbox poll filter). Metrics are untouched, so <code>http.server.*</code> / <code>kestrel.*</code> /
+          <code>aspnetcore.*</code> still feed dashboards. Set it to <code>false</code> to see your own probe traces; only an explicit
+          boolean <code>false</code> turns it off. The paths come from <code>HealthEndpointPaths</code>, the same constants
+          <code>MapDefaultEndpoints()</code> maps, so the filter and the endpoints cannot drift apart.</li>
           <li><strong>Per-message logs are kept off the <code>Information</code> channel.</strong> The outbox&#39;s per-message
           &quot;dispatched successfully&quot; line is <code>Debug</code> (it is the single highest-volume log line in steady
           state); failures stay loud (dead-letter = <code>Error</code>, retry = <code>Warning</code>). So a busy outbox does not

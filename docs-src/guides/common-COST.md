@@ -30,6 +30,18 @@ that previously lived only in code comments.
   are untouched. Unset (default) keeps them, so a host that does not opt in sees no change. Anything but
   a boolean `true` keeps the family, so a typo cannot silently blind it. On the MMCA apps this cut total
   Log Analytics ingestion ~70% (AppMetrics is ~80% of the workspace bill).
+- **Health-probe traces are dropped by default.** On a Container Apps deployment the platform's
+  liveness / readiness probes, the gateway's downstream `/alive` aggregate, YARP active health checks
+  and the availability web test are 100% of the `AppRequests` rows and most of `AppDependencies` (the
+  health check's SQL `SELECT 1` and Redis PING under each probe), and `Telemetry:TracesSampleRatio`
+  does not reduce them. `Telemetry:FilterProbeTelemetry` (default `true`, v1.182.0) makes
+  `ConfigureOpenTelemetry` refuse inbound `/alive`, `/health` and `/health/*` requests in the ASP.NET
+  Core instrumentation, refuse outbound calls to the same paths in the HttpClient instrumentation, and
+  un-record the dependency spans hanging off a probe request through `ProbeTelemetryFilterProcessor`
+  (same mechanism as the outbox poll filter). Metrics are untouched, so `http.server.*` / `kestrel.*` /
+  `aspnetcore.*` still feed dashboards. Set it to `false` to see your own probe traces; only an explicit
+  boolean `false` turns it off. The paths come from `HealthEndpointPaths`, the same constants
+  `MapDefaultEndpoints()` maps, so the filter and the endpoints cannot drift apart.
 - **Per-message logs are kept off the `Information` channel.** The outbox's per-message
   "dispatched successfully" line is `Debug` (it is the single highest-volume log line in steady
   state); failures stay loud (dead-letter = `Error`, retry = `Warning`). So a busy outbox does not
