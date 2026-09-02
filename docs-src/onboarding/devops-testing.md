@@ -15,7 +15,8 @@ sliced, which CI filter sees which tests, how Microsoft Testing Platform differs
 shipped testing-infrastructure NuGet packages, the NetArchTest fitness-function suites that act
 as executable governance, the runtime conformance suites that check a really booted host, the
 integration and E2E strategies, three worked examples, and the CI gates that decide which tier
-blocks which merge.
+blocks which merge, including the two cross-repo gates that build a different repo than the one
+being changed.
 
 ---
 
@@ -35,10 +36,11 @@ only, because their solutions are already fast enough not to need a CI subset:
 | `MMCA.ADC.Integration.slnf` | SQL-gated per-service integration tests only |
 | `MMCA.Store.CI.slnf` / `MMCA.Store.Integration.slnf` | Store's pair, mirroring the ADC split |
 
-`MMCA.ADC.CI.slnf` (`MMCA.ADC/MMCA.ADC.CI.slnf:1-63`) includes 33 source projects and 23 test
-projects: every per-module unit and UI suite across Identity, Conference, Engagement and
-Notification, plus `MMCA.ADC.Architecture.Tests`, `MMCA.ADC.Gateway.Tests` and
-`MMCA.ADC.Services.Tests` (`MMCA.ADC.CI.slnf:59-60`). It deliberately excludes:
+`MMCA.ADC.CI.slnf` (`MMCA.ADC/MMCA.ADC.CI.slnf:1-63`) includes 33 source projects
+(`MMCA.ADC.CI.slnf:5-37`) and 23 test projects (`MMCA.ADC.CI.slnf:38-60`): every per-module unit and
+UI suite across Identity, Conference, Engagement and Notification, plus
+`MMCA.ADC.Architecture.Tests`, `MMCA.ADC.Gateway.Tests` and `MMCA.ADC.Services.Tests`
+(`MMCA.ADC.CI.slnf:58-60`). It deliberately excludes:
 
 - the four per-service integration projects (`MMCA.ADC.{Identity,Conference,Engagement,Notification}.IntegrationTests`)
 - the two Testcontainers tiers (`MMCA.ADC.CrossService.IntegrationTests`, `MMCA.ADC.ServiceBusEmulator.IntegrationTests`)
@@ -51,12 +53,14 @@ the full Aspire stack running. None of that is available in the fast build job, 
 its own job with its own prerequisites.
 
 **Read the gating carefully, it is easy to state wrongly.** ADC's `integration-tests` job is
-**pull-request-only** (`MMCA.ADC/.github/workflows/deploy.yml:535`) and is **not** in the `deploy`
-job's `needs` list (`deploy.yml:1054`). The comment above that list spells out the reasoning
-(`deploy.yml:1055-1063`): with strict branch protection the PR validated the exact merge tree, so
-`build-and-test`, `integration-tests` and `coverage` are required PR checks rather than push-time
-deploy gates, and they are not re-run on the merge push. Those four names are exactly the required
-contexts the repo's own contributing guide records (`MMCA.ADC/CONTRIBUTING.md:37-44,80-82`).
+**pull-request-only** (`MMCA.ADC/.github/workflows/deploy.yml:535`, with the reasoning at
+`deploy.yml:530-534`) and is **not** in the `deploy` job's `needs` list (`deploy.yml:1054`). Its
+sibling `build-and-test` is pull-request-only for the same stated reason (`deploy.yml:191-194`). The
+comment above the `needs` list spells it out (`deploy.yml:1055-1063`): with strict branch protection
+the PR validated the exact merge tree, so those jobs are required PR checks rather than push-time
+deploy gates, and they are not re-run on the merge push. The required contexts are exactly four,
+`build-and-test`, `supply-chain`, `integration-tests` and `coverage`, as the repo's own contributing
+guide records twice (`MMCA.ADC/CONTRIBUTING.md:38-41` and `CONTRIBUTING.md:80-81`).
 
 What actually blocks the deploy is `supply-chain`, `cost-guard`, the three freshness gates
 (`dr-freshness`, `load-freshness`, `cross-service-freshness`), `foundation`, `build-images`, and then
@@ -65,11 +69,13 @@ What actually blocks the deploy is `supply-chain`, `cost-guard`, the three fresh
 `backend-test-gate` (`deploy.yml:394`) exists because those PR-only checks plus a ui-scoped
 `e2e-gate` composed into a hole: a backend-only push to `main` ran **no tests at all** before rolling
 out, with the post-deploy smoke gate as the only backstop, which is detection after the rollout
-rather than prevention (`deploy.yml:376-388`). Its `if` is the exact complement of `e2e-gate`'s
-(`deploy.yml:395` versus `deploy.yml:688`), so one of the two always runs on a code deploy, at zero
+rather than prevention (`deploy.yml:375-388`). Its `if` is the exact complement of `e2e-gate`'s
+(`deploy.yml:396` versus `deploy.yml:688`), so one of the two always runs on a code deploy, at zero
 added minutes on a UI deploy and one `CI.slnf` pass on a backend-only one. It deliberately runs
-`MMCA.ADC.CI.slnf` and skips coverage collection (`deploy.yml:389-393,422`): coverage is a
-review-time regression signal, not a rollout gate.
+`MMCA.ADC.CI.slnf` and skips coverage collection (`deploy.yml:390-393`, run step at
+`deploy.yml:422`): coverage is a review-time regression signal, not a rollout gate. It restores with
+`--locked-mode` against the committed lock files (`deploy.yml:412`), so the gate cannot silently
+resolve a different graph than the PR validated.
 [Rubric §17, DevOps & Deployment]: §17 assesses how consistently CI/CD enforces quality gates; the
 two-filter pattern is how the build stays fast on every push while the SQL-dependent tier still has
 to be green before a PR can merge at all, and the complementary pair is how "no production deploy
@@ -80,14 +86,14 @@ without test execution" survives both of those optimizations.
 (`MMCA.Store/.github/workflows/deploy.yml:945`), so a Store backend-only deploy still relies on the
 post-deploy smoke gate. That is a real asymmetry between the two apps, not a documentation gap.
 
-`MMCA.ADC.Integration.slnf` (`MMCA.ADC/MMCA.ADC.Integration.slnf:4-9`) contains exactly four
+`MMCA.ADC.Integration.slnf` (`MMCA.ADC/MMCA.ADC.Integration.slnf:5-8`) contains exactly four
 projects, one per service host: Identity, Conference, Engagement and Notification. These are the
 per-service `WebApplicationFactory` integration tests that replaced the combined
 `MMCA.ADC.IntegrationTests` project, which has since been **deleted from disk**, not merely
 excluded (`MMCA.ADC/MMCA.ADC.slnx:106-113` records the removal, along with the removal of
 `MMCA.ADC.WebAPI.Tests`, whose middleware coverage was consolidated upstream into
 `MMCA.Common.API.Tests`). `MMCA.Store.Integration.slnf` is the same shape over Catalog, Sales and
-Identity.
+Identity (`MMCA.Store/MMCA.Store.Integration.slnf:5-7`).
 
 `MMCA.Common.slnx` (`MMCA.Common/MMCA.Common.slnx:1-54`) includes sixteen of the seventeen published
 packages (`MMCA.Common/FACTS.md:19-38`): the meta package `MMCA.Common` (line 8), four Core
@@ -97,13 +103,14 @@ packages (`MMCA.Common/FACTS.md:19-38`): the meta package `MMCA.Common` (line 8)
 test projects (lines 33-52). The seventeenth package, `MMCA.Common.UI.Maui`, sits **outside the
 `.slnx`** on purpose: its four MAUI target frameworks cannot build on the ubuntu runners the
 solution's CI uses, so it is built and packed by a dedicated windows job
-(`MMCA.Common/.github/workflows/ci.yml:161`,
+(`MMCA.Common/.github/workflows/ci.yml:160`, rationale at `ci.yml:155-159`, build step at
+`ci.yml:221`,
 [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Four test
 projects are **also intentionally absent from the `.slnx`**:
 
 - `Tests/Presentation/MMCA.Common.UI.Gallery`, a backend-less Blazor host that renders the real
   login and register pages, a UI-primitives showcase and the notification pages; it exists solely to
-  give Playwright something to hit (`ci.yml:222-224`).
+  give Playwright something to hit (`ci.yml:223-225`).
 - `Tests/Presentation/MMCA.Common.UI.E2E.Tests`, the axe-core + render-smoke suite that hits
   the Gallery.
 - `Tests/Core/MMCA.Common.Infrastructure.Redis.Tests`, which runs `DistributedCacheService` against a
@@ -111,9 +118,11 @@ projects are **also intentionally absent from the `.slnx`**:
 - `Tests/Performance/MMCA.Common.Benchmarks`, the BenchmarkDotNet suite behind the ADR-060
   performance gate (see section 7).
 
-The first two are excluded so `dotnet test --solution MMCA.Common.slnx` stays fast (no browser, no
-network); the other two so it needs no Docker (`ci.yml:225-227`). Each runs in its own CI job, built
-by csproj path, for example
+The exclusions are not all for the same reason, and the comments say which is which. The gallery pair
+and the benchmark suite are out so `dotnet test --solution MMCA.Common.slnx` stays fast (no browser
+install, no benchmark wall clock: `ci.yml:226-227` and `ci.yml:330-331`); the Redis project is out
+because it needs a **Docker daemon** the fast unit loop must not require (`ci.yml:749-750`,
+`ci.yml:775-776`). Each runs in its own CI job, built by csproj path, for example
 `dotnet test --project Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj`
 (`ci.yml:301`) and the Redis tier at `ci.yml:777`.
 [Rubric §28, Front-End Testing & Quality]: §28 assesses whether UI components have automated
@@ -212,7 +221,7 @@ files above. Counts are distinct types per project as reported by the Roslyn inv
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.Common.Architecture.Tests` | 158 | 46 test source files (thin subclasses of the shared bases plus the Common-only `*FitnessTests` family), `CommonArchitectureMap`, and the fake modules and probe fixtures the adversarial suites drive (see section 4) |
+| `MMCA.Common.Architecture.Tests` | 158 | 47 test source files (thin subclasses of the shared bases plus the Common-only `*FitnessTests` family), `CommonArchitectureMap`, and the fake modules and probe fixtures the adversarial suites drive (see section 4) |
 
 **Out-of-solution (each run by its own dedicated CI job)**
 
@@ -275,7 +284,7 @@ files above. Counts are distinct types per project as reported by the Roslyn inv
 
 | Project | Types | Purpose |
 |---|---|---|
-| `MMCA.ADC.Gateway.Tests` | 8 | YARP route map, plus the ADR-058 conformance subclasses `SecurityHeadersTests`, `GracefulShutdownTests` and `GatewayHardeningTests` against a Production-pinned Gateway boot |
+| `MMCA.ADC.Gateway.Tests` | 8 | YARP route map, the ADR-058 conformance subclasses `SecurityHeadersTests`, `GracefulShutdownTests` and `GatewayHardeningTests` against a Production-pinned Gateway boot, plus `AppHostBicepParityTests`, which reads the AppHost and the production Bicep as text (see section 4) |
 | `MMCA.ADC.Services.Tests` | 5 | The gRPC export services and their adapters, with a `FakeServerCallContext` |
 
 **Integration (per-service WebApplicationFactory, in `MMCA.ADC.Integration.slnf` only)**
@@ -333,8 +342,9 @@ consume as NuGet references rather than writing their own harness (`MMCA.Common/
 - `MMCA.Common.Testing` (23 types), integration-test base, JWT generator, SQL fixture base, handler
   scaffold, entity builders, and the eight runtime conformance bases (this section).
 - `MMCA.Common.Testing.E2E` (30 types), Playwright fixtures, Blazor nav helpers, Identity,
-  Preferences and Globalization workflow bases, page objects, the `AxeOptions` accessibility contract
-  and a web-vitals collector (this section).
+  Preferences and Globalization workflow bases, five page objects, the `AxeOptions` accessibility
+  contract, the `AuthOutcomeRules` post-submit classifier, and a web-vitals collector plus its
+  page extension (`WebVitalsCollector.cs`, `WebVitalsPageExtensions.cs`) (this section).
 - `MMCA.Common.Testing.UI` (16 types), bUnit component-test base, MudBlazor provider harness, HTTP
   test doubles, an error-summary helper and a markup snapshot helper (this section; see the bUnit
   worked example in section 6).
@@ -431,18 +441,19 @@ a bad page number with an RFC 9457 problem document. All but one run against a h
 
 The two newest are worth reading for the shape of the problem they solve. `MiddlewarePipelineOrderTestsBase`
 builds no `WebApplication` at all: the steps are pure data until they are applied, so it runs in the
-fast unit tier with no database and no host (`MiddlewarePipelineOrderTestsBase.cs:23-25`). Its value
+fast unit tier with no database and no host (`MiddlewarePipelineOrderTestsBase.cs:24-27`). Its value
 is that several adjacencies are load-bearing (pre-forwarded capture immediately before
 `UseForwardedHeaders`, authentication immediately before tenant resolution, authentication before the
 rate limiter per ADR-019, forwarded headers before the HTTPS redirect) and a reorder that breaks one
 fails at runtime in ways that look like configuration bugs: an unreachable `jwks_uri`, a tenant that
-never resolves, a per-user rate cap that never engages (lines 12-17, restated in the assertion's
-because-reason at line 65). `MmcaGatewayHardeningTestsBase` goes the other way and needs the real
+never resolves, a per-user rate cap that never engages (lines 13-18, restated in the assertion's
+because-reason at line 66). The list it compares against is the framework's own 18-step default,
+declared once as data (`MiddlewarePipelineOrderTestsBase.cs:40-57`). `MmcaGatewayHardeningTestsBase` goes the other way and needs the real
 host, but it drives it through `TestServer.SendAsync` rather than an `HttpClient`, because the
 limiter partitions on `Connection.RemoteIpAddress`, which a `TestServer` request leaves null; the kit
 deliberately fails open on an unresolvable IP, so a client-driven test could never observe a 429
-(lines 22-27). Each of its tests uses its own RFC 5737 TEST-NET-3 client IP so the shared host gives
-every one a fresh window (lines 28-29).
+(lines 22-26). Each of its tests uses its own RFC 5737 TEST-NET-3 client IP so the shared host gives
+every one a fresh window (lines 27-28).
 
 Five of the eight reach the host through `IIntegrationTestFixture`; the security-headers base takes a
 bare `CreateClient()` (`SecurityHeadersTestsBase.cs:42`), the gateway-hardening base takes a
@@ -548,7 +559,7 @@ Five more shipped types close out the package, all of them for the tiers above t
   so the broker-parity smoke does not re-implement container lifecycle either.
 - `RecordingHttpForwarder` is the `IHttpForwarder` double a gateway conformance subclass swaps in, so
   a proxied route answers immediately instead of trying to reach a service-discovery name that
-  resolves to nothing in-process (`MmcaGatewayHardeningTestsBase.cs:31-35`), and
+  resolves to nothing in-process (`MmcaGatewayHardeningTestsBase.cs:30-35`), and
   `RateLimiterTestExtensions` supplies `NeutralizeGlobalRateLimiter`, the escape hatch an integration
   fixture uses when a suite must issue more requests from one IP than production would allow.
 - `DependencyInjectionAssert` (`DependencyInjectionAssert.cs:13`) asserts the fluent-registration
@@ -625,11 +636,27 @@ Key methods:
 - `WaitForAuthResultAsync(authPagePath, operation)` (line 214) races **three** signals with
   `Task.WhenAny` (line 228): the `forceLoad` URL change away from the auth page (line 219), the
   logout button appearing (line 223), and an error alert appearing (line 225). The URL change is the
-  interactivity-independent success signal; only an error alert still showing on the auth page after
-  the grace window (`AuthSucceededWithinGraceAsync`, line 282) is a real failure, and it throws with
-  the alert text so tests get a meaningful message rather than a timeout. The losing tasks are
-  explicitly observed (line 232) so their timeouts do not surface as unobserved-task failures in an
-  unrelated test.
+  interactivity-independent success signal, which matters because under Blazor Server prerender on a
+  contended runner the interactive "Sign out" button can hydrate long after a successful login
+  (comment, lines 206-213). The losing tasks are explicitly observed (lines 232-234, helper at line
+  272) so their timeouts do not surface as unobserved-task failures in an unrelated test.
+- **The verdict is a pure function, not inline branching.** The three observed booleans go through
+  `AuthOutcomeRules.Classify` (line 236, defined at
+  `MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Infrastructure/AuthOutcomeRules.cs:38`), which
+  returns one of three outcomes (`AuthOutcome`, `AuthOutcomeRules.cs:4`): `Succeeded`, `ErrorShown`,
+  `Silent`. Navigation away or a visible logout control wins outright, so an error alert flashed on
+  the way out is not a failure (`AuthOutcomeRules.cs:30-34`). Pulling the classification out of the
+  browser code is what makes the four-way decision unit-testable without Playwright
+  (`AuthOutcomeRules.cs:16-27`).
+- **`Silent` is the case the design exists for, and it now fails.** Both non-success outcomes get the
+  grace window once (`AuthSucceededWithinGraceAsync`, line 282, called at line 248), because a slow
+  Server-mode success can still be finishing when all three waits time out. After that, `ErrorShown`
+  throws with the alert text (lines 253-257) and `Silent` throws naming the elapsed budget and the
+  current URL (lines 263-267). A submit that produces neither a navigation nor a rendered error (a
+  500 that renders nothing, a dropped request, a JS exception mid-submit) used to let the wait return
+  normally, and the caller's follow-up interactivity wait was already satisfied by the
+  still-rendered auth page, so login and registration reported success on a sign-in that never
+  happened and the real failure surfaced much later as an unrelated assertion (lines 259-262).
 - `LoginAsAdminAsync()` (line 92) / `LoginAsUserAsync()` (line 95) delegate to `LoginAsync` with
   credentials from `E2ETestConfiguration`.
 - `RegisterNewUserAsync(firstName?, lastName?)` (line 147), synthesizes a unique email, fills the
@@ -695,6 +722,10 @@ isolate Blazor InteractiveAuto rendering quirks:
   (line 186) so the target path always triggers a fresh component lifecycle.
 - `WaitForPageAndBlazorAsync()` (line 197), waits for `Load` state + render flush; use
   after link/button clicks that trigger full-page navigation.
+- Three grid helpers close the gap between "the request finished" and "the DOM settled" on the
+  MudBlazor data grids every list page uses: `SearchAndWaitForRowAsync` (line 233),
+  `ConfirmDeleteAsync` (line 266) and `WaitForGridToSettleAsync` (line 293). A server-side grid
+  re-renders after its own fetch, so asserting immediately after a click reads the pre-fetch rows.
 - `FillAndVerifyAsync(value, timeout)` (line 347), fills a form field then asserts
   `ToHaveValueAsync` with Playwright's built-in retry. If the pre-render value was wiped by
   re-hydration (a common Blazor InteractiveAuto timing bug), it falls back to `PressSequentiallyAsync`
@@ -860,10 +891,10 @@ not in the per-repo test class.
 
 ### MMCA.Common.Architecture.Tests, 158 types
 
-Located at `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/`. Forty-six source files
-declare test classes; one more is `CommonArchitectureMap`, and the rest of the 158 inventoried types
-are the fakes, drifted probes and fixtures the adversarial suites drive. The project falls into two
-halves:
+Located at `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/`. Of its 49 `.cs` files,
+**forty-seven declare test classes**; one more is `CommonArchitectureMap` and the last is
+`GlobalUsings.cs`. The rest of the 158 inventoried types are the fakes, drifted probes and fixtures
+the adversarial suites drive. The project falls into two halves:
 
 **Thin subclasses of a shared mapped base** (about half the files): `LayerDependencyTests`,
 `DomainPurityTests`, `MicroserviceExtractionTests`, `PiiConventionTests`, `AggregateConventionTests`,
@@ -1131,6 +1162,50 @@ per-repo override, which is where the interesting decisions live.
 | `ObservabilityConventionTests` | Every provisioned SLO alert in `infra/main.bicep` keeps a matching, severity-correct section in `infra/OPERATIONS.md`, and no orphan runbook sections exist (§13). Reads the two embedded resources |
 | `DecoratorPipelineOrderTests` | The ADR-058 runtime conformance base, driven against the real `ChangePreferencesCommand` / `GetUserPreferencesQuery` pair through the Identity module's genuine registration sequence (line 28) |
 
+### The topology gate that reads the AppHost and the Bicep
+
+Three of the ADC architecture gates read artifacts rather than assemblies. A fourth of the same shape
+lives outside the architecture project, in the Gateway suite:
+`AppHostBicepParityTests` (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/AppHostBicepParityTests.cs:24`).
+
+The service-discovery topology is declared **twice** and nothing connects the two declarations. The
+Aspire AppHost's `WithReference(peer)` calls inject `services__{peer}__{endpoint}__0` environment
+variables for local development and the E2E stack; `infra/main.bicep` hand-writes the same variables
+onto each production container app. So a new cross-service call wired in the AppHost boots locally,
+passes every test, and then fails in production with an unresolvable service name, and the reverse
+case (a Bicep entry for an edge that no longer exists) is dead configuration nobody notices
+(class doc, lines 7-16).
+
+Two facts close the loop in both directions:
+`EveryAppHostServiceReference_HasAMatchingBicepServiceDiscoveryEntry` (line 53) and
+`EveryBicepServiceDiscoveryEntry_HasAMatchingAppHostReference` (line 73). Three details are worth
+reading:
+
+- **Both files are read as text, not executed** (lines 17-22). The AppHost is a
+  `DistributedApplication` that hangs when started headless, and Bicep is not executable in a test
+  process at all. `ReadAppHostEdges` (line 98) parses `Source/Hosting/MMCA.ADC.AppHost/Program.cs`
+  statement by statement, mapping each `AddProject<Projects.X>("name")` variable to its Aspire
+  resource name (lines 104-105) and attributing every `WithReference` to the resource the statement
+  is about (lines 112-128), so both the chained and the standalone call forms are counted. The parse
+  is deliberately narrow so reformatting either file does not move the gate.
+- **The exception list carries reasons, not just names.** `KnownAppHostOnlyEdges` (line 43) holds the
+  five UI edges that production deliberately does not wire as service discovery, and the remarks
+  above it (lines 31-42) say why: the Blazor server head reaches only the gateway, through
+  `Api__ApiEndpoint`, because one of its consumers is a SignalR `HubConnection` that builds its own
+  message handler and never sees the service-discovery handler, while the WASM client needs the
+  separately-configured browser-reachable `Api__WasmApiEndpoint`. The comment states the operating
+  rule plainly: an unexplained entry is indistinguishable from the drift the test exists to catch
+  (lines 28-29).
+- **The parse is guarded against becoming vacuous.** The reverse fact asserts the Bicep edge set is
+  non-empty first, on the grounds that an empty parse means the test stopped reading the file rather
+  than that the file is clean (line 85).
+
+[Rubric §17, DevOps & Deployment]: §17 assesses whether the deployment configuration is verified
+rather than trusted; this is a unit-tier test that gates a production infrastructure fact, at no
+Azure cost and no container start. [Rubric §13, Observability & Operability]: an unresolvable
+service name is a production-only failure with a confusing signature, and this converts it into a
+build-time one.
+
 ### The same rules in Store and Helpdesk
 
 MMCA.Store's `MMCA.Store.Architecture.Tests` subclasses the same bases over `StoreArchitectureMap`,
@@ -1237,18 +1312,22 @@ Neither is in `deploy.needs`, because the gating jobs have no Docker daemon. Bot
 weekday-nightly schedule (`cross-service-tests.yml:31`, cron `0 6 * * 1-5`, jobs `cross-service` at
 line 75 and `servicebus-emulator-smoke` at line 153) and their **recency** gates the deploy through
 `cross-service-freshness` (`MMCA.ADC/.github/workflows/deploy.yml:815`, `FRESHNESS_DAYS: "5"` at line
-824): the deploy fails if the last successful nightly proving **both** tiers is stale
-(`deploy.yml:808-814`). The window was widened from 3 to 5 days when the nightly moved to weekdays
-plus skip-if-unchanged, so a legitimate weekend or holiday gap does not red the gate
-(`deploy.yml:822-823`). That is the general pattern for a tier too expensive to run per-deploy: gate
+825): the deploy fails if the last successful nightly proving **both** tiers is stale
+(`deploy.yml:808-814`). The emulator smoke has been **authoritative** rather than advisory since
+2026-08-31 (`cross-service-tests.yml:126-135`), and the same comment records the standing rule: if it
+goes red, fix it or dispatch a green run, do not re-add `continue-on-error` to unblock a deploy. The
+window was widened from 3 to 5 days when the nightly moved to weekdays plus skip-if-unchanged, so a
+legitimate weekend or holiday gap does not red the gate (`deploy.yml:823-824`). Both jobs also sit
+behind a `should-run` guard (`cross-service-tests.yml:50`) that skips a night with no new commits.
+That is the general pattern for a tier too expensive to run per-deploy: gate
 on the freshness of the evidence rather than on the run itself. MMCA.Store mirrors the arrangement
 with `MMCA.Store.CrossService.IntegrationTests` and `MMCA.Store.ServiceBusEmulator.IntegrationTests`
 behind its own `cross-service-freshness` gate (`MMCA.Store/.github/workflows/deploy.yml:716`).
 
 A third nightly job, `apphost-smoke` (`cross-service-tests.yml:199`), boots the real Aspire stack and
-asserts its composition. It is **`continue-on-error: true`** (line 203) and, unlike the emulator smoke
+asserts its composition. It is **`continue-on-error: true`** (line 204) and, unlike the emulator smoke
 above it, the `cross-service-freshness` deploy gate does not look at it at all, so nothing it does can
-ever gate a deploy (lines 188-193). The comment says why plainly: it is the widest possible assertion
+ever gate a deploy (lines 189-195). The comment says why plainly: it is the widest possible assertion
 (it pulls and starts four containers before a single process runs) and its failure modes are still
 unproven, so it reds the job for visibility without failing the run, and it should be promoted out of
 `continue-on-error` only after it earns a track record, or deleted if it proves to be a flake
@@ -1280,14 +1359,15 @@ is available, `e2e.yml` brings the stack up with `dotnet run` on the AppHost and
 occur (`MMCA.ADC/.github/workflows/e2e.yml:4-5`).
 
 That workflow is also where the cold-start hardening lives, and it is worth reading because cold start
-is the dominant cause of red E2E runs (`e2e.yml:13-22`). Two steps do the work: a **per-service**
+is the dominant cause of red E2E runs (`e2e.yml:14-22`). Two steps do the work: a **per-service**
 readiness gate that waits until the UI, Identity (the login path) and Conference (the data path) each
 return 200 through the Gateway, not just the UI aggregate, so the suite never starts against a
 half-warm backend; and a warm-up step that JITs every service's hot path before the timed suite,
 including a **real admin login POST** that exercises the Identity DB user lookup, the password hash
-and RS256 signing, which a UI-only warm-up never touched. The note beneath them (lines 22-24) is the
-kind of thing worth keeping: a red run here is residual cold-start timeouts, not an a11y or product
-regression, so do not "fix" it by disabling prerender.
+and RS256 signing, which a UI-only warm-up never touched. `E2E_TIMEOUT` stays at 45 seconds for the
+residual first-navigation latency (line 22). The note beneath them (lines 23-25) is the kind of thing
+worth keeping: a red run here is residual cold-start timeouts, not an a11y or product regression, so
+do not "fix" it by disabling prerender.
 
 The cross-browser matrix runs the same suite once per engine by varying `E2E_BROWSER`:
 `chromium`, `firefox`, `webkit`. Mobile is covered by responsive layout testing (grid to card at a
@@ -1298,12 +1378,13 @@ mechanism.
 **Where the engines actually run differs by repo, and the reason is cost.** The Gallery is
 backend-less, so MMCA.Common runs all three engines on every PR and all three are required merge
 checks. A full Aspire-stack leg costs roughly twenty to twenty-five minutes, so ADC and Store run
-**chromium only** on the deploy path (`e2e.yml:8-11`) and lean on the Common matrix for engine
-coverage. Their firefox and webkit legs stay on a **Mon/Thu** schedule (`e2e.yml:48-49`), and since
-2026-07-29 the two crons are separate entries rather than one `1,4` expression specifically so the
-matrix can branch on `github.event.schedule`: **Monday runs firefox, Thursday runs webkit**, halving
-the nightly spend from about 100 to about 50 minutes a week while still exercising each engine every
-week (lines 43-47). A manual dispatch still gets all three. Section 7 has the gate wiring.
+**chromium only** on the deploy path (`e2e.yml:8-11`, the reusable-workflow input at `e2e.yml:31-36`)
+and lean on the Common matrix for engine coverage. Their firefox and webkit legs stay on a **Mon/Thu**
+schedule (`e2e.yml:49-50`), and since 2026-07-29 the two crons are separate entries rather than one
+`1,4` expression specifically so the matrix can branch on `github.event.schedule`: **Monday runs
+firefox, Thursday runs webkit**, halving the nightly spend from about 100 to about 50 minutes a week
+while still exercising each engine every week (lines 44-48). A manual dispatch still gets all three.
+Section 7 has the gate wiring.
 
 [Rubric §21, Accessibility]: the `AssertNoAccessibilityViolationsAsync` call in the shipped workflow
 bases, in each app's own `AccessibilityTests`, and in `MMCA.Common.UI.E2E.Tests` is the runtime
@@ -1479,14 +1560,18 @@ A test tier only means something once you know what it blocks. This is the map.
 |---|---|---|---|
 | Unit + architecture + bUnit | none | Common `build-and-test`; ADC/Store `build-and-test` over `CI.slnf` | Merge, on every code PR |
 | Unit + architecture + bUnit, again | none | ADC `backend-test-gate` over `CI.slnf`, push-only, non-UI diffs | **The deploy**, on every backend-only ADC code deploy |
+| Unit + architecture, seed | none, no database | Helpdesk `build-and-test` over `MMCA.Helpdesk.slnx`, against MMCA.Common **source** | Merge, on Helpdesk PRs |
 | Runtime conformance, host-free order gates | none | Same job as the unit tier, all four repos | Merge |
 | Runtime conformance, Gateway trio | none (Production-pinned boot) | Same job as the unit tier | Merge |
+| Topology parity (AppHost vs. Bicep) | none, text parse | ADC `MMCA.ADC.Gateway.Tests`, so the unit tier | Merge, and the deploy through `backend-test-gate` |
 | Runtime conformance, HTTP suites | real SQL Server | ADC/Store `integration-tests` over `Integration.slnf` | Merge (PR-only required check), **not** the deploy |
 | Testcontainers cross-service / broker | Docker | Nightly `cross-service-tests.yml` | The deploy, indirectly, via `cross-service-freshness` |
 | AppHost composition smoke | Docker | Nightly `cross-service-tests.yml`, `continue-on-error` | Nothing, deliberately |
 | Browser (gallery) | Playwright, no backend | Common `ui-e2e`, three engines | Merge, all three engines |
 | Browser (full stack) | full Aspire stack | ADC/Store `e2e-gate`, chromium only | The deploy, when the change is ui-scoped |
 | Benchmarks | none | Common `performance-smoke` | Merge |
+| Cross-repo consumer canary | ephemeral SQL Server | Common `consumer-source-build`, building Helpdesk against this PR's framework source | Merge, on MMCA.Common PRs |
+| Template generation smoke | none | Helpdesk `template-smoke`, package mode from nuget.org | Merge, on Helpdesk PRs |
 
 ### The accessibility gate (ADR-063)
 
@@ -1495,7 +1580,7 @@ gallery plus E2E project and runs the axe scans across a `chromium, firefox, web
 (`ci.yml:236-237`), one engine per leg via `E2E_BROWSER` (`ci.yml:298`), with `fail-fast: false`
 (line 235) so each engine reports independently. **All three are required merge checks**, three of
 the eight enumerated in `MMCA.Common/CONTRIBUTING.md:60-71` (firefox was promoted 2026-07-12 and
-webkit 2026-07-16 after 11 consecutive green main runs, `ci.yml:238-241` and
+webkit 2026-07-16 after 11 consecutive green main runs, `ci.yml:238-240` and
 `CONTRIBUTING.md:63-65`). That file also names the live ruleset as authoritative over its own copy
 (`CONTRIBUTING.md:75-77`), which is the right instinct for any list of gates.
 
@@ -1568,6 +1653,53 @@ periodic k6 load test against deployed read endpoints whose recency is gated by 
 Consumers inherit the framework's bounded hot paths through the released packages, not the gate over
 their own code.
 
+### The two cross-repo gates, and MMCA.Helpdesk's own CI
+
+Two gates run a *different repo's* code than the one being changed, and both exist because a green
+build in one repo has repeatedly proved nothing about the other.
+
+**MMCA.Common's consumer canary** (`consumer-source-build`,
+`MMCA.Common/.github/workflows/ci.yml:446`) checks MMCA.Helpdesk out as a sibling and builds it
+against **this PR's** framework source, so a breaking public-API change reds here rather than after a
+release plus a lockstep sweep (`ci.yml:435-445`). Helpdesk is the right canary precisely because it is
+minimal: no database and no GitHub Packages token, and its committed `local.props` already swaps the
+`MMCA.Common.*` package references for project references into `../MMCA.Common/Source`. The job also
+proves the framework's **migration** path end to end, applying the consumer's real EF migrations to an
+ephemeral SQL Server (`ci.yml:443-445`), and it runs the seed's suite with a floor of `40`
+(`ci.yml:536`). It was promoted to a required merge gate on 2026-07-16 after nine consecutive green
+runs (`ci.yml:441-442`).
+
+**MMCA.Helpdesk's own `ci.yml`** is the other half of that pair, and it is deliberately small. It runs
+on pull requests and pushes to `main` (`MMCA.Helpdesk/.github/workflows/ci.yml:3-7`) with one
+`build-and-test` job (line 14) that checks MMCA.Common out as a source companion (line 39) and runs
+the whole seed solution with no database:
+`dotnet test --solution MMCA.Helpdesk.slnx -c Release --no-build --minimum-expected-tests 1`
+(line 60). The header comment states the boundary the seed keeps (lines 9-12): domain plus
+architecture run headless here, and the Aspire round-trip is not run at all.
+
+The step worth reading is **"Resolve MMCA.Common ref (same-name branch, else main)"** (line 28). Both
+repos gate on the other's `main`, so a breaking framework change and its consumer adaptation would
+deadlock each other: neither PR can go green alone. The convention resolves it without a bypass. Name
+the adaptation branch here identically to the framework branch, and this step builds against that
+branch instead of `main` (lines 24-27, resolution at lines 31-37). No match means `main`, so the
+normal case costs nothing.
+
+A second job, `template-smoke` (line 76), is not redundant with the first, and the comment above it
+says why in two numbered points (lines 62-75). This repo **is** the source of the `MMCA.Templates`
+`dotnet new` pack, so there is no second copy to drift; `build-and-test` builds in **local-source**
+mode against MMCA.Common's `main`, while a generated app builds in **package** mode against a
+released version from nuget.org, and a source-mode build can pass where a package-mode Release build
+fails on an analyzer. The job therefore checks out no MMCA.Common at all (lines 86-87), which is
+exactly the credential-free public install path being proven, and runs `build/templates/smoke.ps1`
+(line 89). That script packs the template, installs it, generates three deliberately different apps
+and restores, builds and tests each, then sweeps the generated tree for residual `Helpdesk` / `Ticket`
+tokens, because `sourceName` and the symbol replacements run as separate passes and a token nested
+inside another (`Ticket` inside `Tickets`) is where a rename silently half-applies
+(`MMCA.Helpdesk/build/templates/smoke.ps1:13`, case rationale at lines 77-101).
+[Rubric §33, Developer Experience & Inner Loop]: §33 assesses the friction of adopting and working in
+the codebase; a template that generates an app which does not build is the highest-friction failure
+this workspace can ship, and this is the gate that catches it.
+
 ### Coverage floors
 
 Coverage is enforced as a floor, not reported as a number, and every floor is scoped so it measures
@@ -1578,7 +1710,8 @@ the code it claims to measure.
   unit tier rather than the merged report because the gallery E2E tier dilutes it, and it excludes
   generated code (`*.generated.cs` / `*.g.cs`) because source generators emit large uncovered files
   that otherwise tank the number: 45.3% raw versus 61.9% hand-written on the run that prompted the
-  filter (`ci.yml:414-420`). It runs only when `build-and-test` succeeded, so an upstream failure does
+  filter (`ci.yml:416-421`, assembly and file filters applied at `ci.yml:430`). It runs only when
+  `build-and-test` succeeded, so an upstream failure does
   not add a confusing secondary coverage failure (`ci.yml:425`).
 - **MMCA.ADC:** two floors run inside `build-and-test`, both PR-only. The global unit-tier floor sits
   at **55.5%** (`MMCA.ADC/.github/workflows/deploy.yml:319`), measured over **ADC's own code only**.
@@ -1586,13 +1719,21 @@ the code it claims to measure.
   instruments the consumed framework assemblies (tested in their own repo, near 0% here), plus the
   service hosts and the protobuf-dominated contracts assemblies, and leaving them in deflated the
   number to something that measured nothing (26.8% raw, then 52.8% versus 62.5% filtered after the
-  service-host assemblies appeared). The assembly filter is what makes the floor mean what it says.
-  A second, tighter floor gates **Application-layer branch coverage at 77.5%** (`deploy.yml:351`), and
-  it carries its own anti-vacuity guard: if the filtered report covers fewer than four assemblies
-  (Conference, Engagement, Identity, Notification) the step fails outright, on the grounds that a
-  filter matching nothing would make the floor pass vacuously (`deploy.yml:346`).
+  service-host assemblies appeared). The assembly filter is what makes the floor mean what it says,
+  and it is one line: `+MMCA.ADC.*;-*.Tests;-MMCA.ADC.*.Service;-MMCA.ADC.*.Contracts`
+  (`deploy.yml:317`). A second, tighter floor gates **Application-layer branch coverage at 77.5%**
+  (`deploy.yml:351`) over `+MMCA.ADC.*.Application` only (`deploy.yml:342`), because the repo-wide
+  average is dominated by UI, Infrastructure and generated code, and because the business decisions
+  it wants to measure are branches rather than lines (`deploy.yml:325-336`). It carries its own
+  anti-vacuity guard: if the filtered report covers fewer than four assemblies (Conference,
+  Engagement, Identity, Notification) the step fails outright, on the grounds that a filter matching
+  nothing would make the floor pass vacuously (`deploy.yml:344-348`).
 - **MMCA.Store:** the equivalent unit-tier floor sits at **51.6%**
   (`MMCA.Store/.github/workflows/deploy.yml:255`).
+- **MMCA.Helpdesk has no coverage floor at all**, and that is consistent with what it is. The seed's
+  job is to be readable and adoptable, so its CI asserts that the suite builds and runs
+  (`MMCA.Helpdesk/.github/workflows/ci.yml:60`) rather than holding a percentage a reader would have
+  to maintain while learning the framework.
 
 [Rubric §17, DevOps & Deployment]: the whole table above is §17's subject. A tier that runs and
 blocks nothing is documentation; a tier that blocks something is a gate. The two most instructive
@@ -1611,15 +1752,16 @@ right to.
 | §9 API Design & Contracts | §3 the ADR-058 ProblemDetails, OpenAPI and versioning bases |
 | §11 Security (test RS256 keypair) | §3 JwtTokenGenerator design note; §3 SecurityHeadersTestsBase and MmcaGatewayHardeningTestsBase |
 | §12 Performance & Efficiency | §7 the ADR-060 benchmark baseline gate |
+| §13 Observability & Operability | §4 ObservabilityConventionTests alert-to-runbook pairing, and AppHostBicepParityTests turning an unresolvable service name into a build failure |
 | §14 Testability & Test Strategy | §1 CI filter rationale, §2 project layout, §5 integration strategy, §7 coverage floors |
-| §17 DevOps & Deployment | §1 two-filter CI rationale and the complementary deploy gates, §7 the tier-to-gate map |
+| §17 DevOps & Deployment | §1 two-filter CI rationale and the complementary deploy gates, §4 the AppHost/Bicep topology parity gate, §7 the tier-to-gate map |
 | §21 Accessibility (a11y) | §3 AxeOptions and AssertNoAccessibilityViolationsAsync, §5 E2E strategy, §7 the ADR-063 gate |
 | §22 Responsive & Cross-Browser | §3 PlaywrightFixture engine selection, §5 the alternating-engine nightly |
 | §28 Front-End Testing & Quality | §2 UI/E2E project layout, §3 Testing.E2E and Testing.UI packages, §6 bUnit example |
 | §29 Resilience | §3 GracefulShutdownTestsBase |
 | §30 Compliance, Privacy & Data Governance | §4 PiiConventionTests + PiiErasureContractFitnessTests, DataResidencyTests |
 | §32 Dependency & Supply-Chain | §4 DependencyVersionTests, §6 Example A |
-| §33 Developer Experience & Inner Loop | §1 MTP filter syntax, self-hosted test binaries |
+| §33 Developer Experience & Inner Loop | §1 MTP filter syntax, self-hosted test binaries; §7 the consumer canary, the same-name-branch convention that keeps it from deadlocking, and the template generation smoke |
 | §34 Architecture Governance & Documentation | §4 overall fitness-function framing |
 
 ---
@@ -1631,7 +1773,9 @@ right to.
 - Primer: [`00-primer.md#architecture-enforcement-is-doubled-fitness-functions`](00-primer.md#architecture-enforcement-is-doubled-fitness-functions)
  , compile-time + runtime double enforcement explained
 - Devops/CI chapter: `devops-cicd.md`, CI job definitions, the `integration-tests` job that uses
-  `MMCA.ADC.Integration.slnf`, the `ui-e2e` job that builds the Gallery + E2E tests by csproj path
+  `MMCA.ADC.Integration.slnf`, the `ui-e2e` job that builds the Gallery + E2E tests by csproj path,
+  and the deploy-side jobs (`foundation`, `build-images`, the smoke gate and rollback) that this
+  chapter only names as the backstop behind the test tiers
 - Type inventory: `00-inventory.md`, the per-assembly type counts this chapter's tables are drawn from
 - ADRs:
   - [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html), outbox pattern the integration tests exercise

@@ -229,8 +229,8 @@ at all; a floor near the true count catches the far more common and far more dan
 discovery or filter regression that silently drops thousands of tests and reports green with a handful
 run. The solution test suite covers the per-layer projects (`Shared.Tests`, `Domain.Tests`,
 `Application.Tests`, `Infrastructure.Tests`, `API.Tests`, `Grpc.Tests`, `UI.Tests`, `UI.Web.Tests`,
-`Aspire.Tests`, `Aspire.Hosting.Tests`, `Gateway.Tests`, `Testing.Tests`,
-`MMCA.Common.slnx:33-49`) plus
+`Aspire.Tests`, `Aspire.Hosting.Tests`, `Gateway.Tests`, `Testing.Tests`, plus the
+`Infrastructure.Tests.MigrationsFixture` helper project, `MMCA.Common.slnx:33-49`) plus
 `Architecture.Tests` (NetArchTest layer/purity/extraction fitness functions, see
 [the doubled architecture-enforcement / fitness functions](00-primer.md#architecture-enforcement-is-doubled-fitness-functions-rubric-34-3)).
 
@@ -1063,7 +1063,12 @@ are reports, and the comment above the job draws that line explicitly (`deploy.y
   accepted via `NuGetAuditSuppress` in `Directory.Build.props`. This mirrors Common's `ci.yml` step and
   exists for the same reason: `dotnet list --vulnerable` ignores `NuGetAuditSuppress`, so the accepted
   advisory list has to be re-applied by hand (`deploy.yml:467-472`). NuGetAudit at restore already gates
-  the build; this makes the check deploy-gating as well, belt and suspenders.
+  the build; this makes the check deploy-gating as well, belt and suspenders. One detail differs from
+  Common's copy and is worth knowing before you edit either file: ADC scrapes every `GHSA-` id out of
+  the whole of `Directory.Build.props` (`deploy.yml:467`), while Common narrows the same scrape to
+  actual `<NuGetAuditSuppress` lines (`MMCA.Common/.github/workflows/ci.yml:120`). Common's is the
+  stricter reading, since under ADC's a GHSA id merely mentioned in a comment would suppress that
+  advisory here.
 - **CycloneDX SBOM** (`deploy.yml:490-503`) must exist **and contain components**. The comment records
   the near-miss (`deploy.yml:492-494`): the previous `test -s` check only proved the file was non-empty,
   which a zero-component skeleton passes, which is exactly how an empty SBOM went unnoticed. The step now
@@ -1353,10 +1358,32 @@ foundation:
     logAnalyticsName: ${{ steps.foundation.outputs.logAnalyticsName }}
 ```
 
-`infra/foundation.bicep` (`deploy.yml:932-938`) provisions the two durable resources that must exist
-before a container image can be pushed at all: the Azure Container Registry and the Log Analytics
-workspace. It was split out of `deploy` on 2026-07-21 so image builds can run **concurrently with** the
-roughly 20-minute `e2e-gate` instead of serially after it (`deploy.yml:898-905`).
+`infra/foundation.bicep` (`deploy.yml:932-938`) provisions the durable resources that must exist
+before a container image can be pushed at all: the Log Analytics workspace
+(`infra/foundation.bicep:28-29`) and the Basic-tier Azure Container Registry
+(`infra/foundation.bicep:50-56`), whose admin user is disabled because both the apps (AcrPull) and the
+deploy (AcrPush) authenticate as managed identities (`infra/foundation.bicep:58-60`). It was split out
+of `deploy` on 2026-07-21 so image builds can run **concurrently with** the roughly 20-minute
+`e2e-gate` instead of serially after it (`deploy.yml:898-905`).
+
+A third resource rides along, and it is the reason the registry does not grow without bound: a
+scheduled ACR task named `purge-old-images` (`infra/foundation.bicep:99-101`) that runs daily at
+05:00 UTC (`infra/foundation.bicep:115-121`). Basic-tier ACR has no retention-policy feature, that is
+Premium only, so image garbage collection has to be a task rather than a setting
+(`infra/foundation.bicep:67-70`). Its encoded YAML runs `acr-cli` twice
+(`infra/foundation.bicep:88-97`): the first step ages out tags untouched for 3 days while keeping the
+3 most recent per repository, which is enough because a rollback only ever reaches the previous
+revision; the second step, added 2026-09-02, targets the `buildcache` repository specifically with
+`--ago 1h --keep 10 --untagged`. The comment records what forced the second step
+(`infra/foundation.bicep:77-87`): `mode=max` cache exports write one tag per image, refreshed on every
+deploy and therefore never old enough for the 3-day rule, behind a large tree of untagged layer
+manifests that nothing swept. That backlog had reached about 111 GB and carried registry storage to
+74 GB against the 10 GB the Basic tier includes. `--keep 10` is deliberately larger than the six live
+cache tags, so the step can never delete a tag the next build is about to read.
+
+[Rubric §31, Cost Efficiency / FinOps] is served in the form that matters for a registry: the
+expensive thing is not the images you can see, it is the manifests nothing references and nothing
+deletes.
 
 The safety argument for running infrastructure before the gates is stated in the same comment and is
 worth internalizing: `foundation.bicep` provisions no container apps, no SQL and no traffic-facing
@@ -1414,8 +1441,8 @@ part: `deploy` gates on the job-level equality `needs.build-images.result == 'su
 Nothing is rolled out here (`deploy.yml:945-948`). Images are tagged with both `${{ github.sha }}` (the
 exact commit, immutable and traceable) and `latest`, and pushed to ACR (`deploy.yml:1016-1018`), but
 `deploy` still waits on every gate before `main.bicep` points any container app at them. A red gate
-therefore leaves an unreferenced image in ACR, which the registry retention policy reaps. Building
-speculatively is only safe when publishing and *referencing* are separate acts.
+therefore leaves an unreferenced image in ACR, which the scheduled purge task in `foundation.bicep`
+reaps. Building speculatively is only safe when publishing and *referencing* are separate acts.
 
 **The token is a BuildKit secret, not a build arg** (`deploy.yml:1024-1025`, comment `:950-953`):
 
@@ -1572,26 +1599,25 @@ single-applier, idempotent-by-construction migration is the data-architecture di
 without a racing dual-applier.
 
 **Phase 5, Revision-activation gate plus post-deploy smoke gate with automatic rollback**
-(`deploy.yml:1318-1458`):
+(`deploy.yml:1318-1479`):
 
-Phase 5 is now **two gates in one step**, in a deliberate order, because they answer different questions
+Phase 5 is **two gates in one step**, in a deliberate order, because they answer different questions
 (`deploy.yml:1318-1339`).
 
-**5a, the revision-activation gate** (`deploy.yml:1364-1392`) is the newer half, and it exists because of
+**5a, the revision-activation gate** (`deploy.yml:1364-1405`) is the newer half, and it exists because of
 a four-day production incident. For every app, the **newest** revision by `createdTime` must report
-`healthState` `Healthy`, `runningState` `Running` or `RunningAtMaxScale`, and `trafficWeight` 100:
+`healthState` `Healthy`, `runningState` `Running` or `RunningAtMaxScale`, and `trafficWeight` 100. The
+predicate is factored into its own helper so the rollback below can reuse it (`deploy.yml:1378-1382`),
+and the poll is thirty attempts at twenty seconds, ten minutes per app (`deploy.yml:1385-1396`):
 
 ```bash
-# deploy.yml:1367-1383 (abbreviated)
-revision_gate() {
-  local app="$1" rev health running traffic attempts=30
-  for i in $(seq 1 "$attempts"); do
-    IFS=$'\t' read -r rev health running traffic <<< "$(
-      az containerapp revision list -g "$RG" -n "$app" \
-        --query "reverse(sort_by(@, &properties.createdTime))[0].[name, properties.healthState, properties.runningState, properties.trafficWeight]" \
-        -o tsv 2>/dev/null || echo "")"
-    ...
-  done
+# deploy.yml:1369-1375
+revision_status() {
+  local app="$1" json
+  json=$(az containerapp revision list -g "$RG" -n "$app" \
+    --query "reverse(sort_by(@, &properties.createdTime))[0].[name, properties.healthState, properties.runningState, properties.trafficWeight]" \
+    -o json 2>/dev/null || echo "null")
+  printf '%s' "$json" | jq -r 'if type == "array" then map(if . == null then "" else . end) | @tsv else "" end' 2>/dev/null || echo ""
 }
 ```
 
@@ -1603,13 +1629,16 @@ Managed Redis made `/health/ready` throw on every probe, every backend revision 
 `ActivationFailed`, the older revision kept 100% of the traffic, every probe answered 200 or 401 from the
 old code, and this step reported success on each deploy for four days (2026-08-29 to 2026-09-02).
 
-The gate polls up to ten minutes per app (30 attempts at 20 seconds, `deploy.yml:1368`, `:1380`), and the
-JMESPath projects name, health, running state and traffic weight as an ordered array so the
-tab-separated read stays positional (`deploy.yml:1364-1366`). The transferable lesson is the one the
-incident taught: a smoke test that reaches your system through a load balancer verifies *something is
-serving*, not *your new code is serving*, and only the control plane can tell you which.
+The `-o json` plus `jq` shape is itself a fix, and the comment states the trap plainly
+(`deploy.yml:1364-1368`): a **top-level** JMESPath multiselect list rendered with `-o tsv` prints one
+element **per line**, not one tab-separated row. The positional `read` therefore captured the revision
+name and left health, running state and traffic weight empty, and the gate failed every app on a
+perfectly healthy fleet. Fetching JSON and letting `jq` join it (with nulls mapped to empty strings so
+the field count never collapses) is what makes the positional read honest. The transferable lesson is
+the one the outage taught: a smoke test that reaches your system through a load balancer verifies
+*something is serving*, not *your new code is serving*, and only the control plane can tell you which.
 
-**5b, the reachability probes** (`deploy.yml:1394-1405`) are the older half, six endpoints covering every
+**5b, the reachability probes** (`deploy.yml:1407-1418`) are the older half, six endpoints covering every
 deployable:
 ```bash
 probe "https://${GATEWAY_FQDN}/health"
@@ -1629,32 +1658,43 @@ makes it a backend backstop behind both `e2e-gate` and `backend-test-gate`.
 
 **The two `401` expectations are the interesting part.** `probe` takes an expected status defaulting to
 200, and for the auth-gated Engagement and Notification endpoints the asserted status is *exactly* 401
-(`deploy.yml:1350-1352`, `:1400-1403`). A 401 from the service is the healthy signal: it proves the
+(`deploy.yml:1350-1352`, `:1413-1416`). A 401 from the service is the healthy signal: it proves the
 request traversed Gateway to service to auth pipeline. A 5xx, a 404, or a `000` connection failure does
 not. Accepting "any non-2xx" would have made those two probes unfalsifiable, which is the failure mode a
 smoke test can least afford.
 
-If **either** gate fails, the rollback path (`deploy.yml:1421-1458`) activates, and the query that picks
-the target revision is itself a fix from the same incident (`deploy.yml:1427-1432`):
+If **either** gate fails, the rollback path (`deploy.yml:1434-1479`) activates, and it now carries two
+guards that the original loop did not.
+
+**Guard 1 re-reads the app before rolling it back** (`deploy.yml:1440-1447`). The rollback loop runs
+once for the whole fleet, but the smoke gate can fail for a reason that has nothing to do with a given
+app, so each iteration re-checks that app's newest revision through the same `revision_serving`
+predicate and skips it when it is already healthy, running and taking 100% of the traffic. Without that
+check, one failed probe would take five healthy apps down with it.
+
+**Guard 2 is in the query that picks the target revision** (`deploy.yml:1448-1459`):
 ```bash
-newest=$(az containerapp revision list ... --query "reverse(sort_by(@, &properties.createdTime))[0].name" ...)
-prev=$(az containerapp revision list ... \
-  --query "reverse(sort_by([?properties.provisioningState=='Provisioned' && properties.healthState=='Healthy'], &properties.createdTime))[?name!='${newest}'] | [0].name" ...)
+prev=$(az containerapp revision list -g "$RG" -n "$app" \
+  --query "reverse(sort_by([?properties.provisioningState=='Provisioned' && properties.healthState=='Healthy' && properties.active==\`true\`], &properties.createdTime))[?name!='${newest}'] | [0].name" ...)
 az containerapp revision copy -g "$RG" -n "$app" --from-revision "$prev" -o none
 ```
-The old query took index `[1]` of all *provisioned* revisions, which is only correct when the newest
-revision is the broken one. A revision that failed activation is still `Provisioned`, so filtering on
-`healthState == 'Healthy'` is what keeps the choice honest, and excluding the newest **by name** keeps it
-correct in the other case too, where the newest is healthy and the probes failed for some other reason.
+Three filters, each correcting a way the choice could go wrong. The original query took index `[1]` of
+all *provisioned* revisions, which is only correct when the newest revision is the broken one, and a
+revision that failed activation is still `Provisioned`, so `healthState == 'Healthy'` is what keeps the
+selection honest. Excluding the newest **by name** keeps it correct in the other case, where the newest
+is healthy and the probes failed for some other reason. And `properties.active == true` is what stops
+a *deactivated* old revision, which is exactly what a **successful** activation leaves behind, from
+being copied back; the incident this gate was written for had the old revision still active and healthy
+alongside the failed new one, which is why the earlier query looked correct.
 
 The loop attempts every app before reporting, so one app's rollback failure does not abandon the other
-five (`deploy.yml:1422-1424`), but a partial rollback is then reported loudly: the names of the apps that
+five (`deploy.yml:1435-1437`), but a partial rollback is then reported loudly: the names of the apps that
 failed to roll back are written to the Step Summary under "Smoke gate failed AND rollback incomplete"
-(`deploy.yml:1449-1454`). The comment states the principle directly, a fleet split across revisions needs
+(`deploy.yml:1470-1475`). The comment states the principle directly, a fleet split across revisions needs
 immediate manual attention and must never look like a clean auto-revert. Either way the job exits 1
-(`deploy.yml:1458`).
+(`deploy.yml:1479`).
 
-There is also an informational security-headers check (`deploy.yml:1407-1414`, labeled TD-09) that
+There is also an informational security-headers check (`deploy.yml:1420-1427`, labeled TD-09) that
 confirms the Gateway emits `X-Content-Type-Options: nosniff`. This check is explicitly non-gating (it
 cannot trip the rollback) because a missing header is a hardening gap, not a "revision not serving"
 condition.
@@ -1663,8 +1703,34 @@ condition.
 gates with automatic rollback mean a broken deploy is both detected and partially self-corrected within
 minutes. [Rubric §13, Observability & Operability] (assesses whether failures surface actionable signals)
 is served: the activation loop prints each app's newest revision with its health, running state and
-traffic weight on every attempt (`deploy.yml:1374`), the workflow fails loudly with the specific failing
+traffic weight on every attempt (`deploy.yml:1389`), the workflow fails loudly with the specific failing
 endpoint printed, and the rollback log names each app and its rollback revision.
+
+**Post-deploy, reclaiming BuildKit cache storage** (`deploy.yml:1481-1499`):
+
+The last step in the job is housekeeping, not a gate:
+
+```bash
+az acr run \
+  --registry ${{ needs.foundation.outputs.acrName }} \
+  --cmd "acr purge --filter 'buildcache:.*' --ago 1h --keep 10 --untagged" \
+  /dev/null
+```
+
+It runs the same `buildcache` purge the scheduled ACR task in `foundation.bicep` runs daily, but right
+after the deploy that created the garbage. The comment gives the reason (`deploy.yml:1481-1486`): every
+`cache-to=...,mode=max` push orphans the previous deploy's untagged cache manifests, and reclaiming them
+within minutes rather than within a day is what keeps a Basic-tier registry under its 10 GB included
+storage instead of paying overage on a day's worth of them.
+
+Two details are deliberate. It is `continue-on-error: true` (`deploy.yml:1493`) because it runs *after*
+the rollout and the smoke gate, so a throttled ACR task or a transient auth failure must never fail a
+deploy that has already shipped successfully. And the `/dev/null` argument is the build context, which
+`az acr run` requires positionally and this command does not use (`deploy.yml:1490-1491`).
+
+[Rubric §31, Cost Efficiency / FinOps] is served by the pairing rather than by either half: the
+scheduled task is the floor that catches everything, and this step is the fast path for the garbage the
+deploy just produced.
 
 ---
 
@@ -1741,6 +1807,13 @@ why it ran, which is exactly the distinction a single boolean would have flatten
 
 `E2E_BROWSER` is set from `matrix.browser` and consumed by `MMCA.Common.Testing.E2E`'s
 `PlaywrightFixture`.
+
+The concurrency block reads the same distinction one more time (`e2e.yml:62-64`). The group is keyed on
+`github.event_name` as well as the ref, and `cancel-in-progress` is true only for `schedule` and
+`workflow_dispatch`. A `workflow_call` from `deploy.yml` surfaces here as the **caller's** push or
+dispatch event, so a deploy-gating leg is never cancelled by a later nightly or a flake re-run, while
+cheap re-runs of the nightly still supersede each other (`e2e.yml:59-61`). Cancelling a gate that a
+production deploy is waiting on would not save minutes, it would fail the deploy.
 
 ### Job: `should-run`, the skip-if-unchanged guard
 
@@ -2169,7 +2242,7 @@ event: `comment.body` for the two comment events, `review.body` for a review, an
 The permission set is the same read-only shape as the review workflow plus one addition,
 `actions: read` (`MMCA.Common/.github/workflows/claude.yml:21-26`), granted so the assistant can read CI
 results on a PR, and re-declared as an `additional_permissions` input to the action itself
-(`MMCA.Common/.github/workflows/claude.yml:40-43`). Without it, an `@claude why is CI red` cannot see the
+(`MMCA.Common/.github/workflows/claude.yml:40-41`). Without it, an `@claude why is CI red` cannot see the
 run it is being asked about. ADC's copy is identical apart from the SHA pin
 (`MMCA.ADC/.github/workflows/claude.yml:35-37`).
 
@@ -2250,7 +2323,12 @@ runner already has the workload.
 
 (`dr-drill.yml` is the [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) §29 restore drill: it PITR-restores a *copy* of a chosen database, times the
 restore for the RTO record, verifies it comes back Online, then deletes the copy, the live databases are
-never touched (`dr-drill.yml:32` for its Monday cron). `cross-service-tests.yml`
+never touched (`dr-drill.yml:3-5`, Monday 06:00 UTC cron at `dr-drill.yml:31-33`). A scheduled run picks
+its target by **rotating** across the four live per-service databases by ISO week number, so each one
+gets a recovery proof roughly monthly (`dr-drill.yml:7-10`, selection at `dr-drill.yml:53-56`); a
+dispatch names the database explicitly through a `choice` input (`dr-drill.yml:17-26`). One drill a week
+that always restored the same database would prove the *procedure*, not the fleet.
+`cross-service-tests.yml`
 (`cross-service-tests.yml:6-10`) is the Testcontainers tier that boots the three REST hosts in one process
 against a real SQL Server **and** a real RabbitMQ, exercising the genuine outbox to broker to consumer
 round-trip and the real Conference to Engagement gRPC read. It must never enter `deploy.needs`, and the
@@ -2259,8 +2337,16 @@ reason is mechanical rather than stylistic: Testcontainers needs a Docker daemon
 `servicebus-emulator-smoke`, has been **authoritative since 2026-08-31** and is one of the two jobs the
 freshness gate requires (`cross-service-tests.yml:126-133`); the `continue-on-error` job in that workflow
 today is `apphost-smoke`, probational per ADR-098 and deliberately invisible to the gate
-(`cross-service-tests.yml:189-204`). Neither workflow is given its own section above, but both are part
-of the workflow set.)
+(`cross-service-tests.yml:189-204`). That job also carries a small supply-chain guard worth knowing
+about (`cross-service-tests.yml:220-256`): its project sits outside every `.slnx` and `.slnf`, so its
+committed `packages.lock.json` is covered by no gating restore, and a `Directory.Packages.props` bump
+that forgets it leaves the lock resolving the old framework version while the job stays green (one lock
+sat at 1.176.0 while the repo pinned 1.177.0). The step is a short Python check that every
+`MMCA.Common.*` entry in the lock resolves the single central pin, and it fails on more than one pin at
+all, which is the ADR-016 lockstep invariant expressed as a test. It deliberately does **not** use
+`--locked-mode`: an Aspire AppHost lock carries a RID-specific `Aspire.Dashboard.Sdk.<rid>` entry, so
+locked mode fails with NU1004 on a Linux runner whether or not anything drifted. Neither workflow is
+given its own section above, but both are part of the workflow set.)
 
 `deploy.yml` on push or dispatch is the only Azure-mutating workflow in the set today, and it holds the
 `prod-azure` concurrency group with `cancel-in-progress: false` so a deploy is never interrupted
@@ -2300,9 +2386,9 @@ run, or on it having run recently.
 | §17 DevOps & Deployment | The full workflow set collectively; SHA-tagged images with per-image dirty gating and registry-side re-tagging; the `foundation`/`build-images`/`deploy` phase split that hides image builds under the e2e gate; revision-activation gate plus smoke and rollback; the three proof-of-recency gates in `deploy.needs` and their justification-required break-glass ([ADR-064](https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html)) |
 | §21 Accessibility | `ci.yml` `ui-e2e` axe-core WCAG 2.1 AA gate on every MMCA.Common pull request, across all three browser engines |
 | §28 Front-End Testing & Quality | `ci.yml` `ui-e2e` render smoke; `e2e.yml` full Playwright suite, deploy-gating on chromium via `deploy.yml`'s `e2e-gate` and advisory across firefox/webkit on the alternating nightly |
-| §29 Resilience & Business Continuity | `prod-azure` concurrency group; the revision-activation gate that proves the new code is actually serving, plus smoke and rollback in `deploy.yml`, kept viable by the expand/contract migration guard (revision rollback does not revert schema); `dr-drill.yml` PITR restore drill ([ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) objectives) enforced fresh within 8 days by `dr-freshness` |
+| §29 Resilience & Business Continuity | `prod-azure` concurrency group; the revision-activation gate that proves the new code is actually serving, plus the two-guard rollback in `deploy.yml` (never undo a healthy activation, never copy back a deactivated revision), kept viable by the expand/contract migration guard (revision rollback does not revert schema); `dr-drill.yml` PITR restore drill ([ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) objectives) rotating across the four live databases and enforced fresh within 8 days by `dr-freshness` |
 | §30 Compliance & Privacy | SBOM generation in `release.yml` (both the ubuntu and windows pack jobs) and, as a component-count-asserting gate, in `deploy.yml`'s `supply-chain`; license report in the same job |
-| §31 Cost / FinOps | `cost-guard.yml` surge-drift detection: Monday notifications plus a blocking `deploy.yml` gate; the docs-only, `ui`-scoped and per-image short-circuits in the `changes` job; ACR-hosted layer cache in `build-images`; `maui-audit.yml` as a weekly sweep rather than a per-PR workload install |
+| §31 Cost / FinOps | `cost-guard.yml` surge-drift detection: Monday notifications plus a blocking `deploy.yml` gate; the docs-only, `ui`-scoped and per-image short-circuits in the `changes` job; ACR-hosted layer cache in `build-images`, paired with the daily `purge-old-images` ACR task in `foundation.bicep` and the post-deploy `buildcache` purge that reclaims the manifests each deploy orphans; `maui-audit.yml` as a weekly sweep rather than a per-PR workload install |
 | §32 Dependency & Supply-Chain | Lock files + source mapping in MMCA.Common; `--locked-mode` restores against ADC's committed lock files; suppress-aware vulnerability audit in `ci.yml`, as a deploy gate in ADC's `supply-chain`, and weekly over the MAUI graph in `maui-audit.yml`; SBOM artifacts; the SHA-pinned Claude action in ADC |
 | §33 Developer Experience | Playwright trace upload on failure in `ci.yml` and `e2e.yml`; AppHost + service logs in `e2e.yml`; step summaries in `cost-guard.yml`, `maui-audit.yml` and the freshness gates; the same-name-branch canary convention that lets a breaking framework change land with its consumer adaptation |
 | §34 Architecture Governance | `cost-guard.yml` as executable governance for the surge-revert policy; the automated Claude review as the standing reviewer under a 0-approval ruleset; concurrency group as deployment-ordering governance |
