@@ -1,7 +1,8 @@
 # Versioning & Breaking-Change Policy
 
-MMCA.Common publishes fifteen NuGet packages that are versioned and released **together** as a
-single unit. They share one version number so a consumer never has to reason about cross-package
+MMCA.Common publishes its NuGet packages (the authoritative list and count live in
+[FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)) versioned and released
+**together** as a single unit. They share one version number so a consumer never has to reason about cross-package
 compatibility. (`MMCA.Common.UI.Maui` rides the same tag but is built and packed by a dedicated
 windows job in `release.yml`, since its MAUI target frameworks cannot build on the ubuntu runner.)
 
