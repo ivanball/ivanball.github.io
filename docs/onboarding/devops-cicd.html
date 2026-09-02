@@ -307,8 +307,8 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           discovery or filter regression that silently drops thousands of tests and reports green with a handful
           run. The solution test suite covers the per-layer projects (<code>Shared.Tests</code>, <code>Domain.Tests</code>,
           <code>Application.Tests</code>, <code>Infrastructure.Tests</code>, <code>API.Tests</code>, <code>Grpc.Tests</code>, <code>UI.Tests</code>, <code>UI.Web.Tests</code>,
-          <code>Aspire.Tests</code>, <code>Aspire.Hosting.Tests</code>, <code>Gateway.Tests</code>, <code>Testing.Tests</code>,
-          <code>MMCA.Common.slnx:33-49</code>) plus
+          <code>Aspire.Tests</code>, <code>Aspire.Hosting.Tests</code>, <code>Gateway.Tests</code>, <code>Testing.Tests</code>, plus the
+          <code>Infrastructure.Tests.MigrationsFixture</code> helper project, <code>MMCA.Common.slnx:33-49</code>) plus
           <code>Architecture.Tests</code> (NetArchTest layer/purity/extraction fitness functions, see
           <a href="00-primer.html#architecture-enforcement-is-doubled-fitness-functions-rubric-34-3">the doubled architecture-enforcement / fitness functions</a>).</p>
           <p>[Rubric §14, Testability &amp; Test Strategy] assesses whether tests actually run and cover the system. The
@@ -961,7 +961,12 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           accepted via <code>NuGetAuditSuppress</code> in <code>Directory.Build.props</code>. This mirrors Common&#39;s <code>ci.yml</code> step and
           exists for the same reason: <code>dotnet list --vulnerable</code> ignores <code>NuGetAuditSuppress</code>, so the accepted
           advisory list has to be re-applied by hand (<code>deploy.yml:467-472</code>). NuGetAudit at restore already gates
-          the build; this makes the check deploy-gating as well, belt and suspenders.</li>
+          the build; this makes the check deploy-gating as well, belt and suspenders. One detail differs from
+          Common&#39;s copy and is worth knowing before you edit either file: ADC scrapes every <code>GHSA-</code> id out of
+          the whole of <code>Directory.Build.props</code> (<code>deploy.yml:467</code>), while Common narrows the same scrape to
+          actual <code>&lt;NuGetAuditSuppress</code> lines (<code>MMCA.Common/.github/workflows/ci.yml:120</code>). Common&#39;s is the
+          stricter reading, since under ADC&#39;s a GHSA id merely mentioned in a comment would suppress that
+          advisory here.</li>
           <li><strong>CycloneDX SBOM</strong> (<code>deploy.yml:490-503</code>) must exist <strong>and contain components</strong>. The comment records
           the near-miss (<code>deploy.yml:492-494</code>): the previous <code>test -s</code> check only proved the file was non-empty,
           which a zero-component skeleton passes, which is exactly how an empty SBOM went unnoticed. The step now
@@ -1220,10 +1225,30 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
     <span class="hljs-attr">acrName:</span> <span class="hljs-string">${{</span> <span class="hljs-string">steps.foundation.outputs.acrName</span> <span class="hljs-string">}}</span>
     <span class="hljs-attr">acrLoginServer:</span> <span class="hljs-string">${{</span> <span class="hljs-string">steps.foundation.outputs.acrLoginServer</span> <span class="hljs-string">}}</span>
     <span class="hljs-attr">logAnalyticsName:</span> <span class="hljs-string">${{</span> <span class="hljs-string">steps.foundation.outputs.logAnalyticsName</span> <span class="hljs-string">}}</span></code></pre>
-          <p><code>infra/foundation.bicep</code> (<code>deploy.yml:932-938</code>) provisions the two durable resources that must exist
-          before a container image can be pushed at all: the Azure Container Registry and the Log Analytics
-          workspace. It was split out of <code>deploy</code> on 2026-07-21 so image builds can run <strong>concurrently with</strong> the
-          roughly 20-minute <code>e2e-gate</code> instead of serially after it (<code>deploy.yml:898-905</code>).</p>
+          <p><code>infra/foundation.bicep</code> (<code>deploy.yml:932-938</code>) provisions the durable resources that must exist
+          before a container image can be pushed at all: the Log Analytics workspace
+          (<code>infra/foundation.bicep:28-29</code>) and the Basic-tier Azure Container Registry
+          (<code>infra/foundation.bicep:50-56</code>), whose admin user is disabled because both the apps (AcrPull) and the
+          deploy (AcrPush) authenticate as managed identities (<code>infra/foundation.bicep:58-60</code>). It was split out
+          of <code>deploy</code> on 2026-07-21 so image builds can run <strong>concurrently with</strong> the roughly 20-minute
+          <code>e2e-gate</code> instead of serially after it (<code>deploy.yml:898-905</code>).</p>
+          <p>A third resource rides along, and it is the reason the registry does not grow without bound: a
+          scheduled ACR task named <code>purge-old-images</code> (<code>infra/foundation.bicep:99-101</code>) that runs daily at
+          05:00 UTC (<code>infra/foundation.bicep:115-121</code>). Basic-tier ACR has no retention-policy feature, that is
+          Premium only, so image garbage collection has to be a task rather than a setting
+          (<code>infra/foundation.bicep:67-70</code>). Its encoded YAML runs <code>acr-cli</code> twice
+          (<code>infra/foundation.bicep:88-97</code>): the first step ages out tags untouched for 3 days while keeping the
+          3 most recent per repository, which is enough because a rollback only ever reaches the previous
+          revision; the second step, added 2026-09-02, targets the <code>buildcache</code> repository specifically with
+          <code>--ago 1h --keep 10 --untagged</code>. The comment records what forced the second step
+          (<code>infra/foundation.bicep:77-87</code>): <code>mode=max</code> cache exports write one tag per image, refreshed on every
+          deploy and therefore never old enough for the 3-day rule, behind a large tree of untagged layer
+          manifests that nothing swept. That backlog had reached about 111 GB and carried registry storage to
+          74 GB against the 10 GB the Basic tier includes. <code>--keep 10</code> is deliberately larger than the six live
+          cache tags, so the step can never delete a tag the next build is about to read.</p>
+          <p>[Rubric §31, Cost Efficiency / FinOps] is served in the form that matters for a registry: the
+          expensive thing is not the images you can see, it is the manifests nothing references and nothing
+          deletes.</p>
           <p>The safety argument for running infrastructure before the gates is stated in the same comment and is
           worth internalizing: <code>foundation.bicep</code> provisions no container apps, no SQL and no traffic-facing
           resource, so applying it early cannot affect the live app, and it is an idempotent incremental deploy that
@@ -1269,8 +1294,8 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p>Nothing is rolled out here (<code>deploy.yml:945-948</code>). Images are tagged with both <code>${{ github.sha }}</code> (the
           exact commit, immutable and traceable) and <code>latest</code>, and pushed to ACR (<code>deploy.yml:1016-1018</code>), but
           <code>deploy</code> still waits on every gate before <code>main.bicep</code> points any container app at them. A red gate
-          therefore leaves an unreferenced image in ACR, which the registry retention policy reaps. Building
-          speculatively is only safe when publishing and <em>referencing</em> are separate acts.</p>
+          therefore leaves an unreferenced image in ACR, which the scheduled purge task in <code>foundation.bicep</code>
+          reaps. Building speculatively is only safe when publishing and <em>referencing</em> are separate acts.</p>
           <p><strong>The token is a BuildKit secret, not a build arg</strong> (<code>deploy.yml:1024-1025</code>, comment <code>:950-953</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">secrets:</span> <span class="hljs-string">|</span>
   <span class="hljs-string">github_token=${{</span> <span class="hljs-string">secrets.GITHUB_TOKEN</span> <span class="hljs-string">}}</span></code></pre>
@@ -1391,22 +1416,21 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           single-applier, idempotent-by-construction migration is the data-architecture discipline made operational
           without a racing dual-applier.</p>
           <p><strong>Phase 5, Revision-activation gate plus post-deploy smoke gate with automatic rollback</strong>
-          (<code>deploy.yml:1318-1458</code>):</p>
-          <p>Phase 5 is now <strong>two gates in one step</strong>, in a deliberate order, because they answer different questions
+          (<code>deploy.yml:1318-1479</code>):</p>
+          <p>Phase 5 is <strong>two gates in one step</strong>, in a deliberate order, because they answer different questions
           (<code>deploy.yml:1318-1339</code>).</p>
-          <p><strong>5a, the revision-activation gate</strong> (<code>deploy.yml:1364-1392</code>) is the newer half, and it exists because of
+          <p><strong>5a, the revision-activation gate</strong> (<code>deploy.yml:1364-1405</code>) is the newer half, and it exists because of
           a four-day production incident. For every app, the <strong>newest</strong> revision by <code>createdTime</code> must report
-          <code>healthState</code> <code>Healthy</code>, <code>runningState</code> <code>Running</code> or <code>RunningAtMaxScale</code>, and <code>trafficWeight</code> 100:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1367-1383 (abbreviated)</span>
-<span class="hljs-function"><span class="hljs-title">revision_gate</span></span>() {
-  <span class="hljs-built_in">local</span> app=<span class="hljs-string">&quot;<span class="hljs-variable">$1</span>&quot;</span> rev health running traffic attempts=30
-  <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> $(<span class="hljs-built_in">seq</span> 1 <span class="hljs-string">&quot;<span class="hljs-variable">$attempts</span>&quot;</span>); <span class="hljs-keyword">do</span>
-    IFS=$<span class="hljs-string">&#x27;\t&#x27;</span> <span class="hljs-built_in">read</span> -r rev health running traffic &lt;&lt;&lt; <span class="hljs-string">&quot;<span class="hljs-subst">$(
-      az containerapp revision list -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> \
-        --query <span class="hljs-string">&quot;reverse(sort_by(@, &amp;properties.createdTime))[0].[name, properties.healthState, properties.runningState, properties.trafficWeight]&quot;</span> \
-        -o tsv 2&gt;/dev/null || echo <span class="hljs-string">&quot;&quot;</span>)</span>&quot;</span>
-    ...
-  <span class="hljs-keyword">done</span>
+          <code>healthState</code> <code>Healthy</code>, <code>runningState</code> <code>Running</code> or <code>RunningAtMaxScale</code>, and <code>trafficWeight</code> 100. The
+          predicate is factored into its own helper so the rollback below can reuse it (<code>deploy.yml:1378-1382</code>),
+          and the poll is thirty attempts at twenty seconds, ten minutes per app (<code>deploy.yml:1385-1396</code>):</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1369-1375</span>
+<span class="hljs-function"><span class="hljs-title">revision_status</span></span>() {
+  <span class="hljs-built_in">local</span> app=<span class="hljs-string">&quot;<span class="hljs-variable">$1</span>&quot;</span> json
+  json=$(az containerapp revision list -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> \
+    --query <span class="hljs-string">&quot;reverse(sort_by(@, &amp;properties.createdTime))[0].[name, properties.healthState, properties.runningState, properties.trafficWeight]&quot;</span> \
+    -o json 2&gt;/dev/null || <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;null&quot;</span>)
+  <span class="hljs-built_in">printf</span> <span class="hljs-string">&#x27;%s&#x27;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$json</span>&quot;</span> | jq -r <span class="hljs-string">&#x27;if type == &quot;array&quot; then map(if . == null then &quot;&quot; else . end) | @tsv else &quot;&quot; end&#x27;</span> 2&gt;/dev/null || <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;&quot;</span>
 }</code></pre>
           <p>That proves the code just built is the code now serving, and the HTTP probes below <strong>cannot</strong> prove it.
           The comment names the incident that made the gap concrete (<code>deploy.yml:1321-1330</code>): every probe enters
@@ -1415,12 +1439,15 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           Managed Redis made <code>/health/ready</code> throw on every probe, every backend revision reported
           <code>ActivationFailed</code>, the older revision kept 100% of the traffic, every probe answered 200 or 401 from the
           old code, and this step reported success on each deploy for four days (2026-08-29 to 2026-09-02).</p>
-          <p>The gate polls up to ten minutes per app (30 attempts at 20 seconds, <code>deploy.yml:1368</code>, <code>:1380</code>), and the
-          JMESPath projects name, health, running state and traffic weight as an ordered array so the
-          tab-separated read stays positional (<code>deploy.yml:1364-1366</code>). The transferable lesson is the one the
-          incident taught: a smoke test that reaches your system through a load balancer verifies <em>something is
-          serving</em>, not <em>your new code is serving</em>, and only the control plane can tell you which.</p>
-          <p><strong>5b, the reachability probes</strong> (<code>deploy.yml:1394-1405</code>) are the older half, six endpoints covering every
+          <p>The <code>-o json</code> plus <code>jq</code> shape is itself a fix, and the comment states the trap plainly
+          (<code>deploy.yml:1364-1368</code>): a <strong>top-level</strong> JMESPath multiselect list rendered with <code>-o tsv</code> prints one
+          element <strong>per line</strong>, not one tab-separated row. The positional <code>read</code> therefore captured the revision
+          name and left health, running state and traffic weight empty, and the gate failed every app on a
+          perfectly healthy fleet. Fetching JSON and letting <code>jq</code> join it (with nulls mapped to empty strings so
+          the field count never collapses) is what makes the positional read honest. The transferable lesson is
+          the one the outage taught: a smoke test that reaches your system through a load balancer verifies
+          <em>something is serving</em>, not <em>your new code is serving</em>, and only the control plane can tell you which.</p>
+          <p><strong>5b, the reachability probes</strong> (<code>deploy.yml:1407-1418</code>) are the older half, six endpoints covering every
           deployable:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/health&quot;</span>
 probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/.well-known/jwks.json&quot;</span>
@@ -1436,27 +1463,36 @@ probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${UI_F
           makes it a backend backstop behind both <code>e2e-gate</code> and <code>backend-test-gate</code>.</p>
           <p><strong>The two <code>401</code> expectations are the interesting part.</strong> <code>probe</code> takes an expected status defaulting to
           200, and for the auth-gated Engagement and Notification endpoints the asserted status is <em>exactly</em> 401
-          (<code>deploy.yml:1350-1352</code>, <code>:1400-1403</code>). A 401 from the service is the healthy signal: it proves the
+          (<code>deploy.yml:1350-1352</code>, <code>:1413-1416</code>). A 401 from the service is the healthy signal: it proves the
           request traversed Gateway to service to auth pipeline. A 5xx, a 404, or a <code>000</code> connection failure does
           not. Accepting &quot;any non-2xx&quot; would have made those two probes unfalsifiable, which is the failure mode a
           smoke test can least afford.</p>
-          <p>If <strong>either</strong> gate fails, the rollback path (<code>deploy.yml:1421-1458</code>) activates, and the query that picks
-          the target revision is itself a fix from the same incident (<code>deploy.yml:1427-1432</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">newest=$(az containerapp revision list ... --query <span class="hljs-string">&quot;reverse(sort_by(@, &amp;properties.createdTime))[0].name&quot;</span> ...)
-prev=$(az containerapp revision list ... \
-  --query <span class="hljs-string">&quot;reverse(sort_by([?properties.provisioningState==&#x27;Provisioned&#x27; &amp;&amp; properties.healthState==&#x27;Healthy&#x27;], &amp;properties.createdTime))[?name!=&#x27;<span class="hljs-variable">${newest}</span>&#x27;] | [0].name&quot;</span> ...)
+          <p>If <strong>either</strong> gate fails, the rollback path (<code>deploy.yml:1434-1479</code>) activates, and it now carries two
+          guards that the original loop did not.</p>
+          <p><strong>Guard 1 re-reads the app before rolling it back</strong> (<code>deploy.yml:1440-1447</code>). The rollback loop runs
+          once for the whole fleet, but the smoke gate can fail for a reason that has nothing to do with a given
+          app, so each iteration re-checks that app&#39;s newest revision through the same <code>revision_serving</code>
+          predicate and skips it when it is already healthy, running and taking 100% of the traffic. Without that
+          check, one failed probe would take five healthy apps down with it.</p>
+          <p><strong>Guard 2 is in the query that picks the target revision</strong> (<code>deploy.yml:1448-1459</code>):</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">prev=$(az containerapp revision list -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> \
+  --query <span class="hljs-string">&quot;reverse(sort_by([?properties.provisioningState==&#x27;Provisioned&#x27; &amp;&amp; properties.healthState==&#x27;Healthy&#x27; &amp;&amp; properties.active==\`true\`], &amp;properties.createdTime))[?name!=&#x27;<span class="hljs-variable">${newest}</span>&#x27;] | [0].name&quot;</span> ...)
 az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> --from-revision <span class="hljs-string">&quot;<span class="hljs-variable">$prev</span>&quot;</span> -o none</code></pre>
-          <p>The old query took index <code>[1]</code> of all <em>provisioned</em> revisions, which is only correct when the newest
-          revision is the broken one. A revision that failed activation is still <code>Provisioned</code>, so filtering on
-          <code>healthState == &#39;Healthy&#39;</code> is what keeps the choice honest, and excluding the newest <strong>by name</strong> keeps it
-          correct in the other case too, where the newest is healthy and the probes failed for some other reason.</p>
+          <p>Three filters, each correcting a way the choice could go wrong. The original query took index <code>[1]</code> of
+          all <em>provisioned</em> revisions, which is only correct when the newest revision is the broken one, and a
+          revision that failed activation is still <code>Provisioned</code>, so <code>healthState == &#39;Healthy&#39;</code> is what keeps the
+          selection honest. Excluding the newest <strong>by name</strong> keeps it correct in the other case, where the newest
+          is healthy and the probes failed for some other reason. And <code>properties.active == true</code> is what stops
+          a <em>deactivated</em> old revision, which is exactly what a <strong>successful</strong> activation leaves behind, from
+          being copied back; the incident this gate was written for had the old revision still active and healthy
+          alongside the failed new one, which is why the earlier query looked correct.</p>
           <p>The loop attempts every app before reporting, so one app&#39;s rollback failure does not abandon the other
-          five (<code>deploy.yml:1422-1424</code>), but a partial rollback is then reported loudly: the names of the apps that
+          five (<code>deploy.yml:1435-1437</code>), but a partial rollback is then reported loudly: the names of the apps that
           failed to roll back are written to the Step Summary under &quot;Smoke gate failed AND rollback incomplete&quot;
-          (<code>deploy.yml:1449-1454</code>). The comment states the principle directly, a fleet split across revisions needs
+          (<code>deploy.yml:1470-1475</code>). The comment states the principle directly, a fleet split across revisions needs
           immediate manual attention and must never look like a clean auto-revert. Either way the job exits 1
-          (<code>deploy.yml:1458</code>).</p>
-          <p>There is also an informational security-headers check (<code>deploy.yml:1407-1414</code>, labeled TD-09) that
+          (<code>deploy.yml:1479</code>).</p>
+          <p>There is also an informational security-headers check (<code>deploy.yml:1420-1427</code>, labeled TD-09) that
           confirms the Gateway emits <code>X-Content-Type-Options: nosniff</code>. This check is explicitly non-gating (it
           cannot trip the rollback) because a missing header is a hardening gap, not a &quot;revision not serving&quot;
           condition.</p>
@@ -1464,8 +1500,26 @@ az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hl
           gates with automatic rollback mean a broken deploy is both detected and partially self-corrected within
           minutes. [Rubric §13, Observability &amp; Operability] (assesses whether failures surface actionable signals)
           is served: the activation loop prints each app&#39;s newest revision with its health, running state and
-          traffic weight on every attempt (<code>deploy.yml:1374</code>), the workflow fails loudly with the specific failing
+          traffic weight on every attempt (<code>deploy.yml:1389</code>), the workflow fails loudly with the specific failing
           endpoint printed, and the rollback log names each app and its rollback revision.</p>
+          <p><strong>Post-deploy, reclaiming BuildKit cache storage</strong> (<code>deploy.yml:1481-1499</code>):</p>
+          <p>The last step in the job is housekeeping, not a gate:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">az acr run \
+  --registry <span class="hljs-variable">${{ needs.foundation.outputs.acrName }</span>} \
+  --cmd <span class="hljs-string">&quot;acr purge --filter &#x27;buildcache:.*&#x27; --ago 1h --keep 10 --untagged&quot;</span> \
+  /dev/null</code></pre>
+          <p>It runs the same <code>buildcache</code> purge the scheduled ACR task in <code>foundation.bicep</code> runs daily, but right
+          after the deploy that created the garbage. The comment gives the reason (<code>deploy.yml:1481-1486</code>): every
+          <code>cache-to=...,mode=max</code> push orphans the previous deploy&#39;s untagged cache manifests, and reclaiming them
+          within minutes rather than within a day is what keeps a Basic-tier registry under its 10 GB included
+          storage instead of paying overage on a day&#39;s worth of them.</p>
+          <p>Two details are deliberate. It is <code>continue-on-error: true</code> (<code>deploy.yml:1493</code>) because it runs <em>after</em>
+          the rollout and the smoke gate, so a throttled ACR task or a transient auth failure must never fail a
+          deploy that has already shipped successfully. And the <code>/dev/null</code> argument is the build context, which
+          <code>az acr run</code> requires positionally and this command does not use (<code>deploy.yml:1490-1491</code>).</p>
+          <p>[Rubric §31, Cost Efficiency / FinOps] is served by the pairing rather than by either half: the
+          scheduled task is the floor that catches everything, and this step is the fast path for the garbage the
+          deploy just produced.</p>
           <hr>
           <h2 id="mmcaadc-e2eyml">MMCA.ADC, <code>e2e.yml</code></h2>
           <p><strong>File:</strong> <code>MMCA.ADC/.github/workflows/e2e.yml</code></p>
@@ -1519,6 +1573,12 @@ az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hl
           why it ran, which is exactly the distinction a single boolean would have flattened.</p>
           <p><code>E2E_BROWSER</code> is set from <code>matrix.browser</code> and consumed by <code>MMCA.Common.Testing.E2E</code>&#39;s
           <code>PlaywrightFixture</code>.</p>
+          <p>The concurrency block reads the same distinction one more time (<code>e2e.yml:62-64</code>). The group is keyed on
+          <code>github.event_name</code> as well as the ref, and <code>cancel-in-progress</code> is true only for <code>schedule</code> and
+          <code>workflow_dispatch</code>. A <code>workflow_call</code> from <code>deploy.yml</code> surfaces here as the <strong>caller&#39;s</strong> push or
+          dispatch event, so a deploy-gating leg is never cancelled by a later nightly or a flake re-run, while
+          cheap re-runs of the nightly still supersede each other (<code>e2e.yml:59-61</code>). Cancelling a gate that a
+          production deploy is waiting on would not save minutes, it would fail the deploy.</p>
           <h3 id="job-should-run-the-skip-if-unchanged-guard">Job: <code>should-run</code>, the skip-if-unchanged guard</h3>
           <p>A five-minute pre-job (<code>e2e.yml:86-109</code>) that compares the default branch&#39;s head SHA against the head SHA
           of the last <strong>successful</strong> run of this workflow. If they match, there is nothing new to soak and the
@@ -1857,7 +1917,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           <p>The permission set is the same read-only shape as the review workflow plus one addition,
           <code>actions: read</code> (<code>MMCA.Common/.github/workflows/claude.yml:21-26</code>), granted so the assistant can read CI
           results on a PR, and re-declared as an <code>additional_permissions</code> input to the action itself
-          (<code>MMCA.Common/.github/workflows/claude.yml:40-43</code>). Without it, an <code>@claude why is CI red</code> cannot see the
+          (<code>MMCA.Common/.github/workflows/claude.yml:40-41</code>). Without it, an <code>@claude why is CI red</code> cannot see the
           run it is being asked about. ADC&#39;s copy is identical apart from the SHA pin
           (<code>MMCA.ADC/.github/workflows/claude.yml:35-37</code>).</p>
           <h3 id="maui-audityml-the-weekly-scan-of-the-graph-ci-cannot-see"><code>maui-audit.yml</code>, the weekly scan of the graph CI cannot see</h3>
@@ -1990,7 +2050,12 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           </tbody></table></div>
           <p>(<code>dr-drill.yml</code> is the <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a> §29 restore drill: it PITR-restores a <em>copy</em> of a chosen database, times the
           restore for the RTO record, verifies it comes back Online, then deletes the copy, the live databases are
-          never touched (<code>dr-drill.yml:32</code> for its Monday cron). <code>cross-service-tests.yml</code>
+          never touched (<code>dr-drill.yml:3-5</code>, Monday 06:00 UTC cron at <code>dr-drill.yml:31-33</code>). A scheduled run picks
+          its target by <strong>rotating</strong> across the four live per-service databases by ISO week number, so each one
+          gets a recovery proof roughly monthly (<code>dr-drill.yml:7-10</code>, selection at <code>dr-drill.yml:53-56</code>); a
+          dispatch names the database explicitly through a <code>choice</code> input (<code>dr-drill.yml:17-26</code>). One drill a week
+          that always restored the same database would prove the <em>procedure</em>, not the fleet.
+          <code>cross-service-tests.yml</code>
           (<code>cross-service-tests.yml:6-10</code>) is the Testcontainers tier that boots the three REST hosts in one process
           against a real SQL Server <strong>and</strong> a real RabbitMQ, exercising the genuine outbox to broker to consumer
           round-trip and the real Conference to Engagement gRPC read. It must never enter <code>deploy.needs</code>, and the
@@ -1999,8 +2064,16 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           <code>servicebus-emulator-smoke</code>, has been <strong>authoritative since 2026-08-31</strong> and is one of the two jobs the
           freshness gate requires (<code>cross-service-tests.yml:126-133</code>); the <code>continue-on-error</code> job in that workflow
           today is <code>apphost-smoke</code>, probational per ADR-098 and deliberately invisible to the gate
-          (<code>cross-service-tests.yml:189-204</code>). Neither workflow is given its own section above, but both are part
-          of the workflow set.)</p>
+          (<code>cross-service-tests.yml:189-204</code>). That job also carries a small supply-chain guard worth knowing
+          about (<code>cross-service-tests.yml:220-256</code>): its project sits outside every <code>.slnx</code> and <code>.slnf</code>, so its
+          committed <code>packages.lock.json</code> is covered by no gating restore, and a <code>Directory.Packages.props</code> bump
+          that forgets it leaves the lock resolving the old framework version while the job stays green (one lock
+          sat at 1.176.0 while the repo pinned 1.177.0). The step is a short Python check that every
+          <code>MMCA.Common.*</code> entry in the lock resolves the single central pin, and it fails on more than one pin at
+          all, which is the ADR-016 lockstep invariant expressed as a test. It deliberately does <strong>not</strong> use
+          <code>--locked-mode</code>: an Aspire AppHost lock carries a RID-specific <code>Aspire.Dashboard.Sdk.&lt;rid&gt;</code> entry, so
+          locked mode fails with NU1004 on a Linux runner whether or not anything drifted. Neither workflow is
+          given its own section above, but both are part of the workflow set.)</p>
           <p><code>deploy.yml</code> on push or dispatch is the only Azure-mutating workflow in the set today, and it holds the
           <code>prod-azure</code> concurrency group with <code>cancel-in-progress: false</code> so a deploy is never interrupted
           mid-migration; its comment records the standing rule that any future workflow mutating production Azure
@@ -2066,7 +2139,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           </tr>
           <tr>
           <td>§29 Resilience &amp; Business Continuity</td>
-          <td><code>prod-azure</code> concurrency group; the revision-activation gate that proves the new code is actually serving, plus smoke and rollback in <code>deploy.yml</code>, kept viable by the expand/contract migration guard (revision rollback does not revert schema); <code>dr-drill.yml</code> PITR restore drill (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a> objectives) enforced fresh within 8 days by <code>dr-freshness</code></td>
+          <td><code>prod-azure</code> concurrency group; the revision-activation gate that proves the new code is actually serving, plus the two-guard rollback in <code>deploy.yml</code> (never undo a healthy activation, never copy back a deactivated revision), kept viable by the expand/contract migration guard (revision rollback does not revert schema); <code>dr-drill.yml</code> PITR restore drill (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a> objectives) rotating across the four live databases and enforced fresh within 8 days by <code>dr-freshness</code></td>
           </tr>
           <tr>
           <td>§30 Compliance &amp; Privacy</td>
@@ -2074,7 +2147,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           </tr>
           <tr>
           <td>§31 Cost / FinOps</td>
-          <td><code>cost-guard.yml</code> surge-drift detection: Monday notifications plus a blocking <code>deploy.yml</code> gate; the docs-only, <code>ui</code>-scoped and per-image short-circuits in the <code>changes</code> job; ACR-hosted layer cache in <code>build-images</code>; <code>maui-audit.yml</code> as a weekly sweep rather than a per-PR workload install</td>
+          <td><code>cost-guard.yml</code> surge-drift detection: Monday notifications plus a blocking <code>deploy.yml</code> gate; the docs-only, <code>ui</code>-scoped and per-image short-circuits in the <code>changes</code> job; ACR-hosted layer cache in <code>build-images</code>, paired with the daily <code>purge-old-images</code> ACR task in <code>foundation.bicep</code> and the post-deploy <code>buildcache</code> purge that reclaims the manifests each deploy orphans; <code>maui-audit.yml</code> as a weekly sweep rather than a per-PR workload install</td>
           </tr>
           <tr>
           <td>§32 Dependency &amp; Supply-Chain</td>
