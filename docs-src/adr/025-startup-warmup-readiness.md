@@ -7,7 +7,9 @@ as `live`-tagged ones (see Decision), and the absence of a warm-up timeout was r
 120-second per-task ceiling, so a task that hangs no longer holds the readiness gate closed (see
 Decision and Trade-offs). Revised 2026-08-31: the record now covers `SelfHttpWarmupTaskBase`, the shipped
 base class for warming a host's own inbound request path, which both production apps subclass (see
-Decision).
+Decision). Revised 2026-09-02: readiness checks are recorded as PING-class only, never admin-class, and
+the framework owns the Redis registration so that the untagged health check an Aspire client integration
+adds cannot reach `/health/ready` (see Context and Decision).
 
 ## Context
 On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
@@ -20,6 +22,17 @@ replica that is technically started but not yet warm gets live traffic it cannot
 a way to (a) pre-warm the expensive paths before the replica takes traffic and (b) hold the replica out
 of rotation until that warm-up has had its chance, without letting a single stuck dependency keep a
 replica permanently out of service.
+
+A readiness probe also fails for reasons that have nothing to do with a dependency being down, and the
+command a check chooses is one of them. Aspire's `AddRedisClient` and `AddRedisDistributedCache`
+register the `AspNetCore.HealthChecks.Redis` check under the name `StackExchange.Redis` with no tags at
+all, so it is neither `live` nor `optional` and lands in `/health/ready` by construction. Under
+StackExchange.Redis 3.x, Azure Managed Redis reports itself as a cluster, so that check issues
+`CLUSTER INFO`, and the client refuses the command on a connection that was not opened in admin mode:
+readiness fails on every probe against a cache that is answering normally. That failure takes the worst
+shape a deployment failure can take. The new Container Apps revision never activates, the previous
+revision keeps serving, and the pipeline reports a successful deploy over a revision that never took a
+single request.
 
 ## Decision
 Ship a small warm-up subsystem in `MMCA.Common.Aspire`, wired into `AddServiceDefaults()` so every host
@@ -37,6 +50,18 @@ gets it.
   they do not gate readiness, because making them readiness-fatal converts a partial degradation into a
   total outage (every replica goes unready at once and the app stops serving traffic it could still
   serve). A check is left untagged only when the app genuinely cannot answer correctly without it.
+- **Readiness checks are PING-class, never admin-class.** A check that participates in `/health/ready`
+  may only issue the cheapest liveness command its dependency offers: a Redis `PING`, a trivial
+  `SELECT 1`. It may never issue a command that needs elevated permissions or cluster topology (Redis
+  `CLUSTER INFO` or `CLUSTER NODES`, anything that requires admin mode), because such a command reports
+  the caller's privileges as much as the dependency's health, and a probe cannot tell those two answers
+  apart. So MMCA.Common owns the Redis registration for hosts rather than leaving it to each host:
+  `AddRedisCaching` in `MMCA.Common.Aspire` registers the client and the distributed cache with the
+  health checks that the Aspire client integrations add automatically switched off, because those
+  arrive untagged and therefore gate readiness, and the framework registers its own `redis` check in
+  their place, tagged `optional` and performing a `PING` only
+  (`Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:57` and `Source/Hosting/MMCA.Common.Aspire/Health/RedisPingHealthCheck.cs:26`). A host that reaches for an Aspire client
+  integration directly puts the untagged check back and defeats both rules at once.
 - **A background runner that opens the gate once warm-up has had its chance.** `WarmupHostedService`
   runs every registered `IWarmupTask` exactly once, in parallel, then opens the gate. Critically the gate
   is opened in a `finally`, so it **opens even if tasks fail**: a stuck dependency must not keep a replica
@@ -101,6 +126,11 @@ gets it.
 - **Warm the path, not just the cache.** The OIDC fetch is the specific cold-start failure we saw; even
   though the middleware re-fetches, warming the network path removes the timeout-sized first hit. This is
   the active half of the same cold-start story ADR-004 references from the auth side.
+- **A readiness probe answers one question.** Can this replica serve a request? A cluster-topology or
+  admin-mode command answers a different one, and it answers it wrongly whenever the connection is not
+  privileged, so it can only ever add false negatives to a gate whose false negatives take a replica out
+  of rotation. Holding readiness checks to PING-class commands, and owning the registration in the
+  framework so a host cannot inherit an untagged one by accident, keeps the gate measuring reachability.
 - **Free for every host, cheap for the ones that do not need it.** Putting it in `AddServiceDefaults`
   makes it the default posture; the built-in task self-disables when there is no authority, so a host
   without JwtBearer pays nothing.
@@ -128,6 +158,14 @@ gets it.
 - **The gate does not surface a broken dependency.** Since it opens regardless, a persistently failing
   warm-up task is visible only in logs and (for dependencies that have their own health checks) through
   the separate untagged readiness checks, not through the warm-up gate itself.
+- **A PING-class check is a shallow check.** `PING` proves the connection is open and the server is
+  answering; it does not prove the cache can serve the key sizes or the throughput the app needs. That
+  is the trade the rule accepts: a readiness gate reports reachability, and deeper dependency assertions
+  belong on `/health` where they can be observed without taking a replica out of rotation.
+- **Framework-owned registration costs a hop of indirection.** A host that wants an Aspire Redis client
+  option the framework does not surface has to go through `AddRedisCaching` (or extend it) rather than
+  calling the client integration directly, since calling it directly is what re-introduces the untagged
+  check.
 - **Startup work on every host.** Every host runs the warm-up runner and the built-in task even if the
   benefit is marginal (the task no-ops without an authority, but the hosted service and gate still spin
   up).
@@ -142,4 +180,5 @@ gets it.
 ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same
 cold-start), ADR-009 (the Polly resilience pipeline that absorbs the lazy retry when the gate opens
 before a task succeeds), ADR-019 (the rate limiter that exempts `/health` and `/alive`, the endpoints
-this gate drives).
+this gate drives), ADR-026 (the two-tier caching strategy whose Redis substrate the framework-owned
+registration and the `optional`-tagged `PING` check belong to).
