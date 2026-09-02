@@ -19,13 +19,14 @@
  * Re-run whenever the source docs change:  npm install && npm run build
  * No runtime JS dependency ships to readers: everything is pre-rendered.
  */
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, copyFileSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, copyFileSync, rmSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import vm from "node:vm";
 import path from "node:path";
 import { Marked } from "marked";
 import hljs from "highlight.js";
+import MiniSearch from "minisearch";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEBSITE_ROOT = path.resolve(HERE, "..");
@@ -518,7 +519,7 @@ function searchDialogHtml() {
     <p class="search-foot">
       <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
       <span><kbd>Enter</kbd> to open</span>
-      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>"…"</kbd> all these words</span>
       <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
     </p>
   </dialog>`;
@@ -761,20 +762,27 @@ let written = 0, mermaidPages = 0, tocPages = 0;
 /* ============================================================================
    Search index
    ----------------------------------------------------------------------------
-   The corpus is 7.6 MB of markdown, so a full-text index is not something you
-   can hand a browser. This indexes one record per H2 SECTION instead, which is
-   also the right granularity for a reference library: a hit lands on the
-   section that answers the question, not on a 500 KB chapter.
+   A real inverted index, built here with MiniSearch and shipped as its own
+   serialized form, so the browser loads a finished index instead of rebuilding
+   one out of 7.6 MB of markdown it would first have to download.
 
-   Each record carries a bounded excerpt for display and prose matching, plus
-   the distinct `code identifiers` found in that section. Those identifiers are
-   what people actually search this library for (a type name, a method, a
-   package), they are cheap to extract, and they let a query match text that the
-   truncated excerpt had to drop.
+   The unit is still the H2 SECTION, which is the right granularity for a
+   reference library: a hit lands on the section that answers the question, not
+   on a 500 KB chapter. What changed is what each record CONTAINS. The indexed
+   fields are the section title, the document title, the distinct
+   `code identifiers`, and `b`, the full plain text of the section body. `b` is
+   indexed but never stored, so the whole body is searchable while only the
+   180-character display excerpt travels back with a result. Before this, body
+   text past the excerpt was simply not findable.
+
+   Sections past the per-document cap do not vanish: their text and identifiers
+   fold into the DOCUMENT record, so the words stay findable and the hit lands
+   on the document rather than nowhere.
 
    Everything is root-absolute so a result works from any depth, including the
    404 page. The output is deterministic: same sources in, byte-identical file
-   out, which the CI freshness gate depends on.
+   out, which the CI freshness gate depends on. Ids are assigned sequentially in
+   insertion order for exactly that reason.
    ============================================================================ */
 const SEARCH_RECORDS = [];
 let searchIndexBytes = 0;
@@ -827,6 +835,25 @@ function toExcerpt(md) {
   return text.slice(0, EXCERPT_CHARS - 1).replace(/\s+\S*$/, "") + "…";
 }
 
+/* Markdown to the full plain text that gets INDEXED. Same idea as toExcerpt but
+   with no truncation, and tables are kept: a table cell is prose to a reader
+   looking for a term, and dropping them would silently hide whole comparison
+   matrices from search. Only the pipes go, not the content. Fenced code and
+   images still go entirely: code is already covered, far better, by
+   identifiersIn(), and an image URL is noise no one searches for. */
+function toPlainText(md) {
+  return String(md)
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/~~~[\s\S]*?~~~/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")        // images
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")      // links -> text
+    .replace(/<[^>]+>/g, " ")
+    .replace(/^\s*\|?[\s:|-]*\|[\s:|-]*$/gm, " ") // table separator rows
+    .replace(/[`*_>#|]/g, " ")                    // markdown punctuation, pipes included
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /* Distinct `backticked` identifiers, longest-first so the most specific names
    survive the cap.
 
@@ -847,19 +874,47 @@ function identifiersIn(md) {
   return [...found].sort((a, b) => b.length - a.length || a.localeCompare(b)).slice(0, MAX_IDENTIFIERS);
 }
 
+/* Returns the record it pushed, or null when it dropped one, so the caller can
+   keep folding into a document record it already created. */
 function addSearchRecord({ url, section, doc, kind, source }) {
   const excerpt = toExcerpt(source);
   const ids = identifiersIn(source);
+  const body = toPlainText(source);
   /* A SECTION with no prose and no identifiers is a divider, not a destination.
      A DOCUMENT record is always kept: its title is the main thing people search
      for, and an ADR's lead is nothing but that title, so dropping empty ones
      took all 56 ADRs out of the index by their own name. */
-  if (section && !excerpt && !ids.length) return;
+  if (section && !excerpt && !ids.length && !body) return null;
   const rec = { u: url, d: doc, k: kind };
   if (section) rec.t = section;
   if (excerpt) rec.x = excerpt;
   if (ids.length) rec.i = ids.join(" ");
+  /* Indexed, never stored: the full body is what makes the search full-text,
+     and shipping it back with every result would undo the point of the
+     excerpt. */
+  if (body) rec.b = body;
   SEARCH_RECORDS.push(rec);
+  return rec;
+}
+
+/* Sections past the cap used to be dropped outright, which meant their text was
+   unfindable by any means. Fold them into the document record instead: the
+   words stay searchable and the reader lands on the document that contains
+   them, which is the honest answer when there is no anchor to offer. The
+   per-section identifier cap does not apply here: this list is a union of many
+   sections, so it is allowed to grow, deduplicated and in first-seen order so
+   the output stays byte-stable. */
+function foldSectionsIntoDocument(rec, overflow) {
+  if (!rec || !overflow.length) return;
+  const ids = new Set(rec.i ? rec.i.split(" ") : []);
+  const text = rec.b ? [rec.b] : [];
+  for (const source of overflow) {
+    const body = toPlainText(source);
+    if (body) text.push(body);
+    for (const id of identifiersIn(source)) ids.add(id);
+  }
+  if (ids.size) rec.i = [...ids].join(" ");
+  if (text.length) rec.b = text.join(" ");
 }
 
 /* Everything under docs/ is generated from docs-src/. The build only ever wrote files,
@@ -885,7 +940,7 @@ for (const col of collections) {
     {
       const { lead, sections } = splitSections(doc.md);
       const docUrl = `/${toPosix(doc.outRel)}`;
-      addSearchRecord({ url: docUrl, section: "", doc: doc.title, kind: col.title, source: lead });
+      const docRec = addSearchRecord({ url: docUrl, section: "", doc: doc.title, kind: col.title, source: lead });
       const limit = Math.min(sections.length, ctx.toc.length, MAX_SECTIONS_PER_DOC);
       for (let i = 0; i < limit; i++) {
         addSearchRecord({
@@ -896,6 +951,9 @@ for (const col of collections) {
           source: sections[i],
         });
       }
+      /* Whatever the cap (or a shorter ctx.toc) left over still gets indexed,
+         on the document's own record. */
+      foldSectionsIntoDocument(docRec, sections.slice(limit));
     }
     /* Pretty-print the body by indenting it into the page shell, EXCEPT inside <pre> blocks:
        there the whitespace is literal, so the indent used to render every code line after the
@@ -1014,6 +1072,17 @@ const mermaidSrc = path.join(HERE, "node_modules", "mermaid", "dist", "mermaid.m
 const mermaidDst = path.join(WEBSITE_ROOT, "assets", "js", "mermaid.min.js");
 if (existsSync(mermaidSrc)) {
   copyFileSync(mermaidSrc, mermaidDst);
+}
+
+/* ----- vendor minisearch (loaded lazily by search.js on first open) -----
+   Self-hosted for the same reason as mermaid and the fonts: no third-party
+   request. Deliberately NOT in headAssetsHtml: it is fetched by search.js the
+   first time the dialog opens, so a visitor who never searches downloads
+   nothing extra. The UMD build is the one that defines a global. */
+const miniSearchSrc = path.join(HERE, "node_modules", "minisearch", "dist", "umd", "index.js");
+const miniSearchDst = path.join(WEBSITE_ROOT, "assets", "js", "minisearch.js");
+if (existsSync(miniSearchSrc)) {
+  copyFileSync(miniSearchSrc, miniSearchDst);
 }
 
 /* ----- vendor the web fonts -----
@@ -1365,6 +1434,9 @@ ${bar("Implementation", grab("Implementation"), true)}
     SEARCH_RECORDS.push({
       u: url, d: title, k: "Site",
       x: lead.length > EXCERPT_CHARS ? lead.slice(0, EXCERPT_CHARS - 1).replace(/\s+\S*$/, "") + "…" : lead,
+      /* The stripped text in full is the indexed body; the excerpt above is
+         only what a result displays. */
+      b: lead,
     });
 
     /* Then one record per h2 section. Root pages carry no heading ids, so these
@@ -1379,6 +1451,7 @@ ${bar("Implementation", grab("Implementation"), true)}
       SEARCH_RECORDS.push({
         u: url, t: heading, d: title, k: "Site",
         x: text.length > EXCERPT_CHARS ? text.slice(0, EXCERPT_CHARS - 1).replace(/\s+\S*$/, "") + "…" : text,
+        b: text,
       });
     }
   }
@@ -1389,11 +1462,33 @@ ${bar("Implementation", grab("Implementation"), true)}
     SEARCH_RECORDS.push({
       u: a.url, t: a.title, d: `Article no. ${a.n}`,
       k: catLabels.get(a.cat) || "Writing", x: a.summary, e: 1,
+      /* The summary IS the whole text this site holds for an article; the
+         article itself lives on Medium. */
+      b: a.summary,
     });
   }
 
+  /* The runtime reads these options straight back out of the envelope and hands
+     them to MiniSearch.loadJS, so both sides are guaranteed to agree on which
+     fields exist and which are stored. Tokenizer and processTerm are left at
+     their defaults deliberately: a function cannot survive JSON, so customizing
+     either here would silently give the browser a different tokenization than
+     the one the index was built with. */
+  const searchOptions = {
+    fields: ["t", "d", "i", "b"],
+    storeFields: ["u", "d", "k", "t", "x", "e"],
+    idField: "id",
+  };
+  /* Sequential ids in insertion order: nothing about the index then depends on
+     hashing or iteration luck, which is what keeps two builds byte-identical. */
+  SEARCH_RECORDS.forEach((rec, i) => { rec.id = i; });
+  const miniSearch = new MiniSearch(searchOptions);
+  miniSearch.addAll(SEARCH_RECORDS);
+
   const outPath = path.join(WEBSITE_ROOT, "assets", "data", "search-index.json");
-  const payload = JSON.stringify({ v: 1, n: SEARCH_RECORDS.length, r: SEARCH_RECORDS });
+  const payload = JSON.stringify({
+    v: 2, n: SEARCH_RECORDS.length, o: searchOptions, i: miniSearch.toJSON(),
+  });
   writeFileSync(outPath, payload);
   searchIndexBytes = payload.length;
 }
@@ -1476,7 +1571,7 @@ console.log(`Wrote ${written} pages (${collections.map((c) => `${c.docs.length} 
 if (pruned.length) console.log(`Pruned ${pruned.length} orphaned page(s) whose source is gone: ${pruned.join(", ")}`);
 console.log(`Mermaid bundle vendored: ${existsSync(mermaidDst)}. Fonts vendored: ${fontsCopied}/${FONT_FILES.length}.`);
 console.log(`Highlighted ${HIGHLIGHTED_BLOCKS} code block(s) at build time. On-this-page rail on ${tocPages} page(s).`);
-console.log(`Search index: ${SEARCH_RECORDS.length} records, ${(searchIndexBytes / 1024).toFixed(0)} KB (fetched once, on first search).`);
+console.log(`Search index: ${SEARCH_RECORDS.length} records, ${(searchIndexBytes / 1024).toFixed(0)} KB MiniSearch index (fetched once, on first search, alongside the ${(existsSync(miniSearchDst) ? statSync(miniSearchDst).size / 1024 : 0).toFixed(0)} KB library).`);
 console.log(`Rendered ${ARTICLES.length} article cards into writing.html (${publishedArticles.length} published) and ${adrFiles.length} ADR cards into platform.html.`);
 console.log(`Generated feed.xml (${publishedArticles.length} items) and sitemap.xml (${sitemapUrls} URLs).`);
 
