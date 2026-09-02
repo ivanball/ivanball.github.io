@@ -7,7 +7,10 @@ duplicated-scaffolding trade-off is dropped; the scope/`IUnitOfWork` and `maxRep
 are corrected. Amended (2026-08-01): `SafeDomainEventHandler<TDomainEvent>` logs and **rethrows**,
 so the redelivery bullet, the throwing-is-correct rationale and the redelivery trade-off are
 corrected: the framework packages no swallow, the one hand-rolled swallow is not an instance of the
-base class, and the redelivery blast radius is the whole save's local batch.
+base class, and the redelivery blast radius is the whole save's local batch. Amended (2026-09-01):
+an order line whose inventory row is missing is no longer silently skipped, so the best-effort
+trade-off is rewritten around the returned unmatched ids and the handler warning; the
+`RestoreInventory` and `maxReplicas` citations are corrected.
 
 ## Context
 Checkout spans a boundary no transaction covers. `CheckOutHandler` commits the order insert, the cart
@@ -56,7 +59,7 @@ saga-timeout backstop for steps that depend on an external system.
   `MarkInventoryRestored` refuses a second call and refuses a non-cancelled order
   (`Order.cs:302-325`). The handler checks the marker first
   (`OrderCancelledSagaHandler.cs:56-62`), applies the increases through a pure domain service
-  (`.../Domain/Services/InventoryRestorationDomainService.cs:14-27`), then one
+  (`.../Domain/Services/InventoryRestorationDomainService.cs:14-34`), then one
   `SaveChangesAsync` commits the increases and the marker together
   (`OrderCancelledSagaHandler.cs:94-102`). Same database, one transaction: the marker cannot exist
   without the writes it guards, and the writes cannot land unmarked.
@@ -155,11 +158,18 @@ adopted.
   sits in `PaymentInitiated` with stock held for up to the stuck age plus one poll interval (30 plus
   10 minutes at the shipped defaults). That window is the price of not having a distributed
   transaction.
-- **Compensation is best-effort per line.** `RestoreInventory` skips an order line whose
-  `InventoryItem` row is missing (`InventoryRestorationDomainService.cs:20-21`) and the marker still
-  commits, so that quantity is never restored and nothing retries it. Tolerable only because an
-  inventory row is auto-created for every variant, which makes a missing row mean the variant itself
-  is gone.
+- **Compensation is best-effort per line, and names what it could not restore.** `RestoreInventory`
+  skips an order line whose `InventoryItem` row is missing
+  (`InventoryRestorationDomainService.cs:22-27`), but the skip is not silent: the unmatched variant
+  ids are collected and returned to the caller (`InventoryRestorationDomainService.cs:26,33`), and
+  the handler logs them at Warning naming each one
+  (`OrderCancelledSagaHandler.cs:81-87`, message at `OrderCancelledSagaHandler.cs:115`). The marker
+  still commits anyway, so that quantity is never restored and nothing retries it: withholding the
+  marker would re-apply every matched increase on the next redelivery, which is a double restore
+  (`OrderCancelledSagaHandler.cs:89-93`). The miss is narrow because the handler reads inventory with
+  `ignoreQueryFilters: true` (`OrderCancelledSagaHandler.cs:75`), so a soft-deleted row still counts
+  and a missing row means the row never existed. The stock is still lost; what changed is that the
+  loss is recorded rather than invisible.
 - **Redelivery re-runs every handler of the event, not the failed one.** The dispatcher iterates
   handlers sequentially with no per-handler isolation
   (`MMCA.Common/.../Services/DomainEventDispatcher.cs:76-85`), so one throwing handler also skips the
@@ -173,7 +183,7 @@ adopted.
   swallow its failures itself.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
-  (`MMCA.Store/infra/main.bicep:1273`) two replicas can pick the same stuck order and each spend a
+  (`MMCA.Store/infra/main.bicep:1281`) two replicas can pick the same stuck order and each spend a
   Stripe status call. Correctness holds through the concurrency token; the duplicated external call
   does not deduplicate.
 - **Every compensating action needs its own marker.** There is no generic mechanism: the ADR-021

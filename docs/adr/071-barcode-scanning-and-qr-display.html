@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -275,7 +277,7 @@
           reason sits on the opt-in method&#39;s own doc comment (<code>:86-87</code>): a head that never scans should ship
           neither the camera handler nor a camera permission declaration.</li>
           <li><strong>The scan is a modal page with exactly one resolution.</strong> <code>MauiBarcodeScannerService</code>
-          (<code>Capabilities/MauiBarcodeScannerService.cs:24</code>) marshals to the main thread, then inside
+          (<code>Capabilities/MauiBarcodeScannerService.cs:24</code>) marshals to the main thread (<code>:67-69</code>), then inside
           <code>ScanOnMainThreadAsync</code> (<code>:79-104</code>) pushes a <code>BarcodeScanPage</code> modally (<code>:94</code>) and pops it in a
           <code>finally</code> (<code>:100-103</code>). The page holds a
           <code>TaskCompletionSource&lt;string?&gt;</code> (<code>Capabilities/BarcodeScanPage.cs:23-24</code>) that four paths can complete
@@ -292,7 +294,7 @@
           </ul>
           <p>Packaging follows ADR-042 exactly: <code>QRCoder</code> 1.8.0 (MIT) is a <code>MMCA.Common.UI</code> dependency and
           <code>ZXing.Net.Maui.Controls</code> 0.10.4 (MIT) a <code>MMCA.Common.UI.Maui</code> one, both pinned in
-          <code>MMCA.Common/Directory.Packages.props</code> (<code>:153</code>, <code>:187</code>), and the MAUI package keeps its
+          <code>MMCA.Common/Directory.Packages.props</code> (<code>:158</code>, <code>:192</code>), and the MAUI package keeps its
           windows-job build and pack.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>

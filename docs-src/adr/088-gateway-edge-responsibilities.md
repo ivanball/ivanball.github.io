@@ -160,8 +160,8 @@ check probes `/alive` (`DownstreamServiceHealthCheck.cs:46`) under a 2 second bu
 (`:212`), reports `Unhealthy` on failure (`:210`) and carries the `Ready` tag (`:211`).
 
 The tag is the whole design. The Aspire defaults map `/alive` to checks tagged `Live`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:342-345`) and `/health/ready` to
-everything not tagged `Live` or `Optional` (`:358-361`), so a `Ready`-tagged downstream check reaches
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:334-337`) and `/health/ready` to
+everything not tagged `Live` or `Optional` (`:350-353`), so a `Ready`-tagged downstream check reaches
 readiness and never reaches liveness. Liveness must stay process-local, or a downstream outage restarts
 a perfectly healthy Gateway and makes the outage worse. `/alive` answers "is this process wedged",
 `/health/ready` answers "can this process do useful work", and only the second depends on anything
@@ -254,7 +254,7 @@ the gateway just forwards the Authorization header transparently") and again in 
 against the authority (`AddForwardedJwtBearer`,
 `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:445`,
 the single `AddJwtBearer` at `:475-476`, `Authority` at `:478`), served by `MapJwksEndpoint`
-(`.../MMCA.Common.API/Startup/JwksEndpointExtensions.cs:20`). Adding validation at the edge would
+(`.../MMCA.Common.API/Startup/JwksEndpointExtensions.cs:31`). Adding validation at the edge would
 give the gateway issuer and key-discovery configuration it does not have, which is the coupling the
 decline above rejects: an Identity outage would become a Gateway outage.
 
@@ -267,7 +267,7 @@ balances across the replicas behind it. ADC declares five clusters with one dest
 `:190-193`, `:195-198`) and Store three (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:84-92`,
 `:93-101`, `:102-106`), resolved through `AddServiceDiscoveryDestinationResolver`
 (ADC `Program.cs:115`, Store `Program.cs:141`) against the bicep address book
-(`MMCA.ADC/infra/main.bicep:1718-1721`). The shape is not incidental: both repositories **pin it as
+(`MMCA.ADC/infra/main.bicep:1652-1655`). The shape is not incidental: both repositories **pin it as
 an invariant**, asserting that each cluster contains a single destination
 (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:229-231`,
 `MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:270-272`). A second destination in

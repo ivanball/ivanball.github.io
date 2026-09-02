@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -237,8 +239,12 @@
           and deploy-gating in both consumers (ADC on 2026-08-31 as TD-17, Store immediately after), so the
           &quot;advisory by design so it can never gate a deploy&quot; clause is restated; its fixture now ships as
           <code>ServiceBusEmulatorFixtureBase</code> in <code>MMCA.Common.Testing</code> (v1.178.0), which is why the tier&#39;s
-          MassTransit v8 constraint is enforced in framework code rather than in two copies. The pin, the gate
-          and the dependency set are unchanged.</p>
+          MassTransit v8 constraint is enforced in framework code rather than in two copies. The
+          <code>using MassTransit</code> surface in <strong>Transport exit options</strong> is recounted from source and restated as
+          eight files across two packages (the six that reference MassTransit types, plus the two that lower
+          the emulator&#39;s entity-quota defaults), and the <code>MessageBusSettings.cs</code>, <code>IntegrationEventConsumer.cs</code>,
+          <code>UpcastingIntegrationEventConsumer.cs</code> and Service-Bus-side <code>DependencyInjection.cs</code> citations are
+          rebased onto their current lines. The pin, the gate and the dependency set are unchanged.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>FACTS.md</code> for the authoritative
           list and count) consumed by three downstream repos: the two
@@ -336,11 +342,18 @@
           &quot;stay on v8&quot; is a decision with an expiry rather than a permanent one. Nothing changes today; the
           candidates are recorded now so the eventual move is a comparison and not a scramble.</p>
           <p>What makes any of them a bounded change is where MassTransit actually sits. The whole
-          <code>using MassTransit</code> surface is <strong>six files, all inside <code>MMCA.Common.Infrastructure</code></strong>:
-          <code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:3</code>,
+          <code>using MassTransit</code> surface is <strong>eight files across two packages</strong>. Seven are in
+          <code>MMCA.Common.Infrastructure</code>: <code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:3</code>,
           <code>Services/BrokerMessageBus.cs:1</code>, <code>Services/IntegrationEventConsumer.cs:1</code>,
-          <code>Services/IntegrationEventConsumerExtensions.cs:1</code>, <code>Services/UpcastingIntegrationEventConsumer.cs:1</code>
-          and <code>Services/FaultIntegrationEventConsumer.cs:1</code>. Application, Domain and Shared never reference it:
+          <code>Services/IntegrationEventConsumerExtensions.cs:1</code>, <code>Services/UpcastingIntegrationEventConsumer.cs:1</code>,
+          <code>Services/FaultIntegrationEventConsumer.cs:1</code> and <code>Messaging/ServiceBusEmulatorSupport.cs:4</code>; the
+          eighth is <code>Source/Hosting/MMCA.Common.Testing/ServiceBusEmulatorFixtureBase.cs:5</code>. The last two are
+          the emulator test tier rather than the transport: each one lowers the process-global
+          <code>MassTransit.AzureServiceBusTransport.Defaults</code> entity quotas the emulator rejects
+          (<code>ServiceBusEmulatorSupport.cs:115-117</code>, <code>ServiceBusEmulatorFixtureBase.cs:74-76</code>), a v8 constraint
+          that moves with that tier, not with the bus. The files that reference MassTransit <strong>types</strong>
+          (<code>IConsumer&lt;T&gt;</code>, <code>ConsumeContext&lt;T&gt;</code>, <code>IPublishEndpoint</code>, <code>IBusRegistrationConfigurator</code>) are the
+          first six, all in <code>MMCA.Common.Infrastructure</code>. Application, Domain and Shared never reference it:
           <code>IMessageBus</code> is the Application-layer abstraction
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28</code>) and
           <code>BrokerMessageBus</code> is its only broker implementation (<code>BrokerMessageBus.cs:24</code>), which is the
@@ -358,17 +371,17 @@
           around it, at a recurring cost.</li>
           <li><strong>A direct <code>Azure.Messaging.ServiceBus</code> implementation of <code>IMessageBus</code>.</strong> The largest and the
           most owned. Publishing is one class (<code>BrokerMessageBus.cs:24</code>), but the consume side is where the
-          library earns its keep: three consumers ride <code>IConsumer&lt;T&gt;</code> (<code>IntegrationEventConsumer.cs:29</code>,
-          <code>UpcastingIntegrationEventConsumer.cs:35</code>, <code>FaultIntegrationEventConsumer.cs:28</code>) and the
+          library earns its keep: three consumers ride <code>IConsumer&lt;T&gt;</code> (<code>IntegrationEventConsumer.cs:30</code>,
+          <code>UpcastingIntegrationEventConsumer.cs:36</code>, <code>FaultIntegrationEventConsumer.cs:28</code>) and the
           transport wiring supplies exponential in-process retry plus second-level delayed redelivery
-          (<code>DependencyInjection.cs:938-951</code> on RabbitMQ, <code>:968-978</code> on Service Bus, the two-level argument
+          (<code>DependencyInjection.cs:938-951</code> on RabbitMQ, <code>:980-990</code> on Service Bus, the two-level argument
           at <code>:899-913</code>), all of which would be hand-written. It also drops RabbitMQ, which the local
           Aspire stack provisions.</li>
           </ol>
           <p>The trial point is the same for all three and it is additive: a new case in the <code>MessageBusProvider</code>
           switch inside <code>ConfigureBrokerTransport</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:919</code>, switch at <code>:924</code>,
-          enum at <code>Settings/MessageBusSettings.cs:176</code>), so a candidate ships <strong>beside</strong> RabbitMQ and Service
+          enum at <code>Settings/MessageBusSettings.cs:199</code>), so a candidate ships <strong>beside</strong> RabbitMQ and Service
           Bus instead of replacing either, and a consumer opts in by configuration. The two artifacts that move
           with a decision are the pin
           (<code>MMCA.Common/Directory.Packages.props:90-94</code>, the three entries at <code>:95-97</code>) and the fitness

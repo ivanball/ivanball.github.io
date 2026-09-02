@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -223,8 +225,8 @@
           <p><strong>Orchestration.</strong> Each app has an AppHost that composes the local stack from one file: ADC&#39;s
           provisions a persistent SQL Server container, one database per service, Redis and the RabbitMQ
           broker, then the four services, the Gateway and the Blazor UI
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:1-9</code>, SQL at <code>:14-15</code>, the four databases at
-          <code>:36-39</code>, Redis at <code>:43-44</code>, the broker at <code>:64-65</code>); <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14</code>
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:1-6</code>, SQL at <code>:15-16</code>, the four databases at
+          <code>:37-40</code>, Redis at <code>:44-45</code>, the broker selection at <code>:89-101</code>); <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14</code>
           is the same shape over its three services. Service discovery and health-based startup ordering come from Aspire&#39;s resource
           model rather than from hand-written wiring.</p>
           <p><strong>Service defaults.</strong> Every host calls <code>AddServiceDefaults</code>
@@ -239,7 +241,7 @@
           whole app model in a test process. No integration tier here uses it, and it appears in exactly one
           project across the four .NET repos: ADC&#39;s nightly AppHost composition smoke test, the bounded
           exception Decision 1 sanctions. The package is pinned at
-          <code>MMCA.ADC/Directory.Packages.props:87</code>, referenced only by
+          <code>MMCA.ADC/Directory.Packages.props:92</code>, referenced only by
           <code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/MMCA.ADC.AppHost.SmokeTests.csproj:29</code>,
           and called in one place (<code>AppHostCompositionSmokeTests.cs:46</code>).</li>
           <li>The Azure Container Apps Aspire dashboard, the hosted version of the local dashboard, for looking
@@ -259,11 +261,11 @@
           and the Conference / Engagement / Notification siblings at <code>:17</code> each) and three in Store
           (Catalog <code>:16</code>, Identity <code>:15</code>, Sales <code>:17</code>).</li>
           <li><strong>Cross-service tier: three real hosts, a real broker, real containers.</strong> ADC&#39;s <code>CrossServiceFixture</code>
-          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:23</code>)
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:33</code>)
           extends the shared <code>CrossServiceFixtureBase</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:41</code>) and runs against
           Testcontainers SQL Server and RabbitMQ
-          (<code>MMCA.ADC.CrossService.IntegrationTests.csproj:13-14</code>), exercising the outbox to broker to
+          (<code>MMCA.ADC.CrossService.IntegrationTests.csproj:24-25</code>), exercising the outbox to broker to
           consumer round-trip and a genuine Conference to Engagement gRPC read; Store has the equivalent
           (<code>MMCA.Store/Tests/Integration/MMCA.Store.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:29</code>).</li>
           <li><strong>The deferral is already on the record and stays.</strong> The rework plan that produced these tiers
@@ -296,8 +298,9 @@
           <code>DistributedApplicationTestingBuilder</code> and polls the gateway until it answers 200
           (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AppHostCompositionSmokeTests.cs:42-59</code>, the
           builder call at <code>:46</code>), in a project that sits outside every <code>.slnx</code> and <code>.slnf</code> and is restored,
-          built and run by explicit path in the <code>apphost-smoke</code> job (<code>cross-service-tests.yml:191</code>, with
-          <code>continue-on-error: true</code> at <code>:196</code> while its headless behavior on the CI runner is unproven).
+          built and run by explicit path in the <code>apphost-smoke</code> job (<code>cross-service-tests.yml:199</code>, its
+          explicit-path restore, build and run steps at <code>:215-264</code>, with <code>continue-on-error: true</code> at <code>:204</code>
+          while its headless behavior on the CI runner is unproven).
           Anything beyond that single boot-and-probe is a reversal of this record, not an extension of it.</p>
           <h3 id="2-production-observability-is-workspace-based-app-insights-not-the-aca-aspire-dashboard">2. Production observability is workspace-based App Insights, not the ACA Aspire dashboard</h3>
           <ul>
@@ -315,7 +318,7 @@
           cutting roughly 80% of the remaining datapoints while five-minute alert windows keep the same signal
           (<code>:255-258</code>).</li>
           <li><strong>What an operator actually reads is alerts and a workbook, not a live console.</strong> SLO rules ship as
-          code (<code>main.bicep:331</code>, <code>:388</code>, <code>:447</code>, and the Gateway availability alert at <code>:474</code>, all wired to
+          code (<code>main.bicep:326</code>, <code>:400</code>, <code>:441</code>, and the Gateway availability alert at <code>:474</code>, all wired to
           the unconditional action group at <code>:271-279</code>), and a saved Azure Monitor workbook visualizes the
           same SLOs per service (<code>:508-520</code>), which is the deployed-environment view (ADR-062, ADR-041).</li>
           <li><strong>The ACA Aspire dashboard is not provisioned</strong>, and that is the decision rather than a to-do. It is
@@ -329,7 +332,7 @@
           (<code>MMCA.ADC/infra/main.bicep:984</code>, <code>:1185</code>, <code>:1312</code>, <code>:1439</code>), configured entirely through
           environment variables. <code>WebApplicationFactory</code> plus an environment-variable override channel is a
           closer model of that than an app model the deployment does not use: production topology comes from
-          Bicep (<code>MMCA.ADC/.github/workflows/deploy.yml:1223</code>), not from the AppHost.</li>
+          Bicep (<code>MMCA.ADC/.github/workflows/deploy.yml:1294</code>), not from the AppHost.</li>
           <li><strong>The cheapest tier that could have failed.</strong> The per-service tier needs no Docker at all, because
           <code>AddBrokerMessaging</code> returns early on the default <code>InProcess</code> provider, which is what an absent
           <code>MessageBus</code> section resolves to
@@ -363,10 +366,10 @@
           at the head, so an operator investigating a specific user report will often find the request counted
           and not traced (<code>main.bicep:218-221</code>).</li>
           <li><strong>The <code>Warning</code> floor moves <code>Information</code> logs off the queryable path.</strong> They exist in container
-          stdout only (<code>:228-233</code>), so the correlation-id story (ADR-041) is complete only for what the floor
+          stdout only (<code>:223-232</code>), so the correlation-id story (ADR-041) is complete only for what the floor
           admits.</li>
           <li><strong>A 300-second export interval delays metric-driven signal.</strong> Alert rules use five-minute windows,
-          so the design holds, but a metric change is not visible in near real time (<code>:254-263</code>).</li>
+          so the design holds, but a metric change is not visible in near real time (<code>:249-258</code>).</li>
           <li><strong>Neither absence is enforced.</strong> Nothing fails a build if a project adds <code>Aspire.Hosting.Testing</code> or
           a dashboard resource: unlike the pins of ADR-016 or the fitness rules of ADR-015, this record is a
           convention, and its only guard is review.</li>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -255,7 +257,7 @@
           (<code>Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31</code>), and constrains the user
           type parameter of <code>AuthenticationServiceBase&lt;TUser&gt;</code>
           (<code>where TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;, IAuthUser</code>,
-          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:56</code>), with each consuming
+          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:59</code>), with each consuming
           app supplying the concrete <code>User</code> entity that satisfies it.
           Consumers follow the same pattern: ADC Identity
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2</code>),
@@ -272,7 +274,7 @@
           pulled into every project with a <code>&lt;Compile Include ... Link=... /&gt;</code> block, so the alias is visible
           everywhere without a project reference: Common
           (<code>MMCA.Common/Directory.Build.props:128-138</code>), ADC
-          (<code>MMCA.ADC/Directory.Build.props:89-102</code>), Store (<code>MMCA.Store/Directory.Build.props:90-101</code>). Adding a
+          (<code>MMCA.ADC/Directory.Build.props:92-106</code>), Store (<code>MMCA.Store/Directory.Build.props:78-89</code>). Adding a
           solution-wide alias is a new <code>GlobalUsings.*.cs</code> plus a matching <code>&lt;Compile Include&gt;</code> line, nothing more.</li>
           <li><strong>The alias flows unchanged through every layer.</strong> Tracing the ADC <code>User</code> aggregate: the domain
           entity is <code>User : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>
@@ -357,7 +359,7 @@
           Domain 1 (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1</code>) and Common
           Shared 2 (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2</code>);
           ADC Notification 2
-          (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.GlobalUsings.IdentifierType.cs:1-2</code>),
+          (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/MMCA.ADC.Notification.GlobalUsings.IdentifierType.cs:1-2</code>),
           Identity 1
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2</code>),
           Engagement 10

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -279,7 +281,7 @@
           <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:22</code>), and Bicep injects the
           real value into the gateway container of both applications as
           <code>Cors__AllowedOrigins__0</code>, pointing at the UI container app&#39;s FQDN
-          (<code>MMCA.ADC/infra/main.bicep:1641</code>, <code>MMCA.Store/infra/main.bicep:1328</code>). On Store the same key can
+          (<code>MMCA.ADC/infra/main.bicep:1646</code>, <code>MMCA.Store/infra/main.bicep:1336</code>). On Store the same key can
           also arrive from Key Vault as <code>Cors--AllowedOrigins--0</code>, which is why the vault provider is
           registered before anything reads configuration: the allow-list binds eagerly
           (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:54-62</code>, <code>:63</code>).</li>

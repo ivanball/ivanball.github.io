@@ -1,7 +1,7 @@
 # ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)
 
 ## Status
-Accepted (re-verified against source 2026-08-31).
+Accepted (re-verified against source 2026-09-01).
 
 ## Update (2026-06-22): Store converged to Profile A
 Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
@@ -115,12 +115,12 @@ DB-aware check), which is why ADC moved, and (two days later) why Store followed
 
 **2. `WithJwksDiscovery(identity, gateway)` is local Aspire wiring, not ADC's production rule.**
 The two-argument call sites are all in the AppHost
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:328-330`), which configures the local
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:364-366`), which configures the local
 Aspire environment only. In production ACA, ADC's Bicep hardcodes the **direct in-cluster authority**
 `http://${identityApp.name}` on every token-validating service: Conference (`main.bicep:1249`),
 Engagement (`:1371`), and Notification (`:1517`). Identity's own ingress is `transport: 'http2'`
 (`main.bicep:1003`; Conference `:1204` and Engagement `:1331` match, while Notification `:1457`,
-the Gateway `:1620`, and the UI `:1723` stay `'http'`), so envoy accepts the HTTP/1.1 JwtBearer
+the Gateway `:1625`, and the UI `:1728` stay `'http'`), so envoy accepts the HTTP/1.1 JwtBearer
 metadata fetch and carries it to the container. That is exactly the arrangement the Store update
 above describes, so the
 "JWKS authority differs by environment" nuance is **not** Store-specific: both apps route discovery
@@ -144,14 +144,14 @@ HTTP/1.1 `httpGet`.** The pattern is now uniform:
   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:63` and
   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:57`.
 - **Bicep injects the port and points startup, liveness, and readiness at it.** Store sets
-  `HealthProbe__Port=8081` on Identity (`MMCA.Store/infra/main.bicep:1019`) and Catalog (`:1124`),
+  `HealthProbe__Port=8081` on Identity (`MMCA.Store/infra/main.bicep:1023`) and Catalog (`:1130`),
   with `/alive` for startup and liveness and `/health/ready` for readiness on 8081
-  (`main.bicep:1032-1034` and `:1136-1138`). ADC is unchanged (8081 for the three Profile A hosts,
+  (`main.bicep:1036-1038` and `:1142-1144`). ADC is unchanged (8081 for the three Profile A hosts,
   8082 for Notification): its Bicep line anchors drift with unrelated observability commits, and
-  were last re-verified and corrected in the 2026-07-25 section above on 2026-08-31.
+  were last re-verified and corrected in the 2026-07-25 section above on 2026-09-01.
 - **Hosts whose default endpoint never went Http2-only keep probing their traffic port.** Store's
-  Sales, Gateway, and UI probe 8080 directly (`MMCA.Store/infra/main.bicep:1267-1269`, `:1341-1343`,
-  `:1439-1441`), because an `Http1AndHttp2` endpoint answers the HTTP/1.1 probe on its own.
+  Sales, Gateway, and UI probe 8080 directly (`MMCA.Store/infra/main.bicep:1275-1277`, `:1349-1351`,
+  `:1447-1449`), because an `Http1AndHttp2` endpoint answers the HTTP/1.1 probe on its own.
 
 Rule: the dedicated probe listener is part of Profile A, not an app-specific workaround. A host that
 goes `Http2`-only on cleartext gets the extra `Http1` listener plus `HealthProbe__Port` in its Bicep
@@ -203,7 +203,7 @@ mixed-endpoint profile is no longer a one-edge exception. Notification maps `Liv
 notification inbox rows through the client registered at
 `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:287`, wired by
 `identityService.WithReference(notificationService)` locally
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:256`) and by the same
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:292`) and by the same
 `services__notification__grpc__0` discovery variable in production (`MMCA.ADC/infra/main.bicep:1081`,
 pointing at the `additionalPortMappings` h2c port). The contracts are
 `Protos/live_channel.proto:19` and `Protos/user_notification_export.proto:17` in
@@ -254,12 +254,12 @@ REST routes plus the Stripe webhook over HTTP/1.1
   AppHost wires `identityService.WithReference(salesService)`
   (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:232`); in production the Bicep injects
   `services__sales__grpc__0 = http://<prefix>-sales:8081` on Identity
-  (`MMCA.Store/infra/main.bicep:994`).
-- **ACA:** Sales' main ingress stays `transport: 'http'` (`main.bicep:1169`) and the gRPC port is an
-  internal TCP `additionalPortMappings` entry on 8081 (`:1176-1182`), the same TCP-passthrough
+  (`MMCA.Store/infra/main.bicep:998`).
+- **ACA:** Sales' main ingress stays `transport: 'http'` (`main.bicep:1175`) and the gRPC port is an
+  internal TCP `additionalPortMappings` entry on 8081 (`:1182-1188`), the same TCP-passthrough
   arrangement ADC's Notification uses. Sales still needs no `HealthProbe__Port`: its
   `Http1AndHttp2` default endpoint answers the platform's HTTP/1.1 probes on 8080 directly
-  (`:1267-1269`).
+  (`:1275-1277`).
 
 Consequence for this ADR's taxonomy: **no deployed host is pure Profile B any more.**
 `Http1AndHttp2` survives in both apps only as the default-endpoint half of the mixed-endpoint
@@ -313,7 +313,7 @@ Use when services must **serve** gRPC on cleartext (any bidirectional / inbound 
   backchannel is HTTP/1.1 and **cannot** reach the Http2-only Identity endpoint directly, so the
   authority is set to the **gateway** HTTPS origin; the gateway terminates TLS, speaks HTTP/1.1 + 2
   via ALPN, and routes `/.well-known/*` on to Identity over HTTP/2 (ADR-004). This is the
-  **local Aspire** wiring only (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:328-330`).
+  **local Aspire** wiring only (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:364-366`).
   **In production ACA both apps set the direct in-cluster authority** `http://<identity app>` and let
   the `transport: 'http2'` ingress carry the HTTP/1.1 metadata fetch to the container: see the
   2026-07-25 update above for the ADC Bicep anchors.
@@ -354,22 +354,22 @@ Two v1.167.0 framework additions close the last two operational gaps this profil
 over HTTP/1.1, which an `Http2`-only cleartext endpoint refuses with `HTTP_1_1_REQUIRED`, so until
 now the five Profile A resources (ADC Identity/Conference/Engagement, Store Catalog/Identity)
 carried no Aspire health check at all and every `WaitFor` on them waited only for process start.
-`MMCA.Common.Aspire.Hosting` now ships `WithH2cHealthCheck(path = "/health/ready")`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs`): an
-AppHost-side health check that issues the same GET over HTTP/2 exact version against the resource's
-existing endpoint, exactly the profile the gateway's downstream probe already speaks. Both AppHosts
-chain it on their Profile A resources, probing **`/alive` (liveness), not `/health/ready`**: service
-readiness includes the warm-up gate, whose OIDC metadata task fetches through the gateway, and the
-gateway `WaitFor`s the services, so a readiness startup gate is a cycle (each service retries
-against the not-yet-started gateway until warm-up fails open at ~90s). Liveness proves what a
-`WaitFor` needs, a live Kestrel serving the real protocol, without pulling cross-resource readiness
-into the startup order; the mixed-endpoint hosts' stock gates moved to `/alive` for the same
-reason, and only the UI resources, which nothing `WaitFor`s, gate on `/health/ready`. Production is
-untouched: ACA `httpGet` probes keep targeting the dedicated Http1-only probe listener (the
-2026-07-25/28 updates above). The alternative design, surfacing the `HealthProbe:Port`
-listener as an Aspire endpoint, was rejected because the explicit Kestrel listeners it activates
-override the `ASPNETCORE_URLS` binding Aspire injects locally and collide on the fixed cleartext
-port; the extension's XML docs record the rejection.
+`MMCA.Common.Aspire.Hosting` now ships `WithH2cHealthCheck(path = "/alive")`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs:110`, whose
+`DefaultProbePath` is `"/alive"` at `:53`): an AppHost-side health check that issues the same GET
+over HTTP/2 exact version against the resource's existing endpoint, exactly the profile the
+gateway's downstream probe already speaks. Both AppHosts chain it on their Profile A resources,
+probing **`/alive` (liveness), not `/health/ready`**: service readiness includes the warm-up gate,
+whose OIDC metadata task fetches through the gateway, and the gateway `WaitFor`s the services, so a
+readiness startup gate is a cycle (each service retries against the not-yet-started gateway until
+warm-up fails open at ~90s). Liveness proves what a `WaitFor` needs, a live Kestrel serving the
+real protocol, without pulling cross-resource readiness into the startup order; the mixed-endpoint
+hosts' stock gates moved to `/alive` for the same reason, and only the UI resources, which nothing
+`WaitFor`s, gate on `/health/ready`. Production is untouched: ACA `httpGet` probes keep targeting
+the dedicated Http1-only probe listener (the 2026-07-25/28 updates above). The alternative design,
+surfacing the `HealthProbe:Port` listener as an Aspire endpoint, was rejected because the explicit
+Kestrel listeners it activates override the `ASPNETCORE_URLS` binding Aspire injects locally and
+collide on the fixed cleartext port; the extension's XML docs record the rejection.
 
 **2. The gateway downstream probe negotiates its HTTP version per downstream.**
 `GatewayDownstreamHealthCheckOptions.ProbeVersion` (`DownstreamProbeVersion.Auto` default) tries

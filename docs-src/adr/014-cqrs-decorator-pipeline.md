@@ -221,35 +221,35 @@ execution order (outermost to innermost) is now:
    command-side reason, so a caller is not charged a slice of its execution budget for validating its
    own bad input (`ValidatingQueryDecorator.cs:27-29`, `DependencyInjection.cs:104-107`).
 3. **`AddMmcaApplicationPipeline(pipeline => ...)` is the composition path, and it seals.**
-   (`DependencyInjection.cs:597-606`.) It runs `AddApplication()`, then the caller's handler
+   (`DependencyInjection.cs:612-621`.) It runs `AddApplication()`, then the caller's handler
    registrations through a small builder (module scans, a `ModuleLoader` run, cross-service client
    registrations that replace a handler's dependencies:
    `.../MMCA.Common.Application/MmcaApplicationPipelineBuilder.cs`, argument contract at
-   `DependencyInjection.cs:563-570`), then `AddApplicationDecorators()`, in that order (`:601-605`,
-   equivalence spelled out at `:576-583`). Closing the pipeline registers a private marker type on the
-   service collection (`:145`, marker at `:684`, registered at `:697-698`, probe at `:686-695`), and any
+   `DependencyInjection.cs:578-585`), then `AddApplicationDecorators()`, in that order (`:616-620`,
+   equivalence spelled out at `:591-598`). Closing the pipeline registers a private marker type on the
+   service collection (`:145`, marker at `:699`, registered at `:712-713`, probe at `:701-710`), and any
    later `AddApplicationDecorators`, `ScanModuleApplicationServices` or second
-   `AddMmcaApplicationPipeline` **throws** naming the mistake (`:700-710`, guards at `:117`, `:182`,
-   `:599`). The same guard now also fronts the three generic-CRUD registration helpers, which close
-   handler types over an entity and are therefore just as order-sensitive: `AddEntityCrud` (`:324`),
-   `AddEntityUpdateVerb` (`:382`) and `AddEntityUpdate` (`:433`). That converts the one
+   `AddMmcaApplicationPipeline` **throws** naming the mistake (`:715-725`, guards at `:117`, `:182`,
+   `:614`). The same guard now also fronts the three generic-CRUD registration helpers, which close
+   handler types over an entity and are therefore just as order-sensitive: `AddEntityCrud` (`:335`),
+   `AddEntityUpdateVerb` (`:397`) and `AddEntityUpdate` (`:448`). That converts the one
    load-bearing ordering rule of this record (decorators last, because `TryDecorate` only wraps
    registrations that already exist) from a documented convention whose violation is silent (a handler
    registered afterwards runs with no feature gate, no authorization, no validation, no timeout and no
-   transaction, and nothing fails at startup to say so: `:579-582`) into a startup exception.
+   transaction, and nothing fails at startup to say so: `:594-597`) into a startup exception.
    Registrations that are not handlers stay outside the call: their order relative to the decorators
-   does not matter (`:584-587`).
-4. **`VerifyDecoratorPipeline()` is the fitness hook.** (`DependencyInjection.cs:634-676`.) Never
-   called automatically, it asserts that the pipeline was closed at all (`:636-641`) and that every
+   does not matter (`:599-602`).
+4. **`VerifyDecoratorPipeline()` is the fitness hook.** (`DependencyInjection.cs:649-691`.) Never
+   called automatically, it asserts that the pipeline was closed at all (`:651-656`) and that every
    registered `ICommandHandler<,>` / `IQueryHandler<,>` entry is wrapped, throwing with each unwrapped
-   registration named (`:667-675`, formatting at `:712-723`). The check is registration-shape only: it
+   registration named (`:682-690`, formatting at `:727-738`). The check is registration-shape only: it
    reads `ServiceDescriptor` entries and never builds a provider, so a fitness test does not have to
-   register a double for every decorator dependency (`:619-623`). What it can see is a consequence of
+   register a double for every decorator dependency (`:634-638`). What it can see is a consequence of
    how Scrutor works: decoration rewrites a handler's descriptor into a factory over a keyed copy of
    the original, so a surviving implementation type on the effective (last non-keyed) registration is
-   proof nothing wrapped it (`:624-632`, the effective-descriptor pass at `:645-659`, the predicate at
-   `:661-662`). The outermost decorator's type cannot be read back at all after decoration, since it
-   exists only inside a closure (`:630-631`), which is why this complements rather than replaces
+   proof nothing wrapped it (`:639-647`, the effective-descriptor pass at `:658-674`, the predicate at
+   `:677`). The outermost decorator's type cannot be read back at all after decoration, since it
+   exists only inside a closure (`:645-646`), which is why this complements rather than replaces
    `DecoratorPipelineOrderTestsBase`: that base resolves the real object graph to assert the *order*,
    this one asserts *coverage* without a provider.
 

@@ -46,7 +46,7 @@ not as a wrapper struct.
   (`Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31`), and constrains the user
   type parameter of `AuthenticationServiceBase<TUser>`
   (`where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IAuthUser`,
-  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:56`), with each consuming
+  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:59`), with each consuming
   app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
@@ -63,7 +63,7 @@ not as a wrapper struct.
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
   (`MMCA.Common/Directory.Build.props:128-138`), ADC
-  (`MMCA.ADC/Directory.Build.props:89-102`), Store (`MMCA.Store/Directory.Build.props:90-101`). Adding a
+  (`MMCA.ADC/Directory.Build.props:92-106`), Store (`MMCA.Store/Directory.Build.props:78-89`). Adding a
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
   entity is `User : AuditableAggregateRootEntity<UserIdentifierType>`
@@ -152,7 +152,7 @@ Recounting the alias files across the four repositories gives **44 aliases acros
 Domain 1 (`MMCA.Common/Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1`) and Common
 Shared 2 (`MMCA.Common/Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2`);
 ADC Notification 2
-(`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.GlobalUsings.IdentifierType.cs:1-2`),
+(`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/MMCA.ADC.Notification.GlobalUsings.IdentifierType.cs:1-2`),
 Identity 1
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
 Engagement 10

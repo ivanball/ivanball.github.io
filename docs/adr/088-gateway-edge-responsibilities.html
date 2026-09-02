@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -352,8 +354,8 @@
           (<code>GatewayHealthCheckExtensions.cs:84</code>) applied at both the client (<code>:195</code>) and the registration
           (<code>:212</code>), reports <code>Unhealthy</code> on failure (<code>:210</code>) and carries the <code>Ready</code> tag (<code>:211</code>).</p>
           <p>The tag is the whole design. The Aspire defaults map <code>/alive</code> to checks tagged <code>Live</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:342-345</code>) and <code>/health/ready</code> to
-          everything not tagged <code>Live</code> or <code>Optional</code> (<code>:358-361</code>), so a <code>Ready</code>-tagged downstream check reaches
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:334-337</code>) and <code>/health/ready</code> to
+          everything not tagged <code>Live</code> or <code>Optional</code> (<code>:350-353</code>), so a <code>Ready</code>-tagged downstream check reaches
           readiness and never reaches liveness. Liveness must stay process-local, or a downstream outage restarts
           a perfectly healthy Gateway and makes the outage worse. <code>/alive</code> answers &quot;is this process wedged&quot;,
           <code>/health/ready</code> answers &quot;can this process do useful work&quot;, and only the second depends on anything
@@ -435,7 +437,7 @@
           against the authority (<code>AddForwardedJwtBearer</code>,
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:445</code>,
           the single <code>AddJwtBearer</code> at <code>:475-476</code>, <code>Authority</code> at <code>:478</code>), served by <code>MapJwksEndpoint</code>
-          (<code>.../MMCA.Common.API/Startup/JwksEndpointExtensions.cs:20</code>). Adding validation at the edge would
+          (<code>.../MMCA.Common.API/Startup/JwksEndpointExtensions.cs:31</code>). Adding validation at the edge would
           give the gateway issuer and key-discovery configuration it does not have, which is the coupling the
           decline above rejects: an Identity outage would become a Gateway outage.</p>
           <p><strong>Load balancing is delegated to Azure Container Apps ingress.</strong> No <code>LoadBalancingPolicy</code> appears
@@ -447,7 +449,7 @@
           <code>:190-193</code>, <code>:195-198</code>) and Store three (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:84-92</code>,
           <code>:93-101</code>, <code>:102-106</code>), resolved through <code>AddServiceDiscoveryDestinationResolver</code>
           (ADC <code>Program.cs:115</code>, Store <code>Program.cs:141</code>) against the bicep address book
-          (<code>MMCA.ADC/infra/main.bicep:1718-1721</code>). The shape is not incidental: both repositories <strong>pin it as
+          (<code>MMCA.ADC/infra/main.bicep:1652-1655</code>). The shape is not incidental: both repositories <strong>pin it as
           an invariant</strong>, asserting that each cluster contains a single destination
           (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:229-231</code>,
           <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:270-272</code>). A second destination in

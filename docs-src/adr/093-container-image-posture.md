@@ -21,13 +21,13 @@ runtime properties in the state of "what the default gave us", which is worth re
 that a later hardening pass starts from a stated position rather than from a discovery.
 
 The images are built in CI, not by hand: a fan-out `build-images` matrix job with one leg per image
-(`MMCA.ADC/.github/workflows/deploy.yml:898,908-926` for the six ADC legs,
-`MMCA.Store/.github/workflows/deploy.yml:844,854-869` for the five Store legs) runs
+(`MMCA.ADC/.github/workflows/deploy.yml:960,971-988` for the six ADC legs,
+`MMCA.Store/.github/workflows/deploy.yml:848,859-873` for the five Store legs) runs
 `docker/build-push-action@v7` over a buildx builder
-(`MMCA.ADC/.github/workflows/deploy.yml:943-948`), pushes each image to ACR under both the commit sha
-and `latest` (`:954-956`), and caches layers in that same registry with `mode=max` (`:970-971`).
-The job runs concurrently with the e2e gate and rolls nothing out; that separation is ADR-080's
-subject, not this one's.
+(`MMCA.ADC/.github/workflows/deploy.yml:1005-1010`), pushes each image to ACR under both the commit
+sha and `latest` (`:1017-1018`), and caches layers in that same registry with `mode=max`
+(`:1032-1033`). The job runs concurrently with the e2e gate and rolls nothing out; that separation
+is ADR-080's subject, not this one's.
 
 ## Decision
 **1. The GitHub Packages credential is a BuildKit secret, never an `ARG` or `ENV`.** Both
@@ -39,13 +39,13 @@ into a shell-local `GITHUB_TOKEN` that lives only for that command, which is the
 `nuget.config` expands. The Dockerfile states the reason in place: a build-arg promoted to `ENV`
 lands in image layers, the build cache, and `docker history` (`:8-10`). CI passes it as a
 `secrets:` input to the build action, not a `build-args:` input
-(`MMCA.ADC/.github/workflows/deploy.yml:962-963`,
-`MMCA.Store/.github/workflows/deploy.yml:908-909`), and the workflow repeats the constraint in its
-own comments (`MMCA.ADC/.github/workflows/deploy.yml:887-891`). Secret *content* is deliberately not
+(`MMCA.ADC/.github/workflows/deploy.yml:1024-1025`,
+`MMCA.Store/.github/workflows/deploy.yml:912-913`), and the workflow repeats the constraint in its
+own comments (`MMCA.ADC/.github/workflows/deploy.yml:950-953`). Secret *content* is deliberately not
 part of the BuildKit cache key, so rotating the token does not invalidate the restore layer; that is
 safe only because the package set is pinned by committed lock files and any
 `Directory.Packages.props` change lands in a `COPY` layer that busts the cache anyway
-(`MMCA.ADC/.github/workflows/deploy.yml:958-961`).
+(`MMCA.ADC/.github/workflows/deploy.yml:1019-1023`).
 
 **2. There is deliberately no separate `dotnet build` stage.** The `build` stage restores and stops;
 `publish` does its own restore and build. This is a measured decision, dated in the file: on
@@ -74,7 +74,7 @@ Blazor web hosts do not (`.../MMCA.ADC.UI.Web/Dockerfile:48`,
 scale-out replicas skip first-request JIT (`.../MMCA.ADC.Conference.Service/Dockerfile:39-40`), and
 the containers those replicas land on are fractional-vCPU Container Apps: 0.25 vCPU / 0.5 GiB for
 four of the six ADC apps and 0.5 vCPU / 1 GiB for the other two
-(`MMCA.ADC/infra/main.bicep:1026,1222,1346,1487,1631,1737`). On that much CPU, JIT time is not
+(`MMCA.ADC/infra/main.bicep:1026,1222,1346,1487,1636,1742`). On that much CPU, JIT time is not
 noise.
 
 **4. Every image is published with `UseAppHost=false` and started through the shared runtime.** The
@@ -94,7 +94,7 @@ and neither side has been chosen: a rebuild picks up Microsoft's monthly runtime
 action, and a rebuild is also not reproducible, since the same commit built a month apart yields a
 different runtime layer. Note the asymmetry with the application layer, which *is* pinned: the
 deployment references each image by commit sha, not by `latest`
-(`MMCA.ADC/.github/workflows/deploy.yml:955,1095-1100`). So the code in a revision is exactly
+(`MMCA.ADC/.github/workflows/deploy.yml:1017,1166-1171`). So the code in a revision is exactly
 identified and the runtime under it is not.
 
 **No image drops privileges: all eleven run as root.** No Dockerfile in either repository contains a
@@ -105,7 +105,7 @@ nothing currently fails because of it: Container Apps runs each container in its
 root inside the container is not root on a shared host.
 
 Neither posture is currently observed by any gate. The supply-chain job generates its CycloneDX SBOM
-from the solution filter (`MMCA.ADC/.github/workflows/deploy.yml:441-450`), so it describes the
+from the solution filter (`MMCA.ADC/.github/workflows/deploy.yml:490-503`), so it describes the
 NuGet graph, not the image: no image scanner runs in either pipeline, and a base-layer CVE would
 therefore not be reported by the checks that gate a deploy.
 

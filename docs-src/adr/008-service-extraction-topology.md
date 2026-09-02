@@ -88,9 +88,9 @@ first of all to demonstrate and continuously exercise the extraction path end to
 nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
 conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
 six deployables still ship in a single pipeline run from one template
-(`MMCA.ADC/infra/main.bicep:1036`, `:1250`, `:1379`, `:1508`, `:1674`, `:1777`, deployed together at
-`MMCA.ADC/.github/workflows/deploy.yml:1129`), so the independent-deploy benefit this record lists is
-available rather than taken. What ADC does buy with the split is proof under load that the path
+(`MMCA.ADC/infra/main.bicep:984`, `:1185`, `:1312`, `:1439`, `:1608`, `:1711`, deployed together by a
+single `azure/arm-deploy` step at `MMCA.ADC/.github/workflows/deploy.yml:1289-1295`), so the
+independent-deploy benefit this record lists is available rather than taken. What ADC does buy with the split is proof under load that the path
 works: transport stays out of Domain, Application and Shared under a build gate
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MicroserviceExtractionTests.cs:3`), and the
 genuine cross-process flows (outbox to broker to consumer, and a real gRPC read) run nightly against

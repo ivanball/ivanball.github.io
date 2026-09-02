@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -218,7 +220,10 @@
           are corrected. Amended (2026-08-01): <code>SafeDomainEventHandler&lt;TDomainEvent&gt;</code> logs and <strong>rethrows</strong>,
           so the redelivery bullet, the throwing-is-correct rationale and the redelivery trade-off are
           corrected: the framework packages no swallow, the one hand-rolled swallow is not an instance of the
-          base class, and the redelivery blast radius is the whole save&#39;s local batch.</p>
+          base class, and the redelivery blast radius is the whole save&#39;s local batch. Amended (2026-09-01):
+          an order line whose inventory row is missing is no longer silently skipped, so the best-effort
+          trade-off is rewritten around the returned unmatched ids and the handler warning; the
+          <code>RestoreInventory</code> and <code>maxReplicas</code> citations are corrected.</p>
           <h2 id="context">Context</h2>
           <p>Checkout spans a boundary no transaction covers. <code>CheckOutHandler</code> commits the order insert, the cart
           transition and the atomic conditional stock decrements in one local transaction
@@ -265,7 +270,7 @@
           <code>MarkInventoryRestored</code> refuses a second call and refuses a non-cancelled order
           (<code>Order.cs:302-325</code>). The handler checks the marker first
           (<code>OrderCancelledSagaHandler.cs:56-62</code>), applies the increases through a pure domain service
-          (<code>.../Domain/Services/InventoryRestorationDomainService.cs:14-27</code>), then one
+          (<code>.../Domain/Services/InventoryRestorationDomainService.cs:14-34</code>), then one
           <code>SaveChangesAsync</code> commits the increases and the marker together
           (<code>OrderCancelledSagaHandler.cs:94-102</code>). Same database, one transaction: the marker cannot exist
           without the writes it guards, and the writes cannot land unmarked.</li>
@@ -364,11 +369,18 @@
           sits in <code>PaymentInitiated</code> with stock held for up to the stuck age plus one poll interval (30 plus
           10 minutes at the shipped defaults). That window is the price of not having a distributed
           transaction.</li>
-          <li><strong>Compensation is best-effort per line.</strong> <code>RestoreInventory</code> skips an order line whose
-          <code>InventoryItem</code> row is missing (<code>InventoryRestorationDomainService.cs:20-21</code>) and the marker still
-          commits, so that quantity is never restored and nothing retries it. Tolerable only because an
-          inventory row is auto-created for every variant, which makes a missing row mean the variant itself
-          is gone.</li>
+          <li><strong>Compensation is best-effort per line, and names what it could not restore.</strong> <code>RestoreInventory</code>
+          skips an order line whose <code>InventoryItem</code> row is missing
+          (<code>InventoryRestorationDomainService.cs:22-27</code>), but the skip is not silent: the unmatched variant
+          ids are collected and returned to the caller (<code>InventoryRestorationDomainService.cs:26,33</code>), and
+          the handler logs them at Warning naming each one
+          (<code>OrderCancelledSagaHandler.cs:81-87</code>, message at <code>OrderCancelledSagaHandler.cs:115</code>). The marker
+          still commits anyway, so that quantity is never restored and nothing retries it: withholding the
+          marker would re-apply every matched increase on the next redelivery, which is a double restore
+          (<code>OrderCancelledSagaHandler.cs:89-93</code>). The miss is narrow because the handler reads inventory with
+          <code>ignoreQueryFilters: true</code> (<code>OrderCancelledSagaHandler.cs:75</code>), so a soft-deleted row still counts
+          and a missing row means the row never existed. The stock is still lost; what changed is that the
+          loss is recorded rather than invisible.</li>
           <li><strong>Redelivery re-runs every handler of the event, not the failed one.</strong> The dispatcher iterates
           handlers sequentially with no per-handler isolation
           (<code>MMCA.Common/.../Services/DomainEventDispatcher.cs:76-85</code>), so one throwing handler also skips the
@@ -382,7 +394,7 @@
           swallow its failures itself.</li>
           <li><strong>The sweep is not replica-leased.</strong> The outbox processor claims rows with a lease before working
           them (ADR-003); the sweep takes no such claim, so at the configured <code>maxReplicas: 2</code>
-          (<code>MMCA.Store/infra/main.bicep:1273</code>) two replicas can pick the same stuck order and each spend a
+          (<code>MMCA.Store/infra/main.bicep:1281</code>) two replicas can pick the same stuck order and each spend a
           Stripe status call. Correctness holds through the concurrency token; the duplicated external call
           does not deduplicate.</li>
           <li><strong>Every compensating action needs its own marker.</strong> There is no generic mechanism: the ADR-021

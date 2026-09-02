@@ -26,8 +26,12 @@ Amended (2026-09-01): the emulator proving ground named in **Transport exit opti
 and deploy-gating in both consumers (ADC on 2026-08-31 as TD-17, Store immediately after), so the
 "advisory by design so it can never gate a deploy" clause is restated; its fixture now ships as
 `ServiceBusEmulatorFixtureBase` in `MMCA.Common.Testing` (v1.178.0), which is why the tier's
-MassTransit v8 constraint is enforced in framework code rather than in two copies. The pin, the gate
-and the dependency set are unchanged.
+MassTransit v8 constraint is enforced in framework code rather than in two copies. The
+`using MassTransit` surface in **Transport exit options** is recounted from source and restated as
+eight files across two packages (the six that reference MassTransit types, plus the two that lower
+the emulator's entity-quota defaults), and the `MessageBusSettings.cs`, `IntegrationEventConsumer.cs`,
+`UpcastingIntegrationEventConsumer.cs` and Service-Bus-side `DependencyInjection.cs` citations are
+rebased onto their current lines. The pin, the gate and the dependency set are unchanged.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -122,11 +126,18 @@ The pin has a horizon. MassTransit v8 is the free major and its community suppor
 candidates are recorded now so the eventual move is a comparison and not a scramble.
 
 What makes any of them a bounded change is where MassTransit actually sits. The whole
-`using MassTransit` surface is **six files, all inside `MMCA.Common.Infrastructure`**:
-`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:3`,
+`using MassTransit` surface is **eight files across two packages**. Seven are in
+`MMCA.Common.Infrastructure`: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:3`,
 `Services/BrokerMessageBus.cs:1`, `Services/IntegrationEventConsumer.cs:1`,
-`Services/IntegrationEventConsumerExtensions.cs:1`, `Services/UpcastingIntegrationEventConsumer.cs:1`
-and `Services/FaultIntegrationEventConsumer.cs:1`. Application, Domain and Shared never reference it:
+`Services/IntegrationEventConsumerExtensions.cs:1`, `Services/UpcastingIntegrationEventConsumer.cs:1`,
+`Services/FaultIntegrationEventConsumer.cs:1` and `Messaging/ServiceBusEmulatorSupport.cs:4`; the
+eighth is `Source/Hosting/MMCA.Common.Testing/ServiceBusEmulatorFixtureBase.cs:5`. The last two are
+the emulator test tier rather than the transport: each one lowers the process-global
+`MassTransit.AzureServiceBusTransport.Defaults` entity quotas the emulator rejects
+(`ServiceBusEmulatorSupport.cs:115-117`, `ServiceBusEmulatorFixtureBase.cs:74-76`), a v8 constraint
+that moves with that tier, not with the bus. The files that reference MassTransit **types**
+(`IConsumer<T>`, `ConsumeContext<T>`, `IPublishEndpoint`, `IBusRegistrationConfigurator`) are the
+first six, all in `MMCA.Common.Infrastructure`. Application, Domain and Shared never reference it:
 `IMessageBus` is the Application-layer abstraction
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28`) and
 `BrokerMessageBus` is its only broker implementation (`BrokerMessageBus.cs:24`), which is the
@@ -145,17 +156,17 @@ Three candidates, **none adopted and none evaluated against a running broker her
    around it, at a recurring cost.
 3. **A direct `Azure.Messaging.ServiceBus` implementation of `IMessageBus`.** The largest and the
    most owned. Publishing is one class (`BrokerMessageBus.cs:24`), but the consume side is where the
-   library earns its keep: three consumers ride `IConsumer<T>` (`IntegrationEventConsumer.cs:29`,
-   `UpcastingIntegrationEventConsumer.cs:35`, `FaultIntegrationEventConsumer.cs:28`) and the
+   library earns its keep: three consumers ride `IConsumer<T>` (`IntegrationEventConsumer.cs:30`,
+   `UpcastingIntegrationEventConsumer.cs:36`, `FaultIntegrationEventConsumer.cs:28`) and the
    transport wiring supplies exponential in-process retry plus second-level delayed redelivery
-   (`DependencyInjection.cs:938-951` on RabbitMQ, `:968-978` on Service Bus, the two-level argument
+   (`DependencyInjection.cs:938-951` on RabbitMQ, `:980-990` on Service Bus, the two-level argument
    at `:899-913`), all of which would be hand-written. It also drops RabbitMQ, which the local
    Aspire stack provisions.
 
 The trial point is the same for all three and it is additive: a new case in the `MessageBusProvider`
 switch inside `ConfigureBrokerTransport`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:919`, switch at `:924`,
-enum at `Settings/MessageBusSettings.cs:176`), so a candidate ships **beside** RabbitMQ and Service
+enum at `Settings/MessageBusSettings.cs:199`), so a candidate ships **beside** RabbitMQ and Service
 Bus instead of replacing either, and a consumer opts in by configuration. The two artifacts that move
 with a decision are the pin
 (`MMCA.Common/Directory.Packages.props:90-94`, the three entries at `:95-97`) and the fitness

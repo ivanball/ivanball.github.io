@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-050: JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-21). Storage model superseded by ADR-097 (2026-08-26): the single plaintext refresh-token column on the user row becomes per-device…">
+  <meta name="description" content="Superseded by ADR-097 (2026-09-01). Originally Accepted (2026-07-21, storage model recorded as superseded 2026-08-26). The body below is retained…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-050: JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection">
-  <meta property="og:description" content="Accepted (2026-07-21). Storage model superseded by ADR-097 (2026-08-26): the single plaintext refresh-token column on the user row becomes per-device…">
+  <meta property="og:description" content="Superseded by ADR-097 (2026-09-01). Originally Accepted (2026-07-21, storage model recorded as superseded 2026-08-26). The body below is retained…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-050: JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection">
-  <meta name="twitter:description" content="Accepted (2026-07-21). Storage model superseded by ADR-097 (2026-08-26): the single plaintext refresh-token column on the user row becomes per-device…">
+  <meta name="twitter:description" content="Superseded by ADR-097 (2026-09-01). Originally Accepted (2026-07-21, storage model recorded as superseded 2026-08-26). The body below is retained…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection","item":"https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -212,11 +214,19 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-050-jwt-access-tokens-with-a-single-rotating-refresh-token-and-reuse-detection">ADR-050: JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-21). <strong>Storage model superseded by
-          <a href="097-multi-device-refresh-sessions.html">ADR-097</a></strong> (2026-08-26): the single plaintext refresh-token
-          column on the user row becomes per-device rows in a hashed <code>RefreshSessions</code> table. The rotation,
-          reuse-detection and sliding-expiry policy decided below is kept and generalized to a per-user family
-          of sessions; read ADR-097 for what ships today.</p>
+          <p><strong>Superseded by <a href="097-multi-device-refresh-sessions.html">ADR-097</a> (2026-09-01).</strong> Originally Accepted
+          (2026-07-21, storage model recorded as superseded 2026-08-26). The body below is retained unchanged
+          as the historical record of the rotation, reuse-detection and sliding-expiry policy this record
+          decided, which ADR-097 keeps and generalizes to a per-user family of per-device sessions hashed at
+          rest; read ADR-097 for what ships today. Its storage, revocation and claim details no longer describe
+          the code: refresh tokens are gone from <code>IAuthUser</code>
+          (<code>Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:9-14</code>), <code>UpdateRefreshToken</code> and
+          <code>RevokeRefreshToken</code> no longer exist in any source file, the user id rides the standard <code>sub</code> claim
+          rather than a <code>user_id</code> claim
+          (<code>Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:88,94</code>), and neither app revokes
+          refresh sessions on account deactivation or erasure
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:334-350</code>,
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:185-192</code>).</p>
           <h2 id="context">Context</h2>
           <p>Identity issues two credentials on every successful sign-in: a short-lived, stateless JWT access
           token that every service validates by signature and expiry (ADR-004), and a long-lived refresh token

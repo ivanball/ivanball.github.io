@@ -1,11 +1,19 @@
 # ADR-050: JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection
 
 ## Status
-Accepted (2026-07-21). **Storage model superseded by
-[ADR-097](097-multi-device-refresh-sessions.md)** (2026-08-26): the single plaintext refresh-token
-column on the user row becomes per-device rows in a hashed `RefreshSessions` table. The rotation,
-reuse-detection and sliding-expiry policy decided below is kept and generalized to a per-user family
-of sessions; read ADR-097 for what ships today.
+**Superseded by [ADR-097](097-multi-device-refresh-sessions.md) (2026-09-01).** Originally Accepted
+(2026-07-21, storage model recorded as superseded 2026-08-26). The body below is retained unchanged
+as the historical record of the rotation, reuse-detection and sliding-expiry policy this record
+decided, which ADR-097 keeps and generalizes to a per-user family of per-device sessions hashed at
+rest; read ADR-097 for what ships today. Its storage, revocation and claim details no longer describe
+the code: refresh tokens are gone from `IAuthUser`
+(`Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:9-14`), `UpdateRefreshToken` and
+`RevokeRefreshToken` no longer exist in any source file, the user id rides the standard `sub` claim
+rather than a `user_id` claim
+(`Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:88,94`), and neither app revokes
+refresh sessions on account deactivation or erasure
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:334-350`,
+`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:185-192`).
 
 ## Context
 Identity issues two credentials on every successful sign-in: a short-lived, stateless JWT access

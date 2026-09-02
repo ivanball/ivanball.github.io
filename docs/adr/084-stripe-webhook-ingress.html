@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -257,8 +259,8 @@
           cluster default deliberately carries no version pair so it can never reach the sales cluster and
           downgrade the webhook path. That is why Sales keeps the ADR-012 mixed-endpoint profile: its
           container app&#39;s ingress stays <code>transport: &#39;http&#39;</code> for REST plus this webhook
-          (<code>MMCA.Store/infra/main.bicep:1169</code>), with a TCP-passthrough <code>additionalPortMappings</code> entry carrying
-          the h2c gRPC port alongside it (<code>:1176-1182</code>).</li>
+          (<code>MMCA.Store/infra/main.bicep:1175</code>), with a TCP-passthrough <code>additionalPortMappings</code> entry carrying
+          the h2c gRPC port alongside it (<code>:1182-1188</code>).</li>
           <li><strong>The status code encodes ACCEPTED, not PROCESSED.</strong> Five error codes return 400, held in a
           <code>FrozenSet</code> named <code>RejectionCodes</code>: <code>SignatureVerificationFailed</code>, <code>ParseFailed</code>, <code>SecretMissing</code>,
           <code>PayloadMissing</code> and <code>SignatureMissing</code> (<code>PaymentsController.cs:39-46</code>, defined at
@@ -303,7 +305,7 @@
           skips entirely when <code>WebhookBaseUrl</code> is empty, which is the local-development path where the Stripe
           CLI forwards instead (<code>:54-58</code>), and skips with a <code>Warning</code> when <code>SecretKey</code> is empty (<code>:60-64</code>).
           The expected URL is <code>WebhookBaseUrl</code> plus the constant <code>/Payments/webhook</code> (<code>:33,84</code>); production
-          injects <code>Stripe__WebhookBaseUrl</code> as the Gateway FQDN (<code>main.bicep:1260</code>), so the registered endpoint
+          injects <code>Stripe__WebhookBaseUrl</code> as the Gateway FQDN (<code>main.bicep:1268</code>), so the registered endpoint
           is the Gateway route above. It subscribes exactly three event types (<code>:42-47</code>), and warns when an
           existing endpoint is missing any of them (<code>:224-234</code>).</li>
           <li><strong>It deletes only endpoints it created itself.</strong> Every auto-created endpoint carries the description

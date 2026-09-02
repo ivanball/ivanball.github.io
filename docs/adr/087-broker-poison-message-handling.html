@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -243,7 +245,7 @@
           that is the reason this record exists rather than a one-line change: on RabbitMQ it requires the
           <code>rabbitmq_delayed_message_exchange</code> plugin, and the Aspire dev container does not ship it. Enabling it
           against a plugin-less broker fails at bus start
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:145-148</code>). Azure
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:168-171</code>). Azure
           Service Bus, the production transport, has native scheduled delivery and needs no plugin.</p>
           <h2 id="decision">Decision</h2>
           <p>Three changes, each scoped to one failure: second-level redelivery configured per transport, a fault
@@ -251,8 +253,8 @@
           else.</p>
           <h3 id="second-level-redelivery-is-transport-aware-and-the-flag-exists-only-because-of-rabbitmq">Second-level redelivery is transport-aware, and the flag exists only because of RabbitMQ</h3>
           <p><code>MessageBusSettings</code> gains two members. <code>EnableDelayedRedelivery</code>
-          (<code>MessageBusSettings.cs:156</code>) is a <code>bool</code> with no initializer, so it <strong>defaults to <code>false</code></strong>, and
-          <code>RedeliveryIntervalsSeconds</code> (<code>:172</code>) is an <code>IReadOnlyList&lt;int&gt;</code> defaulting to <code>[60, 600, 3600]</code>: one
+          (<code>MessageBusSettings.cs:179</code>) is a <code>bool</code> with no initializer, so it <strong>defaults to <code>false</code></strong>, and
+          <code>RedeliveryIntervalsSeconds</code> (<code>:195</code>) is an <code>IReadOnlyList&lt;int&gt;</code> defaulting to <code>[60, 600, 3600]</code>: one
           minute, ten minutes, one hour. Both live in the <code>&quot;MessageBus&quot;</code> section (<code>:14</code>).</p>
           <p>The two transports consume them differently, and the asymmetry is the decision:</p>
           <ul>
@@ -264,19 +266,19 @@
           Aspire broker cannot serve it, so a default-on setting would break every developer&#39;s first <code>F5</code>
           with a bus-start failure, which is the worst possible place to learn about a broker plugin.</li>
           <li><strong>Azure Service Bus does not consult it.</strong> <code>UsingAzureServiceBus</code> (<code>:957</code>) calls
-          <code>UseDelayedRedelivery</code> unconditionally (<code>:971</code>), with the reasoning recorded inline (<code>:964-967</code>).
+          <code>UseDelayedRedelivery</code> unconditionally (<code>:983</code>), with the reasoning recorded inline (<code>:976-979</code>).
           Service Bus schedules natively, there is no plugin to be missing, and a production transport that
           can express &quot;try again in an hour&quot; should always express it. Making the operator opt in would mean
           the environment that most needs the behavior is the one most likely to be running without it.</li>
           </ul>
           <p>Two details are worth stating so the words above are not read as stronger than the code.
           &quot;Unconditional&quot; means &quot;not gated on the flag&quot;: both call sites are still guarded by
-          <code>intervals.Length &gt; 0</code> (<code>:941</code>, <code>:969</code>), so an operator who configures an empty interval list turns
+          <code>intervals.Length &gt; 0</code> (<code>:941</code>, <code>:981</code>), so an operator who configures an empty interval list turns
           the feature off everywhere. And <code>RedeliveryIntervalsSeconds</code> carries <strong>no</strong> DataAnnotations attribute,
           unlike its neighbours <code>RetryLimit</code> and the two retry-interval settings, so the ADR-070 fail-fast
           chain does not validate it; non-positive entries are filtered at use time in <code>BuildRedeliveryIntervals</code>
-          (<code>:998-1001</code>) instead. In both transports the redelivery filter is registered <strong>before</strong>
-          <code>UseMessageRetry</code> (<code>:947</code>, <code>:974</code>), which is what keeps immediate retry innermost and delayed
+          (<code>:1010-1013</code>) instead. In both transports the redelivery filter is registered <strong>before</strong>
+          <code>UseMessageRetry</code> (<code>:947</code>, <code>:986</code>), which is what keeps immediate retry innermost and delayed
           redelivery outside it.</p>
           <h3 id="a-fault-consumer-makes-an-exhausted-message-visible">A fault consumer makes an exhausted message visible</h3>
           <p><code>FaultIntegrationEventConsumer&lt;TEvent&gt;</code>
@@ -301,8 +303,10 @@
           two <code>Counter&lt;long&gt;</code> instruments, both in units of <code>messages</code> and both tagged <code>event_type</code>:
           <code>broker.fault.count</code> (<code>:30-33</code>) and <code>broker.circuit.open.count</code> (<code>:42-45</code>). It is a third meter beside
           <code>MMCA.Common.Cqrs</code> and <code>MMCA.Common.Outbox</code> (<a href="041-observability-and-telemetry.html">ADR-041</a>), and the
-          name is duplicated as a literal in <code>MMCA.Common.Aspire</code> (<code>BrokerMetrics.cs:9-11</code>) so the Aspire
-          service defaults can subscribe to it without a package reference.</p>
+          name is duplicated as a literal in <code>MMCA.Common.Aspire</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:168</code>, a duplication the Infrastructure
+          declaration records in its own doc comment at <code>BrokerMetrics.cs:9-11</code>) so the Aspire service defaults
+          can subscribe to it without a package reference.</p>
           <h3 id="a-circuit-breaker-around-the-outbox-broker-publish-and-nothing-else">A circuit breaker around the outbox broker publish, and nothing else</h3>
           <p><code>OutboxProcessor</code> holds a per-instance Polly <code>ResiliencePipeline</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:99</code>, built
@@ -332,7 +336,7 @@
           queueing on it. It is <strong>not</strong> being made. A repository-wide search for <code>CircuitBreaker</code>,
           <code>BrokenCircuitException</code> and <code>ResiliencePipeline</code> across <code>Source</code> finds the outbox breaker above and
           otherwise only the HTTP and gRPC standard resilience handlers
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:99,107</code>,
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:106,111-114</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:16</code>,
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:61</code>). There is no breaker in any
           persistence path and none is added here.</p>
@@ -385,7 +389,7 @@
           warns a RabbitMQ host that the feature it never enabled is not running.</li>
           <li><strong>The intervals are not validated at startup.</strong> <code>RedeliveryIntervalsSeconds</code> sits outside the
           ADR-070 fail-fast chain, so a typo becomes a filtered-out entry at
-          <code>DependencyInjection.cs:998-1001</code> rather than a refusal to boot. An operator who writes
+          <code>DependencyInjection.cs:1010-1013</code> rather than a refusal to boot. An operator who writes
           <code>[0, 0, 0]</code> silently gets no delayed redelivery at all.</li>
           <li><strong>An hour-long redelivery window widens the duplicate window with it.</strong> A message redelivered at
           <code>+3600s</code> runs its handlers an hour after the original attempt, so ADR-021&#39;s inbox and every
@@ -401,7 +405,7 @@
           call rather than flip one setting.</li>
           <li><strong><code>BrokerMetrics</code> is <code>internal</code> and its meter name is written twice.</strong> A consumer cannot reference
           the class to add its own instruments to the meter, and the <code>MMCA.Common.Aspire</code> copy of the name
-          (<code>BrokerMetrics.cs:9-11</code>) can drift from the Infrastructure declaration with no compiler error and
+          (<code>Extensions.cs:168</code>) can drift from the Infrastructure declaration with no compiler error and
           no test: the symptom would be a meter that exports nothing.</li>
           <li><strong>The breaker is per processor instance, so its state is not shared.</strong> The pipeline is a per-instance
           field (<code>OutboxProcessor.cs:99</code>, rationale <code>:92-97</code>), so with N replicas the broker sees up to N

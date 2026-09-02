@@ -50,8 +50,8 @@ and **a self-registering, self-provisioning endpoint registration at startup**.
   cluster default deliberately carries no version pair so it can never reach the sales cluster and
   downgrade the webhook path. That is why Sales keeps the ADR-012 mixed-endpoint profile: its
   container app's ingress stays `transport: 'http'` for REST plus this webhook
-  (`MMCA.Store/infra/main.bicep:1169`), with a TCP-passthrough `additionalPortMappings` entry carrying
-  the h2c gRPC port alongside it (`:1176-1182`).
+  (`MMCA.Store/infra/main.bicep:1175`), with a TCP-passthrough `additionalPortMappings` entry carrying
+  the h2c gRPC port alongside it (`:1182-1188`).
 - **The status code encodes ACCEPTED, not PROCESSED.** Five error codes return 400, held in a
   `FrozenSet` named `RejectionCodes`: `SignatureVerificationFailed`, `ParseFailed`, `SecretMissing`,
   `PayloadMissing` and `SignatureMissing` (`PaymentsController.cs:39-46`, defined at
@@ -96,7 +96,7 @@ and **a self-registering, self-provisioning endpoint registration at startup**.
   skips entirely when `WebhookBaseUrl` is empty, which is the local-development path where the Stripe
   CLI forwards instead (`:54-58`), and skips with a `Warning` when `SecretKey` is empty (`:60-64`).
   The expected URL is `WebhookBaseUrl` plus the constant `/Payments/webhook` (`:33,84`); production
-  injects `Stripe__WebhookBaseUrl` as the Gateway FQDN (`main.bicep:1260`), so the registered endpoint
+  injects `Stripe__WebhookBaseUrl` as the Gateway FQDN (`main.bicep:1268`), so the registered endpoint
   is the Gateway route above. It subscribes exactly three event types (`:42-47`), and warns when an
   existing endpoint is missing any of them (`:224-234`).
 - **It deletes only endpoints it created itself.** Every auto-created endpoint carries the description

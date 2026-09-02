@@ -42,7 +42,7 @@ Use a dual-dispatch strategy:
   A message that **throws during dispatch** is retried up to `Outbox:MaxRetries` (default 5) times,
   then dropped from the eligible set (it stops being polled once `RetryCount >= MaxRetries`).
 - Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` seconds multiplied by a random jitter factor in `[0.8, 1.2]`, capped at `Outbox:LeaseSeconds` (the re-lease at `MMCA.Common/.../Outbox/OutboxProcessor.cs:642-643`, the jitter-then-cap formula in `ComputeRetryBackoffSeconds` at `:732-746`). At the shipped defaults (base 10s, `MaxRetries` 5, lease 300s, batch 50: `MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,99`) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends **about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range**, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).
-- That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: `OutboxProcessor.cs:150-173`), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (`HasMoreEligibleWork` requires progress: `OutboxProcessor.cs:329-334`), so a batch of 50 that fails in full cannot hot-spin the processor.
+- That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: `OutboxProcessor.cs:150-173`), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (`HasMoreEligibleWork` requires progress: `OutboxProcessor.cs:337-339`), so a batch of 50 that fails in full cannot hot-spin the processor.
 - Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup.
 
 ## Revision (2026-07-19)
@@ -173,7 +173,7 @@ hands a consumer twice.
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IOutboxAdministration.cs:16`),
    an operator surface a host exposes from an admin endpoint, a support command or a scheduled job
    (`:5-14`), registered scoped by the framework
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:177-178`):
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:202-203`):
    `ListDeadLettersAsync(dataSource, skip, take)` pages them oldest first across every outbox source
    the host owns or one named source (`IOutboxAdministration.cs:30-34`, contract at `:18-29`);
    `ReplayDeadLettersAsync(dataSource, ids)` returns them to the pending pool, with `RetryCount` to
@@ -219,11 +219,11 @@ hands a consumer twice.
    `Outbox:MaxRetries` to 1 asked for no retries at all and gets none (`:707-711`). A payload whose
    fields changed shape is a different problem: it needs a new event type and an upcaster (ADR-090).
 5. **The consumer-side inbox is on by default wherever redelivery is possible.**
-   `MessageBus:EnableInbox` is now three-valued (`.../Settings/MessageBusSettings.cs:94`): an explicit
-   setting wins in both directions (`:88`), and left unset it resolves ON for a broker provider and
-   OFF for the in-process one, which has no redelivery to dedup (`:102`, reasoning at `:76-79`). Broker
+   `MessageBus:EnableInbox` is now three-valued (`.../Settings/MessageBusSettings.cs:117`): an explicit
+   setting wins in both directions (`:111`), and left unset it resolves ON for a broker provider and
+   OFF for the in-process one, which has no redelivery to dedup (`:102`, reasoning at `:103-108`). Broker
    delivery is at-least-once by contract, so with the inbox off every redelivery became a duplicate
-   side effect unless each handler happened to be idempotent on its own (`:79-85`); a host that must
+   side effect unless each handler happened to be idempotent on its own (`:103-107`); a host that must
    not query the table yet sets `false` explicitly and still gets its one startup Warning
    (`.../Persistence/Inbox/InboxDisabledWarningService.cs:13-16`, message at `:35`). The inbox row
    also stops being a separate write: `TryBeginAsync` STAGES it in the scope's unit of work unsaved

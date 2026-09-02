@@ -38,7 +38,7 @@ example:
 3. **The test** pinned 23 of the 26 routes, leaving `/Sponsors`, `/CheckIns` and `/Points` unpinned,
    and its own doc comment described the set as "14 REST controllers + SessionSelection". The
    replacement test still names those three routes as the gap it exists to close
-   (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:28-31`).
+   (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:32-34`).
 
 Three routes were live and ungated, a comment was off by one, and the test's description matched
 neither. None of that was caught, because nothing enumerated the table from a single place: a
@@ -55,7 +55,7 @@ because it is the duplication a reader assumes exists. The Aspire AppHost holds 
 start-ordering (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:252-262`,
 `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:218-226`) and the bicep templates hold
 `services__<name>__http__0` environment variables on the gateway container app
-(`MMCA.ADC/infra/main.bicep:1704-1707`, `MMCA.Store/infra/main.bicep:1400-1402`). Both are **address
+(`MMCA.ADC/infra/main.bicep:1652-1655`, `MMCA.Store/infra/main.bicep:1342-1344`). Both are **address
 books**: service name to URL, with no path prefix anywhere in them. They answer "where does
 `conference` resolve" and never "what reaches conference", so neither is a second route table and
 neither should become one.

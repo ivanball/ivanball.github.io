@@ -2,14 +2,16 @@
 
 ## Status
 Accepted (2026-08-14). Revised 2026-08-31 (the read-only claim is qualified: one `az config set` on
-the runner's own CLI precedes the queries; citations re-anchored).
+the runner's own CLI precedes the queries; citations re-anchored). Revised 2026-09-01: ADC's
+Notification app now declares `maxReplicas: 2` like its five peers, so the declared baseline is
+uniform across all eleven Container Apps in the two repos, and ADC's deploy condition now tolerates
+two skippable test gates rather than one; the gate mechanism and the `2` ceiling are unchanged.
 
 ## Context
 Both deployed apps run a deliberately small production footprint: every Container App is declared with
 `maxReplicas: 2` and every SQL database with the `Basic` tier
-(`MMCA.Store/infra/main.bicep:1038,1142,1273,1349,1447` and `:557-559,587-589`;
-`MMCA.ADC/infra/main.bicep:1177,1304,1431,1684,1806` and `:612-614,645-647`, with ADC's Notification
-app deliberately right-sized at `maxReplicas: 1`, `MMCA.ADC/infra/main.bicep:1586-1591`). That
+(`MMCA.Store/infra/main.bicep:1042,1148,1281,1357,1455` and `:557-559,587-589`;
+`MMCA.ADC/infra/main.bicep:1177,1304,1431,1596,1689,1811` and `:612-614,645-647`). That
 footprint is the cost baseline, and it is what the monthly bill is planned against.
 
 The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
@@ -31,7 +33,7 @@ This is the FinOps sibling of the deploy gates the framework already records: AD
 provenance), ADR-060 (the performance-regression gate against a committed baseline) and ADR-062 (SLO
 alerting as code). ADR-064 decides the three proof-of-recency gates and enumerates `cost-guard`
 in passing among the jobs that "have the change itself as their subject"
-(`Website/docs-src/adr/064-deploy-recency-gates.md:11-12,39`), but it does not decide it. This record
+(`Website/docs-src/adr/064-deploy-recency-gates.md:16-17,44`), but it does not decide it. This record
 does.
 
 ## Decision
@@ -82,17 +84,21 @@ The cost baseline is asserted by a **read-only reusable workflow** that both run
   (`MMCA.Store/.github/workflows/cost-guard.yml:47`, `MMCA.ADC/.github/workflows/cost-guard.yml:43`).
 
 - **`deploy` waits on it by name.** `cost-guard` is listed in `deploy.needs`
-  (`MMCA.Store/.github/workflows/deploy.yml:941`, `MMCA.ADC/.github/workflows/deploy.yml:992`), and
+  (`MMCA.Store/.github/workflows/deploy.yml:945`, `MMCA.ADC/.github/workflows/deploy.yml:1054`), and
   because the deploy condition runs under `always()` with explicit per-need results, the condition
   requires `needs.cost-guard.result == 'success'` literally
-  (`MMCA.Store/.github/workflows/deploy.yml:960-972`,
-  `MMCA.ADC/.github/workflows/deploy.yml:1010-1022`). Only `e2e-gate` is allowed to be `skipped` there,
-  so a cost-guard that fails, errors or is skipped leaves `deploy` unrun.
+  (`MMCA.Store/.github/workflows/deploy.yml:964-976`,
+  `MMCA.ADC/.github/workflows/deploy.yml:1080-1093`). The only needs allowed to be `skipped` there are
+  the diff-scoped test gates: `e2e-gate` on Store
+  (`MMCA.Store/.github/workflows/deploy.yml:976`), and `e2e-gate` or `backend-test-gate` on ADC, whose
+  UI and backend conditions are exact complements, so exactly one of the two runs on every code deploy
+  (`MMCA.ADC/.github/workflows/deploy.yml:1092-1093`). A cost-guard that fails, errors or is skipped
+  leaves `deploy` unrun in either repo.
 
 - **Gate on deploys only, never on pull requests.** The calling job carries
   `if: github.event_name != 'pull_request'` and `secrets: inherit`
   (`MMCA.Store/.github/workflows/deploy.yml:572-575`,
-  `MMCA.ADC/.github/workflows/deploy.yml:616-619`), because there is no production OIDC on a PR and the
+  `MMCA.ADC/.github/workflows/deploy.yml:665-668`), because there is no production OIDC on a PR and the
   deploy is PR-skipped anyway. Both repos' CONTRIBUTING files list `cost-guard` among the push-only
   jobs that must **not** be added to branch protection (`MMCA.Store/CONTRIBUTING.md:42,118`,
   `MMCA.ADC/CONTRIBUTING.md:42,111`).

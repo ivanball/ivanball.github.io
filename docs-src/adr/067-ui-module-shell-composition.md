@@ -61,7 +61,7 @@ Ship the application shell in the framework package and let each module plug int
   layout.
 - **Registration is one call.** `AddUIModule<TModule>()` runs the Scrutor scan for the module's entity
   services and then registers the descriptor as a singleton `IUIModule`
-  (`MMCA.Common.UI/DependencyInjection.cs:185-194`); modules with extra services register the
+  (`MMCA.Common.UI/DependencyInjection.cs:203-213`); modules with extra services register the
   descriptor directly with `AddSingleton<IUIModule, TModule>()` after their own registrations
   (`MMCA.Common.UI/Notifications/DependencyInjection.cs:39`,
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:69`).
@@ -76,7 +76,7 @@ Ship the application shell in the framework package and let each module plug int
   `ConfirmAsync`, where dismissing the prompt counts as declining, so a caller only ever branches on
   `true`. Both facades are registered by one extracted call, `AddCommonUiFacades()`, which
   TryAdd-registers `MudToastService` and `MudAppDialogService` over MudBlazor's `ISnackbar` and
-  `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:140-145`). `AddUIShared` calls it (`:88`),
+  `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:158-163`). `AddUIShared` calls it (`:106`),
   and so does the shipped bUnit base
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:53`),
   so a component test resolves the two contracts without pulling in the rest of the shared-UI surface.

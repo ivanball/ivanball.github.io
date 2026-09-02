@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-057: Expand/Contract Schema Evolution Enforced as a CI Gate · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-28). Revised 2026-08-01: the diff now fails closed in both repos (the || true is gone and MMCA.Store&#39;s build-and-test checkout sets…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/057-expand-contract-schema-evolution-gate.html">
+  <title>ADR-105: The Published Data-Residency Claim as a Build Gate · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-01).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/105-data-residency-build-gate.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-057: Expand/Contract Schema Evolution Enforced as a CI Gate">
-  <meta property="og:description" content="Accepted (2026-07-28). Revised 2026-08-01: the diff now fails closed in both repos (the || true is gone and MMCA.Store&#39;s build-and-test checkout sets…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/057-expand-contract-schema-evolution-gate.html">
+  <meta property="og:title" content="ADR-105: The Published Data-Residency Claim as a Build Gate">
+  <meta property="og:description" content="Accepted (2026-09-01).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/105-data-residency-build-gate.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-057: Expand/Contract Schema Evolution Enforced as a CI Gate">
-  <meta name="twitter:description" content="Accepted (2026-07-28). Revised 2026-08-01: the diff now fails closed in both repos (the || true is gone and MMCA.Store&#39;s build-and-test checkout sets…">
+  <meta name="twitter:title" content="ADR-105: The Published Data-Residency Claim as a Build Gate">
+  <meta name="twitter:description" content="Accepted (2026-09-01).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"057 · Expand/Contract Schema Evolution Enforced as a CI Gate","item":"https://ivanball.github.io/docs/adr/057-expand-contract-schema-evolution-gate.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"105 · The Published Data-Residency Claim as a Build Gate","item":"https://ivanball.github.io/docs/adr/105-data-residency-build-gate.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</span>
+        <span class="current">105 · The Published Data-Residency Claim as a Build Gate</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -156,7 +156,7 @@
         <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
         <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
         <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
-        <li><a href="057-expand-contract-schema-evolution-gate.html" aria-current="page">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
@@ -204,7 +204,7 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
-        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="105-data-residency-build-gate.html" aria-current="page">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
@@ -212,154 +212,195 @@
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-057-expandcontract-schema-evolution-enforced-as-a-ci-gate">ADR-057: Expand/Contract Schema Evolution Enforced as a CI Gate</h1>
+          <h1 id="adr-105-the-published-data-residency-claim-as-a-build-gate">ADR-105: The Published Data-Residency Claim as a Build Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-28). Revised 2026-08-01: the diff now fails <strong>closed</strong> in both repos (the <code>|| true</code>
-          is gone and MMCA.Store&#39;s <code>build-and-test</code> checkout sets <code>fetch-depth: 0</code>), so the fail-open trade-off
-          recorded on acceptance is now history rather than current behavior.</p>
+          <p>Accepted (2026-09-01).</p>
           <h2 id="context">Context</h2>
-          <p>ADR-030 decides <strong>who</strong> applies a migration: every service host runs <code>DatabaseInitStrategy = Migrate</code>
-          and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
-          <code>sqlcmd</code> backstop (<code>MMCA.Store/.github/workflows/deploy.yml:1123-1131</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1297-1307</code>). It says nothing about what <strong>shape</strong> a migration
-          may take.</p>
-          <p>That gap is load-bearing because production rollback is <strong>revision-only</strong>. When the post-deploy smoke
-          gate fails, the deploy rolls every container app back to its previous revision with
-          <code>az containerapp revision copy --from-revision</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1139,1199</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1318,1381</code>). That reverts the <strong>image</strong> and nothing else:
-          the new revision already migrated the database on boot, and no down-migration runs. The previous
-          release therefore keeps serving traffic against the <strong>new</strong> schema, which is exactly the statement
-          both repos&#39; CONTRIBUTING makes (<code>MMCA.Store/CONTRIBUTING.md:56-59</code>, <code>MMCA.ADC/CONTRIBUTING.md:57-60</code>).
-          A <code>DropColumn</code> shipped alongside the code that stopped reading it makes the rollback path a broken
-          release rather than a recovery.</p>
-          <p>The existing build-time gate does not cover this. <code>dotnet ef migrations has-pending-model-changes</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:263-277</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:359-373</code>)
-          asserts a migration <strong>exists</strong> for every model change; it has no opinion on whether that migration is
-          survivable one release back. The gate below is the shape rule that ADR-030 left open. It arrived in
-          MMCA.ADC with the 2026-07-19 security/resilience/ops review batch (commit <code>adee5058</code>, PR #38) and was
-          ported to MMCA.Store on 2026-07-25 (commit <code>1dfdc991</code>, PR #52).</p>
+          <p>Both deployed apps publish a privacy policy at their repo root, and each has a section that tells a
+          user where their personal data is stored (<code>MMCA.ADC/PRIVACY.md:61</code>, <code>MMCA.Store/PRIVACY.md:53</code>).
+          That sentence is a public commitment about a named jurisdiction, and it is one of the few parts of a
+          privacy policy that a reader could in principle check against reality.</p>
+          <p>It is also the part most likely to be quietly wrong. The region a policy names is typed once, by a
+          human, at the moment the policy is written. The region where the databases holding that data are
+          actually provisioned lives in infrastructure code that moves for reasons having nothing to do with
+          the policy: ADC pins its SQL server&#39;s region to a default declared inside its deploy workflow,
+          deliberately separate from where its Container Apps run, because the subscription blocks the SQL
+          resource provider in the resource group&#39;s own location
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1152-1157</code>); Store runs single-region and records that region
+          as a single sentence in its DR runbook (<code>MMCA.Store/infra/DISASTER-RECOVERY.md:19</code>). Either can move
+          without anyone opening <code>PRIVACY.md</code>, and the failure is silent: nothing breaks, no test goes red, no
+          alert fires, and the app keeps serving traffic while the published claim is false. This workspace had
+          exactly that gap, which is why ADC&#39;s guard still carries an explicit block on the stale claim its
+          policy once made
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:9-10,16</code>).</p>
+          <p>The compliance surface around this is already fitness-enforced wherever a compiler can see it.
+          ADR-005&#39;s erasure path is guarded by <code>PiiConventionTestsBase</code>, which fails the build when a domain
+          entity carrying a <code>[Pii]</code> property does not implement <code>IAnonymizable</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/PiiConventionTestsBase.cs:3-12</code>).
+          Residency is not a property of any type, so that technique does not reach it: the claim lives in
+          prose and the truth lives in a workflow file or a runbook. It is a doc-to-infrastructure consistency
+          problem, the same shape ADC already solves for SLO alerts by embedding the Bicep template and the
+          operations runbook into the architecture test assembly and pairing them
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:14-22</code>,
+          ADR-062), and the same shape ADR-081 solves for the cost baseline at deploy time.</p>
           <h2 id="decision">Decision</h2>
-          <p>Schema changes follow <strong>expand/contract</strong>, and a CI step enforces the contract half.</p>
-          <ul>
-          <li><strong>Expand now, contract later, as a written rule.</strong> Adding nullable columns, new tables and new
-          indexes is safe in any release; <code>DropColumn</code> / <code>DropTable</code> / <code>DropIndex</code> belong to a LATER release,
-          once no revision that reads the old shape can still be rolled back to
-          (<code>MMCA.Store/CONTRIBUTING.md:61-64</code>, <code>MMCA.ADC/CONTRIBUTING.md:62-65</code>).</li>
-          <li><strong>A migration ADDED by a PR may not drop without a marker.</strong> The <code>Expand/contract migration guard (schema rollback safety)</code> step fails the build when a newly added migration&#39;s <code>Up()</code> matches
-          <code>\.(DropColumn|DropTable|DropIndex)\s*(&lt;[^&gt;]*&gt;)?\s*\(</code> and the same <code>Up()</code> body does not carry the
-          override marker (<code>MMCA.Store/.github/workflows/deploy.yml:279-325</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:203-249</code>). Those three operations are the entire matched set.</li>
-          <li><strong>The marker&#39;s documented format is one comment line:</strong>
-          <code>// EXPAND-CONTRACT-OVERRIDE: &lt;why this drop is safe one release back&gt;</code>
-          (<code>MMCA.Store/CONTRIBUTING.md:72-74</code>, <code>MMCA.ADC/CONTRIBUTING.md:73-75</code>). What the step actually
-          enforces is looser: <code>grep -q &#39;EXPAND-CONTRACT-OVERRIDE&#39;</code> over the <code>Up()</code> body
-          (<code>MMCA.Store/.github/workflows/deploy.yml:318</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:242</code>), so the
-          token must appear inside <code>Up()</code>, but the <code>//</code> prefix, the colon and the reason text are convention,
-          not validation.</li>
-          <li><strong>&quot;Added by this PR&quot; means git-added, base-relative, path-scoped.</strong> The step fetches the PR base and
-          runs <code>git diff --diff-filter=A --name-only &quot;origin/&lt;base_ref&gt;...HEAD&quot;</code> limited to
-          <code>Source/Hosting/MMCA.Store.Migrations.SqlServer.*/Migrations/*.cs</code> (respectively
-          <code>MMCA.ADC.Migrations.SqlServer.*</code>) (<code>MMCA.Store/.github/workflows/deploy.yml:301-302</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:225-226</code>). <code>*.Designer.cs</code> files are skipped explicitly
-          (<code>MMCA.Store/.github/workflows/deploy.yml:313-315</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:237-239</code>),
-          the model snapshot is a modification rather than an addition so it never enters the list, and the
-          frozen combined-archive projects (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer/</code>,
-          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer/</code>) fall outside the pathspec.</li>
-          <li><strong>Only the <code>Up()</code> body is scanned.</strong> The body is extracted with
-          <code>awk &#39;/protected override void Up\(/{flag=1} /protected override void Down\(/{flag=0} flag&#39;</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:316</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:240</code>), because
-          every additive migration&#39;s <code>Down()</code> legitimately drops what <code>Up()</code> added and <code>Down()</code> never runs at
-          startup: down-migration is explicit tooling only.</li>
-          <li><strong>It is a merge gate, not a deploy gate.</strong> The step lives in the <code>build-and-test</code> job, which both
-          repos run only on <code>pull_request</code> (<code>MMCA.Store/.github/workflows/deploy.yml:178</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:194</code>) and document as a required merge check
-          (<code>MMCA.Store/CONTRIBUTING.md:37-38</code>, <code>MMCA.ADC/CONTRIBUTING.md:37-38</code>). Nothing re-checks the shape
-          on the push to <code>main</code> that deploys.</li>
-          <li><strong>The common legitimate override is an index rebuilt in place.</strong> Adding INCLUDE columns or a filter
-          emits a <code>DropIndex</code> immediately followed by a <code>CreateIndex</code> under the same name, which a
-          one-release-back revision reads as a superset of what it expects
-          (<code>MMCA.Store/CONTRIBUTING.md:76-78</code>). The live markers say exactly that:
-          <code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260725133726_AddOutboxInboxRetentionIndexes.cs:13-17</code>
-          (outbox pending index gains INCLUDE columns) and
-          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260720031638_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:14-17</code>
-          (unique index gains an <code>[IsDeleted] = 0</code> filter). The second legitimate case is an index replaced by
-          a wider composite with the same leading column, reasoned out in
-          <code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260725044543_AddOrderStatusAndCreatedOnIndexes.cs:13-17</code>.</li>
-          </ul>
-          <p><strong>Adoption is partial, and deliberately so at the deployed repos only.</strong> MMCA.ADC and MMCA.Store both
-          run the gate, in identical form. <strong>MMCA.Helpdesk does not have it</strong>: neither of its two CI jobs runs a
-          migration step (<code>build-and-test</code> at <code>MMCA.Helpdesk/.github/workflows/ci.yml:14-60</code>, <code>template-smoke</code>
-          at <code>:76-89</code>), and its tree
-          already carries an unmarked <code>DropIndex</code> in an <code>Up()</code> body
-          (<code>MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/Migrations/20260725121253_AddOutboxInboxRetentionIndexes.cs:13-16</code>),
-          which is consistent: Helpdesk has no deploy workflow and therefore no revision-rollback model to
-          protect. <strong>MMCA.Common does not have it either, and cannot</strong>: the framework owns no migrations
-          (there is no <code>Migrations</code> directory anywhere in the repo) even though consumer migrations create the
-          shared <code>OutboxMessages</code> / <code>InboxMessages</code> tables it defines, so a framework-driven shape change lands
-          as an added migration in each consumer, which is where the gate sees it.</p>
+          <p><strong>The published data-residency claim is a build-gated assertion. A shared fitness base parses the
+          region where a repo actually provisions its PII-bearing storage from that repo&#39;s own infrastructure
+          source of truth, and fails the build unless the repo&#39;s <code>PRIVACY.md</code> states that region.</strong></p>
+          <ol>
+          <li><p><strong>One shared base, one test, authored in the framework.</strong> <code>DataResidencyTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DataResidencyTestsBase.cs:14</code>)
+          declares a single <code>[Fact]</code>, <code>PrivacyPolicy_DataStorageRegion_MatchesDeployedRegion</code> (<code>:25-45</code>),
+          and names the rubric category it serves in its own summary (<code>:3-13</code>, rubric section 30,
+          Compliance, Privacy and Governance). It is one of the 46 abstract bases in that package&#39;s
+          <code>Bases/</code> directory, so it is subclassed per repo rather than copied.</p>
+          </li>
+          <li><p><strong>The repo supplies its own source of truth.</strong> The only abstract behavior is
+          <code>ExtractDeployedRegion(string repoRoot)</code> (<code>:53</code>), documented to parse the region from whatever the
+          repo actually provisions from (a workflow default, an infra runbook, a Bicep parameter) and to
+          assert with a clear <code>because</code> when its expected marker is missing rather than return an empty
+          string (<code>:47-52</code>). The base makes no assumption about where a repo&#39;s truth lives.</p>
+          </li>
+          <li><p><strong>Both files are read from the working tree, not embedded.</strong> The test locates the repo root by
+          walking up from the test assembly&#39;s base directory to the directory holding <code>{RepoToken}.slnx</code>
+          (<code>:28</code>, via
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureMapBase.cs:79-90</code>), then
+          reads <code>PRIVACY.md</code> from that root (<code>:34</code>). The repo identity comes from the same <code>IArchitectureMap</code>
+          every other rule in the package takes (<code>:16</code>).</p>
+          </li>
+          <li><p><strong>Absence fails, it does not pass.</strong> The extracted region must be non-null and non-whitespace
+          before any comparison happens, with the stated reason that the region must be parseable from the
+          repo&#39;s infrastructure source of truth (<code>:31-33</code>). A repo whose marker has been renamed or deleted
+          goes red rather than silently comparing nothing.</p>
+          </li>
+          <li><p><strong>Matching is whitespace-insensitive and case-insensitive, in both directions.</strong> <code>Normalize</code>
+          strips every whitespace character and upper-cases the rest (<code>:57-58</code>, CA1308 rationale at
+          <code>:55-56</code>), and is applied to the policy text and to the extracted region alike, so a policy
+          written in prose form matches an Azure region token written without spaces (<code>:35</code>, <code>:37-38</code>). The
+          assertion is containment: the normalized policy must contain the normalized region.</p>
+          </li>
+          <li><p><strong>A denylist blocks stale and copied claims from returning.</strong> <code>ForbiddenResidencyClaims</code> is a
+          virtual, empty-by-default list (<code>:23</code>); every entry is normalized and asserted absent from the
+          policy (<code>:40-44</code>), with a failure message stating that the claim is stale or belongs to another
+          deployment. This is what a positive match alone cannot catch: a policy can name the correct region
+          and still carry a contradicting sentence beside it.</p>
+          </li>
+          <li><p><strong>ADC parses its deploy workflow.</strong> <code>DataResidencyTests</code>
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:12</code>, map at <code>:14</code>)
+          reads <code>.github/workflows/deploy.yml</code>, finds the <code>SQL_LOCATION_OVERRIDE:-</code> marker, asserts it is
+          present, and takes the letters and digits that follow it as the region (<code>:20-31</code>, marker at <code>:24</code>,
+          assertion at <code>:26-27</code>). That default is the region ADC&#39;s SQL server and database land in
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1157</code>). Its denylist carries one entry, the
+          pre-migration claim that once contradicted the deployed region (<code>:16</code>, explained at <code>:9-10</code>).</p>
+          </li>
+          <li><p><strong>Store parses its DR runbook.</strong> <code>DataResidencyTests</code>
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DataResidencyTests.cs:12</code>, map at
+          <code>:14</code>) reads <code>infra/DISASTER-RECOVERY.md</code>, finds the single-region sentence by its <code>one region (</code>
+          marker and takes the comma-terminated token that follows, asserting both the marker and the
+          terminator are present (<code>:20-35</code>, marker at <code>:24</code>, assertions at <code>:26-27</code> and <code>:31-32</code>). Its
+          denylist carries two entries, the regions belonging to the other deployment, so a policy paragraph
+          copied between the two repos fails (<code>:16</code>, explained at <code>:9-10</code>).</p>
+          </li>
+          <li><p><strong>It runs in the ordinary fitness suite, with no credentials and no cloud calls.</strong> The rule lives
+          in each repo&#39;s <code>*.Architecture.Tests</code> project and executes on every build and pull request like
+          every other architecture rule. Unlike the deploy-time gates it never authenticates to Azure and
+          never reads live resource state: both of its inputs are committed files.</p>
+          </li>
+          <li><p><strong>Adoption is exactly the two deployed apps.</strong> ADC and Store subclass the base; MMCA.Helpdesk
+          references the same package
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MMCA.Helpdesk.Architecture.Tests.csproj:24</code>)
+          but declares no <code>DataResidencyTests</code> and has no <code>PRIVACY.md</code>, and MMCA.Common has neither. The
+          base is available to any consumer; it applies to a repo that publishes a residency claim, which
+          today is the two apps with users.</p>
+          </li>
+          <li><p><strong>The base is frozen public API.</strong> The type, its constructor, the <code>[Fact]</code>, the abstract <code>Map</code>
+          and <code>ExtractDeployedRegion</code>, and the virtual <code>ForbiddenResidencyClaims</code> are all in the package&#39;s
+          shipped baseline
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt:40-42,237-238,370</code>),
+          so reshaping the extension point is a reviewable text diff and a breaking change under ADR-015.</p>
+          </li>
+          </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>Rollback is one-way for schema, so the check belongs where the drop is still cheap.</strong> The only
-          moment a destructive migration can be reconsidered for free is the PR that adds it; after the deploy
-          the options are roll forward or restore (ADR-009).</li>
-          <li><strong>A grep is enough, and cheap enough to always run.</strong> The gate needs no database, no EF invocation
-          and no new tool; it is a diff plus two greps inside a job that already runs on every PR, so it costs
-          seconds and cannot itself become a flaky gate.</li>
-          <li><strong>An override that carries a reason beats a bypass label.</strong> The marker lives in the migration file
-          next to the operation it excuses, so the next reader of that migration gets the argument for why the
-          drop was safe, rather than a green check whose reasoning died with the PR thread.</li>
-          <li><strong>Up-only scanning keeps the false-positive rate at zero.</strong> Every additive migration&#39;s <code>Down()</code>
-          drops what it added; scanning both bodies would flag essentially every migration and the gate would
-          be disabled within a week.</li>
-          <li><strong>Invariant over discipline.</strong> This is the same posture as the architecture fitness functions
-          (ADR-015) and the integration-event schema rule (ADR-010): a compatibility convention that a code
-          review is expected to catch is a convention that eventually ships broken.</li>
+          <li><strong>The statement with the most legal weight had the least enforcement.</strong> Every other compliance
+          claim in these repos is backed by code a rule can inspect: erasure by <code>IAnonymizable</code>, PII marking
+          by <code>[Pii]</code>, export by a contract. Residency was backed by a sentence, and a sentence is the one
+          artifact nothing in the build was reading.</li>
+          <li><strong>The truth has to be per repo, because the deployments genuinely differ.</strong> ADC&#39;s SQL region is set
+          independently of its compute region for a subscription-level reason
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1152-1156</code>), while Store&#39;s whole footprint is one region
+          documented in its DR runbook. A single hardcoded extractor would have fit neither; making
+          <code>ExtractDeployedRegion</code> the only abstract member keeps the assertion, the normalization and the
+          denylist shared while the parsing stays local.</li>
+          <li><strong>Build time is the right time, because both inputs are committed.</strong> ADR-081&#39;s cost baseline has to
+          query Azure, because the thing it guards is live resource configuration that drifts by hand. What a
+          repo claims and what it declares it will provision are both files in the repo, so the cheapest and
+          earliest place to compare them is the test suite that already runs on every pull request, with no
+          OIDC, no subscription access and no deploy pipeline involvement.</li>
+          <li><strong>A denylist is the only defense against the copy-paste failure.</strong> The two policies are
+          structurally similar documents in sibling repos, and the realistic drift is a paragraph carried
+          across or a pre-migration sentence left behind. A positive match passes both of those; naming them
+          explicitly does not.</li>
+          <li><strong>Failing on an unparseable marker beats defaulting.</strong> The base insists on a non-empty region
+          (<code>DataResidencyTestsBase.cs:31-33</code>) and both subclasses assert their marker exists, so renaming the
+          workflow variable or reformatting the runbook sentence produces a red build with a message naming
+          the expected marker, rather than a gate that quietly stops checking.</li>
+          <li><strong>Shipping the rule as a package base matches how every other fitness rule is shared.</strong> ADR-058&#39;s
+          posture applies: the rule is authored once, versioned with the framework, and adopted as a short
+          subclass, so a fix to the comparison logic reaches every consumer through a version bump instead of
+          a copy-edit in each repo.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Three operations, not a model of compatibility.</strong> <code>AlterColumn</code> narrowing a type or flipping a
-          column to NOT NULL, <code>DropForeignKey</code>, <code>DropPrimaryKey</code>, <code>DropSchema</code>, <code>RenameColumn</code> and a raw
-          <code>migrationBuilder.Sql(&quot;DROP ...&quot;)</code> all pass unflagged. The gate catches the common destructive
-          shapes, not every one.</li>
-          <li><strong>The marker is per-migration and unvalidated.</strong> One occurrence anywhere in <code>Up()</code> exempts every
-          destructive operation in that <code>Up()</code>, and nothing checks that the text after the token is a real
-          reason, so the gate ultimately enforces &quot;state a reason&quot;, not &quot;have a good one&quot;.</li>
-          <li><strong>Added-only, and pull-request-only.</strong> A destructive statement appended to a migration file that is
-          already on <code>main</code> is a modification, not an addition, and is never scanned; neither is anything that
-          reaches <code>main</code> without a PR.</li>
-          <li><strong>The diff fails closed, and the checkout it depends on is elsewhere in the file.</strong> Neither repo
-          wraps the diff in <code>|| true</code> any more: an unresolvable diff prints an <code>::error::</code> and exits 1
-          (<code>MMCA.Store/.github/workflows/deploy.yml:298-305</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:220-229</code>), and only a diff that resolves to an empty added
-          list prints &quot;No new migration files in this diff: expand/contract guard passes.&quot; and exits 0
-          (<code>MMCA.Store/.github/workflows/deploy.yml:306-309</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:230-233</code>).
-          Both <code>build-and-test</code> checkouts now set <code>fetch-depth: 0</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:182-188</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:198-201</code>),
-          so the two repos run the same step against the same git object graph. The residual cost is that the
-          gate&#39;s correctness lives in another step&#39;s <code>with:</code> block, directly above the guard in MMCA.ADC but
-          some ninety lines above it in MMCA.Store: drop the <code>fetch-depth</code> and every PR reds on a step that
-          has nothing to do with the change, which is the deliberate direction for that failure to point. As
-          accepted (2026-07-28) this record described the opposite. The diff was <code>$(git diff ... || true)</code> and
-          the MMCA.Store checkout was shallow, so the step passed vacuously on every run from 2026-07-25 to
-          2026-07-28, a three-day window in which a required check reported green without ever evaluating a
-          migration (<code>MMCA.Store/.github/workflows/deploy.yml:184-187</code>).</li>
-          <li><strong>It gates the migration, not the application.</strong> Nothing verifies that the previous release&#39;s code
-          tolerates the new schema; an expand migration that adds a required column the old revision never
-          writes is invisible to the gate.</li>
-          <li><strong>Partial adoption is a real gap for the reference app.</strong> MMCA.Helpdesk is the seed developers copy,
-          and the rule it teaches by example today is the unmarked drop.</li>
+          <li><strong>It proves the policy agrees with a file, not with Azure.</strong> Both extractors read committed text.
+          A database provisioned by hand into another region, a restore into a different geography, or a
+          geo-redundant backup target is invisible to this gate. In ADC&#39;s case the marker parsed is a shell
+          default (<code>MMCA.ADC/.github/workflows/deploy.yml:1157</code>), so a deploy run with <code>SQL_LOCATION_OVERRIDE</code>
+          set lands the SQL server in a region the test will never see, and the test still passes.</li>
+          <li><strong>Containment is looser than equality.</strong> The assertion is that the normalized policy contains the
+          normalized region (<code>DataResidencyTestsBase.cs:37-38</code>), so a policy naming several regions passes as
+          long as one of them matches, and a match anywhere in the document counts, including in a sentence
+          that is not the residency statement. The denylist is the only counterweight and it is hand
+          maintained.</li>
+          <li><strong>Whitespace-stripped containment makes one region token a prefix of another.</strong> After
+          normalization a shorter region token is a substring of its numbered sibling, so a policy naming the
+          numbered variant satisfies an extracted base-region token. The check is strong against a wholly
+          different region and weak against an adjacent one.</li>
+          <li><strong>The markers are load-bearing strings inside files maintained for other reasons.</strong> Renaming the
+          workflow&#39;s override variable, or reflowing the DR sentence so its comma moves, breaks the build in
+          a repo where nobody touched the privacy policy
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:24</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DataResidencyTests.cs:24,30-32</code>). That
+          is the intended fail-loud posture, but the cost lands on an unrelated edit.</li>
+          <li><strong>The suite needs the repo working tree.</strong> <code>FindRepoRoot</code> walks up for <code>{RepoToken}.slnx</code> and throws
+          when it is absent (<code>ArchitectureMapBase.cs:79-90</code>), so this rule cannot run from a copied artifact
+          the way an assembly-only rule can.</li>
+          <li><strong>One region per repo, one storage class.</strong> The model is a single string compared against a single
+          policy. A second store of personal data in another location (blob storage, a broker&#39;s retained
+          payloads, log analytics retention) has no representation here.</li>
+          <li><strong>Nothing detects a missing subclass.</strong> A consumer that publishes a <code>PRIVACY.md</code> and never derives
+          from the base gets no failure and no warning; the gate exists only where someone opted in. The
+          framework ships the rule, the repo has to adopt it.</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-030 (decides that each service self-applies its migrations at startup, which is precisely why a
-          rolled-back revision meets the new schema; this ADR constrains what those migrations may contain),
-          ADR-006 (database-per-service bounds a bad migration to one service&#39;s database), ADR-009 (a drilled
-          restore is the backstop when a schema change cannot be rolled forward), ADR-010 (the message-contract
-          sibling: additive changes stay compatible, breaking ones need a parallel path), ADR-015 (the
-          invariant-over-discipline posture this gate applies to schema).</p>
+          <p><a href="009-resilience-and-recovery-objectives.html">ADR-009</a> (the single-region acceptance a consumer must
+          declare: this record is what keeps the published claim honest about which region that is),
+          <a href="005-soft-delete-vs-erasure.html">ADR-005</a> (the erasure path guarded by the sibling section 30 fitness
+          function, <code>PiiConventionTestsBase</code>),
+          <a href="076-data-subject-export.html">ADR-076</a> (the export half of the same compliance surface, enforced in
+          code rather than in prose),
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function posture this rule extends from
+          code shape to a published document, and the public-API baseline that freezes its extension point),
+          <a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a> (rules authored once in a package and
+          adopted as thin per-repo subclasses),
+          <a href="062-slo-alerting-as-code.html">ADR-062</a> (the other doc-to-infrastructure pairing gate: alert specs
+          against runbook sections),
+          <a href="081-cost-baseline-deploy-gate.html">ADR-081</a> (the deploy-time sibling, which has to query live Azure
+          state because its subject is live configuration rather than committed text).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/057-expand-contract-schema-evolution-gate.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/105-data-residency-build-gate.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">

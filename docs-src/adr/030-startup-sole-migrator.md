@@ -31,7 +31,7 @@ in production and is the sole migrator of its own database**: it applies its pen
 at startup, before the new revision serves traffic. There is deliberately **no** separate deploy-step
 migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
-- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:985,1120,1243` (Identity/Catalog/Sales)
+- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:989,1126,1251` (Identity/Catalog/Sales)
   and `MMCA.ADC/infra/main.bicep:1067,1254,1376,1522` (Identity/Conference/Engagement/Notification) all set
   `DatabaseInitStrategy = 'Migrate'`.
 - **One applier per revision.** Each service runs `minReplicas: 1`, so the startup `MigrateAsync` is not
@@ -40,7 +40,7 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)
 - **No deploy-step backstop, on purpose.** Both `deploy.yml` files carry an explicit comment that there
   is *no external `sqlcmd` migration backstop* and that each service is the **sole migrator**
-  (`MMCA.Store/.github/workflows/deploy.yml:1119-1127`, `MMCA.ADC/.github/workflows/deploy.yml:1227-1236`). The
+  (`MMCA.Store/.github/workflows/deploy.yml:1123-1131`, `MMCA.ADC/.github/workflows/deploy.yml:1298-1306`). The
   `sqlcmd` that *is* installed in the pipeline is a connectivity/readiness probe, not a migration apply.
 - **Build-time drift gate, not a runtime apply.** CI runs
   `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:273`, ADC `deploy.yml:369`) so a
@@ -115,7 +115,7 @@ trade-off it carries.
    integer seed id to the module's identifier type: `int` passes through, and a `Guid` alias is
    manufactured by writing the int into a zeroed 16-byte span, so the same seed integer yields the
    same Guid on every boot, host and machine
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/DbSeeder.cs:20-31`).
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/DbSeeder.cs:20-38`).
    Re-running a seeder against a populated database collides with the existing keys by construction
    instead of minting new ones.
 4. **The accepted trade-off is the same bargain as auto-migrate-on-boot.** One owner, one mechanism,

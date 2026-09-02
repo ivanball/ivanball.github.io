@@ -1,7 +1,7 @@
 # ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange
 
 ## Status
-Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21, provider-email validation ahead of the by-email lookup documented 2026-07-25).
+Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21, provider-email validation ahead of the by-email lookup documented 2026-07-25, one-provider-link-per-user conflict branch documented and the provider-columns migration attribution corrected 2026-09-01).
 
 ## Context
 The framework's Identity story so far is entirely first-party: a user registers with an email and
@@ -56,25 +56,31 @@ a local `User`.
   upstream access logs.
 - **The exchange resolves to a local `User`, three ways, and guards the by-email link.**
   `ExternalLoginAsync` (app-level,
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:145`)
-  opens the transaction and runs the workflow body in `ExternalLoginCoreAsync`
-  (`AuthenticationService.cs:157`), which
-  first looks the user up by `LoginProvider` + `ProviderKey` (`AuthenticationService.cs:166`). Missing,
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:148`)
+  opens the transaction (`AuthenticationService.cs:155`) and runs the workflow body in
+  `ExternalLoginCoreAsync` (`AuthenticationService.cs:160`), which
+  first looks the user up by `LoginProvider` + `ProviderKey` (`AuthenticationService.cs:169`). Missing,
   it **validates the provider-supplied email before it searches on it**: `Email.Create(email)`
-  (`AuthenticationService.cs:184`) is checked as a `Result`, and an unparseable claim value **rejects**
+  (`AuthenticationService.cs:187`) is checked as a `Result`, and an unparseable claim value **rejects**
   the sign-in with an `Error.Validation` carrying code `Auth.ExternalEmailInvalid`
-  (`AuthenticationService.cs:187`). This address is the one email in the system no request-level
+  (`AuthenticationService.cs:191`). This address is the one email in the system no request-level
   validator has already gated (it arrives in an OAuth claim, not in a validated request), and the
-  by-email lookup that follows (`AuthenticationService.cs:194`) compares against the validated `Email`
-  value object rather than the raw claim string. When a local or other-provider account
-  already owns that email, it applies an account-takeover guard before linking: it asks
-  `IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync` (`AuthenticationService.cs:207`)
+  by-email lookup that follows (`AuthenticationService.cs:197`) compares against the validated `Email`
+  value object rather than the raw claim string. When an account already owns that email, two guards
+  run before anything is linked. First, **one provider link per user**: an account that is already
+  externally linked to a *different* provider (`IsExternalLogin` plus a `LoginProvider` mismatch,
+  `AuthenticationService.cs:208`) is **rejected** with an `Error.Conflict` carrying code
+  `Auth.ExternalProviderAlreadyLinked` (`AuthenticationService.cs:211`), because the aggregate holds a
+  single `(LoginProvider, ProviderKey)` pair and linking a second provider would overwrite the first
+  and strand the original login; the check runs ahead of the verifier, so saying no costs no external
+  round trip. Second, the account-takeover guard: it asks
+  `IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync` (`AuthenticationService.cs:222`)
   whether the provider asserted the incoming email as verified, and when it did not it **rejects** the
-  sign-in with `Auth.ExternalEmailNotVerified` (defined inline at `AuthenticationService.cs:213`)
+  sign-in with `Auth.ExternalEmailNotVerified` (defined inline at `AuthenticationService.cs:228`)
   instead of linking, so an unverified provider assertion cannot claim an existing local account. Only
-  when the provider did assert a verified email does it **link** the external provider to that account
-  (`User.LinkExternalProvider`, `AuthenticationService.cs:218`). When no account owns the email it
-  **creates** a new `Attendee` via `User.CreateExternal` (`AuthenticationService.cs:224`; an external
+  when both guards pass does it **link** the external provider to that account
+  (`User.LinkExternalProvider`, `AuthenticationService.cs:233`). When no account owns the email it
+  **creates** a new `Attendee` via `User.CreateExternal` (`AuthenticationService.cs:239`; an external
   user has empty password hash/salt and carries `LoginProvider` / `ProviderKey`). In the link and
   create cases it rotates the refresh token, saves, and mints the access token, so the caller receives
   the same `AuthenticationResponse` shape as a local login.
@@ -85,9 +91,10 @@ a local `User`.
   `InitialCreate` migration
   (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260606053130_InitialCreate.cs:63`,
   index at `20260606053130_InitialCreate.cs:100`), so two external identities cannot map to the same
-  local account while local (null,null) accounts are unconstrained. (The earlier standalone
-  `AddExternalLoginProviderFields` migration survives only in the frozen combined single-DB archive
-  under `MMCA.ADC.Migrations.SqlServer/` and is never applied to the per-service database.)
+  local account while local (null,null) accounts are unconstrained. (ADC's `Source/Hosting/` carries only
+  the four per-module migration projects, Identity, Conference, Engagement and Notification, so the
+  Identity database's own `InitialCreate` is the only place these columns are created: there is no
+  standalone provider-fields migration and no combined single-DB migration project in the repo.)
   `User.Anonymize` clears both fields on erasure (ADR-005).
 - **New external users re-use the local registration side-effect.** A brand-new external `User`
   publishes the same post-commit `UserRegistered` integration event the local `RegisterAsync` path
@@ -147,7 +154,7 @@ Identity story stays local-credential + RS256 only.
   `email_verified` claim passes the guard; GitHub's OAuth flow asserts nothing, so a GitHub sign-in
   whose email matches an existing account is rejected with `Auth.ExternalEmailNotVerified`, not linked.
   The framework itself still performs no such check: `Auth.ExternalEmailNotVerified` is defined inline
-  in ADC's override (`AuthenticationService.cs:213`), and a non-adopting host (Store, Helpdesk) gets only
+  in ADC's override (`AuthenticationService.cs:228`), and a non-adopting host (Store, Helpdesk) gets only
   the framework's not-supported default (`Auth.ExternalLoginNotSupported`,
   `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:130`), so the guard is
   ADC's own edge, not a framework guarantee.
@@ -157,7 +164,10 @@ Identity story stays local-credential + RS256 only.
   challenge can leave a local account whose token pair was never collected.
 - **A second credential shape on `User`.** External accounts carry empty password hash/salt and rely
   on `LoginProvider` / `ProviderKey`; code that assumes every `User` has a usable password must check
-  `IsExternalLogin` first.
+  `IsExternalLogin` first. The pair is single-valued, so a person holds at most one provider link: a
+  second provider arriving with the same email is rejected (`Auth.ExternalProviderAlreadyLinked`)
+  rather than relinked, and the rejection message points the person back at the provider already
+  linked, or at Forgot password to set a local one (`AuthenticationService.cs:212`).
 
 ## Related
 ADR-004 (the RS256/JWKS token this flow exchanges the external identity *for*, and validates

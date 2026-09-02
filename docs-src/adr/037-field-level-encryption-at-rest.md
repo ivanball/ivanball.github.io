@@ -287,6 +287,6 @@ of the caller's dictionary (`:281`), and the version byte the single-key constru
 
 The work this revision documents landed via MMCA.Common PR #247 and is included in v1.153.0 (tagged
 2026-08-18), so the versioned envelope and key ring are now in published packages. It is included
-rather than featured: the `[1.153.0]` changelog entry (`MMCA.Common/CHANGELOG.md:931`) does not name
+rather than featured: the `[1.153.0]` changelog entry (`MMCA.Common/CHANGELOG.md:1218`) does not name
 the converter, which is in the release because it merged to `main` before the tag. Adoption is
 unchanged at zero: no entity configuration in any of the four repositories wires the converter.

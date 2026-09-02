@@ -36,12 +36,12 @@ Make the outbox a three-valued setting resolved from the transport, gate the com
 something, keep the schema, and refuse the one combination that cannot work.
 
 1. **`MessageBus:EnableOutbox` is `bool?` and defaults to unset.**
-   `MessageBusSettings.EnableOutbox` (`Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:128`)
-   carries the explicit override; `IsOutboxEnabled` (`:136`) is the resolved posture every framework
+   `MessageBusSettings.EnableOutbox` (`Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:151`)
+   carries the explicit override; `IsOutboxEnabled` (`:159`) is the resolved posture every framework
    component reads: `EnableOutbox ?? Provider != MessageBusProvider.InProcess`. That is character for
-   character the inbox rule one property above it (`:102`). An explicit value wins in both
+   character the inbox rule two properties above it (`:125`). An explicit value wins in both
    directions, so a monolith that wants at-least-once delivery across a crash sets
-   `MessageBus:EnableOutbox=true` and gets the full outbox back (`:119-126`).
+   `MessageBus:EnableOutbox=true` and gets the full outbox back (`:143-148`).
 
 2. **Resolution happens once, at registration.** `AddInfrastructure` binds the section, and on the
    enabled path registers `OutboxProcessor` and `OutboxCleanupService`; on the disabled path it

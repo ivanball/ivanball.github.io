@@ -26,18 +26,18 @@ recipient policy both behind abstractions.
   `SendPushNotificationHandler` (`MMCA.Common.Application`) resolves recipients, creates a
   `PushNotification` aggregate (`MMCA.Common.Domain.Notifications.PushNotifications`, the audit record of
   what was sent, carrying the caller's optional `ScopeKey` alongside the title, body, sender and
-  recipient count, `SendPushNotificationHandler.cs:56-62`), persists one `UserNotification` inbox row
+  recipient count, `SendPushNotificationHandler.cs:65-71`), persists one `UserNotification` inbox row
   per recipient (`MMCA.Common.Domain.Notifications.UserNotifications`, carrying `IsRead` / `ReadOn` with
   an idempotent `MarkAsRead`), and only then dispatches the live push. The inbox is the durable source
   of truth; the push is the best-effort live layer over it.
 - **A send is idempotent only when the caller opts in.** The command may carry a `DedupKey`; when it is
   present and not whitespace the handler looks it up before doing anything else and, on a hit, returns
   the already-sent notification without resolving recipients, writing inbox rows, or pushing
-  (`SendPushNotificationHandler.cs:30-41`). That lookup is a check-then-act, so two concurrent retries
+  (`SendPushNotificationHandler.cs:39-50`). That lookup is a check-then-act, so two concurrent retries
   of the same send both pass it and the loser fails on the insert against the filtered unique index on
-  `DedupKey` (`PushNotificationConfiguration.cs:67-69`). The handler catches that save failure,
+  `DedupKey` (`PushNotificationConfiguration.cs:68-70`). The handler catches that save failure,
   requeries the key on `CancellationToken.None`, and returns the winner's notification if the key now
-  exists, rethrowing untouched otherwise (`SendPushNotificationHandler.cs:76-103`). With no key the path
+  exists, rethrowing untouched otherwise (`SendPushNotificationHandler.cs:81-112`). With no key the path
   is unchanged: nothing is deduplicated by default.
 - **Transient delivery is an abstraction with a no-op default.** `IPushNotificationSender`
   (`MMCA.Common.Application`) is registered by default as `NullPushNotificationSender` (no-op), so a host
@@ -59,7 +59,7 @@ recipient policy both behind abstractions.
   the notification on next load. A send is never rolled back because the WebSocket fan-out failed.
 - **An optional third, native-push leg (ADR-044).** After the inbox write and the SignalR push,
   `SendPushNotificationHandler` also dispatches through `INativePushSender`
-  (`SendPushNotificationHandler.cs:134-152`), an OS-level native-push channel that reaches devices the
+  (`SendPushNotificationHandler.cs:144-161`), an OS-level native-push channel that reaches devices the
   SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
   push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
   defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:565`), so it
@@ -124,7 +124,7 @@ unchanged: this closes a documentation gap so the asymmetry reads as deliberate 
 1. **Email is a framework-registered primitive, not a channel of this ADR.** `IEmailSender`
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IEmailSender.cs:6`) has a
    single implementation, `SmtpEmailSender`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:12`), and it is
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:13`), and it is
    TryAdd-registered in the same block as the push-sender defaults
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:559`, beside
    `IPushNotificationSender` at `:560`, `ILiveChannelPublisher` at `:561`, `INativePushSender` at `:565`
