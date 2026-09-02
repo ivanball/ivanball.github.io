@@ -5,7 +5,11 @@ Accepted (2026-08-13). Revised 2026-08-14 (the API-surface section corrected to 
 an abstract `DataExportControllerBase` a subclass mounts, not an application-part registration; the
 consumer adoption picture corrected; the export/delete generic-constraint difference stated; ADC
 citations re-anchored).
-The implementation lands in the MMCA.Common "enterprise capability wave" release.
+Revised 2026-09-01 (both consumers now adopt the controller base: ADC and Store each ship a
+`UsersDataExportController` deriving from `DataExportControllerBase<ExportUserDataQuery>`, both
+Identity services enable `Privacy.DataExport`, and neither `UsersController` holds an export action
+any more, so the shipped-but-unadopted trade-off is retired).
+The implementation shipped in the MMCA.Common "enterprise capability wave" release.
 It is opt-in: an app subclasses `ExportUserDataHandlerBase` and registers its own
 `IUserDataExportSection` implementations, and the shipped controller base is subclassed and routed by
 the app. Nothing changes for a host that does not.
@@ -22,9 +26,13 @@ Both consumers then wrote that flow, separately.
 `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs`
 and its Store twin
 `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs`
-make the same decisions in the same order: check owner-or-privileged role, load the user aggregate
+made the same decisions in the same order: check owner-or-privileged role, load the user aggregate
 read-only, fan out to the peer modules holding the rest of the person's data, catch each peer call on its
-own, assemble one document. They differ only in which fields they copy and which peers they call.
+own, assemble one document. They differed only in which fields they copy and which peers they call.
+Both files still carry those names, and each app still owns its `ExportUserDataHandlerTests`, but each
+handler is now a thin subclass of the base this record decided on, overriding a role test and a subject
+projection and nothing else (ADC `ExportUserDataHandler.cs:35`, `:38`, `:41`; Store
+`ExportUserDataHandler.cs:39`, `:47`, `:56`).
 
 The duplication is already on the record. `UserOwnershipRule`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserOwnershipRule.cs:21`) exists precisely
@@ -55,7 +63,7 @@ declares a `SectionName` and `ExportAsync(UserIdentifierType userId, Cancellatio
 section DTO carrying an `Available` flag. Every store of personal data that is not the user aggregate
 itself contributes one implementation: an in-process module service, a gRPC adapter to an extracted
 peer, or anything else the app registers. This generalizes ADC's `IUserEngagementExportService`
-(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/IUserEngagementExportService.cs:11`),
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/IUserEngagementExportService.cs:14`),
 the same contract with one module's name baked into it. Sections are collected from DI, so adding a
 store of personal data to an app is a registration, not an edit to the export handler.
 
@@ -110,7 +118,7 @@ There is no `AddDsarControllers()` registration; the unit of opt-in is the subcl
 declares a controller carrying its own `[Route]`, passes its query type, and implements the abstract
 `CreateQuery(userId, currentUserId, currentUserRole)` factory (`:119-122`); the action template
 `{userId}/export` is fixed on the base (`:77`), so a subclass routed at `Users` serves the same
-`/Users/{userId}/export` path the hand-written controllers do.
+`/Users/{userId}/export` path the apps published before the hoist.
 
 The base carries a bare `[Authorize]` (`:57`) and `[FeatureGate(PrivacyFeatures.DataExport)]` (`:58`),
 so a host that has not turned the feature on answers 404 rather than 403
@@ -123,16 +131,24 @@ serializes the package itself and returns `File(payload, ExportContentType, Buil
 (`:109`) rather than an `ObjectResult`, because content negotiation would render the document inline
 and the point of the endpoint is a saved file.
 
-**No consumer has adopted the base yet.** Neither ADC's nor Store's `UsersController` references
-`DataExportControllerBase`: each still owns a standalone action that reimplements the dispatch. ADC's
-`GET /Users/{userId}/export`
-(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:157`) builds
-the query inline and ends in `Ok(result.Value)` (`:175`), returning the document as a negotiated body
-with no `Content-Disposition`, and it is covered only by the class-level `[Authorize]` (`:31`) with no
-`[FeatureGate]`. Store's is the same shape
-(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs:35`). So
-the handler hoist landed in both apps while the controller hoist did not: the framework base is shipped
-and tested, the download delivery and the feature gate reach a consumer only when one subclasses it.
+**Both consumers have adopted the base, and the subclass is the whole app-side controller.** ADC ships
+`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersDataExportController.cs` and
+Store ships
+`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersDataExportController.cs`,
+each a sealed `[Route("Users")]` controller deriving from `DataExportControllerBase<ExportUserDataQuery>`
+(ADC `:29`, Store `:31`) whose only member is the `CreateQuery` override (ADC `:32-35`, Store `:34-38`).
+Neither app's `UsersController` holds an export action any more: Store's own remarks point at the
+subclass instead (`MMCA.Store/.../UsersController.cs:20-22`), and ADC's carries the list, delete and
+avatar actions under its class-level `[Authorize]` (`MMCA.ADC/.../UsersController.cs:29`) with no export
+of its own. Both Identity service hosts turn the gate on
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:21`,
+`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/appsettings.json:18`), so the file download,
+the `Content-Disposition` name and the 404-when-disabled posture are the behavior both deployed
+endpoints exhibit. Each app's integration tier pins that from the outside: ADC asserts the `attachment`
+disposition and the `user-data-{userId}-` name
+(`MMCA.ADC/Tests/Integration/MMCA.ADC.Identity.IntegrationTests/Attendee/UserExportTests.cs:72-81`),
+and Store asserts the exact `user-data-{userId}-{yyyyMMdd}.json` file name
+(`MMCA.Store/Tests/Integration/MMCA.Store.Identity.IntegrationTests/Users/UserExportTests.cs:88`).
 
 ### The completeness fitness rule is deferred, deliberately
 A `PiiEntitiesAreExportable` rule as a sibling to `EntitiesWithPiiImplementAnonymizable` (ADR-005) is the
@@ -143,12 +159,18 @@ of them could register a section, which is the opposite of how a fitness functio
 visible rather than being forgotten.
 
 ### Adoption in the lockstep sweep
-ADC and Store rebase their existing handlers onto the base as thin subclasses with identical public
+ADC and Store rebased their existing handlers onto the base as thin subclasses with identical public
 surface and untouched unit tests: the `AuthenticationServiceBase` hoist playbook (hoist with
-behavior-preserving hooks, the consumer becomes a subclass, the tests do not move). ADC's Engagement
-section already carries the check-in and points data added by [ADR-072](072-qr-badge-check-in-and-points.md)
+behavior-preserving hooks, the consumer becomes a subclass, the tests do not move). Each then replaced
+its hand-written action with a `UsersDataExportController` subclass on the same URL space, so the
+published path did not move. ADC's Engagement section already carries the check-in and points data added
+by [ADR-072](072-qr-badge-check-in-and-points.md)
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/UserEngagementExportDTO.cs:18`,
-`:24`), so it re-registers that projection as an `IUserDataExportSection` rather than adding data.
+`:24`), so it re-registers that projection as an `IUserDataExportSection` rather than adding data. ADC
+implements two sections
+(`MMCA.ADC/.../Identity.Application/Users/UseCases/ExportUserData/EngagementUserDataExportSection.cs:20`,
+`NotificationUserDataExportSection.cs:19`) and Store one
+(`MMCA.Store/.../Identity.Application/Users/UseCases/ExportUserData/SalesUserDataExportSection.cs:24`).
 MMCA.Helpdesk has no Identity module and does not adopt.
 
 ## Rationale
@@ -182,11 +204,13 @@ MMCA.Helpdesk has no Identity module and does not adopt.
 - **Best-effort degradation can return a quietly incomplete package.** `Available = false` is the only
   signal, and nothing forces a caller, a UI, or the subject to read it. A section that fails on every
   attempt produces an export that looks successful every time.
-- **The controller half of this record is shipped but unadopted.** Both apps subclass the handler base
-  and neither subclasses `DataExportControllerBase`, so the download delivery, the `Content-Disposition`
-  file name and the `[FeatureGate]` 404 posture are framework behavior no deployed endpoint exhibits
-  today: ADC and Store still return the package inline from their own actions. Until a consumer
-  subclasses, the two halves of the endpoint contract can drift without a test noticing.
+- **A legally required endpoint now depends on two things a host can get wrong quietly.** The gate means
+  an Identity host that leaves `Privacy.DataExport` off answers 404 and the app has no other DSAR
+  surface, which ADC records in the settings file itself
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:17-19`); and the route lives on
+  the subclass, so the tokenized `[Route("[controller]")]` would resolve to `UsersDataExport` and move
+  the published path, which is why both apps spell the literal `Users`
+  (`MMCA.Store/.../UsersDataExportController.cs:18-22`). Neither mistake fails a build.
 - **Nothing proves a section exists for every store of personal data.** The completeness of an export is
   exactly the set of sections a consumer chose to register; a module holding personal data that registers
   none is invisible to the export, and the fitness rule that would catch it is deferred.

@@ -38,16 +38,16 @@ fixes every choice above once, in one file.
   and derived test classes call `RenderUnderTest` / `RenderAs` and never touch the version-specific
   symbols, so a move off that line changes this file and no other
   (`BunitComponentTestBase.cs:29-34`). The line is pinned at `bunit` 2.9.0 in each repo's central
-  package file (`MMCA.Common/Directory.Packages.props:200-201`,
+  package file (`MMCA.Common/Directory.Packages.props:205-206`,
   `MMCA.ADC/Directory.Packages.props:31-32`, `MMCA.Store/Directory.Packages.props:51-52`), and the
   package carries a direct `AngleSharp` pin because central package management does not pin
   transitives (`MMCA.Common.Testing.UI.csproj:13-15`).
 - **MudBlazor services plus the ADR-067 facades, registered once.** The constructor calls
   `Services.AddMudServices()` (`BunitComponentTestBase.cs:46`) and then
   `Services.AddCommonUiFacades()` (`:53`), which is the same call the production shell makes from
-  `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:88`). That
+  `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:106`). That
   call registers `IToastService` -> `MudToastService` and `IAppDialogService` -> `MudAppDialogService`
-  with `TryAdd` (`DependencyInjection.cs:140-145`), so a component test resolves the vendor-neutral
+  with `TryAdd` (`DependencyInjection.cs:158-163`), so a component test resolves the vendor-neutral
   facades and exercises the real Mud-backed path, and a test that wants a recording double registers
   one afterwards (last registration wins, `BunitComponentTestBase.cs:48-52`).
 - **Loose JSInterop.** `JSInterop.Mode = JSRuntimeMode.Loose` (`:55`) so MudBlazor components that
@@ -55,11 +55,11 @@ fixes every choice above once, in one file.
 - **A mutable `AuthenticationStateProvider` that serves both consumption paths.** One
   `MutableAuthenticationStateProvider` instance is held by the base (`:42`), registered as the
   `AuthenticationStateProvider` singleton (`:58`), and implemented over a settable principal that
-  notifies listeners (`:156-168`). `RenderAs` sets the principal and also adds the cascading
-  `AuthenticationState`, so `<AuthorizeView>` and a directly injecting page agree (`:124-135`);
-  `SetUser` changes it mid-test without a new render root (`:114-115`); the default is anonymous
-  (`:39-40`, `:118-121`). Authorization is permissive but real: `IsAuthenticatedAuthorizationService`
-  succeeds for an authenticated identity and fails otherwise (`:57`, `:170-180`). Principals come from
+  notifies listeners (`:162-174`). `RenderAs` sets the principal and also adds the cascading
+  `AuthenticationState`, so `<AuthorizeView>` and a directly injecting page agree (`:130-141`);
+  `SetUser` changes it mid-test without a new render root (`:120-121`); the default is anonymous
+  (`:39-40`, `:123-127`). Authorization is permissive but real: `IsAuthenticatedAuthorizationService`
+  succeeds for an authenticated identity and fails otherwise (`:57`, `:176-186`). Principals come from
   the shipped `TestPrincipal` factory, which writes the user id under both `sub` and
   `ClaimTypes.NameIdentifier` because a real principal reaches a page under either name
   (`Infrastructure/TestPrincipal.cs:7,22-32`), plus an `Organizer` shorthand (`TestPrincipal.cs:35-36`).
@@ -68,18 +68,18 @@ fixes every choice above once, in one file.
   localized markup against the neutral resources in the component's own assembly with no per-test
   setup (`:60-62`).
 - **`SetRendererInfo` behind one helper, because its call ordering is load-bearing.**
-  `ConfigureDataGridListPageHost` (`:94-112`) registers the list-page state services (`:99-100`),
+  `ConfigureDataGridListPageHost` (`:100-118`) registers the list-page state services (`:105-106`),
   substitutes MudBlazor's `IBrowserViewportService` with an inert double so `IsMobile` stays
-  deterministically false (`:104`, which is why `Moq` is a package dependency rather than a
+  deterministically false (`:110`, which is why `Moq` is a package dependency rather than a
   hand-written stub, `MMCA.Common.Testing.UI.csproj:17-21`), adds bUnit's persistent component state
-  for the prerender boundary (`:108`), and calls `SetRendererInfo` **last** (`:111`). The rule is
+  for the prerender boundary (`:114`), and calls `SetRendererInfo` **last** (`:117`). The rule is
   written where the helper is: `SetRendererInfo` builds and freezes the bUnit service provider, so any
   registration made after it is silently ignored and the page resolves the framework default instead
-  of the test's double (`:72-77`). Eighteen test files across MMCA.Common, MMCA.ADC and MMCA.Store
+  of the test's double (`:78-82`). Nineteen test files across MMCA.Common, MMCA.ADC and MMCA.Store
   call the helper today; its comment records the fifteen hand-rolled copies of the block that the
-  extraction replaced (`:75-76`).
+  extraction replaced (`:81-82`).
 - **The rest of the harness ships with it.** `RenderMudProviders` renders the popover, dialog and
-  snackbar providers into the test's render root and returns handles (`:142-148`, `:151-154`);
+  snackbar providers into the test's render root and returns handles (`:148-154`, `:157-160`);
   `BunitInteractionExtensions` expresses clicks and text reads over accessible text rather than CSS
   paths (`Infrastructure/BunitInteractionExtensions.cs:12-34`); `MarkupSnapshot` is a dependency-free
   golden-markup comparison that normalizes MudBlazor's per-render GUIDs
@@ -97,11 +97,11 @@ fixes every choice above once, in one file.
   `.../Sales/MMCA.Store.Sales.UI.Tests/MMCA.Store.Sales.UI.Tests.csproj:12`,
   `.../Identity/MMCA.Store.Identity.UI.Tests/MMCA.Store.Identity.UI.Tests.csproj:12`); MMCA.Common's
   own UI tests take it by project reference
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/MMCA.Common.UI.Tests.csproj:22`). Each repo's
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/MMCA.Common.UI.Tests.csproj:25`). Each repo's
   subclass carries only what its head owns and nothing shared: Store Catalog's is an empty declaration
   (`MMCA.Store/Tests/Modules/Catalog/MMCA.Store.Catalog.UI.Tests/BunitTestBase.cs:11`), ADC
   Conference's adds the ADR-042 device-capability defaults and inert configuration
-  (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:18-38`), and
+  (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:19-46`), and
   MMCA.Common's adds the layout-chrome services only its own tests render
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:15-46`).
 
@@ -119,13 +119,13 @@ where a Blazor UI exists.
   structure and ADR-058 takes for runtime contracts.
 - **One freeze rule, one call site.** The `SetRendererInfo` ordering constraint cannot be enforced by
   the compiler, so the next best thing is to have exactly one place that gets it right and a helper
-  name that says when to call it (`BunitComponentTestBase.cs:70-77`).
+  name that says when to call it (`BunitComponentTestBase.cs:74-82`).
 - **The version boundary is a single file.** Isolating `BunitContext` and `Render<T>` behind
   `RenderUnderTest` / `RenderAs` means a bUnit line change is a framework edit, not a sweep across
   every UI test class in three repos (`:29-34`).
 - **Test-time and run-time resolve the same facades.** Because the base calls the production
   `AddCommonUiFacades` rather than registering its own doubles (`:53`,
-  `MMCA.Common.UI/DependencyInjection.cs:88,140-145`), a component test asserts against the real
+  `MMCA.Common.UI/DependencyInjection.cs:106,158-163`), a component test asserts against the real
   toast and dialog implementations ADR-067 put behind those interfaces, and a test that wants to
   assert on a toast opts into a double explicitly.
 - **A package matches how every other shipped test tier is delivered.** Runtime conformance
@@ -138,11 +138,11 @@ where a Blazor UI exists.
   JS module which does not exist, because the loose mode answers with defaults
   (`BunitComponentTestBase.cs:55`). Only the browser tier (ADR-063, ADR-092) catches that.
 - **Authorization in this tier answers on authentication, not on policy.** The shipped double succeeds
-  for any authenticated principal (`:170-180`), so a component test cannot assert a permission
+  for any authenticated principal (`:176-186`), so a component test cannot assert a permission
   denial; permission behavior belongs to the handler and API tiers.
 - **The frozen-provider rule is a convention, not a compiler error.** Nothing fails a test that
   registers a service after `SetRendererInfo`; the symptom is the framework default resolving quietly
-  in place of the double (`:72-77`), which is exactly the failure the helper exists to prevent and
+  in place of the double (`:78-82`), which is exactly the failure the helper exists to prevent and
   cannot prevent for a test that bypasses it.
 - **Nothing enforces adoption.** No fitness rule requires a UI test project to subclass the shared
   base, so a new project can still re-derive the block; the only inventory is a search.
@@ -151,7 +151,7 @@ where a Blazor UI exists.
   tests still takes Moq transitively, and a non-MudBlazor UI could not use this base at all.
 - **The bUnit version is pinned per repo, not by the package.** The package references `bunit` without
   a version (`MMCA.Common.Testing.UI.csproj:13`) and each consumer's central package file names the
-  number (`MMCA.Common/Directory.Packages.props:201`, `MMCA.ADC/Directory.Packages.props:32`,
+  number (`MMCA.Common/Directory.Packages.props:206`, `MMCA.ADC/Directory.Packages.props:32`,
   `MMCA.Store/Directory.Packages.props:52`), so three files have to agree, and the AngleSharp advisory
   pin has to be repeated the same way.
 

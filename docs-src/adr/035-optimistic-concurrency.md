@@ -90,8 +90,8 @@ stale update fails inside the UPDATE statement.
   All three are RFC 9457 problem details built by one helper (`:204`) through the registered
   `ProblemDetailsFactory`, so they carry the same `traceId`/`requestId` diagnostics as every other
   problem response on the surface, and each carries the standard `errors` extension with a stable
-  code: `Concurrency.PreconditionRequired` (`:162`), `Concurrency.MalformedIfMatch` (`:174`),
-  `Concurrency.PreconditionFailed` (`:186`).
+  code: `Concurrency.PreconditionRequired` (`:169`), `Concurrency.MalformedIfMatch` (`:181`),
+  `Concurrency.PreconditionFailed` (`:192`).
 - **`SetOriginalRowVersion` is the persistence extension point.**
   `IWriteRepository.SetOriginalRowVersion(TEntity, byte[])`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:406`)
@@ -124,9 +124,9 @@ stale update fails inside the UPDATE statement.
 - **The UI speaks the same format.** `ConcurrencyETag` lives in `MMCA.Common.Shared.Http` rather than
   in the API package precisely so both ends of the exchange can use it: the API reads an `If-Match`
   value with it and the UI writes one. `EntityServiceBase.UpdateAsync`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:166`) passes
-  `ConcurrencyTagOf(entity)` (`:184`) as the write's `If-Match` (`:174`), and the request client sets
-  the header (`:309`), so a Blazor page conditions its writes with no per-page code.
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:176`) passes
+  `ConcurrencyTagOf(entity)` (`:197`) as the write's `If-Match` (`:184`), and the request client sets
+  the header (`:394`), so a Blazor page conditions its writes with no per-page code.
 - **Every table carries the column.** The token exists in the database or it does not exist at all:
   each database's migrations add the `RowVersion` column to every table, typed `rowversion` in SQL
   Server, alongside the audit columns of the same base

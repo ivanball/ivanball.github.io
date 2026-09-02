@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -288,7 +290,7 @@
           null-object implementations of the owning module&#39;s cross-module contracts, shipped in that module&#39;s
           <code>*.Shared</code> project: <code>DisabledProductVariantService</code> answers <code>false</code> for existence checks, <code>null</code> for
           the SKU lookup and an empty dictionary for the batch price query
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/DisabledProductVariantService.cs:10-40</code>);
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/DisabledProductVariantService.cs:10-45</code>);
           <code>DisabledCustomerService</code> returns <code>null</code>
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/Customers/DisabledCustomerService.cs:8-15</code>);
           <code>DisabledSessionBookmarkValidationService</code> returns <code>Result.Success()</code> plus an empty session-id
@@ -327,7 +329,7 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:33-53,60-82</code>).
           Seeders run only for enabled modules and in registration order (<code>ModuleLoader.cs:118-121,255-261</code>),
           invoked from startup database initialization
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:32-35,98</code>).
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:35-38,111</code>).
           <code>AddModuleHealthChecks</code> publishes one <code>module-{Name}</code> check per module, Healthy when enabled and
           Degraded when disabled (<code>DependencyInjection.cs:179-207</code>).</li>
           <li><strong>A remote-dependency validator exists but is not wired.</strong> <code>ValidateRemoteDependencies</code> re-resolves
@@ -369,14 +371,14 @@
           <code>Sales</code> and declares <code>[&quot;Catalog&quot;, &quot;Identity&quot;]</code> as <code>RemoteDependencies</code>
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34</code>), then replaces the two
           stubs with typed gRPC clients after the loader returns
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:240-241</code>). ADC Engagement declares
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:235-236</code>). ADC Engagement declares
           <code>[&quot;Conference&quot;]</code> remote (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46</code>)
           and ADC Notification declares <code>[&quot;Identity&quot;]</code> remote
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:27-35</code>), while ADC
           Conference enables one module and declares nothing remote
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25</code>) even though it wires
           Engagement&#39;s <code>IBookmarkCountService</code> as a gRPC client
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350</code>), because
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:347</code>), because
           <code>ConferenceModule</code> never declares Engagement in <code>Dependencies</code>.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -392,7 +394,7 @@
           puts its contract type in the container, the dependent module&#39;s Application and Domain code has no
           branch for &quot;peer not present&quot;, which is precisely why a module&#39;s non-hosting layers are identical
           in-process and extracted (<code>ModuleLoader.cs:108</code>, <code>CatalogModule.cs:24-25</code>). The host then
-          overwrites the stub with a real cross-process adapter (<code>Sales.Service/Program.cs:240-241</code>).</li>
+          overwrites the stub with a real cross-process adapter (<code>Sales.Service/Program.cs:235-236</code>).</li>
           <li><strong>Two strictness levels, chosen per module.</strong> A module that genuinely cannot function without a
           peer opts into <code>RequiresDependencies = true</code> and fails fast (<code>SalesModule.cs:32</code>,
           <code>EngagementModule.cs:23</code>, <code>NotificationModule.cs:24</code>); everything else tolerates a missing peer and
@@ -434,7 +436,7 @@
           (<code>DependencyInjection.cs:200-207</code>, <code>ModuleLoader.cs:323-324,332-333</code>).</li>
           <li><strong>The dependency graph is a hand-written declaration, not a derived fact.</strong> ADC Conference consumes
           Engagement&#39;s <code>IBookmarkCountService</code> over gRPC without listing Engagement in <code>Dependencies</code>
-          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:350</code>), so neither the
+          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:347</code>), so neither the
           topological sort nor the <code>RequiresDependencies</code> check knows about that edge. Nothing derives
           <code>Dependencies</code> from the interfaces a module actually resolves. What is pinned is the declaration
           against a written expectation: <code>ModuleConformanceTestsBase&lt;TModule&gt;</code> asserts <code>Name</code>, <code>Dependencies</code>,

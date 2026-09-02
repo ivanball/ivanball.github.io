@@ -68,7 +68,7 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
   reason sits on the opt-in method's own doc comment (`:86-87`): a head that never scans should ship
   neither the camera handler nor a camera permission declaration.
 - **The scan is a modal page with exactly one resolution.** `MauiBarcodeScannerService`
-  (`Capabilities/MauiBarcodeScannerService.cs:24`) marshals to the main thread, then inside
+  (`Capabilities/MauiBarcodeScannerService.cs:24`) marshals to the main thread (`:67-69`), then inside
   `ScanOnMainThreadAsync` (`:79-104`) pushes a `BarcodeScanPage` modally (`:94`) and pops it in a
   `finally` (`:100-103`). The page holds a
   `TaskCompletionSource<string?>` (`Capabilities/BarcodeScanPage.cs:23-24`) that four paths can complete
@@ -85,7 +85,7 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
 
 Packaging follows ADR-042 exactly: `QRCoder` 1.8.0 (MIT) is a `MMCA.Common.UI` dependency and
 `ZXing.Net.Maui.Controls` 0.10.4 (MIT) a `MMCA.Common.UI.Maui` one, both pinned in
-`MMCA.Common/Directory.Packages.props` (`:153`, `:187`), and the MAUI package keeps its
+`MMCA.Common/Directory.Packages.props` (`:158`, `:192`), and the MAUI package keeps its
 windows-job build and pack.
 
 ## Rationale

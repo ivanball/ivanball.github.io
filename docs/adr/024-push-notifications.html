@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -235,18 +237,18 @@
           <code>SendPushNotificationHandler</code> (<code>MMCA.Common.Application</code>) resolves recipients, creates a
           <code>PushNotification</code> aggregate (<code>MMCA.Common.Domain.Notifications.PushNotifications</code>, the audit record of
           what was sent, carrying the caller&#39;s optional <code>ScopeKey</code> alongside the title, body, sender and
-          recipient count, <code>SendPushNotificationHandler.cs:56-62</code>), persists one <code>UserNotification</code> inbox row
+          recipient count, <code>SendPushNotificationHandler.cs:65-71</code>), persists one <code>UserNotification</code> inbox row
           per recipient (<code>MMCA.Common.Domain.Notifications.UserNotifications</code>, carrying <code>IsRead</code> / <code>ReadOn</code> with
           an idempotent <code>MarkAsRead</code>), and only then dispatches the live push. The inbox is the durable source
           of truth; the push is the best-effort live layer over it.</li>
           <li><strong>A send is idempotent only when the caller opts in.</strong> The command may carry a <code>DedupKey</code>; when it is
           present and not whitespace the handler looks it up before doing anything else and, on a hit, returns
           the already-sent notification without resolving recipients, writing inbox rows, or pushing
-          (<code>SendPushNotificationHandler.cs:30-41</code>). That lookup is a check-then-act, so two concurrent retries
+          (<code>SendPushNotificationHandler.cs:39-50</code>). That lookup is a check-then-act, so two concurrent retries
           of the same send both pass it and the loser fails on the insert against the filtered unique index on
-          <code>DedupKey</code> (<code>PushNotificationConfiguration.cs:67-69</code>). The handler catches that save failure,
+          <code>DedupKey</code> (<code>PushNotificationConfiguration.cs:68-70</code>). The handler catches that save failure,
           requeries the key on <code>CancellationToken.None</code>, and returns the winner&#39;s notification if the key now
-          exists, rethrowing untouched otherwise (<code>SendPushNotificationHandler.cs:76-103</code>). With no key the path
+          exists, rethrowing untouched otherwise (<code>SendPushNotificationHandler.cs:81-112</code>). With no key the path
           is unchanged: nothing is deduplicated by default.</li>
           <li><strong>Transient delivery is an abstraction with a no-op default.</strong> <code>IPushNotificationSender</code>
           (<code>MMCA.Common.Application</code>) is registered by default as <code>NullPushNotificationSender</code> (no-op), so a host
@@ -268,7 +270,7 @@
           the notification on next load. A send is never rolled back because the WebSocket fan-out failed.</li>
           <li><strong>An optional third, native-push leg (ADR-044).</strong> After the inbox write and the SignalR push,
           <code>SendPushNotificationHandler</code> also dispatches through <code>INativePushSender</code>
-          (<code>SendPushNotificationHandler.cs:134-152</code>), an OS-level native-push channel that reaches devices the
+          (<code>SendPushNotificationHandler.cs:144-161</code>), an OS-level native-push channel that reaches devices the
           SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
           push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
           defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:565</code>), so it
@@ -334,7 +336,7 @@
           <li><strong>Email is a framework-registered primitive, not a channel of this ADR.</strong> <code>IEmailSender</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IEmailSender.cs:6</code>) has a
           single implementation, <code>SmtpEmailSender</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:12</code>), and it is
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:13</code>), and it is
           TryAdd-registered in the same block as the push-sender defaults
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:559</code>, beside
           <code>IPushNotificationSender</code> at <code>:560</code>, <code>ILiveChannelPublisher</code> at <code>:561</code>, <code>INativePushSender</code> at <code>:565</code>

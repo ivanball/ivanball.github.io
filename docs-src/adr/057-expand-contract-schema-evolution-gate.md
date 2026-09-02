@@ -8,17 +8,17 @@ recorded on acceptance is now history rather than current behavior.
 ## Context
 ADR-030 decides **who** applies a migration: every service host runs `DatabaseInitStrategy = Migrate`
 and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
-`sqlcmd` backstop (`MMCA.Store/.github/workflows/deploy.yml:1119-1127`,
-`MMCA.ADC/.github/workflows/deploy.yml:1226-1236`). It says nothing about what **shape** a migration
+`sqlcmd` backstop (`MMCA.Store/.github/workflows/deploy.yml:1123-1131`,
+`MMCA.ADC/.github/workflows/deploy.yml:1297-1307`). It says nothing about what **shape** a migration
 may take.
 
 That gap is load-bearing because production rollback is **revision-only**. When the post-deploy smoke
 gate fails, the deploy rolls every container app back to its previous revision with
-`az containerapp revision copy --from-revision` (`MMCA.Store/.github/workflows/deploy.yml:1135,1195`,
-`MMCA.ADC/.github/workflows/deploy.yml:1247,1310`). That reverts the **image** and nothing else:
+`az containerapp revision copy --from-revision` (`MMCA.Store/.github/workflows/deploy.yml:1139,1199`,
+`MMCA.ADC/.github/workflows/deploy.yml:1318,1381`). That reverts the **image** and nothing else:
 the new revision already migrated the database on boot, and no down-migration runs. The previous
 release therefore keeps serving traffic against the **new** schema, which is exactly the statement
-both repos' CONTRIBUTING makes (`MMCA.Store/CONTRIBUTING.md:57-60`, `MMCA.ADC/CONTRIBUTING.md:57-60`).
+both repos' CONTRIBUTING makes (`MMCA.Store/CONTRIBUTING.md:56-59`, `MMCA.ADC/CONTRIBUTING.md:57-60`).
 A `DropColumn` shipped alongside the code that stopped reading it makes the rollback path a broken
 release rather than a recovery.
 
@@ -35,7 +35,7 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
 - **Expand now, contract later, as a written rule.** Adding nullable columns, new tables and new
   indexes is safe in any release; `DropColumn` / `DropTable` / `DropIndex` belong to a LATER release,
   once no revision that reads the old shape can still be rolled back to
-  (`MMCA.Store/CONTRIBUTING.md:62-65`, `MMCA.ADC/CONTRIBUTING.md:62-65`).
+  (`MMCA.Store/CONTRIBUTING.md:61-64`, `MMCA.ADC/CONTRIBUTING.md:62-65`).
 - **A migration ADDED by a PR may not drop without a marker.** The `Expand/contract migration guard
   (schema rollback safety)` step fails the build when a newly added migration's `Up()` matches
   `\.(DropColumn|DropTable|DropIndex)\s*(<[^>]*>)?\s*\(` and the same `Up()` body does not carry the
@@ -43,7 +43,7 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
   `MMCA.ADC/.github/workflows/deploy.yml:203-249`). Those three operations are the entire matched set.
 - **The marker's documented format is one comment line:**
   `// EXPAND-CONTRACT-OVERRIDE: <why this drop is safe one release back>`
-  (`MMCA.Store/CONTRIBUTING.md:73-75`, `MMCA.ADC/CONTRIBUTING.md:73-75`). What the step actually
+  (`MMCA.Store/CONTRIBUTING.md:72-74`, `MMCA.ADC/CONTRIBUTING.md:73-75`). What the step actually
   enforces is looser: `grep -q 'EXPAND-CONTRACT-OVERRIDE'` over the `Up()` body
   (`MMCA.Store/.github/workflows/deploy.yml:318`, `MMCA.ADC/.github/workflows/deploy.yml:242`), so the
   token must appear inside `Up()`, but the `//` prefix, the colon and the reason text are convention,
@@ -65,12 +65,12 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
 - **It is a merge gate, not a deploy gate.** The step lives in the `build-and-test` job, which both
   repos run only on `pull_request` (`MMCA.Store/.github/workflows/deploy.yml:178`,
   `MMCA.ADC/.github/workflows/deploy.yml:194`) and document as a required merge check
-  (`MMCA.Store/CONTRIBUTING.md:38-39`, `MMCA.ADC/CONTRIBUTING.md:37-38`). Nothing re-checks the shape
+  (`MMCA.Store/CONTRIBUTING.md:37-38`, `MMCA.ADC/CONTRIBUTING.md:37-38`). Nothing re-checks the shape
   on the push to `main` that deploys.
 - **The common legitimate override is an index rebuilt in place.** Adding INCLUDE columns or a filter
   emits a `DropIndex` immediately followed by a `CreateIndex` under the same name, which a
   one-release-back revision reads as a superset of what it expects
-  (`MMCA.Store/CONTRIBUTING.md:77-79`). The live markers say exactly that:
+  (`MMCA.Store/CONTRIBUTING.md:76-78`). The live markers say exactly that:
   `MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260725133726_AddOutboxInboxRetentionIndexes.cs:13-17`
   (outbox pending index gains INCLUDE columns) and
   `MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260720031638_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.cs:14-17`
@@ -80,8 +80,8 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
 
 **Adoption is partial, and deliberately so at the deployed repos only.** MMCA.ADC and MMCA.Store both
 run the gate, in identical form. **MMCA.Helpdesk does not have it**: neither of its two CI jobs runs a
-migration step (`build-and-test` at `MMCA.Helpdesk/.github/workflows/ci.yml:14-45`, `template-smoke`
-at `:61-74`), and its tree
+migration step (`build-and-test` at `MMCA.Helpdesk/.github/workflows/ci.yml:14-60`, `template-smoke`
+at `:76-89`), and its tree
 already carries an unmarked `DropIndex` in an `Up()` body
 (`MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/Migrations/20260725121253_AddOutboxInboxRetentionIndexes.cs:13-16`),
 which is consistent: Helpdesk has no deploy workflow and therefore no revision-rollback model to

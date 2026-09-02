@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -302,8 +304,8 @@
           <p>All three are RFC 9457 problem details built by one helper (<code>:204</code>) through the registered
           <code>ProblemDetailsFactory</code>, so they carry the same <code>traceId</code>/<code>requestId</code> diagnostics as every other
           problem response on the surface, and each carries the standard <code>errors</code> extension with a stable
-          code: <code>Concurrency.PreconditionRequired</code> (<code>:162</code>), <code>Concurrency.MalformedIfMatch</code> (<code>:174</code>),
-          <code>Concurrency.PreconditionFailed</code> (<code>:186</code>).</p>
+          code: <code>Concurrency.PreconditionRequired</code> (<code>:169</code>), <code>Concurrency.MalformedIfMatch</code> (<code>:181</code>),
+          <code>Concurrency.PreconditionFailed</code> (<code>:192</code>).</p>
           </li>
           <li><p><strong><code>SetOriginalRowVersion</code> is the persistence extension point.</strong>
           <code>IWriteRepository.SetOriginalRowVersion(TEntity, byte[])</code>
@@ -340,9 +342,9 @@
           <li><p><strong>The UI speaks the same format.</strong> <code>ConcurrencyETag</code> lives in <code>MMCA.Common.Shared.Http</code> rather than
           in the API package precisely so both ends of the exchange can use it: the API reads an <code>If-Match</code>
           value with it and the UI writes one. <code>EntityServiceBase.UpdateAsync</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:166</code>) passes
-          <code>ConcurrencyTagOf(entity)</code> (<code>:184</code>) as the write&#39;s <code>If-Match</code> (<code>:174</code>), and the request client sets
-          the header (<code>:309</code>), so a Blazor page conditions its writes with no per-page code.</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:176</code>) passes
+          <code>ConcurrencyTagOf(entity)</code> (<code>:197</code>) as the write&#39;s <code>If-Match</code> (<code>:184</code>), and the request client sets
+          the header (<code>:394</code>), so a Blazor page conditions its writes with no per-page code.</p>
           </li>
           <li><p><strong>Every table carries the column.</strong> The token exists in the database or it does not exist at all:
           each database&#39;s migrations add the <code>RowVersion</code> column to every table, typed <code>rowversion</code> in SQL

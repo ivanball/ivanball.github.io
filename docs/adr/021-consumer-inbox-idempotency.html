@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-021: Consumer-Side Inbox for Integration-Event Idempotency · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inbox stays opt-in, but being off is no longer silent: a broker-connected…">
+  <meta name="description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15, inventory refreshed 2026-09-01). Revised 2026-08-18 (the inbox stays opt-in, but being off is no…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-021: Consumer-Side Inbox for Integration-Event Idempotency">
-  <meta property="og:description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inbox stays opt-in, but being off is no longer silent: a broker-connected…">
+  <meta property="og:description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15, inventory refreshed 2026-09-01). Revised 2026-08-18 (the inbox stays opt-in, but being off is no…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-021: Consumer-Side Inbox for Integration-Event Idempotency">
-  <meta name="twitter:description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inbox stays opt-in, but being off is no longer silent: a broker-connected…">
+  <meta name="twitter:description" content="Accepted (2026-06-09; adoption reviewed 2026-07-15, inventory refreshed 2026-09-01). Revised 2026-08-18 (the inbox stays opt-in, but being off is no…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"021 · Consumer-Side Inbox for Integration-Event Idempotency","item":"https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -212,7 +214,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-021-consumer-side-inbox-for-integration-event-idempotency">ADR-021: Consumer-Side Inbox for Integration-Event Idempotency</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inbox stays opt-in, but
+          <p>Accepted (2026-06-09; adoption reviewed 2026-07-15, inventory refreshed 2026-09-01). Revised 2026-08-18 (the inbox stays opt-in, but
           being off is no longer silent: a broker-connected host running <code>NoOpInboxStore</code> logs a startup
           warning, <code>MessageBus:EnableInbox=true</code> becomes the stated recommendation for any such host, and the
           <code>InboxMessages</code> entity is confirmed to be part of the relational model unconditionally. See the
@@ -272,17 +274,22 @@
           that saves to the same physical source now commits the inbox row in its own transaction, so that
           window is closed for it; it remains open for a handler that writes nothing or writes to a different
           source, and handlers must still be idempotent.)</p>
-          <p>In production <code>EnableInbox: true</code> is set on all four ADC service hosts
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:28</code>,
+          <p>In production <code>EnableInbox: true</code> is set explicitly on all four ADC service hosts
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:34</code>,
           <code>MMCA.ADC.Conference.Service/appsettings.json:31</code>, <code>MMCA.ADC.Engagement.Service/appsettings.json:52</code>,
-          <code>MMCA.ADC.Notification.Service/appsettings.json:50</code>) and on Store&#39;s Sales service
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:40</code>). Where the <code>InboxMessages</code>
-          table comes from differs by repo: each of the four ADC per-service migration projects carries a
-          dedicated <code>AddInboxMessages</code> migration, whereas Store Sales creates the table and its unique
-          <code>IX_InboxMessages_MessageId</code> index inside its single <code>InitialCreate</code> migration
-          (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260621192808_InitialCreate.cs:21,179</code>),
-          because that per-service project postdates the frozen combined-archive lineage that added the ADC
-          migration. Adoption inventory as of 2026-08-13: <strong>three ADC services consume from the broker</strong> and
+          <code>MMCA.ADC.Notification.Service/appsettings.json:50</code>) and on all three Store service hosts
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:40</code>,
+          <code>MMCA.Store.Catalog.Service/appsettings.json:30</code>, <code>MMCA.Store.Identity.Service/appsettings.json:30</code>),
+          so every deployed service host states its posture rather than resting on the transport default the
+          Revision (2026-08-26) introduced. Where the <code>InboxMessages</code> table comes from differs by repo: each of
+          the four ADC per-service migration projects carries a dedicated <code>AddInboxMessages</code> migration, whereas
+          each Store per-service project creates the table and its unique <code>IX_InboxMessages_MessageId</code> index
+          inside its single <code>InitialCreate</code> migration
+          (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260621192808_InitialCreate.cs:21,179</code>,
+          <code>MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs:48,213</code>,
+          <code>MMCA.Store.Migrations.SqlServer.Identity/Migrations/20260621192816_InitialCreate.cs:49,119</code>),
+          because those per-service projects postdate the frozen combined-archive lineage that added the ADC
+          migration. Adoption inventory as of 2026-09-01: <strong>three ADC services consume from the broker</strong> and
           so use their inbox for real, plus Store Sales. ADC Identity consumes <code>SpeakerLinkedToUser</code> and
           <code>SpeakerUnlinkedFromUser</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:290-291</code>),
           ADC Conference consumes <code>UserRegistered</code> (<code>MMCA.ADC.Conference.Service/Program.cs:349</code>), and ADC
@@ -291,16 +298,13 @@
           first of which is ADC&#39;s first <strong>self-consumption</strong> over the broker: Engagement publishes
           <code>AttendeeCheckedIn</code> and consumes it back, which is precisely the shape a redelivery would double-count,
           so the inbox is load-bearing there rather than decorative. Store Sales consumes <code>ProductVariantChanged</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:247</code>). Only <strong>ADC Notification</strong>
-          now carries <code>EnableInbox: true</code> and the table while registering no consumer, so its inbox alone is
-          provisioned and unused (functionally harmless). The mirror image is equally harmless and worth stating
-          because it looks like the opposite mistake: Store Catalog and Store Identity carry the <code>InboxMessages</code>
-          table from their own <code>InitialCreate</code> migrations
-          (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs:48,213</code>,
-          <code>MMCA.Store.Migrations.SqlServer.Identity/Migrations/20260621192816_InitialCreate.cs:49,119</code>) with
-          <strong>no</strong> <code>EnableInbox</code> flag and <strong>no</strong> consumer, so the table exists and is simply never written; the
-          audit condition the Trade-offs below state (no broker-consuming service lacks the flag) holds in both
-          repos.</p>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:247</code>). The remaining three hosts (<strong>ADC
+          Notification</strong>, <strong>Store Catalog</strong> and <strong>Store Identity</strong>) carry <code>EnableInbox: true</code> and the table while
+          registering no consumer, so their inboxes are provisioned and unused, which is functionally harmless:
+          the flag costs one scoped <code>EfInboxStore</code> registration and the table stays empty until one of them
+          starts consuming. The audit condition the Trade-offs below state (no broker-consuming service lacks
+          the flag) holds in both repos, and no host in either repo now leaves the setting to the transport
+          default.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Dedup once, not in every handler.</strong> A single consume-edge check turns &quot;every handler author must
@@ -360,9 +364,11 @@
           which DI branch registered it. Its message text is at <code>:33-36</code>. The type is <code>internal</code>, so it is a
           framework behavior rather than a public extension point.</li>
           <li><strong><code>MessageBus:EnableInbox=true</code> is now the stated recommendation, not a neutral option.</strong> The
-          setting is still <code>bool</code> with no initializer, so the default is still <code>false</code>
-          (<code>.../Settings/MessageBusSettings.cs:84</code>), but its own documentation now says &quot;RECOMMENDED true for
-          any broker-connected host&quot; (<code>:65-73</code>). The Trade-offs entry above (&quot;a broker-consuming service that
+          setting is still <code>bool</code> with no initializer, so the default is still <code>false</code>, but its own
+          documentation now says &quot;RECOMMENDED true for any broker-connected host&quot;. (<strong>Superseded by the
+          Revision (2026-08-26)</strong>: the property is <code>bool?</code> with no initializer
+          (<code>.../Settings/MessageBusSettings.cs:117</code>), and its documentation now states the transport-driven
+          resolution rather than a recommendation (<code>:91-116</code>).) The Trade-offs entry above (&quot;a broker-consuming service that
           forgets <code>EnableInbox</code> gets no dedup&quot;) therefore keeps its substance and loses its silence: the
           inventory audit it asks for is now performed by the host at every boot.</li>
           <li><strong>The <code>InboxMessages</code> table is part of the relational model unconditionally.</strong>
@@ -381,8 +387,9 @@
           Every service enumerated in the Decision above is past that point already (ADC&#39;s four per-service
           migration projects each carry an <code>AddInboxMessages</code> migration; Store&#39;s per-service projects create the
           table in <code>InitialCreate</code>). The settings documentation says the same thing
-          (<code>MessageBusSettings.cs:58-64</code>), and notes that the <code>false</code> default exists only so an existing host
-          does not start querying a table it has not migrated yet. Cosmos hosts remain the exception, as the
+          (<code>MessageBusSettings.cs:94-97</code>), and carved out the <code>false</code> default for an existing host that has not
+          migrated the table yet (that carve-out is now the explicit <code>EnableInbox=false</code> opt-out documented at
+          <code>:110-115</code>, per the Revision (2026-08-26)). Cosmos hosts remain the exception, as the
           Decision above already states.</p>
           <h2 id="revision-2026-08-26">Revision (2026-08-26)</h2>
           <p><strong>Two changes, and the first one reverses this record&#39;s central choice.</strong> The inbox is no longer
@@ -390,16 +397,16 @@
           <ol>
           <li><strong><code>EnableInbox</code> becomes three-valued, and unset resolves ON for a broker.</strong>
           <code>MessageBusSettings.EnableInbox</code> is now <code>bool?</code> with no initializer
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:94</code>), and every
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:117</code>), and every
           framework component reads the resolved posture instead:
-          <code>IsInboxEnabled =&gt; EnableInbox ?? Provider != MessageBusProvider.InProcess</code> (<code>:102</code>). An explicit
-          value still wins in both directions (<code>:88-92</code>); left unset the transport decides, ON for RabbitMQ
-          and Azure Service Bus, OFF for the in-process provider that has no redelivery to dedup (<code>:76-79</code>).
+          <code>IsInboxEnabled =&gt; EnableInbox ?? Provider != MessageBusProvider.InProcess</code> (<code>:125</code>). An explicit
+          value still wins in both directions (<code>:110-115</code>); left unset the transport decides, ON for RabbitMQ
+          and Azure Service Bus, OFF for the in-process provider that has no redelivery to dedup (<code>:99-102</code>).
           The reason the default flipped is written where the setting lives: broker delivery is
           at-least-once by contract, so an ack lost to a network blip, a redelivery after a lease expiry, or
           an outbox row republished after a crash all hand the same event to the same handlers twice, and
           with the inbox off each of those becomes a duplicate side effect (a second email, a second charge
-          attempt, a double decrement) unless every handler happens to be idempotent on its own (<code>:80-85</code>).
+          attempt, a double decrement) unless every handler happens to be idempotent on its own (<code>:103-108</code>).
           The registration branch is unchanged in shape and only its condition moved: <code>AddBrokerMessaging</code>
           still returns early for <code>MessageBusProvider.InProcess</code>
           (<code>.../MMCA.Common.Infrastructure/DependencyInjection.cs:741</code>), so this scopes to broker hosts, and

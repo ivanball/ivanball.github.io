@@ -9,10 +9,13 @@ families join the library, a `.proto` wire-contract gate and an idempotency-inte
 move to **104 test methods across 36 bases**, superseding the 102/34 figure the first revision
 recorded. See the second section, Revision (2026-08-18): Section B rule families. Revised 2026-08-18
 against the released framework v1.154.0: MMCA.Common's own build then executed **99** of the 104 methods
-and the public-API baselines hold **5,150 declarations**. Revised 2026-08-23: the method and base counts
-moved again and are no longer restated in this record's live text, since `MMCA.Common/FACTS.md` owns them
-(`:44`, `:47`) and is drift-gated in CI; the Decision's `--minimum-expected-tests` figure is corrected to
-the floor CI actually applies. See Revision (2026-08-23) at the end.
+and the public-API baselines then held **5,150 declarations**. Revised 2026-08-23: the method and base
+counts moved again and are no longer restated in this record's live text, since `MMCA.Common/FACTS.md`
+owns them (`:46`, `:49`) and is drift-gated in CI; the Decision's `--minimum-expected-tests` figure is
+corrected to the floor CI actually applies. See Revision (2026-08-23) at the end. Revised 2026-09-01:
+the public-API gate's file, declaration and coverage figures are corrected in place (sixteen baseline
+pairs, one per published package except `MMCA.Common.UI.Maui`, with the package count left to
+`MMCA.Common/FACTS.md`), and three citations are re-anchored. See Revision (2026-09-01) at the end.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -162,9 +165,10 @@ exemption records a genuine blind spot in the rule rather than an accepted defec
 This is the structural change to the Decision above, which framed enforcement as two layers (an MSBuild
 project-reference guard and a NetArchTest suite). The gate is neither: it is a **compile-time analyzer
 with a committed baseline**, `Microsoft.CodeAnalysis.PublicApiAnalyzers` 5.6.0
-(`MMCA.Common/Directory.Packages.props:194`), applied to every `Source` project through one
+(`MMCA.Common/Directory.Packages.props:199`), applied to every `Source` project through one
 `Directory.Build.props` ItemGroup rather than per csproj (`:86-93`), with `PublicAPI.Shipped.txt` and
-`PublicAPI.Unshipped.txt` added as `AdditionalFiles` (`:91-92`). Fourteen projects carry the pair.
+`PublicAPI.Unshipped.txt` added as `AdditionalFiles` (`:91-92`). Sixteen projects carry the pair, one
+for every published package except the single exclusion below.
 **`MMCA.Common.UI.Maui` is deliberately excluded** and the condition says why (`:82-84`): it lives
 outside `MMCA.Common.slnx` and builds only on the windows `build-maui` job across four MAUI TFMs
 (ADR-042), "so its baseline could neither be bootstrapped nor kept honest from the normal build".
@@ -178,16 +182,19 @@ explicitly set to `error`: both are left at the repository's global analyzer-err
 Widening or breaking a package's shipped surface therefore becomes a reviewable diff in a text file
 instead of something a consumer discovers after the release.
 
-The baselines hold **5,150 declarations** across the fourteen files (5,164 non-empty lines, each file
-opening with a `#nullable enable` header), and every `PublicAPI.Unshipped.txt` contains that header and
-nothing else. **What is baselined is the surface as of this branch**, which is whichever release
-`MMCA.Common/FACTS.md:14` currently names (v1.154.0 when this revision was written, v1.160.0 as of
-2026-08-23), so the figures above cover the Section A additions this
-revision described plus the Section B ones that followed, not a frozen picture of one release. The
+The shipped baselines hold **5,034 declarations** across the sixteen files (5,050 non-empty lines, each
+file opening with a `#nullable enable` header; two of them, `MMCA.Common.Gateway` and the `MMCA.Common`
+metapackage, hold the header alone). The `PublicAPI.Unshipped.txt` files are no longer header-only
+stubs: fourteen of the sixteen now carry **1,457 declarations** of surface added since their shipped
+baseline was last written, the two exceptions being `MMCA.Common.UI.Web` and the `MMCA.Common`
+metapackage. **What is baselined is the surface as of this branch**, which is whichever release
+`MMCA.Common/FACTS.md:14` currently names (v1.154.0 when this revision was written; the figures above
+were re-counted on 2026-09-01), so they cover the Section A additions this
+revision described plus every wave that followed, not a frozen picture of one release. The
 start version is no longer uncited: the gate shipped in v1.153.0, whose changelog entry names
 `Microsoft.CodeAnalysis.PublicApiAnalyzers` on every in-slnx Source project with committed baselines as
-one of three new build gates (`MMCA.Common/CHANGELOG.md:986-992`, under the v1.153.0 heading at
-`:931`). The discipline therefore begins with
+one of three new build gates (`MMCA.Common/CHANGELOG.md:1273-1279`, under the v1.153.0 heading at
+`:1218`). The discipline therefore begins with
 v1.153.0 rather than applying retroactively.
 
 Three rules from the same analyzer are off, each with the reason recorded rather than silently
@@ -224,7 +231,9 @@ in the repository that owns it.
   `ValueTask<T>` qualify (`ArchitectureRules.CancellationTokens.cs:105-112`), so an
   `IAsyncEnumerable<T>` method or any custom awaitable is silently out of scope despite being exactly
   the kind of long-running work a token exists for.
-- **The public API gate covers 14 of the 15 packages, and only in MMCA.Common.** `MMCA.Common.UI.Maui`
+- **The public API gate covers every published package except one, and only in MMCA.Common.** The
+  package list and count live in `MMCA.Common/FACTS.md` and are deliberately not restated here.
+  `MMCA.Common.UI.Maui`
   is excluded for build-topology reasons even though it has its own required windows build gate, so
   "every shipped package's surface is gated" would be an overstatement. ADC, Store and Helpdesk publish
   nothing and get no baselines, which leaves the three enforcement layers unevenly distributed across
@@ -269,8 +278,12 @@ change into a red build. Consumers subclass `ProtoContractTestsBase`
 **MMCA.Common ships no `.proto` of its own and does not subclass the base.** The only proto files in
 the repository are a matched fixture pair,
 `Tests/Architecture/MMCA.Common.Architecture.Tests/TestData/fitness-catalog.proto` and its deliberately
-drifted twin, driven through the rule by `ProtoContractFitnessTests.cs:11`. A clean fixture proves the
-parser accepts a real contract and a drifted one proves the rule actually fails, which is the only way
+drifted twin, driven through the rule by five `[Fact]`s in `ProtoContractFitnessTests`
+(`.../ProtoContractFitnessTests.cs:14`, the fixture pair at `:20-22`, the cases at `:44`, `:52`, `:66`,
+`:76` and `:89`). A clean fixture proves the
+parser accepts a real contract and a drifted one proves the rule actually fails, a missing path fails
+loudly rather than pinning an empty contract (`:76-87`), and one case asserts the unpinned `syntax`,
+`import` and `option` lines really are ignored (`:89-98`), which is the only way
 a rule whose subject lives in another repository can be tested by the repository that owns it.
 
 ### The idempotency-intent gate
@@ -333,10 +346,45 @@ job does and the solution-wide run cannot.
 
 **One citation was re-anchored, not rewritten.** The v1.153.0 changelog bullet naming
 `Microsoft.CodeAnalysis.PublicApiAnalyzers` is verbatim unchanged but has moved to
-`MMCA.Common/CHANGELOG.md:986-992` (its release heading at `:931`) as newer releases were prepended
+`MMCA.Common/CHANGELOG.md:1273-1279` (its release heading at `:1218`) as newer releases were prepended
 above it. Line-anchored citations into an append-at-top file are a known cost of citing this precisely;
 the alternative, citing nothing, is worse. The anchors above are the current ones and are re-anchored
 in place on each audit, since a pointer that has drifted is broken rather than merely superseded.
+
+## Revision (2026-09-01): the public API gate's real coverage, and re-anchored citations
+No rule family joined or left the library in this entry and no decision changed. It corrects the
+public-API figures the first 2026-08-18 revision recorded, which had gone stale as the framework grew,
+and it re-anchors three citations that moved.
+
+**The gate is wider than this record said, and the coverage ratio is retired rather than updated.**
+Sixteen `Source` projects carry the `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` pair, one for
+every published package except `MMCA.Common.UI.Maui`, where the first revision counted fourteen
+projects and described the gate as covering "14 of the 15 packages". The package count is no longer
+restated in this record at all: `MMCA.Common/FACTS.md` owns the package list and is generated and
+drift-gated in CI, and a transcribed "N of M" here is precisely the figure that went stale. What this
+record states instead is the shape of the coverage, which the MSBuild condition itself guarantees:
+every `Source` project except the one the condition names by hand
+(`MMCA.Common/Directory.Build.props:86`).
+
+**The declaration figures were re-counted and the unshipped files are no longer empty.** The shipped
+baselines hold 5,034 declarations across 5,050 non-empty lines, where the first revision recorded 5,150
+across 5,164 for fourteen files, and the `PublicAPI.Unshipped.txt` files, described in that revision as
+holding the `#nullable enable` header and nothing else, now carry 1,457 declarations between fourteen
+of the sixteen. That is the gate working, not a backlog: surface added since a baseline was last
+written has to be declared somewhere for the build to stay green, and the unshipped file is where it
+lands. Both figures are a reading of one branch on one date and will move with the next wave, which is
+why the sentence around them points at `FACTS.md:14` for the release they describe.
+
+**Three citations were re-anchored, not rewritten.** The `Microsoft.CodeAnalysis.PublicApiAnalyzers`
+`PackageVersion` moved to `MMCA.Common/Directory.Packages.props:199` (a `Meziantou.Analyzer` entry was
+inserted above it in the Analyzers block); the v1.153.0 changelog bullet moved to
+`MMCA.Common/CHANGELOG.md:1273-1279` under its heading at `:1218`, the append-at-top cost the
+2026-08-23 entry above predicted; and the proto fixture pair's citation now names the test class and
+its five cases (`ProtoContractFitnessTests.cs:14`, `:20-22`, `:44`, `:52`, `:66`, `:76`, `:89`) rather
+than a line inside that file's XML doc comment. The two `FACTS.md` pointers in the Status block moved
+from `:44` / `:47` to `:46` / `:49` as that generated file grew; the dated readings inside the
+revisions above keep their own anchors, since re-pointing a historical number at a line that now says
+something else would be worse than leaving it dated.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

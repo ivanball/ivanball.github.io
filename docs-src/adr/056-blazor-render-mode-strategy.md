@@ -61,28 +61,28 @@ layer rather than by weakening the render mode.
 - **The SSR/interactive double fetch is removed once, in the shared list-page base.**
   `DataGridListPageBase<TDto>` injects `PersistentComponentState`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:31`), restores a
-  per-page-type key `grid:{TypeFullName}` in `OnInitialized` (`DataGridListPageBase.cs:136-140`), and
+  per-page-type key `grid:{TypeFullName}` in `OnInitialized` (`DataGridListPageBase.cs:171-175`), and
   registers a persist callback so the prerender pass hands its rows forward
-  (`DataGridListPageBase.cs:151-161`). The first interactive `ServerData` call returns that snapshot and
-  clears it instead of issuing a redundant API round-trip (`DataGridListPageBase.cs:452-461`), which the
+  (`DataGridListPageBase.cs:184-194`). The first interactive `ServerData` call returns that snapshot and
+  clears it instead of issuing a redundant API round-trip (`DataGridListPageBase.cs:513-522`), which the
   base's own comment records as the fix for the visible cancel-retry cycle caused by the
-  SSR to Server to WASM transition (`DataGridListPageBase.cs:134-137`). The payload is a
-  `PersistedGridState` record of items plus total (`DataGridListPageBase.cs:834`). **Nineteen types
+  SSR to Server to WASM transition (`DataGridListPageBase.cs:167-170`). The payload is a
+  `PersistedGridState` record of items plus total (`DataGridListPageBase.cs:1034`). **Nineteen types
   inherit this base** (thirteen in ADC, six in Store), eighteen of them routable list pages plus ADC's
   non-routable Engagement `AttendeeSearchPanel`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIn/AttendeeSearchPanel.razor.cs:16`),
   so the policy is written once and adopted by inheritance.
 - **The persist callback declares `InteractiveAuto` explicitly.** The base passes
   `RenderMode.InteractiveAuto` as the second argument to `RegisterOnPersisting`
-  (`DataGridListPageBase.cs:161`) because a page that inherits its mode from
+  (`DataGridListPageBase.cs:194`) because a page that inherits its mode from
   `<Routes @rendermode="...">` declares none of its own, and the callback would otherwise fail render-mode
   inference during the static prerender pass; the reasoning is recorded inline
-  (`DataGridListPageBase.cs:144-150`).
+  (`DataGridListPageBase.cs:177-183`).
 - **The prerender fetch is time-bounded so a cold backend cannot block the page.** `CreateFetchCts` links
   to the request token and, when `RendererInfo.IsInteractive` is false, cancels after
-  `PrerenderFetchTimeoutMs` (5000 ms) (`DataGridListPageBase.cs:84`, `DataGridListPageBase.cs:525-534`).
+  `PrerenderFetchTimeoutMs` (5000 ms) (`DataGridListPageBase.cs:84`, `DataGridListPageBase.cs:710-721`).
   On timeout the page returns an empty grid that the first interactive call refills
-  (`DataGridListPageBase.cs:496-503`).
+  (`DataGridListPageBase.cs:558-565`).
 - **Detail and dashboard pages take the other route: they skip the prerender fetch entirely.** An early
   `if (!RendererInfo.IsInteractive) return;` guard in `OnParametersSetAsync` / `OnInitializedAsync` appears
   across both apps, with two different stated reasons: avoiding the doubled reads under `InteractiveAuto`
@@ -97,9 +97,9 @@ layer rather than by weakening the render mode.
 - **One page outside the grid family repeats the persistence pattern by hand.** Store's `CatalogBrowse`
   persists its prerendered products, categories and filter tuple and rehydrates them when the interactive
   pass starts on the same filter combination
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogBrowse.razor.cs:66-72`,
-  `CatalogBrowse.razor.cs:92-105`, `CatalogBrowse.razor.cs:124-139`, `CatalogBrowse.razor.cs:155-168`),
-  using the single-argument `RegisterOnPersisting` overload (`CatalogBrowse.razor.cs:96`) rather than the
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogBrowse.razor.cs:82-89`,
+  `CatalogBrowse.razor.cs:99-112`, `CatalogBrowse.razor.cs:135-150`, `CatalogBrowse.razor.cs:157-178`),
+  using the single-argument `RegisterOnPersisting` overload (`CatalogBrowse.razor.cs:101`) rather than the
   explicit-render-mode form the base needs. It is a copy of the policy, not an instance of it.
 - **Because any page may run in either runtime, both runtimes register the same services.** Each WASM
   client `Program.cs` mirrors its server host's registrations (MudBlazor, `AddUIShared`, browser device
@@ -180,7 +180,7 @@ layer rather than by weakening the render mode.
   `RendererInfo.IsInteractive` guard avoid the duplicate work; a new page that does none of the three
   silently fetches twice on every load. No test or analyzer flags that.
 - **Persisting grid rows inflates the prerendered HTML.** The full page of DTOs is serialized into the
-  response so the interactive pass can reuse it (`DataGridListPageBase.cs:156`), trading response size for
+  response so the interactive pass can reuse it (`DataGridListPageBase.cs:189`), trading response size for
   one fewer API round-trip; a large page size makes that trade worse.
 - **The deploy-gating E2E suite measures a mode production does not run.** Because CI pins
   `InteractiveServer`, the chromium e2e-gate never exercises the `InteractiveAuto` transition it was pinned

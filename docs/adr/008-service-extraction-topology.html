@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -297,9 +299,9 @@
           nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
           conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
           six deployables still ship in a single pipeline run from one template
-          (<code>MMCA.ADC/infra/main.bicep:1036</code>, <code>:1250</code>, <code>:1379</code>, <code>:1508</code>, <code>:1674</code>, <code>:1777</code>, deployed together at
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1129</code>), so the independent-deploy benefit this record lists is
-          available rather than taken. What ADC does buy with the split is proof under load that the path
+          (<code>MMCA.ADC/infra/main.bicep:984</code>, <code>:1185</code>, <code>:1312</code>, <code>:1439</code>, <code>:1608</code>, <code>:1711</code>, deployed together by a
+          single <code>azure/arm-deploy</code> step at <code>MMCA.ADC/.github/workflows/deploy.yml:1289-1295</code>), so the
+          independent-deploy benefit this record lists is available rather than taken. What ADC does buy with the split is proof under load that the path
           works: transport stays out of Domain, Application and Shared under a build gate
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MicroserviceExtractionTests.cs:3</code>), and the
           genuine cross-process flows (outbox to broker to consumer, and a real gRPC read) run nightly against

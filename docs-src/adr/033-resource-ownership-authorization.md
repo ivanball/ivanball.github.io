@@ -29,7 +29,7 @@ enforcement points keyed on the caller's owner claim (`customer_id` by default) 
 bypass role (`Admin` by default).
 
 - **Single-resource action filter.** `OwnerOrAdminFilter`
-  (`Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:30`) is a sealed
+  (`Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:31`) is a sealed
   `IAsyncActionFilter` whose primary constructor takes `ICurrentUserService` and
   `IOptions<OwnerOrAdminFilterOptions>`. Its ownership vocabulary comes from
   `OwnerOrAdminFilterOptions`
@@ -38,11 +38,11 @@ bypass role (`Admin` by default).
   (`OwnerOrAdminFilterOptions.cs:14`), `BypassRole` `"Admin"` (`OwnerOrAdminFilterOptions.cs:17`), and
   `OwnerParameterName` `"id"` (`OwnerOrAdminFilterOptions.cs:24`), so a host that configures nothing
   behaves exactly as before. It short-circuits to the action for the bypass role
-  (`OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)`, `OwnerOrAdminFilter.cs:42`);
+  (`OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)`, `OwnerOrAdminFilter.cs:43`);
   otherwise it reads the caller's owner claim via `GetClaimValue<int>(settings.OwnerClaimType)`
-  (`OwnerOrAdminFilter.cs:48`) and returns `ForbidResult` (HTTP 403) if the claim is missing
-  (`OwnerOrAdminFilter.cs:50`, `OwnerOrAdminFilter.cs:52`) or if the requested owner parameter resolves
-  to an int that does not equal the claim (`OwnerOrAdminFilter.cs:72`, `OwnerOrAdminFilter.cs:74`).
+  (`OwnerOrAdminFilter.cs:49`) and returns `ForbidResult` (HTTP 403) if the claim is missing
+  (`OwnerOrAdminFilter.cs:51`, `OwnerOrAdminFilter.cs:53`) or if the requested owner parameter resolves
+  to an int that does not equal the claim (`OwnerOrAdminFilter.cs:73`, `OwnerOrAdminFilter.cs:75`).
   `TryGetOwnerParameter` reads that parameter from a **route value**
   (`/customers/{id}`) or, when the route lacks it, from a **model-bound query/body argument**
   (`?userId=42`), so the guard also covers list/query routes that carry the owner as a bound
@@ -199,7 +199,7 @@ value before the filter runs.
   collection read has to add the same gate rather than inherit it.
 - **The filter assumes the owner parameter equals the owning id.** `OwnerOrAdminFilter` compares its
   configured owner parameter, resolved from either a route value or a model-bound argument, against the
-  configured owner claim (`OwnerOrAdminFilter.cs:72`). That holds where the resource is keyed by the
+  configured owner claim (`OwnerOrAdminFilter.cs:73`). That holds where the resource is keyed by the
   owner (the cart, the customer profile, a user's own bookmarks) but not where a resource has a separate
   id and a foreign-key owner; those (orders) need the spec or an explicit per-id check instead.
 - **This is ownership, not ABAC.** It answers "is this row mine" against a single id claim with an admin

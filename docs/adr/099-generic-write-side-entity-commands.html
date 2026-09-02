@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -304,9 +306,9 @@
           </li>
           <li><p><strong>One registration call per aggregate.</strong>
           <code>AddEntityCrud&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest, TUpdateRequest&gt;()</code>
-          (<code>Source/Core/MMCA.Common.Application/DependencyInjection.cs:318</code>) registers the create, update
-          and delete handlers closed over that aggregate&#39;s types (<code>:326-336</code>). Two properties are
-          deliberate (<code>:298-306</code>):</p>
+          (<code>Source/Core/MMCA.Common.Application/DependencyInjection.cs:329</code>) registers the create, update
+          and delete handlers closed over that aggregate&#39;s types (<code>:337-347</code>). Two properties are
+          deliberate (<code>:299-307</code>):</p>
           <ul>
           <li><strong>Closed, not open-generic</strong>, because Scrutor&#39;s <code>TryDecorate</code> wraps concrete service types: an
           open <code>ICommandHandler&lt;,&gt;</code> registration would resolve completely undecorated and
@@ -315,7 +317,7 @@
           a delete that must load its children first) registers its own handler for that verb before this
           call and keeps the generic pair for the other two.</li>
           </ul>
-          <p>It calls <code>ThrowIfPipelineSealed</code> (<code>:324</code>), so registering after <code>AddApplicationDecorators()</code> fails
+          <p>It calls <code>ThrowIfPipelineSealed</code> (<code>:335</code>), so registering after <code>AddApplicationDecorators()</code> fails
           loudly rather than leaving three handlers unwrapped (ADR-014).</p>
           </li>
           <li><p><strong>PUT ships on a new derived controller base, not on the shipped one.</strong>
@@ -377,10 +379,10 @@
           <li><strong>Nothing in the framework opts a consumer in: every registration is a line the module writes.</strong>
           Adoption is per aggregate and partial. ADC&#39;s Conference module registers it for <code>Category</code>,
           <code>Activity</code> and <code>Sponsor</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:139-141</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:140-142</code>),
           Store&#39;s Catalog for <code>Product</code> (one call per field-scoped update request) and <code>Category</code>
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:68-72</code>,
-          <code>:79</code>),
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:71-74</code>,
+          <code>:75</code>, <code>:82</code>),
           and Store&#39;s Identity for <code>Customer</code>
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:65-67</code>),
           each call placed after the convention scan so <code>TryAdd</code> leaves the hand-written handlers those
@@ -468,8 +470,8 @@
           rationale at <code>:73-80</code>). <code>UpdateEntityHandler&lt;TEntity, TEntityDTO, TIdentifierType, TUpdateRequest, TApplier&gt;</code> (<code>UpdateEntityHandler.cs:115</code>) injects that applier by its concrete type (<code>:117</code>), which
           the module scan registers alongside its interfaces, and reports a <code>HandlerName</code> naming the verb so
           two verbs produce distinguishable <code>NotFound</code> failures (<code>:133</code>). Registration is one
-          <code>AddEntityUpdateVerb&lt;...&gt;()</code> per verb (<code>DependencyInjection.cs:376</code>), <code>TryAdd</code> like <code>AddEntityCrud</code>
-          (<code>:384-388</code>) and bridging the verb&#39;s command to <code>IValidator&lt;TUpdateRequest&gt;</code> (<code>:390-392</code>). The
+          <code>AddEntityUpdateVerb&lt;...&gt;()</code> per verb (<code>DependencyInjection.cs:391</code>), <code>TryAdd</code> like <code>AddEntityCrud</code>
+          (<code>:399-403</code>) and bridging the verb&#39;s command to <code>IValidator&lt;TUpdateRequest&gt;</code> (<code>:405-407</code>). The
           wire shape does not move: same route, same request DTO.</li>
           <li><em>A command carrying state beside the request.</em> <code>UpdateEntityCommand&lt;TEntity, TUpdateRequest, TIdentifierType&gt;</code> is no longer sealed (<code>UpdateEntityCommand.cs:46</code>, rationale at <code>:26-35</code>), so a
           module derives a positional record that adds a route-derived child id, a server-decided flag or a
@@ -481,11 +483,11 @@
           and still answers with a bare <code>Result</code> for the same reason the request-only applier does (<code>:29-32</code>).
           <code>UpdateEntityCommandHandler&lt;TCommand, ...&gt;</code> (<code>UpdateEntityHandler.cs:185</code>) runs it on the shared
           workflow, delegating through the context-aware <code>MutateAsync</code> (<code>:218-223</code>), and
-          <code>AddEntityUpdate&lt;TCommand, ...&gt;()</code> registers the pair (<code>DependencyInjection.cs:427</code>).</li>
-          <li>Both helpers call <code>ThrowIfPipelineSealed</code> (<code>:382</code>, <code>:433</code>) like <code>AddEntityCrud</code>, and both call the
-          new <code>AddCommandRequestValidator&lt;TCommand, TRequest&gt;()</code> (<code>:460</code>): the explicit form of the bridge the
+          <code>AddEntityUpdate&lt;TCommand, ...&gt;()</code> registers the pair (<code>DependencyInjection.cs:442</code>).</li>
+          <li>Both helpers call <code>ThrowIfPipelineSealed</code> (<code>:397</code>, <code>:448</code>) like <code>AddEntityCrud</code>, and both call the
+          new <code>AddCommandRequestValidator&lt;TCommand, TRequest&gt;()</code> (<code>:475</code>): the explicit form of the bridge the
           module scan applies by reflection, for a command the scan cannot see because it is a closed generic
-          constructed at registration time. It is <code>TryAdd</code> (<code>:463</code>), so an explicit <code>IValidator&lt;TCommand&gt;</code>
+          constructed at registration time. It is <code>TryAdd</code> (<code>:478</code>), so an explicit <code>IValidator&lt;TCommand&gt;</code>
           still wins, and registering it with no <code>IValidator&lt;TRequest&gt;</code> present is harmless.</li>
           <li>Post-load, pre-mutate work needs no new hook. A subclass that has to stamp <code>SetOriginalRowVersion</code>
           on a tracked child row (ADR-035&#39;s second token, which the base&#39;s root-stamping <code>RowVersion</code> hook
@@ -529,7 +531,7 @@
           command-aware applier
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/Update/SpeakerUpdateApplier.cs:13-14</code>)
           registered with <code>AddEntityUpdate</code>
-          (<code>.../MMCA.ADC.Conference.Application/DependencyInjection.cs:163</code>); its session, event and room
+          (<code>.../MMCA.ADC.Conference.Application/DependencyInjection.cs:150</code>); its session, event and room
           writes sit on the payload base
           (<code>.../Sessions/UseCases/Update/UpdateSessionHandler.cs:23</code>,
           <code>.../Events/UseCases/Update/UpdateEventHandler.cs:22</code>,

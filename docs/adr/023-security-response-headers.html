@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-023: Centralized Security-Response-Headers Middleware with a Pluggable CSP · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-02).">
+  <meta name="description" content="Accepted (2026-07-02). Revised 2026-09-01 (the static default is now a complete hardened baseline: it ships script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39; and…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/023-security-response-headers.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-023: Centralized Security-Response-Headers Middleware with a Pluggable CSP">
-  <meta property="og:description" content="Accepted (2026-07-02).">
+  <meta property="og:description" content="Accepted (2026-07-02). Revised 2026-09-01 (the static default is now a complete hardened baseline: it ships script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39; and…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/023-security-response-headers.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-023: Centralized Security-Response-Headers Middleware with a Pluggable CSP">
-  <meta name="twitter:description" content="Accepted (2026-07-02).">
+  <meta name="twitter:description" content="Accepted (2026-07-02). Revised 2026-09-01 (the static default is now a complete hardened baseline: it ships script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39; and…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP","item":"https://ivanball.github.io/docs/adr/023-security-response-headers.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -212,7 +214,12 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-023-centralized-security-response-headers-middleware-with-a-pluggable-csp">ADR-023: Centralized Security-Response-Headers Middleware with a Pluggable CSP</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02).</p>
+          <p>Accepted (2026-07-02). Revised 2026-09-01 (the static default is now a complete hardened baseline: it
+          ships <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code> and <code>style-src &#39;self&#39; &#39;unsafe-inline&#39;</code> instead of omitting
+          both directives; <code>BlazorCspPolicyProvider</code> fails closed on an API/Gateway origin it cannot resolve,
+          narrowing <code>connect-src</code> to <code>&#39;self&#39;</code> while staying enforced, rather than degrading to a permissive
+          Report-Only policy; the middleware also substitutes a per-request nonce for a <code>{nonce}</code> token in the
+          resolved policy).</p>
           <h2 id="context">Context</h2>
           <p>Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
           hardened HTTP response headers: <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>,
@@ -238,23 +245,27 @@
           <li><strong>The CSP is resolved through an <code>ICspPolicyProvider</code> extension point</strong>, not stamped as a constant. The provider
           returns a <code>CspPolicy(string Value, bool Enforce)</code>: when <code>Enforce</code> is true the middleware writes
           <code>Content-Security-Policy</code>, otherwise <code>Content-Security-Policy-Report-Only</code>. Returning <code>null</code> emits no
-          CSP.</li>
-          <li><strong>The default provider (<code>StaticCspPolicyProvider</code>) returns a conservative baseline</strong> from
+          CSP. A resolved policy that carries the literal token <code>{nonce}</code> gets a fresh 128-bit value per request,
+          substituted into the header as <code>&#39;nonce-&lt;value&gt;&#39;</code> and stashed in <code>HttpContext.Items</code> (read with
+          <code>CspNonce.Get</code>) before the rest of the pipeline runs, so a layout can stamp it onto its own tags.</li>
+          <li><strong>The default provider (<code>StaticCspPolicyProvider</code>) returns a complete hardened baseline</strong> from
           <code>SecurityHeadersSettings.ContentSecurityPolicy</code>:
-          <code>default-src &#39;self&#39;; object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; frame-ancestors &#39;none&#39;</code>.
-          It <strong>deliberately omits <code>script-src</code> and <code>style-src</code></strong> so that an HTML host which forgets to register a
-          fuller provider is not hard-broken (Blazor needs <code>script-src &#39;wasm-unsafe-eval&#39;</code>, MudBlazor needs
-          <code>style-src &#39;unsafe-inline&#39;</code>). This baseline is the right complete policy for JSON/WebSocket/static
-          hosts (API, Gateway) and a safe-but-partial policy for an unconfigured HTML host.</li>
+          <code>default-src &#39;self&#39;; script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;; object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; frame-ancestors &#39;none&#39;</code>.
+          It ships <code>script-src</code> and <code>style-src</code> at exactly the strength Blazor (<code>&#39;wasm-unsafe-eval&#39;</code>) and
+          MudBlazor (<code>&#39;unsafe-inline&#39;</code> styles) need, so an HTML host that never registers a fuller provider gets
+          a functional policy rather than one silently missing both directives, while the JSON, WebSocket and
+          static responses of API and Gateway hosts are unaffected. A host wanting a stricter or looser policy
+          configures the <code>&quot;SecurityHeaders&quot;</code> section or registers its own provider.</li>
           <li><strong>HTML hosts register their own <code>ICspPolicyProvider</code></strong> before calling <code>AddCommonSecurityHeaders</code>
           (the registration uses <code>TryAddSingleton</code>, so the first-registered provider wins). Both apps register
           one shared <code>BlazorCspPolicyProvider</code> (a single <code>internal sealed</code> class hoisted into
           <code>MMCA.Common.UI.Web</code>, byte-identical to the copies the app hosts formerly carried) via
           <code>AddCommonBlazorCsp</code> ahead of <code>AddCommonSecurityHeaders</code>. It pins <code>connect-src</code> to <code>&#39;self&#39;</code> plus the
-          configured API/Gateway origin (https + wss, from the shared <code>ApiSettings</code>), adds <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code> and <code>style-src &#39;self&#39; &#39;unsafe-inline&#39;</code>, and <strong>degrades to a permissive
-          <code>Report-Only</code> policy if the origin cannot be resolved</strong> (never enforce a CSP it could not build
-          correctly). It loosens the policy for localhost only in Development (Visual Studio Browser Link / Hot
-          Reload).</li>
+          configured API/Gateway origin (https + wss, from the shared <code>ApiSettings</code>), adds <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code> and <code>style-src &#39;self&#39; &#39;unsafe-inline&#39;</code>, and <strong>fails closed when that origin cannot
+          be resolved or parsed</strong>: <code>connect-src</code> narrows to <code>&#39;self&#39;</code> and the policy is still enforced, so a
+          misconfiguration shows up immediately as blocked cross-origin calls in the browser console rather than
+          as a header that is emitted but inert. It loosens the policy for localhost only in Development (Visual
+          Studio Browser Link / Hot Reload).</li>
           <li><strong>Adopted at both edges of both apps:</strong> Store and ADC each wire <code>AddCommonSecurityHeaders</code> +
           <code>UseCommonSecurityHeaders</code> in their Gateway host and their UI web host, with the UI host also
           registering <code>BlazorCspPolicyProvider</code>. The middleware carries a unit test
@@ -267,20 +278,24 @@
           <li><strong>An extension point, because one CSP cannot fit all hosts.</strong> The <code>ICspPolicyProvider</code> indirection is the minimum
           needed to let a Blazor host inject a runtime, origin-pinned policy while API/Gateway hosts keep the
           strict static one, without the framework guessing either app&#39;s origins.</li>
-          <li><strong>Fail-safe over fail-secure for the default.</strong> Omitting <code>script-src</code>/<code>style-src</code> from the baseline
-          trades a slightly weaker default CSP for the guarantee that the shared middleware can never be the
-          thing that blanks out a Blazor app. A host that wants the strong policy opts in by registering a
-          provider, which is visible and testable.</li>
-          <li><strong>Report-Only as the degradation path.</strong> A dynamic policy that cannot be built (misconfigured origin)
-          downgrades to Report-Only instead of hard-breaking production, surfacing the misconfiguration in the
-          browser console rather than as an outage.</li>
+          <li><strong>A default that is complete and still Blazor-compatible.</strong> The baseline carries <code>script-src</code> and
+          <code>style-src</code> at the weakest strength a Blazor/MudBlazor host actually needs, so every directive is
+          covered even for a host that never registers a provider, and the shared middleware is still never the
+          thing that blanks out such a host. Tightening past that is an explicit act: configure the section or
+          register a provider, both visible and testable.</li>
+          <li><strong>Fail closed when a dynamic policy cannot be built.</strong> A <code>connect-src</code> origin that cannot be resolved
+          is a misconfiguration, so the policy keeps enforcing on the strictest value it can be sure of
+          (<code>&#39;self&#39;</code>). The mistake surfaces as blocked cross-origin calls, which someone notices, instead of a
+          Report-Only header that protects nothing.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>The baseline CSP is intentionally incomplete.</strong> An API/Gateway host gets <code>default-src &#39;self&#39;</code>-style
-          protection but no <code>script-src</code>/<code>style-src</code> discipline unless it registers a fuller provider; an HTML
-          host that forgets to register one runs without script/style restrictions (safe, but not the intended
-          hardened policy). The omission is documented on <code>SecurityHeadersSettings.ContentSecurityPolicy</code>.</li>
+          <li><strong>The baseline is complete, not maximal.</strong> Shipping a policy that works for a Blazor/MudBlazor host
+          means the default carries <code>style-src &#39;unsafe-inline&#39;</code> (MudBlazor injects styles at runtime), so inline
+          styles are not blocked out of the box, and an API or Gateway host that serves no HTML inherits a
+          script/style allowance it does not need. Either host tightens the string in the <code>&quot;SecurityHeaders&quot;</code>
+          section or registers its own provider; the <code>{nonce}</code> placeholder is the supported path off
+          <code>&#39;unsafe-inline&#39;</code>. The default is documented on <code>SecurityHeadersSettings.ContentSecurityPolicy</code>.</li>
           <li><strong>Registration order is a foot-gun.</strong> Because the provider is registered with <code>TryAddSingleton</code>, a host
           must register its custom <code>ICspPolicyProvider</code> <em>before</em> <code>AddCommonSecurityHeaders</code>, or the static
           default wins silently.</li>
@@ -289,8 +304,11 @@
           <code>AddCommonBlazorCsp</code>, so the connect-src/origin logic is no longer copied per app. The remaining
           trade-off is that a host needing genuinely different CSP logic cannot edit an app-local class: it must
           supply its own <code>ICspPolicyProvider</code> (registered before <code>AddCommonSecurityHeaders</code>) instead.</li>
-          <li><strong>A degraded (Report-Only) policy protects nothing.</strong> The fail-safe path means a broken dynamic policy
-          is non-blocking but also non-enforcing until someone notices the Report-Only header.</li>
+          <li><strong>Failing closed moves the pain onto a running app.</strong> A Blazor host whose <code>ApiSettings</code> endpoint is
+          wrong still serves pages, but the enforced <code>connect-src &#39;self&#39;</code> blocks every cross-origin API call and
+          the SignalR notification hub. That loud signal is the point (a security header that quietly stops
+          being enforced is the worse failure mode), and the cost is that the configuration mistake lands on the
+          users of that deployment rather than in a passive report.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022

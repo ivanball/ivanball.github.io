@@ -79,8 +79,8 @@ per entity configuration.
    constructs (indexes) are stripped at model-build time.
 7. **The host surface reads the same two shapes.** The Aspire AppHost helpers
    `With{SQLServer,Cosmos,Sqlite}DataSource` inject the `DataSources__{logicalName}__*` environment
-   variables for the source they attach (`Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:263`,
-   `:292-293`, `:317`). The database health checks enumerate the top-level section and every named
+   variables for the source they attach (`Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:493`,
+   `:522-523`, `:547`). The database health checks enumerate the top-level section and every named
    entry, deduplicated by connection string, so each physical database contributes exactly one readiness
    check and the entries that collapse onto one database contribute one between them
    (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:446-478`). The requirement that a host have a
@@ -138,8 +138,9 @@ The rule is now: **a request naming an engine the host configures nowhere is ser
 host does configure.**
 
 - The resolver records which engines carry a connection string anywhere, top-level or on a named
-  `DataSources` entry, while it builds the per-engine maps (`DataSourceResolver.cs:64-72`, the test at
-  `:131-136`).
+  `DataSources` entry, while it builds the per-engine maps (`DataSourceResolver.cs:64-72`, the
+  predicate at `:131-136`; the named-entry half of that rule is what
+  `DataSourceResolverTests.cs:350` exercises).
 - The substitute is the first configured engine in a fixed preference order, `SQLServer` then `Sqlite`
   then `CosmosDB` (`:26`, selected at `:74-77`). Relational first because every table the framework
   owns is relational, and SQL Server ahead of SQLite so a host that configures SQL Server at all keeps

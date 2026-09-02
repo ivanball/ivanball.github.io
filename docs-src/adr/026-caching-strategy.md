@@ -11,7 +11,11 @@ best-effort, on a new `MMCA.Common.OutputCache` meter. Tier 1 is untouched by th
 mirror image of ADR-077's Tier-1-only amendment; see the Revision (2026-08-18) at the end. Revised
 2026-08-23: the counter trade-off now records that `ICacheService`'s own `<remarks>` still anticipates a
 Redis `INCR` override that no implementation provides, so a reader who starts at the interface is not
-left with the opposite conclusion; anchors re-verified throughout.
+left with the opposite conclusion; anchors re-verified throughout. Amended 2026-09-01: an **optional
+third tier on the client** is recorded, `IUiReadCache`, a per-circuit read-through cache over the API
+client whose keys are the relative URL (path plus the full query) so they line up with Tier 2's
+`QueryKeys = "*"` policy. It is shipped and DI-registered, but opt-in per UI service and passed by no
+consumer app today; both server tiers are unchanged. See the Revision (2026-09-01) at the end.
 
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
@@ -71,7 +75,7 @@ Cache in two tiers, each with its own substrate.
   `app.UseOutputCache()` in the shared middleware pipeline, which is a builder of named steps rather
   than a run of inline calls: the step is registered at
   `MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:138` under the name
-  `MiddlewarePipelineStepNames.OutputCache` (`MMCA.Common.API/Startup/MiddlewarePipelineStepNames.cs:64`).
+  `MiddlewarePipelineStepNames.OutputCache` (`MMCA.Common.API/Startup/MiddlewarePipelineStepNames.cs:65`).
   The pipeline ships no policies. Each service
   registers its own `AddOutputCache(...)`: most declare a `NoCache` base policy (Identity, Sales,
   Engagement, Notification), while the read-heavy public services declare real cacheable policies. ADC
@@ -103,6 +107,42 @@ Cache in two tiers, each with its own substrate.
   makes the shared store the expected posture for any multi-replica deployment. The practical effect is
   that both tiers ride the same Redis instance: Tier 1 through `IDistributedCache`, Tier 2 through the
   output-cache store.
+
+### An optional third tier on the client (amended 2026-09-01)
+Two tiers are what this ADR decides. A third one exists in the framework as a capability a UI host may
+switch on, and it is recorded here so a reader is not surprised by it in the UI package.
+
+- **`IUiReadCache` caches in front of the API client, not in front of a handler.** The interface
+  (`MMCA.Common.UI/Services/Caching/IUiReadCache.cs:32`) is `TryGetFresh` (`:42`), `Set` (`:51`),
+  `InvalidatePrefix` (`:59`) and `Clear` (`:66`); the default implementation
+  (`MMCA.Common.UI/Services/Caching/UiReadCache.cs:18`) is a lock-guarded dictionary with lazy expiry,
+  registered scoped by `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:57`, `TryAddScoped`),
+  which is one instance per Blazor Server circuit and one per app lifetime on WebAssembly and MAUI.
+- **The key is the relative URL, path plus the full query, deliberately the same key shape Tier 2
+  uses.** `PublicEndpointOutputCachePolicy` sets `CacheVaryByRules.QueryKeys = "*"`
+  (`MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:81`), so mirroring it means the two
+  layers agree on what "the same read" is: a filter, page or sort change misses on both sides instead
+  of being answered stale by one of them (`MMCA.Common.UI/Services/EntityServiceBase.cs:229`).
+- **Freshness is stated in configuration.** `UiReadCacheOptions`
+  (`MMCA.Common.UI/Common/Settings/UiReadCacheOptions.cs:13`, bound from the `UiReadCache` section,
+  `:16`) carries an `Enabled` kill switch (`:24`), a 60-second `DefaultTtl` (`:32`) and per-route-prefix
+  TTL overrides (`:41`). The longest matching prefix wins (`UiReadCache.cs:120-135`, the length
+  comparison at `:127`), so a nested route can state a stricter budget than the endpoint above it
+  whatever order configuration enumerates in.
+- **Successes only, prefix invalidation on write, clear on sign-out.** `GetCachedAsync`
+  (`MMCA.Common.UI/Services/EntityServiceBase.cs:241`) stores a value only when the read succeeded
+  (`:262-264`), so a transient outage or a 404 is never pinned in front of the user; a successful write
+  drops this endpoint's whole prefix (`InvalidateOnSuccess`, `:281`, calling
+  `InvalidatePrefix(Endpoint)` at `:285`); and `AuthUIService` empties the cache on sign-out and on an
+  unrefreshable session (`MMCA.Common.UI/Services/Auth/AuthUIService.cs:127` and `:156`), which is what
+  keeps one account's reads from outliving its session where the scope does.
+- **Shipped and registered, adopted by no app.** `EntityServiceBase` takes the cache as an optional
+  constructor parameter defaulting to `null` (`MMCA.Common.UI/Services/EntityServiceBase.cs:47`,
+  exposed as the protected `ReadCache` property at `:58`); with `null` every read goes to the API and
+  the class behaves exactly as it did before the cache existed (`:248`). No UI service in ADC, Store or
+  Helpdesk passes it: a search of all four repositories finds `IUiReadCache` only inside MMCA.Common's
+  own source and tests. This tier is therefore a capability the framework offers, not a posture the
+  apps are in.
 
 ## Rationale
 - **One substrate, swapped by environment.** Keeping `ICacheService` as the only thing application code
@@ -167,13 +207,21 @@ Cache in two tiers, each with its own substrate.
   half the decision: the store behind it is per-replica memory unless the service registers the shared
   Redis output-cache store (Tier 2 above), which is what a multi-replica adopter needs for tag eviction
   to reach every replica (ADR-040).
+- **The optional client tier is an inventory item, and the inventory is empty.** `IUiReadCache` is
+  registered wherever a host calls `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:57`), but a UI
+  service reads through it only if its own constructor forwards the optional parameter
+  (`MMCA.Common.UI/Services/EntityServiceBase.cs:47`), so registration on its own changes nothing and
+  no build, test or startup notices the difference. That is Tier 2's audit-the-inventory caveat one
+  layer further out, and it is the intended posture rather than a gap to sweep: client-side staleness
+  is visible to the user, so each UI service opts in on its own read pattern or does not opt in at all.
 
 ## Related
 ADR-014 (the Caching decorators and `IQueryCacheable` / `ICacheInvalidating` markers that consume this
 substrate), ADR-019 (output caching as the anonymous-traffic lever, and `LoginProtectionService` is
 another `ICacheService` consumer), ADR-006 / ADR-008 (the same monolith-to-services swap boundary this
 substrate follows), ADR-040 (amends this ADR's Tier 2: the adopters' public-read policies cache
-authenticated, bearer-carrying requests too, not only anonymous traffic),
+authenticated, bearer-carrying requests too, not only anonymous traffic, and its
+`CacheVaryByRules.QueryKeys = "*"` rule is the key shape the optional client tier mirrors),
 [ADR-077](077-hybridcache-substrate.md) (amends this ADR's Tier 1: the opt-in `HybridCacheService`
 substrate, the disjoint `hc:` keyspace that generalizes the `WRONGTYPE` lesson recorded in the counter
 trade-off above, and the L1 bypass that keeps `IncrementAsync` semantics unchanged),
@@ -484,7 +532,10 @@ One correction of substance plus a line-anchor re-verification. No decision and 
 Item 4's "re-checked and unchanged" list did not hold: `CacheOptions`, both adopters'
 `AddStackExchangeRedisOutputCache` calls, all seven paired Redis registrations and the
 `DistributedCacheService` counter anchors have all moved since. Read items 1 and 4 as the state on
-2026-08-23, and the 2026-08-31 entry below for the current anchors.
+2026-08-23, and the 2026-08-31 entry below for the current anchors. Item 2's
+`MiddlewarePipelineStepNames.cs:64` was an off-by-one from the start rather than drift: `:64` is the
+XML doc comment and the const it names is at `:65`, corrected in the Decision by the 2026-09-01 entry
+below.
 
 ## Revision (2026-08-31)
 Line anchors only, re-verified against the current source. No decision, no behavior, and no
@@ -522,8 +573,8 @@ substantive prose changed.
    preceding revision treated its predecessor.
 
 ## Revision (2026-09-01)
-Line anchors only, for the one file the 2026-08-31 entry did not re-read. No decision, no behavior,
-and no substantive prose changed.
+One amendment of substance (an optional third tier is recorded) plus line anchors for the files the
+2026-08-31 entry did not re-read. No behavior changed, and neither server tier changed.
 
 1. **The eviction registration.** `AddOutputCacheEvictionHandler()` is now at
    `MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:111` (from `:32`) and its
@@ -538,7 +589,28 @@ and no substantive prose changed.
 2. **Re-checked and unchanged.** `OutputCacheEvictionHandler.cs:32` (the class) and `:44-63` (the
    per-tag loop with its swallow-log-count catch), `OutputCacheMetrics.cs:19` (the meter name) and
    `:29-37` (the `cache.eviction.failed` instrument plus its recorder), and
-   `MMCA.Common.Aspire/Extensions.cs:169` (the meter subscription, still the fifth `AddMeter` line).
+   `MMCA.Common.Aspire/Extensions.cs:169` (the meter subscription, which is the SIXTH of the seven
+   chained `AddMeter` calls, not the fifth: they begin at `MMCA.Common.Outbox` on `:164` and run
+   Outbox, Cqrs, Idempotency, Scheduler, Broker, OutputCache, BestEffort).
    The 2026-08-31 entry's own anchors were not re-read this pass and stand as written there.
-3. **The 2026-08-31 anchor claim is annotated rather than removed**, consistent with how every
+3. **The output-cache step name was cited one line high, and always had been.**
+   `MiddlewarePipelineStepNames.OutputCache` is declared at
+   `MMCA.Common.API/Startup/MiddlewarePipelineStepNames.cs:65`; `:64`, the anchor the Decision and the
+   Revision (2026-08-23) carried, is the XML doc comment above it. The Decision's citation is
+   corrected here and the 2026-08-23 entry is annotated in place rather than rewritten.
+   `MiddlewarePipelineBuilder.cs:138`, the `app.UseOutputCache()` step itself, was re-read and holds.
+4. **An optional third tier is recorded: `IUiReadCache`, the client-side read-through cache.** No code
+   moves with this entry; this is shipped code the ADR had never described. A new Decision subsection
+   and a new Trade-offs bullet record it: per-circuit read-through over the API client, keyed by the
+   relative URL so the key shape matches Tier 2's `QueryKeys = "*"`
+   (`PublicEndpointOutputCachePolicy.cs:81`), a default TTL plus longest-prefix per-route overrides
+   (`UiReadCacheOptions.cs:32` and `:41`), successes-only storage
+   (`EntityServiceBase.cs:262-264`), prefix invalidation on a successful write (`:285`) and a clear on
+   sign-out (`AuthUIService.cs:127`). It is DI-registered by `AddUIShared`
+   (`MMCA.Common.UI/DependencyInjection.cs:57`) and still opt-in per service, through an optional
+   constructor parameter that defaults to `null` (`EntityServiceBase.cs:47`), and **no consumer app
+   passes it**: ADC, Store and Helpdesk contain no reference to the type at all. It is recorded as a
+   capability and an inventory item, not as something to adopt in a sweep. The title stays
+   "Two-Tier Caching" on purpose: two tiers are what this ADR decides, and the client one is optional.
+5. **The 2026-08-31 anchor claim is annotated rather than removed**, consistent with how every
    preceding revision treated its predecessor.

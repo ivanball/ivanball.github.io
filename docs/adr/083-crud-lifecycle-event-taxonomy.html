@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -252,8 +254,8 @@
           <li><strong><code>Added</code> from the factory, <code>Updated</code> from mutators, <code>Deleted</code> from <code>Delete()</code>.</strong> The base&#39;s usage
           note fixes the mapping (<code>EntityChangedEvent.cs:10-13</code>), and <code>Session</code> is the canonical shape: one
           event type, three raise sites, in
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:206</code> (Added, from
-          the static factory), <code>:267</code> (Updated), <code>:304</code> (Deleted, inside the soft delete), all constructing the
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:212</code> (Added, from
+          the static factory), <code>:273</code> (Updated), <code>:294</code> (Deleted, inside the soft delete), all constructing the
           same <code>SessionChanged</code> (<code>.../Sessions/DomainEvents/SessionChanged.cs:13-18</code>).</li>
           <li><strong>Handlers filter on <code>State</code>, or deliberately do not.</strong> <code>SpeakerDeletedHandler</code> subscribes to
           <code>SpeakerChanged</code> and returns immediately unless the state is <code>Deleted</code>
@@ -270,13 +272,13 @@
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/DomainEvents/OrderPaid.cs:13-18</code>),
           and <code>ShoppingCartCheckedOut</code> names the checkout transition rather than an update
           (<code>.../Sales.Domain/ShoppingCarts/DomainEvents/ShoppingCartCheckedOut.cs:6-8</code>, raised at
-          <code>.../ShoppingCarts/ShoppingCart.cs:115</code>). The test is payload plus intent: a transition with a name a
+          <code>.../ShoppingCarts/ShoppingCart.cs:118</code>). The test is payload plus intent: a transition with a name a
           business person uses and fields no other transition carries gets its own type.</li>
           <li><strong>The discriminator rides the wire, and it is frozen there.</strong> Store&#39;s one cross-module contract puts
           <code>DomainEntityState State</code> first on a <code>BaseIntegrationEvent</code>
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:26-32</code>)
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:28-34</code>)
           and explicitly consolidates four former events, <code>ProductVariantAdded</code>, <code>ProductVariantRemoved</code>,
-          <code>ProductVariantSkuChanged</code> and <code>ProductVariantPriceChanged</code> (<code>:8-10</code>). The Sales consumer filters it
+          <code>ProductVariantSkuChanged</code> and <code>ProductVariantPriceChanged</code> (<code>:10-11</code>). The Sales consumer filters it
           to <code>Added</code>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:46-47</code>).
           Because integration-event shapes are snapshot-frozen by an architecture test
@@ -312,7 +314,7 @@
           transitions) and <strong>1 in Helpdesk</strong>: <strong>32</strong> in total.</li>
           <li><strong>Nothing enforces the taxonomy.</strong> The shared fitness rules require domain events to be sealed and to
           live in a <code>*.DomainEvents</code> namespace
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Naming.cs:52-60</code>), to
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Naming.cs:66-75</code>), to
           be immutable (<code>ArchitectureRules.Immutability.cs:34-38</code>), and require integration events to inherit
           <code>BaseIntegrationEvent</code> and declare an <code>int SchemaVersion</code> (<code>ArchitectureRules.Events.cs:6-25</code>), but no
           rule mentions <code>EntityChangedEvent</code> or the discriminator. The framework&#39;s own coverage of the base is
@@ -329,7 +331,7 @@
           aggregate deliberately raises <strong>no</strong> <code>Added</code> event, with creation signalled after commit by a separate
           integration event instead
           (<code>.../Tickets.Domain/Tickets/Ticket.cs:81-84</code>, published at
-          <code>.../Tickets.Application/Tickets/UseCases/Create/CreateTicketHandler.cs:46</code>); the audit handler&#39;s doc
+          <code>.../Tickets.Application/Tickets/UseCases/Create/CreateTicketHandler.cs:42-43</code>); the audit handler&#39;s doc
           records exactly that gap (<code>TicketChangedAuditHandler.cs:13-14</code>). Outside the four repos, the two-module
           <code>MMCA.ECommerce</code> companion sample carries two more adopters on the same pattern
           (<code>MMCA.ECommerce/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/DomainEvents/ProductChanged.cs:15</code>,

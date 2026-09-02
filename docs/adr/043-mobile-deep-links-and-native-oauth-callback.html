@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -230,7 +232,7 @@
           consumer&#39;s deep-link wave has shipped: <code>MMCA.ADC.UI.Web</code> serves the two well-known association
           documents through the shared helper
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:178</code>), the Identity service allow-lists the
-          <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:50-52</code>), and
+          <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:56-58</code>), and
           the native heads register the callback: iOS carries both the custom-scheme URL type
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Info.plist:16</code>) and the associated-domains
           entitlement (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Entitlements.plist:11</code>), while
@@ -292,10 +294,11 @@
           <code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:65</code> calls
           <code>IAuthUIService.ExchangeOAuthCodeAsync</code>, which returns <code>Result&lt;AuthenticationResponse&gt;</code> so the
           page branches on <code>result.IsFailure</code> (<code>:66</code>) rather than on an exception. The service
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:53</code>) POSTs the existing
-          anonymous <code>auth/oauth/exchange</code> through the shared <code>AuthenticateAsync</code> helper (<code>:61</code>), which
-          stores the pair via <code>ITokenStorageService</code> (<code>:266</code>), so the single-use-code contract lives in
-          exactly one place. This rides behind the <code>IExternalAuthBroker</code> contract
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:65</code>) POSTs the existing
+          anonymous <code>auth/oauth/exchange</code> through the shared <code>AuthenticateAsync</code> helper (<code>:73</code>, the helper
+          itself at <code>:259</code>), which stores the pair via <code>ITokenStorageService</code> (<code>:287</code>), so the
+          single-use-code contract lives in exactly one place. This rides behind the <code>IExternalAuthBroker</code>
+          contract
           (ADR-042); the default broker is unavailable, which keeps the shared Login page on its anchor
           flow for web heads.</li>
           <li><strong>Association files are served by each app&#39;s UI.Web host</strong>, not the gateway: the shared web URLs
@@ -373,8 +376,8 @@
           (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:71-76</code>) and then
           navigates to <code>/auth/oauth-complete?code=...</code> (<code>:80</code>); <code>OAuthComplete.razor:65</code> calls
           <code>IAuthUIService.ExchangeOAuthCodeAsync</code>, which POSTs <code>auth/oauth/exchange</code>
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:53</code>, the POST at <code>:61</code>) and
-          calls <code>ITokenStorageService.SetTokensAsync</code> (<code>:266</code>). The net effect is what the ADR described; the
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:65</code>, the POST at <code>:73</code>) and
+          calls <code>ITokenStorageService.SetTokensAsync</code> (<code>:287</code>). The net effect is what the ADR described; the
           division of labor is not, and it matters because the native path reuses the web completion page
           rather than duplicating it.</li>
           <li><strong>Anchor and tense maintenance.</strong> <code>MapAppAssociationEndpoints</code> is called at
@@ -445,14 +448,14 @@
           ADR-043 block comment. Every citation of those anchors is updated above.</li>
           <li><strong>The MMCA.Common exchange call returns a <code>Result</code>.</strong> <code>IAuthUIService.ExchangeOAuthCodeAsync</code>
           returns <code>Result&lt;AuthenticationResponse&gt;</code>
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:53</code>), so the shared
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:65</code>), so the shared
           completion page branches on <code>result.IsFailure</code>
           (<code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:65-66</code>) instead of relying on
           the surrounding <code>try</code>/<code>catch</code> alone. Inside the service the POST to <code>auth/oauth/exchange</code> goes
-          through the shared <code>AuthenticateAsync</code> helper (<code>:61</code>), which is also where
-          <code>ITokenStorageService.SetTokensAsync</code> is called (<code>:266</code>). The division of labor the 2026-07-28
-          entry corrected is unchanged: the page still owns the exchange, the broker still only hands over
-          the code.</li>
+          through the shared <code>AuthenticateAsync</code> helper (<code>:73</code>, the helper itself at <code>:259</code>), which is
+          also where <code>ITokenStorageService.SetTokensAsync</code> is called (<code>:287</code>). The division of labor the
+          2026-07-28 entry corrected is unchanged: the page still owns the exchange, the broker still only
+          hands over the code.</li>
           <li><strong>The Android manifest carries nine permissions, not seven.</strong> The 2026-07-28 count is stale:
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/AndroidManifest.xml:4-26</code> declares
           <code>ACCESS_NETWORK_STATE</code>, <code>INTERNET</code>, <code>POST_NOTIFICATIONS</code>, <code>VIBRATE</code>, <code>ACCESS_COARSE_LOCATION</code>,
@@ -470,8 +473,8 @@
           <li><strong>Remaining ADC anchor drift.</strong> The MAUI head&#39;s <code>appsettings.json</code> is compiled in as an
           <code>EmbeddedResource</code> at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:130</code> (the only
           <code>EmbeddedResource</code> in that file), the Identity service&#39;s OAuth allowlist section is at
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:50-52</code> with the <code>atldevcon</code>
-          entry at <code>:51</code>, the served fingerprint key is at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:56-58</code> with the <code>atldevcon</code>
+          entry at <code>:57</code>, the served fingerprint key is at
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:34-36</code>, the Android intent filter is
           at <code>Platforms/Android/MainActivity.cs:26-31</code> with <code>PublishDeepLink</code> at <code>:65-80</code>, and
           <code>BuildSuccessRedirectUrl</code> is defined at

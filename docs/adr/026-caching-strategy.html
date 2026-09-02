@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -222,7 +224,11 @@
           mirror image of ADR-077&#39;s Tier-1-only amendment; see the Revision (2026-08-18) at the end. Revised
           2026-08-23: the counter trade-off now records that <code>ICacheService</code>&#39;s own <code>&lt;remarks&gt;</code> still anticipates a
           Redis <code>INCR</code> override that no implementation provides, so a reader who starts at the interface is not
-          left with the opposite conclusion; anchors re-verified throughout.</p>
+          left with the opposite conclusion; anchors re-verified throughout. Amended 2026-09-01: an <strong>optional
+          third tier on the client</strong> is recorded, <code>IUiReadCache</code>, a per-circuit read-through cache over the API
+          client whose keys are the relative URL (path plus the full query) so they line up with Tier 2&#39;s
+          <code>QueryKeys = &quot;*&quot;</code> policy. It is shipped and DI-registered, but opt-in per UI service and passed by no
+          consumer app today; both server tiers are unchanged. See the Revision (2026-09-01) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework needs caching in two distinct places. Inside the application pipeline, query results
           are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -279,7 +285,7 @@
           <code>app.UseOutputCache()</code> in the shared middleware pipeline, which is a builder of named steps rather
           than a run of inline calls: the step is registered at
           <code>MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:138</code> under the name
-          <code>MiddlewarePipelineStepNames.OutputCache</code> (<code>MMCA.Common.API/Startup/MiddlewarePipelineStepNames.cs:64</code>).
+          <code>MiddlewarePipelineStepNames.OutputCache</code> (<code>MMCA.Common.API/Startup/MiddlewarePipelineStepNames.cs:65</code>).
           The pipeline ships no policies. Each service
           registers its own <code>AddOutputCache(...)</code>: most declare a <code>NoCache</code> base policy (Identity, Sales,
           Engagement, Notification), while the read-heavy public services declare real cacheable policies. ADC
@@ -311,6 +317,42 @@
           makes the shared store the expected posture for any multi-replica deployment. The practical effect is
           that both tiers ride the same Redis instance: Tier 1 through <code>IDistributedCache</code>, Tier 2 through the
           output-cache store.</li>
+          </ul>
+          <h3 id="an-optional-third-tier-on-the-client-amended-2026-09-01">An optional third tier on the client (amended 2026-09-01)</h3>
+          <p>Two tiers are what this ADR decides. A third one exists in the framework as a capability a UI host may
+          switch on, and it is recorded here so a reader is not surprised by it in the UI package.</p>
+          <ul>
+          <li><strong><code>IUiReadCache</code> caches in front of the API client, not in front of a handler.</strong> The interface
+          (<code>MMCA.Common.UI/Services/Caching/IUiReadCache.cs:32</code>) is <code>TryGetFresh</code> (<code>:42</code>), <code>Set</code> (<code>:51</code>),
+          <code>InvalidatePrefix</code> (<code>:59</code>) and <code>Clear</code> (<code>:66</code>); the default implementation
+          (<code>MMCA.Common.UI/Services/Caching/UiReadCache.cs:18</code>) is a lock-guarded dictionary with lazy expiry,
+          registered scoped by <code>AddUIShared</code> (<code>MMCA.Common.UI/DependencyInjection.cs:57</code>, <code>TryAddScoped</code>),
+          which is one instance per Blazor Server circuit and one per app lifetime on WebAssembly and MAUI.</li>
+          <li><strong>The key is the relative URL, path plus the full query, deliberately the same key shape Tier 2
+          uses.</strong> <code>PublicEndpointOutputCachePolicy</code> sets <code>CacheVaryByRules.QueryKeys = &quot;*&quot;</code>
+          (<code>MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:81</code>), so mirroring it means the two
+          layers agree on what &quot;the same read&quot; is: a filter, page or sort change misses on both sides instead
+          of being answered stale by one of them (<code>MMCA.Common.UI/Services/EntityServiceBase.cs:229</code>).</li>
+          <li><strong>Freshness is stated in configuration.</strong> <code>UiReadCacheOptions</code>
+          (<code>MMCA.Common.UI/Common/Settings/UiReadCacheOptions.cs:13</code>, bound from the <code>UiReadCache</code> section,
+          <code>:16</code>) carries an <code>Enabled</code> kill switch (<code>:24</code>), a 60-second <code>DefaultTtl</code> (<code>:32</code>) and per-route-prefix
+          TTL overrides (<code>:41</code>). The longest matching prefix wins (<code>UiReadCache.cs:120-135</code>, the length
+          comparison at <code>:127</code>), so a nested route can state a stricter budget than the endpoint above it
+          whatever order configuration enumerates in.</li>
+          <li><strong>Successes only, prefix invalidation on write, clear on sign-out.</strong> <code>GetCachedAsync</code>
+          (<code>MMCA.Common.UI/Services/EntityServiceBase.cs:241</code>) stores a value only when the read succeeded
+          (<code>:262-264</code>), so a transient outage or a 404 is never pinned in front of the user; a successful write
+          drops this endpoint&#39;s whole prefix (<code>InvalidateOnSuccess</code>, <code>:281</code>, calling
+          <code>InvalidatePrefix(Endpoint)</code> at <code>:285</code>); and <code>AuthUIService</code> empties the cache on sign-out and on an
+          unrefreshable session (<code>MMCA.Common.UI/Services/Auth/AuthUIService.cs:127</code> and <code>:156</code>), which is what
+          keeps one account&#39;s reads from outliving its session where the scope does.</li>
+          <li><strong>Shipped and registered, adopted by no app.</strong> <code>EntityServiceBase</code> takes the cache as an optional
+          constructor parameter defaulting to <code>null</code> (<code>MMCA.Common.UI/Services/EntityServiceBase.cs:47</code>,
+          exposed as the protected <code>ReadCache</code> property at <code>:58</code>); with <code>null</code> every read goes to the API and
+          the class behaves exactly as it did before the cache existed (<code>:248</code>). No UI service in ADC, Store or
+          Helpdesk passes it: a search of all four repositories finds <code>IUiReadCache</code> only inside MMCA.Common&#39;s
+          own source and tests. This tier is therefore a capability the framework offers, not a posture the
+          apps are in.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -377,13 +419,21 @@
           half the decision: the store behind it is per-replica memory unless the service registers the shared
           Redis output-cache store (Tier 2 above), which is what a multi-replica adopter needs for tag eviction
           to reach every replica (ADR-040).</li>
+          <li><strong>The optional client tier is an inventory item, and the inventory is empty.</strong> <code>IUiReadCache</code> is
+          registered wherever a host calls <code>AddUIShared</code> (<code>MMCA.Common.UI/DependencyInjection.cs:57</code>), but a UI
+          service reads through it only if its own constructor forwards the optional parameter
+          (<code>MMCA.Common.UI/Services/EntityServiceBase.cs:47</code>), so registration on its own changes nothing and
+          no build, test or startup notices the difference. That is Tier 2&#39;s audit-the-inventory caveat one
+          layer further out, and it is the intended posture rather than a gap to sweep: client-side staleness
+          is visible to the user, so each UI service opts in on its own read pattern or does not opt in at all.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-014 (the Caching decorators and <code>IQueryCacheable</code> / <code>ICacheInvalidating</code> markers that consume this
           substrate), ADR-019 (output caching as the anonymous-traffic lever, and <code>LoginProtectionService</code> is
           another <code>ICacheService</code> consumer), ADR-006 / ADR-008 (the same monolith-to-services swap boundary this
           substrate follows), ADR-040 (amends this ADR&#39;s Tier 2: the adopters&#39; public-read policies cache
-          authenticated, bearer-carrying requests too, not only anonymous traffic),
+          authenticated, bearer-carrying requests too, not only anonymous traffic, and its
+          <code>CacheVaryByRules.QueryKeys = &quot;*&quot;</code> rule is the key shape the optional client tier mirrors),
           <a href="077-hybridcache-substrate.html">ADR-077</a> (amends this ADR&#39;s Tier 1: the opt-in <code>HybridCacheService</code>
           substrate, the disjoint <code>hc:</code> keyspace that generalizes the <code>WRONGTYPE</code> lesson recorded in the counter
           trade-off above, and the L1 bypass that keeps <code>IncrementAsync</code> semantics unchanged),
@@ -683,7 +733,10 @@
           <p>Item 4&#39;s &quot;re-checked and unchanged&quot; list did not hold: <code>CacheOptions</code>, both adopters&#39;
           <code>AddStackExchangeRedisOutputCache</code> calls, all seven paired Redis registrations and the
           <code>DistributedCacheService</code> counter anchors have all moved since. Read items 1 and 4 as the state on
-          2026-08-23, and the 2026-08-31 entry below for the current anchors.</p>
+          2026-08-23, and the 2026-08-31 entry below for the current anchors. Item 2&#39;s
+          <code>MiddlewarePipelineStepNames.cs:64</code> was an off-by-one from the start rather than drift: <code>:64</code> is the
+          XML doc comment and the const it names is at <code>:65</code>, corrected in the Decision by the 2026-09-01 entry
+          below.</p>
           <h2 id="revision-2026-08-31">Revision (2026-08-31)</h2>
           <p>Line anchors only, re-verified against the current source. No decision, no behavior, and no
           substantive prose changed.</p>
@@ -720,8 +773,8 @@
           preceding revision treated its predecessor.</li>
           </ol>
           <h2 id="revision-2026-09-01">Revision (2026-09-01)</h2>
-          <p>Line anchors only, for the one file the 2026-08-31 entry did not re-read. No decision, no behavior,
-          and no substantive prose changed.</p>
+          <p>One amendment of substance (an optional third tier is recorded) plus line anchors for the files the
+          2026-08-31 entry did not re-read. No behavior changed, and neither server tier changed.</p>
           <ol>
           <li><strong>The eviction registration.</strong> <code>AddOutputCacheEvictionHandler()</code> is now at
           <code>MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:111</code> (from <code>:32</code>) and its
@@ -736,8 +789,29 @@
           <li><strong>Re-checked and unchanged.</strong> <code>OutputCacheEvictionHandler.cs:32</code> (the class) and <code>:44-63</code> (the
           per-tag loop with its swallow-log-count catch), <code>OutputCacheMetrics.cs:19</code> (the meter name) and
           <code>:29-37</code> (the <code>cache.eviction.failed</code> instrument plus its recorder), and
-          <code>MMCA.Common.Aspire/Extensions.cs:169</code> (the meter subscription, still the fifth <code>AddMeter</code> line).
+          <code>MMCA.Common.Aspire/Extensions.cs:169</code> (the meter subscription, which is the SIXTH of the seven
+          chained <code>AddMeter</code> calls, not the fifth: they begin at <code>MMCA.Common.Outbox</code> on <code>:164</code> and run
+          Outbox, Cqrs, Idempotency, Scheduler, Broker, OutputCache, BestEffort).
           The 2026-08-31 entry&#39;s own anchors were not re-read this pass and stand as written there.</li>
+          <li><strong>The output-cache step name was cited one line high, and always had been.</strong>
+          <code>MiddlewarePipelineStepNames.OutputCache</code> is declared at
+          <code>MMCA.Common.API/Startup/MiddlewarePipelineStepNames.cs:65</code>; <code>:64</code>, the anchor the Decision and the
+          Revision (2026-08-23) carried, is the XML doc comment above it. The Decision&#39;s citation is
+          corrected here and the 2026-08-23 entry is annotated in place rather than rewritten.
+          <code>MiddlewarePipelineBuilder.cs:138</code>, the <code>app.UseOutputCache()</code> step itself, was re-read and holds.</li>
+          <li><strong>An optional third tier is recorded: <code>IUiReadCache</code>, the client-side read-through cache.</strong> No code
+          moves with this entry; this is shipped code the ADR had never described. A new Decision subsection
+          and a new Trade-offs bullet record it: per-circuit read-through over the API client, keyed by the
+          relative URL so the key shape matches Tier 2&#39;s <code>QueryKeys = &quot;*&quot;</code>
+          (<code>PublicEndpointOutputCachePolicy.cs:81</code>), a default TTL plus longest-prefix per-route overrides
+          (<code>UiReadCacheOptions.cs:32</code> and <code>:41</code>), successes-only storage
+          (<code>EntityServiceBase.cs:262-264</code>), prefix invalidation on a successful write (<code>:285</code>) and a clear on
+          sign-out (<code>AuthUIService.cs:127</code>). It is DI-registered by <code>AddUIShared</code>
+          (<code>MMCA.Common.UI/DependencyInjection.cs:57</code>) and still opt-in per service, through an optional
+          constructor parameter that defaults to <code>null</code> (<code>EntityServiceBase.cs:47</code>), and <strong>no consumer app
+          passes it</strong>: ADC, Store and Helpdesk contain no reference to the type at all. It is recorded as a
+          capability and an inventory item, not as something to adopt in a sweep. The title stays
+          &quot;Two-Tier Caching&quot; on purpose: two tiers are what this ADR decides, and the client one is optional.</li>
           <li><strong>The 2026-08-31 anchor claim is annotated rather than removed</strong>, consistent with how every
           preceding revision treated its predecessor.</li>
           </ol>

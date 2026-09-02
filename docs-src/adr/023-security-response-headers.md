@@ -1,7 +1,12 @@
 # ADR-023: Centralized Security-Response-Headers Middleware with a Pluggable CSP
 
 ## Status
-Accepted (2026-07-02).
+Accepted (2026-07-02). Revised 2026-09-01 (the static default is now a complete hardened baseline: it
+ships `script-src 'self' 'wasm-unsafe-eval'` and `style-src 'self' 'unsafe-inline'` instead of omitting
+both directives; `BlazorCspPolicyProvider` fails closed on an API/Gateway origin it cannot resolve,
+narrowing `connect-src` to `'self'` while staying enforced, rather than degrading to a permissive
+Report-Only policy; the middleware also substitutes a per-request nonce for a `{nonce}` token in the
+resolved policy).
 
 ## Context
 Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
@@ -29,24 +34,28 @@ with `AddCommonSecurityHeaders(configuration?, configure?)` and inserted early w
 - **The CSP is resolved through an `ICspPolicyProvider` extension point**, not stamped as a constant. The provider
   returns a `CspPolicy(string Value, bool Enforce)`: when `Enforce` is true the middleware writes
   `Content-Security-Policy`, otherwise `Content-Security-Policy-Report-Only`. Returning `null` emits no
-  CSP.
-- **The default provider (`StaticCspPolicyProvider`) returns a conservative baseline** from
+  CSP. A resolved policy that carries the literal token `{nonce}` gets a fresh 128-bit value per request,
+  substituted into the header as `'nonce-<value>'` and stashed in `HttpContext.Items` (read with
+  `CspNonce.Get`) before the rest of the pipeline runs, so a layout can stamp it onto its own tags.
+- **The default provider (`StaticCspPolicyProvider`) returns a complete hardened baseline** from
   `SecurityHeadersSettings.ContentSecurityPolicy`:
-  `default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`.
-  It **deliberately omits `script-src` and `style-src`** so that an HTML host which forgets to register a
-  fuller provider is not hard-broken (Blazor needs `script-src 'wasm-unsafe-eval'`, MudBlazor needs
-  `style-src 'unsafe-inline'`). This baseline is the right complete policy for JSON/WebSocket/static
-  hosts (API, Gateway) and a safe-but-partial policy for an unconfigured HTML host.
+  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`.
+  It ships `script-src` and `style-src` at exactly the strength Blazor (`'wasm-unsafe-eval'`) and
+  MudBlazor (`'unsafe-inline'` styles) need, so an HTML host that never registers a fuller provider gets
+  a functional policy rather than one silently missing both directives, while the JSON, WebSocket and
+  static responses of API and Gateway hosts are unaffected. A host wanting a stricter or looser policy
+  configures the `"SecurityHeaders"` section or registers its own provider.
 - **HTML hosts register their own `ICspPolicyProvider`** before calling `AddCommonSecurityHeaders`
   (the registration uses `TryAddSingleton`, so the first-registered provider wins). Both apps register
   one shared `BlazorCspPolicyProvider` (a single `internal sealed` class hoisted into
   `MMCA.Common.UI.Web`, byte-identical to the copies the app hosts formerly carried) via
   `AddCommonBlazorCsp` ahead of `AddCommonSecurityHeaders`. It pins `connect-src` to `'self'` plus the
   configured API/Gateway origin (https + wss, from the shared `ApiSettings`), adds `script-src 'self'
-  'wasm-unsafe-eval'` and `style-src 'self' 'unsafe-inline'`, and **degrades to a permissive
-  `Report-Only` policy if the origin cannot be resolved** (never enforce a CSP it could not build
-  correctly). It loosens the policy for localhost only in Development (Visual Studio Browser Link / Hot
-  Reload).
+  'wasm-unsafe-eval'` and `style-src 'self' 'unsafe-inline'`, and **fails closed when that origin cannot
+  be resolved or parsed**: `connect-src` narrows to `'self'` and the policy is still enforced, so a
+  misconfiguration shows up immediately as blocked cross-origin calls in the browser console rather than
+  as a header that is emitted but inert. It loosens the policy for localhost only in Development (Visual
+  Studio Browser Link / Hot Reload).
 - **Adopted at both edges of both apps:** Store and ADC each wire `AddCommonSecurityHeaders` +
   `UseCommonSecurityHeaders` in their Gateway host and their UI web host, with the UI host also
   registering `BlazorCspPolicyProvider`. The middleware carries a unit test
@@ -58,19 +67,23 @@ with `AddCommonSecurityHeaders(configuration?, configure?)` and inserted early w
 - **An extension point, because one CSP cannot fit all hosts.** The `ICspPolicyProvider` indirection is the minimum
   needed to let a Blazor host inject a runtime, origin-pinned policy while API/Gateway hosts keep the
   strict static one, without the framework guessing either app's origins.
-- **Fail-safe over fail-secure for the default.** Omitting `script-src`/`style-src` from the baseline
-  trades a slightly weaker default CSP for the guarantee that the shared middleware can never be the
-  thing that blanks out a Blazor app. A host that wants the strong policy opts in by registering a
-  provider, which is visible and testable.
-- **Report-Only as the degradation path.** A dynamic policy that cannot be built (misconfigured origin)
-  downgrades to Report-Only instead of hard-breaking production, surfacing the misconfiguration in the
-  browser console rather than as an outage.
+- **A default that is complete and still Blazor-compatible.** The baseline carries `script-src` and
+  `style-src` at the weakest strength a Blazor/MudBlazor host actually needs, so every directive is
+  covered even for a host that never registers a provider, and the shared middleware is still never the
+  thing that blanks out such a host. Tightening past that is an explicit act: configure the section or
+  register a provider, both visible and testable.
+- **Fail closed when a dynamic policy cannot be built.** A `connect-src` origin that cannot be resolved
+  is a misconfiguration, so the policy keeps enforcing on the strictest value it can be sure of
+  (`'self'`). The mistake surfaces as blocked cross-origin calls, which someone notices, instead of a
+  Report-Only header that protects nothing.
 
 ## Trade-offs
-- **The baseline CSP is intentionally incomplete.** An API/Gateway host gets `default-src 'self'`-style
-  protection but no `script-src`/`style-src` discipline unless it registers a fuller provider; an HTML
-  host that forgets to register one runs without script/style restrictions (safe, but not the intended
-  hardened policy). The omission is documented on `SecurityHeadersSettings.ContentSecurityPolicy`.
+- **The baseline is complete, not maximal.** Shipping a policy that works for a Blazor/MudBlazor host
+  means the default carries `style-src 'unsafe-inline'` (MudBlazor injects styles at runtime), so inline
+  styles are not blocked out of the box, and an API or Gateway host that serves no HTML inherits a
+  script/style allowance it does not need. Either host tightens the string in the `"SecurityHeaders"`
+  section or registers its own provider; the `{nonce}` placeholder is the supported path off
+  `'unsafe-inline'`. The default is documented on `SecurityHeadersSettings.ContentSecurityPolicy`.
 - **Registration order is a foot-gun.** Because the provider is registered with `TryAddSingleton`, a host
   must register its custom `ICspPolicyProvider` *before* `AddCommonSecurityHeaders`, or the static
   default wins silently.
@@ -79,8 +92,11 @@ with `AddCommonSecurityHeaders(configuration?, configure?)` and inserted early w
   `AddCommonBlazorCsp`, so the connect-src/origin logic is no longer copied per app. The remaining
   trade-off is that a host needing genuinely different CSP logic cannot edit an app-local class: it must
   supply its own `ICspPolicyProvider` (registered before `AddCommonSecurityHeaders`) instead.
-- **A degraded (Report-Only) policy protects nothing.** The fail-safe path means a broken dynamic policy
-  is non-blocking but also non-enforcing until someone notices the Report-Only header.
+- **Failing closed moves the pain onto a running app.** A Blazor host whose `ApiSettings` endpoint is
+  wrong still serves pages, but the enforced `connect-src 'self'` blocks every cross-origin API call and
+  the SignalR notification hub. That loud signal is the point (a security header that quietly stops
+  being enforced is the worse failure mode), and the cost is that the configuration mistake lands on the
+  users of that deployment rather than in a passive report.
 
 ## Related
 ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022

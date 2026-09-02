@@ -9,7 +9,12 @@ gallery assertions, so the base count, the gallery count (now eleven assertions 
 both consumer subclass counts are updated, along with a correction to ADC's grid/strict split; no decision
 changed. Revised 2026-08-31: a signed-in devices/sessions page scan joined the gallery (now twelve
 assertions across eight classes), and the `PageExtensions`, ADC/Store `deploy.yml`, and MMCA.Helpdesk pin
-line anchors are refreshed; no decision changed.
+line anchors are refreshed; no decision changed. Revised 2026-09-01: the gallery count is re-measured from
+source (fifteen assertions across nine classes), which adds the virtualized-grid page scan in
+`GridPageE2ETests` (a class the record had never listed) and the two notification inbox deep-link scans,
+corrects the signed-in set (the notification scans seed the fake auth cookie too, not the sessions scan
+alone), and refreshes the `E2ETestBase` helper, ADC `deploy.yml`, and Store `deploy.yml` deploy-job line
+anchors; no decision changed.
 
 ## Context
 Accessibility was documented before it was enforced. The narrative guide
@@ -57,9 +62,9 @@ the package's own workflow bases, and wire it as a required merge check and a de
   password-recovery flow of [ADR-091](091-cache-backed-password-reset.md)) each call the assert with
   `AxeOptions.Wcag21Aa`.
 - **Consumer page scans go through two helpers that make strictness explicit.** On
-  `.../Testing.E2E/Infrastructure/E2ETestBase.cs`, `ScanAsync()` (`:293`) waits for any loading bar to
-  clear and asserts the strict options (`:296`); `ScanGridAsync()` (`:283`) additionally waits for a
-  seeded data row before scanning and asserts with the one recorded exception (`:288`). Which helper a
+  `.../Testing.E2E/Infrastructure/E2ETestBase.cs`, `ScanAsync()` (`:334`) waits for any loading bar to
+  clear and asserts the strict options (`:337`); `ScanGridAsync()` (`:324`) additionally waits for a
+  seeded data row before scanning and asserts with the one recorded exception (`:329`). Which helper a
   page uses is the declaration of which rule set applies to it.
 - **Exactly one recorded exception exists, and it is a value, not a switch.**
   `AxeOptions.Wcag21AaExceptMudPagerCombobox` (`AxeOptions.cs:35`) carries the same four WCAG tags
@@ -74,10 +79,10 @@ the package's own workflow bases, and wire it as a required merge check and a de
   `E2E_BROWSER` (`:298`), with `fail-fast: false` so each engine reports independently (`:235`). All
   three contexts block merges (`MMCA.Common/CONTRIBUTING.md:63-64`, enumerated in the branch-protection
   payload at `:174-176`).
-- **Both deployed apps gate the deploy on it.** `MMCA.ADC/.github/workflows/deploy.yml:636` and
+- **Both deployed apps gate the deploy on it.** `MMCA.ADC/.github/workflows/deploy.yml:689` and
   `MMCA.Store/.github/workflows/deploy.yml:592` call the reusable `e2e.yml` workflow chromium-only
-  (ADC `:638`, Store `:594`) against the full Aspire stack, and the `deploy` job waits on that gate
-  (ADC `:992`, Store `:941`).
+  (ADC `:691`, Store `:594`) against the full Aspire stack, and the `deploy` job waits on that gate
+  (ADC `:1054`, Store `:945`).
 - **The gate already owns design-token decisions.** Contrast values in the shared theme are set to
   what the scan will accept, with the ratio recorded in place: light-palette `WarningContrastText`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:33`, rationale at `:29-32`,
@@ -87,18 +92,23 @@ the package's own workflow bases, and wire it as a required merge check and a de
   surface ratio (`.../MMCA.Common.UI/Theme/BrandColors.cs:26`, rationale at `:22-24`).
 
 Adoption differs per repo and is uneven on purpose. **MMCA.Common** scans its own backend-less gallery:
-twelve assertions across eight classes over `GalleryAxeTestBase`
+fifteen assertions across nine classes over `GalleryAxeTestBase`
 (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Infrastructure/GalleryAxeTestBase.cs:14`),
 covering login (`LoginPageE2ETests.cs:34`), register (`RegisterPageE2ETests.cs:36`), the primitives
 showcase (`ComponentsPageE2ETests.cs:80`), both dark-mode states (`DarkModeE2ETests.cs:30,:40`), the
-notification pages, one of which is the gallery's use of the pager exception
-(`NotificationPagesE2ETests.cs:32`, alongside strict scans at `:44` and `:56`), and the password-recovery
+notification pages, whose five scans open with the gallery's one use of the pager exception on the
+history table (`NotificationPagesE2ETests.cs:32`) and continue with strict scans of the inbox (`:44`), its
+two deep-link states (an unknown notification id at `:61`, a known one at `:74`), and the compose page
+(`:86`), the virtualized grid page, whose windowed markup is scanned under the strict options like every
+other gallery page (`GridPageE2ETests.cs:82`, class at `:16`), and the password-recovery
 pages added with [ADR-091](091-cache-backed-password-reset.md): forgot-password in both its form state and
 its confirmation state, which replaces the form and is therefore a distinct rendering
 (`ForgotPasswordPageE2ETests.cs:46` and `:60`), plus reset-password (`ResetPasswordPageE2ETests.cs:48`).
-One gallery scan covers a signed-in page: the shared devices/sessions page
-(`SessionsPageE2ETests.cs:34`, class at `:13`), which carries a real `[Authorize]`, so the test seeds the
-gallery's cookie-toggled fake authentication scheme before navigating and scans the populated table, its
+The notification and sessions scans are the signed-in ones: both the notification pages and the shared
+devices/sessions page (`SessionsPageE2ETests.cs:34`, class at `:13`) carry a real `[Authorize]`, so those
+tests seed the gallery's cookie-toggled fake authentication scheme before navigating
+(`NotificationPagesE2ETests.cs:92`, `SessionsPageE2ETests.cs:39`) while the login, register, components
+and grid scans stay deliberately anonymous. The sessions scan covers the populated table, its
 current-device marker, and the per-device sign-out buttons under the strict options.
 **MMCA.Store** subclasses all four Identity bases
 (`Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5`,
@@ -147,7 +157,7 @@ accessibility gate today.
   (`AxeOptions.cs:12-15`).
 - **One accepted exception, with real blast radius.** `Wcag21AaExceptMudPagerCombobox` disables
   `aria-input-field-name` for the whole page scan, not just for the pager node. A grid page that later
-  gains a genuinely unnamed combobox of its own would pass `ScanGridAsync` (`E2ETestBase.cs:288`). The
+  gains a genuinely unnamed combobox of its own would pass `ScanGridAsync` (`E2ETestBase.cs:329`). The
   exception is documented as "use only where the sole combobox is a pager" (`AxeOptions.cs:33`), which is
   a convention the compiler cannot enforce. It is upstream-owned: it stands until MudBlazor labels the
   pager select.
@@ -155,8 +165,8 @@ accessibility gate today.
   not machine-checkable and are covered by the manual screen-reader checklist in
   [common-ACCESSIBILITY.md](../guides/common-ACCESSIBILITY.md), which is a periodic human pass, not a gate.
 - **The deploy gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-  filter (ADC `deploy.yml:635`, Store `deploy.yml:591`), and `deploy` accepts `success` or `skipped` for it
-  (ADC `:1022`, Store `:972`), so a backend-only or infra-only deploy ships without a browser scan. That
+  filter (ADC `deploy.yml:688`, Store `deploy.yml:591`), and `deploy` accepts `success` or `skipped` for it
+  (ADC `:1092`, Store `:976`), so a backend-only or infra-only deploy ships without a browser scan. That
   is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
   gate as backstop, but it does mean "deployed" does not always mean "axe ran on this commit".
 - **Consumer breadth is hand-maintained.** Nothing forces a new page into `AccessibilityTests`, so

@@ -1,7 +1,7 @@
 # ADR-021: Consumer-Side Inbox for Integration-Event Idempotency
 
 ## Status
-Accepted (2026-06-09; adoption reviewed 2026-07-15). Revised 2026-08-18 (the inbox stays opt-in, but
+Accepted (2026-06-09; adoption reviewed 2026-07-15, inventory refreshed 2026-09-01). Revised 2026-08-18 (the inbox stays opt-in, but
 being off is no longer silent: a broker-connected host running `NoOpInboxStore` logs a startup
 warning, `MessageBus:EnableInbox=true` becomes the stated recommendation for any such host, and the
 `InboxMessages` entity is confirmed to be part of the relational model unconditionally. See the
@@ -65,17 +65,22 @@ that saves to the same physical source now commits the inbox row in its own tran
 window is closed for it; it remains open for a handler that writes nothing or writes to a different
 source, and handlers must still be idempotent.)
 
-In production `EnableInbox: true` is set on all four ADC service hosts
-(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:28`,
+In production `EnableInbox: true` is set explicitly on all four ADC service hosts
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:34`,
 `MMCA.ADC.Conference.Service/appsettings.json:31`, `MMCA.ADC.Engagement.Service/appsettings.json:52`,
-`MMCA.ADC.Notification.Service/appsettings.json:50`) and on Store's Sales service
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:40`). Where the `InboxMessages`
-table comes from differs by repo: each of the four ADC per-service migration projects carries a
-dedicated `AddInboxMessages` migration, whereas Store Sales creates the table and its unique
-`IX_InboxMessages_MessageId` index inside its single `InitialCreate` migration
-(`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260621192808_InitialCreate.cs:21,179`),
-because that per-service project postdates the frozen combined-archive lineage that added the ADC
-migration. Adoption inventory as of 2026-08-13: **three ADC services consume from the broker** and
+`MMCA.ADC.Notification.Service/appsettings.json:50`) and on all three Store service hosts
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:40`,
+`MMCA.Store.Catalog.Service/appsettings.json:30`, `MMCA.Store.Identity.Service/appsettings.json:30`),
+so every deployed service host states its posture rather than resting on the transport default the
+Revision (2026-08-26) introduced. Where the `InboxMessages` table comes from differs by repo: each of
+the four ADC per-service migration projects carries a dedicated `AddInboxMessages` migration, whereas
+each Store per-service project creates the table and its unique `IX_InboxMessages_MessageId` index
+inside its single `InitialCreate` migration
+(`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260621192808_InitialCreate.cs:21,179`,
+`MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs:48,213`,
+`MMCA.Store.Migrations.SqlServer.Identity/Migrations/20260621192816_InitialCreate.cs:49,119`),
+because those per-service projects postdate the frozen combined-archive lineage that added the ADC
+migration. Adoption inventory as of 2026-09-01: **three ADC services consume from the broker** and
 so use their inbox for real, plus Store Sales. ADC Identity consumes `SpeakerLinkedToUser` and
 `SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:290-291`),
 ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:349`), and ADC
@@ -84,16 +89,13 @@ Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`
 first of which is ADC's first **self-consumption** over the broker: Engagement publishes
 `AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
 so the inbox is load-bearing there rather than decorative. Store Sales consumes `ProductVariantChanged`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:247`). Only **ADC Notification**
-now carries `EnableInbox: true` and the table while registering no consumer, so its inbox alone is
-provisioned and unused (functionally harmless). The mirror image is equally harmless and worth stating
-because it looks like the opposite mistake: Store Catalog and Store Identity carry the `InboxMessages`
-table from their own `InitialCreate` migrations
-(`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs:48,213`,
-`MMCA.Store.Migrations.SqlServer.Identity/Migrations/20260621192816_InitialCreate.cs:49,119`) with
-**no** `EnableInbox` flag and **no** consumer, so the table exists and is simply never written; the
-audit condition the Trade-offs below state (no broker-consuming service lacks the flag) holds in both
-repos.
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:247`). The remaining three hosts (**ADC
+Notification**, **Store Catalog** and **Store Identity**) carry `EnableInbox: true` and the table while
+registering no consumer, so their inboxes are provisioned and unused, which is functionally harmless:
+the flag costs one scoped `EfInboxStore` registration and the table stays empty until one of them
+starts consuming. The audit condition the Trade-offs below state (no broker-consuming service lacks
+the flag) holds in both repos, and no host in either repo now leaves the setting to the transport
+default.
 
 ## Rationale
 - **Dedup once, not in every handler.** A single consume-edge check turns "every handler author must
@@ -153,9 +155,11 @@ What changed is that the default is now loud.
    which DI branch registered it. Its message text is at `:33-36`. The type is `internal`, so it is a
    framework behavior rather than a public extension point.
 2. **`MessageBus:EnableInbox=true` is now the stated recommendation, not a neutral option.** The
-   setting is still `bool` with no initializer, so the default is still `false`
-   (`.../Settings/MessageBusSettings.cs:84`), but its own documentation now says "RECOMMENDED true for
-   any broker-connected host" (`:65-73`). The Trade-offs entry above ("a broker-consuming service that
+   setting is still `bool` with no initializer, so the default is still `false`, but its own
+   documentation now says "RECOMMENDED true for any broker-connected host". (**Superseded by the
+   Revision (2026-08-26)**: the property is `bool?` with no initializer
+   (`.../Settings/MessageBusSettings.cs:117`), and its documentation now states the transport-driven
+   resolution rather than a recommendation (`:91-116`).) The Trade-offs entry above ("a broker-consuming service that
    forgets `EnableInbox` gets no dedup") therefore keeps its substance and loses its silence: the
    inventory audit it asks for is now performed by the host at every boot.
 3. **The `InboxMessages` table is part of the relational model unconditionally.**
@@ -174,8 +178,9 @@ already create, so flipping `EnableInbox` is a configuration change and a restar
 Every service enumerated in the Decision above is past that point already (ADC's four per-service
 migration projects each carry an `AddInboxMessages` migration; Store's per-service projects create the
 table in `InitialCreate`). The settings documentation says the same thing
-(`MessageBusSettings.cs:58-64`), and notes that the `false` default exists only so an existing host
-does not start querying a table it has not migrated yet. Cosmos hosts remain the exception, as the
+(`MessageBusSettings.cs:94-97`), and carved out the `false` default for an existing host that has not
+migrated the table yet (that carve-out is now the explicit `EnableInbox=false` opt-out documented at
+`:110-115`, per the Revision (2026-08-26)). Cosmos hosts remain the exception, as the
 Decision above already states.
 
 ## Revision (2026-08-26)
@@ -184,16 +189,16 @@ opt-in where redelivery is possible, and its row is no longer a separate write.
 
 1. **`EnableInbox` becomes three-valued, and unset resolves ON for a broker.**
    `MessageBusSettings.EnableInbox` is now `bool?` with no initializer
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:94`), and every
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:117`), and every
    framework component reads the resolved posture instead:
-   `IsInboxEnabled => EnableInbox ?? Provider != MessageBusProvider.InProcess` (`:102`). An explicit
-   value still wins in both directions (`:88-92`); left unset the transport decides, ON for RabbitMQ
-   and Azure Service Bus, OFF for the in-process provider that has no redelivery to dedup (`:76-79`).
+   `IsInboxEnabled => EnableInbox ?? Provider != MessageBusProvider.InProcess` (`:125`). An explicit
+   value still wins in both directions (`:110-115`); left unset the transport decides, ON for RabbitMQ
+   and Azure Service Bus, OFF for the in-process provider that has no redelivery to dedup (`:99-102`).
    The reason the default flipped is written where the setting lives: broker delivery is
    at-least-once by contract, so an ack lost to a network blip, a redelivery after a lease expiry, or
    an outbox row republished after a crash all hand the same event to the same handlers twice, and
    with the inbox off each of those becomes a duplicate side effect (a second email, a second charge
-   attempt, a double decrement) unless every handler happens to be idempotent on its own (`:80-85`).
+   attempt, a double decrement) unless every handler happens to be idempotent on its own (`:103-108`).
    The registration branch is unchanged in shape and only its condition moved: `AddBrokerMessaging`
    still returns early for `MessageBusProvider.InProcess`
    (`.../MMCA.Common.Infrastructure/DependencyInjection.cs:741`), so this scopes to broker hosts, and

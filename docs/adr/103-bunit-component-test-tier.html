@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html" aria-current="page">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -246,16 +248,16 @@
           and derived test classes call <code>RenderUnderTest</code> / <code>RenderAs</code> and never touch the version-specific
           symbols, so a move off that line changes this file and no other
           (<code>BunitComponentTestBase.cs:29-34</code>). The line is pinned at <code>bunit</code> 2.9.0 in each repo&#39;s central
-          package file (<code>MMCA.Common/Directory.Packages.props:200-201</code>,
+          package file (<code>MMCA.Common/Directory.Packages.props:205-206</code>,
           <code>MMCA.ADC/Directory.Packages.props:31-32</code>, <code>MMCA.Store/Directory.Packages.props:51-52</code>), and the
           package carries a direct <code>AngleSharp</code> pin because central package management does not pin
           transitives (<code>MMCA.Common.Testing.UI.csproj:13-15</code>).</li>
           <li><strong>MudBlazor services plus the ADR-067 facades, registered once.</strong> The constructor calls
           <code>Services.AddMudServices()</code> (<code>BunitComponentTestBase.cs:46</code>) and then
           <code>Services.AddCommonUiFacades()</code> (<code>:53</code>), which is the same call the production shell makes from
-          <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:88</code>). That
+          <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:106</code>). That
           call registers <code>IToastService</code> -&gt; <code>MudToastService</code> and <code>IAppDialogService</code> -&gt; <code>MudAppDialogService</code>
-          with <code>TryAdd</code> (<code>DependencyInjection.cs:140-145</code>), so a component test resolves the vendor-neutral
+          with <code>TryAdd</code> (<code>DependencyInjection.cs:158-163</code>), so a component test resolves the vendor-neutral
           facades and exercises the real Mud-backed path, and a test that wants a recording double registers
           one afterwards (last registration wins, <code>BunitComponentTestBase.cs:48-52</code>).</li>
           <li><strong>Loose JSInterop.</strong> <code>JSInterop.Mode = JSRuntimeMode.Loose</code> (<code>:55</code>) so MudBlazor components that
@@ -263,11 +265,11 @@
           <li><strong>A mutable <code>AuthenticationStateProvider</code> that serves both consumption paths.</strong> One
           <code>MutableAuthenticationStateProvider</code> instance is held by the base (<code>:42</code>), registered as the
           <code>AuthenticationStateProvider</code> singleton (<code>:58</code>), and implemented over a settable principal that
-          notifies listeners (<code>:156-168</code>). <code>RenderAs</code> sets the principal and also adds the cascading
-          <code>AuthenticationState</code>, so <code>&lt;AuthorizeView&gt;</code> and a directly injecting page agree (<code>:124-135</code>);
-          <code>SetUser</code> changes it mid-test without a new render root (<code>:114-115</code>); the default is anonymous
-          (<code>:39-40</code>, <code>:118-121</code>). Authorization is permissive but real: <code>IsAuthenticatedAuthorizationService</code>
-          succeeds for an authenticated identity and fails otherwise (<code>:57</code>, <code>:170-180</code>). Principals come from
+          notifies listeners (<code>:162-174</code>). <code>RenderAs</code> sets the principal and also adds the cascading
+          <code>AuthenticationState</code>, so <code>&lt;AuthorizeView&gt;</code> and a directly injecting page agree (<code>:130-141</code>);
+          <code>SetUser</code> changes it mid-test without a new render root (<code>:120-121</code>); the default is anonymous
+          (<code>:39-40</code>, <code>:123-127</code>). Authorization is permissive but real: <code>IsAuthenticatedAuthorizationService</code>
+          succeeds for an authenticated identity and fails otherwise (<code>:57</code>, <code>:176-186</code>). Principals come from
           the shipped <code>TestPrincipal</code> factory, which writes the user id under both <code>sub</code> and
           <code>ClaimTypes.NameIdentifier</code> because a real principal reaches a page under either name
           (<code>Infrastructure/TestPrincipal.cs:7,22-32</code>), plus an <code>Organizer</code> shorthand (<code>TestPrincipal.cs:35-36</code>).</li>
@@ -276,18 +278,18 @@
           localized markup against the neutral resources in the component&#39;s own assembly with no per-test
           setup (<code>:60-62</code>).</li>
           <li><strong><code>SetRendererInfo</code> behind one helper, because its call ordering is load-bearing.</strong>
-          <code>ConfigureDataGridListPageHost</code> (<code>:94-112</code>) registers the list-page state services (<code>:99-100</code>),
+          <code>ConfigureDataGridListPageHost</code> (<code>:100-118</code>) registers the list-page state services (<code>:105-106</code>),
           substitutes MudBlazor&#39;s <code>IBrowserViewportService</code> with an inert double so <code>IsMobile</code> stays
-          deterministically false (<code>:104</code>, which is why <code>Moq</code> is a package dependency rather than a
+          deterministically false (<code>:110</code>, which is why <code>Moq</code> is a package dependency rather than a
           hand-written stub, <code>MMCA.Common.Testing.UI.csproj:17-21</code>), adds bUnit&#39;s persistent component state
-          for the prerender boundary (<code>:108</code>), and calls <code>SetRendererInfo</code> <strong>last</strong> (<code>:111</code>). The rule is
+          for the prerender boundary (<code>:114</code>), and calls <code>SetRendererInfo</code> <strong>last</strong> (<code>:117</code>). The rule is
           written where the helper is: <code>SetRendererInfo</code> builds and freezes the bUnit service provider, so any
           registration made after it is silently ignored and the page resolves the framework default instead
-          of the test&#39;s double (<code>:72-77</code>). Eighteen test files across MMCA.Common, MMCA.ADC and MMCA.Store
+          of the test&#39;s double (<code>:78-82</code>). Nineteen test files across MMCA.Common, MMCA.ADC and MMCA.Store
           call the helper today; its comment records the fifteen hand-rolled copies of the block that the
-          extraction replaced (<code>:75-76</code>).</li>
+          extraction replaced (<code>:81-82</code>).</li>
           <li><strong>The rest of the harness ships with it.</strong> <code>RenderMudProviders</code> renders the popover, dialog and
-          snackbar providers into the test&#39;s render root and returns handles (<code>:142-148</code>, <code>:151-154</code>);
+          snackbar providers into the test&#39;s render root and returns handles (<code>:148-154</code>, <code>:157-160</code>);
           <code>BunitInteractionExtensions</code> expresses clicks and text reads over accessible text rather than CSS
           paths (<code>Infrastructure/BunitInteractionExtensions.cs:12-34</code>); <code>MarkupSnapshot</code> is a dependency-free
           golden-markup comparison that normalizes MudBlazor&#39;s per-render GUIDs
@@ -305,11 +307,11 @@
           <code>.../Sales/MMCA.Store.Sales.UI.Tests/MMCA.Store.Sales.UI.Tests.csproj:12</code>,
           <code>.../Identity/MMCA.Store.Identity.UI.Tests/MMCA.Store.Identity.UI.Tests.csproj:12</code>); MMCA.Common&#39;s
           own UI tests take it by project reference
-          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/MMCA.Common.UI.Tests.csproj:22</code>). Each repo&#39;s
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/MMCA.Common.UI.Tests.csproj:25</code>). Each repo&#39;s
           subclass carries only what its head owns and nothing shared: Store Catalog&#39;s is an empty declaration
           (<code>MMCA.Store/Tests/Modules/Catalog/MMCA.Store.Catalog.UI.Tests/BunitTestBase.cs:11</code>), ADC
           Conference&#39;s adds the ADR-042 device-capability defaults and inert configuration
-          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:18-38</code>), and
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:19-46</code>), and
           MMCA.Common&#39;s adds the layout-chrome services only its own tests render
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:15-46</code>).</li>
           </ul>
@@ -327,13 +329,13 @@
           structure and ADR-058 takes for runtime contracts.</li>
           <li><strong>One freeze rule, one call site.</strong> The <code>SetRendererInfo</code> ordering constraint cannot be enforced by
           the compiler, so the next best thing is to have exactly one place that gets it right and a helper
-          name that says when to call it (<code>BunitComponentTestBase.cs:70-77</code>).</li>
+          name that says when to call it (<code>BunitComponentTestBase.cs:74-82</code>).</li>
           <li><strong>The version boundary is a single file.</strong> Isolating <code>BunitContext</code> and <code>Render&lt;T&gt;</code> behind
           <code>RenderUnderTest</code> / <code>RenderAs</code> means a bUnit line change is a framework edit, not a sweep across
           every UI test class in three repos (<code>:29-34</code>).</li>
           <li><strong>Test-time and run-time resolve the same facades.</strong> Because the base calls the production
           <code>AddCommonUiFacades</code> rather than registering its own doubles (<code>:53</code>,
-          <code>MMCA.Common.UI/DependencyInjection.cs:88,140-145</code>), a component test asserts against the real
+          <code>MMCA.Common.UI/DependencyInjection.cs:106,158-163</code>), a component test asserts against the real
           toast and dialog implementations ADR-067 put behind those interfaces, and a test that wants to
           assert on a toast opts into a double explicitly.</li>
           <li><strong>A package matches how every other shipped test tier is delivered.</strong> Runtime conformance
@@ -347,11 +349,11 @@
           JS module which does not exist, because the loose mode answers with defaults
           (<code>BunitComponentTestBase.cs:55</code>). Only the browser tier (ADR-063, ADR-092) catches that.</li>
           <li><strong>Authorization in this tier answers on authentication, not on policy.</strong> The shipped double succeeds
-          for any authenticated principal (<code>:170-180</code>), so a component test cannot assert a permission
+          for any authenticated principal (<code>:176-186</code>), so a component test cannot assert a permission
           denial; permission behavior belongs to the handler and API tiers.</li>
           <li><strong>The frozen-provider rule is a convention, not a compiler error.</strong> Nothing fails a test that
           registers a service after <code>SetRendererInfo</code>; the symptom is the framework default resolving quietly
-          in place of the double (<code>:72-77</code>), which is exactly the failure the helper exists to prevent and
+          in place of the double (<code>:78-82</code>), which is exactly the failure the helper exists to prevent and
           cannot prevent for a test that bypasses it.</li>
           <li><strong>Nothing enforces adoption.</strong> No fitness rule requires a UI test project to subclass the shared
           base, so a new project can still re-derive the block; the only inventory is a search.</li>
@@ -360,7 +362,7 @@
           tests still takes Moq transitively, and a non-MudBlazor UI could not use this base at all.</li>
           <li><strong>The bUnit version is pinned per repo, not by the package.</strong> The package references <code>bunit</code> without
           a version (<code>MMCA.Common.Testing.UI.csproj:13</code>) and each consumer&#39;s central package file names the
-          number (<code>MMCA.Common/Directory.Packages.props:201</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
+          number (<code>MMCA.Common/Directory.Packages.props:206</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
           <code>MMCA.Store/Directory.Packages.props:52</code>), so three files have to agree, and the AngleSharp advisory
           pin has to be repeated the same way.</li>
           </ul>

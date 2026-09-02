@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -242,12 +244,12 @@
           something, keep the schema, and refuse the one combination that cannot work.</p>
           <ol>
           <li><p><strong><code>MessageBus:EnableOutbox</code> is <code>bool?</code> and defaults to unset.</strong>
-          <code>MessageBusSettings.EnableOutbox</code> (<code>Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:128</code>)
-          carries the explicit override; <code>IsOutboxEnabled</code> (<code>:136</code>) is the resolved posture every framework
+          <code>MessageBusSettings.EnableOutbox</code> (<code>Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:151</code>)
+          carries the explicit override; <code>IsOutboxEnabled</code> (<code>:159</code>) is the resolved posture every framework
           component reads: <code>EnableOutbox ?? Provider != MessageBusProvider.InProcess</code>. That is character for
-          character the inbox rule one property above it (<code>:102</code>). An explicit value wins in both
+          character the inbox rule two properties above it (<code>:125</code>). An explicit value wins in both
           directions, so a monolith that wants at-least-once delivery across a crash sets
-          <code>MessageBus:EnableOutbox=true</code> and gets the full outbox back (<code>:119-126</code>).</p>
+          <code>MessageBus:EnableOutbox=true</code> and gets the full outbox back (<code>:143-148</code>).</p>
           </li>
           <li><p><strong>Resolution happens once, at registration.</strong> <code>AddInfrastructure</code> binds the section, and on the
           enabled path registers <code>OutboxProcessor</code> and <code>OutboxCleanupService</code>; on the disabled path it

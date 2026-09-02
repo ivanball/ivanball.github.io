@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -311,14 +313,14 @@
           <code>JsFetchSessionCookieSync.cs:20</code>, <code>mmca-auth-cookie.js:5</code>). The refresh token transits JS only for
           that single same-origin POST and is never persisted in localStorage. The sync is registered via
           <code>AddClientAuthSessionCookieSync</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:152</code>,
-          <code>DependencyInjection.cs:154</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:170</code>,
+          <code>DependencyInjection.cs:172</code>).</li>
           <li><strong>Every outgoing API request is bearer-stamped by one handler.</strong> <code>AuthDelegatingHandler</code> reads the
           current access token from <code>ITokenStorageService</code> and attaches it as a <code>Bearer</code> authorization header
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:9</code>,
           <code>AuthDelegatingHandler.cs:17-20</code>). It is registered into the shared named <code>&quot;APIClient&quot;</code> HttpClient
-          pipeline via <code>AddHttpMessageHandler</code> (<code>DependencyInjection.cs:59</code>, <code>DependencyInjection.cs:63</code>,
-          <code>DependencyInjection.cs:83</code>), so the handler is head-agnostic: it depends only on the storage
+          pipeline via <code>AddHttpMessageHandler</code> (<code>DependencyInjection.cs:77</code>, <code>DependencyInjection.cs:81</code>,
+          <code>DependencyInjection.cs:101</code>), so the handler is head-agnostic: it depends only on the storage
           abstraction, which supplies the correctly-hydrated token per head.</li>
           <li><strong>Blazor auth state is derived from the JWT client-side.</strong> <code>JwtAuthenticationStateProvider</code> reads
           the stored access token, parses and expiry-checks it without server validation, and builds an

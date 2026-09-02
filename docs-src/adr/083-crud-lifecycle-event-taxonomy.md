@@ -45,8 +45,8 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
 - **`Added` from the factory, `Updated` from mutators, `Deleted` from `Delete()`.** The base's usage
   note fixes the mapping (`EntityChangedEvent.cs:10-13`), and `Session` is the canonical shape: one
   event type, three raise sites, in
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:206` (Added, from
-  the static factory), `:267` (Updated), `:304` (Deleted, inside the soft delete), all constructing the
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:212` (Added, from
+  the static factory), `:273` (Updated), `:294` (Deleted, inside the soft delete), all constructing the
   same `SessionChanged` (`.../Sessions/DomainEvents/SessionChanged.cs:13-18`).
 - **Handlers filter on `State`, or deliberately do not.** `SpeakerDeletedHandler` subscribes to
   `SpeakerChanged` and returns immediately unless the state is `Deleted`
@@ -63,13 +63,13 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/DomainEvents/OrderPaid.cs:13-18`),
   and `ShoppingCartCheckedOut` names the checkout transition rather than an update
   (`.../Sales.Domain/ShoppingCarts/DomainEvents/ShoppingCartCheckedOut.cs:6-8`, raised at
-  `.../ShoppingCarts/ShoppingCart.cs:115`). The test is payload plus intent: a transition with a name a
+  `.../ShoppingCarts/ShoppingCart.cs:118`). The test is payload plus intent: a transition with a name a
   business person uses and fields no other transition carries gets its own type.
 - **The discriminator rides the wire, and it is frozen there.** Store's one cross-module contract puts
   `DomainEntityState State` first on a `BaseIntegrationEvent`
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:26-32`)
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:28-34`)
   and explicitly consolidates four former events, `ProductVariantAdded`, `ProductVariantRemoved`,
-  `ProductVariantSkuChanged` and `ProductVariantPriceChanged` (`:8-10`). The Sales consumer filters it
+  `ProductVariantSkuChanged` and `ProductVariantPriceChanged` (`:10-11`). The Sales consumer filters it
   to `Added`
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:46-47`).
   Because integration-event shapes are snapshot-frozen by an architecture test
@@ -105,7 +105,7 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   transitions) and **1 in Helpdesk**: **32** in total.
 - **Nothing enforces the taxonomy.** The shared fitness rules require domain events to be sealed and to
   live in a `*.DomainEvents` namespace
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Naming.cs:52-60`), to
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Naming.cs:66-75`), to
   be immutable (`ArchitectureRules.Immutability.cs:34-38`), and require integration events to inherit
   `BaseIntegrationEvent` and declare an `int SchemaVersion` (`ArchitectureRules.Events.cs:6-25`), but no
   rule mentions `EntityChangedEvent` or the discriminator. The framework's own coverage of the base is
@@ -122,7 +122,7 @@ factory": `Ticket`'s identifier is database-generated, so it is still `0` at fac
 aggregate deliberately raises **no** `Added` event, with creation signalled after commit by a separate
 integration event instead
 (`.../Tickets.Domain/Tickets/Ticket.cs:81-84`, published at
-`.../Tickets.Application/Tickets/UseCases/Create/CreateTicketHandler.cs:46`); the audit handler's doc
+`.../Tickets.Application/Tickets/UseCases/Create/CreateTicketHandler.cs:42-43`); the audit handler's doc
 records exactly that gap (`TicketChangedAuditHandler.cs:13-14`). Outside the four repos, the two-module
 `MMCA.ECommerce` companion sample carries two more adopters on the same pattern
 (`MMCA.ECommerce/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/DomainEvents/ProductChanged.cs:15`,

@@ -77,8 +77,8 @@ path through it, in both directions.
   salt, `:50-54` for the correct password, `:57-61` for the wrong one), per-call salt uniqueness
   (`:30-36`) and null/empty argument guards; no legacy-format test remains in it.
 - **All four framework call sites are unchanged by this decision.** Login verification
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:156`) and
-  registration hashing (`:207`) live in the shared base (`:47`, hasher parameter at `:50`);
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:159`) and
+  registration hashing (`:210`) live in the shared base (`:50`, hasher parameter at `:53`);
   change-password verifies then hashes in `ChangePasswordHandlerBase<TUser, TCommand>`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:24`,
   `:55`, `:61`); reset-password hashes in `ResetPasswordHandlerBase<TUser, TCommand>`
@@ -87,7 +87,7 @@ path through it, in both directions.
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:38`,
   `:103`). No file under either app's `Source/` invokes the hasher: ADC and Store only declare the
   parameter and forward it to a Common base
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:41,44,54`,
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:44,47,57`,
   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:21,24,33`).
 - **The security model summary states the same rule.** `MMCA.Common/SECURITY.md:29-35` documents
   PBKDF2-SHA512 with a high iteration count and constant-time comparison as build-failing invariants

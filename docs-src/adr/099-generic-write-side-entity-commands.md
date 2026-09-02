@@ -97,9 +97,9 @@ Ship the generic write side as four additive pieces plus a registration helper.
 
 5. **One registration call per aggregate.**
    `AddEntityCrud<TEntity, TEntityDTO, TIdentifierType, TCreateRequest, TUpdateRequest>()`
-   (`Source/Core/MMCA.Common.Application/DependencyInjection.cs:318`) registers the create, update
-   and delete handlers closed over that aggregate's types (`:326-336`). Two properties are
-   deliberate (`:298-306`):
+   (`Source/Core/MMCA.Common.Application/DependencyInjection.cs:329`) registers the create, update
+   and delete handlers closed over that aggregate's types (`:337-347`). Two properties are
+   deliberate (`:299-307`):
    - **Closed, not open-generic**, because Scrutor's `TryDecorate` wraps concrete service types: an
      open `ICommandHandler<,>` registration would resolve completely undecorated and
      `VerifyDecoratorPipeline()` could not see it.
@@ -107,7 +107,7 @@ Ship the generic write side as four additive pieces plus a registration helper.
      a delete that must load its children first) registers its own handler for that verb before this
      call and keeps the generic pair for the other two.
 
-   It calls `ThrowIfPipelineSealed` (`:324`), so registering after `AddApplicationDecorators()` fails
+   It calls `ThrowIfPipelineSealed` (`:335`), so registering after `AddApplicationDecorators()` fails
    loudly rather than leaving three handlers unwrapped (ADR-014).
 
 6. **PUT ships on a new derived controller base, not on the shipped one.**
@@ -166,10 +166,10 @@ Ship the generic write side as four additive pieces plus a registration helper.
 - **Nothing in the framework opts a consumer in: every registration is a line the module writes.**
   Adoption is per aggregate and partial. ADC's Conference module registers it for `Category`,
   `Activity` and `Sponsor`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:139-141`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:140-142`),
   Store's Catalog for `Product` (one call per field-scoped update request) and `Category`
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:68-72`,
-  `:79`),
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:71-74`,
+  `:75`, `:82`),
   and Store's Identity for `Customer`
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:65-67`),
   each call placed after the convention scan so `TryAdd` leaves the hand-written handlers those
@@ -265,8 +265,8 @@ command that the three-parameter form cannot express.
   TApplier>` (`UpdateEntityHandler.cs:115`) injects that applier by its concrete type (`:117`), which
   the module scan registers alongside its interfaces, and reports a `HandlerName` naming the verb so
   two verbs produce distinguishable `NotFound` failures (`:133`). Registration is one
-  `AddEntityUpdateVerb<...>()` per verb (`DependencyInjection.cs:376`), `TryAdd` like `AddEntityCrud`
-  (`:384-388`) and bridging the verb's command to `IValidator<TUpdateRequest>` (`:390-392`). The
+  `AddEntityUpdateVerb<...>()` per verb (`DependencyInjection.cs:391`), `TryAdd` like `AddEntityCrud`
+  (`:399-403`) and bridging the verb's command to `IValidator<TUpdateRequest>` (`:405-407`). The
   wire shape does not move: same route, same request DTO.
 - *A command carrying state beside the request.* `UpdateEntityCommand<TEntity, TUpdateRequest,
   TIdentifierType>` is no longer sealed (`UpdateEntityCommand.cs:46`, rationale at `:26-35`), so a
@@ -279,11 +279,11 @@ command that the three-parameter form cannot express.
   and still answers with a bare `Result` for the same reason the request-only applier does (`:29-32`).
   `UpdateEntityCommandHandler<TCommand, ...>` (`UpdateEntityHandler.cs:185`) runs it on the shared
   workflow, delegating through the context-aware `MutateAsync` (`:218-223`), and
-  `AddEntityUpdate<TCommand, ...>()` registers the pair (`DependencyInjection.cs:427`).
-- Both helpers call `ThrowIfPipelineSealed` (`:382`, `:433`) like `AddEntityCrud`, and both call the
-  new `AddCommandRequestValidator<TCommand, TRequest>()` (`:460`): the explicit form of the bridge the
+  `AddEntityUpdate<TCommand, ...>()` registers the pair (`DependencyInjection.cs:442`).
+- Both helpers call `ThrowIfPipelineSealed` (`:397`, `:448`) like `AddEntityCrud`, and both call the
+  new `AddCommandRequestValidator<TCommand, TRequest>()` (`:475`): the explicit form of the bridge the
   module scan applies by reflection, for a command the scan cannot see because it is a closed generic
-  constructed at registration time. It is `TryAdd` (`:463`), so an explicit `IValidator<TCommand>`
+  constructed at registration time. It is `TryAdd` (`:478`), so an explicit `IValidator<TCommand>`
   still wins, and registering it with no `IValidator<TRequest>` present is harmless.
 - Post-load, pre-mutate work needs no new hook. A subclass that has to stamp `SetOriginalRowVersion`
   on a tracked child row (ADR-035's second token, which the base's root-stamping `RowVersion` hook
@@ -329,7 +329,7 @@ consumer applications run on these surfaces. MMCA.ADC serves its speaker update 
 command-aware applier
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/Update/SpeakerUpdateApplier.cs:13-14`)
 registered with `AddEntityUpdate`
-(`.../MMCA.ADC.Conference.Application/DependencyInjection.cs:163`); its session, event and room
+(`.../MMCA.ADC.Conference.Application/DependencyInjection.cs:150`); its session, event and room
 writes sit on the payload base
 (`.../Sessions/UseCases/Update/UpdateSessionHandler.cs:23`,
 `.../Events/UseCases/Update/UpdateEventHandler.cs:22`,

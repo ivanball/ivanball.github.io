@@ -11,7 +11,11 @@ set published to both registries from the same tag, with no workflow change; it 
 line this record made credential-free from six references to one. Revised (2026-08-31): the
 per-package counts this record used to spell out are replaced by a pointer to
 `MMCA.Common/FACTS.md:19-38` (generated and CI-gated, so it cannot drift), and the fork behavior is
-corrected to what `release.yml` actually does.
+corrected to what `release.yml` actually does. Revised (2026-09-01): the two build comments this
+record used to quote no longer carry a package count of their own (`release.yml:90`,
+`Directory.Build.props:68`), so that note is dropped and `MMCA.Common/FACTS.md:19-38` is the single
+place the published set is enumerated; the `release.yml` line anchors are re-pinned to the current
+file.
 
 ## Context
 The `MMCA.Common.*` packages have shipped to GitHub Packages since the first release (the package
@@ -43,15 +47,13 @@ So this is purely about people outside the account.
 Every release publishes to **both** registries, from the same tag, in the same workflow run.
 
 - `release.yml` keeps its existing `dotnet nuget push` to `https://nuget.pkg.github.com/ivanball/index.json`
-  unchanged (`release.yml:68`, `:149`), and gains a second push to `https://api.nuget.org/v3/index.json`
-  with `--skip-duplicate` (`release.yml:88`, `:165`). Both the main (ubuntu) job and the MAUI (windows)
+  unchanged (`release.yml:68`, `:150`), and gains a second push to `https://api.nuget.org/v3/index.json`
+  with `--skip-duplicate` (`release.yml:88`, `:166`). Both the main (ubuntu) job and the MAUI (windows)
   job push to both registries, so the lockstep release stays whole across every published id: the
   packable projects in `MMCA.Common.slnx` (`MMCA.Common.slnx:8-29`) ship from the ubuntu job, and
   `MMCA.Common.UI.Maui` ships from the windows job (ADR-042 splits the MAUI package into its own
-  job). `MMCA.Common/FACTS.md:19-38` is the source of truth for that set. Two build comments still
-  name an older count in prose (`release.yml:90` calls `MMCA.Common.UI.Maui` "the 15th package",
-  `Directory.Build.props:68` says "fifteen csproj files"); both are descriptive text with no effect
-  on what packs or pushes.
+  job). `MMCA.Common/FACTS.md:19-38` is the source of truth for that set, and the workflow comment
+  that introduces the MAUI job points at it rather than restating a count (`release.yml:90`).
 - **Authentication to nuget.org is trusted publishing, not a stored API key.** Each publishing job
   requests a GitHub OIDC token (`permissions: id-token: write`) and exchanges it through
   `NuGet/login@v1` for an API key valid for one hour, immediately before the push. No long-lived
@@ -65,9 +67,9 @@ Every release publishes to **both** registries, from the same tag, in the same w
   job still needs its own `id-token: write` permission and its own exchange: a short-lived key is
   single-use and cannot cross a job boundary.
 - The nuget.org steps are guarded by `github.repository_owner == 'ivanball'` (`release.yml:80`,
-  `:87`, `:156`, `:163`), so a fork skips the trusted-publishing exchange it can never satisfy
+  `:87`, `:157`, `:164`), so a fork skips the trusted-publishing exchange it can never satisfy
   instead of failing on it. The guard covers the nuget.org steps only. The GitHub Packages push
-  target is hardcoded to the `ivanball` namespace (`release.yml:68`, `:149`), which a fork's own
+  target is hardcoded to the `ivanball` namespace (`release.yml:68`, `:150`), which a fork's own
   `GITHUB_TOKEN` has no write scope for, so a fork's run reaches that push and fails there. Releasing
   from a fork is therefore not a path this workflow supports on either registry.
 - **The `MMCA.` ID prefix reservation has been granted** (2026-07-28), so the ids are protected from

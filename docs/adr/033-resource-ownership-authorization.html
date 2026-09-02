@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -237,7 +239,7 @@
           bypass role (<code>Admin</code> by default).</p>
           <ul>
           <li><strong>Single-resource action filter.</strong> <code>OwnerOrAdminFilter</code>
-          (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:30</code>) is a sealed
+          (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:31</code>) is a sealed
           <code>IAsyncActionFilter</code> whose primary constructor takes <code>ICurrentUserService</code> and
           <code>IOptions&lt;OwnerOrAdminFilterOptions&gt;</code>. Its ownership vocabulary comes from
           <code>OwnerOrAdminFilterOptions</code>
@@ -246,11 +248,11 @@
           (<code>OwnerOrAdminFilterOptions.cs:14</code>), <code>BypassRole</code> <code>&quot;Admin&quot;</code> (<code>OwnerOrAdminFilterOptions.cs:17</code>), and
           <code>OwnerParameterName</code> <code>&quot;id&quot;</code> (<code>OwnerOrAdminFilterOptions.cs:24</code>), so a host that configures nothing
           behaves exactly as before. It short-circuits to the action for the bypass role
-          (<code>OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)</code>, <code>OwnerOrAdminFilter.cs:42</code>);
+          (<code>OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)</code>, <code>OwnerOrAdminFilter.cs:43</code>);
           otherwise it reads the caller&#39;s owner claim via <code>GetClaimValue&lt;int&gt;(settings.OwnerClaimType)</code>
-          (<code>OwnerOrAdminFilter.cs:48</code>) and returns <code>ForbidResult</code> (HTTP 403) if the claim is missing
-          (<code>OwnerOrAdminFilter.cs:50</code>, <code>OwnerOrAdminFilter.cs:52</code>) or if the requested owner parameter resolves
-          to an int that does not equal the claim (<code>OwnerOrAdminFilter.cs:72</code>, <code>OwnerOrAdminFilter.cs:74</code>).
+          (<code>OwnerOrAdminFilter.cs:49</code>) and returns <code>ForbidResult</code> (HTTP 403) if the claim is missing
+          (<code>OwnerOrAdminFilter.cs:51</code>, <code>OwnerOrAdminFilter.cs:53</code>) or if the requested owner parameter resolves
+          to an int that does not equal the claim (<code>OwnerOrAdminFilter.cs:73</code>, <code>OwnerOrAdminFilter.cs:75</code>).
           <code>TryGetOwnerParameter</code> reads that parameter from a <strong>route value</strong>
           (<code>/customers/{id}</code>) or, when the route lacks it, from a <strong>model-bound query/body argument</strong>
           (<code>?userId=42</code>), so the guard also covers list/query routes that carry the owner as a bound
@@ -422,7 +424,7 @@
           collection read has to add the same gate rather than inherit it.</li>
           <li><strong>The filter assumes the owner parameter equals the owning id.</strong> <code>OwnerOrAdminFilter</code> compares its
           configured owner parameter, resolved from either a route value or a model-bound argument, against the
-          configured owner claim (<code>OwnerOrAdminFilter.cs:72</code>). That holds where the resource is keyed by the
+          configured owner claim (<code>OwnerOrAdminFilter.cs:73</code>). That holds where the resource is keyed by the
           owner (the cart, the customer profile, a user&#39;s own bookmarks) but not where a resource has a separate
           id and a foreign-key owner; those (orders) need the spec or an explicit per-id check instead.</li>
           <li><strong>This is ownership, not ABAC.</strong> It answers &quot;is this row mine&quot; against a single id claim with an admin

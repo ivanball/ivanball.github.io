@@ -36,7 +36,7 @@ is a dependency that will come back but not within seconds. It also carries a tr
 that is the reason this record exists rather than a one-line change: on RabbitMQ it requires the
 `rabbitmq_delayed_message_exchange` plugin, and the Aspire dev container does not ship it. Enabling it
 against a plugin-less broker fails at bus start
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:145-148`). Azure
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:168-171`). Azure
 Service Bus, the production transport, has native scheduled delivery and needs no plugin.
 
 ## Decision
@@ -46,8 +46,8 @@ else.
 
 ### Second-level redelivery is transport-aware, and the flag exists only because of RabbitMQ
 `MessageBusSettings` gains two members. `EnableDelayedRedelivery`
-(`MessageBusSettings.cs:156`) is a `bool` with no initializer, so it **defaults to `false`**, and
-`RedeliveryIntervalsSeconds` (`:172`) is an `IReadOnlyList<int>` defaulting to `[60, 600, 3600]`: one
+(`MessageBusSettings.cs:179`) is a `bool` with no initializer, so it **defaults to `false`**, and
+`RedeliveryIntervalsSeconds` (`:195`) is an `IReadOnlyList<int>` defaulting to `[60, 600, 3600]`: one
 minute, ten minutes, one hour. Both live in the `"MessageBus"` section (`:14`).
 
 The two transports consume them differently, and the asymmetry is the decision:
@@ -60,19 +60,19 @@ The two transports consume them differently, and the asymmetry is the decision:
   Aspire broker cannot serve it, so a default-on setting would break every developer's first `F5`
   with a bus-start failure, which is the worst possible place to learn about a broker plugin.
 - **Azure Service Bus does not consult it.** `UsingAzureServiceBus` (`:957`) calls
-  `UseDelayedRedelivery` unconditionally (`:971`), with the reasoning recorded inline (`:964-967`).
+  `UseDelayedRedelivery` unconditionally (`:983`), with the reasoning recorded inline (`:976-979`).
   Service Bus schedules natively, there is no plugin to be missing, and a production transport that
   can express "try again in an hour" should always express it. Making the operator opt in would mean
   the environment that most needs the behavior is the one most likely to be running without it.
 
 Two details are worth stating so the words above are not read as stronger than the code.
 "Unconditional" means "not gated on the flag": both call sites are still guarded by
-`intervals.Length > 0` (`:941`, `:969`), so an operator who configures an empty interval list turns
+`intervals.Length > 0` (`:941`, `:981`), so an operator who configures an empty interval list turns
 the feature off everywhere. And `RedeliveryIntervalsSeconds` carries **no** DataAnnotations attribute,
 unlike its neighbours `RetryLimit` and the two retry-interval settings, so the ADR-070 fail-fast
 chain does not validate it; non-positive entries are filtered at use time in `BuildRedeliveryIntervals`
-(`:998-1001`) instead. In both transports the redelivery filter is registered **before**
-`UseMessageRetry` (`:947`, `:974`), which is what keeps immediate retry innermost and delayed
+(`:1010-1013`) instead. In both transports the redelivery filter is registered **before**
+`UseMessageRetry` (`:947`, `:986`), which is what keeps immediate retry innermost and delayed
 redelivery outside it.
 
 ### A fault consumer makes an exhausted message visible
@@ -100,8 +100,10 @@ is an `internal static` class holding a single meter named `MMCA.Common.Broker` 
 two `Counter<long>` instruments, both in units of `messages` and both tagged `event_type`:
 `broker.fault.count` (`:30-33`) and `broker.circuit.open.count` (`:42-45`). It is a third meter beside
 `MMCA.Common.Cqrs` and `MMCA.Common.Outbox` ([ADR-041](041-observability-and-telemetry.md)), and the
-name is duplicated as a literal in `MMCA.Common.Aspire` (`BrokerMetrics.cs:9-11`) so the Aspire
-service defaults can subscribe to it without a package reference.
+name is duplicated as a literal in `MMCA.Common.Aspire`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:168`, a duplication the Infrastructure
+declaration records in its own doc comment at `BrokerMetrics.cs:9-11`) so the Aspire service defaults
+can subscribe to it without a package reference.
 
 ### A circuit breaker around the outbox broker publish, and nothing else
 `OutboxProcessor` holds a per-instance Polly `ResiliencePipeline`
@@ -135,7 +137,7 @@ The obvious symmetric move is a breaker on the query path, so a failing database
 queueing on it. It is **not** being made. A repository-wide search for `CircuitBreaker`,
 `BrokenCircuitException` and `ResiliencePipeline` across `Source` finds the outbox breaker above and
 otherwise only the HTTP and gRPC standard resilience handlers
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:99,107`,
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:106,111-114`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:16`,
 `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:61`). There is no breaker in any
 persistence path and none is added here.
@@ -188,7 +190,7 @@ database resilience posture**, recorded here so the asymmetry is a decision rath
   warns a RabbitMQ host that the feature it never enabled is not running.
 - **The intervals are not validated at startup.** `RedeliveryIntervalsSeconds` sits outside the
   ADR-070 fail-fast chain, so a typo becomes a filtered-out entry at
-  `DependencyInjection.cs:998-1001` rather than a refusal to boot. An operator who writes
+  `DependencyInjection.cs:1010-1013` rather than a refusal to boot. An operator who writes
   `[0, 0, 0]` silently gets no delayed redelivery at all.
 - **An hour-long redelivery window widens the duplicate window with it.** A message redelivered at
   `+3600s` runs its handlers an hour after the original attempt, so ADR-021's inbox and every
@@ -204,7 +206,7 @@ database resilience posture**, recorded here so the asymmetry is a decision rath
   call rather than flip one setting.
 - **`BrokerMetrics` is `internal` and its meter name is written twice.** A consumer cannot reference
   the class to add its own instruments to the meter, and the `MMCA.Common.Aspire` copy of the name
-  (`BrokerMetrics.cs:9-11`) can drift from the Infrastructure declaration with no compiler error and
+  (`Extensions.cs:168`) can drift from the Infrastructure declaration with no compiler error and
   no test: the symptom would be a meter that exports nothing.
 - **The breaker is per processor instance, so its state is not shared.** The pipeline is a per-instance
   field (`OutboxProcessor.cs:99`, rationale `:92-97`), so with N replicas the broker sees up to N

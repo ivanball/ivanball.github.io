@@ -103,14 +103,14 @@ match its safe-storage story; the UI code above them never branches on render mo
   `JsFetchSessionCookieSync.cs:20`, `mmca-auth-cookie.js:5`). The refresh token transits JS only for
   that single same-origin POST and is never persisted in localStorage. The sync is registered via
   `AddClientAuthSessionCookieSync`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:152`,
-  `DependencyInjection.cs:154`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:170`,
+  `DependencyInjection.cs:172`).
 - **Every outgoing API request is bearer-stamped by one handler.** `AuthDelegatingHandler` reads the
   current access token from `ITokenStorageService` and attaches it as a `Bearer` authorization header
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:9`,
   `AuthDelegatingHandler.cs:17-20`). It is registered into the shared named `"APIClient"` HttpClient
-  pipeline via `AddHttpMessageHandler` (`DependencyInjection.cs:59`, `DependencyInjection.cs:63`,
-  `DependencyInjection.cs:83`), so the handler is head-agnostic: it depends only on the storage
+  pipeline via `AddHttpMessageHandler` (`DependencyInjection.cs:77`, `DependencyInjection.cs:81`,
+  `DependencyInjection.cs:101`), so the handler is head-agnostic: it depends only on the storage
   abstraction, which supplies the correctly-hydrated token per head.
 - **Blazor auth state is derived from the JWT client-side.** `JwtAuthenticationStateProvider` reads
   the stored access token, parses and expiry-checks it without server validation, and builds an

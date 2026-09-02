@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -239,7 +241,7 @@
           at startup, before the new revision serves traffic. There is deliberately <strong>no</strong> separate deploy-step
           migration (no <code>sqlcmd</code> / <code>dotnet ef database update</code> apply in <code>deploy.yml</code>).</p>
           <ul>
-          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:985,1120,1243</code> (Identity/Catalog/Sales)
+          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:989,1126,1251</code> (Identity/Catalog/Sales)
           and <code>MMCA.ADC/infra/main.bicep:1067,1254,1376,1522</code> (Identity/Conference/Engagement/Notification) all set
           <code>DatabaseInitStrategy = &#39;Migrate&#39;</code>.</li>
           <li><strong>One applier per revision.</strong> Each service runs <code>minReplicas: 1</code>, so the startup <code>MigrateAsync</code> is not
@@ -248,7 +250,7 @@
           is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)</li>
           <li><strong>No deploy-step backstop, on purpose.</strong> Both <code>deploy.yml</code> files carry an explicit comment that there
           is <em>no external <code>sqlcmd</code> migration backstop</em> and that each service is the <strong>sole migrator</strong>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1119-1127</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1227-1236</code>). The
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1123-1131</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1298-1306</code>). The
           <code>sqlcmd</code> that <em>is</em> installed in the pipeline is a connectivity/readiness probe, not a migration apply.</li>
           <li><strong>Build-time drift gate, not a runtime apply.</strong> CI runs
           <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:273</code>, ADC <code>deploy.yml:369</code>) so a
@@ -324,7 +326,7 @@
           integer seed id to the module&#39;s identifier type: <code>int</code> passes through, and a <code>Guid</code> alias is
           manufactured by writing the int into a zeroed 16-byte span, so the same seed integer yields the
           same Guid on every boot, host and machine
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/DbSeeder.cs:20-31</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/DbSeeder.cs:20-38</code>).
           Re-running a seeder against a populated database collides with the existing keys by construction
           instead of minting new ones.</li>
           <li><strong>The accepted trade-off is the same bargain as auto-migrate-on-boot.</strong> One owner, one mechanism,

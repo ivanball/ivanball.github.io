@@ -34,12 +34,12 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   `IBiometricAuthenticator`, `ISpeechToTextService`, `IExternalAuthBroker`, `IDeepLinkDispatcher`,
   `IConnectivityStatusService`, `ILocalCacheStore`). Five more have joined since, for 23 today, all
   TryAdd-registered by `AddDeviceCapabilityDefaults`
-  (`Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:27-65`) and
+  (`Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:30-74`) and
   overridden natively by `AddMauiDeviceCapabilities`
-  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:28-58`): `IGeocodingService`
+  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:26-62`): `IGeocodingService`
   (Wave 3), `IMediaPickerService` (ADR-045), the push pair `IPushRegistrationService` and
   `IPushDeviceTokenProvider` (ADR-044), and `IBarcodeScannerService` for camera barcode/QR scanning
-  (`DependencyInjection.cs:57`). Barcode is the one native override that is deliberately NOT in
+  (`Capabilities/DependencyInjection.cs:63`). Barcode is the one native override that is deliberately NOT in
   `AddMauiDeviceCapabilities`: it ships behind the opt-in `UseCommonBarcodeScanner`
   (`Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104`, called by ADC at
   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:151`), so a head that never scans ships

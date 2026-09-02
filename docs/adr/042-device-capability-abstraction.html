@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -242,12 +244,12 @@
           <code>IBiometricAuthenticator</code>, <code>ISpeechToTextService</code>, <code>IExternalAuthBroker</code>, <code>IDeepLinkDispatcher</code>,
           <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Five more have joined since, for 23 today, all
           TryAdd-registered by <code>AddDeviceCapabilityDefaults</code>
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:27-65</code>) and
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:30-74</code>) and
           overridden natively by <code>AddMauiDeviceCapabilities</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:28-58</code>): <code>IGeocodingService</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:26-62</code>): <code>IGeocodingService</code>
           (Wave 3), <code>IMediaPickerService</code> (ADR-045), the push pair <code>IPushRegistrationService</code> and
           <code>IPushDeviceTokenProvider</code> (ADR-044), and <code>IBarcodeScannerService</code> for camera barcode/QR scanning
-          (<code>DependencyInjection.cs:57</code>). Barcode is the one native override that is deliberately NOT in
+          (<code>Capabilities/DependencyInjection.cs:63</code>). Barcode is the one native override that is deliberately NOT in
           <code>AddMauiDeviceCapabilities</code>: it ships behind the opt-in <code>UseCommonBarcodeScanner</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104</code>, called by ADC at
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:151</code>), so a head that never scans ships

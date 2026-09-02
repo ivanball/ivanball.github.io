@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -274,7 +276,7 @@
           </li>
           <li><p><strong>Registration is one call.</strong> <code>AddUIModule&lt;TModule&gt;()</code> runs the Scrutor scan for the module&#39;s entity
           services and then registers the descriptor as a singleton <code>IUIModule</code>
-          (<code>MMCA.Common.UI/DependencyInjection.cs:185-194</code>); modules with extra services register the
+          (<code>MMCA.Common.UI/DependencyInjection.cs:203-213</code>); modules with extra services register the
           descriptor directly with <code>AddSingleton&lt;IUIModule, TModule&gt;()</code> after their own registrations
           (<code>MMCA.Common.UI/Notifications/DependencyInjection.cs:39</code>,
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:69</code>).</p>
@@ -290,7 +292,7 @@
           <code>ConfirmAsync</code>, where dismissing the prompt counts as declining, so a caller only ever branches on
           <code>true</code>. Both facades are registered by one extracted call, <code>AddCommonUiFacades()</code>, which
           TryAdd-registers <code>MudToastService</code> and <code>MudAppDialogService</code> over MudBlazor&#39;s <code>ISnackbar</code> and
-          <code>IDialogService</code> (<code>MMCA.Common.UI/DependencyInjection.cs:140-145</code>). <code>AddUIShared</code> calls it (<code>:88</code>),
+          <code>IDialogService</code> (<code>MMCA.Common.UI/DependencyInjection.cs:158-163</code>). <code>AddUIShared</code> calls it (<code>:106</code>),
           and so does the shipped bUnit base
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:53</code>),
           so a component test resolves the two contracts without pulling in the rest of the shared-UI surface.

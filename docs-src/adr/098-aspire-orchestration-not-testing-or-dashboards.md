@@ -14,8 +14,8 @@ Aspire is used on exactly two surfaces here.
 **Orchestration.** Each app has an AppHost that composes the local stack from one file: ADC's
 provisions a persistent SQL Server container, one database per service, Redis and the RabbitMQ
 broker, then the four services, the Gateway and the Blazor UI
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:1-9`, SQL at `:14-15`, the four databases at
-`:36-39`, Redis at `:43-44`, the broker at `:64-65`); `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14`
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:1-6`, SQL at `:15-16`, the four databases at
+`:37-40`, Redis at `:44-45`, the broker selection at `:89-101`); `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:1-14`
 is the same shape over its three services. Service discovery and health-based startup ordering come from Aspire's resource
 model rather than from hand-written wiring.
 
@@ -32,7 +32,7 @@ like an unfinished adoption:
    whole app model in a test process. No integration tier here uses it, and it appears in exactly one
    project across the four .NET repos: ADC's nightly AppHost composition smoke test, the bounded
    exception Decision 1 sanctions. The package is pinned at
-   `MMCA.ADC/Directory.Packages.props:87`, referenced only by
+   `MMCA.ADC/Directory.Packages.props:92`, referenced only by
    `MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/MMCA.ADC.AppHost.SmokeTests.csproj:29`,
    and called in one place (`AppHostCompositionSmokeTests.cs:46`).
 2. The Azure Container Apps Aspire dashboard, the hosted version of the local dashboard, for looking
@@ -55,11 +55,11 @@ The tiers that exist keep their shape, and `DistributedApplicationTestingBuilder
   and the Conference / Engagement / Notification siblings at `:17` each) and three in Store
   (Catalog `:16`, Identity `:15`, Sales `:17`).
 - **Cross-service tier: three real hosts, a real broker, real containers.** ADC's `CrossServiceFixture`
-  (`MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:23`)
+  (`MMCA.ADC/Tests/Integration/MMCA.ADC.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:33`)
   extends the shared `CrossServiceFixtureBase`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:41`) and runs against
   Testcontainers SQL Server and RabbitMQ
-  (`MMCA.ADC.CrossService.IntegrationTests.csproj:13-14`), exercising the outbox to broker to
+  (`MMCA.ADC.CrossService.IntegrationTests.csproj:24-25`), exercising the outbox to broker to
   consumer round-trip and a genuine Conference to Engagement gRPC read; Store has the equivalent
   (`MMCA.Store/Tests/Integration/MMCA.Store.CrossService.IntegrationTests/Infrastructure/CrossServiceFixture.cs:29`).
 - **The deferral is already on the record and stays.** The rework plan that produced these tiers
@@ -95,8 +95,9 @@ in the gating path. It ships as a single `[Fact]` that boots the real AppHost th
 `DistributedApplicationTestingBuilder` and polls the gateway until it answers 200
 (`MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AppHostCompositionSmokeTests.cs:42-59`, the
 builder call at `:46`), in a project that sits outside every `.slnx` and `.slnf` and is restored,
-built and run by explicit path in the `apphost-smoke` job (`cross-service-tests.yml:191`, with
-`continue-on-error: true` at `:196` while its headless behavior on the CI runner is unproven).
+built and run by explicit path in the `apphost-smoke` job (`cross-service-tests.yml:199`, its
+explicit-path restore, build and run steps at `:215-264`, with `continue-on-error: true` at `:204`
+while its headless behavior on the CI runner is unproven).
 Anything beyond that single boot-and-probe is a reversal of this record, not an extension of it.
 
 ### 2. Production observability is workspace-based App Insights, not the ACA Aspire dashboard
@@ -115,7 +116,7 @@ Anything beyond that single boot-and-probe is a reversal of this record, not an 
   cutting roughly 80% of the remaining datapoints while five-minute alert windows keep the same signal
   (`:255-258`).
 - **What an operator actually reads is alerts and a workbook, not a live console.** SLO rules ship as
-  code (`main.bicep:331`, `:388`, `:447`, and the Gateway availability alert at `:474`, all wired to
+  code (`main.bicep:326`, `:400`, `:441`, and the Gateway availability alert at `:474`, all wired to
   the unconditional action group at `:271-279`), and a saved Azure Monitor workbook visualizes the
   same SLOs per service (`:508-520`), which is the deployed-environment view (ADR-062, ADR-041).
 - **The ACA Aspire dashboard is not provisioned**, and that is the decision rather than a to-do. It is
@@ -128,7 +129,7 @@ Anything beyond that single boot-and-probe is a reversal of this record, not an 
   (`MMCA.ADC/infra/main.bicep:984`, `:1185`, `:1312`, `:1439`), configured entirely through
   environment variables. `WebApplicationFactory` plus an environment-variable override channel is a
   closer model of that than an app model the deployment does not use: production topology comes from
-  Bicep (`MMCA.ADC/.github/workflows/deploy.yml:1223`), not from the AppHost.
+  Bicep (`MMCA.ADC/.github/workflows/deploy.yml:1294`), not from the AppHost.
 - **The cheapest tier that could have failed.** The per-service tier needs no Docker at all, because
   `AddBrokerMessaging` returns early on the default `InProcess` provider, which is what an absent
   `MessageBus` section resolves to
@@ -161,10 +162,10 @@ Anything beyond that single boot-and-probe is a reversal of this record, not an 
   at the head, so an operator investigating a specific user report will often find the request counted
   and not traced (`main.bicep:218-221`).
 - **The `Warning` floor moves `Information` logs off the queryable path.** They exist in container
-  stdout only (`:228-233`), so the correlation-id story (ADR-041) is complete only for what the floor
+  stdout only (`:223-232`), so the correlation-id story (ADR-041) is complete only for what the floor
   admits.
 - **A 300-second export interval delays metric-driven signal.** Alert rules use five-minute windows,
-  so the design holds, but a metric change is not visible in near real time (`:254-263`).
+  so the design holds, but a metric change is not visible in near real time (`:249-258`).
 - **Neither absence is enforced.** Nothing fails a build if a project adds `Aspire.Hosting.Testing` or
   a dashboard resource: unlike the pins of ADR-016 or the fitness rules of ADR-015, this record is a
   convention, and its only guard is review.

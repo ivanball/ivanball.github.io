@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -431,35 +433,35 @@
           command-side reason, so a caller is not charged a slice of its execution budget for validating its
           own bad input (<code>ValidatingQueryDecorator.cs:27-29</code>, <code>DependencyInjection.cs:104-107</code>).</li>
           <li><strong><code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code> is the composition path, and it seals.</strong>
-          (<code>DependencyInjection.cs:597-606</code>.) It runs <code>AddApplication()</code>, then the caller&#39;s handler
+          (<code>DependencyInjection.cs:612-621</code>.) It runs <code>AddApplication()</code>, then the caller&#39;s handler
           registrations through a small builder (module scans, a <code>ModuleLoader</code> run, cross-service client
           registrations that replace a handler&#39;s dependencies:
           <code>.../MMCA.Common.Application/MmcaApplicationPipelineBuilder.cs</code>, argument contract at
-          <code>DependencyInjection.cs:563-570</code>), then <code>AddApplicationDecorators()</code>, in that order (<code>:601-605</code>,
-          equivalence spelled out at <code>:576-583</code>). Closing the pipeline registers a private marker type on the
-          service collection (<code>:145</code>, marker at <code>:684</code>, registered at <code>:697-698</code>, probe at <code>:686-695</code>), and any
+          <code>DependencyInjection.cs:578-585</code>), then <code>AddApplicationDecorators()</code>, in that order (<code>:616-620</code>,
+          equivalence spelled out at <code>:591-598</code>). Closing the pipeline registers a private marker type on the
+          service collection (<code>:145</code>, marker at <code>:699</code>, registered at <code>:712-713</code>, probe at <code>:701-710</code>), and any
           later <code>AddApplicationDecorators</code>, <code>ScanModuleApplicationServices</code> or second
-          <code>AddMmcaApplicationPipeline</code> <strong>throws</strong> naming the mistake (<code>:700-710</code>, guards at <code>:117</code>, <code>:182</code>,
-          <code>:599</code>). The same guard now also fronts the three generic-CRUD registration helpers, which close
-          handler types over an entity and are therefore just as order-sensitive: <code>AddEntityCrud</code> (<code>:324</code>),
-          <code>AddEntityUpdateVerb</code> (<code>:382</code>) and <code>AddEntityUpdate</code> (<code>:433</code>). That converts the one
+          <code>AddMmcaApplicationPipeline</code> <strong>throws</strong> naming the mistake (<code>:715-725</code>, guards at <code>:117</code>, <code>:182</code>,
+          <code>:614</code>). The same guard now also fronts the three generic-CRUD registration helpers, which close
+          handler types over an entity and are therefore just as order-sensitive: <code>AddEntityCrud</code> (<code>:335</code>),
+          <code>AddEntityUpdateVerb</code> (<code>:397</code>) and <code>AddEntityUpdate</code> (<code>:448</code>). That converts the one
           load-bearing ordering rule of this record (decorators last, because <code>TryDecorate</code> only wraps
           registrations that already exist) from a documented convention whose violation is silent (a handler
           registered afterwards runs with no feature gate, no authorization, no validation, no timeout and no
-          transaction, and nothing fails at startup to say so: <code>:579-582</code>) into a startup exception.
+          transaction, and nothing fails at startup to say so: <code>:594-597</code>) into a startup exception.
           Registrations that are not handlers stay outside the call: their order relative to the decorators
-          does not matter (<code>:584-587</code>).</li>
-          <li><strong><code>VerifyDecoratorPipeline()</code> is the fitness hook.</strong> (<code>DependencyInjection.cs:634-676</code>.) Never
-          called automatically, it asserts that the pipeline was closed at all (<code>:636-641</code>) and that every
+          does not matter (<code>:599-602</code>).</li>
+          <li><strong><code>VerifyDecoratorPipeline()</code> is the fitness hook.</strong> (<code>DependencyInjection.cs:649-691</code>.) Never
+          called automatically, it asserts that the pipeline was closed at all (<code>:651-656</code>) and that every
           registered <code>ICommandHandler&lt;,&gt;</code> / <code>IQueryHandler&lt;,&gt;</code> entry is wrapped, throwing with each unwrapped
-          registration named (<code>:667-675</code>, formatting at <code>:712-723</code>). The check is registration-shape only: it
+          registration named (<code>:682-690</code>, formatting at <code>:727-738</code>). The check is registration-shape only: it
           reads <code>ServiceDescriptor</code> entries and never builds a provider, so a fitness test does not have to
-          register a double for every decorator dependency (<code>:619-623</code>). What it can see is a consequence of
+          register a double for every decorator dependency (<code>:634-638</code>). What it can see is a consequence of
           how Scrutor works: decoration rewrites a handler&#39;s descriptor into a factory over a keyed copy of
           the original, so a surviving implementation type on the effective (last non-keyed) registration is
-          proof nothing wrapped it (<code>:624-632</code>, the effective-descriptor pass at <code>:645-659</code>, the predicate at
-          <code>:661-662</code>). The outermost decorator&#39;s type cannot be read back at all after decoration, since it
-          exists only inside a closure (<code>:630-631</code>), which is why this complements rather than replaces
+          proof nothing wrapped it (<code>:639-647</code>, the effective-descriptor pass at <code>:658-674</code>, the predicate at
+          <code>:677</code>). The outermost decorator&#39;s type cannot be read back at all after decoration, since it
+          exists only inside a closure (<code>:645-646</code>), which is why this complements rather than replaces
           <code>DecoratorPipelineOrderTestsBase</code>: that base resolves the real object graph to assert the <em>order</em>,
           this one asserts <em>coverage</em> without a provider.</li>
           </ol>

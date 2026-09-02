@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (re-verified against source 2026-08-31).">
+  <meta name="description" content="Accepted (re-verified against source 2026-09-01).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)">
-  <meta property="og:description" content="Accepted (re-verified against source 2026-08-31).">
+  <meta property="og:description" content="Accepted (re-verified against source 2026-09-01).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)">
-  <meta name="twitter:description" content="Accepted (re-verified against source 2026-08-31).">
+  <meta name="twitter:description" content="Accepted (re-verified against source 2026-09-01).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)","item":"https://ivanball.github.io/docs/adr/012-grpc-host-transport.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 104 ADRs</summary>
+        <summary>All 106 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -204,6 +204,8 @@
         <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
         <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
           </ol>
         </nav>
       </details>
@@ -212,7 +214,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-012-grpc-host-transport-convention-http2-only-h2c-vs-http1andhttp2--alpn">ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (re-verified against source 2026-08-31).</p>
+          <p>Accepted (re-verified against source 2026-09-01).</p>
           <h2 id="update-2026-06-22-store-converged-to-profile-a">Update (2026-06-22): Store converged to Profile A</h2>
           <p>Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
           <code>Http1AndHttp2</code> Kestrel + <code>transport: &#39;auto&#39;</code> ingress on a <strong>cleartext</strong> endpoint there is no ALPN, so
@@ -319,12 +321,12 @@
           2026-07-28 update below.</p>
           <p><strong>2. <code>WithJwksDiscovery(identity, gateway)</code> is local Aspire wiring, not ADC&#39;s production rule.</strong>
           The two-argument call sites are all in the AppHost
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:328-330</code>), which configures the local
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:364-366</code>), which configures the local
           Aspire environment only. In production ACA, ADC&#39;s Bicep hardcodes the <strong>direct in-cluster authority</strong>
           <code>http://${identityApp.name}</code> on every token-validating service: Conference (<code>main.bicep:1249</code>),
           Engagement (<code>:1371</code>), and Notification (<code>:1517</code>). Identity&#39;s own ingress is <code>transport: &#39;http2&#39;</code>
           (<code>main.bicep:1003</code>; Conference <code>:1204</code> and Engagement <code>:1331</code> match, while Notification <code>:1457</code>,
-          the Gateway <code>:1620</code>, and the UI <code>:1723</code> stay <code>&#39;http&#39;</code>), so envoy accepts the HTTP/1.1 JwtBearer
+          the Gateway <code>:1625</code>, and the UI <code>:1728</code> stay <code>&#39;http&#39;</code>), so envoy accepts the HTTP/1.1 JwtBearer
           metadata fetch and carries it to the container. That is exactly the arrangement the Store update
           above describes, so the
           &quot;JWKS authority differs by environment&quot; nuance is <strong>not</strong> Store-specific: both apps route discovery
@@ -346,14 +348,14 @@
           <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:63</code> and
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:57</code>.</li>
           <li><strong>Bicep injects the port and points startup, liveness, and readiness at it.</strong> Store sets
-          <code>HealthProbe__Port=8081</code> on Identity (<code>MMCA.Store/infra/main.bicep:1019</code>) and Catalog (<code>:1124</code>),
+          <code>HealthProbe__Port=8081</code> on Identity (<code>MMCA.Store/infra/main.bicep:1023</code>) and Catalog (<code>:1130</code>),
           with <code>/alive</code> for startup and liveness and <code>/health/ready</code> for readiness on 8081
-          (<code>main.bicep:1032-1034</code> and <code>:1136-1138</code>). ADC is unchanged (8081 for the three Profile A hosts,
+          (<code>main.bicep:1036-1038</code> and <code>:1142-1144</code>). ADC is unchanged (8081 for the three Profile A hosts,
           8082 for Notification): its Bicep line anchors drift with unrelated observability commits, and
-          were last re-verified and corrected in the 2026-07-25 section above on 2026-08-31.</li>
+          were last re-verified and corrected in the 2026-07-25 section above on 2026-09-01.</li>
           <li><strong>Hosts whose default endpoint never went Http2-only keep probing their traffic port.</strong> Store&#39;s
-          Sales, Gateway, and UI probe 8080 directly (<code>MMCA.Store/infra/main.bicep:1267-1269</code>, <code>:1341-1343</code>,
-          <code>:1439-1441</code>), because an <code>Http1AndHttp2</code> endpoint answers the HTTP/1.1 probe on its own.</li>
+          Sales, Gateway, and UI probe 8080 directly (<code>MMCA.Store/infra/main.bicep:1275-1277</code>, <code>:1349-1351</code>,
+          <code>:1447-1449</code>), because an <code>Http1AndHttp2</code> endpoint answers the HTTP/1.1 probe on its own.</li>
           </ul>
           <p>Rule: the dedicated probe listener is part of Profile A, not an app-specific workaround. A host that
           goes <code>Http2</code>-only on cleartext gets the extra <code>Http1</code> listener plus <code>HealthProbe__Port</code> in its Bicep
@@ -401,7 +403,7 @@
           notification inbox rows through the client registered at
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:287</code>, wired by
           <code>identityService.WithReference(notificationService)</code> locally
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:256</code>) and by the same
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:292</code>) and by the same
           <code>services__notification__grpc__0</code> discovery variable in production (<code>MMCA.ADC/infra/main.bicep:1081</code>,
           pointing at the <code>additionalPortMappings</code> h2c port). The contracts are
           <code>Protos/live_channel.proto:19</code> and <code>Protos/user_notification_export.proto:17</code> in
@@ -449,12 +451,12 @@
           AppHost wires <code>identityService.WithReference(salesService)</code>
           (<code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:232</code>); in production the Bicep injects
           <code>services__sales__grpc__0 = http://&lt;prefix&gt;-sales:8081</code> on Identity
-          (<code>MMCA.Store/infra/main.bicep:994</code>).</li>
-          <li><strong>ACA:</strong> Sales&#39; main ingress stays <code>transport: &#39;http&#39;</code> (<code>main.bicep:1169</code>) and the gRPC port is an
-          internal TCP <code>additionalPortMappings</code> entry on 8081 (<code>:1176-1182</code>), the same TCP-passthrough
+          (<code>MMCA.Store/infra/main.bicep:998</code>).</li>
+          <li><strong>ACA:</strong> Sales&#39; main ingress stays <code>transport: &#39;http&#39;</code> (<code>main.bicep:1175</code>) and the gRPC port is an
+          internal TCP <code>additionalPortMappings</code> entry on 8081 (<code>:1182-1188</code>), the same TCP-passthrough
           arrangement ADC&#39;s Notification uses. Sales still needs no <code>HealthProbe__Port</code>: its
           <code>Http1AndHttp2</code> default endpoint answers the platform&#39;s HTTP/1.1 probes on 8080 directly
-          (<code>:1267-1269</code>).</li>
+          (<code>:1275-1277</code>).</li>
           </ul>
           <p>Consequence for this ADR&#39;s taxonomy: <strong>no deployed host is pure Profile B any more.</strong>
           <code>Http1AndHttp2</code> survives in both apps only as the default-endpoint half of the mixed-endpoint
@@ -505,7 +507,7 @@
           backchannel is HTTP/1.1 and <strong>cannot</strong> reach the Http2-only Identity endpoint directly, so the
           authority is set to the <strong>gateway</strong> HTTPS origin; the gateway terminates TLS, speaks HTTP/1.1 + 2
           via ALPN, and routes <code>/.well-known/*</code> on to Identity over HTTP/2 (ADR-004). This is the
-          <strong>local Aspire</strong> wiring only (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:328-330</code>).
+          <strong>local Aspire</strong> wiring only (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:364-366</code>).
           <strong>In production ACA both apps set the direct in-cluster authority</strong> <code>http://&lt;identity app&gt;</code> and let
           the <code>transport: &#39;http2&#39;</code> ingress carry the HTTP/1.1 metadata fetch to the container: see the
           2026-07-25 update above for the ADC Bicep anchors.</li>
@@ -544,22 +546,22 @@
           over HTTP/1.1, which an <code>Http2</code>-only cleartext endpoint refuses with <code>HTTP_1_1_REQUIRED</code>, so until
           now the five Profile A resources (ADC Identity/Conference/Engagement, Store Catalog/Identity)
           carried no Aspire health check at all and every <code>WaitFor</code> on them waited only for process start.
-          <code>MMCA.Common.Aspire.Hosting</code> now ships <code>WithH2cHealthCheck(path = &quot;/health/ready&quot;)</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs</code>): an
-          AppHost-side health check that issues the same GET over HTTP/2 exact version against the resource&#39;s
-          existing endpoint, exactly the profile the gateway&#39;s downstream probe already speaks. Both AppHosts
-          chain it on their Profile A resources, probing <strong><code>/alive</code> (liveness), not <code>/health/ready</code></strong>: service
-          readiness includes the warm-up gate, whose OIDC metadata task fetches through the gateway, and the
-          gateway <code>WaitFor</code>s the services, so a readiness startup gate is a cycle (each service retries
-          against the not-yet-started gateway until warm-up fails open at ~90s). Liveness proves what a
-          <code>WaitFor</code> needs, a live Kestrel serving the real protocol, without pulling cross-resource readiness
-          into the startup order; the mixed-endpoint hosts&#39; stock gates moved to <code>/alive</code> for the same
-          reason, and only the UI resources, which nothing <code>WaitFor</code>s, gate on <code>/health/ready</code>. Production is
-          untouched: ACA <code>httpGet</code> probes keep targeting the dedicated Http1-only probe listener (the
-          2026-07-25/28 updates above). The alternative design, surfacing the <code>HealthProbe:Port</code>
-          listener as an Aspire endpoint, was rejected because the explicit Kestrel listeners it activates
-          override the <code>ASPNETCORE_URLS</code> binding Aspire injects locally and collide on the fixed cleartext
-          port; the extension&#39;s XML docs record the rejection.</p>
+          <code>MMCA.Common.Aspire.Hosting</code> now ships <code>WithH2cHealthCheck(path = &quot;/alive&quot;)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/H2cHealthCheckExtensions.cs:110</code>, whose
+          <code>DefaultProbePath</code> is <code>&quot;/alive&quot;</code> at <code>:53</code>): an AppHost-side health check that issues the same GET
+          over HTTP/2 exact version against the resource&#39;s existing endpoint, exactly the profile the
+          gateway&#39;s downstream probe already speaks. Both AppHosts chain it on their Profile A resources,
+          probing <strong><code>/alive</code> (liveness), not <code>/health/ready</code></strong>: service readiness includes the warm-up gate,
+          whose OIDC metadata task fetches through the gateway, and the gateway <code>WaitFor</code>s the services, so a
+          readiness startup gate is a cycle (each service retries against the not-yet-started gateway until
+          warm-up fails open at ~90s). Liveness proves what a <code>WaitFor</code> needs, a live Kestrel serving the
+          real protocol, without pulling cross-resource readiness into the startup order; the mixed-endpoint
+          hosts&#39; stock gates moved to <code>/alive</code> for the same reason, and only the UI resources, which nothing
+          <code>WaitFor</code>s, gate on <code>/health/ready</code>. Production is untouched: ACA <code>httpGet</code> probes keep targeting
+          the dedicated Http1-only probe listener (the 2026-07-25/28 updates above). The alternative design,
+          surfacing the <code>HealthProbe:Port</code> listener as an Aspire endpoint, was rejected because the explicit
+          Kestrel listeners it activates override the <code>ASPNETCORE_URLS</code> binding Aspire injects locally and
+          collide on the fixed cleartext port; the extension&#39;s XML docs record the rejection.</p>
           <p><strong>2. The gateway downstream probe negotiates its HTTP version per downstream.</strong>
           <code>GatewayDownstreamHealthCheckOptions.ProbeVersion</code> (<code>DownstreamProbeVersion.Auto</code> default) tries
           HTTP/2 exact first and, on a protocol refusal (not on a transient failure), retries HTTP/1.1 inside

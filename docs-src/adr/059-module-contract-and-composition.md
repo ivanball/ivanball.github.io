@@ -80,7 +80,7 @@ rather than by absence.
   null-object implementations of the owning module's cross-module contracts, shipped in that module's
   `*.Shared` project: `DisabledProductVariantService` answers `false` for existence checks, `null` for
   the SKU lookup and an empty dictionary for the batch price query
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/DisabledProductVariantService.cs:10-40`);
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/DisabledProductVariantService.cs:10-45`);
   `DisabledCustomerService` returns `null`
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/Customers/DisabledCustomerService.cs:8-15`);
   `DisabledSessionBookmarkValidationService` returns `Result.Success()` plus an empty session-id
@@ -119,7 +119,7 @@ rather than by absence.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:33-53,60-82`).
   Seeders run only for enabled modules and in registration order (`ModuleLoader.cs:118-121,255-261`),
   invoked from startup database initialization
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:32-35,98`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:35-38,111`).
   `AddModuleHealthChecks` publishes one `module-{Name}` check per module, Healthy when enabled and
   Degraded when disabled (`DependencyInjection.cs:179-207`).
 - **A remote-dependency validator exists but is not wired.** `ValidateRemoteDependencies` re-resolves
@@ -162,14 +162,14 @@ Catalog enables `Catalog` and disables both peers with no remote declarations
 `Sales` and declares `["Catalog", "Identity"]` as `RemoteDependencies`
 (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34`), then replaces the two
 stubs with typed gRPC clients after the loader returns
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:240-241`). ADC Engagement declares
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:235-236`). ADC Engagement declares
 `["Conference"]` remote (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46`)
 and ADC Notification declares `["Identity"]` remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:27-35`), while ADC
 Conference enables one module and declares nothing remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25`) even though it wires
 Engagement's `IBookmarkCountService` as a gRPC client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350`), because
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:347`), because
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale
@@ -185,7 +185,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   puts its contract type in the container, the dependent module's Application and Domain code has no
   branch for "peer not present", which is precisely why a module's non-hosting layers are identical
   in-process and extracted (`ModuleLoader.cs:108`, `CatalogModule.cs:24-25`). The host then
-  overwrites the stub with a real cross-process adapter (`Sales.Service/Program.cs:240-241`).
+  overwrites the stub with a real cross-process adapter (`Sales.Service/Program.cs:235-236`).
 - **Two strictness levels, chosen per module.** A module that genuinely cannot function without a
   peer opts into `RequiresDependencies = true` and fails fast (`SalesModule.cs:32`,
   `EngagementModule.cs:23`, `NotificationModule.cs:24`); everything else tolerates a missing peer and
@@ -226,7 +226,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   (`DependencyInjection.cs:200-207`, `ModuleLoader.cs:323-324,332-333`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** ADC Conference consumes
   Engagement's `IBookmarkCountService` over gRPC without listing Engagement in `Dependencies`
-  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:350`), so neither the
+  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:347`), so neither the
   topological sort nor the `RequiresDependencies` check knows about that edge. Nothing derives
   `Dependencies` from the interfaces a module actually resolves. What is pinned is the declaration
   against a written expectation: `ModuleConformanceTestsBase<TModule>` asserts `Name`, `Dependencies`,

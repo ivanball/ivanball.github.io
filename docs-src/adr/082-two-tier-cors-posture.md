@@ -73,7 +73,7 @@ deliberately broader one for gateways.
   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:22`), and Bicep injects the
   real value into the gateway container of both applications as
   `Cors__AllowedOrigins__0`, pointing at the UI container app's FQDN
-  (`MMCA.ADC/infra/main.bicep:1641`, `MMCA.Store/infra/main.bicep:1328`). On Store the same key can
+  (`MMCA.ADC/infra/main.bicep:1646`, `MMCA.Store/infra/main.bicep:1336`). On Store the same key can
   also arrive from Key Vault as `Cors--AllowedOrigins--0`, which is why the vault provider is
   registered before anything reads configuration: the allow-list binds eagerly
   (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:54-62`, `:63`).
