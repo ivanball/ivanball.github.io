@@ -11,18 +11,26 @@ Diagrams are grounded in:
 
 ---
 
-## 1. System context, two codebases + the 15 packages
+## 1. System context, two codebases + the 17 packages
 
-`MMCA.Common` is a framework published as fifteen NuGet packages in lockstep, to nuget.org **and**
+`MMCA.Common` is a framework published as seventeen NuGet packages in lockstep, to nuget.org **and**
 GitHub Packages from one tag ([ADR-053](https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html));
-`MMCA.ADC` and `MMCA.Store` consume them. The framework depends on neither consumer (that one-way
-arrow is why the Common groups come first in the guide). `UI.Maui` is the one MAUI-TFM package: it
-lives outside `MMCA.Common.slnx` and is built and packed by dedicated windows CI jobs
+`MMCA.ADC` and `MMCA.Store` consume them. `MMCA.Common/FACTS.md` owns the count and the list (link
+there, do not recount). The framework depends on neither consumer (that one-way arrow is why the
+Common groups come first in the guide). Two packages are not layers: `MMCA.Common` itself is a
+**metapackage** that ships no assembly and bundles the six a standard host always takes (Shared,
+Domain, Application, Infrastructure, API, Aspire)
+([ADR-101](https://ivanball.github.io/docs/adr/101-common-metapackage.html)), and
+`MMCA.Common.Gateway` is the YARP edge kit that sits beside the Aspire host kit and takes no
+first-party project reference at all
+([ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html)). `UI.Maui`
+is the one MAUI-TFM package: it lives outside `MMCA.Common.slnx` and is built and packed by
+dedicated windows CI jobs
 ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
 
 ```mermaid
 flowchart TD
-    subgraph COMMON["MMCA.Common: framework, 15 NuGet packages (lockstep versioned)"]
+    subgraph COMMON["MMCA.Common: framework, 17 NuGet packages (lockstep versioned)"]
         direction TB
         subgraph CORE["Core (4)"]
             SH["Shared"]
@@ -37,9 +45,10 @@ flowchart TD
             UIW["UI.Web"]
             UIM["UI.Maui<br/>(outside the slnx)"]
         end
-        subgraph ASP["Aspire (2)"]
+        subgraph HOSTPK["Hosting / edge (3)"]
             ASPIRE["Aspire"]
             ASPH["Aspire.Hosting"]
+            GWPK["Gateway<br/>(YARP edge kit, ADR-088)"]
         end
         subgraph TEST["Testing (4)"]
             T1["Testing"]
@@ -47,6 +56,7 @@ flowchart TD
             T3["Testing.UI"]
             T4["Testing.Architecture"]
         end
+        META["MMCA.Common<br/>(metapackage, no assembly:<br/>the Core 6, ADR-101)"]
     end
 
     ADC["MMCA.ADC: Atlanta Developers Conference app<br/>(Conference · Engagement · Identity · Notification)"]
@@ -57,7 +67,7 @@ flowchart TD
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef con fill:#e6f4ea,stroke:#34a853,color:#111
-    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,T1,T2,T3,T4 fw
+    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,META fw
     class ADC,STORE con
 ```
 
@@ -67,10 +77,12 @@ flowchart TD
 
 Source dependencies point **inward** toward the Domain; each layer references only layers below it.
 Deliberate exceptions: `UI` and `Grpc` depend on `Shared` **only** (UI for Blazor WASM compatibility,
-Grpc because it is pure transport, and `Aspire` in fact references only `Shared` too); `UI.Maui` may
-reference `UI` and `Shared` only; and `UI.Web`, the Blazor Web host bridge, sits above `UI`, `API`
-and `Aspire`, with transitive project references disabled so the guard can tell a deliberate direct
-reference from an inherited one. Enforced twice: the compile-time MSBuild layer guard in
+Grpc because it is pure transport, and `Aspire` in fact references only `Shared` too); `UI.Maui`
+references `UI` (and `Shared` through it) only; and `UI.Web`, the Blazor Web host bridge, sits above
+`UI`, `API` and `Aspire`, with transitive project references disabled so the guard can tell a
+deliberate direct reference from an inherited one. `Gateway` sits outside the rule set entirely: it
+carries no guard target and no first-party project reference at all (YARP only). Enforced twice: the
+compile-time MSBuild layer guard in
 `Source/Build/MMCA.Common.LayerEnforcement.targets`, which carries a target per guarded project
 (Shared, Domain, Application, Infrastructure, UI, UI.Maui, UI.Web) and fails the build on a
 forbidden `ProjectReference`, **and** NetArchTest fitness tests that re-assert the same rules against
@@ -88,6 +100,7 @@ flowchart TD
     ASPL["Aspire (service defaults)"]
     UIMA["UI.Maui (MAUI heads, ADR-042)"]
     UIWB["UI.Web (Blazor Web host bridge)"]
+    GWL["Gateway (YARP edge kit:<br/>no first-party reference, ADR-088)"]
 
     APIL --> INFL --> APPL --> DOML --> SHRL
     UIL -.->|"Shared only"| SHRL
@@ -105,7 +118,7 @@ flowchart TD
     classDef exc fill:#fce8e6,stroke:#ea4335,color:#111
     classDef note fill:#f1f3f4,stroke:#9aa0a6,color:#333
     class APIL,INFL,APPL,DOML,SHRL layer
-    class UIL,GRPCL,ASPL,UIMA,UIWB exc
+    class UIL,GRPCL,ASPL,UIMA,UIWB,GWL exc
     class ENF note
 ```
 
@@ -145,7 +158,7 @@ flowchart TD
         G19["G19 Conference · Infrastructure"]
         G20["G20 Conference · API / gRPC"]
         G21["G21 Conference · UI"]
-        G22["G22 Engagement · session bookmarks"]
+        G22["G22 Engagement · bookmarks, check-in, points"]
         G23["G23 Engagement · live layer (polls, Q&amp;A)"]
         G24["G24 Identity module"]
         G25["G25 ADC Host / Shell / Composition"]
@@ -248,8 +261,8 @@ flowchart LR
         PIPE["Decorator pipeline"]
     end
 
-    subgraph EVT["Events + Outbox (G04, ADR-003)"]
-        OUTBOX["Transactional outbox"]
+    subgraph EVT["Events + Outbox (G04, ADR-003/100)"]
+        OUTBOX["Transactional outbox<br/>(on unless the transport is in-process)"]
         BUS["IMessageBus<br/>(in-process / broker)"]
         INBOX["Consumer inbox (ADR-021)"]
     end
@@ -286,8 +299,10 @@ Handlers are thin (one method); every cross-cutting concern is a decorator wrapp
 `TryDecorate` composes them **in reverse registration order** (last registered = outermost), so the
 registration list in `AddApplicationDecorators()` reads inside-out while the **execution order is
 load-bearing**: FeatureGate → Authorization → Logging → Caching → Validating → Timeout → Transactional →
-Handler for commands, and FeatureGate → Authorization → Logging → Caching → Timeout → Handler for
-queries (a query gets no Validating and no Transactional decorator). Authorization (keyed on
+Handler for commands, and the same chain minus Transactional for queries (FeatureGate →
+Authorization → Logging → Caching → Validating → Timeout → Handler). A query is validated too, and
+deliberately **inside** caching: a cached entry can only exist because the same query already passed
+validation when that entry was produced. Authorization (keyed on
 `IRequiresPermission`, resolved through `IPermissionRegistry`) sits outside caching deliberately, so
 a denied request neither reads nor populates the cache; Timeout (keyed on `IHasTimeout`) links a
 per-request budget token to the caller's. Opt-in marker interfaces let a handler switch each concern
@@ -304,8 +319,8 @@ flowchart TD
         FG["FeatureGate: 404 if flag off (ADR-031)"]
         AZ["Authorization: IRequiresPermission via IPermissionRegistry,<br/>outside the cache, denied = Forbidden (ADR-020)"]
         LOG["Logging + RED metrics"]
-        CA["Caching: reads only (ADR-026)"]
-        VA["Validating: FluentValidation (G06, commands only)"]
+        CA["Caching: query results in, command invalidation<br/>after commit (ADR-026)"]
+        VA["Validating: FluentValidation (G06, commands and queries)"]
         TO["Timeout: IHasTimeout execution budget"]
         TX["Transactional: SaveChanges + outbox (commands only)"]
         H["Concrete handler (one job)"]
@@ -325,7 +340,7 @@ flowchart TD
 
 ---
 
-## 6. Event-driven integration, outbox dual-dispatch ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) / 010 / 021)
+## 6. Event-driven integration, outbox dual-dispatch ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) / 010 / 021 / 100)
 
 Domain events are captured into an `OutboxMessage` row **in the same transaction** as the data
 (no dual-write bug). The two event kinds then part ways: **local domain events** are dispatched
@@ -337,7 +352,13 @@ MassTransit broker for extracted services) decides delivery. The processor is al
 for a local dispatch that failed. A handler that publishes an integration event itself calls
 `IEventBus.PublishAsync`, which writes outbox rows rather than sending inline (the removed
 `IIntegrationEventPublisher` is not a caller-facing option any more). Every integration event carries
-a `SchemaVersion`; consumers dedup by `MessageId` via the opt-in inbox.
+a `SchemaVersion`; consumers dedup by `MessageId` via the opt-in inbox. The outbox itself is not
+unconditional: `MessageBus:EnableOutbox` is a `bool?` that resolves an unset value as
+"the provider is not in-process", so a single-process host dispatches every event inside the process
+that raised it and runs neither `OutboxProcessor` nor `OutboxCleanupService`, while a broker
+transport with the outbox explicitly disabled throws at registration
+([ADR-100](https://ivanball.github.io/docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html)).
+The EF model is the same either way, so flipping the flag is a restart and never a migration.
 
 ```mermaid
 flowchart TD
@@ -349,7 +370,7 @@ flowchart TD
         OBX[("OutboxMessage rows")]
     end
     DISP["IDomainEventDispatcher: in-process handlers<br/>(deferred until after commit)"]
-    PROC["OutboxProcessor: background, smart-wait poll,<br/>leased rows for replica scale-out,<br/>broker publish behind a circuit breaker (ADR-087),<br/>dead-letter on retry exhaustion"]
+    PROC["OutboxProcessor: background, smart-wait poll,<br/>leased rows for replica scale-out,<br/>opt-in per-key ordered delivery via IHasOrderingKey,<br/>broker publish behind a circuit breaker (ADR-087),<br/>dead-letter on retry exhaustion, with list/replay<br/>through IOutboxAdministration"]
     BUS["IMessageBus: InProcessMessageBus or BrokerMessageBus<br/>→ MassTransit v8 (RabbitMQ / Azure Service Bus)"]
     CONSUMER["IntegrationEventConsumer in another module/service"]
     INBOX[("Opt-in inbox: dedup by MessageId (ADR-021)")]
@@ -382,8 +403,11 @@ lives at the edges. MMCA.ADC has taken the second path all the way: its four mod
 their own service host under `Source/Services/` behind the Gateway, and the former single
 `MMCA.ADC.WebAPI` host is gone. The Gateway's route-to-service map is YARP `ReverseProxy`
 configuration, not `MapForwarder` code ([ADR-089](https://ivanball.github.io/docs/adr/089-gateway-topology-owned-by-configuration.html)),
-and the Gateway also owns a small set of cross-cutting edge behaviors (ADR-088). Deploy A is not hypothetical: it is what MMCA.Helpdesk (its single
-Tickets module in one API host) runs.
+and the Gateway also owns a small set of cross-cutting edge behaviors, composed from the dedicated
+`MMCA.Common.Gateway` package: `AddMmcaGateway` registers services and maps nothing, so
+`LoadFromConfig` and `MapReverseProxy` (and therefore the route table) stay with the host
+([ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html)). Deploy A is
+not hypothetical: it is what MMCA.Helpdesk (its single Tickets module in one API host) runs.
 
 ```mermaid
 flowchart TD
@@ -399,7 +423,7 @@ flowchart TD
 
     subgraph SERVICES["Deploy B: extracted services (what ADC runs)"]
         direction TB
-        GW["YARP Gateway: service discovery,<br/>route map owned by config (ADR-089)"]
+        GW["YARP Gateway: MMCA.Common.Gateway edge kit (ADR-088),<br/>route map owned by config (ADR-089)"]
         SVC1["Conference service host"]
         SVC2["Engagement service host"]
         SVC3["Identity service host"]
@@ -475,7 +499,7 @@ flowchart TD
 ## 9. Authentication & Authorization stack
 
 The auth concern (G08) spans token validation, session cookies, federated sign-in, password hashing,
-brute-force protection, refresh-token rotation and revocation, a cache-backed forgot/reset-password
+brute-force protection, per-device refresh-session rotation and revocation, a cache-backed forgot/reset-password
 vertical, and a layered authorization model: RBAC roles → opt-in permissions → resource ownership.
 
 ```mermaid
@@ -484,10 +508,10 @@ flowchart TD
         JWT["JWT bearer validation"]
         JWKS["JWKS discovery + fallback fetch (ADR-004)"]
         COOKIE["HttpOnly session cookie + non-validating SSR scheme (ADR-022)"]
-        HASH["PBKDF2-HMAC-SHA512, 600k iters + salt-length migration (ADR-032)"]
+        HASH["PBKDF2-HMAC-SHA512, 32-byte salt, 600k iters:<br/>one algorithm, no legacy branch (ADR-102)"]
         LOGIN["ILoginProtectionService: lockout + per-IP cap (ADR-029)"]
         EXT["External OAuth: Google / GitHub behind a short-lived<br/>ExternalLogin cookie + single-use code (ADR-036/043)"]
-        ROT["AuthenticationServiceBase: 15-min access token +<br/>one rotating refresh token per user (ADR-050);<br/>ITokenRefresher per head (ADR-051)"]
+        ROT["AuthenticationServiceBase: 15-min access token +<br/>one refresh session per device, SHA-256 at rest,<br/>rotated with reuse detection (ADR-097);<br/>ITokenRefresher per head (ADR-051)"]
         RESET["Forgot/reset password: cache-backed single-use<br/>hashed token + email leg (ADR-091)"]
     end
 
@@ -576,7 +600,7 @@ module's UI plugs into one shared shell by contributing navigation and routes th
 ```mermaid
 flowchart TD
     PAGE["Razor component authored once<br/>(per-module .UI library, e.g. EventList.razor)"]
-    COMMONUI["MMCA.Common.UI: MudBlazor building blocks,<br/>DataGrid list-page base, common pages/services (G15)"]
+    COMMONUI["MMCA.Common.UI: MudBlazor building blocks,<br/>DataGridListPageBase + EntityServiceBase client<br/>data access, common pages/services (G15, ADR-094)"]
     SHELL["Shared shell + MainLayout: modules contribute<br/>nav + routes via IUIModule (ADR-067)"]
 
     subgraph HOSTS["Same UI libraries referenced by every host"]
@@ -621,15 +645,16 @@ flowchart TD
 ## 12. ADC business modules, bounded contexts end-to-end
 
 Each ADC module is a vertical slice through all layers. Conference is large enough to split across
-five chapters (G17-G21); Engagement takes two (G22 session bookmarks, G23 the conference-day live
-layer); Identity is one (G24); Notification is the thin host over the Common notifications
-capability, taught in G10.
+five chapters (G17-G21); Engagement takes two (G22 the bookmark, QR badge check-in and points
+slices, [ADR-072](https://ivanball.github.io/docs/adr/072-qr-badge-check-in-and-points.html); G23 the
+conference-day live layer); Identity is one (G24); Notification is the thin host over the Common
+notifications capability, taught in G10.
 
 ```mermaid
 flowchart LR
     subgraph CONF["Conference (G17-G21)"]
         direction TB
-        C_D["Domain: Event/Session/Speaker/Category/Question aggregates"]
+        C_D["Domain: Event/Session/Speaker/Category/Question/<br/>Sponsor/Activity aggregates"]
         C_A["Application: CQRS handlers, validators, DTOs, Sessionize import, analytics"]
         C_I["Infrastructure: DbContext reg, EF configs, seeding"]
         C_P["API + .Contracts gRPC + extractable service host"]
@@ -639,7 +664,7 @@ flowchart LR
 
     subgraph ENG["Engagement (G22-G23)"]
         direction TB
-        E["G22: UserSessionBookmark aggregate → use cases →<br/>persistence → API/contracts/service → feedback UI"]
+        E["G22: UserSessionBookmark, CheckIn/AttendeeBadge and<br/>PointsEntry/LeaderboardOptIn aggregates → use cases →<br/>persistence → API/contracts/service → feedback,<br/>check-in and leaderboard UI"]
         EL["G23 live layer: LivePoll + SessionQuestion aggregates,<br/>voting, moderated Q&amp;A, Happening Now / presenter UI"]
         E --> EL
     end
@@ -677,7 +702,9 @@ flowchart LR
 
 Every accepted ADR in `Website/docs-src/adr/`, clustered by the concern it governs. That directory's
 [`README.md`](https://ivanball.github.io/docs/adr/) is the canonical index and owns the count and
-range; this map only regroups it. (011 is struck through there: superseded by 027.)
+range; this map only regroups it. (Three are struck through there: 011 superseded by 027, 032 by
+102, and 050 by 097. They stay on this map because the records they replaced still explain the
+shape of the code that followed.)
 
 ```mermaid
 mindmap
@@ -689,9 +716,11 @@ mindmap
       048 Primitive identifier aliases
       085 Identifier aliases revisited
       068 Value objects as validated primitives
+      104 Plain enums by default, smart enum opt-in
     CQRS and events
       014 CQRS decorator pipeline
       003 Outbox dual-dispatch
+      100 Outbox resolved from the messaging mode
       010 Integration event schema versioning
       090 Event upcaster registration
       021 Consumer inbox idempotency
@@ -733,13 +762,15 @@ mindmap
       020 Permission-based authz
       022 Session-cookie auth
       029 Brute-force protection
-      032 Password hashing PBKDF2
+      102 PBKDF2-only password hashing
+      032 Password hashing superseded by 102
       033 Resource-ownership authz
       019 Rate limiting
       023 Security headers and CSP
       036 External OAuth login
       047 Soft-deleted-user session revocation
-      050 JWT and rotating refresh token
+      097 Multi-device refresh sessions
+      050 JWT and rotating refresh token superseded by 097
       051 Client auth token lifecycle
       091 Cache-backed password reset
       069 Shared data-protection key ring
@@ -749,6 +780,7 @@ mindmap
       017 Request idempotency
       031 Feature-flag management
       034 Generic entity controllers
+      099 Generic write-side entity commands
       079 Shared HTTP middleware pipeline
       040 Authenticated output caching
       046 HTTP API versioning
@@ -760,6 +792,7 @@ mindmap
       026 Two-tier caching
       077 HybridCache substrate
       041 Observability and telemetry
+      098 Aspire for orchestration, not testing or dashboards
       062 SLO alerting as code
       064 Deploy recency gates
       080 Rollout and revision rollback
@@ -786,9 +819,13 @@ mindmap
       038 Supply-chain provenance
       049 Library ConfigureAwait policy
       053 Dual-registry package publishing
+      101 MMCA.Common metapackage for the Core 6
       058 Runtime conformance suites as a package
+      103 bUnit component-test tier as a package
       065 Scaffolding templates
       060 Performance-regression gate
+      105 Data residency as a build gate
+      106 Extension members as the public DI surface
 ```
 
 ---
@@ -887,6 +924,7 @@ flowchart TD
   filename rather than by its id.
 - Pattern diagrams (§4-§12) reflect the mechanisms as taught in the corresponding `group-NN-*.md`
   chapters and the ADRs named in [`00-primer.md`](00-primer.md).
-- The 20 dependency cycles (SCCs) listed in the manifest are kept whole inside a single group
-  (e.g. the `ApplicationDbContext` ↔ interceptors cycle in G07, the Conference aggregate nav-cycles in
-  G17); they are not drawn as separate nodes here.
+- The 36 dependency cycles (SCCs) listed in the manifest are kept whole inside a single group
+  (e.g. the eight-member `ApplicationDbContext` ↔ interceptors ↔ `OutboxFinalizer` cycle in G07, the
+  Conference aggregate nav-cycles in G17, the `LivePoll` ↔ `LivePollOption` cycle in the live-layer
+  chapter); they are not drawn as separate nodes here.

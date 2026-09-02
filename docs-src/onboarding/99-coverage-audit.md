@@ -11,20 +11,20 @@ explained, and lists what could not be determined from source. All counts are re
 
 | Quantity | Count | Source |
 |----------|------:|--------|
-| `.cs` files scanned | 2,950 | `00-inventory.md` |
-|, in-scope | 2,828 | |
-|, generated/excluded | 122 | logged exception §2.1 |
-| Type declaration rows (incl. partial-class fragments) | 3,797 | `00-inventory.md` |
-| **Distinct type nodes (partials collapsed)** | **3,668** | the master checklist |
-| → mapped to a functional group | 3,668 | `classify.ps1` (0 unmapped) |
-| → individually sectioned (named in a chapter) | 2,001 | `verify.ps1` |
-| → rolled up by project (G25 test classes) | 1,667 | logged exception §2.2 |
-| Distinct `###` sections written across 27 chapters | 1,910 | covering the 2,001 (sibling families share a section, §2.3) |
+| `.cs` files scanned | 3,227 | `00-inventory.md` |
+|, in-scope | 3,131 | |
+|, generated/excluded | 96 | logged exception §2.1 |
+| Type declaration rows (incl. partial-class fragments) | 4,358 | `00-inventory.md` |
+| **Distinct type nodes (partials collapsed)** | **4,205** | the master checklist |
+| → mapped to a functional group | 4,205 | `classify.ps1` (0 unmapped) |
+| → individually sectioned (named in a chapter) | 2,273 | `verify.ps1` |
+| → rolled up by project (G25 test classes) | 1,932 | logged exception §2.2 |
+| Distinct `###` sections written across 27 chapters | 2,188 | covering the 2,273 (sibling families share a section, §2.3) |
 | Chapter overviews written | 27 | one per group |
 
-**Cross-check result:** `verify.ps1` confirms **0** of the 2,001 individually-sectioned types are
+**Cross-check result:** `verify.ps1` confirms **0** of the 2,273 individually-sectioned types are
 missing from their group chapter, every one appears as a `###` heading or in a sibling-family
-`File:Line` table. 3,668 = 2,001 individually-sectioned + 1,667 rolled-up. Nothing dropped, nothing
+`File:Line` table. 4,205 = 2,273 individually-sectioned + 1,932 rolled-up. Nothing dropped, nothing
 double-counted (each type maps to exactly one group).
 
 > **Caveat on what `verify.ps1` proves.** Its check is name presence: a type counts as covered when
@@ -949,9 +949,71 @@ double-counted (each type maps to exactly one group).
 
 ---
 
+
+> **Regeneration note (re-verified against current source, 2026-09-02 full drift sweep).** Regenerated
+> at MMCA.Common `5f4d9e2` + MMCA.ADC `2b77dc07` (both clean; prior pass `0110aee` / `96f0919a`, ten
+> Common releases v1.161 to v1.181 in between). Net change: **+537** distinct nodes (3,668 to **4,205**),
+> 593 added and 56 removed by name, **813** relocated (same type, new `file:line`), 0 regrouped;
+> `classify.ps1` reports 0 unmapped and the per-group counts sum to 4,205. Individually-sectioned types
+> 2,001 to **2,273**, roll-ups 1,667 to **1,932**, `###` sections 1,910 to **2,188**, cycles 34 to **36**,
+> edges 15,334 by namespace / 586 by unique-name fallback / 38 dropped.
+> - **Governance event, classifier extension (G16 +14):** the new `MMCA.Common.Gateway` package
+>   (`Source/Hosting/MMCA.Common.Gateway/`, v1.163 hardening wave) fit no rule and `classify.ps1` refused
+>   by design. Approved 2026-09-02: one prefix rule `MMCA.Common.Gateway` to **G16**, the same home the
+>   2026-08-18 decision gave the ADC gateway host types (that namespace now holds 0 types, its
+>   `Http2ForwardingConfigFilter` having moved into the package). No new group. Members: `GatewaySettings`
+>   and its six nested settings records (`MMCA.Common.Gateway/GatewaySettings.cs:12`),
+>   `GatewayReverseProxyExtensions` (`GatewayReverseProxyExtensions.cs:26`), `ForwardedHeadersExtensions`
+>   (`ForwardedHeadersExtensions.cs:23`), the two `Configuration/*ConfigFilter` types,
+>   `RateLimiting/GatewayRoutePolicyExtensions.cs:27` and `Transforms/GatewayTraceHeaderTransformProvider.cs:18`.
+> - **Multi-device refresh sessions (G08 +11, G07 +3, [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html)):**
+>   `RefreshSession` (`MMCA.Common.Domain/Auth/RefreshSession.cs:31`), `IRefreshSessionStore`,
+>   `SessionStampingTokenService`, `RefreshSessionSettings`, `EFRefreshSessionStore` and
+>   `RefreshSessionCleanupService`; `AuthorizationPolicies` removed. PBKDF2-only hashing
+>   ([ADR-102](https://ivanball.github.io/docs/adr/102-pbkdf2-only-password-hashing.html)) is a body change to `PasswordHasher`, not a type change.
+> - **Generic write side (G05 +19, G18 +26/-8, G12 +4, [ADR-099](https://ivanball.github.io/docs/adr/099-generic-write-side-entity-commands.html)):**
+>   `UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`, `IEntityUpdateApplier<...>`,
+>   `MutateEntityHandlerCore<...>`, the child-entity handler bases and `CqrsContractInspector`
+>   (`MMCA.Common.Application/UseCases/`), `CrudEntityControllerBase<...>` in the API; in ADC the
+>   hand-written `Update{Activity,ConferenceCategory,Sponsor}Command/Handler` pairs are gone, replaced by
+>   per-entity `*UpdateApplier` + `*FieldRules<T>` families.
+> - **Outbox from messaging mode (G04 +4, G14 +6, [ADR-100](https://ivanball.github.io/docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html)):**
+>   `OutboxDisabledNoticeService`, `EventNameResolver`, `ScopedIntegrationEventHandlerBase<T>`,
+>   `DecoratorPipelineSeal`, `ServiceBusEmulatorSupport`; the `I*Settings` interfaces
+>   (`IApplicationSettings`, `IConnectionStringSettings`, `IJwtSettings`, `ISmtpSettings`,
+>   `IPushNotificationSettings`) and the `DefaultEngineDbContextFactories` family removed.
+> - **Move-to-Common wave (G15 +27, G16 +12, G27 +3):** `IPublicLinkBuilder`, `NavigationPublicLinkBuilder`,
+>   `InfiniteScrollSentinel`, `ListPageActions`, `MauiPublicLinkBuilder` and `ConcurrencyETag`
+>   (`MMCA.Common.Shared/Http/ConcurrencyETag.cs:24`) left their ADC chapters for the Common ones;
+>   `IUiReadCache`/`UiReadCache`, the toast/dialog services and `ModelValidation` are new in G15; the h2c
+>   health-check family, `BrokerSelection` and `ServiceBusEmulatorResource` are new in G16.
+> - **ADC Conference UI (G21 +44):** per-entity `*CreateModel`/`*EditModel`/`*FormModel` families,
+>   `EventFilteredListPageBase<TDto>`, `DetailPageBase`, `ScorePollHost`; Engagement/Live/Identity/Host
+>   ride the same waves (+4/+4/+3/+1).
+> - **Testing growth (G25 +383):** per-`[Fact]` classes rolled up per the standing exception; the
+>   individually-sectioned base set in group-27 gained `MmcaGatewayHardeningTestsBase<TEntryPoint>`,
+>   `ServiceBusEmulatorFixtureBase`, `DataResidencyTestsBase` ([ADR-105](https://ivanball.github.io/docs/adr/105-data-residency-build-gate.html)) and
+>   `BunitComponentTestBase` ([ADR-103](https://ivanball.github.io/docs/adr/103-bunit-component-test-tier.html)).
+> - **Outside the type pipeline:** all five `devops-*` chapters were re-authored (every cited workflow,
+>   Bicep and AppHost file had newer commits: ADC `deploy.yml` 7 commits incl. the revision-activation
+>   gate, Common `ci.yml`/`release.yml` 08-31, `main.bicep` 8 commits); `devops-cicd` dropped the removed
+>   `cutover-per-service-dbs.yml` and, per the approved coverage-gap fix, gained a section on
+>   `claude.yml`/`claude-code-review.yml` (both repos) and ADC `maui-audit.yml`. `CONCEPT-MAPS.md` moved
+>   from fifteen to the FACTS-owned 17 packages. The `00-primer.md` ADR table gained rows 097-106, struck
+>   032 (by 102) and 050 (by 097), and amended 003/026/034.
+> - **Authoring pass and verification:** 184 of 196 units re-authored (112 in a first wave cut off by a
+>   spend limit, 72 in the resumed wave; 11 unchanged units reused as-is) plus the five devops chapters and
+>   the concept maps, all against real source with `path:line` citations. `verify.ps1`: **0 missing**,
+>   rubric **34/34**. Adversarial spot-checks: G18-p19 CONFIRMED; G20-p00 DRIFTED on four `Program.cs`
+>   walkthrough lines off by one to two (corrected to `:163`, `:166-168`, `:273-277`, `:280`); G18-p18
+>   DRIFTED on an invented `Checkbox` question type (corrected to `Text`; `QuestionInvariants.cs:118-129`
+>   switches only on Rating, Text and Email).
+
+---
+
 ## 2. Exceptions log (every deliberate omission, with reason)
 
-### 2.1 Generated / scaffolded code, not sectioned (122 files)
+### 2.1 Generated / scaffolded code, not sectioned (96 files)
 EF Core migrations (`/Migrations/`, `.Migrations.SqlServer`), `ModelSnapshot`, `*.Designer.cs`,
 `*.g.cs`, `GlobalUsings.g.cs`, and `AssemblyInfo.cs` are excluded by rule (`Tools/invtool` `IsGenerated`).
 The **mechanisms** that produce them are taught instead: the `DbContext`, the migration workflow, and
@@ -959,7 +1021,7 @@ the `.proto`/gRPC contracts (see [group-07](group-07-persistence-ef-core.md),
 [group-13](group-13-grpc-contracts.md), and [devops-testing](devops-testing.md)). The full file list is
 in [`00-inventory.md`](00-inventory.md#generated--excluded-artifacts-no-type-sections-written).
 
-### 2.2 Per-`[Fact]` test classes, rolled up by project (1,667 types)
+### 2.2 Per-`[Fact]` test classes, rolled up by project (1,932 types)
 Per the guide's TESTS note, individual test classes are **not** given per-type sections. The
 [Testing chapter (group-27)](group-27-testing-infrastructure.md) instead:
 - sections the **reusable** test infrastructure in full (the **240** types in `MMCA.Common.Testing`,
@@ -1103,8 +1165,8 @@ chapters. It also reports a 35th distinct `§N` token, `§1798`, which is the le
    [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to) and group-07), not yet as
    live production options.
 3. **Edge-resolution approximation.** The dependency graph is a *syntactic* (namespace-aware) resolve,
-   not a full semantic compiler bind: ~96% of edges bind by namespace visibility (12,293), the rest by a
-   globally-unique-name fallback (493 edges), and 29 references are dropped as ambiguous. This is accurate enough
+   not a full semantic compiler bind: ~96% of edges bind by namespace visibility (15,334), the rest by a
+   globally-unique-name fallback (586 edges), and 38 references are dropped as ambiguous. This is accurate enough
    for the leveling spine but is a documented approximation
    ([manifest accuracy note](00-dependency-manifest.md#edge-resolution--accuracy)).
 4. **64 cross-linked types have no section of their own** (measured at the v1.135.0 pass by the

@@ -146,14 +146,14 @@
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="operational-scripts--runbooks">Operational Scripts &amp; Runbooks</h1>
           <p>This chapter covers every operational script and runbook in <code>MMCA.ADC</code>: the one-time Azure
-          bootstrap, the database-per-service cutover story (how the legacy <code>AtlDevCon</code> monolith DB was
-          split into four per-service databases), the disaster-recovery posture, the automated restore
-          drill, the day-2 alert-triage runbook, the staged SQL managed-identity migration, the post-cutover
-          archive downgrade, the Play Store asset pipeline, and the mobile store-submission runbook. For
-          each artifact you will learn what it
-          does, when an operator runs it, a step-by-step walkthrough with line cites, and why each gate or
-          design choice exists. Architecture rubric categories are tagged inline; cross-links reach the IaC
-          and CI/CD chapters and the ADRs that recorded the underlying decisions.</p>
+          bootstrap, the database-per-service cutover story (how the legacy <code>AtlDevCon</code> monolith DB was split
+          into four per-service databases, and why its scripts no longer exist), the disaster-recovery
+          posture, the automated restore drill, the day-2 alert-triage runbook, the staged SQL
+          managed-identity migration, the post-cutover archive downgrade, the Play Store asset pipeline, and
+          the mobile store-submission runbook. For each artifact you will learn what it does, when an operator
+          runs it, a step-by-step walkthrough with line cites, and why each gate or design choice exists.
+          Architecture rubric categories are tagged inline; cross-links reach the IaC and CI/CD chapters and
+          the ADRs that recorded the underlying decisions.</p>
           <blockquote>
           <p><strong>Architectural context.</strong> The database-per-service split (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>) and the resilience/recovery
           posture (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>) are the two decisions that make this chapter necessary. Read both ADRs before
@@ -161,291 +161,223 @@
           </blockquote>
           <blockquote>
           <p><strong>Which repo.</strong> Every file cited here lives in <code>MMCA.ADC</code>. <code>MMCA.Store</code> ships same-named twins
-          (<code>infra/DISASTER-RECOVERY.md</code>, <code>infra/OPERATIONS.md</code>, <code>.github/workflows/dr-drill.yml</code>,
-          <code>scripts/dr-restore-drill.ps1</code>) with different contents. The quick tell: ADC&#39;s copies name the
-          <code>acc-rg</code> resource group, the <code>AtlDevCon</code> archive and the four <code>ADC_*</code> databases; Store&#39;s name
-          <code>ib_rg</code>, <code>MMCAStore</code> and three <code>Store_*</code> databases. Reading the wrong one hands an operator the
-          other application&#39;s recovery procedure.</p>
+          (<code>infra/DISASTER-RECOVERY.md</code>, <code>infra/OPERATIONS.md</code>, <code>infra/SQL-MANAGED-IDENTITY.md</code>,
+          <code>.github/workflows/dr-drill.yml</code>, <code>scripts/dr-restore-drill.ps1</code>) with different contents. The
+          quick tell: ADC&#39;s copies name the <code>acc-rg</code> resource group and the four <code>ADC_*</code> databases; Store&#39;s
+          name <code>ib_rg</code>, <code>MMCAStore</code> and three <code>Store_*</code> databases
+          (<code>MMCA.Store/infra/DISASTER-RECOVERY.md:19</code>, <code>:26</code>, <code>:38-39</code>). Reading the wrong one hands an
+          operator the other application&#39;s recovery procedure.</p>
+          </blockquote>
+          <blockquote>
+          <p><strong>What <code>scripts/</code> actually contains today.</strong> Four files: <code>azure-setup.sh</code>,
+          <code>dr-restore-drill.ps1</code>, <code>play-store-capture.ps1</code> and <code>play-store-compose.ps1</code>. The one-time
+          cutover scripts and their workflow were deleted once the cutover completed (see the cutover
+          section below), so do not go looking for them.</p>
           </blockquote>
           <hr>
           <h2 id="azure-setupsh-one-time-azure-bootstrap">azure-setup.sh, One-time Azure bootstrap</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/scripts/azure-setup.sh</code></p>
+          <p><strong>File:</strong> <code>MMCA.ADC/scripts/azure-setup.sh</code> (175 lines)</p>
           <p><strong>What it is.</strong> A bash script that creates every Azure identity and OIDC credential the GitHub
           Actions deploy pipeline needs. It is idempotent: every step checks for existing state before
           creating anything (<code>azure-setup.sh:12</code>, &quot;Idempotent: safe to re-run&quot;).</p>
           <p><strong>When to run.</strong> Once per environment: when standing up a fresh Azure deployment for the first
           time, or when rebuilding after a disaster recovery scenario where the identity objects were lost.
-          Never run it as part of a regular deploy; <code>deploy.yml</code> consumes the outputs but never re-runs
-          this script.</p>
+          Never run it as part of a regular deploy; <code>deploy.yml</code> consumes the outputs but never re-runs this
+          script.</p>
           <p>[Rubric §11, Security] assesses whether secrets are managed safely and whether OIDC / managed
-          identities replace long-lived credentials. This script is the bootstrap for that posture: it
-          creates a User-Assigned Managed Identity (UAMI) and federated GitHub OIDC credentials so the
-          pipeline never holds a client secret.</p>
+          identities replace long-lived credentials. This script is the bootstrap for that posture: it creates
+          a User-Assigned Managed Identity (UAMI) and federated GitHub OIDC credentials so the pipeline never
+          holds a client secret.</p>
           <p>[Rubric §17, DevOps &amp; Deployment] assesses whether the provisioning and deployment pipeline is
           automated, repeatable, and documented. The bootstrap being a single idempotent script that also
-          prints its own post-run checklist (<code>azure-setup.sh:141-176</code>) is the embodiment of that principle.</p>
+          prints its own post-run checklist (<code>azure-setup.sh:140-175</code>) is the embodiment of that principle.</p>
           <h3 id="walkthrough">Walkthrough</h3>
           <p><strong>Configuration block (<code>azure-setup.sh:26-35</code>).</strong> Hard-codes the target subscription
-          (<code>4513b073-3a04-4f5c-b272-bbcc329b2d49</code>), tenant (<code>QiMata Technologies</code>), resource group
-          (<code>acc-rg</code>), location (<code>eastus2</code>), UAMI name (<code>mmca-adc-github-deploy</code>), and GitHub coordinates
-          (<code>ivanball/ADC</code>, <code>main</code>, environment <code>production</code>). Edit these before running in a different
-          environment.</p>
-          <p><strong>Why UAMI instead of an App Registration (<code>azure-setup.sh:6-10</code>).</strong> AAD App Registration
-          creation is blocked in the QiMata tenant for non-admin users (<code>Graph Authorization_RequestDenied</code>). UAMIs are ARM resources, RG-level Contributor plus role-assignment
-          rights is sufficient to create them. The choice is forced by tenant policy, not preference.</p>
+          (<code>4513b073-3a04-4f5c-b272-bbcc329b2d49</code>), tenant (<code>c6369020-...</code>, QiMata Technologies), resource
+          group (<code>acc-rg</code>), location (<code>eastus2</code>), UAMI name (<code>mmca-adc-github-deploy</code>) and the GitHub
+          coordinates (org <code>ivanball</code>, repo <code>ADC</code>, branch <code>main</code>, environment <code>production</code>). Edit these before
+          running in a different environment. The inline comment at <code>azure-setup.sh:32</code> is the one that saves
+          an hour: the GitHub repo is named <code>ADC</code>, not <code>MMCA.ADC</code>, and an OIDC subject built from the wrong
+          repo name authenticates nothing.</p>
+          <p><strong>Why UAMI instead of an App Registration (<code>azure-setup.sh:6-10</code>).</strong> AAD App Registration creation
+          is blocked in the QiMata tenant for non-admin users (<code>Graph Authorization_RequestDenied</code>). UAMIs are
+          ARM resources, so RG-level Contributor plus role-assignment rights is sufficient to create them. The
+          choice is forced by tenant policy, not preference.</p>
           <p><strong>Resource group (<code>azure-setup.sh:43-47</code>).</strong> <code>az group create</code> is a no-op when the group already
-          exists. The comment (<code>azure-setup.sh:40-42</code>) explicitly notes that <code>acc-rg</code> is shared with other
-          production resources and that <code>mode=Complete</code> is therefore forbidden, destroying unrelated
-          resources with a Complete-mode Bicep deploy would be catastrophic.</p>
-          <p><strong>UAMI creation and ID retrieval (<code>azure-setup.sh:49-65</code>).</strong> Creates the identity and then
-          immediately queries both <code>clientId</code> and <code>principalId</code>. The <code>clientId</code> goes into the GitHub secret
-          <code>AZURE_CLIENT_ID</code>; the <code>principalId</code> is used for role-assignment lookups.</p>
-          <p><strong><code>assign_role</code> function and the az-cli 2.84.x workaround (<code>azure-setup.sh:73-100</code>).</strong> Azure CLI
-          2.84.x returns a spurious <code>MissingSubscription</code> error on <code>az role assignment create</code> even when the
-          write succeeds (see the MEMORY note <code>feedback_azure_cli_role_bug.md</code>). The function therefore hits
-          the ARM REST API directly with <code>az rest PUT</code>. It also checks for an existing assignment first
-          (<code>az rest GET</code> + JMESPath filter) to be idempotent.</p>
-          <p><strong>Role assignments (<code>azure-setup.sh:103-105</code>).</strong> Two roles are granted to the UAMI on the RG
-          scope:</p>
+          exists. The comment (<code>azure-setup.sh:40-42</code>) notes that <code>acc-rg</code> is shared with unrelated production
+          resources and that the create call is kept only for disaster recovery. That shared-RG fact is what
+          makes <code>mode=Complete</code> forbidden for every Bicep deploy in this repo: Complete mode deletes resources
+          absent from the template, which here would mean someone else&#39;s production.</p>
+          <p><strong>UAMI creation and ID retrieval (<code>azure-setup.sh:49-65</code>).</strong> Creates the identity, then queries both
+          <code>clientId</code> (<code>azure-setup.sh:56-59</code>) and <code>principalId</code> (<code>azure-setup.sh:60-63</code>) and echoes them. The
+          <code>clientId</code> becomes the GitHub secret <code>AZURE_CLIENT_ID</code>; the <code>principalId</code> is what the role
+          assignments below key on.</p>
+          <p><strong><code>assign_role</code> and the az-cli 2.84.x workaround (<code>azure-setup.sh:69-100</code>).</strong> Azure CLI 2.84.x
+          returns a spurious <code>MissingSubscription</code> error on <code>az role assignment create</code> even when the write
+          succeeds (<code>azure-setup.sh:70-72</code>). The function therefore hits the ARM REST API directly with
+          <code>az rest PUT</code> (<code>azure-setup.sh:89-98</code>). It also checks for an existing assignment first (an
+          <code>az rest GET</code> plus a JMESPath filter, <code>azure-setup.sh:81-87</code>), so a re-run is a no-op rather than a
+          duplicate grant.</p>
+          <p><strong>Role assignments (<code>azure-setup.sh:102-105</code>).</strong> Two roles are granted to the UAMI at RG scope:</p>
           <ul>
-          <li><code>Contributor</code> (GUID <code>b24988ac-...</code>), deploys ARM/Bicep, manages Container Apps, SQL, etc.</li>
-          <li><code>AcrPush</code> (GUID <code>8311e382-...</code>), pushes container images; the ACR admin password is disabled, so
-          the UAMI&#39;s <code>AcrPush</code> is the only image-push path.</li>
+          <li><code>Contributor</code> (GUID <code>b24988ac-...</code>), which deploys ARM/Bicep and manages Container Apps, SQL and
+          the rest.</li>
+          <li><code>AcrPush</code> (GUID <code>8311e382-...</code>), which pushes container images. The ACR admin user is disabled
+          (<code>DISASTER-RECOVERY.md:63-64</code>), so the UAMI&#39;s <code>AcrPush</code> is the only image-push path that exists.</li>
           </ul>
-          <p><strong>Federated credentials (<code>azure-setup.sh:112-138</code>).</strong> Two OIDC federated credentials are
-          created on the UAMI, using <code>create_or_replace_fic</code> which skips creation if the credential already
-          exists:</p>
+          <p>Note what is deliberately absent: <code>Microsoft.Authorization/roleAssignments/write</code>. That omission is
+          a least-privilege decision with a visible downstream consequence, the avatar-storage grant has to be
+          applied by hand (<code>main.bicep:125-126</code>, and section 6 of the mobile runbook below).</p>
+          <p><strong>Federated credentials (<code>azure-setup.sh:107-138</code>).</strong> Two OIDC federated credentials are created on
+          the UAMI through <code>create_or_replace_fic</code>, which skips creation when the credential already exists
+          (<code>azure-setup.sh:116-122</code>):</p>
           <ul>
-          <li><code>github-env-production</code>, subject <code>repo:ivanball/ADC:environment:production</code>. The deploy job
-          uses <code>environment: production</code>, which produces this subject.</li>
-          <li><code>github-ref-main</code>, subject <code>repo:ivanball/ADC:ref:refs/heads/main</code>. A fallback for workflow
-          runs not bound to an environment.</li>
+          <li><code>github-env-production</code>, subject <code>repo:ivanball/ADC:environment:production</code>. The deploy job runs
+          with <code>environment: production</code>, which is the subject GitHub mints.</li>
+          <li><code>github-ref-main</code>, subject <code>repo:ivanball/ADC:ref:refs/heads/main</code>. The fallback for workflow runs
+          that do not bind to an environment.</li>
           </ul>
-          <p><strong>Post-run checklist (<code>azure-setup.sh:141-176</code>).</strong> The script prints everything the operator must
-          do manually: create the GitHub environment, add six required secrets (<code>AZURE_CLIENT_ID</code>,
+          <p>Both are pinned to issuer <code>https://token.actions.githubusercontent.com</code> and audience
+          <code>api://AzureADTokenExchange</code> (<code>azure-setup.sh:129-131</code>). The subject string is the entire security
+          boundary here: it is why a fork, or any other repo, cannot mint a token Azure will accept.</p>
+          <p><strong>Post-run checklist (<code>azure-setup.sh:140-175</code>).</strong> The script prints everything the operator must
+          still do by hand: create the GitHub environment, add six required secrets (<code>AZURE_CLIENT_ID</code>,
           <code>AZURE_TENANT_ID</code>, <code>AZURE_SUBSCRIPTION_ID</code>, <code>SQL_ADMIN_PASSWORD</code>, <code>JWT_RSA_PRIVATE_KEY_PEM</code>,
-          <code>JWT_RSA_PUBLIC_KEY_PEM</code>), one required variable (<code>AZURE_RESOURCE_GROUP</code>), and a list of optional
-          secrets for the HS256 fallback key, SMTP, OAuth, and the Anthropic API.</p>
+          <code>JWT_RSA_PUBLIC_KEY_PEM</code>), one required variable (<code>AZURE_RESOURCE_GROUP</code>), then the optional secrets
+          (<code>OAUTH_GITHUB_CLIENT_ID</code>, <code>OAUTH_GITHUB_CLIENT_SECRET</code>, <code>ANTHROPIC_API_KEY</code>, <code>SMTP_PASSWORD</code>) and
+          optional variables (<code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_FROM</code>, <code>SMTP_USERNAME</code>). There is no HS256
+          fallback signing key in that list: RS256 is the only signing path, which is why both RSA PEMs are
+          listed as required and <code>deploy.yml:1143-1152</code> fails the run when either is missing.</p>
+          <p><strong>One gap to know about before your first deploy.</strong> The checklist never mentions <code>ALERT_EMAIL</code>, but
+          <code>main.bicep:115-117</code> declares <code>alertEmailAddress</code> as a required parameter with <code>@minLength(3)</code> and
+          no default (alerts that notify nobody are silent failures), and <code>deploy.yml:1138-1141</code> refuses the
+          run with an actionable error when <code>vars.ALERT_EMAIL</code> is unset. Follow the printed checklist exactly
+          and the first deploy stops there. Set <code>ALERT_EMAIL</code> as well.</p>
           <hr>
-          <h2 id="the-database-per-service-cutover-story">The database-per-service cutover story</h2>
-          <p>Before the cutover scripts make sense, the story behind them does.</p>
+          <h2 id="the-database-per-service-cutover-and-why-its-scripts-are-gone">The database-per-service cutover, and why its scripts are gone</h2>
+          <p>Before the surviving artifacts make sense, the story behind them does.</p>
           <p><strong>Before <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>.</strong> All four modules (<code>Identity</code>, <code>Conference</code>, <code>Engagement</code>, <code>Notification</code>)
-          pointed at a single shared SQL database called <code>AtlDevCon</code>. This caused an outbox race: every
+          pointed at a single shared SQL database called <code>AtlDevCon</code>. That caused an outbox race: every
           service&#39;s <code>OutboxProcessor</code> polled the same <code>dbo.OutboxMessages</code> table and could claim another
-          service&#39;s rows, producing duplicate dispatch (the precise defect documented in <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> and the
-          <code>project_outbox_race_shared_db.md</code> memory note, fixed 2026-06-07).</p>
+          service&#39;s rows, producing duplicate dispatch (the defect documented in <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, fixed 2026-06-07).</p>
           <p><strong>The <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> decision.</strong> Adopt database-per-service. Each service owns <code>ADC_Identity</code>,
-          <code>ADC_Conference</code>, <code>ADC_Engagement</code>, or <code>ADC_Notification</code>, locally on the Aspire SQL container,
-          in Azure as four Basic-tier databases on the same SQL server (<code>main.bicep:661-677</code>, Basic 5 DTU
-          with a 2 GB cap each). The legacy <code>AtlDevCon</code> database is retained <strong>read-only</strong> as an archive and
-          rollback path and is never deleted. Cross-service references become scalar IDs (no cross-database
-          foreign keys); <code>CrossDataSourceDegradeConvention</code> removes FK constraints at the EF level;
-          consistency flows through the outbox and broker (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>).</p>
-          <p>[Rubric §8, Data Architecture] assesses data modeling quality, isolation, and whether services
-          own their own schema. The per-service database design directly addresses this: each service has its
-          own schema, its own migrations project, and its own <code>dbo.OutboxMessages</code>, no service ever sees
-          another&#39;s rows.</p>
-          <p><strong>The three-commit rollout plan.</strong> The Azure cutover was structured as three commits to prevent
-          data loss:</p>
-          <ol>
-          <li><strong>Commit 1</strong>, <code>main.bicep</code> provisions the four <code>ADC_*</code> databases (empty). Services still read
-          <code>AtlDevCon</code>.</li>
-          <li><strong>Run <code>cutover-per-service-dbs.yml</code></strong> (one-time, manual), migrates the four empty databases,
-          copies <code>AtlDevCon</code> data into them, verifies row counts. <code>AtlDevCon</code> is never written.</li>
-          <li><strong>Commit 2</strong>, Container App env vars flip to the per-service connection strings. Services now
-          read and write their own databases.</li>
-          <li><strong>Commit 3</strong>, downgrade <code>AtlDevCon</code> from S0 to Basic tier (archive), as described in the
-          post-cutover runbook below.</li>
-          </ol>
-          <p>All of it has landed. <code>main.bicep</code> now injects the per-service connection strings into the
-          container apps as Key Vault secret references (<code>main.bicep:1082</code> is Identity&#39;s
-          <code>DataSources__Identity__SQLServerConnectionString</code>), and the <code>AtlDevCon</code> resource is declared at
-          the Basic archive SKU (<code>main.bicep:629-643</code>). The cutover workflow and the downgrade runbook below
-          are therefore history rather than pending steps, and they are documented here because they are the
-          recovery-time reference for rebuilding this topology from the archive.</p>
-          <h3 id="cutover-per-service-dbsyml-the-orchestrating-workflow">cutover-per-service-dbs.yml, the orchestrating workflow</h3>
-          <p><strong>File:</strong> <code>MMCA.ADC/.github/workflows/cutover-per-service-dbs.yml</code></p>
-          <p><strong>What it is.</strong> A manually-triggered (<code>workflow_dispatch</code>) GitHub Actions workflow that runs the
-          entire cutover sequence safely against production Azure SQL.</p>
-          <p><strong>When to run.</strong> Exactly once per environment, between Commit 1 (databases provisioned) and
-          Commit 2 (app flip). Never again, the <code>copy-atldevcon-to-per-service-dbs.azure.ps1</code> script skips
-          tables that already have rows, so accidental re-runs after Commit 2 would silently skip seeded
-          data.</p>
-          <p><strong>Confirmation gate (<code>cutover-per-service-dbs.yml:48-53</code>).</strong> The <code>confirm</code> input must be typed as
-          exactly the string <code>&quot;cutover&quot;</code>. Any other value aborts immediately. This is a typo-prevention
-          guard for a destructive (irreversible-at-scale) one-time operation.</p>
-          <p><strong>Concurrency lock (<code>cutover-per-service-dbs.yml:37-39</code>).</strong> Uses <code>group: prod-azure</code> with
-          <code>cancel-in-progress: false</code>, the same concurrency group as <code>deploy.yml</code>. A simultaneous <code>push</code> to
-          <code>main</code> cannot interleave a new container revision mid-copy, because the cutover workflow holds the
-          lock and <code>cancel-in-progress: false</code> prevents it from being preempted.</p>
-          <p><strong>GATE 1, apps still point at <code>AtlDevCon</code> (<code>cutover-per-service-dbs.yml:74-81</code>).</strong> Checks
-          whether <code>adc-prod-identity</code> already carries <code>DataSources__Identity__SQLServerConnectionString</code>. If
-          it does, Commit 2 has already been deployed and the seeded <code>ADC_*</code> tables are non-empty; a copy
-          would silently skip everything. The step aborts with a clear error message.</p>
-          <p><strong>SQL server discovery (<code>cutover-per-service-dbs.yml:83-92</code>).</strong> Queries by name prefix
-          (<code>adc-prod-sql-*</code>) rather than hard-coding the suffix token, so the FQDN is always resolved from
-          the live Azure state.</p>
-          <p><strong>Optional traffic freeze (<code>cutover-per-service-dbs.yml:99-101</code>).</strong> When <code>freeze_traffic: true</code>,
-          the step disables the Gateway&#39;s Container App ingress (<code>az containerapp ingress disable</code>). This
-          eliminates the write-drift window (new rows written to <code>AtlDevCon</code> after the copy starts but
-          before the flip). Recommended for production cutovers. The re-enable step (<code>cutover-per-service-dbs.yml:168-172</code>) runs
-          under <code>if: ${{ always() &amp;&amp; inputs.freeze_traffic }}</code> so the Gateway is never left offline even if a
-          later step fails.</p>
-          <p><strong>GATE 2, outbox drained (<code>cutover-per-service-dbs.yml:105-117</code>).</strong> Counts unprocessed rows in
-          <code>AtlDevCon.dbo.OutboxMessages WHERE ProcessedOn IS NULL</code>. A non-zero count aborts. This is
-          critical: unprocessed outbox rows represent integration events that have not yet been published to
-          the broker. Copying them after the flip is complex (the commented-out section in the SQL script
-          shows how). Draining first means the copy script can safely omit <code>OutboxMessages</code> entirely.</p>
-          <p><strong>Migration generation (<code>cutover-per-service-dbs.yml:119-135</code>).</strong> Runs <code>dotnet ef migrations script --idempotent</code> for each of the four per-module migration projects
-          (<code>Source/Hosting/MMCA.ADC.Migrations.SqlServer.{Identity,Conference,Engagement,Notification}</code>).
-          No database connection is opened during script generation, the design-time factory in each
-          migration project is self-contained.</p>
-          <p><strong>Migration application (<code>cutover-per-service-dbs.yml:137-146</code>).</strong> Applies each generated script
-          to its target database via <code>sqlcmd</code>. The <code>--idempotent</code> flag means re-running is safe: applied
-          migrations are skipped.</p>
-          <p><strong>Data copy (<code>cutover-per-service-dbs.yml:152-162</code>).</strong> Calls
-          <code>copy-atldevcon-to-per-service-dbs.azure.ps1</code> with <code>-VerifyCounts</code>, which fails the step if any
-          target has fewer rows than its source. <code>AtlDevCon</code> is read-only throughout.</p>
-          <hr>
-          <h2 id="copy-atldevcon-to-per-service-dbsazureps1-azure-data-copy">copy-atldevcon-to-per-service-dbs.azure.ps1, Azure data copy</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/scripts/copy-atldevcon-to-per-service-dbs.azure.ps1</code></p>
-          <p><strong>What it is.</strong> A PowerShell script that streams rows from <code>AtlDevCon</code> into the four per-service
-          Azure SQL databases using <code>SqlBulkCopy</code>. It is the Azure-compatible counterpart to the local SQL
-          script (below), Azure SQL Database does not support the three-part cross-database names
-          (<code>AtlDevCon.schema.Table</code>) that <code>sqlcmd</code> needs, so the PowerShell approach opens a separate
-          connection per database and streams data row-by-row.</p>
-          <p><strong>When to run.</strong> Invoked by <code>cutover-per-service-dbs.yml</code>. Can also be run from a developer
-          machine (the <code>dev-machine use</code> block in the doc comment, lines 60-67, explains the temporary
-          firewall rule needed for that).</p>
-          <p>[Rubric §17, DevOps &amp; Deployment] assesses automation. Running this script from the CI workflow
-          rather than a manual SSMS session means the copy is reproducible, version-controlled, and audited
-          in the Actions run log.</p>
-          <h3 id="walkthrough-1">Walkthrough</h3>
-          <p><strong>Table list (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:86-109</code>).</strong> An ordered array of
-          <code>{Db, Schema, Table}</code> hashes in FK-safe order, roots before children, parent tables before join
-          tables. The order mirrors <code>migrate-atldevcon-to-per-service-dbs.sql</code> exactly (comment on line 84).
-          <code>OutboxMessages</code> is deliberately absent (line 85, &quot;intentionally absent&quot;).</p>
-          <p><strong>Skip-if-non-empty guard (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:171-176</code>).</strong> Before
-          touching any table, a <code>COUNT(*)</code> query checks whether the target already has rows. If it does, the
-          table is skipped with a <code>SKIP</code> log line. This is the idempotency mechanism: re-running after a
-          partial failure copies only the missing tables. The flip side, straggler rows written to
-          <code>AtlDevCon</code> after the copy, is explicitly called out as NOT handled automatically (doc comment
-          lines 28-33, &quot;There is intentionally no merge mode&quot;).</p>
-          <p><strong>Copyable-column resolution (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:127-147</code>).</strong> Queries
-          <code>sys.columns</code> on the <em>source</em> connection, excluding computed columns (<code>is_computed = 0</code>) and
-          <code>timestamp</code>/<code>rowversion</code> columns (<code>TYPE_NAME &lt;&gt; &#39;timestamp&#39;</code>). Targets mint fresh <code>RowVersion</code>
-          values. Critically, the script uses <strong>name-based column mappings</strong> (<code>foreach ($c in $columns) { [void]$bulk.ColumnMappings.Add($c, $c) }</code>, line 197), not ordinal mappings, because the excluded
-          <code>rowversion</code> column would shift ordinals and produce wrong-column inserts.</p>
-          <p><strong><code>KeepIdentity</code> + RESEED (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:192, 206-209</code>).</strong> The
-          <code>SqlBulkCopy</code> options include <code>KeepIdentity</code> so numeric primary keys are preserved verbatim. After
-          the copy, <code>DBCC CHECKIDENT ... RESEED</code> re-synchronizes the identity seed so the next <code>INSERT</code> does
-          not collide with copied IDs.</p>
-          <p><strong><code>QUOTED_IDENTIFIER ON</code> (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:22-23</code>, doc comment).</strong>
-          <code>Microsoft.Data.SqlClient</code> sessions default <code>QUOTED_IDENTIFIER ON</code>. This is required for
-          inserts into tables that have filtered indexes (which use <code>WHERE</code> clauses that reference quoted
-          identifiers). The equivalent <code>sqlcmd -I</code> flag is passed by the local PowerShell wrapper below.</p>
-          <p><strong><code>-VerifyCounts</code> flag (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:226-260</code>).</strong> When set,
-          re-opens both source and target connections after the copy and compares row counts per table. Any
-          target with <em>fewer</em> rows than its source causes the script to exit non-zero, failing the CI step.
-          Targets with <em>more</em> rows (e.g. seeded admin rows) are flagged for investigation but do not fail.</p>
-          <hr>
-          <h2 id="migrate-atldevcon-to-per-service-dbsps1-local-data-copy-wrapper">migrate-atldevcon-to-per-service-dbs.ps1, local data copy wrapper</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/scripts/migrate-atldevcon-to-per-service-dbs.ps1</code></p>
-          <p><strong>What it is.</strong> A thin PowerShell wrapper that invokes the companion SQL script via <code>sqlcmd</code>
-          against the local Aspire SQL container. Unlike the Azure script, this one uses three-part
-          cross-database names, supported by SQL Server on the Aspire container, not by Azure SQL Database.</p>
-          <p><strong>When to run.</strong> Once per local environment, after the first <code>dotnet run --project Source/Hosting/MMCA.ADC.AppHost</code> has let every service create, migrate, and seed its own database.
-          Run it when you are first standing up a local development environment from the legacy <code>AtlDevCon</code>
-          data (e.g. restoring a production snapshot locally for debugging).</p>
-          <h3 id="walkthrough-2">Walkthrough</h3>
-          <p><strong>Parameters (<code>migrate-atldevcon-to-per-service-dbs.ps1:18-21</code>).</strong> <code>-Server</code> (default
-          <code>localhost,1433</code>) and <code>-Password</code> (mandatory SA password). Get the dynamic port from the Aspire
-          dashboard&#39;s <code>sql</code> resource connection string.</p>
-          <p><strong><code>sqlcmd</code> invocation (<code>migrate-atldevcon-to-per-service-dbs.ps1:27</code>).</strong> Key flags: <code>-C</code> (trust
-          server cert on the self-signed Aspire container cert), <code>-b</code> (exit non-zero on error), <code>-I</code>
-          (enable <code>QUOTED_IDENTIFIER ON</code>, required for the filtered indexes on the target tables), <code>-i $scriptPath</code> (the SQL file). A non-zero exit code is re-thrown as a PowerShell exception.</p>
-          <hr>
-          <h2 id="migrate-atldevcon-to-per-service-dbssql-local-sql-copy-script">migrate-atldevcon-to-per-service-dbs.sql, local SQL copy script</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/scripts/migrate-atldevcon-to-per-service-dbs.sql</code></p>
-          <p><strong>What it is.</strong> The T-SQL script that performs the actual per-row copy from <code>AtlDevCon</code> into the
-          four per-service databases using three-part names. Safe to run against the local Aspire SQL
-          container; not safe against Azure SQL Database (three-part names are not supported there, use
-          <code>copy-atldevcon-to-per-service-dbs.azure.ps1</code> instead).</p>
-          <p><strong>When to run.</strong> Invoked by <code>migrate-atldevcon-to-per-service-dbs.ps1</code>. Never run directly in
-          production.</p>
-          <p>[Rubric §8, Data Architecture] assesses migration hygiene and whether the database split is
-          tractable. This script is the local proof that the split is mechanical and auditable, not a manual
-          SSMS drag-and-drop.</p>
-          <h3 id="walkthrough-3">Walkthrough</h3>
-          <p><strong>Session settings (<code>migrate-atldevcon-to-per-service-dbs.sql:19-23</code>).</strong> <code>SET XACT_ABORT ON</code>
-          ensures that any error rolls back the current statement&#39;s implicit transaction. <code>SET QUOTED_IDENTIFIER ON</code> and <code>SET ANSI_NULLS ON</code> are required by the filtered indexes on the target
-          tables.</p>
-          <p><strong>Source-exists guard (<code>migrate-atldevcon-to-per-service-dbs.sql:25-29</code>).</strong> <code>IF DB_ID(N&#39;AtlDevCon&#39;) IS NULL</code>, exits cleanly with a message if the source database does not exist on this instance (e.g.
-          a fresh local machine that never had the legacy DB).</p>
-          <p><strong>Table sequence (<code>migrate-atldevcon-to-per-service-dbs.sql:32-56</code>).</strong> An in-memory table variable
-          holds the ordered list (<code>Seq</code>, <code>TargetDb</code>, <code>SchemaName</code>, <code>TableName</code>) in FK-safe sequence,
-          roots first (Event, User), leaf joins last (SessionCategoryItem, EventQuestionAnswer). The
-          sequence numbers leave gaps between modules (10-series, 20-34 series, 40-series, 50-51) for easy
-          insertion.</p>
-          <p><strong>Column introspection (<code>migrate-atldevcon-to-per-service-dbs.sql:83-110</code>).</strong> Dynamic SQL builds
-          the column list at runtime from <code>AtlDevCon.sys.columns</code>, excluding computed columns and
-          <code>timestamp</code> types. The same column set (aliased <code>s.</code>) forms the <code>SELECT</code> list; the primary-key
-          columns drive the <code>WHERE NOT EXISTS</code> idempotency predicate.</p>
-          <p><strong>Per-row idempotency (<code>migrate-atldevcon-to-per-service-dbs.sql:122-124</code>).</strong> The insert is
-          <code>INSERT INTO &lt;target&gt; (...) SELECT ... FROM &lt;source&gt; AS s WHERE NOT EXISTS (SELECT 1 FROM &lt;target&gt; AS t WHERE &lt;pk match&gt;)</code>. Re-running the script copies only rows whose primary key is absent from
-          the target, so seeded rows (e.g. the admin account) are not duplicated, and a partial run can
-          be safely resumed.</p>
-          <p><strong><code>IDENTITY_INSERT ON/OFF</code> (<code>migrate-atldevcon-to-per-service-dbs.sql:118-127</code>).</strong> Enabled for
-          tables that have identity columns (<code>sys.identity_columns</code>), preserving source PKs verbatim. Note:
-          the Azure bulk-copy script handles identity reseeding explicitly; the SQL script does not (the
-          next insert on the local container will land at the highest existing ID + 1 automatically via
-          <code>DBCC CHECKIDENT</code>).</p>
-          <p><strong><code>OutboxMessages</code>, deliberately omitted (<code>migrate-atldevcon-to-per-service-dbs.sql:14-17</code>).</strong> The
-          commented-out block at lines 151-156 shows how to route unprocessed rows by event namespace if
-          you must preserve them, but the normal path is to drain the outbox on the old branch first and
-          not copy it at all.</p>
+          <code>ADC_Conference</code>, <code>ADC_Engagement</code> or <code>ADC_Notification</code>, locally on the Aspire SQL container and in
+          Azure as four Basic-tier databases on the same SQL server (<code>main.bicep:649-672</code>, Basic 5 DTU with a
+          2 GB cap each). The legacy <code>AtlDevCon</code> database is retained read-only as an archive and rollback
+          path and is never deleted (<code>main.bicep:618-623</code>). Cross-service references become scalar IDs (no
+          cross-database foreign keys); <code>CrossDataSourceDegradeConvention</code> removes FK constraints at the EF
+          level; consistency flows through the outbox and broker (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>).</p>
+          <p>[Rubric §8, Data Architecture] assesses data modeling quality, isolation, and whether services own
+          their own schema. The per-service database design addresses this directly: each service has its own
+          schema, its own migrations project
+          (<code>Source/Hosting/MMCA.ADC.Migrations.SqlServer.{Identity,Conference,Engagement,Notification}</code>), and
+          its own <code>dbo.OutboxMessages</code>, so no service ever sees another&#39;s rows.</p>
+          <p><strong>The three-commit rollout, and what remains of it.</strong> The Azure cutover was structured as three
+          commits to prevent data loss: commit 1 provisioned the four <code>ADC_*</code> databases empty while the apps
+          kept reading <code>AtlDevCon</code>; a one-time manual workflow then migrated and copied the data with
+          row-count verification; commit 2 flipped the container-app connection strings; commit 3 downgraded
+          <code>AtlDevCon</code> to the Basic archive SKU.</p>
+          <p>All of it landed, and the finished state is what the template now declares:</p>
+          <ul>
+          <li>Per-service connection strings are built once from a shared base and injected per app
+          (<code>main.bicep:160-173</code>), reaching each container app as a Key Vault secret reference
+          (<code>main.bicep:1068</code> is Identity&#39;s <code>DataSources__Identity__SQLServerConnectionString</code>).</li>
+          <li>The comment at <code>main.bicep:160-162</code> records the invariant plainly: each service connects only to
+          its own database, and <code>AtlDevCon</code> is no longer referenced by any app.</li>
+          <li><code>AtlDevCon</code> is declared at the Basic archive SKU (<code>main.bicep:624-638</code>) under a &quot;NEVER delete&quot;
+          comment.</li>
+          </ul>
+          <p><strong>The cutover scripts were deleted on purpose (2026-08-30, commit <code>6323a7b9</code>).</strong> Four artifacts this
+          chapter used to walk step by step no longer exist in the tree:
+          <code>.github/workflows/cutover-per-service-dbs.yml</code>,
+          <code>scripts/copy-atldevcon-to-per-service-dbs.azure.ps1</code>,
+          <code>scripts/migrate-atldevcon-to-per-service-dbs.ps1</code> and
+          <code>scripts/migrate-atldevcon-to-per-service-dbs.sql</code>. They were single-use tooling whose own guard
+          rails made a second run wrong rather than merely redundant: the copy skipped any target table that
+          already had rows, so a run after the flip would silently do nothing while reporting success. Keeping
+          a dangerous single-use script in <code>scripts/</code> invites exactly that run. If a DR rebuild ever needs
+          them, recover them from git history at that commit rather than reconstructing them from memory.</p>
+          <p>[Rubric §34, Architecture Governance] assesses whether the repository&#39;s contents reflect current
+          policy rather than accumulated history. Deleting spent one-time tooling, while keeping the archive
+          database it produced, is that principle applied to <code>scripts/</code>.</p>
+          <p><strong>One stale comment to expect.</strong> <code>main.bicep:645-647</code> still narrates the rollout in the future tense
+          (&quot;Commit 1 (this) creates them EMPTY while the apps keep running against AtlDevCon; the one-time
+          cutover workflow migrates + copies data into them before commit 2 flips the container apps&quot;). The
+          workflow it refers to is gone and the flip is long done. Read those lines as history and trust the
+          resource declarations around them (<code>main.bicep:649-672</code>) over the comment.</p>
           <hr>
           <h2 id="infradisaster-recoverymd-dr-runbook">infra/DISASTER-RECOVERY.md, DR runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code> (175 lines; not the Store file of the same name)</p>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code> (176 lines; not the Store file of the same name)</p>
           <p><strong>What it is.</strong> The authoritative disaster-recovery runbook for the ADC production environment.
           Mandated by <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>: every consuming app must declare RTO/RPO per failure scenario, document the
           backup/restore mechanism, accept single-region risk in writing, and record restore drills in a
           drill-result table that cannot stay empty.</p>
-          <p><strong>When to consult.</strong> On any data-loss event, corruption, failed deployment, or region outage.
-          Also consult it when changing backup/retention settings to understand what the targets are. Day-2
-          alert triage (what to do when an SLO alert fires) is the companion <code>infra/OPERATIONS.md</code>, not this
-          file (<code>OPERATIONS.md:3-6</code>).</p>
+          <p><strong>When to consult.</strong> On any data-loss event, corruption, failed deployment, or region outage. Also
+          consult it when changing backup or retention settings, to see what the targets are. Day-2 alert
+          triage (what to do when an SLO alert fires) is the companion <code>infra/OPERATIONS.md</code>, not this file
+          (<code>OPERATIONS.md:3-6</code>).</p>
           <p>Cross-link: see the <a href="devops-iac.html">IaC chapter</a> for how <code>infra/main.bicep</code> provisions the LTR
-          policies and alerts, and the <a href="devops-cicd.html">CI/CD chapter</a> for the deploy rollback mechanism
-          and the freshness gates.</p>
+          policies and alerts, and the <a href="devops-cicd.html">CI/CD chapter</a> for the deploy rollback mechanism and
+          the freshness gates.</p>
           <p>[Rubric §29, Resilience &amp; Business Continuity] assesses whether the system has documented RTO/RPO
           targets and a drilled restore procedure. The DR file addresses both: the objectives table
           (<code>DISASTER-RECOVERY.md:10-14</code>) and a maintained drill ledger of six rows
-          (<code>DISASTER-RECOVERY.md:151-158</code>), whose newest entry is a PITR restore of <code>ADC_Conference</code> on
+          (<code>DISASTER-RECOVERY.md:152-159</code>), whose newest entry is a PITR restore of <code>ADC_Conference</code> on
           2026-08-10 that completed in 2.1 min against the 2 h RTO and came back Online. The status block
-          (<code>DISASTER-RECOVERY.md:160-165</code>) reads that ledger as a rotation rather than as a single success:
+          (<code>DISASTER-RECOVERY.md:161-166</code>) reads that ledger as a rotation rather than as a single success:
           every <code>ADC_*</code> database now carries a recovery proof, and the number it quotes is the <strong>slowest</strong>
           measured restore in the rotation (4.4 min), not the fastest. A second status paragraph is retained
-          for the record (<code>DISASTER-RECOVERY.md:167-175</code>); it closes TD-10 on the strength of the original
+          for the record (<code>DISASTER-RECOVERY.md:168-176</code>); it closes TD-10 on the strength of the original
           2026-06-20 drill plus the Polly fault-injection tests in MMCA.Common and the Azure Monitor SLO
-          workbook (<code>main.bicep:530</code>, the <code>sloWorkbook</code> resource embedding
+          workbook (<code>main.bicep:525-537</code>, the <code>sloWorkbook</code> resource embedding
           <code>infra/workbooks/adc-slo-workbook.json</code>).</p>
-          <p>[Rubric §13, Observability] assesses alerting and monitoring. The DR file&#39;s alert table
-          (<code>DISASTER-RECOVERY.md:49-53</code>) records the three SLO signals, their thresholds and their
-          severities: failed requests count &gt; 10 (sev 2), average server response time &gt; 3000 ms (sev 3),
-          dependency failures count &gt; 10 (sev 2), each evaluated every 5 minutes over a 15-minute window.
-          Those numbers are current, but the resource type in the prose above the table
-          (<code>DISASTER-RECOVERY.md:45-47</code>, &quot;metric alerts&quot;) is not: the live rules are KQL log-search alerts
-          built from <code>sloAlertSpecs</code> (<code>main.bicep:276-304</code>, materialized as <code>scheduledQueryRules</code> at
-          <code>main.bicep:306-348</code>), and the original metric alerts of the same names are kept declared with
-          <code>enabled: false</code> (<code>main.bicep:357-392</code>) because an incremental ARM deployment never deletes a
-          resource that simply left the template. Per-alert triage lives in <code>infra/OPERATIONS.md</code> below.</p>
           <p>[Rubric §11, Security] assesses credential hardening. The managed-identity section
-          (<code>DISASTER-RECOVERY.md:59-85</code>) documents the out-of-band bootstrap for the <code>adc-prod-apps-identity</code>
-          UAMI, the Key Vault (<code>adckv&lt;resourceToken&gt;</code>, RBAC-authorized) and both role grants (Secrets User
-          for the apps, Secrets Officer for the deploy identity). The ACR admin user is disabled; runtime
-          secrets reach the container apps as <code>keyVaultUrl</code> references, so no plaintext secrets exist in
-          Container App environment variables.</p>
+          (<code>DISASTER-RECOVERY.md:59-86</code>) documents the out-of-band bootstrap for the <code>adc-prod-apps-identity</code>
+          UAMI, the Key Vault (<code>adckv&lt;resourceToken&gt;</code>, RBAC-authorized) and both role grants (Secrets User for
+          the apps, Secrets Officer for the deploy identity). The ACR admin user is disabled; runtime secrets
+          reach the container apps as <code>keyVaultUrl</code> references, so no plaintext secrets exist in Container App
+          environment variables. The bootstrap is out-of-band for the same least-privilege reason the avatar
+          grant is: the deploy identity has Contributor but not role-assignment write, so <code>main.bicep</code>
+          references the identity as <code>existing</code> rather than creating it (<code>DISASTER-RECOVERY.md:64-66</code>).</p>
+          <h3 id="three-passages-that-have-drifted-from-the-template">Three passages that have drifted from the template</h3>
+          <p>Read these with the bicep open, because the runbook prose is behind the code in three specific
+          spots. Nothing here makes the runbook unusable, but each one would mislead a first responder.</p>
+          <p><strong>Alert resource type (<code>DISASTER-RECOVERY.md:45-47</code>).</strong> The prose says &quot;three SLO <strong>metric</strong> alerts
+          scoped to the App Insights component&quot;. The live rules are KQL log-search alerts: <code>sloAlertSpecs</code>
+          (<code>main.bicep:301-329</code>) materialized as <code>scheduledQueryRules</code> named <code>adc-prod-alert-&lt;key&gt;-v2</code>
+          (<code>main.bicep:331-372</code>) and scoped to the Log Analytics workspace, not to the App Insights component.
+          The superseded metric-alert loop that used to sit alongside them, declared with <code>enabled: false</code>
+          because an incremental ARM deployment never deletes a resource that simply left the template, was
+          removed from the template in the same 2026-08-30 cleanup that deleted the cutover scripts. The one
+          metric alert that remains is the Sev 1 gateway-availability rule (<code>main.bicep:491-515</code>), kept
+          deliberately because availability has no status-code confound and never produced a false page
+          (<code>main.bicep:374-375</code>). The thresholds in the table (<code>DISASTER-RECOVERY.md:49-53</code>) are still
+          correct.</p>
+          <p>[Rubric §13, Observability] assesses alerting and monitoring. The three SLO signals, their
+          thresholds and their severities are: failed requests count above 10 (sev 2, <code>main.bicep:303-309</code>),
+          average server response time above 3000 ms (sev 3, <code>main.bicep:312-318</code>), and dependency failures
+          count above 10 (sev 2, <code>main.bicep:321-327</code>), each evaluated every 5 minutes over a 15-minute window
+          (<code>main.bicep:344-345</code>). The queries carry tuning a metric alert could not express: 401 and 499
+          responses are excluded from the failure counts, and SignalR hub connections are excluded from the
+          average-duration rule because a hub reports its connection lifetime as request duration
+          (<code>main.bicep:287-300</code>). Per-alert triage lives in <code>infra/OPERATIONS.md</code> below.</p>
+          <p><strong><code>ALERT_EMAIL</code> is no longer optional (<code>DISASTER-RECOVERY.md:55-57</code>).</strong> The runbook says the rules
+          are created and visible in Azure Monitor even without the variable, &quot;they just don&#39;t email&quot;. That
+          state is no longer reachable: <code>alertEmailAddress</code> is a required parameter with <code>@minLength(3)</code> and
+          no default (<code>main.bicep:115-117</code>), the action group&#39;s email receiver is unconditional
+          (<code>main.bicep:268-285</code>), and <code>deploy.yml:1138-1141</code> fails the deploy before bicep validation when
+          <code>vars.ALERT_EMAIL</code> is unset. An alert that notifies nobody is now impossible in a deployed
+          environment by construction, which is the stronger version of what the runbook was aiming at.</p>
+          <p><strong>Deploy rollback description (<code>DISASTER-RECOVERY.md:108-115</code>).</strong> The runbook describes the
+          post-deploy smoke gate as Gateway <code>/health</code> plus <code>/.well-known/jwks.json</code> plus the UI root. The live
+          gate is broader in both dimensions: a revision-activation gate that requires the newest revision of
+          every app to report Healthy, Running and 100% traffic weight, followed by six probes that reach
+          every service through the Gateway (<code>deploy.yml:1318-1340</code> for the reasoning,
+          <code>deploy.yml:1407-1418</code> for the probes). The activation gate exists because the HTTP probes alone
+          cannot prove the new code is serving: a healthy Gateway keeps answering from the previous backend
+          revision when the new one never goes ready, which is exactly how a readiness regression stayed
+          hidden for four days (<code>deploy.yml:1326-1330</code>). The rollback mechanism the runbook names,
+          <code>az containerapp revision copy</code>, is still what runs (<code>deploy.yml:1462</code>).</p>
           <h3 id="recovery-objectives">Recovery objectives</h3>
           <p>The DR file targets three failure scenarios (<code>DISASTER-RECOVERY.md:10-14</code>):</p>
           <div class="table-wrap"><table>
@@ -458,33 +390,34 @@
           </thead>
           <tbody><tr>
           <td>Accidental data loss / bad migration (within the retention window)</td>
-          <td>≤ ~10 min</td>
-          <td>≤ 2 h</td>
+          <td>about 10 min</td>
+          <td>2 h</td>
           </tr>
           <tr>
           <td>Single service DB corruption</td>
-          <td>≤ ~10 min</td>
-          <td>≤ 1 h (PITR restore-as-new, swap name)</td>
+          <td>about 10 min</td>
+          <td>1 h (PITR restore-as-new, swap name)</td>
           </tr>
           <tr>
           <td>Full region loss</td>
-          <td>≤ 1 h (geo-redundant backup replication lag)</td>
-          <td>≤ 4 h (geo-restore + redeploy)</td>
+          <td>1 h (geo-redundant backup replication lag)</td>
+          <td>4 h (geo-restore plus redeploy)</td>
           </tr>
           </tbody></table></div>
-          <p>These are deliberately modest: ADC is a regional, non-24×7 conference app. Sub-hour multi-region
+          <p>These are deliberately modest: ADC is a regional, non-24x7 conference app. Sub-hour multi-region
           failover is explicitly not a goal (<code>DISASTER-RECOVERY.md:16-17</code>).</p>
           <h3 id="accepted-single-region-risks">Accepted single-region risks</h3>
-          <p><code>DISASTER-RECOVERY.md:19-31</code> lists three knowingly-accepted SPOFs. Note the topology it records
-          (<code>DISASTER-RECOVERY.md:21-23</code>): one resource group (<code>acc-rg</code>), apps in the RG&#39;s region, and the
-          SQL server in <code>sqlLocation</code> (westus2) because the QiMata Sponsorship subscription blocks new SQL
-          servers in eastus2. That split is a bicep parameter, not an accident (<code>main.bicep:13-14</code>).</p>
+          <p><code>DISASTER-RECOVERY.md:19-31</code> lists three knowingly-accepted single points of failure. Note the
+          topology it records (<code>DISASTER-RECOVERY.md:21-23</code>): one resource group (<code>acc-rg</code>), apps in the RG&#39;s
+          region, and the SQL server in <code>sqlLocation</code> (westus2) because the QiMata Sponsorship subscription
+          blocks new SQL servers in eastus2. That split is a bicep parameter, not an accident
+          (<code>main.bicep:13-14</code>).</p>
           <ul>
           <li>One Azure SQL server, <code>publicNetworkAccess: Enabled</code> with the Azure-services firewall rule
-          (mitigated by geo-redundant PITR + LTR + the <code>AtlDevCon</code> archive).</li>
+          (<code>main.bicep:590-599</code>), mitigated by geo-redundant PITR, LTR and the <code>AtlDevCon</code> archive.</li>
           <li>One Container Apps environment, all apps <code>minReplicas: 1</code>. A zonal outage drops the app until
-          Azure reschedules. Conference-day scale-up (applied only when warranted, the 2026 ADC load of
-          ~67 peak concurrent did not warrant it) is the documented mitigation.</li>
+          Azure reschedules. Conference-day scale-up is the documented mitigation and is applied only when
+          warranted (the 2026 ADC load of about 67 peak concurrent did not warrant it).</li>
           <li>One Service Bus namespace (Standard) and one ACR.</li>
           </ul>
           <h3 id="backup-posture">Backup posture</h3>
@@ -492,44 +425,42 @@
           <ul>
           <li><strong>PITR</strong>: the Basic tier&#39;s 7 days of point-in-time restore on geo-redundant storage (the Azure
           default). Covers the &quot;undo the last bad change&quot; case with an RPO of minutes.</li>
-          <li><strong>LTR</strong>: long-term retention on all four live per-service databases: weekly P4W, monthly P12M,
-          yearly P1Y (week 1). Declared via the <code>serviceDatabaseLtr</code> resource in <code>infra/main.bicep</code>
-          (<code>main.bicep:683-694</code>). <code>AtlDevCon</code> is excluded (static archive, never written after cutover).</li>
+          <li><strong>LTR</strong>: long-term retention on all four live per-service databases, weekly P4W, monthly P12M and
+          yearly P1Y at week 1, declared as the <code>serviceDatabaseLtr</code> resource (<code>main.bicep:678-689</code>).
+          <code>AtlDevCon</code> is excluded, and the template says why: it is a static archive never written after the
+          cutover (<code>main.bicep:676-677</code>).</li>
           </ul>
           <h3 id="recovery-procedures">Recovery procedures</h3>
-          <p><strong>Single database PITR restore (<code>DISASTER-RECOVERY.md:89-94</code>).</strong> Restore to a new name, validate,
-          then rename or repoint via a redeploy. Example given for <code>ADC_Conference</code>.</p>
-          <p><strong>LTR restore (<code>DISASTER-RECOVERY.md:96-101</code>).</strong> List available backups with <code>az sql db ltr-backup list</code>, then restore with <code>az sql db ltr-backup restore</code>.</p>
-          <p><strong>Full region loss (<code>DISASTER-RECOVERY.md:103-105</code>).</strong> The deploy pipeline is region-parameterized
-          (<code>sqlLocation</code> + RG location), so recovery is: create a new RG in a healthy region → geo-restore
-          each <code>ADC_*</code> database there → re-run <code>deploy.yml</code> pointed at the new RG. The <code>AtlDevCon</code> archive
-          is the last-resort source of record.</p>
-          <p><strong>Deploy rollback (<code>DISASTER-RECOVERY.md:107-114</code>).</strong> <code>deploy.yml</code>&#39;s post-deploy smoke gate
-          (Gateway <code>/health</code> + <code>/.well-known/jwks.json</code> + UI root, with retries) auto-reverts every
-          container app to its previous revision via <code>az containerapp revision copy</code> if the new revision
-          does not serve. Manual rollback example is also given.</p>
+          <p><strong>Single database PITR restore (<code>DISASTER-RECOVERY.md:90-95</code>).</strong> Restore to a new name, validate,
+          then rename or repoint via a redeploy. The worked example uses <code>ADC_Conference</code>.</p>
+          <p><strong>LTR restore (<code>DISASTER-RECOVERY.md:97-102</code>).</strong> List available backups with
+          <code>az sql db ltr-backup list</code>, then restore with <code>az sql db ltr-backup restore</code>.</p>
+          <p><strong>Full region loss (<code>DISASTER-RECOVERY.md:104-106</code>).</strong> The deploy pipeline is region-parameterized
+          (<code>sqlLocation</code> plus the RG location), so recovery is: create a new RG in a healthy region,
+          geo-restore each <code>ADC_*</code> database there, then re-run <code>deploy.yml</code> pointed at the new RG. The
+          <code>AtlDevCon</code> archive is the last-resort source of record.</p>
           <h3 id="restore-drill">Restore drill</h3>
-          <p><code>DISASTER-RECOVERY.md:116-138</code> defines the drill: PITR-restore a throwaway copy, confirm it comes
-          back Online, record the measured restore time, then delete the copy. Only a copy is ever created,
-          so the live databases are never touched. The file documents three ways to run it
-          (<code>DISASTER-RECOVERY.md:120-130</code>) and names the scheduled one as the enforcing path:</p>
+          <p><code>DISASTER-RECOVERY.md:117-139</code> defines the drill: PITR-restore a throwaway copy, confirm it comes
+          back Online, record the measured restore time, then delete the copy. Only a copy is ever created, so
+          the live databases are never touched. The file documents three ways to run it
+          (<code>DISASTER-RECOVERY.md:121-131</code>) and names the scheduled one as the enforcing path:</p>
           <ul>
-          <li><strong>Scheduled</strong> (<code>DISASTER-RECOVERY.md:122-125</code>), the weekly cron, which rotates across the four
-          live per-service databases by ISO week number so each earns a recovery proof roughly monthly.
-          The retired <code>AtlDevCon</code> archive is deliberately absent from the rotation and can never be the
+          <li><strong>Scheduled</strong> (<code>DISASTER-RECOVERY.md:123-126</code>), the weekly cron, which rotates across the four
+          live per-service databases by ISO week number so each earns a recovery proof roughly monthly. The
+          retired <code>AtlDevCon</code> archive is deliberately absent from the rotation and can never be the
           scheduled target.</li>
-          <li><strong>One-click</strong> (<code>DISASTER-RECOVERY.md:126-129</code>), the <code>dr-drill.yml</code> workflow&#39;s manual
+          <li><strong>One-click</strong> (<code>DISASTER-RECOVERY.md:127-130</code>), the <code>dr-drill.yml</code> workflow&#39;s manual
           <code>workflow_dispatch</code>, for a chosen database (default <code>ADC_Identity</code>, with <code>AtlDevCon</code> still
-          selectable as a manual-only archive check) and a chosen point in time. It prints the
-          drill-result row in the job summary, ready to paste into the ledger.</li>
-          <li><strong>Local / CLI</strong> (<code>DISASTER-RECOVERY.md:130</code>), <code>pwsh ./scripts/dr-restore-drill.ps1 -SourceDatabase ADC_Conference</code> after <code>az login</code>.</li>
+          selectable as a manual-only archive check) and a chosen point in time. It prints the drill-result
+          row in the job summary, ready to paste into the ledger.</li>
+          <li><strong>Local / CLI</strong> (<code>DISASTER-RECOVERY.md:131</code>), <code>pwsh ./scripts/dr-restore-drill.ps1 -SourceDatabase ADC_Conference</code> after <code>az login</code>.</li>
           </ul>
           <p>All three wrap the same <code>az sql db restore</code>, verify, <code>az sql db delete</code> sequence
-          (<code>DISASTER-RECOVERY.md:132-138</code>); there is no <code>sqlcmd</code> anywhere in the drill path.</p>
-          <p>The stated SLO is at least one successful drill per release train and after any backup or
-          retention change, with the restore completing inside the 2 h RTO; a missed or failed drill is
-          called a release-blocking regression for §29 (<code>DISASTER-RECOVERY.md:140-142</code>). The drill-result
-          table (<code>DISASTER-RECOVERY.md:151-158</code>) is where that claim is cashed, and it carries six rows:</p>
+          (<code>DISASTER-RECOVERY.md:133-139</code>); there is no <code>sqlcmd</code> anywhere in the drill path.</p>
+          <p>The stated SLO is at least one successful drill per release train and after any backup or retention
+          change, with the restore completing inside the 2 h RTO; a missed or failed drill is called a
+          release-blocking regression for §29 (<code>DISASTER-RECOVERY.md:141-143</code>). The drill-result table
+          (<code>DISASTER-RECOVERY.md:152-159</code>) is where that claim is cashed, and it carries six rows:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -572,18 +503,20 @@
           <p>Read the shape of that table, not just the last row. The first entry is the pre-rotation drill in
           which one database stood in for all four; everything from 2026-07-20 onward is the weekly rotation,
           and those rows are the first recovery proofs <code>ADC_Identity</code>, <code>ADC_Engagement</code> and <code>ADC_Notification</code>
-          ever had (<code>DISASTER-RECOVERY.md:144-149</code>). The spread is the other lesson: the same <code>ADC_Identity</code>
-          database restored in 1.8 min in July and 4.4 min in August, which is why the status block quotes the
-          slowest number against the 2 h RTO (<code>DISASTER-RECOVERY.md:160-165</code>). A ledger that keeps growing is
-          what makes a claim like &quot;restores take about two minutes&quot; falsifiable; a single row cannot show
-          variance at all.</p>
+          ever had (<code>DISASTER-RECOVERY.md:145-150</code>). Each row also carries its <code>dr-drill.yml</code> run id, so every
+          claim in the ledger is traceable to an Actions run instead of resting on the author&#39;s word. The
+          spread is the other lesson: the same <code>ADC_Identity</code> database restored in 1.8 min in July and 4.4 min
+          in August, which is why the status block quotes the slowest number against the 2 h RTO
+          (<code>DISASTER-RECOVERY.md:161-166</code>). A ledger that keeps growing is what makes a claim like &quot;restores
+          take about two minutes&quot; falsifiable; a single row cannot show variance at all.</p>
           <p>The ledger stays honest because it is gated, not remembered: <code>dr-freshness</code> fails a deploy when the
-          newest successful <code>dr-drill.yml</code> run is older than 8 days (<code>deploy.yml:557</code>,
-          <code>DISASTER-RECOVERY.md:163-165</code>). The rotation itself is prose here but arithmetic in the workflow,
+          newest successful <code>dr-drill.yml</code> run is older than 8 days (<code>deploy.yml:707</code>,
+          <code>DISASTER-RECOVERY.md:164-166</code>). The rotation itself is prose here but arithmetic in the workflow,
           which is the source of truth. The next section walks it.</p>
           <hr>
           <h2 id="dr-drillyml-and-dr-restore-drillps1-the-adr-009-restore-drill">dr-drill.yml and dr-restore-drill.ps1, the ADR-009 restore drill</h2>
-          <p><strong>Files:</strong> <code>MMCA.ADC/.github/workflows/dr-drill.yml</code>, <code>MMCA.ADC/scripts/dr-restore-drill.ps1</code></p>
+          <p><strong>Files:</strong> <code>MMCA.ADC/.github/workflows/dr-drill.yml</code> (80 lines),
+          <code>MMCA.ADC/scripts/dr-restore-drill.ps1</code> (100 lines)</p>
           <p><strong>What it is.</strong> The automation behind the drill requirement above: the workflow picks a target
           database and logs in to Azure via OIDC, the PowerShell script does the restore, the timing, the
           verification and the cleanup, and prints a drill-result row ready to paste into
@@ -594,43 +527,66 @@
           <li><strong>Weekly cron</strong>, Mondays 06:00 UTC (<code>dr-drill.yml:30-32</code>). This is the enforcing path: a
           throwaway-copy restore is cheap and is deleted immediately after, so recovery is proven
           continuously rather than whenever somebody remembers (<code>dr-drill.yml:7-8</code>).</li>
-          <li><strong><code>workflow_dispatch</code></strong> (<code>dr-drill.yml:14-29</code>) for an ad-hoc drill against a specific database
-          and restore point. The dispatch default is <code>ADC_Identity</code> with a 10-minutes-ago restore point.</li>
+          <li><strong><code>workflow_dispatch</code></strong> (<code>dr-drill.yml:14-29</code>) for an ad-hoc drill against a specific database and
+          restore point. The dispatch default is <code>ADC_Identity</code> with a 10-minutes-ago restore point.</li>
           </ul>
+          <p>The job holds <code>id-token: write</code> plus <code>contents: read</code> and nothing else (<code>dr-drill.yml:34-36</code>), which
+          is the least privilege an OIDC login needs, and it logs in with the same three <code>AZURE_*</code> secrets
+          <code>azure-setup.sh</code> printed (<code>dr-drill.yml:45-50</code>).</p>
           <p>Scheduled runs <strong>rotate</strong> across the four live per-service databases by ISO week number modulo 4
-          (<code>dr-drill.yml:52-71</code>), so each live database gets a recovery proof roughly monthly. <code>AtlDevCon</code> is
-          selectable on dispatch but is never the scheduled target, because it is the retired archive and
-          proving <em>it</em> restores proves nothing about the databases that take writes (<code>dr-drill.yml:9-12</code>).</p>
+          (<code>dr-drill.yml:52-71</code>, the arithmetic at <code>dr-drill.yml:64-67</code>), so each live database gets a recovery
+          proof roughly monthly. Which branch runs is decided purely by whether the dispatch input is present
+          (<code>dr-drill.yml:58</code>), which is what lets one job serve both triggers. <code>AtlDevCon</code> is selectable on
+          dispatch but is never the scheduled target, because it is the retired archive and proving <em>it</em>
+          restores proves nothing about the databases that take writes (<code>dr-drill.yml:9-12</code>). The chosen
+          database is echoed into the step summary before the drill starts (<code>dr-drill.yml:71</code>), so a reader of
+          a failed run knows immediately which database was under test.</p>
           <p>[Rubric §29, Resilience &amp; Business Continuity] is what this workflow serves: it converts the DR
           runbook from a document into a measurement.</p>
           <h3 id="walkthrough-of-the-script">Walkthrough of the script</h3>
           <p><strong>Parameters (<code>dr-restore-drill.ps1:22-29</code>).</strong> <code>-ResourceGroup</code> (default <code>acc-rg</code>),
           <code>-SourceDatabase</code> (default <code>AtlDevCon</code>), <code>-RestorePointMinutesAgo</code> (default 10), <code>-KeepCopy</code>, and
-          <code>-SummaryPath</code> (the workflow passes <code>$env:GITHUB_STEP_SUMMARY</code>, <code>dr-drill.yml:73-80</code>).</p>
-          <p><strong>Server discovery (<code>dr-restore-drill.ps1:39-43</code>).</strong> Same prefix query as the cutover workflow
-          (<code>adc-prod-sql-*</code>), throwing a clear &quot;did you run az login&quot; error when nothing matches.</p>
-          <p><strong>Stale-copy cleanup (<code>dr-restore-drill.ps1:51-56</code>).</strong> Deletes any <code>&lt;SourceDatabase&gt;-drill</code> left by
-          a previous run, so the restore name is free. Without it a crashed prior run would fail every
-          subsequent drill on a name collision.</p>
-          <p><strong>Restore and timing (<code>dr-restore-drill.ps1:58-65</code>).</strong> A stopwatch brackets <code>az sql db restore</code>.
-          That elapsed time IS the measured RTO reported in the drill row; it is not an estimate.</p>
-          <p><strong>Verification (<code>dr-restore-drill.ps1:67-75</code>).</strong> ARM-level: <code>az sql db show --query status</code> must
-          read <code>Online</code>, else the drill is a FAIL. A deeper row-count check is deliberately out of scope and
+          <code>-SummaryPath</code> (the workflow passes <code>$env:GITHUB_STEP_SUMMARY</code>, <code>dr-drill.yml:73-80</code>). The script&#39;s
+          own default source is still the archive, which is safe by construction: the workflow never relies on
+          it and always passes an explicit <code>-SourceDatabase</code> from the rotation step.</p>
+          <p><strong>Server discovery (<code>dr-restore-drill.ps1:39-43</code>).</strong> Queries by name prefix (<code>adc-prod-sql-*</code>) rather
+          than hard-coding the resource-token suffix, and throws a clear &quot;Did you run &#39;az login&#39;?&quot; error when
+          nothing matches. Resolving from live Azure state is what lets the same script work against a rebuilt
+          environment whose token differs.</p>
+          <p><strong>Stale-copy cleanup (<code>dr-restore-drill.ps1:51-56</code>).</strong> Deletes any <code>&lt;SourceDatabase&gt;-drill</code> left by a
+          previous run, so the restore name is free. Without it, one crashed run would fail every subsequent
+          drill on a name collision, and the freshness gate would then start blocking deploys for a reason
+          that has nothing to do with recoverability.</p>
+          <p><strong>Restore and timing (<code>dr-restore-drill.ps1:58-65</code>).</strong> A stopwatch brackets <code>az sql db restore</code>, and
+          <code>$LASTEXITCODE</code> is checked explicitly (<code>dr-restore-drill.ps1:64</code>) because a failing <code>az</code> call does
+          not by itself throw in PowerShell. That elapsed time IS the measured RTO reported in the drill row;
+          it is not an estimate.</p>
+          <p><strong>Verification (<code>dr-restore-drill.ps1:67-75</code>).</strong> ARM-level: <code>az sql db show --query status</code> must read
+          <code>Online</code>, otherwise the drill is a FAIL. A deeper row-count check is deliberately out of scope and
           needs <code>-KeepCopy</code> plus a manual pass (<code>dr-restore-drill.ps1:17-20</code>).</p>
           <p><strong>Cleanup (<code>dr-restore-drill.ps1:82-87</code>).</strong> The delete sits in a <code>finally</code> block, so the throwaway
           copy is removed even when the restore or the verification threw. This is the line that keeps a
           weekly drill from accreting paid databases.</p>
           <p><strong>Result row and exit code (<code>dr-restore-drill.ps1:89-100</code>).</strong> Prints the markdown table row (date,
-          source, PASS/FAIL, minutes, note) to both the console and the job summary, then <code>exit 1</code> on
-          anything other than PASS, so a failed drill is a failed workflow run.</p>
+          source, PASS/FAIL, minutes, note) to both the console and the job summary through the <code>Write-Line</code>
+          helper (<code>dr-restore-drill.ps1:34-37</code>), then exits 1 on anything other than PASS
+          (<code>dr-restore-drill.ps1:100</code>), so a failed drill is a failed workflow run and therefore a stale
+          recovery proof.</p>
           <h3 id="what-it-does-not-do-and-the-gate-that-makes-it-matter">What it does not do, and the gate that makes it matter</h3>
           <p>The drill never touches a live database and it does not gate production directly. The link to
           production is the age of its newest successful run: <code>deploy.yml</code>&#39;s <code>dr-freshness</code> job
-          (<code>deploy.yml:549-599</code>) reads the Actions API for the latest successful <code>dr-drill.yml</code> run and fails
-          the deploy when that run is older than 8 days (<code>deploy.yml:557</code>), or when there is no successful
-          run at all. <code>dr-freshness</code> sits in <code>deploy.needs</code> alongside <code>load-freshness</code> and
-          <code>cross-service-freshness</code> (<code>deploy.yml:866</code>, condition at <code>deploy.yml:891-893</code>), with a
-          justification-required break-glass dispatch input for a genuine emergency.</p>
+          (<code>deploy.yml:699-749</code>) reads the Actions API for the latest successful <code>dr-drill.yml</code> run
+          (<code>deploy.yml:734-736</code>) and fails the deploy when that run is older than the 8-day window
+          (<code>deploy.yml:707</code>, compared at <code>deploy.yml:745-748</code>), or when there is no successful run at all
+          (<code>deploy.yml:737-740</code>). The comment at <code>deploy.yml:732-733</code> records why the gate can trust the run
+          list at face value: <code>dr-drill.yml</code> has no skip-if-unchanged guard, so every successful run really
+          performed a PITR restore.</p>
+          <p><code>dr-freshness</code> sits in <code>deploy.needs</code> alongside <code>load-freshness</code> and <code>cross-service-freshness</code>
+          (<code>deploy.yml:1054</code>), and the deploy&#39;s condition requires all three to have concluded <code>success</code>
+          (<code>deploy.yml:1087-1089</code>). Break-glass exists but is deliberately expensive to use: the
+          <code>skip_freshness_gates</code> input is honored only with a non-empty <code>skip_justification</code>, and the run
+          refuses without one (<code>deploy.yml:717-721</code>), then writes the justification into the step summary and
+          raises a workflow warning (<code>deploy.yml:722-729</code>).</p>
           <p>The operational consequence for an on-call reader: <strong>a red or skipped weekly drill blocks the next
           production deploy.</strong> If a deploy fails on <code>dr-freshness</code>, the fix is to re-run <code>dr-drill.yml</code> (and
           fix it first if it genuinely failed), not to bypass it. The gate&#39;s full mechanics, the break-glass
@@ -638,24 +594,26 @@
           is <a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a>.</p>
           <hr>
           <h2 id="infraoperationsmd-day-2-alert-triage-runbook">infra/OPERATIONS.md, day-2 alert triage runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/infra/OPERATIONS.md</code></p>
-          <p><strong>What it is.</strong> The alert-to-action companion to the provisioned observability: what to do when
-          each SLO alert fires, how to read the SLO workbook, and the standard recovery moves. It explicitly
-          defers restore procedure, RTO/RPO and accepted SPOFs to <code>DISASTER-RECOVERY.md</code> and covers day-2
-          triage only (<code>OPERATIONS.md:3-6</code>).</p>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/OPERATIONS.md</code> (207 lines)</p>
+          <p><strong>What it is.</strong> The alert-to-action companion to the provisioned observability: what to do when each
+          alert fires, how to read the SLO workbook, the standard recovery moves, and why production has no
+          Aspire dashboard. It explicitly defers restore procedure, RTO/RPO and accepted SPOFs to
+          <code>DISASTER-RECOVERY.md</code> and covers day-2 triage only (<code>OPERATIONS.md:3-6</code>).</p>
           <p><strong>When to consult.</strong> When an alert email arrives from the <code>adc-prod-alerts-*</code> action group
-          (<code>main.bicep:246-260</code>), whose only receiver is the address in the <code>ALERT_EMAIL</code> repository
-          variable (<code>OPERATIONS.md:8-11</code>).</p>
-          <p>[Rubric §13, Observability &amp; Operability] assesses whether alerts lead anywhere. A threshold with
-          no runbook is a page nobody knows how to answer, which is exactly what this file, and the build
-          gate below, exist to prevent.</p>
+          (<code>main.bicep:271-285</code>), whose only receiver is the address in the <code>ALERT_EMAIL</code> repository variable
+          (<code>OPERATIONS.md:8-11</code>).</p>
+          <p>[Rubric §13, Observability &amp; Operability] assesses whether alerts lead anywhere. A threshold with no
+          runbook is a page nobody knows how to answer, which is exactly what this file, and the build gate
+          below, exist to prevent.</p>
           <h3 id="the-pairing-rule-enforced-at-build-time">The pairing rule, enforced at build time</h3>
           <p><code>ObservabilityConventionTestsBase</code> (in the <code>MMCA.Common.Testing.Architecture</code> package) pairs the
           alerts declared in the consumer&#39;s bicep against the runbook sections in its <code>OPERATIONS.md</code>. ADC
           subclasses it with nothing but an identity
-          (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/ObservabilityConventionTests.cs:7</code>), and wires it
-          by embedding both files as manifest resources named <code>infra.main.bicep</code> and <code>infra.OPERATIONS.md</code>
-          (<code>MMCA.ADC.Architecture.Tests.csproj:17-22</code>). Three facts run:</p>
+          (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/ObservabilityConventionTests.cs:7</code>), and wires it by
+          embedding both files as manifest resources named <code>infra.main.bicep</code> and <code>infra.OPERATIONS.md</code>
+          (<code>MMCA.ADC.Architecture.Tests.csproj:17-22</code>). The base resolves those resources from the <em>derived</em>
+          type&#39;s assembly (<code>ObservabilityConventionTestsBase.cs:51</code>), which is the detail that lets one shared
+          rule body serve every consumer repo. Three facts run:</p>
           <ol>
           <li><strong>Non-vacuous floor</strong> (<code>ObservabilityConventionTestsBase.cs:53-61</code>): at least
           <code>MinimumAlertSpecs</code> alerts must parse out of the bicep, defaulting to 3
@@ -663,252 +621,355 @@
           instead of passing with zero discovered alerts.</li>
           <li><strong>Forward direction</strong> (<code>ObservabilityConventionTestsBase.cs:63-89</code>): every discovered alert key
           must have a <code>### ...-alert-&lt;key&gt;</code> heading in <code>OPERATIONS.md</code>, and that heading must carry the
-          alert&#39;s current severity as the literal text <code>(sev N)</code>. Re-tiering an alert in bicep without
-          touching its runbook heading fails the build.</li>
+          alert&#39;s current severity as the literal text <code>(sev N)</code>
+          (<code>ObservabilityConventionTestsBase.cs:80-84</code>). Re-tiering an alert in bicep without touching its
+          runbook heading fails the build.</li>
           <li><strong>Reverse direction</strong> (<code>ObservabilityConventionTestsBase.cs:91-103</code>): a runbook section for an
           alert bicep no longer provisions is an orphan and also fails the build.</li>
           </ol>
           <p>The parse window is the text between <code>var sloAlertSpecs</code> and <code>resource sloAlerts</code>
-          (<code>ObservabilityConventionTestsBase.cs:109-110</code>). In ADC&#39;s bicep that is <code>main.bicep:276</code> through
-          <code>main.bicep:363</code>, which happens to contain both the live <code>sloAlertSpecs</code> (276-304) and the
-          superseded <code>legacySloMetricAlertSpecs</code> (357-361). The parser therefore sees the same three keys
-          twice with identical severities, which is harmless: the counts of keys and severities still match,
-          and both copies resolve to the same runbook section.</p>
-          <p>ADC&#39;s three sections are <code>adc-alert-failed-requests</code> (sev 2, <code>OPERATIONS.md:15</code>),
-          <code>adc-alert-server-response-time</code> (sev 3, <code>OPERATIONS.md:29</code>) and <code>adc-alert-dependency-failures</code>
-          (sev 2, <code>OPERATIONS.md:42</code>). The headings use the pre-<code>v2</code> rule names while the live scheduled-query
-          rules are provisioned as <code>adc-prod-alert-&lt;key&gt;-v2</code> (<code>main.bicep:311</code>); the gate matches on the
-          <code>-alert-&lt;key&gt;</code> infix (<code>ObservabilityConventionTestsBase.cs:32</code>, 73), so the suffix does not break
-          the pairing.</p>
-          <h3 id="what-the-gate-does-not-cover">What the gate does not cover</h3>
-          <p>The pairing is honest only about the alerts inside that parse window. Three more alerts are
-          provisioned outside it, so they are neither gated nor runbooked:</p>
+          (<code>ObservabilityConventionTestsBase.cs:109-114</code>), which in ADC&#39;s bicep is <code>main.bicep:301</code> through
+          <code>main.bicep:331</code>. That window is now clean: the superseded <code>legacySloMetricAlertSpecs</code> block that
+          used to sit inside it (and made the parser see each key twice) was deleted with the rest of the
+          2026-08-30 cleanup, so the gate discovers exactly the three live keys. The base also asserts that the
+          key count and the severity count match (<code>ObservabilityConventionTestsBase.cs:117</code>), which is what
+          catches a change to the spec <em>shape</em> rather than to the specs.</p>
+          <p>ADC&#39;s three <code>###</code> sections are <code>adc-prod-alert-failed-requests-v2</code> (sev 2, <code>OPERATIONS.md:15</code>),
+          <code>adc-prod-alert-server-response-time-v2</code> (sev 3, <code>OPERATIONS.md:29</code>) and
+          <code>adc-prod-alert-dependency-failures-v2</code> (sev 2, <code>OPERATIONS.md:42</code>). The headings now carry the same
+          <code>-v2</code> suffix the provisioned rules use (<code>main.bicep:335</code>), and that suffix is itself load-bearing:
+          <code>main.bicep:333-334</code> warns that <code>-v2</code> is part of the rule&#39;s identity in Azure, so renaming it would
+          create a second rule beside the live one instead of updating it. The gate matches on the
+          <code>-alert-&lt;key&gt;</code> infix (<code>ObservabilityConventionTestsBase.cs:32</code>, <code>:73</code>), so the suffix does not affect
+          the pairing either way.</p>
+          <h3 id="the-operational-alerts-and-why-their-headings-use-four-hashes">The operational alerts, and why their headings use four hashes</h3>
+          <p>Three further alerts are provisioned outside the gated window, and all three now have triage
+          sections (<code>OPERATIONS.md:55-148</code>). The section preamble (<code>OPERATIONS.md:57-63</code>) explains the heading
+          depth, and it is worth understanding rather than copying: the gate&#39;s heading regex is <code>^###\s+.*$</code>
+          (<code>ObservabilityConventionTestsBase.cs:145</code>), so a <code>####</code> heading does not match it at all. That makes
+          these sections invisible to both directions of the gate. Promoting one to <code>###</code> would break the build
+          immediately, because the reverse-direction fact would see a runbook section for an alert
+          <code>sloAlertSpecs</code> does not provision and call it an orphan.</p>
           <ul>
-          <li><code>adc-prod-alert-outbox-dead-letter</code>, severity 2, fires on any <code>AppTraces</code> row matching
-          <code>dead-lettered</code> (<code>main.bicep:408-413</code>, materialized at 422-454). Every hit means an integration
-          event was permanently lost from a service&#39;s outbox.</li>
-          <li><code>adc-prod-alert-sql-dependency-failures</code>, severity 2, threshold 10 failed SQL dependency calls
-          over 15 minutes (<code>main.bicep:414-419</code>).</li>
-          <li><code>adc-prod-alert-gateway-availability</code>, severity 1 (<code>main.bicep:496-520</code>), driven by the standard
-          web test that pings the public Gateway <code>/health</code> from three Azure locations every 5 minutes with
-          a 2-of-3 failed-location threshold (<code>main.bicep:463-494</code>).</li>
+          <li><strong><code>adc-prod-alert-outbox-dead-letter</code></strong> (sev 2, <code>OPERATIONS.md:65-98</code>) fires on any <code>AppTraces</code> row
+          matching <code>dead-lettered</code> (<code>main.bicep:397-402</code>, materialized at <code>main.bicep:417-449</code>). The
+          threshold is 0, meaning first hit rather than a rate, because every hit is an integration event
+          permanently lost from a service&#39;s outbox. The runbook makes the reason explicit
+          (<code>OPERATIONS.md:67-70</code>): the true &quot;stuck outbox&quot; signal is row age, which is DB-side and not
+          queryable from Log Analytics, so this Error line has to serve as the backlog alarm as well as the
+          loss alarm. The triage walks type-resolution failures (with the seven live <code>[EventName]</code> contracts
+          listed at <code>OPERATIONS.md:79-82</code>), broker rejection, and consumer-side handler failure, then warns
+          that replay is manual and that production&#39;s 300-second outbox poll (<code>main.bicep:1075</code>,
+          <code>OPERATIONS.md:94-97</code>) means waiting five minutes before concluding a reset did not take.</li>
+          <li><strong><code>adc-prod-alert-sql-dependency-failures</code></strong> (sev 2, <code>OPERATIONS.md:100-124</code>), threshold 10 failed
+          SQL dependency calls over 15 minutes (<code>main.bicep:403-408</code>). Its value over the general
+          dependency-failures SLO is attribution: every service owns exactly one database, so a burst names a
+          service and a database instead of &quot;some dependency&quot; (<code>OPERATIONS.md:102-104</code>). The last step
+          (<code>OPERATIONS.md:122-124</code>) is the one that saves an incident: do not restart the service, because
+          production sets <code>DatabaseInitStrategy=Migrate</code> and each service is the sole migrator of its own
+          database, so a restart re-runs startup migrations against the same unreachable server and turns a
+          read outage into a failed revision.</li>
+          <li><strong><code>adc-prod-alert-gateway-availability</code></strong> (sev 1, <code>main.bicep:491-515</code>, <code>OPERATIONS.md:126-148</code>) is
+          driven by the standard web test that pings the public Gateway <code>/health</code> from three Azure locations
+          every 5 minutes with a 2-of-3 failed-location threshold (<code>main.bicep:458-489</code>). It is the only
+          outside-in signal in the deployment, which is exactly why it is Sev 1: every other alert is
+          reported by the app and therefore goes quiet when the app is down (<code>OPERATIONS.md:128-131</code>). The
+          triage carries two facts a first responder will otherwise get wrong: <code>/health</code> is the Gateway&#39;s
+          readiness endpoint and aggregates one <code>downstream-{name}</code> check per service, so a healthy Gateway
+          can still fail the probe because a backend is unhealthy; and Identity, Conference and Engagement
+          serve HTTP/2 cleartext only, so probing them without <code>--http2-prior-knowledge</code> reports a failure
+          that is not there (<code>OPERATIONS.md:140-146</code>).</li>
           </ul>
-          <p>Adding, renaming or re-tiering any of those cannot fail the build, and <code>OPERATIONS.md</code> carries no
-          <code>###</code> triage section for any of them, including the only Sev 1 alert in the system. Treat the
-          pairing gate as covering the three SLO alerts, not the alert surface as a whole.</p>
+          <h3 id="the-one-gap-the-gate-cannot-see">The one gap the gate cannot see</h3>
+          <p><code>scheduledQueryAlertSpecs</code> now declares <strong>three</strong> rules, not two: <code>outbox-dead-letter</code>,
+          <code>sql-dependency-failures</code> and <code>revision-activation-failed</code> (<code>main.bicep:396-415</code>). The third fires on
+          <code>ContainerAppSystemLogs_CL</code> rows whose <code>Reason_s</code> starts with &quot;Deployment Progress Deadline Exceeded&quot;
+          (<code>main.bicep:409-413</code>), the platform&#39;s report that a revision&#39;s readiness probe never went green. It
+          exists because that failure mode is silent from outside: the platform keeps the previous revision
+          serving, so nothing degrades and the deploy looks fine while the new code never takes traffic
+          (<code>main.bicep:390-395</code>, the 2026-08-29 Redis readiness regression).</p>
+          <p>It has no runbook section anywhere in <code>OPERATIONS.md</code>, and the file&#39;s own preamble still says &quot;the
+          <strong>two</strong> scheduled query rules declared in <code>main.bicep</code>&#39;s <code>scheduledQueryAlertSpecs</code> block&quot;
+          (<code>OPERATIONS.md:57-59</code>). Because the rule lives outside the gated window, nothing failed when it was
+          added. That is the honest boundary of the pairing gate: it covers the three SLO specs, not the alert
+          surface as a whole, and the governance note at <code>OPERATIONS.md:165-171</code> says so, calling the non-SLO
+          alerts &quot;the honour system&quot;. A reader paged by <code>adc-prod-alert-revision-activation-failed</code> today
+          should follow the deploy-side story instead: the activation gate and rollback at
+          <code>deploy.yml:1318-1340</code>, described in the <a href="devops-cicd.html">CI/CD chapter</a>.</p>
           <h3 id="recovery-moves">Recovery moves</h3>
-          <p><code>OPERATIONS.md:55-68</code> is the fast reference: roll a bad revision back with <code>az containerapp revision list</code> / <code>revision copy</code>, follow <code>DISASTER-RECOVERY.md</code> for a database restore, re-run the
+          <p><code>OPERATIONS.md:150-163</code> is the fast reference: roll a bad revision back with <code>az containerapp revision list</code> and <code>revision copy</code>, follow <code>DISASTER-RECOVERY.md</code> for a database restore, re-run the
           referenced workflow when a freshness gate blocks a deploy, and revert a conference-day surge when
-          <code>cost-guard.yml</code> fails. Its freshness quick-reference (<code>OPERATIONS.md:63-66</code>) names all three
-          windows and each one matches the workflow that enforces it: <code>dr-freshness</code> 8 days
-          (<code>deploy.yml:557</code>), <code>load-freshness</code> 35 days (<code>deploy.yml:614</code>), <code>cross-service-freshness</code> 5 days
-          (<code>deploy.yml:673</code>). Those numbers live in two places, so treat the workflow as the source of truth
-          and re-check the runbook line whenever a window moves: the cross-service window was widened from 3
-          to 5 days when that suite went weekday-nightly (<code>deploy.yml:671-672</code>), and the runbook text
-          followed separately.</p>
+          <code>cost-guard.yml</code> fails. Its freshness quick-reference (<code>OPERATIONS.md:158-161</code>) names all three
+          windows, and each one matches the workflow that enforces it: <code>dr-freshness</code> 8 days
+          (<code>deploy.yml:707</code>), <code>load-freshness</code> 35 days (<code>deploy.yml:764</code>), <code>cross-service-freshness</code> 5 days
+          (<code>deploy.yml:825</code>). Those numbers live in two places, so treat the workflow as the source of truth
+          and re-check the runbook line whenever a window moves: the cross-service window was widened from 3 to
+          5 days when that suite went weekday-nightly (<code>deploy.yml:823-824</code>), and the runbook text followed
+          separately.</p>
+          <h3 id="why-there-is-no-aspire-dashboard-in-production">Why there is no Aspire dashboard in production</h3>
+          <p><code>OPERATIONS.md:176-207</code> closes the file by answering the question every new operator asks. The
+          absence is a decision (<a href="https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html" target="_blank" rel="noopener">ADR-098</a>), not an omission, and it rests on three facts.</p>
+          <p>The production telemetry stream is deliberately thinned, so a full-fidelity dashboard would have
+          nothing extra to show: <code>main.bicep:223-263</code> sets <code>Telemetry__TracesSampleRatio=0.25</code>
+          (<code>main.bicep:223-226</code>), an OpenTelemetry log floor of <code>Warning</code> so Information still reaches
+          container stdout without billing against the workspace (<code>main.bicep:234-237</code>),
+          <code>Telemetry__DisableHttpClientMetrics</code> and <code>Telemetry__DisableRuntimeMetrics</code> (<code>main.bicep:245-252</code>,
+          together about 65% of AppMetrics ingestion), and <code>OTEL_METRIC_EXPORT_INTERVAL=300000</code> against a
+          60-second default (<code>main.bicep:260-263</code>). The dashboard&#39;s value is live, unsampled, per-request
+          detail, which is exactly the data production does not carry.</p>
+          <p>The durable operational surface is the workspace, not a dashboard (<code>OPERATIONS.md:192-196</code>): the
+          alert rules and their action group, the SLO workbook, and KQL over <code>ContainerAppConsoleLogs_CL</code>,
+          <code>AppRequests</code> and <code>AppDependencies</code> all survive a revision restart and stay queryable weeks later.
+          And the ACA dashboard component is ephemeral and full-fidelity, which is the wrong pair for
+          production (<code>OPERATIONS.md:198-202</code>): it holds its data in the running container&#39;s memory, so a
+          restart discards it, while ingesting at exactly the fidelity the settings above were tuned to avoid.</p>
+          <p>[Rubric §31, Cost / FinOps] assesses whether cost is actively managed. This section is where §13 and
+          §31 meet: the observability posture is shaped by ingestion cost, and the runbook records that
+          trade-off where an operator will actually hit it rather than leaving it implicit in the bicep.</p>
           <hr>
           <h2 id="infrasql-managed-identitymd-staged-passwordless-sql-runbook">infra/SQL-MANAGED-IDENTITY.md, staged passwordless-SQL runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/infra/SQL-MANAGED-IDENTITY.md</code></p>
-          <p><strong>What it is.</strong> The runbook for moving the four service apps from SQL-login (password) auth to
-          Entra managed-identity auth against their per-service databases, and the written acceptance of the
-          SQL data plane staying on public network access with no VNet.</p>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/SQL-MANAGED-IDENTITY.md</code> (100 lines)</p>
+          <p><strong>What it is.</strong> The runbook for moving the four service apps from SQL-login (password) auth to Entra
+          managed-identity auth against their per-service databases, and the written acceptance of the SQL data
+          plane staying on public network access with no VNet.</p>
           <p><strong>When to run.</strong> Only when deliberately advancing that hardening. Nothing here is on the normal
           deploy path: all three bicep knobs are default-safe, so a deploy with the defaults changes nothing
-          (<code>SQL-MANAGED-IDENTITY.md:8-9</code>).</p>
+          (<code>SQL-MANAGED-IDENTITY.md:7-9</code>, the knob table at <code>SQL-MANAGED-IDENTITY.md:29-33</code>).</p>
           <p>[Rubric §11, Security] assesses credential hardening. <strong>All three stages have been run in ADC
           production.</strong> The template default is still <code>false</code> (<code>main.bicep:36</code>), because that is what makes a
           fresh environment start on password auth and each stage independently deployable, but the deployed
-          value comes from a repository variable, not the default: <code>deploy.yml:932</code> reads
-          <code>vars.USE_MANAGED_IDENTITY_SQL</code> and <code>deploy.yml:1065-1068</code> rewrites the parameter to <code>true</code> when it
-          is set. All three variables are set in <code>ivanball/ADC</code> (<code>USE_MANAGED_IDENTITY_SQL</code>,
+          value comes from a repository variable, not the default: <code>deploy.yml:1133</code> reads
+          <code>vars.USE_MANAGED_IDENTITY_SQL</code> and <code>deploy.yml:1293-1296</code> rewrites the parameter to a literal JSON
+          <code>true</code> when it is set. All three variables are set in <code>ivanball/ADC</code> (<code>USE_MANAGED_IDENTITY_SQL</code>,
           <code>SQL_AAD_ADMIN_LOGIN</code> and <code>SQL_AAD_ADMIN_OID</code>, all dated 2026-06-28), so the deployed apps use
           passwordless <code>Active Directory Managed Identity</code> connection strings. The ADC scorecard records the
           same activation on that date, with all four services healthy and mapped <code>db_owner</code> in every
-          per-service database, which is what lifted §17 DevOps Implementation from 8 to 9. <code>OPERATIONS.md:46</code>
-          is therefore correct when it tells an on-call engineer that production runs passwordless SQL.</p>
+          per-service database, which is what lifted §17 DevOps Implementation from 8 to 9.
+          <code>OPERATIONS.md:45-46</code> is therefore correct when it tells an on-call engineer that production runs
+          passwordless SQL.</p>
           <p>Note for a reader trying to verify this: the live value is repository configuration, not source, so
           it cannot be confirmed from the tree. Reading <code>main.bicep:36</code> alone gives the opposite impression.
-          <a href="https://ivanball.github.io/docs/adr/061-runtime-secret-management.html" target="_blank" rel="noopener">ADR-061</a> records the
-          staging mechanism and describes the flag as not yet flipped, which was true when it was written.</p>
+          <a href="https://ivanball.github.io/docs/adr/061-runtime-secret-management.html" target="_blank" rel="noopener">ADR-061</a> records the staging
+          mechanism and describes the flag as not yet flipped, which was true when it was written.</p>
           <h3 id="why-staged-and-the-three-stages">Why staged, and the three stages</h3>
           <p>The migration is staged because managed-identity auth needs a database user mapped to the identity
           (<code>CREATE USER ... FROM EXTERNAL PROVIDER</code>), which is data-plane T-SQL that must run as an Entra
           admin. The deploy principal holds Contributor, not SQL AAD-admin, so it cannot perform that grant.
           Flipping the connection strings before the grants exist takes every app offline
-          (<code>SQL-MANAGED-IDENTITY.md:11-18</code>). Password auth keeps working at every step (dual-auth), so each
-          stage is independently deployable and reversible.</p>
+          (<code>SQL-MANAGED-IDENTITY.md:11-18</code>). Password auth keeps working at every step, because
+          <code>azureADOnlyAuthentication</code> is deliberately not set (<code>SQL-MANAGED-IDENTITY.md:35-37</code>), so each stage
+          is independently deployable and reversible.</p>
           <ol>
-          <li><strong>Stage 1, add the Entra admin.</strong> Set the <code>SQL_AAD_ADMIN_LOGIN</code> and <code>SQL_AAD_ADMIN_OID</code>
-          repository variables; <code>deploy.yml:1054-1060</code> folds them into the bicep parameter file, and
-          <code>main.bicep:612-621</code> provisions the AAD admin only when the object id is non-empty. Additive,
-          zero app impact.</li>
+          <li><strong>Stage 1, add the Entra admin</strong> (<code>SQL-MANAGED-IDENTITY.md:50-54</code>). Set the <code>SQL_AAD_ADMIN_LOGIN</code>
+          and <code>SQL_AAD_ADMIN_OID</code> repository variables; <code>deploy.yml:1282-1289</code> folds them into the bicep
+          parameter file, and <code>main.bicep:607-616</code> provisions the AAD admin only when the object id is
+          non-empty. Additive, zero app impact.</li>
           <li><strong>Stage 2, grant the identity in each database</strong> (<code>SQL-MANAGED-IDENTITY.md:56-68</code>). Connect to
           each of the four <code>ADC_*</code> databases as the Entra admin and run <code>CREATE USER [adc-prod-apps-identity] FROM EXTERNAL PROVIDER</code> plus <code>ALTER ROLE db_owner ADD MEMBER</code>.
-          <code>db_owner</code> because each service is its own sole migrator and applies DDL at startup.</li>
+          <code>db_owner</code> because each service is its own sole migrator and applies DDL at startup
+          (<code>SQL-MANAGED-IDENTITY.md:66-68</code>, which also names the tighter alternative).</li>
           <li><strong>Stage 3, flip the apps</strong> (<code>SQL-MANAGED-IDENTITY.md:70-75</code>). Set <code>USE_MANAGED_IDENTITY_SQL=true</code>
-          and deploy; <code>main.bicep:152</code> swaps the auth segment of every connection string to
-          <code>Authentication=Active Directory Managed Identity</code> with the UAMI&#39;s client id and no password.</li>
+          and deploy; <code>main.bicep:166-168</code> swaps the auth segment of every connection string to
+          <code>Authentication=Active Directory Managed Identity</code> with the UAMI&#39;s client id and no password. No
+          app-code or package change is needed: <code>Microsoft.Data.SqlClient</code> honours the keyword and
+          <code>Azure.Identity</code> is already present transitively.</li>
           </ol>
           <p><strong>Rollback</strong> is unsetting the variable and redeploying (<code>SQL-MANAGED-IDENTITY.md:77-79</code>): the
           password path is never removed in this wave, and the per-database users are inert when unused.</p>
-          <p><strong>Accepted risk (<code>SQL-MANAGED-IDENTITY.md:81-100</code>).</strong> The SQL server keeps <code>publicNetworkAccess: Enabled</code> and the <code>AllowAzureServices</code> rule, because there is no VNet and moving to a private
-          endpoint would require recreating the Container Apps environment (and therefore every container
-          app). The compensating controls are TLS 1.2 minimum, Key Vault secrets via the managed identity,
-          and, once stages 1 to 3 land, no shared SQL password at all.</p>
+          <p><strong>Accepted risk (<code>SQL-MANAGED-IDENTITY.md:81-100</code>).</strong> The SQL server keeps <code>publicNetworkAccess: Enabled</code> and the <code>AllowAzureServices</code> rule, because there is no VNet and moving to a private endpoint
+          would require recreating the Container Apps environment (and therefore every container app). The
+          compensating controls are TLS 1.2 minimum, Key Vault secrets via the managed identity, and, with
+          stages 1 to 3 complete, no shared SQL password in the data path at all, so network reachability no
+          longer implies credential exposure.</p>
           <hr>
           <h2 id="infrapost-cutover-atldevcon-downgrademd-archive-downgrade-runbook">infra/POST-CUTOVER-atldevcon-downgrade.md, archive downgrade runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md</code></p>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md</code> (64 lines)</p>
           <p><strong>What it is.</strong> A step-by-step runbook for the third and final commit of the database-per-service
-          rollout: downgrading <code>AtlDevCon</code> from S0 to Basic tier in <code>main.bicep</code>. This is a cost-reduction
-          step that must be taken only after the per-service databases have been proven in production. It
-          has already been applied (<code>main.bicep:629-643</code> declares the Basic SKU), so read it as the record
-          of how that was done and as the procedure to repeat after a DR rebuild.</p>
+          rollout: downgrading <code>AtlDevCon</code> from S0 to Basic tier in <code>main.bicep</code>. This is a cost-reduction step
+          that must be taken only after the per-service databases have been proven in production. It has
+          already been applied (<code>main.bicep:624-638</code> declares the Basic SKU), so read it as the record of how
+          that was done and as the procedure to repeat after a DR rebuild.</p>
           <p><strong>When to run.</strong> After the per-service databases (<code>ADC_*</code>) have been running and verified for at
           least 24 hours, <code>AtlDevCon</code> has had no new writes, and the outbox is fully drained.</p>
-          <p>[Rubric §31, Cost/FinOps] assesses whether cost is actively managed and right-sized. Downgrading
-          a now-idle database from S0 to Basic (5 DTU, 2 GB cap) once it becomes a static archive is the
+          <p>[Rubric §31, Cost/FinOps] assesses whether cost is actively managed and right-sized. Downgrading a
+          now-idle database from S0 to Basic (5 DTU, 2 GB cap) once it becomes a static archive is the
           operationalization of that principle.</p>
-          <p>[Rubric §8, Data Architecture] assesses data lifecycle and migration hygiene. Keeping <code>AtlDevCon</code>
-          in the Bicep declaration under a <code>// RETAINED, archived legacy database, data preserved. NEVER delete.</code> comment (shown in the runbook, line 41) prevents out-of-band drift: the Bicep resource
-          is always the source of truth about the database&#39;s existence and configuration.</p>
-          <h3 id="walkthrough-4">Walkthrough</h3>
+          <p>[Rubric §8, Data Architecture] assesses data lifecycle and migration hygiene. Keeping <code>AtlDevCon</code> in
+          the Bicep declaration under a &quot;RETAINED, archived legacy database, data preserved. NEVER delete.&quot;
+          comment (shown in the runbook at <code>POST-CUTOVER-atldevcon-downgrade.md:41</code>, live at
+          <code>main.bicep:618-623</code>) prevents out-of-band drift: the Bicep resource stays the source of truth about
+          the database&#39;s existence and configuration.</p>
+          <h3 id="walkthrough-1">Walkthrough</h3>
           <p><strong>Prerequisites (<code>POST-CUTOVER-atldevcon-downgrade.md:11-31</code>).</strong> Three checks:</p>
           <ol>
-          <li>Confirm the flip is live and healthy, all four <code>adc-prod-*</code> apps serve from their <code>ADC_*</code>
-          databases, <code>AtlDevCon</code> has had no writes for ≥24h, outbox is empty (<code>ProcessedOn IS NULL = 0</code>).</li>
-          <li>Confirm <code>AtlDevCon</code> fits in the 2 GB Basic cap using <code>az sql db list-usages</code>. At ~76 users /
-          50 sessions / 53 speakers, it is far under the limit.</li>
-          <li>Export a permanent <code>.bacpac</code> archive before downgrading. Basic tier retains PITR for only 7 days
-          (vs 35 days for S0), so a one-off export to blob storage is the last-resort point-in-time
-          snapshot (<code>POST-CUTOVER-atldevcon-downgrade.md:24-31</code>).</li>
+          <li>Confirm the flip is live and healthy: all four <code>adc-prod-*</code> apps serve from their <code>ADC_*</code>
+          databases, <code>AtlDevCon</code> has had no writes for at least 24 h, and its outbox is empty
+          (<code>ProcessedOn IS NULL</code> count of 0).</li>
+          <li>Confirm <code>AtlDevCon</code> fits in the 2 GB Basic cap using <code>az sql db list-usages</code>
+          (<code>POST-CUTOVER-atldevcon-downgrade.md:17-22</code>). At about 76 users, 50 sessions and 53 speakers it
+          is far under the limit, and the runbook says plainly what to do if it is not: leave it at S0.</li>
+          <li>Export a permanent <code>.bacpac</code> archive before downgrading
+          (<code>POST-CUTOVER-atldevcon-downgrade.md:24-31</code>). Basic retains PITR for 7 days against S0&#39;s 35, so a
+          one-off export to blob storage is the last-resort point-in-time snapshot. This is the step that
+          keeps the downgrade compatible with the &quot;data must never be lost&quot; constraint.</li>
           </ol>
           <p><strong>The Bicep change (<code>POST-CUTOVER-atldevcon-downgrade.md:33-53</code>).</strong> Replace <code>sku</code> and <code>maxSizeBytes</code>
-          only on the <code>AtlDevCon</code> resource. The resource stays in <code>main.bicep</code>, Incremental mode would
-          not delete it if removed, but keeping it declared prevents out-of-band drift. The change is
+          only, on the <code>AtlDevCon</code> resource. The resource stays in <code>main.bicep</code>: Incremental mode would not
+          delete it if it were removed, but keeping it declared prevents out-of-band drift. The change is
           <code>name: &#39;Basic&#39;, tier: &#39;Basic&#39;, capacity: 5</code> with <code>maxSizeBytes: 2147483648</code> (2 GB cap).</p>
-          <p><strong>Why Commit 3 is separate (<code>POST-CUTOVER-atldevcon-downgrade.md:8-9</code>).</strong> If <code>main.bicep</code> carried
-          the Basic SKU when Commit 2 deployed (the app flip), <code>AtlDevCon</code> would be downgraded before the
-          new databases were proven. Separating the commits eliminates that risk.</p>
-          <p><strong>Deploy via the normal pipeline.</strong> Merge the Bicep change and let <code>deploy.yml</code> apply it
-          (<code>POST-CUTOVER-atldevcon-downgrade.md:55</code>). No special workflow or manual <code>az sql db update</code>
-          command is needed, Incremental mode changes only the SKU, data is untouched.</p>
-          <p><strong>Verification (<code>POST-CUTOVER-atldevcon-downgrade.md:57-59</code>).</strong> <code>az sql db show</code> confirms <code>sku.name = Basic</code> and <code>maxSizeBytes = 2147483648</code>. A spot row-count query against <code>AtlDevCon</code> confirms data
-          is preserved.</p>
-          <p><strong>Rollback (<code>POST-CUTOVER-atldevcon-downgrade.md:61-64</code>).</strong> Revert the Commit 3 change and
-          redeploy to return <code>AtlDevCon</code> to S0. Rolling back the downgrade is entirely independent of
-          rolling back the app flip (Commit 2); they can be reverted separately.</p>
+          <p><strong>Why Commit 3 is separate (<code>POST-CUTOVER-atldevcon-downgrade.md:8-9</code>).</strong> If <code>main.bicep</code> carried the
+          Basic SKU when Commit 2 deployed (the app flip), <code>AtlDevCon</code> would be downgraded before the new
+          databases were proven. Separating the commits eliminates that risk.</p>
+          <p><strong>Deploy via the normal pipeline (<code>POST-CUTOVER-atldevcon-downgrade.md:55</code>).</strong> Merge the Bicep change
+          and let <code>deploy.yml</code> apply it. No special workflow and no manual <code>az sql db update</code> is needed:
+          Incremental mode changes only the SKU, and the data is untouched.</p>
+          <p><strong>Verification (<code>POST-CUTOVER-atldevcon-downgrade.md:57-59</code>).</strong> <code>az sql db show</code> confirms
+          <code>sku.name = Basic</code> and <code>maxSizeBytes = 2147483648</code>. A spot row-count query against <code>AtlDevCon</code>
+          confirms the data is preserved.</p>
+          <p><strong>Rollback (<code>POST-CUTOVER-atldevcon-downgrade.md:61-64</code>).</strong> Revert the Commit 3 change and redeploy to
+          return <code>AtlDevCon</code> to S0. Rolling back the downgrade is entirely independent of rolling back the app
+          flip (Commit 2); they can be reverted separately.</p>
           <hr>
           <h2 id="play-store-captureps1-android-screenshot-capture">play-store-capture.ps1, Android screenshot capture</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/scripts/play-store-capture.ps1</code></p>
-          <p><strong>What it is.</strong> A PowerShell 7 script that captures a screenshot from an attached Android device
-          or emulator via <code>adb screencap</code> and saves it as a deterministic-filename PNG under
+          <p><strong>File:</strong> <code>MMCA.ADC/scripts/play-store-capture.ps1</code> (147 lines)</p>
+          <p><strong>What it is.</strong> A PowerShell 7 script that captures a screenshot from an attached Android device or
+          emulator via <code>adb screencap</code> and saves it as a deterministic-filename PNG under
           <code>store-assets/play-store/raw/</code>.</p>
-          <p><strong>When to run.</strong> When preparing or refreshing Google Play Store screenshots. Run once per slot
-          (e.g. <code>01-home</code>, <code>02-sessions</code>) on a device or emulator that is showing the correct screen. Eight
+          <p><strong>When to run.</strong> When preparing or refreshing Google Play Store screenshots. Run once per slot (for
+          example <code>01-home</code>, <code>02-sessions</code>) on a device or emulator that is showing the correct screen. Eight
           slots are defined in the companion compose script&#39;s lineup.</p>
-          <p>[Rubric §30, Compliance/Privacy] assesses whether the app store presence is maintained. These
-          scripts are the mechanism for maintaining Play Store assets, without them, the screenshots drift
-          from the current UI. The <code>raw/</code> directory is gitignored because a capture can contain the signed-in
-          test user&#39;s data; only the composed <code>screenshots/</code> set is committed
+          <p>[Rubric §30, Compliance/Privacy] assesses whether the app store presence is maintained. These scripts
+          are the mechanism for maintaining Play Store assets; without them the screenshots drift from the
+          current UI. The <code>raw/</code> directory is gitignored because a capture can contain the signed-in test
+          user&#39;s data; only the composed <code>screenshots/</code> set is committed
           (<code>store-assets/play-store/README.md:19-20</code>).</p>
-          <h3 id="walkthrough-5">Walkthrough</h3>
-          <p><strong>Slug-based filenames (<code>play-store-capture.ps1:47-51</code>, written at line 106).</strong> Raw captures are
-          saved as <code>&lt;slug&gt;.png</code> under <code>store-assets/play-store/raw/</code>, with the directory created on first
-          use. Deterministic names mean the compose script can look them up by slug key without a manifest
-          file.</p>
-          <p><strong><code>-List</code> switch (<code>play-store-capture.ps1:53-65</code>).</strong> Lists already-captured slots with file size
-          and timestamp, a quick sanity check before a composing session.</p>
-          <p><strong><code>adb</code> resolution (<code>play-store-capture.ps1:67-75</code>).</strong> Prefers <code>adb</code> on <code>PATH</code>; falls back to the
-          well-known SDK path (<code>C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe</code>).</p>
-          <p><strong><code>exec-out</code> not <code>shell screencap</code> (<code>play-store-capture.ps1:104-110</code>).</strong> Uses <code>adb exec-out</code> to
-          stream the PNG binary directly into the output file. Plain <code>adb shell screencap</code> on Windows applies
-          CRLF translation to the binary stream, corrupting the PNG.</p>
-          <p><strong>Dimension read from IHDR (<code>play-store-capture.ps1:127-147</code>).</strong> Reads the PNG IHDR chunk to print
-          the captured resolution. If width &gt; height (landscape), a warning is emitted, Play Store phone
+          <h3 id="walkthrough-2">Walkthrough</h3>
+          <p><strong>Slug-based filenames (<code>play-store-capture.ps1:47-51</code>, written at <code>:106</code>).</strong> Raw captures are saved
+          as <code>&lt;slug&gt;.png</code> under <code>store-assets/play-store/raw/</code>, with the directory created on first use
+          (<code>play-store-capture.ps1:48-49</code>). Deterministic names mean the compose script can look them up by
+          slug key without a manifest file.</p>
+          <p><strong><code>-List</code> switch (<code>play-store-capture.ps1:53-65</code>).</strong> Lists the slots already captured, with file size
+          and timestamp: a quick sanity check before a composing session.</p>
+          <p><strong><code>adb</code> resolution (<code>play-store-capture.ps1:67-75</code>).</strong> Prefers <code>adb</code> on <code>PATH</code>, then falls back to the
+          well-known SDK path (<code>C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe</code>), and throws
+          an actionable error when neither exists (<code>play-store-capture.ps1:73-74</code>).</p>
+          <p><strong><code>exec-out</code> not <code>shell screencap</code> (<code>play-store-capture.ps1:104-110</code>).</strong> Uses <code>adb exec-out</code> to stream
+          the PNG binary straight into the output file. Plain <code>adb shell screencap</code> on Windows applies CRLF
+          translation to the binary stream, corrupting the PNG. This is the kind of platform detail that is
+          invisible until every capture is subtly broken, which is why the comment sits directly above the
+          call.</p>
+          <p><strong>Dimension read from IHDR (<code>play-store-capture.ps1:127-147</code>).</strong> Reads the PNG IHDR chunk (bytes
+          16-19 width, 20-23 height, big-endian, <code>play-store-capture.ps1:127-128</code>) to print the captured
+          resolution. A landscape capture (width greater than height) emits a warning, because Play Store phone
           screenshots must be portrait.</p>
           <hr>
           <h2 id="play-store-composeps1-play-store-screenshot-compositor">play-store-compose.ps1, Play Store screenshot compositor</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/scripts/play-store-compose.ps1</code></p>
+          <p><strong>File:</strong> <code>MMCA.ADC/scripts/play-store-compose.ps1</code> (187 lines)</p>
           <p><strong>What it is.</strong> A PowerShell 7 script that reads raw captures from <code>store-assets/play-store/raw/</code>,
-          wraps each into a 1080×1920 branded canvas, overlays a caption and subtitle from a hard-coded
-          lineup, and writes the finished PNG to <code>store-assets/play-store/screenshots/</code>. The composed images
-          satisfy Play Console&#39;s aspect-ratio requirement (Pixel emulators capture at 1080×2400, 9:20, which
-          Play Console rejects as too tall; the script guarantees a compliant 1080×1920 / 9:16 result).</p>
-          <p><strong>When to run.</strong> After <code>play-store-capture.ps1</code> has captured all needed slots. Run with no <code>-Slug</code>
-          to compose the full set, or <code>-Slug &lt;slug&gt;</code> to recompose one slot. Run with <code>-NoCaption</code> for a
-          plain brand-framed variant (e.g. for the feature graphic or tablet screenshots).</p>
-          <p>[Rubric §30, Compliance/Privacy] assesses app store compliance. Play Console has strict
-          aspect-ratio rules for phone screenshots; this script enforces compliance mechanically rather than
-          relying on manual cropping.</p>
-          <h3 id="walkthrough-6">Walkthrough</h3>
-          <p><strong>Lineup (<code>play-store-compose.ps1:52-61</code>).</strong> Eight slots are defined inline with slug, caption
-          (large bold white text), and subtitle (smaller cyan text). The comment on line 51 notes that the
-          lineup must be kept in sync with <code>store-assets/play-store/README.md</code>, whose table
-          (<code>store-assets/play-store/README.md:42-51</code>) currently matches all eight slugs, captions and
-          subtitles exactly.</p>
-          <p><strong>Brand colors (<code>play-store-compose.ps1:69-71</code>).</strong> Three colors: <code>brandTeal</code> (<code>#0D7377</code>),
-          <code>brandCyan</code> (<code>#14FFEC</code>), <code>brandTealDark</code> (<code>#094F52</code>). The canvas uses a vertical <code>LinearGradientBrush</code>
-          from teal to dark teal for depth.</p>
+          wraps each into a 1080x1920 branded canvas (<code>play-store-compose.ps1:67-68</code>), overlays a caption and
+          subtitle from a hard-coded lineup, and writes the finished PNG to
+          <code>store-assets/play-store/screenshots/</code>. The composed images satisfy Play Console&#39;s aspect-ratio
+          requirement: Pixel emulators capture at 1080x2400 (9:20), which Play Console rejects as too tall, and
+          the script guarantees a compliant 1080x1920 (9:16) result.</p>
+          <p><strong>When to run.</strong> After <code>play-store-capture.ps1</code> has captured all needed slots. Run with no <code>-Slug</code> to
+          compose the full set, or <code>-Slug &lt;slug&gt;</code> to recompose one slot. Run with <code>-NoCaption</code> for a plain
+          brand-framed variant (a feature graphic or tablet screenshots, for example), which also shrinks the
+          reserved caption band from 280 px to 80 px (<code>play-store-compose.ps1:72</code>).</p>
+          <p>[Rubric §30, Compliance/Privacy] assesses app store compliance. Play Console has strict aspect-ratio
+          rules for phone screenshots; this script enforces compliance mechanically rather than relying on
+          manual cropping.</p>
+          <h3 id="walkthrough-3">Walkthrough</h3>
+          <p><strong>Lineup (<code>play-store-compose.ps1:52-61</code>).</strong> Eight slots are defined inline with slug, caption (large
+          bold white text) and subtitle (smaller cyan text). The comment at <code>play-store-compose.ps1:51</code> notes
+          that the lineup must be kept in sync with <code>store-assets/play-store/README.md</code>, whose table
+          (<code>store-assets/play-store/README.md:42-51</code>) currently matches all eight slugs, captions and subtitles
+          exactly. A missing lineup entry does not fail the run: the slot renders without a caption and a
+          warning is written (<code>play-store-compose.ps1:158-160</code>).</p>
+          <p><strong>Brand colors (<code>play-store-compose.ps1:69-71</code>).</strong> Three colors: <code>brandTeal</code> (<code>#0D7377</code>), <code>brandCyan</code>
+          (<code>#14FFEC</code>) and <code>brandTealDark</code> (<code>#094F52</code>). The canvas uses a vertical gradient from teal to dark
+          teal for depth.</p>
           <p><strong><code>System.Drawing.Common</code> assembly (<code>play-store-compose.ps1:39-42</code>).</strong> The script loads
-          <code>System.Drawing.Common</code> (PowerShell 7 path) with a fallback to the desktop-FX alias on
-          Windows PowerShell 5.1.</p>
-          <p><strong>Fit-inside scaling (<code>play-store-compose.ps1:133-138</code>).</strong> Each raw capture is scaled to fit inside
-          the available image area (<code>imageMaxW × imageMaxH</code>, computed from the canvas minus caption area and
-          footer) preserving aspect ratio, then centered horizontally and vertically. Captures taller than
-          9:16 (e.g. 9:20 Pixel emulator) are letterboxed on the teal background.</p>
+          <code>System.Drawing.Common</code> (the PowerShell 7 path) inside a <code>try</code>, falling back to the desktop-FX
+          <code>System.Drawing</code> alias on Windows PowerShell 5.1.</p>
+          <p><strong>Fit-inside scaling (<code>play-store-compose.ps1:130-138</code>).</strong> Each raw capture is scaled to fit inside
+          the available image area (<code>imageMaxW</code> by <code>imageMaxH</code>, computed from the canvas minus the caption band
+          and the footer at <code>play-store-compose.ps1:74-75</code>), preserving aspect ratio, then centered
+          horizontally and vertically. Captures taller than 9:16 (the 9:20 Pixel emulator case) are letterboxed
+          on the teal background rather than cropped, so nothing in the UI is lost.</p>
           <p><strong>Soft shadow and cyan border (<code>play-store-compose.ps1:140-152</code>).</strong> A black rectangle offset 10 px
-          right and 14 px down at alpha 80 of 255 produces a drop shadow. A 2-px cyan (<code>brandCyan</code>) rectangle
-          borders the screenshot so it pops against the teal background.</p>
+          right and 14 px down at alpha 80 of 255 produces a drop shadow; a 2-px cyan border makes the
+          screenshot pop against the teal background.</p>
           <p><strong>Output (<code>play-store-compose.ps1:175</code>).</strong> Each composed PNG is saved as
-          <code>store-assets/play-store/screenshots/&lt;slug&gt;.png</code>. Upload these directly to Play Console → Main
-          store listing → Phone screenshots.</p>
+          <code>store-assets/play-store/screenshots/&lt;slug&gt;.png</code>, and every GDI+ object is released in nested
+          <code>finally</code> blocks (<code>play-store-compose.ps1:176-181</code>) so a long composing run does not leak handles.
+          Upload the results directly to Play Console, Main store listing, Phone screenshots.</p>
           <hr>
           <h2 id="docsmobilereleaserunbookmd-store-submission-runbook">Docs/MobileReleaseRunbook.md, store-submission runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/Docs/MobileReleaseRunbook.md</code></p>
+          <p><strong>File:</strong> <code>MMCA.ADC/Docs/MobileReleaseRunbook.md</code> (205 lines)</p>
           <p><strong>What it is.</strong> The manual, credential-holding steps around a store submission that code and CI
           cannot perform, each tagged with when it must happen relative to the submission
-          (<code>MobileReleaseRunbook.md:3-5</code>). Its companion is <code>Docs/DeviceTestChecklist.md</code>, the physical-device
-          pass to re-run after any behavior-affecting bump.</p>
-          <p><strong>When to run.</strong> Before a Play or TestFlight upload. The sections are independent; read the one
+          (<code>MobileReleaseRunbook.md:3-5</code>). Its companion is <code>Docs/DeviceTestChecklist.md</code> (178 lines), the
+          physical-device pass to re-run after any behavior-affecting bump.</p>
+          <p><strong>When to run.</strong> Before a Play or TestFlight upload. The eight sections are independent; read the one
           that matches the step you are on.</p>
           <p>[Rubric §17, DevOps &amp; Deployment] assesses whether the release path is documented end to end. The
           mobile head is the part of ADC that CI cannot fully automate (signing keys, provisioning profiles,
           store consoles), so the runbook is the substitute for a pipeline.</p>
           <h3 id="the-load-bearing-items">The load-bearing items</h3>
-          <p><strong>Android App Links fingerprint (<code>MobileReleaseRunbook.md:7-59</code>).</strong> <code>/.well-known/assetlinks.json</code>
-          is served from <code>AppAssociation</code> config in <code>MMCA.ADC.UI.Web</code>, and Android verifies a link only when
-          both <code>package_name</code> and <code>sha256_cert_fingerprints</code> match the installed app. Two traps: the Release
-          android property group overrides the package id to <code>ivanball.AtlDevCon</code>
-          (<code>MMCA.ADC.UI.csproj:57-58</code>) while Debug installs as <code>com.ivanball.atldevcon</code>
-          (<code>MMCA.ADC.UI.csproj:29</code>), and the checked-in fingerprint is still a placeholder that must be
-          replaced with the <strong>Play App Signing</strong> certificate fingerprint, not the local upload keystore&#39;s
-          (<a href="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html" target="_blank" rel="noopener">ADR-043</a> records the same open item).</p>
+          <p><strong>Android App Links fingerprint (<code>MobileReleaseRunbook.md:7-59</code>).</strong> <code>/.well-known/assetlinks.json</code> is
+          served by the shared <code>MapAppAssociationEndpoints</code> mapper in <code>MMCA.Common.API</code>, wired in
+          <code>MMCA.ADC.UI.Web/Program.cs</code> from the <code>AppAssociation</code> configuration section; bicep does not inject
+          that section and <code>appsettings.Production.json</code> does not override it, so the base <code>appsettings.json</code>
+          values are verbatim what production serves (<code>MobileReleaseRunbook.md:13-18</code>). Android verifies a link
+          only when both <code>package_name</code> and <code>sha256_cert_fingerprints</code> match the installed app. Two traps: the
+          Release android property group overrides the package id to <code>ivanball.AtlDevCon</code>
+          (<code>MMCA.ADC.UI.csproj:58</code>) while Debug installs as <code>com.ivanball.atldevcon</code>
+          (<code>MMCA.ADC.UI.csproj:29</code>), and the checked-in fingerprint is still a placeholder that must be replaced
+          with the <strong>Play App Signing</strong> certificate fingerprint, not the local upload keystore&#39;s, which Google
+          discards when it re-signs (<code>MobileReleaseRunbook.md:32-34</code>;
+          <a href="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html" target="_blank" rel="noopener">ADR-043</a> records the same open item). The fingerprint belongs in the repo rather than Key Vault
+          because it is public by design: it is served to anyone who requests the document
+          (<code>MobileReleaseRunbook.md:39-40</code>).</p>
           <p><strong>iOS associated domains (<code>MobileReleaseRunbook.md:61-75</code>).</strong> <code>Entitlements.plist</code> now requests
-          <code>com.apple.developer.associated-domains</code>, which the existing App Store provisioning profile does
-          not carry, so the next Release build fails signing until the capability is enabled and the profile
-          regenerated. The AASA document must be live on the prod UI host before App Review.</p>
+          <code>com.apple.developer.associated-domains</code>, which the existing &quot;AtlDevCon App Store&quot; provisioning
+          profile does not carry, so the next Release build fails signing until the capability is enabled and
+          the profile regenerated under the identical name (the csproj pins <code>CodesignProvision</code>). The AASA
+          document must be live on the prod UI host before App Review, because Apple&#39;s CDN fetches it at
+          submission (<code>MobileReleaseRunbook.md:28-31</code>).</p>
           <p><strong>Release signing password (<code>MobileReleaseRunbook.md:77-81</code>).</strong> Keystore passwords are not in the
-          csproj: <code>AndroidSigningKeyPass</code> and <code>AndroidSigningStorePass</code> read the
-          <code>ADC_ANDROID_SIGNING_PASSWORD</code> environment variable (<code>MMCA.ADC.UI.csproj:70-74</code>), which must be set
-          in the shell before any local Release android build.</p>
-          <p><strong>Two deliberately-off Bicep switches.</strong> Native push is inert by design: the Notification Hub is
-          not provisioned (<code>main.bicep:110</code>, <code>deployNotificationHub</code> defaults false after ARM
-          <code>InternalServerError</code> failures blocked deploys on 2026-07-11) and delivery stays off
-          (<code>main.bicep:107</code>, <code>nativePushEnabled</code> false); section 5 of the runbook is the credentials
-          sequence. Avatar storage needs a one-time manual role grant because the deploy identity
-          deliberately lacks <code>roleAssignments/write</code> (<code>main.bicep:113</code>, <code>grantAvatarStorageRole</code> false);
-          until it is applied, avatar uploads fail cleanly with <code>FileStorage.UploadFailed</code>
-          (<code>MobileReleaseRunbook.md:116-138</code>).</p>
-          <p><strong>Play target API level (<code>MobileReleaseRunbook.md:148-198</code>).</strong> A recurring annual deadline: from
+          csproj: <code>AndroidSigningKeyPass</code> and <code>AndroidSigningStorePass</code> read the <code>ADC_ANDROID_SIGNING_PASSWORD</code>
+          environment variable (<code>MMCA.ADC.UI.csproj:73-74</code>), which must be set in the shell before any local
+          Release android build.</p>
+          <p><strong>Native push and the avatar grant, two Bicep switches pointing in opposite directions.</strong> Both are
+          worth reading against the template rather than the prose:</p>
+          <ul>
+          <li>Native push is now <strong>wired and enabled by default</strong>: <code>nativePushEnabled</code> defaults to <code>true</code>
+          (<code>main.bicep:119-120</code>) and <code>deployNotificationHub</code> defaults to <code>true</code> (<code>main.bicep:122-123</code>). What
+          the second flag gates is only the <em>wiring</em>, the Key Vault connection-string secret plus the
+          notification app&#39;s secret and env refs (<code>main.bicep:952-955</code>, <code>:1502</code>, <code>:1570-1572</code>). The
+          namespace, hub and auth rule are never deployed by this template: they are declared <code>existing</code>
+          (<code>main.bicep:746-760</code>) because ARM PUTs on this namespace hang until timeout, on create in
+          2026-07-11 and again on update in 2026-08-24 (<code>main.bicep:122</code>). They have to be provisioned out of
+          band through section 5 of the runbook before the flag can be true. Section 5 itself
+          (<code>MobileReleaseRunbook.md:94-99</code>) still reads &quot;The Azure Notification Hub is NOT provisioned yet&quot;
+          and describes the guard as <code>deployNotificationHub=false</code>. That text is behind the template; treat
+          <code>main.bicep:119-123</code> as current and section 5 as the provisioning procedure.</li>
+          <li>Avatar storage still needs a one-time manual role grant, because the deploy identity deliberately
+          lacks <code>Microsoft.Authorization/roleAssignments/write</code> (<code>main.bicep:125-126</code>,
+          <code>grantAvatarStorageRole</code> default <code>false</code>). Until the grant is applied, avatar uploads fail cleanly
+          with <code>FileStorage.UploadFailed</code> and nothing else breaks (<code>MobileReleaseRunbook.md:123-146</code>, which
+          includes the <code>az rest</code> form because <code>az role assignment create</code> misreports on this tenant).</li>
+          </ul>
+          <p><strong>Play target API level (<code>MobileReleaseRunbook.md:155-205</code>).</strong> A recurring annual deadline: from
           2026-08-31 an update must target API 36 (Android 16) or higher. The level is pinned in the csproj
-          (<code>MMCA.ADC.UI.csproj:53-55</code>, <code>TargetPlatformVersion</code> 36.0) precisely so a build machine one Android
-          workload behind fails outright instead of quietly producing a rejectable AAB. Raising it is a
-          behavior change (API 35+ forces edge-to-edge layout), so the device checklist is re-run before
-          rollout.</p>
+          (<code>MMCA.ADC.UI.csproj:54</code>, <code>TargetPlatformVersion</code> 36.0) precisely so a build machine one Android
+          workload behind fails outright instead of quietly producing a rejectable AAB
+          (<code>MobileReleaseRunbook.md:171-176</code>). Raising it is a behavior change (API 35+ forces edge-to-edge
+          layout), so the device checklist is re-run before rollout, and the runbook prescribes verifying the
+          merged manifest before every upload (<code>MobileReleaseRunbook.md:183-190</code>).</p>
           <hr>
-          <h2 id="the-database-per-service-cutover-in-full-context">The database-per-service cutover in full context</h2>
-          <p>The five database-related artifacts above form a single coherent story, and the resilience
-          artifacts extend it past the cutover:</p>
+          <h2 id="the-operational-artifacts-in-full-context">The operational artifacts in full context</h2>
+          <p>The surviving artifacts form one story that starts at bootstrap and ends at day-2 triage:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -918,60 +979,66 @@
           </tr>
           </thead>
           <tbody><tr>
-          <td><strong>Local dev setup</strong>, copy legacy data into fresh per-service databases on the Aspire container</td>
-          <td>Developer</td>
-          <td><code>migrate-atldevcon-to-per-service-dbs.ps1</code> → <code>.sql</code></td>
-          </tr>
-          <tr>
-          <td><strong>Production one-time cutover</strong>, gate, freeze, migrate, copy, verify</td>
-          <td>GitHub Actions (manual trigger)</td>
-          <td><code>cutover-per-service-dbs.yml</code> → <code>copy-atldevcon-to-per-service-dbs.azure.ps1</code></td>
+          <td><strong>Bootstrap</strong>, create the deploy identity and its OIDC credentials</td>
+          <td>Operator, once per environment</td>
+          <td><code>scripts/azure-setup.sh</code></td>
           </tr>
           <tr>
           <td><strong>Post-cutover archive downgrade</strong>, lower <code>AtlDevCon</code> to Basic tier</td>
-          <td>Developer (Bicep PR + normal deploy)</td>
-          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code></td>
+          <td>Developer (Bicep PR plus normal deploy)</td>
+          <td><code>infra/POST-CUTOVER-atldevcon-downgrade.md</code></td>
           </tr>
           <tr>
           <td><strong>Weekly recovery proof</strong>, PITR-restore a throwaway copy and time it</td>
-          <td>GitHub Actions (weekly cron) + operator on demand</td>
-          <td><code>dr-drill.yml</code> → <code>dr-restore-drill.ps1</code></td>
+          <td>GitHub Actions (weekly cron) plus operator on demand</td>
+          <td><code>dr-drill.yml</code> into <code>scripts/dr-restore-drill.ps1</code></td>
           </tr>
           <tr>
           <td><strong>Disaster recovery</strong>, restore a database, roll back a deploy</td>
           <td>On-call operator</td>
-          <td><code>DISASTER-RECOVERY.md</code></td>
+          <td><code>infra/DISASTER-RECOVERY.md</code></td>
           </tr>
           <tr>
           <td><strong>Day-2 alert triage</strong>, answer a page and pick the recovery move</td>
           <td>On-call operator</td>
-          <td><code>OPERATIONS.md</code></td>
+          <td><code>infra/OPERATIONS.md</code></td>
+          </tr>
+          <tr>
+          <td><strong>Passwordless SQL</strong>, advance or roll back the auth hardening</td>
+          <td>Operator plus one deploy per stage</td>
+          <td><code>infra/SQL-MANAGED-IDENTITY.md</code></td>
+          </tr>
+          <tr>
+          <td><strong>Store assets and submission</strong>, capture, compose, upload</td>
+          <td>Developer on a device or emulator</td>
+          <td><code>scripts/play-store-*.ps1</code>, <code>Docs/MobileReleaseRunbook.md</code></td>
           </tr>
           </tbody></table></div>
-          <p>The <code>AtlDevCon</code> database is the thread that runs through all of them: it is the source of data
-          truth during the copy, the rollback path after the flip, and the last-resort archive in a
-          full-region DR scenario. That is why it is retained in <code>main.bicep</code> under a <code>// NEVER delete</code>
-          comment. It is no longer the drill target, though: the weekly rotation deliberately drills the four
-          live databases instead, and <code>AtlDevCon</code> is reachable only by manual dispatch.</p>
+          <p>The <code>AtlDevCon</code> database is the thread that runs through the database half of that table: it was the
+          source of data truth during the copy, it is the rollback path after the flip, and it is the
+          last-resort archive in a full-region DR scenario. That is why it is retained in <code>main.bicep</code> under a
+          &quot;NEVER delete&quot; comment (<code>main.bicep:618-623</code>). It is no longer the drill target, though: the weekly
+          rotation deliberately drills the four live databases instead (<code>dr-drill.yml:64-67</code>), and <code>AtlDevCon</code>
+          is reachable only by manual dispatch.</p>
           <p>Cross-links:</p>
           <ul>
-          <li><a href="devops-iac.html">IaC chapter</a>, <code>infra/main.bicep</code> provisions the four <code>ADC_*</code> databases, the LTR
+          <li><a href="devops-iac.html">IaC chapter</a>: <code>infra/main.bicep</code> provisions the four <code>ADC_*</code> databases, the LTR
           policies, the SLO alerts and workbook, and the Service Bus namespace.</li>
-          <li><a href="devops-cicd.html">CI/CD chapter</a>, <code>deploy.yml</code> applies per-module idempotent migration scripts,
-          runs the post-deploy smoke gate, and carries the three recency gates (<code>dr-freshness</code>,
-          <code>load-freshness</code>, <code>cross-service-freshness</code>); <code>cutover-per-service-dbs.yml</code> is a sibling workflow
-          in the same <code>prod-azure</code> concurrency group.</li>
-          <li><a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, the decision to adopt database-per-service,
-          the trade-offs, and the <code>CrossDataSourceDegradeConvention</code> that removes cross-database FKs.</li>
-          <li><a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>, the resilience and recovery
-          objectives framework, including the requirement that <code>DISASTER-RECOVERY.md</code> exists and that the
-          drill-result table is filled.</li>
-          <li><a href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html" target="_blank" rel="noopener">ADR-062</a>, SLO alerting as code and
-          the alert-to-runbook pairing gate that <code>infra/OPERATIONS.md</code> satisfies.</li>
-          <li><a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a>, deploy preconditions as
-          proof of recency, which is what turns the weekly drill into a production gate.</li>
-          <li><a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>, the outbox pattern that the cutover workflow
-          gates on (drain first) and that the per-service databases each own independently.</li>
+          <li><a href="devops-cicd.html">CI/CD chapter</a>: <code>deploy.yml</code> carries the revision-activation and smoke gates, the
+          rollback, and the three recency gates (<code>dr-freshness</code>, <code>load-freshness</code>,
+          <code>cross-service-freshness</code>).</li>
+          <li><a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, the decision to adopt database-per-service, its trade-offs, and the
+          <code>CrossDataSourceDegradeConvention</code> that removes cross-database FKs.</li>
+          <li><a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>, the resilience and recovery objectives framework, including the requirement
+          that <code>DISASTER-RECOVERY.md</code> exists and that the drill-result table is filled.</li>
+          <li><a href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html" target="_blank" rel="noopener">ADR-062</a>, SLO alerting as code and the alert-to-runbook pairing gate that
+          <code>infra/OPERATIONS.md</code> satisfies.</li>
+          <li><a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a>, deploy preconditions as proof of recency, which is what turns the weekly
+          drill into a production gate.</li>
+          <li><a href="https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html" target="_blank" rel="noopener">ADR-098</a>, Aspire for orchestration and not for production dashboards, which
+          <code>OPERATIONS.md:176-207</code> operationalizes.</li>
+          <li><a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>, the outbox pattern that the per-service databases each own independently and
+          that the outbox dead-letter alert watches.</li>
           </ul>
           <hr>
           <h2 id="rubric-tag-summary">Rubric tag summary</h2>
@@ -984,23 +1051,23 @@
           </thead>
           <tbody><tr>
           <td>§8 Data Architecture</td>
-          <td><a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, the SQL/PS copy scripts, POST-CUTOVER downgrade runbook</td>
+          <td><a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> and the per-service database declarations; the POST-CUTOVER downgrade runbook</td>
           </tr>
           <tr>
           <td>§11 Security</td>
-          <td><code>azure-setup.sh</code> (UAMI / OIDC), <code>DISASTER-RECOVERY.md</code> (managed identity, Key Vault), <code>SQL-MANAGED-IDENTITY.md</code> (staged passwordless SQL, accepted public-network risk)</td>
+          <td><code>azure-setup.sh</code> (UAMI / OIDC / least privilege), <code>DISASTER-RECOVERY.md</code> (managed identity, Key Vault), <code>SQL-MANAGED-IDENTITY.md</code> (staged passwordless SQL, accepted public-network risk)</td>
           </tr>
           <tr>
           <td>§13 Observability</td>
-          <td><code>DISASTER-RECOVERY.md</code> (alert thresholds and severities), <code>OPERATIONS.md</code> (per-alert triage, build-gated pairing)</td>
+          <td><code>DISASTER-RECOVERY.md</code> (alert thresholds and severities), <code>OPERATIONS.md</code> (per-alert triage, the build-gated pairing, the no-dashboard decision)</td>
           </tr>
           <tr>
           <td>§17 DevOps &amp; Deployment</td>
-          <td><code>azure-setup.sh</code>, <code>cutover-per-service-dbs.yml</code>, copy scripts, <code>Docs/MobileReleaseRunbook.md</code> (the manual store-submission path)</td>
+          <td><code>azure-setup.sh</code>, <code>POST-CUTOVER-atldevcon-downgrade.md</code>, <code>Docs/MobileReleaseRunbook.md</code> (the manual store-submission path)</td>
           </tr>
           <tr>
           <td>§29 Resilience &amp; Business Continuity</td>
-          <td><code>DISASTER-RECOVERY.md</code> (RTO/RPO, PITR, LTR, restore runbook, drill record), <code>dr-drill.yml</code> + <code>dr-restore-drill.ps1</code> (the drill itself, gated for recency by <code>dr-freshness</code>)</td>
+          <td><code>DISASTER-RECOVERY.md</code> (RTO/RPO, PITR, LTR, restore runbook, drill ledger), <code>dr-drill.yml</code> plus <code>dr-restore-drill.ps1</code> (the drill itself, gated for recency by <code>dr-freshness</code>)</td>
           </tr>
           <tr>
           <td>§30 Compliance/Privacy</td>
@@ -1008,23 +1075,31 @@
           </tr>
           <tr>
           <td>§31 Cost/FinOps</td>
-          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 → Basic downgrade)</td>
+          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 to Basic downgrade); the thinned telemetry stream documented in <code>OPERATIONS.md:176-207</code></td>
+          </tr>
+          <tr>
+          <td>§34 Architecture Governance</td>
+          <td>The deliberate deletion of the spent one-time cutover tooling; <code>OPERATIONS.md:165-171</code>, which states exactly which alerts the pairing gate does and does not cover</td>
           </tr>
           </tbody></table></div>
           <hr>
           <h2 id="not-determinable-from-source">Not determinable from source</h2>
           <ul>
-          <li><strong><code>ALERT_EMAIL</code> variable</strong>: <code>DISASTER-RECOVERY.md:55-57</code> and <code>OPERATIONS.md:8-11</code> both route
-          alert notifications through the <code>alertEmailAddress</code> action-group receiver fed by the
-          <code>ALERT_EMAIL</code> repository Actions variable. Whether that variable is currently set in the
-          <code>ivanball/ADC</code> repository is not determinable from the files; check Settings → Variables. If it
-          is unset the rules still exist and fire in Azure Monitor, they simply email nobody.</li>
           <li><strong>Whether the newest weekly drill is green</strong>: the drill ledger is maintained through 2026-08-10
-          (<code>DISASTER-RECOVERY.md:151-158</code>), but <code>dr-drill.yml</code> runs every Monday and a run reaches the
-          ledger only when an operator pastes the printed row back into <code>DISASTER-RECOVERY.md</code>. Any drill
-          newer than the last ledger row exists only in the Actions history, which is exactly what
-          <code>dr-freshness</code> queries (<code>deploy.yml:557</code>); it cannot be read from the repository.</li>
-          <li><strong>S0 and Basic list prices</strong>: the DTU counts are in source (<code>main.bicep:637</code> sets Basic capacity
+          (<code>DISASTER-RECOVERY.md:152-159</code>), but <code>dr-drill.yml</code> runs every Monday and a run reaches the ledger
+          only when an operator pastes the printed row back into <code>DISASTER-RECOVERY.md</code>. Any drill newer than
+          the last ledger row exists only in the Actions history, which is exactly what <code>dr-freshness</code> queries
+          (<code>deploy.yml:734-736</code>); it cannot be read from the repository.</li>
+          <li><strong>The live values of the three SQL managed-identity repository variables</strong>: <code>main.bicep:36</code> shows
+          the safe default (<code>false</code>) and <code>deploy.yml:1133</code> shows that the deployed value comes from
+          <code>vars.USE_MANAGED_IDENTITY_SQL</code>. The variable&#39;s current value is repository configuration, not
+          source. Check Settings, then Secrets and variables, then Actions.</li>
+          <li><strong>Whether the Notification Hub namespace actually exists in Azure</strong>: <code>main.bicep:746-760</code> declares
+          the namespace, hub and auth rule as <code>existing</code>, so the template asserts nothing about their
+          presence. With <code>deployNotificationHub</code> defaulting to <code>true</code> (<code>main.bicep:123</code>), a deploy fails to
+          resolve <code>listKeys()</code> if they were never provisioned out of band. Only an <code>az</code> query against the
+          subscription can settle it.</li>
+          <li><strong>S0 and Basic list prices</strong>: the DTU counts are in source (<code>main.bicep:629-632</code> sets Basic capacity
           5), but the monthly costs are Azure list pricing, not a repository fact. Check the Azure pricing
           page before quoting a saving.</li>
           </ul>
@@ -1038,10 +1113,7 @@
             <p class="doc-toc-title">On this page</p>
             <ul>
             <li><a href="#azure-setupsh-one-time-azure-bootstrap">azure-setup.sh, One-time Azure bootstrap</a></li>
-            <li><a href="#the-database-per-service-cutover-story">The database-per-service cutover story</a></li>
-            <li><a href="#copy-atldevcon-to-per-service-dbsazureps1-azure-data-copy">copy-atldevcon-to-per-service-dbs.azure.ps1, Azure data copy</a></li>
-            <li><a href="#migrate-atldevcon-to-per-service-dbsps1-local-data-copy-wrapper">migrate-atldevcon-to-per-service-dbs.ps1, local data copy wrapper</a></li>
-            <li><a href="#migrate-atldevcon-to-per-service-dbssql-local-sql-copy-script">migrate-atldevcon-to-per-service-dbs.sql, local SQL copy script</a></li>
+            <li><a href="#the-database-per-service-cutover-and-why-its-scripts-are-gone">The database-per-service cutover, and why its scripts are gone</a></li>
             <li><a href="#infradisaster-recoverymd-dr-runbook">infra/DISASTER-RECOVERY.md, DR runbook</a></li>
             <li><a href="#dr-drillyml-and-dr-restore-drillps1-the-adr-009-restore-drill">dr-drill.yml and dr-restore-drill.ps1, the ADR-009 restore drill</a></li>
             <li><a href="#infraoperationsmd-day-2-alert-triage-runbook">infra/OPERATIONS.md, day-2 alert triage runbook</a></li>
@@ -1050,7 +1122,7 @@
             <li><a href="#play-store-captureps1-android-screenshot-capture">play-store-capture.ps1, Android screenshot capture</a></li>
             <li><a href="#play-store-composeps1-play-store-screenshot-compositor">play-store-compose.ps1, Play Store screenshot compositor</a></li>
             <li><a href="#docsmobilereleaserunbookmd-store-submission-runbook">Docs/MobileReleaseRunbook.md, store-submission runbook</a></li>
-            <li><a href="#the-database-per-service-cutover-in-full-context">The database-per-service cutover in full context</a></li>
+            <li><a href="#the-operational-artifacts-in-full-context">The operational artifacts in full context</a></li>
             <li><a href="#rubric-tag-summary">Rubric tag summary</a></li>
             <li><a href="#not-determinable-from-source">Not determinable from source</a></li>
             </ul>

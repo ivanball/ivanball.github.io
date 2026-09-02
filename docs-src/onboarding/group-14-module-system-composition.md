@@ -2,20 +2,25 @@
 
 **What this chapter covers.** This is the wiring layer, the code that turns a pile of layered
 assemblies into a running host. It answers three questions a new host author asks: *how does the
-process discover and assemble its modules?*, *in what order does DI get built so decorators wrap the
-right handlers?*, and *where do the dozens of `appsettings.json` knobs land as typed objects?* The
-cast is small but load-bearing: the [`IModule`](#imodule) contract and its
+process discover and assemble its modules?*, *in what order does DI get built so the decorators wrap
+the right handlers?*, and *where do the dozens of `appsettings.json` knobs land as typed objects?*
+The cast is small but load-bearing: the [`IModule`](#imodule) contract and its
 [`IModuleSeeder`](#imoduleseeder) sidekick; the [`ModuleLoader`](#moduleloader) that discovers and
 Kahn-sorts them; the two `extension(IServiceCollection)` [`DependencyInjection`](#dependencyinjection)
-composition roots (Application and Infrastructure); the [`AssemblyReference`](#assemblyreference) /
+composition roots (Application and Infrastructure) plus the
+[`MmcaApplicationPipelineBuilder`](#mmcaapplicationpipelinebuilder) and the
+[`DecoratorPipelineSeal`](#decoratorpipelineseal) marker that together make the ordering rule
+enforceable instead of merely documented; the [`AssemblyReference`](#assemblyreference) /
 [`ClassReference`](#classreference) assembly anchors that Scrutor and the architecture tests pin to;
 the two data-source attributes ([`UseDataSourceAttribute`](#usedatasourceattribute),
 [`UseDatabaseAttribute`](#usedatabaseattribute)); the whole **Settings** family,
 [`ApplicationSettings`](#applicationsettings) / [`ModulesSettings`](#modulessettings) /
-[`ModuleSettings`](#modulesettings) in Application plus the Infrastructure bindings
-([`ConnectionStringSettings`](#connectionstringsettings), [`DataSourcesSettings`](#datasourcessettings),
-[`MessageBusSettings`](#messagebussettings), [`OutboxSettings`](#outboxsettings),
-[`PersistenceSettings`](#persistencesettings), the JWT/JWKS group, [`SmtpSettings`](#smtpsettings),
+[`ModuleSettings`](#modulesettings) / [`QueryCachePipelineSettings`](#querycachepipelinesettings) in
+Application plus the Infrastructure bindings ([`ConnectionStringSettings`](#connectionstringsettings)
+with its cross-section [`ConnectionStringSettingsValidator`](#connectionstringsettingsvalidator),
+[`DataSourcesSettings`](#datasourcessettings), [`MessageBusSettings`](#messagebussettings),
+[`OutboxSettings`](#outboxsettings), [`PersistenceSettings`](#persistencesettings),
+[`CacheSettings`](#cachesettings), the JWT/JWKS group, [`SmtpSettings`](#smtpsettings),
 [`PushNotificationSettings`](#pushnotificationsettings), [`NativePushSettings`](#nativepushsettings),
 [`FileStorageSettings`](#filestoragesettings)) and the opt-in feature sections
 ([`SchedulerSettings`](#schedulersettings), [`AuditTrailSettings`](#audittrailsettings),
@@ -32,10 +37,12 @@ separate service processes from the **same module code**, configuration-switched
 Cross-Cutting Concerns]` and `[Rubric §3, Clean Architecture]` also run throughout: composition is
 where the inward-pointing dependency rule gets physically realized (Infrastructure references
 Application references Domain references Shared), and where cross-cutting concerns are registered once
-for every module rather than per-feature. The two ADRs that explain *why* this shape exists are
-[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) (service-extraction
-topology) and [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)
-(database-per-service).
+for every module rather than per-feature. The ADRs that explain *why* this shape exists are
+[ADR-059](https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html) (the module
+contract itself), [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)
+(service-extraction topology), [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)
+(database-per-service) and [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html)
+(the decorator pipeline whose ordering rule this chapter enforces).
 
 ## The module contract and the boundary it creates
 
@@ -61,8 +68,8 @@ in its own service the Engagement module is *disabled* in that host's config, ye
 `GetSessionBookmarkCountHandler` still needs Engagement's `IBookmarkCountService`, so the disabled
 Engagement module contributes a stub and the host then *replaces* that stub with a typed gRPC client
 pointed at the real Engagement process
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:342-350`). Application code never
-learns which path it got; the transport choice lives entirely at the composition edge
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:328-332`, `:349`). Application code
+never learns which path it got; the transport choice lives entirely at the composition edge
 ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). `[Rubric §2,
 Design Patterns]` applies here: this is a clean strategy / null-object pairing (real service, disabled
 stub, remote client) rather than scattered `if (moduleEnabled)` checks.
@@ -70,63 +77,70 @@ stub, remote client) rather than scattered `if (moduleEnabled)` checks.
 ## Discovery and Kahn-ordered registration
 
 [`ModuleLoader`](#moduleloader)
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:15`) is the engine. Its
-`DiscoverAndRegister` comes in two overloads: the short one (`ModuleLoader.cs:52`) scans
-`AppDomain.CurrentDomain.GetAssemblies()`, and the explicit-assemblies overload
-(`ModuleLoader.cs:73`) takes the list to scan, which its own doc comment recommends for hosts because
-the AppDomain scan only sees assemblies already loaded, so a referenced-but-untouched module assembly
-is silently absent from discovery (`ModuleLoader.cs:61-65`). Either way the scan guards each
-`GetTypes()` call against a throwing assembly so one bad reference does not abort the whole pass
-(`ModuleLoader.cs:86-99`), then instantiates every concrete [`IModule`](#imodule) via
-`Activator.CreateInstance` (`ModuleLoader.cs:101-104`) and every concrete
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:15`) is the engine. Its one
+`DiscoverAndRegister` overload (`ModuleLoader.cs:58-64`) takes the assemblies to scan as a required
+parameter: there is no AppDomain-scan convenience, and the parameter doc says why, because an
+AppDomain scan only sees assemblies already loaded, so a module assembly that is referenced but not
+yet touched by any code path would be silently absent from discovery (`ModuleLoader.cs:48-53`). The
+scan guards each `GetTypes()` call against a throwing assembly so one bad reference logs a warning
+instead of aborting the whole pass (`ModuleLoader.cs:71-84`), then instantiates every concrete
+[`IModule`](#imodule) via `Activator.CreateInstance` (`ModuleLoader.cs:86-89`) and every concrete
 [`IModuleSeeder`](#imoduleseeder) into a case-insensitive dictionary keyed by `ModuleName`
-(`ModuleLoader.cs:106-109`).
+(`ModuleLoader.cs:91-94`).
 
-Ordering is **Kahn's topological sort** (`ModuleLoader.cs:286-336`) over the modules' declared
+Ordering is **Kahn's topological sort** (`ModuleLoader.cs:271-321`) over the modules' declared
 `Dependencies`. Kahn's algorithm is BFS over a dependency graph: compute each module's in-degree
-(count of unprocessed dependencies, `ModuleLoader.cs:291`), build the reverse adjacency list of
-dependents (`ModuleLoader.cs:294-307`), seed a queue with the zero-in-degree modules
-(`ModuleLoader.cs:310-311`), and as each is emitted decrement its dependents' in-degrees, enqueuing
-any that reach zero (`ModuleLoader.cs:320-323`). A dependency name that was never discovered is
-skipped rather than treated as an edge (`ModuleLoader.cs:301-302`); validation catches it later. If
+(count of unprocessed dependencies, `ModuleLoader.cs:276`), build the reverse adjacency list of
+dependents (`ModuleLoader.cs:279-292`), seed a queue with the zero-in-degree modules
+(`ModuleLoader.cs:295-296`), and as each is emitted decrement its dependents' in-degrees, enqueuing
+any that reach zero (`ModuleLoader.cs:305-309`). A dependency name that was never discovered is
+skipped rather than treated as an edge (`ModuleLoader.cs:286-287`); validation catches it later. If
 fewer modules come out than went in, the remainder form a cycle and the loader throws with the
-offending names (`ModuleLoader.cs:328-333`). The payoff is an ordering where a module's DI
+offending names (`ModuleLoader.cs:313-318`). The payoff is an ordering where a module's DI
 registrations always exist *before* any dependent registers, which matters because the CQRS decorator
 pipeline (below) can only wrap handlers that are already in the container.
 
 For each sorted module the loader checks [`ModulesSettings.IsModuleEnabled`](#modulessettings)
-(`ModuleLoader.cs:116`). A disabled module gets `RegisterDisabledStubs` called, has the exact service
-descriptors that call added recorded (`ModuleLoader.cs:122-124`), and is listed in
-`DisabledModuleNames` (`ModuleLoader.cs:126`); an enabled one runs `ValidateModuleDependencies` then
-`RegisterEnabledModule` (`ModuleLoader.cs:130-131`) and contributes its seeder if one was found
-(`ModuleLoader.cs:133-136`). Registration is also where **per-module configuration** is loaded by
+(`ModuleLoader.cs:101`). A disabled module gets `RegisterDisabledStubs` called, has the exact service
+descriptors that call added recorded (`ModuleLoader.cs:107-109`), and is listed in
+`DisabledModuleNames` (`ModuleLoader.cs:111`); an enabled one runs `ValidateModuleDependencies` then
+`RegisterEnabledModule` (`ModuleLoader.cs:115-116`) and contributes its seeder if one was found
+(`ModuleLoader.cs:118-121`). Registration is also where **per-module configuration** is loaded by
 convention: before calling `module.Register(...)` the loader adds `modules.{name}.json` and, when an
 environment name is passed, `modules.{name}.{environment}.json` to the configuration builder
-(`ModuleLoader.cs:189-193`), so a module can ship its own config file. Dependency validation
-(`ModuleLoader.cs:140-173`) is microservice-aware: a dependency that is disabled in-process but listed
+(`ModuleLoader.cs:174-178`), so a module can ship its own config file. Dependency validation
+(`ModuleLoader.cs:125-158`) is microservice-aware: a dependency that is disabled in-process but listed
 in that consumer's [`ModuleSettings`](#modulesettings) `RemoteDependencies` is treated as *satisfied
 remotely*, and only a `RequiresDependencies = true` module with a genuinely unsatisfied dependency
-throws, with an error message that spells out the three ways to fix it
-(`ModuleLoader.cs:154-162`). Every step emits a `[LoggerMessage]`-generated structured log
-(`ModuleLoader.cs:338-357`), so the startup log tells you exactly which modules loaded, in what order,
-and how long each took (`ModuleLoader.cs:195-198`).
+throws, with an error message that spells out the three ways to fix it (`ModuleLoader.cs:139-147`).
+Every step emits a `[LoggerMessage]`-generated structured log (`ModuleLoader.cs:323-342`), so the
+startup log tells you exactly which modules loaded, in what order, and how long each took
+(`ModuleLoader.cs:180-183`).
 
 Trusting configuration is not quite enough, so the loader offers a second, post-build gate:
-`ValidateRemoteDependencies(serviceProvider)` (`ModuleLoader.cs:216-238`) walks every remote-declared
+`ValidateRemoteDependencies(serviceProvider)` (`ModuleLoader.cs:201-223`) walks every remote-declared
 dependency, resolves each service type the disabled module's stub had registered, throws when one does
 not resolve at all, and logs a warning when it still resolves to the stub implementation
-(`ModuleLoader.cs:240-261`). That converts a forgotten gRPC-client registration from a first-request
+(`ModuleLoader.cs:225-246`). That converts a forgotten gRPC-client registration from a first-request
 mystery into a startup failure. It is a capability, not a habit: today only
 `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs` calls it, and no
 ADC or Store host does. `[Rubric §13, Observability & Operability]` is the category at play in both
 this method and the log messages above.
 
-A subtlety worth stating against the source: the loader is **not** called from inside
-`AddApplication()`. Each host's `Program.cs` constructs a [`ModuleLoader`](#moduleloader), hands it a
-logger, calls `DiscoverAndRegister` directly, then registers the loader instance itself as a singleton
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:335-340`). After discovery the
-loader also drives startup data through `SeedAllAsync` (`ModuleLoader.cs:270-276`), which invokes each
-collected [`IModuleSeeder.SeedAsync`](#imoduleseeder) in registration order.
+The loader is **not** called from inside `AddApplication()`, and a host no longer constructs it by
+hand either. `AddModuleHost` in the API layer
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:51`) binds and
+validates [`ApplicationSettings`](#applicationsettings) and [`ModulesSettings`](#modulessettings)
+(`ModuleHostExtensions.cs:61-76`), constructs the [`ModuleLoader`](#moduleloader) with the host's
+bootstrap logger, registers it as a singleton (`ModuleHostExtensions.cs:78-82`), and hands back a
+[`ModuleHostContext`](group-12-api-hosting-mapping.md#modulehostcontext) whose `RegisterModules`
+method is the discovery step
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostContext.cs:66-77`). Discovery
+deliberately does *not* run inside `AddModuleHost`: it has to land inside the application pipeline
+described next, and its position relative to a host's other steps is a per-host decision
+(`ModuleHostContext.cs:12-19`). After discovery the loader also drives startup data through
+`SeedAllAsync` (`ModuleLoader.cs:255-261`), which invokes each collected
+[`IModuleSeeder.SeedAsync`](#imoduleseeder) in registration order.
 [`IModuleSeeder`](#imoduleseeder)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModuleSeeder.cs:8`) is a two-member
 interface, `ModuleName` (`IModuleSeeder.cs:13`, matched case-insensitively against an
@@ -134,87 +148,76 @@ interface, `ModuleName` (`IModuleSeeder.cs:13`, matched case-insensitively again
 (`IModuleSeeder.cs:18`), deliberately separate from `IModule` so seeding runs *after* the whole
 container is built and a real `IServiceProvider` exists.
 
-## The two composition roots and the ordering they enforce
+## The two composition roots, and the pipeline that seals them
 
 Service registration itself lives in two static [`DependencyInjection`](#dependencyinjection) classes,
 each using a C# `extension(IServiceCollection services)` block (see
-[primer §4](00-primer.md#4-c-build-and-code-style-conventions) for the `extension(T)` syntax). The
-**Application** root
-(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:22`) exposes `AddApplication()`
-(`DependencyInjection.cs:30`), which fronts [`ApplicationSettings`](#applicationsettings) with its
-[`IApplicationSettings`](#iapplicationsettings) abstraction (`DependencyInjection.cs:32`), registers
-the core singletons ([`IDomainEventDispatcher`](group-04-events-outbox.md#idomaineventdispatcher) at
-`:34`, [`IEventUpcasterRegistry`](group-05-cqrs-pipeline.md#ieventupcasterregistry) at `:40`,
+[primer §4](00-primer.md#4-c-build-and-code-style-conventions) for the `extension(T)` syntax, and
+[ADR-106](https://ivanball.github.io/docs/adr/106-extension-members-as-public-di-surface.html) for why
+the public DI surface is written that way). The **Application** root
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:25`) exposes `AddApplication()`
+(`DependencyInjection.cs:33`), which registers the core singletons
+([`IDomainEventDispatcher`](group-04-events-outbox.md#idomaineventdispatcher) at `:34`,
+[`IEventUpcasterRegistry`](group-05-cqrs-pipeline.md#ieventupcasterregistry) at `:40`,
 [`INavigationMetadataProvider`](group-03-querying-specifications.md#inavigationmetadataprovider) at
-`:42`, [`IEntityQueryPipeline`](group-03-querying-specifications.md#ientityquerypipeline) at `:43`),
-and pulls in the framework's own FluentValidation validators by assembly (`DependencyInjection.cs:48`).
-The upcaster registry is registered unconditionally on purpose: with no upcasters it is an empty
-registry whose operations are the identity, so both delivery paths can depend on it without a null
-check (`DependencyInjection.cs:36-40`,
+`:42`, [`IEntityQueryPipeline`](group-03-querying-specifications.md#ientityquerypipeline) at `:43`)
+and pulls in the framework's own FluentValidation validators by assembly
+(`DependencyInjection.cs:48`). Each of those four singletons is registered with `TryAddSingleton`, so
+a host that registered its own first keeps it. The upcaster registry is registered unconditionally on purpose: with no upcasters it
+is an empty registry whose operations are the identity, so both delivery paths can depend on it
+without a null check (`DependencyInjection.cs:36-40`,
 [ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html)), and individual
 upcasters accumulate through `AddEventUpcaster<TSource, TTarget, TUpcaster>()`
-(`DependencyInjection.cs:283-290`).
+(`DependencyInjection.cs:551`).
 
 The Application root also owns `ScanModuleApplicationServices<TAssemblyMarker>()`
-(`DependencyInjection.cs:140-213`), the Scrutor convention scan every module's `AddXModule` calls:
-domain-event and integration-event handlers as singletons (`DependencyInjection.cs:144-155`), DTO
-mappers, the opt-in
+(`DependencyInjection.cs:161-163`) and its `Assembly`-typed overload (`DependencyInjection.cs:179`),
+the Scrutor convention scan every module's `AddXModule` call makes: domain-event and integration-event
+handlers as singletons (`DependencyInjection.cs:184-196`), DTO mappers, the opt-in
 [`IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`](group-05-cqrs-pipeline.md#ientitydtoprojectortentity-tentitydto-tidentifiertype)
-projectors and request mappers scoped (`DependencyInjection.cs:157-176`), command and query handlers
-scoped (`DependencyInjection.cs:178-188`), validators from the module assembly
-(`DependencyInjection.cs:190`), and finally a reflection pass that `TryAdd`s a
+projectors, request mappers and update appliers scoped (`DependencyInjection.cs:198-236`), command and
+query handlers scoped (`DependencyInjection.cs:238-248`), validators from the module assembly
+(`DependencyInjection.cs:250`), and finally a reflection pass that `TryAdd`s a
 `CommandRequestValidator<,>` for every command implementing `ICommandWithRequest<T>`
-(`DependencyInjection.cs:194-210`) so an explicit validator still wins.
-
-The **Infrastructure** root
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:40`) exposes
-`AddInfrastructure(configuration)` (`DependencyInjection.cs:50`), which binds most of the settings
-types in this chapter, registers the three save interceptors as singletons
-(`DependencyInjection.cs:57-63`), the persistence stack (data-source service and resolver, entity
-registry, the scoped and singleton context factories, repositories, unit of work,
-`DependencyInjection.cs:52-109`), Scrutor-scans the framework's own EF entity configurations
-(`DependencyInjection.cs:113-117`), adds caching (`DependencyInjection.cs:119`), enrolls a startup
-validator that fails the host on a bad upcaster graph (`DependencyInjection.cs:160-161`), and adds the
-two outbox hosted services (`DependencyInjection.cs:164-165`). Optional add-ons sit alongside it:
-`AddPushNotifications` (`DependencyInjection.cs:541`), `AddNativePushNotifications`
-(`DependencyInjection.cs:576`), `AddAzureBlobFileStorage` (`DependencyInjection.cs:608`),
-`AddBrokerMessaging` (`DependencyInjection.cs:660`), and the typed-client helper
-`AddTypedServiceClient<TInterface, TImplementation>(serviceName)` (`DependencyInjection.cs:734`) that
-swaps an in-process abstraction for an HTTP transport.
-
-`AddCaching` (`MMCA.Common.Infrastructure/DependencyInjection.cs:177`) also registers this chapter's
-one cross-replica primitive: an [`IDistributedLock`](group-05-cqrs-pipeline.md#idistributedlock) that
-resolves to [`RedisDistributedLock`](#redisdistributedlock) when the host has an
-`IConnectionMultiplexer` registered, and to the warn-once
-[`InProcessDistributedLock`](#inprocessdistributedlock) otherwise
-(`MMCA.Common.Infrastructure/DependencyInjection.cs:208-222`). The Redis implementation is the
-standard `SET key token NX PX ttl` acquire
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/RedisDistributedLock.cs:66-68`) with a
-compare-and-delete release script (`RedisDistributedLock.cs:36-37`), handing back a
-[`RedisLockHandle`](#redislockhandle) that releases exactly its own acquisition, once
-(`RedisDistributedLock.cs:88-98`); the fallback is exclusive only inside one process, which is exactly
-what its warning says out loud
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/InProcessDistributedLock.cs:75`), and
-its [`InProcessLockHandle`](#inprocesslockhandle) simply removes the key from a
-`ConcurrentDictionary` (`InProcessDistributedLock.cs:79-91`). A multi-replica host that registers no
-Redis client therefore gets one execution of the guarded section per replica. `[Rubric §29, Resilience]`
-and `[Rubric §12, Performance & Scalability]` both touch this pair: the degradation is deliberate,
-announced, and never silent.
+(`DependencyInjection.cs:252-266`) so an explicit validator still wins.
 
 The **order** of these calls is a hard contract in exactly one respect, and it is the reason
-`AddApplicationDecorators()` (`MMCA.Common.Application/DependencyInjection.cs:110`) must come *last*.
+`AddApplicationDecorators()` (`MMCA.Common.Application/DependencyInjection.cs:115`) must come *last*.
 Decorators are registered with **Scrutor's `TryDecorate`**, which wraps *existing* registrations, so
-every module's concrete handlers must already be in the container or there is nothing to wrap. Beyond
-that, the relative position of `AddInfrastructure` and `AddAPI` is not load-bearing. `[Rubric §6, CQRS
-& Event-Driven]` and `[Rubric §1, SOLID]` (open/closed) live here: cross-cutting behavior is added by
-wrapping, not by editing handlers. `AddApplicationDecorators` also encodes the **execution order** via
-`TryDecorate`'s reverse-registration rule (registered innermost first,
-`MMCA.Common.Application/DependencyInjection.cs:115-128`), so the command pipeline ends up
+every module's concrete handlers must already be in the container or there is nothing to wrap, and a
+handler registered afterwards runs completely unwrapped with nothing failing at startup to say so
+(`DependencyInjection.cs:594-597`). Rather than leaving that as a comment, the framework enforces it.
+`AddApplicationDecorators()` finishes by calling `SealPipeline`, which `TryAdd`s a singleton instance
+of the private marker [`DecoratorPipelineSeal`](#decoratorpipelineseal)
+(`DependencyInjection.cs:145`, `:699`, `:712-713`), and every registration entry point that
+contributes handlers (`ScanModuleApplicationServices`, `AddEntityCrud`, `AddEntityUpdateVerb`,
+`AddEntityUpdate`, `AddMmcaApplicationPipeline` itself) opens with `ThrowIfPipelineSealed`, which scans
+the collection for that marker and throws a message naming the offending call
+(`DependencyInjection.cs:715-724`). The whole sequence is available as one call,
+`AddMmcaApplicationPipeline(configure)` (`DependencyInjection.cs:612-621`): it runs `AddApplication()`,
+invokes the callback with a [`MmcaApplicationPipelineBuilder`](#mmcaapplicationpipelinebuilder)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/MmcaApplicationPipelineBuilder.cs:12`) whose
+`ScanModule<TAssemblyMarker>` (`:27`), `ScanModules(params Assembly[])` (`:41`) and
+`Register(Action<IServiceCollection>)` (`:62`) steps are where module discovery, gRPC clients and
+broker messaging go, and then closes with `AddApplicationDecorators()`. The builder's constructor is
+`internal` precisely so it cannot be created outside that call, because outside it nothing keeps the
+decorators last (`MmcaApplicationPipelineBuilder.cs:9-14`). A third guard, `VerifyDecoratorPipeline()`
+(`DependencyInjection.cs:649`), is never called automatically: it is the hook an architecture fitness
+test calls after replaying a host's own registration sequence, and it reports every
+`ICommandHandler<,>` / `IQueryHandler<,>` descriptor that still carries an implementation type, which
+after decoration is proof that nothing wrapped it (`DependencyInjection.cs:658-690`).
+`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:66` and
+`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/ApplicationPipelineCompositionTests.cs:158` are
+its callers today.
+
+`AddApplicationDecorators` also encodes the **execution order** via `TryDecorate`'s
+reverse-registration rule (registered innermost first,
+`MMCA.Common.Application/DependencyInjection.cs:126-143`), so the command pipeline ends up
 `FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Transactional -> handler`
-and the query pipeline `FeatureGate -> Authorization -> Logging -> Caching -> Timeout -> handler`
-([ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html)). The rationale for
-each position is written out in the method's own doc comment
-(`MMCA.Common.Application/DependencyInjection.cs:84-107`): authorization sits outside caching so a
+and the query pipeline `FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout ->
+handler` ([ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html)). The
+rationale for each position is written out in the method's own doc comment
+(`MMCA.Common.Application/DependencyInjection.cs:86-113`): authorization sits outside caching so a
 denied request neither reads nor populates the cache, validation sits outside the transaction so an
 invalid command never opens one, and the timeout budget sits inside validation and outside the
 transaction so it covers the database work and cancels it rather than leaving it open. The decorator
@@ -224,65 +227,115 @@ types themselves (for example
 and [`TimeoutCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#timeoutcommanddecoratortcommand-tresult))
 are documented in the CQRS-pipeline chapter; this chapter owns only the *wiring* of them. An optional
 MiniProfiler pair is registered separately by an opt-in `AddApplicationProfiling()`
-(`MMCA.Common.Application/DependencyInjection.cs:297-303`), never by `AddApplicationDecorators()`.
+(`MMCA.Common.Application/DependencyInjection.cs:565`), never by `AddApplicationDecorators()`.
+`[Rubric §6, CQRS & Event-Driven]` and `[Rubric §1, SOLID]` (open/closed) live here: cross-cutting
+behavior is added by wrapping, not by editing handlers.
+
+The **Infrastructure** root
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:39`) exposes
+`AddInfrastructure(configuration)` (`DependencyInjection.cs:49`), which binds most of the settings
+types in this chapter, registers the three save interceptors as singletons
+(`DependencyInjection.cs:53-62`), the persistence stack (data-source service and resolver, entity
+registry, the scoped and singleton context factories, repositories, unit of work,
+`DependencyInjection.cs:51-107`), Scrutor-scans the framework's own EF entity configurations
+(`DependencyInjection.cs:110-115`), adds caching (`DependencyInjection.cs:117`), registers the refresh
+session store and its retention sweep behind the same flag that maps the table
+(`DependencyInjection.cs:145-158`), and enrolls a startup validator that fails the host on a bad
+upcaster graph (`DependencyInjection.cs:176-177`). The outbox hosted services are **conditional**: the
+method reads [`MessageBusSettings`](#messagebussettings), calls `EnsureOutboxAvailableForProvider`, and
+adds [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) plus `OutboxCleanupService` only
+when `IsOutboxEnabled`, otherwise registering
+[`OutboxDisabledNoticeService`](group-04-events-outbox.md#outboxdisablednoticeservice) so the choice is
+visible in the log (`DependencyInjection.cs:187-198`,
+[ADR-100](https://ivanball.github.io/docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html)).
+The `OutboxMessages` table stays mapped either way, so flipping the flag is never a migration
+(`DependencyInjection.cs:181-186`). Optional add-ons sit alongside the root:
+`AddCommonHybridCache` (`DependencyInjection.cs:326`), `AddScheduledJobs` (`:391`), `AddAuditTrail`
+(`:462`), `AddMultiTenancy` (`:511`), `AddEntityConfigurationAssembly` (`:583`),
+`AddNotificationInfrastructure` (`:600`), `AddPushNotifications` (`:615`),
+`AddNativePushNotifications` (`:648`), `AddAzureBlobFileStorage` (`:680`), `AddBrokerMessaging`
+(`:732`) and the typed-client helper `AddTypedServiceClient<TInterface, TImplementation>(serviceName)`
+(`:819`) that swaps an in-process abstraction for an HTTP transport.
+
+`AddCaching` (`MMCA.Common.Infrastructure/DependencyInjection.cs:215`) also registers this chapter's
+one cross-replica primitive: an [`IDistributedLock`](group-05-cqrs-pipeline.md#idistributedlock) that
+resolves to [`RedisDistributedLock`](#redisdistributedlock) when the host has an
+`IConnectionMultiplexer` registered, and to the warn-once
+[`InProcessDistributedLock`](#inprocessdistributedlock) otherwise
+(`MMCA.Common.Infrastructure/DependencyInjection.cs:273-287`). The Redis implementation is the
+standard `SET key token NX PX ttl` acquire
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/RedisDistributedLock.cs:67`) with a
+compare-and-delete release script (`RedisDistributedLock.cs:36-37`, evaluated at `:104`), handing back
+a [`RedisLockHandle`](#redislockhandle) that releases exactly its own acquisition, once
+(`RedisDistributedLock.cs:88`); the fallback is exclusive only inside one process, which is exactly
+what its warning says out loud
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/InProcessDistributedLock.cs:74-75`),
+and its [`InProcessLockHandle`](#inprocesslockhandle) simply removes the key from a
+`ConcurrentDictionary` (`InProcessDistributedLock.cs:79-91`). A multi-replica host that registers no
+Redis client therefore gets one execution of the guarded section per replica. `[Rubric §29,
+Resilience]` and `[Rubric §12, Performance & Scalability]` both touch this pair: the degradation is
+deliberate, announced, and never silent.
 
 ## Opt-in platform features are composed the same way
 
 Four capabilities are registered beside the roots rather than inside them, and they share one
 discipline: **registering a feature is not the same as turning it on.** `AddScheduledJobs(configuration)`
-(`MMCA.Common.Infrastructure/DependencyInjection.cs:317`) binds
+(`MMCA.Common.Infrastructure/DependencyInjection.cs:391`) binds
 [`SchedulerSettings`](#schedulersettings) and enrolls [`ScheduledJobRunner`](#scheduledjobrunner)
 through `TryAddEnumerable` rather than `AddHostedService`, precisely so two modules calling it cannot
-start two runners racing for the same rows (`DependencyInjection.cs:324-328`); individual jobs arrive
-through `AddScheduledJob<TJob>()` (`DependencyInjection.cs:352-357`), each registered scoped so the
-runner can resolve it in a fresh scope per execution. `AddAuditTrail(configuration)`
-(`DependencyInjection.cs:388`) binds [`AuditTrailSettings`](#audittrailsettings), adds the
+start two runners racing for the same rows (`DependencyInjection.cs:398-402`); individual
+[`IScheduledJob`](group-05-cqrs-pipeline.md#ischeduledjob) implementations arrive through
+`AddScheduledJob<TJob>()` (`DependencyInjection.cs:426`), each registered scoped so the runner can
+resolve it in a fresh scope per execution. `AddAuditTrail(configuration)`
+(`DependencyInjection.cs:462`) binds [`AuditTrailSettings`](#audittrailsettings), adds the
 [`AuditTrailSaveChangesInterceptor`](group-07-persistence-ef-core.md#audittrailsavechangesinterceptor)
 and the [`AuditTrailReader`](group-07-persistence-ef-core.md#audittrailreader) that projects
 [`AuditTrailEntryDTO`](#audittrailentrydto) rows, and contributes its own retention job
-(`DependencyInjection.cs:390-404`), which only actually runs when the host also enabled the scheduler.
-`AddMultiTenancy(configuration)` (`DependencyInjection.cs:437`) binds
+(`DependencyInjection.cs:464-478`), which only actually runs when the host also enabled the scheduler.
+`AddMultiTenancy(configuration)` (`DependencyInjection.cs:511`) binds
 [`TenancySettings`](#tenancysettings) and registers
 [`TenancySettingsValidator`](#tenancysettingsvalidator) as an `IValidateOptions<TenancySettings>`
-(`DependencyInjection.cs:439-446`); note what it does *not* do, because that is the design:
+through `TryAddEnumerable` (`DependencyInjection.cs:513-521`); note what it does *not* do, because
+that is the design:
 [`TenantSaveChangesInterceptor`](group-07-persistence-ef-core.md#tenantsavechangesinterceptor) and
 [`ITenantContext`](group-05-cqrs-pipeline.md#itenantcontext) are registered unconditionally by
-`AddInfrastructure` and `AddServices` (`DependencyInjection.cs:63`, `:465`) and stay inert until a
-tenant is resolved, so the framework can never sit in the half-wired state where entities carry
+`AddInfrastructure` and `AddServices` and stay inert until a tenant is resolved, so the framework can
+never sit in the half-wired state where entities carry
 [`ITenantEntity`](group-02-domain-building-blocks.md#itenantentity) but the write-side guard is off
-([ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)). Finally
-`AddUserDataExportSection<TSection>()` (`MMCA.Common.Application/DependencyInjection.cs:240-246`)
+(`DependencyInjection.cs:59-62`, `:539`,
+[ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)). Finally
+`AddUserDataExportSection<TSection>()` (`MMCA.Common.Application/DependencyInjection.cs:508`)
 accumulates [`IUserDataExportSection`](#iuserdataexportsection) contributors into the one
-`IEnumerable` the export handler fans out over; ADC's Identity module registers two of them
-(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:42-43`). The
-governing ADRs are [ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html),
+`IEnumerable` the export handler fans out over. The governing ADRs are
+[ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html),
 [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html), ADR-073 and
-[ADR-076](https://ivanball.github.io/docs/adr/076-data-subject-export.html); `[Rubric §30,
-Compliance & Data Governance]` is the category the trail and the export both serve.
+[ADR-076](https://ivanball.github.io/docs/adr/076-data-subject-export.html); `[Rubric §30, Compliance
+& Data Governance]` is the category the trail and the export both serve.
 
 [`ScheduledJobRunner`](#scheduledjobrunner)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:39`) is the one
 of these with real runtime machinery, and it reuses the outbox's idioms wholesale. It is a
 `BackgroundService` that returns immediately (after one log line) when `Scheduler:Enabled` is false
-(`ScheduledJobRunner.cs:77-83`), waits out a 15-second startup delay so migrations finish first
-(`ScheduledJobRunner.cs:69`, `:87`), then loops: reconcile the `ScheduledJobs` rows against the
-registered jobs, claim due rows with a lease, execute, stamp the outcome, and smart-wait until the
-earliest upcoming occurrence capped at `Scheduler:PollingIntervalSeconds`
-(`ScheduledJobRunner.cs:94-126`). A claim attempt is a single filtered `ExecuteUpdateAsync` against the
-still-unleased predicate, so two racing replicas both issue it and exactly one matches
-(`ScheduledJobRunner.cs:429-439`); it returns a [`JobClaim`](#jobclaim) carrying either this replica's
-lock token or `null` when another replica won the row (`ScheduledJobRunner.cs:447`), which is what
-makes an occurrence run exactly once across a scaled host. The persisted row is
-[`ScheduledJobEntry`](#scheduledjobentry)
+(`ScheduledJobRunner.cs:77-82`), waits out a 15-second startup delay so migrations finish first
+(`ScheduledJobRunner.cs:69`, `:87`), then loops: run one cycle that reconciles the `ScheduledJobs` rows
+against the registered jobs, claims due rows with a lease, executes and stamps the outcome
+(`ScheduledJobRunner.cs:94-99`, `:200`), and smart-waits until the earliest upcoming occurrence capped
+at `Scheduler:PollingIntervalSeconds` (`ScheduledJobRunner.cs:112-120`). A claim attempt is a single
+filtered `ExecuteUpdateAsync` against the still-unleased predicate, so two racing replicas both issue
+it and exactly one matches (`ScheduledJobRunner.cs:433-435`); it returns a [`JobClaim`](#jobclaim)
+carrying either this replica's lock token or `null` when another replica won the row
+(`ScheduledJobRunner.cs:447`), which is what makes an occurrence run exactly once across a scaled host.
+The persisted row is [`ScheduledJobEntry`](#scheduledjobentry)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobEntry.cs:20`), deliberately
 not an auditable entity: it is framework bookkeeping with an explicit claim lease instead of a
-concurrency token (`ScheduledJobEntry.cs:10-13`). [`SchedulerMetrics`](#schedulermetrics)
+concurrency token, and it is host-scoped, living in the `Default` data source only
+(`ScheduledJobEntry.cs:8-19`). [`SchedulerMetrics`](#schedulermetrics)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/SchedulerMetrics.cs:16`) publishes the
 `MMCA.Common.Scheduler` meter with a run counter tagged by job and outcome
-(`SchedulerMetrics.cs:28-31`) and a duration histogram (`SchedulerMetrics.cs:39-42`), the same shape
-[`BrokerMetrics`](#brokermetrics)
+(`SchedulerMetrics.cs:28-31`), a duration histogram (`SchedulerMetrics.cs:39-42`) and a schedule-lag
+histogram (`SchedulerMetrics.cs:50`), the same shape [`BrokerMetrics`](#brokermetrics)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMetrics.cs:18`) uses for the
-`MMCA.Common.Broker` meter's fault and circuit-open counters (`BrokerMetrics.cs:30`, `:42`). So
+`MMCA.Common.Broker` meter's fault and circuit-open counters (`BrokerMetrics.cs:30`, `:43`). So
 `[Rubric §13, Observability & Operability]` is covered by instruments rather than by log scraping.
 
 ## Assembly anchors
@@ -296,9 +349,15 @@ each a trivial `static class AssemblyReference` holding `Assembly` / `AssemblyNa
 ClassReference` (`AssemblyReference.cs:18`) for the places a generic constraint forbids a static type.
 `AddApplication` uses the Application pair for the common validators
 (`MMCA.Common.Application/DependencyInjection.cs:48`) and `AddInfrastructure` uses the Infrastructure
-pair to scan entity configurations (`MMCA.Common.Infrastructure/DependencyInjection.cs:113-117`). They
+pair to scan entity configurations (`MMCA.Common.Infrastructure/DependencyInjection.cs:110-115`). They
 are deliberately behavior-free; their whole job is to *name an assembly* for the scanning and
-governance tooling.
+governance tooling. A related, test-only assembly anchor lives in
+[`CreateMigrationProofTable`](#createmigrationprooftable)
+(`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests.MigrationsFixture/CreateMigrationProofTable.cs:24`):
+a real EF migration for the framework's one SQLite context kept in its own tiny library, because EF
+selects migrations by the `[DbContext]` they carry and a migration compiled into the test assembly
+would make every test that names that assembly see a pending migration
+(`CreateMigrationProofTable.cs:11-21`).
 
 ## Configuration binding, the Settings family
 
@@ -307,24 +366,20 @@ Everything a host operator tunes arrives as a strongly-typed settings object bou
 lives next to the shape it binds. The pattern in `AddInfrastructure` is uniform:
 `services.AddOptions<T>().Bind(configuration.GetSection(T.SectionName)).ValidateDataAnnotations().ValidateOnStart()`
 (for example [`ConnectionStringSettings`](#connectionstringsettings) at
-`MMCA.Common.Infrastructure/DependencyInjection.cs:67-70`), so misconfiguration **fails fast at
+`MMCA.Common.Infrastructure/DependencyInjection.cs:64-67`), so misconfiguration **fails fast at
 startup** rather than lazily on first use
-([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)), and the
-concrete class is then usually fronted by an interface singleton so consumers depend on the
-abstraction ([`IConnectionStringSettings`](#iconnectionstringsettings) at `DependencyInjection.cs:71`,
-[`ISmtpSettings`](#ismtpsettings) at `DependencyInjection.cs:85`,
-[`IJwtSettings`](#ijwtsettings) at `DependencyInjection.cs:65`,
-[`IPushNotificationSettings`](#ipushnotificationsettings) at `DependencyInjection.cs:547`).
-`[Rubric §13, Observability & Operability]` and `[Rubric §15, Best Practices]` apply: `ValidateOnStart`
-plus DataAnnotations ranges (for example [`OutboxSettings`](#outboxsettings) `BatchSize` is
-`[Range(1, 1000)]` with a default of 50,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/OutboxSettings.cs:16-17`) turn a config
+([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)). There are
+no `ISettings` facade interfaces over these types: consumers take `IOptions<T>` (or the concrete
+singleton, for the two dictionary-shaped ones) directly. `[Rubric §13, Observability & Operability]`
+and `[Rubric §15, Best Practices]` apply: `ValidateOnStart` plus DataAnnotations ranges (for example
+[`OutboxSettings`](#outboxsettings) `BatchSize` is `[Range(1, 1000)]` with a default of 50,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/OutboxSettings.cs:15-17`) turn a config
 typo into an immediate, descriptive boot failure.
 
 The Application-layer settings drive composition itself. [`ApplicationSettings`](#applicationsettings)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:8`) carries
 `UseMiniProfiler`, `MaxPageSize` (default 500), `MaxExportRows` (`[Range(1, 10_000_000)]`, default
-100,000) and `DatabaseInitStrategy` (default `"Migrate"`, `ApplicationSettings.cs:14-32`), and is
+100,000) and `DatabaseInitStrategy` (default `"Migrate"`, `ApplicationSettings.cs:14-43`), and is
 passed by value into every `IModule.Register`. [`ModulesSettings`](#modulessettings) *is* a
 `Dictionary<string, ModuleSettings>` bound from the `"Modules"` section
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ModulesSettings.cs:7-10`) whose
@@ -333,56 +388,79 @@ note that a module absent from configuration is treated as **disabled** (`Module
 [`ModuleSettings`](#modulesettings) carries the per-module `Enabled` flag (default `true`,
 `MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ModuleSettings.cs:9`) and the
 `RemoteDependencies` list (`ModuleSettings.cs:38`) that flips a dependency from "in-process" to
-"satisfied by an extracted service".
+"satisfied by an extracted service", with a worked monolith-after-extraction config example on the
+property itself (`ModuleSettings.cs:24-35`). One more Application-layer settings class exists for a
+layering reason rather than a composition one: [`QueryCachePipelineSettings`](#querycachepipelinesettings)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Settings/QueryCachePipelineSettings.cs:20`) exposes
+the single `Cache:PopulateLockTimeout` knob the caching query decorator needs, because that decorator
+lives in Application and Application cannot reference Infrastructure where
+[`CacheSettings`](#cachesettings) binds the rest of the same section
+(`QueryCachePipelineSettings.cs:4-18`,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/CacheSettings.cs:18-22`); `AddCaching`
+binds both from the same section so they cannot drift
+(`MMCA.Common.Infrastructure/DependencyInjection.cs:232-240`).
 
-The Infrastructure settings cover the rest of the platform:
-[`ConnectionStringSettings`](#connectionstringsettings) (the `Default` source; only
-`SQLServerConnectionString` is `[Required]`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ConnectionStringSettings.cs:24-25`);
+The Infrastructure settings cover the rest of the platform, starting with the database ones.
+[`ConnectionStringSettings`](#connectionstringsettings)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ConnectionStringSettings.cs:12`) has **no
+required property at all**: SQL Server is the default engine, but a host may run entirely on SQLite or
+Cosmos, and may declare its databases through the `DataSources` section instead
+(`ConnectionStringSettings.cs:3-11`). What *is* required is that the host can reach some database, and
+that rule spans two sections, so it cannot be a data annotation:
+[`ConnectionStringSettingsValidator`](#connectionstringsettingsvalidator)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ConnectionStringSettingsValidator.cs:30`)
+is registered as an `IValidateOptions<ConnectionStringSettings>` via `TryAddEnumerable`
+(`MMCA.Common.Infrastructure/DependencyInjection.cs:71-72`) and passes only when the top-level section
+names a database on any engine or one `DataSources` entry does
+(`ConnectionStringSettingsValidator.cs:46-52`, `:56-72`), failing with a message that lists both shapes
+because which one is missing depends on whether the host is a single-database monolith or a
+database-per-module one (`ConnectionStringSettingsValidator.cs:38-44`).
 [`DataSourcesSettings`](#datasourcessettings) with its per-entry
 [`DataSourceEntrySettings`](#datasourceentrysettings)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/DataSourceEntrySettings.cs:19`), the
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/DataSourceEntrySettings.cs:19`) is the
 logical-to-physical source map for database-per-service, built *directly* from
 `Get<Dictionary<...>>` rather than through the options pipeline
-(`MMCA.Common.Infrastructure/DependencyInjection.cs:75-77`) because a root-level dictionary section
-does not bind that way, with a constructor that rejects a reserved `"Default"` key
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/DataSourcesSettings.cs:34-39`);
-[`MessageBusSettings`](#messagebussettings) and its [`MessageBusProvider`](#messagebusprovider) enum
-(`InProcess` / `RabbitMq` / `AzureServiceBus`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:116-132`) that
+(`MMCA.Common.Infrastructure/DependencyInjection.cs:76-78`) because a root-level dictionary section
+does not bind that way, with a constructor that rejects an empty or reserved `"Default"` key
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/DataSourcesSettings.cs:27-40`).
+
+The rest of the platform sections follow the same discipline: [`MessageBusSettings`](#messagebussettings)
+and its [`MessageBusProvider`](#messagebusprovider) enum (`InProcess` / `RabbitMq` / `AzureServiceBus`,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:199-215`) that
 `AddBrokerMessaging` switches on, short-circuiting entirely for `InProcess`
-(`MMCA.Common.Infrastructure/DependencyInjection.cs:669-672`) and otherwise `Replace`-ing both
+(`MMCA.Common.Infrastructure/DependencyInjection.cs:741-744`) and otherwise `Replace`-ing both
 [`IMessageBus`](group-04-events-outbox.md#imessagebus) and
 [`IEventBus`](group-04-events-outbox.md#ieventbus) with their broker-backed counterparts
-(`DependencyInjection.cs:689-695`); [`OutboxSettings`](#outboxsettings) (batch size, retries, polling
-and processing intervals, lease, retention) consumed by the
-[`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor);
+(`DependencyInjection.cs:771`, `:777`), with the whole local-emulator path for Azure Service Bus
+quarantined in [`ServiceBusEmulatorSupport`](#servicebusemulatorsupport)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/ServiceBusEmulatorSupport.cs:32`) and
+entered only when the resolved connection string carries `UseDevelopmentEmulator=true`, a token a real
+namespace never has (`ServiceBusEmulatorSupport.cs:12-18`,
+[ADR-066](https://ivanball.github.io/docs/adr/066-broker-transport-selection.html));
+[`OutboxSettings`](#outboxsettings) (batch size, retries, polling and processing intervals, lease,
+retention) consumed by the [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor);
 [`PersistenceSettings`](#persistencesettings), whose single `CommandTimeoutSeconds` defaults to the 30
 seconds the framework applied implicitly before the section existed
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/PersistenceSettings.cs:21-22`); the
-JWT/JWKS group ([`JwtSettings`](#jwtsettings) with its algorithm-aware `IValidatableObject.Validate`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:51-66`, the
+JWT/JWKS group ([`JwtSettings`](#jwtsettings), the
 [`JwtSigningAlgorithm`](#jwtsigningalgorithm) enum
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSigningAlgorithm.cs:18`), the
-[`IJwtSettings`](#ijwtsettings) abstraction
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/IJwSettings.cs:10`), and
-[`JwksSettings`](#jwkssettings), whose `Enabled` defaults to `false` so an HMAC-only deployment does not
-start advertising a key set by accident,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwksSettings.cs:26`); and the delivery
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSigningAlgorithm.cs:21`), and
+[`JwksSettings`](#jwkssettings), whose `Enabled` defaults to `false` so an HMAC-only deployment does
+not start advertising an RSA key set by accident,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwksSettings.cs:22-25`); and the delivery
 channels, [`SmtpSettings`](#smtpsettings), [`PushNotificationSettings`](#pushnotificationsettings),
 [`NativePushSettings`](#nativepushsettings)
 ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)) and
 [`FileStorageSettings`](#filestoragesettings)
 ([ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)). The last
-two follow a different discipline on purpose: their `Add*` methods bind the section and then **no-op**
-when it is disabled or incomplete (`MMCA.Common.Infrastructure/DependencyInjection.cs:581-587` and
-`:613-624`), so a host registers them unconditionally and a deployment switches the channel on by
-configuration alone. One binding is deliberately elsewhere: `JwtSettings` is bound by the API layer's
-`AddCommonAuthentication`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:536-541`),
-while Infrastructure only registers the `IJwtSettings` facade over the resulting options
-(`MMCA.Common.Infrastructure/DependencyInjection.cs:65`), so a host that skips authentication never
-pays for a JWT section it does not have.
+two follow a stricter rule on purpose: their `Add*` methods bind the section and then **no-op** when it
+is disabled or incomplete (`MMCA.Common.Infrastructure/DependencyInjection.cs:652-659` and
+`:683-696`), so a host registers them unconditionally and a deployment switches the channel on by
+configuration alone. `AddPushNotifications` does not share that rule: it always adds SignalR and
+replaces the null sender pair (`DependencyInjection.cs:617-635`). One binding is deliberately
+elsewhere: `JwtSettings` is bound by the API layer's `AddCommonAuthentication`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:540-541`),
+so a host that skips authentication never pays for a JWT section it does not have.
 
 The three opt-in feature sections follow the same shape with one extra rule worth reading closely.
 [`SchedulerSettings`](#schedulersettings)
@@ -390,30 +468,28 @@ The three opt-in feature sections follow the same shape with one extra rule wort
 [`AuditTrailSettings`](#audittrailsettings)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/AuditTrailSettings.cs:16`) each make
 `Enabled` (default `false`) the *single* gate over both the behavior and whether the backing table is
-mapped into the model at all (`SchedulerSettings.cs:10-26`, `AuditTrailSettings.cs:10-26`), so a host
+mapped into the model at all (`SchedulerSettings.cs:10-14`, `AuditTrailSettings.cs:10-15`), so a host
 that never opts in keeps exactly the migrations it had. Their tunables are ranged the same way
-(`PollingIntervalSeconds` default 30, `LeaseSeconds` default 300, `SchedulerSettings.cs:33-43`;
+(`PollingIntervalSeconds` default 30 and `LeaseSeconds` default 300, `SchedulerSettings.cs:28-43`;
 `RetentionDays` default 90, `AuditTrailSettings.cs:37-38`), and per-job retiming lives in
 [`ScheduledJobOverrideSettings`](#scheduledjoboverridesettings) bound from `Scheduler:Jobs:{Name}`
-(`SchedulerSettings.cs:60`, `:66-75`). [`TenancySettings`](#tenancysettings)
+(`SchedulerSettings.cs:60`, `:66-74`). [`TenancySettings`](#tenancysettings)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/TenancySettings.cs:50`) adds the
 collection-binding subtlety: `ResolutionOrder` and `ExcludedPathPrefixes` bind as *empty* lists and the
 framework reads `EffectiveResolutionOrder` / `EffectiveExcludedPathPrefixes` instead
-(`TenancySettings.cs:76-77`, `:106-107`), because the configuration binder ADDS to a pre-populated
-collection rather than replacing it, so a non-empty default would leave a host running the framework's
-entries as well (`TenancySettings.cs:41-48`). Its per-tenant database routing is pure configuration:
+(`TenancySettings.cs:76`, `:106`), because the configuration binder ADDS to a pre-populated collection
+rather than replacing it, so a non-empty default would leave a host running the framework's entries as
+well (`TenancySettings.cs:41-48`). Its per-tenant database routing is pure configuration:
 [`TenantEntrySettings`](#tenantentrysettings) (`TenancySettings.cs:121`) keys
 [`TenantDataSourceOverrideSettings`](#tenantdatasourceoverridesettings) (`TenancySettings.cs:138`) by
 **physical** data source name, and [`TenancySettingsValidator`](#tenancysettingsvalidator)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/TenancySettingsValidator.cs:23`) fails
-the boot when an override names a source that does not exist
-(`TenancySettingsValidator.cs:93-104`) or declares no connection string at all
-(`TenancySettingsValidator.cs:76-86`), and when the resolution order names
-[`TenantResolutionStrategy`](#tenantresolutionstrategy) `Host`, which is defined but not implemented
-(`TenancySettings.cs:22-27`, `TenancySettingsValidator.cs:54-65`). Every one of those failures is a
+the boot when an override names a source that does not exist, when it declares no connection string at
+all, or when the resolution order names [`TenantResolutionStrategy`](#tenantresolutionstrategy) `Host`,
+which is defined but not implemented (`TenancySettings.cs:21-27`). Every one of those failures is a
 misconfiguration that would otherwise surface as silent cross-tenant behavior, which is exactly the bug
-class tenancy exists to prevent, so it is worth a failed boot
-(`TenancySettingsValidator.cs:8-12`). `[Rubric §11, Security]` is the category there.
+class tenancy exists to prevent, so it is worth a failed boot. `[Rubric §11, Security]` is the category
+there.
 
 ## The two routing attributes
 
@@ -463,9 +539,9 @@ the data-subject access workflow, and the password-recovery pair
 and [`ResetPasswordHandlerBase<TUser, TCommand>`](#resetpasswordhandlerbasetuser-tcommand)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:30`),
 which run the token issue-and-redeem flow described in
-[ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) over
-`IPasswordResetTokenService` and answer identically whether or not the address holds an account
-(`ResetPasswordHandlerBase.cs:20-21`).
+[ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) and collapse every
+rejection to one `Auth.InvalidResetToken` error so the endpoint reveals nothing about which addresses
+hold accounts (`ResetPasswordHandlerBase.cs:19-23`).
 
 Each base is generic in the app's `User` aggregate and in the app's own command or query record, and
 reads that record only through the small contracts in this group:
@@ -475,7 +551,7 @@ reads that record only through the small contracts in this group:
 `IUserScopedCommand.cs:13`), and [`IUserOwnedRequest`](#iuserownedrequest) (adds `CurrentUserId` and
 `CurrentUserRole`, `IUserOwnedRequest.cs:8`). The commands stay app-side precisely because the two apps
 disagree on their pipeline attributes: ADC marks the password-change command `ICacheInvalidating` and
-Store does not (`ChangePasswordHandlerBase.cs:17-20`). Note that
+Store does not (`ChangePasswordHandlerBase.cs:16-21`). Note that
 [`IUserScopedCommand<out TRequest>`](#iuserscopedcommandout-trequest) is deliberately *not*
 `ICommandWithRequest<TRequest>`: implementing the latter also opts a command into automatic
 `CommandRequestValidator` registration, which is a per-app decision, so implementing this one alone
@@ -484,30 +560,30 @@ changes no pipeline behavior (`IUserScopedCommand.cs:6-11`).
 The export base is the most instructive of the seven, because it is where the container-level and
 handler-level composition meet. It authorizes through
 [`UserOwnershipRule.CheckOwnership`](#userownershiprule)
-(`ExportUserDataHandlerBase.cs:81-90`), reads the account through `GetReadRepository`
+(`ExportUserDataHandlerBase.cs:81-86`), reads the account through `GetReadRepository`
 (`ExportUserDataHandlerBase.cs:92-93`), asks the subclass for the app-specific subject snapshot
 (`:100`), and then fans out **sequentially** over every injected
-[`IUserDataExportSection`](#iuserdataexportsection) (`:104-108`), sequential on purpose because the
+[`IUserDataExportSection`](#iuserdataexportsection) (`:103-108`), sequential on purpose because the
 sections share one scoped `DbContext` and because registration order is the published order of the
 document. A section that throws degrades to an envelope reporting `Available = false` rather than
 failing the export, which is the contract
-[`UserDataExportSectionResult`](#userdataexportsectionresult) encodes with its `Complete` / `Unavailable`
-factories
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/IUserDataExportSection.cs:73-101`),
-with the caller-safe default text in [`UserDataExportSectionDefaults`](#userdataexportsectiondefaults)
-(`IUserDataExportSection.cs:105-113`). The result is a
-[`UserDataExportDTO`](group-08-auth.md#userdataexportdto) that is PII by design and is therefore never
-logged or cached (`ExportUserDataHandlerBase.cs:43-45`).
+[`UserDataExportSectionResult`](#userdataexportsectionresult) encodes with its `Complete` /
+`Unavailable` factories
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/IUserDataExportSection.cs:73`,
+`:91`), with the caller-safe default text in
+[`UserDataExportSectionDefaults`](#userdataexportsectiondefaults) (`IUserDataExportSection.cs:105-113`).
+The result is a [`UserDataExportDTO`](group-08-auth.md#userdataexportdto) that is PII by design and is
+therefore never logged or cached (`ExportUserDataHandlerBase.cs:42-45`).
 
 Around those bases sit the small shared pieces: [`UserOwnershipRule`](#userownershiprule)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserOwnershipRule.cs:21`), the
 owner-or-privileged-role decision returning a `Forbidden`
-[`Error`](group-01-result-error-handling.md#error) or `null` (`UserOwnershipRule.cs:38-54`) with the
-privileged-role test passed in already evaluated because each app owns its own role vocabulary;
-[`UserUseCaseLog`](#userusecaselog)
+[`Error`](group-01-result-error-handling.md#error) or `null` (`UserOwnershipRule.cs:38`) with the
+privileged-role test passed in already evaluated because each app owns its own role vocabulary
+(`UserOwnershipRule.cs:15-19`); [`UserUseCaseLog`](#userusecaselog)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserUseCaseLog.cs:11`), a non-generic
 `[LoggerMessage]` holder so every subclass emits identical text while the log category still comes from
-the subclass's own `ILogger<T>` (`UserUseCaseLog.cs:13-29`);
+the subclass's own `ILogger<T>` (`UserUseCaseLog.cs:13-38`);
 [`SoftDeletedUserValidator<TUser>`](#softdeleteduservalidatortuser)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:19`), which answers
 [`ISoftDeletedUserValidator`](group-08-auth.md#isoftdeleteduservalidator) with one
@@ -522,27 +598,43 @@ workflow.
 ## End-to-end: one host's boot
 
 Reading `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs` top to bottom shows the whole
-chapter cooperating. The host binds and validates [`ApplicationSettings`](#applicationsettings) and
-also reads the section eagerly for the value it must pass around (`Program.cs:170-176`), calls
-`AddApplication()` then `AddInfrastructure(builder.Configuration)` (`Program.cs:308-309`), opts into the
-scheduler and the audit trail (`Program.cs:313`, `:317`), binds
-[`ModulesSettings`](#modulessettings) and calls `AddAPI(modulesSettings)` (`Program.cs:320-329`), then
-constructs a [`ModuleLoader`](#moduleloader) with a Serilog-backed logger and calls
-`DiscoverAndRegister(services, configuration, applicationSettings, modulesSettings, environmentName)`
-before registering the loader as a singleton (`Program.cs:335-340`). Because this is the *Conference*
-service, only the Conference module is `Enabled` in its configuration; every other discovered module
-takes the `RegisterDisabledStubs` path. The host then patches the cross-process edges: it replaces the
-disabled Engagement stub with a real gRPC client (`AddEngagementBookmarkCountClient()`,
-`Program.cs:350`) and calls `AddBrokerMessaging(builder.Configuration, ...)` (`Program.cs:371`) so
-[`MessageBusSettings`](#messagebussettings) `Provider` decides whether
-[`IMessageBus`](group-04-events-outbox.md#imessagebus) stays in-process or becomes the
-MassTransit-backed broker. Only then comes `AddApplicationDecorators()` (`Program.cs:375`), last, so
-the decorators wrap the now-registered Conference handlers. Finally
-`app.Services.InitializeDatabaseAsync(applicationSettings, moduleLoader)` (`Program.cs:396`) applies
-migrations and runs the module seeders the loader collected. The exact same module assemblies, dropped
-into a monolith host with every module `Enabled`, would Kahn-sort into one in-process graph with no
-gRPC clients, which is precisely the reversibility
+chapter cooperating. The host calls `AddInfrastructure(builder.Configuration)` (`Program.cs:288`), opts
+into the scheduler and the audit trail (`Program.cs:292`, `:296`), then calls `AddModuleHost` with the
+single assembly that declares `ConferenceModule` and a Serilog-backed
+[`ModuleLoader`](#moduleloader) logger (`Program.cs:307-310`), and passes the resulting
+[`ModulesSettings`](#modulessettings) to `AddAPI` (`Program.cs:312`). The whole handler-contributing
+sequence then goes inside one `AddMmcaApplicationPipeline` call (`Program.cs:347-352`): step one is
+`moduleHost.RegisterModules` (module discovery), step two replaces the disabled Engagement stub with a
+real gRPC client (`AddEngagementBookmarkCountClient()`), and step three is `AddBrokerMessaging` with
+its integration-event consumers, so [`MessageBusSettings`](#messagebussettings) `Provider` decides
+whether [`IMessageBus`](group-04-events-outbox.md#imessagebus) stays in-process or becomes the
+MassTransit-backed broker. Because this is the *Conference* service, only the Conference module is
+`Enabled` in its configuration; every other discovered module takes the `RegisterDisabledStubs` path.
+The pipeline call closes with `AddApplicationDecorators()` and seals the collection, so the decorators
+wrap the now-registered Conference handlers and any later handler registration throws rather than
+running bare. Afterwards the host adds module health checks from the loader (`Program.cs:364`) and
+finally `app.Services.InitializeDatabaseAsync(moduleHost.ApplicationSettings, moduleHost.ModuleLoader)`
+(`Program.cs:373`) applies migrations and runs the module seeders the loader collected. The exact same
+module assemblies, dropped into a monolith host with every module `Enabled`, would Kahn-sort into one
+in-process graph with no gRPC clients, which is precisely the reversibility
 [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) is after.
+
+### ApplicationSettings
+> MMCA.Common.Application · `MMCA.Common.Application.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:8` · Level 0 · class (sealed)
+
+- **What it is**: the framework's global settings object, bound from the `"ApplicationSettings"` configuration section, with four knobs: `UseMiniProfiler` (MiniProfiler tracing), `MaxPageSize` (the ceiling the API applies to a paged list query), `MaxExportRows` (the ceiling on a single CSV export) and `DatabaseInitStrategy` (`"Migrate"` or `"None"`).
+
+- **Depends on**: nothing first-party. `System.ComponentModel.DataAnnotations` for one `[Range]` attribute (`ApplicationSettings.cs:1`, `:32`), and the options binder at the composition root. That purity is why it sits at Level 0 despite being reachable from nearly every layer.
+
+- **Concept introduced, options-pattern settings classes.** `[Rubric §10, Cross-Cutting Concerns]` assesses whether configuration is centralised and typed rather than read as magic-string keys scattered through the codebase. Every settings class in the framework follows the same three-part shape, and this is the simplest exemplar of it: a `public static readonly string SectionName` naming the configuration section (`ApplicationSettings.cs:11`) so no registration site spells the section out, `init`-only properties so the object is immutable once the binder has filled it, and defaults declared inline beside the property. Consumers take `IOptions<ApplicationSettings>` from the container or receive the bound instance by value; nothing injects `IConfiguration` to read these values. `[Rubric §8, Data Architecture]` shows up in the last knob: `"Migrate"` applies pending EF Core migrations, and `"None"` is the production setting that validates and **fails startup** when the schema is behind rather than silently migrating it (`:35-42`). `[Rubric §12, Performance and Scalability]` is why the two ceiling knobs exist at all: both stop one caller from turning a single request into a full-table scan.
+
+- **Walkthrough**: `SectionName = "ApplicationSettings"` (`:11`). `UseMiniProfiler` takes the implicit `false` default (`:14`). `MaxPageSize = 500` (`:17`). `MaxExportRows = 100_000` (`:33`) is the one property carrying a validation attribute, `[Range(1, 10_000_000)]` (`:32`), and its remarks explain both the number and the attribute's limits (`:24-31`): 100,000 rows is roughly a 10 to 25 MB file for a typical grid DTO, large enough that no real operational export hits the cap and small enough that one caller cannot pin a request thread to a full-table scan; the `[Range]` is honored only by hosts that opt into `ValidateDataAnnotations` on the options binding, so the export endpoint independently falls back to its own default when a host configures a non-positive value. The two ceilings compose rather than duplicate: the export endpoint page-loops the query service at `MaxPageSize` per page, so `MaxExportRows` bounds the whole file and not one page (`:19-23`). `DatabaseInitStrategy = "Migrate"` (`:43`).
+
+- **Why it's built this way**: `static SectionName` keeps registration DRY, and `init` immutability makes one bound instance safe to share across the process as a singleton `IOptions<T>` value and safe to hand to every module by value. Validating a bound value with an attribute rather than a hand-written guard keeps the ceiling declarative, while the endpoint-side fallback means a host that never opts into validation still cannot produce an unbounded export.
+
+- **Where it's used**: bound and validated by [`ModuleHostExtensions.AddModuleHost`](group-12-api-hosting-mapping.md#modulehostextensions), which calls `AddOptions<ApplicationSettings>().Bind(...).ValidateDataAnnotations().ValidateOnStart()` and then reads the section a second time to get a plain instance, throwing when the section is absent (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:61-67`). That instance is carried on [`ModuleHostContext.ApplicationSettings`](group-12-api-hosting-mapping.md#modulehostcontext) (`ModuleHostContext.cs:44`) and passed **by value** into every [`IModule.Register(services, configuration, applicationSettings)`](#imodule) call, so a module reads global settings without resolving anything. Each knob then has a distinct consumer: `MaxPageSize` is resolved per request by [`EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#entitycontrollerbasetentity-tentitydto-tidentifiertype) through `IOptions<ApplicationSettings>` with a `500` fallback when nothing is registered (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:58-64`); `MaxExportRows` the same way, with `DefaultMaxExportRows = 100_000` (`EntityControllerBase.cs:526`) used both when no settings exist and when a host configures a non-positive value (`:78-85`, `:266`, [ADR-078](https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html)); `UseMiniProfiler` gates [`MiniProfilerExtensions`](group-12-api-hosting-mapping.md#miniprofilerextensions) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiniProfilerExtensions.cs:18`) and the profiling repository wrappers in [`RepositoryFactory`](group-07-persistence-ef-core.md#repositoryfactory) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:34`, `:58`); `DatabaseInitStrategy` drives the startup switch in [`DatabaseInitializationExtensions`](group-12-api-hosting-mapping.md#databaseinitializationextensions) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:92-102`), where any third value throws an exception naming the two valid ones (`:195`).
+
+---
 
 ### AssemblyReference
 > MMCA.Common.Application · `MMCA.Common.Application` · `MMCA.Common/Source/Core/MMCA.Common.Application/AssemblyReference.cs:5` · Level 0 · class (static)
@@ -551,11 +643,11 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: `System.Reflection.Assembly` (BCL) only. No first-party dependencies, and that purity is why it sits at Level 0.
 
-- **Concept introduced, assembly-marker types for convention scanning.** `[Rubric §2, Design Patterns]` assesses whether recurring problems are solved with recognised patterns; the marker (or anchor) type is the idiomatic way to hand an `Assembly` to a scanner without coupling to an incidental concrete class. `[Rubric §1, SOLID]` (DIP): registration code depends on a deliberate, meaningless token rather than on `typeof(SomeRandomHandler).Assembly`, so renaming or moving any real type never breaks the scan. Repeating the identical `AssemblyReference` + [`ClassReference`](#classreference) pair in every package keeps each assembly self-describing with no cross-layer reference at all.
+- **Concept introduced, assembly-marker types for convention scanning.** `[Rubric §2, Design Patterns]` assesses whether recurring problems are solved with recognised patterns; the marker (or anchor) type is the idiomatic way to hand an `Assembly` to a scanner without coupling to an incidental concrete class. `[Rubric §1, SOLID]` (DIP): registration code depends on a deliberate, meaningless token rather than on `typeof(SomeRandomHandler).Assembly`, so renaming or moving any real type never breaks the scan. Repeating the identical `AssemblyReference` plus [`ClassReference`](#classreference) pair in every package keeps each assembly self-describing with no cross-layer reference at all.
 
-- **Walkthrough**: two `public static readonly` fields resolved once at type-initialization. `Assembly` is `typeof(AssemblyReference).Assembly` (`MMCA.Common/Source/Core/MMCA.Common.Application/AssemblyReference.cs:7`); `AssemblyName` is `Assembly.GetName().Name` with a `?? string.Empty` null-coalescing fallback (`AssemblyReference.cs:8`), so the field is never null even if the runtime reports no simple name. The Application copy carries no XML doc; the Domain copy is byte-identical in body but documents the type as existing "for Scrutor assembly-scanning registration and architecture tests" (`MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:5-7`, fields at `:10-11`).
+- **Walkthrough**: two `public static readonly` fields resolved once at type initialization. `Assembly` is `typeof(AssemblyReference).Assembly` (`MMCA.Common/Source/Core/MMCA.Common.Application/AssemblyReference.cs:7`); `AssemblyName` is `Assembly.GetName().Name` with a `?? string.Empty` null-coalescing fallback (`AssemblyReference.cs:8`), so the field is never null even if the runtime reports no simple name. The Application copy carries no XML doc; the Domain copy is byte-identical in body but documents the type as existing "for Scrutor assembly-scanning registration and architecture tests" (`MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:5-7`, fields at `:10-11`).
 
-- **Why it's built this way**: a purpose-built anchor decouples scanning from any business type, and one per package means an assembly can be named without referencing anything inside it. The per-module Application assemblies follow the same convention (see the module copies in [group-22](group-22-engagement-module.md#assemblyreference) and [group-23](group-24-identity-module.md#assemblyreference)).
+- **Why it's built this way**: a purpose-built anchor decouples scanning from any business type, and one per package means an assembly can be named without referencing anything inside it. The per-module Application assemblies follow the same convention (see the module copies in [group-22](group-22-engagement-module.md#assemblyreference) and [group-24](group-24-identity-module.md#assemblyreference)).
 
 - **Where it's used**: as the assembly source for Scrutor scans and FluentValidation discovery, usually through its non-static companion (next section) because those helpers are generic.
 
@@ -570,15 +662,15 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: the solution-wide identifier alias `UserIdentifierType` (`global using UserIdentifierType = int;`, `MMCA.Common/Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1`, the convention recorded in [ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)) and BCL types (`Guid`, `DateTime`, `string`). Nothing else first-party: the persisted counterpart [`AuditTrailEntry`](group-07-persistence-ef-core.md#audittrailentry) lives in Infrastructure and is never referenced from here, which is why the DTO sits at Level 0.
 
-- **Concept introduced, the read-model DTO that deliberately narrows its source row.** `[Rubric §9, API and Contract Design]` assesses whether the shape a consumer sees is designed rather than leaked: the class-level remarks state the intent outright, "deliberately minimal in v1: it carries what a 'who changed what, and when' view needs and nothing an infrastructure table happens to also store" (`AuditTrailEntryDTO.cs:6-11`). `[Rubric §3, Clean Architecture]`: declaring the DTO in the **Application** layer is what lets the reader contract live above Infrastructure while the EF entity stays below it, so no consumer of the trail takes a persistence dependency. `[Rubric §30, Compliance, Privacy and Data Governance]` is the sharpest edge here: values are the invariant string forms captured at save time, and a value that belonged to a property carrying `PiiAttribute` reads as the redaction placeholder on **both** sides (`AuditTrailEntryDTO.cs:8-11`), because the interceptor that writes the row substitutes `PiiRedactor.RedactedToken` for `OldValue` and `NewValue` before persisting (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:309-310`). Personal data never reaches the table, so it cannot leak through this DTO either.
+- **Concept introduced, the read-model DTO that deliberately narrows its source row.** `[Rubric §9, API and Contract Design]` assesses whether the shape a consumer sees is designed rather than leaked: the class-level remarks state the intent outright, "deliberately minimal in v1: it carries what a 'who changed what, and when' view needs and nothing an infrastructure table happens to also store" (`AuditTrailEntryDTO.cs:6-11`). `[Rubric §3, Clean Architecture]`: declaring the DTO in the **Application** layer is what lets the reader contract live above Infrastructure while the EF entity stays below it, so no consumer of the trail takes a persistence dependency. `[Rubric §30, Compliance, Privacy and Data Governance]` is the sharpest edge here: values are the invariant string forms captured at save time, and a value that belonged to a property carrying [`PiiAttribute`](group-02-domain-building-blocks.md#piiattribute) reads as the redaction placeholder on **both** sides (`AuditTrailEntryDTO.cs:9-11`), because the interceptor that writes the row substitutes [`PiiRedactor`](group-02-domain-building-blocks.md#piiredactor)`.RedactedToken` for `OldValue` and `NewValue` before persisting (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:309-310`). Personal data never reaches the table, so it cannot leak through this DTO either.
 
-- **Walkthrough**: ten `init` properties on a `sealed record`, so the type gets structural equality and immutability from the compiler. Four are `required`, and that is the contract: `Id` (`:15`), `EntityType`, the full CLR type name of the changed entity (`:18`), `EntityKey`, the invariant string form of its primary key (`:21`), and `Operation`, one of `Added` / `Modified` / `Deleted` (`:36`), plus `ChangedOn`, the UTC instant (`:45`). The nullable ones each encode a real case: `PropertyName` is null on the summary row of a create or delete (`:24-27`), `OldValue` and `NewValue` are null when there is no value on that side (`:30`, `:33`), `ChangedBy` is null when the save carried no identity such as a background service or a seeder (`:38-42`), and `CorrelationId` is null when the change was recorded outside a traced request (`:48`).
+- **Walkthrough**: ten `init` properties on a `sealed record`, so the type gets structural equality and immutability from the compiler. Five are `required`, and that is the contract: `Id` (`:15`), `EntityType`, the full CLR type name of the changed entity (`:18`), `EntityKey`, the invariant string form of its primary key (`:21`), `Operation`, one of `Added` / `Modified` / `Deleted` (`:36`), and `ChangedOn`, the UTC instant (`:45`). The nullable ones each encode a real case: `PropertyName` is null on the summary row of a create or delete (`:23-27`), `OldValue` and `NewValue` are null when there is no value on that side (`:30`, `:33`), `ChangedBy` is null when the save carried no identity such as a background service or a seeder (`:38-42`), and `CorrelationId` is null when the change was recorded outside a traced request (`:47-48`).
 
-- **Why it's built this way**: [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html) is the decision record for the trail feature. A `record` rather than a class means a test can compare two projections by value, and the `required` markers make the four facts that every row must carry a compile-time obligation rather than a runtime null check.
+- **Why it's built this way**: [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html) is the decision record for the trail feature. A `record` rather than a class means a test can compare two projections by value, and the `required` markers make the five facts that every row must carry a compile-time obligation rather than a runtime null check.
 
-- **Where it's used**: the return element of `IAuditTrailReader.GetForEntityAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IAuditTrailReader.cs:37`), and materialized by the single implementation `AuditTrailReader`, which projects it directly inside the EF `Select` so only these ten columns leave the database (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailReader.cs:67-79`).
+- **Where it's used**: the return element of `IAuditTrailReader.GetForEntityAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IAuditTrailReader.cs:37`), and materialized by the single implementation [`AuditTrailReader`](group-07-persistence-ef-core.md#audittrailreader), which projects it directly inside the EF `Select` so only these ten columns leave the database (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailReader.cs:67-79`).
 
-- **Caveats / not-in-source**: no shipped endpoint or page returns this DTO. The reader's own remarks say so explicitly, "the framework ships the read, not the exposure ... because who may see an entity's history is an application decision" (`IAuditTrailReader.cs:10-15`), so today the only non-test consumer is the reader implementation itself.
+- **Caveats / not-in-source**: no shipped endpoint or page returns this DTO. The reader's own remarks say so explicitly, "the framework ships the read, not the exposure ... because who may see an entity's history is an application decision" (`IAuditTrailReader.cs:11-14`), so today the only non-test consumer is the reader implementation itself.
 
 ---
 
@@ -589,30 +681,38 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: nothing first-party; nothing from the BCL beyond `object`.
 
-- **Concept**: the companion half of the marker pattern introduced under [`AssemblyReference`](#assemblyreference). C# **static classes cannot be used as generic type arguments**, and several registration helpers are constrained to an instantiable reference type, notably [`ScanModuleApplicationServices<TAssemblyMarker>()`](#dependencyinjection), whose `where TAssemblyMarker : class` constraint (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:116`) forbids a static type. `ClassReference` fills that slot without weakening `AssemblyReference`'s static-ness. `[Rubric §33, Developer Experience]` assesses how conventional the inner loop is: one token (`ScanModuleApplicationServices<ClassReference>()`) is the entire registration ceremony a new module needs.
+- **Concept**: the companion half of the marker pattern introduced under [`AssemblyReference`](#assemblyreference). C# **static classes cannot be used as generic type arguments**, and the registration helpers that take a marker are constrained to an instantiable reference type: `ScanModuleApplicationServices<TAssemblyMarker>()` declares `where TAssemblyMarker : class` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:161-162`) and so does [`MmcaApplicationPipelineBuilder.ScanModule<TAssemblyMarker>()`](#mmcaapplicationpipelinebuilder) (`MmcaApplicationPipelineBuilder.cs:27-28`). `ClassReference` fills that slot without weakening `AssemblyReference`'s static-ness. `[Rubric §33, Developer Experience]` assesses how conventional the inner loop is: one token (`ScanModuleApplicationServices<ClassReference>()`) is the entire registration ceremony a new module needs.
 
-- **Walkthrough**: a single body-less type declaration, `public class ClassReference;` (`MMCA.Common/Source/Core/MMCA.Common.Application/AssemblyReference.cs:11`). No members. Its only meaningful property is the assembly it belongs to, read by the scanner through `typeof(TAssemblyMarker).Assembly` (`DependencyInjection.cs:160`) or Scrutor's `FromAssemblyOf<TAssemblyMarker>()`. The Domain copy documents the same role, "anchor type used for assembly resolution when `AssemblyReference` cannot be used (e.g., generic type constraints that require a non-static class)" (`MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:14-18`).
+- **Walkthrough**: a single body-less type declaration, `public class ClassReference;` (`MMCA.Common/Source/Core/MMCA.Common.Application/AssemblyReference.cs:11`). No members. Its only meaningful property is the assembly it belongs to, read by the scanner through `typeof(TAssemblyMarker).Assembly` (`DependencyInjection.cs:163`) before it hands that `Assembly` to the assembly-typed overload. The Domain copy documents the same role, "anchor type used for assembly resolution when `AssemblyReference` cannot be used (e.g., generic type constraints that require a non-static class)" (`MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:14-18`).
 
 - **Why it's built this way**: keeping a separate non-static anchor sidesteps the static-class generic-argument restriction while leaving `AssemblyReference` static (and therefore impossible to instantiate accidentally). Every module's Application assembly defines its own `ClassReference`, so each module scans itself by passing its local copy.
 
-- **Where it's used**: as the `TAssemblyMarker` argument in [`ScanModuleApplicationServices<TAssemblyMarker>()`](#dependencyinjection); the three ADC module composition roots all call `services.ScanModuleApplicationServices<ClassReference>()` with their own local copy (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:47`, `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:112`, `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:82`). The framework root [`AddApplication()`](#dependencyinjection) passes the Application-layer copy to `AddValidatorsFromAssemblyContaining<ClassReference>()` (`DependencyInjection.cs:40`).
+- **Where it's used**: as the `TAssemblyMarker` argument in [`ScanModuleApplicationServices<TAssemblyMarker>()`](#dependencyinjection). All three ADC module composition roots call `services.ScanModuleApplicationServices<ClassReference>()` with their own local copy (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:47`, `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:130`, `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:87`), as do Store's three (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:53`, `.../Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:51`, `.../Sales/MMCA.Store.Sales.Application/DependencyInjection.cs:65`) and Helpdesk's single module (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs:34`). The framework root [`AddApplication()`](#dependencyinjection) passes the Application-layer copy to `AddValidatorsFromAssemblyContaining<ClassReference>()` (`DependencyInjection.cs:49`).
 
 ---
 
-### IApplicationSettings
-> MMCA.Common.Application · `MMCA.Common.Application.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Application/Settings/IApplicationSettings.cs:7` · Level 0 · interface
+### DecoratorPipelineSeal
+> MMCA.Common.Application · `MMCA.Common.Application` · `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:699` · Level 0 · class (private, sealed)
 
-- **What it is**: a cross-cutting settings *contract* with four global knobs: `UseMiniProfiler` (enables MiniProfiler tracing), `MaxPageSize` (the upper bound the API applies to list queries), `MaxExportRows` (the ceiling on a single CSV export), and `DatabaseInitStrategy` (`"Migrate"` | `"EnsureCreated"` | `"None"`).
+- **What it is**: a private, empty marker class that [`DependencyInjection`](#dependencyinjection) registers into the service collection as a singleton **instance** the moment `AddApplicationDecorators()` finishes. Its presence in the descriptor list is the record that the CQRS decorator pipeline has been closed on that collection. It is never resolved and never depended on: its only job is to be there.
 
-- **Depends on**: BCL only. Implemented by [`ApplicationSettings`](#applicationsettings) (Level 1).
+- **Depends on**: nothing. It has no members and no base type beyond `object`.
 
-- **Concept introduced, typed settings interfaces over raw `IConfiguration`.** `[Rubric §10, Cross-Cutting Concerns]` assesses whether configuration is centralised and typed rather than read as magic-string keys all over the codebase. Instead of injecting `IConfiguration`, the Application layer declares a typed contract, the concrete class implements it, and the composition root registers the bridge. Services depend on `IApplicationSettings`, which makes settings trivially stubbable in tests and resolvable as a singleton. `[Rubric §8, Data Architecture]` shows up in the last knob: the XML doc (`IApplicationSettings.cs:22-30`) enumerates the three accepted strings, and `"None"` is the production setting that *fails startup* when the schema is behind rather than silently migrating it. `[Rubric §12, Performance and Scalability]` is the reason the two ceiling knobs are here at all: both exist to stop one caller from turning a request into a full-table scan.
+- **Concept introduced, an ordering invariant enforced by a marker registration.** The framework's one hard composition rule is that `AddApplicationDecorators()` must run **after** every handler registration, because Scrutor's `TryDecorate` can only wrap registrations that already exist (see [`DependencyInjection`](#dependencyinjection) for the full pipeline). A handler registered afterwards resolves completely unwrapped: no feature gate, no authorization, no validation, no timeout, no transaction, and nothing fails at startup to say so. `[Rubric §16, Maintainability]` assesses whether a rule that has to be obeyed is *enforceable* rather than merely documented: instead of leaving the ordering as a comment, the framework leaves a token in the container and has every handler-contributing entry point check for it first. `[Rubric §15, Best Practices and Code Quality]`: making the marker `private` means no consumer can register, resolve, or fake it, so the signal cannot be forged from outside. `[Rubric §14, Testability]`: the same marker is what `VerifyDecoratorPipeline()` reads to tell "no handler is wrapped" apart from "some handler is not wrapped", which are two different failures with two different messages.
 
-- **Walkthrough**: four `{ get; init; }` members: `UseMiniProfiler` (`IApplicationSettings.cs:10`), `MaxPageSize` (`:13`), `MaxExportRows` (`:20`), `DatabaseInitStrategy` (`:30`). `init`-only accessors mean the binder sets them once at startup and the object is immutable afterwards, which is what makes the singleton registration safe. The two ceilings are documented as composing rather than duplicating: the export endpoint page-loops the query service at `MaxPageSize` per page, so `MaxExportRows` bounds the whole file and not one page (`:15-19`).
+- **Walkthrough**
+  - **Declaration**: `private sealed class DecoratorPipelineSeal;` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:699`), sitting outside the `extension(IServiceCollection)` block beside the three private helpers that use it, with its role written into the XML doc (`:694-698`).
+  - **`SealPipeline`** (`:712-713`): a one-line `services.TryAddSingleton(new DecoratorPipelineSeal())`. Registering an **instance** rather than a type means nothing is ever constructed lazily, and `TryAdd` means a second call is a no-op at the descriptor level. It is called at the very end of `AddApplicationDecorators()`, after all thirteen `TryDecorate` calls (`:145`).
+  - **`IsPipelineSealed`** (`:701-710`): a linear scan of the collection comparing `descriptor.ServiceType` to `typeof(DecoratorPipelineSeal)`. No provider is built, so the check is safe to run mid-composition and costs one pass over the descriptor list.
+  - **`ThrowIfPipelineSealed`** (`:715-725`): the guard itself. When the marker is present it throws an `InvalidOperationException` naming the offending call and spelling out both remedies, move the call ahead of `AddApplicationDecorators()` or compose the whole sequence with `AddMmcaApplicationPipeline(...)` (`:719-723`). Every entry point that can contribute a handler opens with it: `AddApplicationDecorators` itself (`:117`, which is what makes a second call throw), `ScanModuleApplicationServices` (`:182`), `AddEntityCrud` (`:335`), `AddEntityUpdateVerb` (`:397`), `AddEntityUpdate` (`:448`) and `AddMmcaApplicationPipeline` (`:614`).
+  - **The two deliberate non-guards**: `AddCommandRequestValidator<TCommand, TRequest>()` (`:475`) and `AddApplicationProfiling()` (`:565`) do not check the marker. A validator is not a handler, and the profiling pair is an outer decoration that is *supposed* to be applied on top of the closed pipeline; `ApplicationPipelineCompositionTests` pins that second case as allowed behavior (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/ApplicationPipelineCompositionTests.cs:137-142`).
+  - **Read by `VerifyDecoratorPipeline()`** (`:649-656`): before inspecting any handler descriptor it asks `IsPipelineSealed`, and when the answer is no it throws the distinct "the pipeline was never closed" message rather than listing every handler as undecorated.
 
-- **Why it's built this way**: separating the interface (Application layer) from the concrete class lets higher layers inject the abstraction while only the composition root knows the implementation, the dependency-inversion shape the primer describes for ports and adapters ([primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
+- **Why it's built this way**: a marker in the collection is the only piece of state that travels with an `IServiceCollection`, which is what the guard needs, because the ordering rule is a property of *that collection* and not of the process. Registering it as an instance keeps the check allocation-free at resolution time (nothing ever resolves it) and keeps it invisible to consumers, which is why it is `private` rather than `internal`.
 
-- **Where it's used**: registered by [`AddApplication()`](#dependencyinjection) as `TryAddSingleton<IApplicationSettings>(sp => sp.GetRequiredService<IOptions<ApplicationSettings>>().Value)` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:31`). Each knob has a distinct consumer. `MaxPageSize` is read per request by `EntityControllerBase`, which falls back to `500` when no settings are registered (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:56-61`) and clamps every paged request with `Math.Min(pageSize, MaxPageSize)` (`:154`). `MaxExportRows` is read the same way, with a `DefaultMaxExportRows = 100_000` constant used both when no settings exist and when a host configures a non-positive value (`EntityControllerBase.cs:76-82`, `:430`), and it bounds the CSV page loop (`:249-250`, [ADR-078](https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html)). `UseMiniProfiler` gates the MiniProfiler wiring (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiniProfilerExtensions.cs:18`) and the profiling repository wrappers (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:33`, `:57`). `DatabaseInitStrategy` drives the startup switch in [`DatabaseInitializationExtensions`](group-12-api-hosting-mapping.md#databaseinitializationextensions) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:74-89`), where an unrecognised value throws with the list of valid ones.
+- **Where it's used**: only inside `DependencyInjection.cs`, by the four helpers above. Its observable effects are the exception messages tested in `ApplicationPipelineCompositionTests` (`:114-131`, `:182-188`).
+
+- **Caveats / not-in-source**: the seal records that the decorators ran, not that they ran *correctly*. A host that registers a handler after `AddApplicationDecorators()` through a path with no guard, for example a bare `services.AddScoped<ICommandHandler<...>, ...>()`, still slips through; catching that is exactly what `VerifyDecoratorPipeline()` exists for, and it has to be called explicitly by a fitness test.
 
 ---
 
@@ -627,7 +727,30 @@ gRPC clients, which is precisely the reversibility
 
 - **Walkthrough**: `string ModuleName { get; }` (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModuleSeeder.cs:13`) must match the corresponding [`IModule.Name`](#imodule) so the loader can correlate a seeder to its module and keep it in topological position; `Task SeedAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)` (`:18`) is the single work method, and the XML doc states it is called only for enabled modules (`:16`).
 
-- **Where it's used**: discovered by [`ModuleLoader.DiscoverAndRegister`](#moduleloader) into a case-insensitive dictionary keyed by `ModuleName` (`ModuleLoader.cs:106-109`) and kept only when the matching module is enabled (`ModuleLoader.cs:133-136`). The actual invocation happens at host startup: [`DatabaseInitializationExtensions`](group-12-api-hosting-mapping.md#databaseinitializationextensions) calls `moduleLoader.SeedAllAsync(scope.ServiceProvider, cancellationToken)` after schema initialization and tenant-database initialization (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:98`). Seeding deliberately runs on the default scope only, not once per tenant, and the comment above the call gives the reason: no module declares which seeders apply per tenant, and running one twice against a shared database is worse than not running it per tenant at all (`:94-97`).
+- **Where it's used**: discovered by [`ModuleLoader`](#moduleloader) into a case-insensitive dictionary keyed by `ModuleName` (`ModuleLoader.cs:91-94`) and kept only when the matching module is enabled (`ModuleLoader.cs:118-121`). The actual invocation happens at host startup: [`DatabaseInitializationExtensions`](group-12-api-hosting-mapping.md#databaseinitializationextensions) calls `moduleLoader.SeedAllAsync(scope.ServiceProvider, cancellationToken)` after schema initialization and tenant-database initialization (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:111`). Seeding deliberately runs on the default scope only, not once per tenant, and the comment above the call gives the reason: no module declares which seeders apply per tenant, and running one twice against a shared database is worse than not running it per tenant at all (`:107-110`). The implementations are one per data-owning module: `ConferenceModuleSeeder` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:13`) and `IdentityModuleSeeder` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:14`) in ADC; `CatalogModuleSeeder` (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/CatalogModuleSeeder.cs:11`), `SalesModuleSeeder` (`.../Sales/MMCA.Store.Sales.API/SalesModuleSeeder.cs:14`) and `IdentityModuleSeeder` (`.../Identity/MMCA.Store.Identity.API/IdentityModuleSeeder.cs:12`) in Store.
+
+---
+
+### MmcaApplicationPipelineBuilder
+> MMCA.Common.Application · `MMCA.Common.Application` · `MMCA.Common/Source/Core/MMCA.Common.Application/MmcaApplicationPipelineBuilder.cs:12` · Level 0 · class (sealed)
+
+- **What it is**: the small builder handed to the callback of `AddMmcaApplicationPipeline(...)`. It collects every registration that has to happen *between* `AddApplication()` and `AddApplicationDecorators()`, which is to say everything that puts a command or query handler into the container: module assembly scans, a [`ModuleLoader`](#moduleloader) run, cross-service gRPC clients, broker messaging.
+
+- **Depends on**: [`DependencyInjection`](#dependencyinjection) (it calls `ScanModuleApplicationServices` on the collection it holds). Externals: `Microsoft.Extensions.DependencyInjection.IServiceCollection` and `System.Reflection.Assembly`.
+
+- **Concept introduced, a builder whose constructor is the guard.** `[Rubric §33, Developer Experience]` assesses how hard the framework makes it to do the right thing by default. The ordering rule this builder exists to protect is invisible at the call site: a handler registered after the decorators is silently unwrapped. Rather than documenting the order and hoping, the framework makes the *only* way to obtain a builder be inside the call that also runs the decorators afterwards. The constructor is `internal` (`MmcaApplicationPipelineBuilder.cs:14`), and the XML doc states the reason plainly: "not constructible on its own, because outside that call there is nothing keeping the decorators last" (`:9-10`). `[Rubric §2, Design Patterns]`: this is the Builder shape used for scoping rather than for object construction, the same idea as ASP.NET Core's own `IEndpointRouteBuilder` style callbacks. `[Rubric §16, Maintainability]`: a host's composition root now reads as one call whose body is a list of steps, so a reviewer can see at a glance whether a registration belongs inside the pipeline.
+
+- **Walkthrough**: four members, all trivially thin.
+  - `Services` (`:19`), the collection under construction, exposed for a step that needs it directly.
+  - `ScanModule<TAssemblyMarker>()` (`:27-32`, constrained `where TAssemblyMarker : class` at `:28`), which forwards to `Services.ScanModuleApplicationServices<TAssemblyMarker>()` and returns `this` for chaining. The marker is typically the module's own [`ClassReference`](#classreference).
+  - `ScanModules(params Assembly[] moduleAssemblies)` (`:41-51`), the assembly-typed form for hosts that resolve their module set at runtime rather than naming a marker type per module; it null-guards the array (`:43`) and loops the assembly overload of the scanner (`:45-48`).
+  - `Register(Action<IServiceCollection> register)` (`:62-68`), the escape hatch for an arbitrary step, null-guarded at `:64`. The doc names exactly what belongs here: a `ModuleLoader.DiscoverAndRegister(...)` call, cross-service gRPC clients, broker messaging, per-host handler overrides (`:53-58`).
+
+- **Why it's built this way**: the callback shape is what makes the ordering rule structural instead of advisory. `AddMmcaApplicationPipeline` runs `AddApplication()`, invokes the callback with a freshly constructed builder, and then returns `AddApplicationDecorators()` (`DependencyInjection.cs:612-621`), so the decorators are last by construction. Everything that is not a handler registration (infrastructure, API, telemetry, options, health checks) deliberately stays *outside* the call, because its order relative to the decorators does not matter (`DependencyInjection.cs:599-602`).
+
+- **Where it's used**: constructed in exactly one place, `AddMmcaApplicationPipeline` (`DependencyInjection.cs:618`). Every ADC and Store service host composes through it: ADC Conference (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:347-352`), Identity (`.../MMCA.ADC.Identity.Service/Program.cs:288`), Engagement (`.../MMCA.ADC.Engagement.Service/Program.cs:278`), Notification (`.../MMCA.ADC.Notification.Service/Program.cs:215`), Store Catalog (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:233`), Sales (`.../MMCA.Store.Sales.Service/Program.cs:234`) and Identity (`.../MMCA.Store.Identity.Service/Program.cs:211`). The architecture fitness tests replay the same shape, `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:50-51` and `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/ApplicationPipelineCompositionTests.cs:32`.
+
+- **Caveats / not-in-source**: the MMCA.Helpdesk host does not use the builder. It writes the three-call sequence by hand (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:66`, `:104`, `:120`) with the ordering rule stated as a comment above it (`:65`), which is still a supported composition, just the unguarded one.
 
 ---
 
@@ -638,30 +761,47 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: BCL only (`List<string>` plus the options binder).
 
-- **Concept introduced, the module-extraction boundary expressed as configuration.** `[Rubric §7, Microservices Readiness]` assesses whether a module can be lifted into its own service without rewriting application code. [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) is the *why*: when Catalog is extracted, the host sets `"Catalog": { "Enabled": false }`, and any module that still depends on it adds `"RemoteDependencies": [ "Catalog" ]`. [`ModuleLoader`](#moduleloader) then treats that dependency as satisfied, lets the disabled module's `RegisterDisabledStubs` put the contract type into DI, and the host afterwards replaces the stub with a real gRPC client adapter. The XML doc walks exactly this Catalog/Sales example, including the sample JSON (`ModuleSettings.cs:11-36`). So extraction becomes a configuration plus wiring change, not a code change.
+- **Concept introduced, the module-extraction boundary expressed as configuration.** `[Rubric §7, Microservices Readiness]` assesses whether a module can be lifted into its own service without rewriting application code. [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) is the *why*: when Catalog is extracted, the host sets `"Catalog": { "Enabled": false }`, and any module that still depends on it adds `"RemoteDependencies": [ "Catalog" ]`. [`ModuleLoader`](#moduleloader) then treats that dependency as satisfied, lets the disabled module's `RegisterDisabledStubs` put the contract type into DI, and the host afterwards replaces the stub with a real gRPC client adapter. The XML doc walks exactly this Catalog/Sales example, including the sample JSON (`ModuleSettings.cs:11-36`). Extraction therefore becomes a configuration plus wiring change, not a code change.
 
 - **Walkthrough**: `bool Enabled { get; init; } = true` (`ModuleSettings.cs:9`), `init`-only so it cannot be mutated after binding. `List<string> RemoteDependencies { get; set; } = []` (`:38`), and note this one is `set`, not `init`, because the `IConfiguration` binder needs a settable collection to populate; the resulting `CA2227` ("collection properties should be read only") analyzer error is suppressed with an inline `#pragma` plus an explanatory comment (`:37-39`), an acknowledged and documented trade-off rather than an oversight.
 
 - **Why it's built this way**: a plain POCO bound by the options pattern keeps the configuration model decoupled from the module infrastructure, and the `Enabled` flag lets a deployment switch off a whole module without deleting code.
 
-- **Where it's used**: as the value type of [`ModulesSettings`](#modulessettings) (the `"Modules"` dictionary), read for every discovered [`IModule`](#imodule) by [`ModuleLoader`](#moduleloader) during composition.
+- **Where it's used**: as the value type of [`ModulesSettings`](#modulessettings) (the `"Modules"` dictionary), read for every discovered [`IModule`](#imodule) by [`ModuleLoader`](#moduleloader) during composition, and enumerated directly by [`ModuleControllerFeatureProvider`](group-12-api-hosting-mapping.md#modulecontrollerfeatureprovider) when it filters out the controllers of disabled modules (`MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:36-39`).
 
 ---
 
-### ApplicationSettings
-> MMCA.Common.Application · `MMCA.Common.Application.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:8` · Level 1 · class (sealed)
+### QueryCachePipelineSettings
+> MMCA.Common.Application · `MMCA.Common.Application.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Application/Settings/QueryCachePipelineSettings.cs:20` · Level 0 · class (sealed)
 
-- **What it is**: the concrete global-settings class bound from the `"ApplicationSettings"` configuration section. It implements [`IApplicationSettings`](#iapplicationsettings) and supplies the defaults.
+- **What it is**: the Application layer's narrow view of the `Cache` configuration section, carrying exactly one knob: how long a request that missed the cache waits for the per-key populate lock before giving up and running the handler uncached.
 
-- **Depends on**: [`IApplicationSettings`](#iapplicationsettings) (Level 0, the interface it implements) and `System.ComponentModel.DataAnnotations` for one `[Range]` attribute. BCL only otherwise.
+- **Depends on**: BCL only (`TimeSpan`, `Timeout.InfiniteTimeSpan`). Bound by Infrastructure, read by [`CachingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult).
 
-- **Concept introduced, options-pattern settings classes.** `[Rubric §10, Cross-Cutting Concerns]` assesses centralised, typed configuration rather than per-service copy-paste. Every settings class in the framework follows the same shape: a `static readonly string SectionName` names its configuration section (so `Configure<ApplicationSettings>(config.GetSection(ApplicationSettings.SectionName))` avoids a magic string), and `init` properties capture the bound values so the object is immutable after startup. `ApplicationSettings` is the simplest exemplar of that shape, with defaults inline and one range check.
+- **Concept introduced, splitting one configuration section across two layers without a layer violation.** `[Rubric §3, Clean Architecture]` assesses whether the dependency rule survives contact with real configuration. The rest of the `Cache` section (TTL policy, key prefix) is bound in Infrastructure beside `CacheSettings`, but the caching **decorator** lives in the Application layer, and Application cannot reference Infrastructure. Rather than duplicating a settings class or pushing the decorator down a layer, the framework declares this one-property class *in* Application and lets Infrastructure bind it: both types read the same `Cache:PopulateLockTimeout` key, so they cannot drift (`QueryCachePipelineSettings.cs:3-14`, and the reciprocal note on `CacheSettings` at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/CacheSettings.cs:20`). `[Rubric §10, Cross-Cutting Concerns]`: the same `SectionName` plus `init` shape as every other settings class here ([`ApplicationSettings`](#applicationsettings) introduces it). `[Rubric §12, Performance and Scalability]`: the knob exists for cache-stampede control, and the default deliberately preserves the strongest form of it. `[Rubric §29, Resilience and Business Continuity]`: the remarks call the behavior fail-open outright, "the value bounds how long a request waits, never whether it succeeds" (`:16-18`), which is the same posture every other cache failure takes in this framework.
 
-- **Walkthrough**: `SectionName = "ApplicationSettings"` (`ApplicationSettings.cs:11`); four `init` properties carrying `<inheritdoc />` from the interface. `UseMiniProfiler` takes the implicit `false` default (`:14`); `MaxPageSize = 500` (`:17`); `MaxExportRows = 100_000` (`:29`), the one property on this class carrying a validation attribute, `[Range(1, 10_000_000)]` (`:28`); `DatabaseInitStrategy = "Migrate"` (`:32`). The remarks on `MaxExportRows` explain both the number and the limits of the attribute (`:20-27`): 100,000 rows is roughly a 10 to 25 MB file for a typical grid DTO, large enough that no real operational export hits the cap and small enough that one caller cannot pin a request thread to a full-table scan; the `[Range]` is honored only by hosts that opt into `ValidateDataAnnotations` on the options binding, so the export endpoint independently falls back to its own default when a host configures a non-positive value. Because the implemented interface is Level 0, this concrete class lands at Level 1.
+- **Walkthrough**: `SectionName = "Cache"` (`:23`), the same section Infrastructure's own cache settings bind to. `DefaultPopulateLockTimeout = Timeout.InfiniteTimeSpan` (`:29`), a `static readonly` so both the settings object and a hand-constructed decorator can reach the same fallback. `TimeSpan PopulateLockTimeout { get; init; } = DefaultPopulateLockTimeout` (`:42`). The remarks spell out the trade (`:35-41`): waiting indefinitely means exactly one request per key populates the entry and the rest are served from it, whereas a finite value bounds the wait so a pathologically slow populate cannot hold a queue behind it, at the cost of several requests running the same query at once. Zero or a negative value means no bound, exactly like the default.
 
-- **Why it's built this way**: `static SectionName` keeps registration DRY, and `init` immutability makes the bound instance safe to share as the singleton [`AddApplication()`](#dependencyinjection) registers it as. Validating a bound value with an attribute rather than a hand-written guard is what makes the ceiling declarative, while the endpoint-side fallback means an un-validating host still cannot produce an unbounded export.
+- **Why it's built this way**: keeping the knob in Application is what lets `CachingQueryDecorator` take it as a constructor dependency at all, and making the fallback a `static readonly` on the settings type is what lets the decorator's optional `IOptions<>` parameter degrade cleanly to framework behavior in a unit test or in a host that never called `AddCaching`.
 
-- **Where it's used**: passed **by value** into every [`IModule.Register(services, configuration, applicationSettings)`](#imodule) call (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModule.cs:28`), so a module reads global settings without resolving anything from the container; handed to [`ModuleLoader.DiscoverAndRegister`](#moduleloader) by each service host (for example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:318` and `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:245`).
+- **Where it's used**: bound by Infrastructure's `AddCaching` path, with validation when a configuration is supplied (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:237-241`) and as a bare `AddOptions<T>()` when it is not, so `IOptions<QueryCachePipelineSettings>` always resolves to the framework defaults rather than failing the host (`:245`, comment at `:222-227`). Read by [`CachingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult), which takes it as an **optional** constructor parameter (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:46`), falls back to `DefaultPopulateLockTimeout` when it is absent (`:81-82`), and on a lock timeout logs, records a cache miss and runs the inner handler without caching the result (`:84-92`). Pinned by `CacheSettingsTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Settings/CacheSettingsTests.cs:94`, `:110-111`).
+
+---
+
+### IModule
+> MMCA.Common.Application · `MMCA.Common.Application.Modules` · `MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModule.cs:7` · Level 1 · interface
+
+- **What it is**: the contract every pluggable module implements: a `Name`, an optional `Dependencies` list, a `RequiresDependencies` flag, a `Register` method that wires the module's services, and an optional `RegisterDisabledStubs` method for the cross-module stubs used when the module is switched off.
+
+- **Depends on**: [`ApplicationSettings`](#applicationsettings) (Level 0, passed into `Register`); externally `Microsoft.Extensions.DependencyInjection` (`IServiceCollection`) and `Microsoft.Extensions.Configuration` (`IConfigurationBuilder`).
+
+- **Concept introduced, the module system as a single composition contract.** `[Rubric §5, Vertical Slice]` assesses whether features cluster into cohesive, self-contained boundaries: a module (Conference, Engagement, Identity, Notification, Catalog, Sales, Tickets) is the top-level cohesion unit, and it registers *all* of its own services (handlers, EF configurations, repositories, validators) through one `Register` call. `[Rubric §7, Microservices Readiness]` assesses independent deployability: modules declare dependencies by *name* (string), so [`ModuleLoader`](#moduleloader) can compute a safe startup order with no compile-time reference between modules. When a dependency is disabled and `RequiresDependencies` is left at its `false` default, the depended-on module registers stubs through `RegisterDisabledStubs` so cross-module interfaces stay resolvable, which is precisely what lets the Conference service boot with [`DisabledBookmarkCountService`](group-22-engagement-module.md#disabledbookmarkcountservice) standing in for Engagement's [`IBookmarkCountService`](group-22-engagement-module.md#ibookmarkcountservice).
+
+- **Walkthrough**: five members, three of them with **default interface implementations**, so a minimal module supplies only `Name` and `Register`. `string Name { get; }` (`IModule.cs:12`, required); `IReadOnlyList<string> Dependencies => []` (`:17`, default empty); `bool RequiresDependencies => false` (`:23`, default tolerant); `void Register(IServiceCollection, IConfigurationBuilder, ApplicationSettings)` (`:28`, required); `void RegisterDisabledStubs(IServiceCollection services) { }` (`:34`, default no-op). Note that `Register` takes an `IConfigurationBuilder`, not a built `IConfiguration`, so a module can add its own configuration sources before its services bind them, which is exactly what the loader exploits to inject per-module JSON files.
+
+- **Why it's built this way**: [ADR-059](https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html) is the decision record for this contract, and [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) is the topology it enables ("each service is the monolith with one module enabled"). Making `IModule` the single composition boundary means extraction is a deployment concern rather than a rewrite, and default interface members keep the common case ceremony-free while leaving the extraction hooks available.
+
+- **Where it's used**: implemented by every module's API project, for example [`ConferenceModule`](group-20-conference-api-grpc.md#conferencemodule) (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:15`), [`EngagementModule`](group-22-engagement-module.md#engagementmodule) (`.../Engagement/MMCA.ADC.Engagement.API/EngagementModule.cs:14`), [`IdentityModule`](group-24-identity-module.md#identitymodule) (`.../Identity/MMCA.ADC.Identity.API/IdentityModule.cs:13`), [`NotificationModule`](group-10-notifications.md#notificationmodule) (`.../Notification/MMCA.ADC.Notification.API/NotificationModule.cs:15`), Store's `CatalogModule` / `SalesModule` / `IdentityModule`, and Helpdesk's single `TicketsModule` (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/TicketsModule.cs:13`). Discovered, sorted, and invoked by [`ModuleLoader`](#moduleloader); the name is additionally pinned as a fitness rule by `ModuleConformanceTestsBase`, because renaming it silently disables the module's configuration and drops it from other modules' dependency graphs (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ModuleConformanceTestsBase.cs:42`).
 
 ---
 
@@ -674,95 +814,87 @@ gRPC clients, which is precisely the reversibility
 
 - **Concept**: the same [options-pattern](#applicationsettings) shape, but realised by *subclassing the dictionary* so `appsettings.json` can express an arbitrary map of module name to settings without a hand-written model class per module. `[Rubric §7, Microservices Readiness]`: `IsDependencyRemote` is the extracted-service hook, and when a module's dependency is met by a remote service rather than an in-process module, it returns true and [`ModuleLoader`](#moduleloader) treats the dependency as satisfied.
 
-- **Walkthrough**: `SectionName = "Modules"` (`ModulesSettings.cs:10`). `IsModuleEnabled` (`:18-19`) is `TryGetValue` followed by `settings.Enabled`, so a module *absent* from configuration is treated as **disabled**, not enabled, which the XML doc states explicitly (`:14`). `IsDependencyRemote` (`:30-32`) does `TryGetValue` for the consumer, then `settings.RemoteDependencies.Contains(dependencyModule, StringComparer.OrdinalIgnoreCase)`, case-insensitive so deployment configuration need not match casing exactly.
+- **Walkthrough**: `SectionName = "Modules"` (`ModulesSettings.cs:10`). `IsModuleEnabled` (`:18-19`) is `TryGetValue` followed by `settings.Enabled`, so a module *absent* from configuration is treated as **disabled**, not enabled, which the XML doc states explicitly (`:12-15`). `IsDependencyRemote` (`:30-32`) does `TryGetValue` for the consumer, then `settings.RemoteDependencies.Contains(dependencyModule, StringComparer.OrdinalIgnoreCase)`, case-insensitive so deployment configuration need not match casing exactly.
 
 - **Why it's built this way**: subclassing `Dictionary<,>` rather than wrapping one keeps the binder's job trivial (the section is literally a map) while still giving the two questions the loader asks a named, testable home instead of leaving `TryGetValue` chains scattered through composition code.
 
-- **Where it's used**: consumed by [`ModuleLoader`](#moduleloader) for both the enable check and the remote-dependency bypass (`ModuleLoader.cs:116`, `:147`, `:151`, `:228`), and by [`ModuleControllerFeatureProvider`](group-12-api-hosting-mapping.md#modulecontrollerfeatureprovider) in the API layer to restrict which module controllers are discovered (`MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:29`); it is also the optional first parameter of `AddAPI` (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:44`).
-
----
-
-### IModule
-> MMCA.Common.Application · `MMCA.Common.Application.Modules` · `MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModule.cs:7` · Level 2 · interface
-
-- **What it is**: the contract every pluggable module implements: a `Name`, an optional `Dependencies` list, a `RequiresDependencies` flag, a `Register` method that wires the module's services, and an optional `RegisterDisabledStubs` method for the cross-module stubs used when the module is switched off.
-
-- **Depends on**: [`ApplicationSettings`](#applicationsettings) (Level 1, passed into `Register`); externally `Microsoft.Extensions.DependencyInjection` (`IServiceCollection`) and `Microsoft.Extensions.Configuration` (`IConfigurationBuilder`).
-
-- **Concept introduced, the module system as a single composition contract.** `[Rubric §5, Vertical Slice]` assesses whether features cluster into cohesive, self-contained boundaries: a module (Conference, Engagement, Identity, Notification) is the top-level cohesion unit, and it registers *all* of its own services (handlers, EF configurations, repositories, validators) through one `Register` call. `[Rubric §7, Microservices Readiness]` assesses independent deployability: modules declare dependencies by *name* (string), so [`ModuleLoader`](#moduleloader) can compute a safe startup order with no compile-time reference between modules. When a dependency is disabled and `RequiresDependencies` is left at its `false` default, the depended-on module registers stubs through `RegisterDisabledStubs` so cross-module interfaces stay resolvable, which is precisely what lets the Conference service boot with [`DisabledBookmarkCountService`](group-22-engagement-module.md#disabledbookmarkcountservice) standing in for Engagement's [`IBookmarkCountService`](group-22-engagement-module.md#ibookmarkcountservice).
-
-- **Walkthrough**: five members, three of them with **default interface implementations**, so a minimal module supplies only `Name` and `Register`. `string Name { get; }` (`IModule.cs:12`, required); `IReadOnlyList<string> Dependencies => []` (`:17`, default empty); `bool RequiresDependencies => false` (`:23`, default tolerant); `void Register(IServiceCollection, IConfigurationBuilder, ApplicationSettings)` (`:28`, required); `void RegisterDisabledStubs(IServiceCollection services) { }` (`:34`, default no-op). Note that `Register` takes an `IConfigurationBuilder`, not a built `IConfiguration`, so a module can add its own configuration sources before its services bind them, which is exactly what the loader exploits to inject per-module JSON files.
-
-- **Why it's built this way**: [ADR-059](https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html) is the decision record for this contract, and [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) is the topology it enables ("each service is the monolith with one module enabled"). Making `IModule` the single composition boundary means extraction is a deployment concern rather than a rewrite, and default interface members keep the common case ceremony-free while leaving the extraction hooks available.
-
-- **Where it's used**: implemented by every module's API project (for example [`ConferenceModule`](group-20-conference-api-grpc.md#conferencemodule), [`EngagementModule`](group-22-engagement-module.md#engagementmodule), [`IdentityModule`](group-24-identity-module.md#identitymodule), [`NotificationModule`](group-10-notifications.md#notificationmodule)). Discovered, sorted, and invoked by [`ModuleLoader`](#moduleloader).
+- **Where it's used**: bound and validated alongside [`ApplicationSettings`](#applicationsettings) by [`ModuleHostExtensions.AddModuleHost`](group-12-api-hosting-mapping.md#modulehostextensions), which falls back to an empty map when the section is absent (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:69-76`) and carries it on [`ModuleHostContext`](group-12-api-hosting-mapping.md#modulehostcontext) (`ModuleHostContext.cs:47`). Consumed by [`ModuleLoader`](#moduleloader) for both the enable check and the remote-dependency bypass (`ModuleLoader.cs:101`, `:132`, `:136`, `:213`), and by [`ModuleControllerFeatureProvider`](group-12-api-hosting-mapping.md#modulecontrollerfeatureprovider) to keep MVC from mapping a disabled module's controllers (`MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:28-29`, `:36-41`); it is also the optional first parameter of `AddAPI` (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:44`).
 
 ---
 
 ### ModuleLoader
-> MMCA.Common.Application · `MMCA.Common.Application.Modules` · `MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:15` · Level 3 · class (sealed, partial)
+> MMCA.Common.Application · `MMCA.Common.Application.Modules` · `MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:15` · Level 2 · class (sealed, partial)
 
-- **What it is**: the engine of the module system. It reflects over assemblies to find every [`IModule`](#imodule) and [`IModuleSeeder`](#imoduleseeder) implementation, sorts the modules into dependency order with **Kahn's topological sort**, registers each enabled module into the DI container while recording stub registrations for the disabled ones, and afterwards can verify against the built container that every remote-declared dependency was actually re-wired.
+- **What it is**: the engine of the module system. It reflects over the assemblies the host names to find every [`IModule`](#imodule) and [`IModuleSeeder`](#imoduleseeder) implementation, sorts the modules into dependency order with **Kahn's topological sort**, registers each enabled module into the DI container while recording stub registrations for the disabled ones, and afterwards can verify against the built container that every remote-declared dependency was actually re-wired.
 
-- **Depends on**: [`IModule`](#imodule) (Level 2), [`IModuleSeeder`](#imoduleseeder) (Level 0), [`ApplicationSettings`](#applicationsettings) (Level 1), [`ModulesSettings`](#modulessettings) (Level 1). Externals: `IServiceCollection` / `ServiceDescriptor` / `IConfigurationBuilder`, `Microsoft.Extensions.Logging` (source-generated `[LoggerMessage]` methods, `NullLogger<T>`), `System.Diagnostics.Stopwatch`, `System.Reflection`.
+- **Depends on**: [`IModule`](#imodule) (Level 1), [`IModuleSeeder`](#imoduleseeder) (Level 0), [`ApplicationSettings`](#applicationsettings) (Level 0), [`ModulesSettings`](#modulessettings) (Level 1). Externals: `IServiceCollection` / `ServiceDescriptor` / `IConfigurationBuilder`, `Microsoft.Extensions.Logging` (source-generated `[LoggerMessage]` methods, `NullLogger<T>`), `System.Diagnostics.Stopwatch`, `System.Reflection`.
 
-- **Concept introduced, Kahn's topological sort for DI registration ordering.** `[Rubric §2, Design Patterns]` assesses use of the right algorithm for the problem: ordering items so each appears after everything it depends on is textbook topological sort, and `TopologicalSort` (`ModuleLoader.cs:286`) implements the BFS-based Kahn variant. `[Rubric §7, Microservices Readiness]`: the loader is what makes partial enablement (one module per service host) work at all. `[Rubric §16, Maintainability]`: modules name their dependencies as strings and the loader resolves and sorts them at startup, so adding a module is purely additive, with no central registration list to edit. `[Rubric §13, Observability and Operability]`: seven `[LoggerMessage]` partial methods (`:338-357`) give allocation-free structured diagnostics of which modules loaded, in what order, with which satisfied or unsatisfied dependencies, and how long each `Register` took.
+- **Concept introduced, Kahn's topological sort for DI registration ordering.** `[Rubric §2, Design Patterns]` assesses use of the right algorithm for the problem: ordering items so each appears after everything it depends on is textbook topological sort, and `TopologicalSort` (`ModuleLoader.cs:271`) implements the BFS-based Kahn variant. `[Rubric §7, Microservices Readiness]`: the loader is what makes partial enablement (one module per service host) work at all. `[Rubric §16, Maintainability]`: modules name their dependencies as strings and the loader resolves and sorts them at startup, so adding a module is purely additive, with no central registration list to edit. `[Rubric §13, Observability and Operability]`: seven `[LoggerMessage]` partial methods (`:323-342`) give allocation-free structured diagnostics of which modules loaded, in what order, with which satisfied or unsatisfied dependencies, and how long each `Register` took.
 
 - **Walkthrough**
-  - **State** (`ModuleLoader.cs:17-27`): three private lists, `_enabledModules`, `_seeders`, `_disabledModuleNames`, the first and third surfaced as the read-only `EnabledModules` (`:24`) and `DisabledModuleNames` (`:27`) properties. A fourth field, `_stubRegistrations` (`:20`), is a case-insensitive `Dictionary<string, List<ServiceDescriptor>>` recording exactly which descriptors each disabled module's stub registration added; `_modulesSettings` (`:21`) caches the settings for the post-build validation pass. `Logger` (`:33`) is an `init`-only `ILogger<ModuleLoader>` defaulting to `NullLogger<ModuleLoader>.Instance`, so the loader runs silently unless a host supplies one.
-  - **Two `DiscoverAndRegister` overloads.** The five-parameter overload (`:52-59`) simply forwards with `moduleAssemblies: null`; the six-parameter overload (`:73`) takes the assemblies to scan explicitly. The XML doc recommends the explicit form in hosts (`:61-65`), because the AppDomain scan only sees assemblies **already loaded**, so a module assembly that is referenced but never touched by any code path is silently absent from discovery.
-  - **Discovery** (`:86-109`): enumerates `moduleAssemblies ?? AppDomain.CurrentDomain.GetAssemblies()` and calls `GetTypes()` on each inside a `try/catch` (`:89-98`) that logs and skips assemblies which throw (for example `ReflectionTypeLoadException` from a missing transitive reference) rather than aborting the whole scan. It then instantiates every concrete, non-abstract, non-interface `IModule` via `Activator.CreateInstance` (`:101-104`) and every `IModuleSeeder` into an `OrdinalIgnoreCase` dictionary keyed by `ModuleName` (`:106-109`).
-  - **Per-module loop** (`:114-137`): for a module disabled per [`ModulesSettings.IsModuleEnabled`](#modulessettings), it logs, snapshots `services.Count`, calls `module.RegisterDisabledStubs(services)`, stores the newly appended descriptors under the module's name (`:122-124`), records the name, and continues. An enabled module runs `ValidateModuleDependencies` then `RegisterEnabledModule`, and if a seeder with a matching name exists it is appended to `_seeders` (`:133-136`).
-  - **`ValidateModuleDependencies`** (`:140`): computes the module's disabled dependencies (`:146-148`), subtracts those declared remote via [`ModulesSettings.IsDependencyRemote`](#modulessettings) (`:150-152`), and throws `InvalidOperationException` only if a genuinely unsatisfied dependency remains *and* `RequiresDependencies` is true; the message spells out the three remediations, enable the module, disable this one, or add the name to `Modules:{Name}:RemoteDependencies` (`:154-162`). Otherwise it logs a warning per unsatisfied-but-tolerated dependency (`:164-167`) and an information line per remote-satisfied one (`:169-172`).
-  - **`RegisterEnabledModule`** (`:175`): before calling `module.Register`, it adds the conventional per-module JSON configuration files `modules.{name}.json` and, when an environment name was supplied, `modules.{name}.{environment}.json`, both optional and `reloadOnChange: true` (`:189-193`); the name is lower-cased with `ToLowerInvariant` under a documented `CA1308` suppression for the file-naming convention (`:186-188`). It times the `Register` call with a `Stopwatch` and logs the elapsed milliseconds (`:195-199`).
-  - **`ValidateRemoteDependencies`** (`:216`): the post-build half of the extraction story. Given the built root provider, it creates a scope (`:223`) and, for every enabled module and every dependency that module declared remote, looks up the descriptors the disabled peer's stubs added and calls `ValidateRemoteDependencyStubs` (`:225-237`). That helper (`:240`) skips open generics, resolves each stub's `ServiceType`, and **throws** with a remediation message if it does not resolve at all (`:248-253`); if it resolves but is still the stub implementation type, it only logs a warning (`:255-259`), because a best-effort dependency may intentionally keep its stub. Configuration trust alone is not enough: a typo in a `RemoteDependencies` entry or a forgotten `AddTypedGrpcClient` would otherwise surface as a first-request failure or a silent no-op instead of at startup (`:202-215`).
-  - **`SeedAllAsync`** (`:270`): awaits each collected seeder's `SeedAsync` in registration (that is, topological) order, with `ConfigureAwait(false)` (`:272-275`).
-  - **`TopologicalSort`** (`:286`): builds `modulesByName`, `inDegree`, and a reverse-adjacency `dependents` map, all `OrdinalIgnoreCase` (`:288-294`); while building the graph it **ignores dependencies on modules that were not discovered** (`:301-302`), deferring those to registration-time validation. It seeds a `Queue<string>` with the zero-in-degree modules (`:310-311`) and drains it, decrementing each dependent's in-degree and enqueuing at zero (`:314-325`). If fewer modules were emitted than exist, the remainder form a cycle, and it throws `InvalidOperationException` naming them (`:328-333`).
+  - **State** (`ModuleLoader.cs:17-21`): three private lists, `_enabledModules`, `_seeders`, `_disabledModuleNames`, the first and third surfaced as the read-only `EnabledModules` (`:24`) and `DisabledModuleNames` (`:27`) properties. A fourth field, `_stubRegistrations` (`:20`), is a case-insensitive `Dictionary<string, List<ServiceDescriptor>>` recording exactly which descriptors each disabled module's stub registration added; `_modulesSettings` (`:21`) caches the settings for the post-build validation pass. `Logger` (`:33`) is an `init`-only `ILogger<ModuleLoader>` defaulting to `NullLogger<ModuleLoader>.Instance`, so the loader runs silently unless a host supplies one.
+  - **`DiscoverAndRegister`** (`:58-64`) is the single entry point, and it takes the assemblies to scan as a **required** parameter. There is no ambient-scan overload, and the XML doc gives the reason: an AppDomain scan only sees assemblies already loaded, so a module assembly that is referenced but not yet touched by any code path would be silently absent from discovery (`:48-53`).
+  - **Discovery** (`:71-94`): flattens `moduleAssemblies` through `GetTypes()` inside a `try/catch` (`:74-82`) that logs and skips assemblies which throw (for example `ReflectionTypeLoadException` from a missing transitive reference) rather than aborting the whole scan. It then instantiates every concrete, non-abstract, non-interface `IModule` via `Activator.CreateInstance` (`:86-89`) and every `IModuleSeeder` into an `OrdinalIgnoreCase` dictionary keyed by `ModuleName` (`:91-94`).
+  - **Per-module loop** (`:99-122`): for a module disabled per [`ModulesSettings.IsModuleEnabled`](#modulessettings), it logs, snapshots `services.Count`, calls `module.RegisterDisabledStubs(services)`, stores the newly appended descriptors under the module's name (`:107-109`), records the name, and continues. An enabled module runs `ValidateModuleDependencies` then `RegisterEnabledModule`, and if a seeder with a matching name exists it is appended to `_seeders` (`:118-121`).
+  - **`ValidateModuleDependencies`** (`:125`): computes the module's disabled dependencies (`:131-133`), subtracts those declared remote via [`ModulesSettings.IsDependencyRemote`](#modulessettings) (`:135-137`), and throws `InvalidOperationException` only if a genuinely unsatisfied dependency remains *and* `RequiresDependencies` is true; the message spells out the three remediations, enable the module, disable this one, or add the name to `Modules:{Name}:RemoteDependencies` (`:139-147`). Otherwise it logs a warning per unsatisfied-but-tolerated dependency (`:149-152`) and an information line per remote-satisfied one (`:154-157`).
+  - **`RegisterEnabledModule`** (`:160`): before calling `module.Register`, it adds the conventional per-module JSON configuration files `modules.{name}.json` and, when an environment name was supplied, `modules.{name}.{environment}.json`, both optional and `reloadOnChange: true` (`:174-178`); the name is lower-cased with `ToLowerInvariant` under a documented `CA1308` suppression for the file-naming convention (`:171-173`). It times the `Register` call with a `Stopwatch` and logs the elapsed milliseconds (`:180-184`).
+  - **`ValidateRemoteDependencies`** (`:201`): the post-build half of the extraction story. Given the built root provider, it creates a scope (`:208`) and, for every enabled module and every dependency that module declared remote, looks up the descriptors the disabled peer's stubs added and calls `ValidateRemoteDependencyStubs` (`:210-222`). That helper (`:225`) skips open generics, resolves each stub's `ServiceType`, and **throws** with a remediation message if it does not resolve at all (`:233-238`); if it resolves but is still the stub implementation type, it only logs a warning (`:240-244`), because a best-effort dependency may intentionally keep its stub. Configuration trust alone is not enough: a typo in a `RemoteDependencies` entry or a forgotten `AddTypedGrpcClient` would otherwise surface as a first-request failure or a silent no-op instead of at startup (`:187-200`).
+  - **`SeedAllAsync`** (`:255`): awaits each collected seeder's `SeedAsync` in registration (that is, topological) order, with `ConfigureAwait(false)` (`:257-260`).
+  - **`TopologicalSort`** (`:271`): builds `modulesByName`, `inDegree`, and a reverse-adjacency `dependents` map, all `OrdinalIgnoreCase` (`:273-279`); while building the graph it **ignores dependencies on modules that were not discovered** (`:286-287`), deferring those to registration-time validation. It seeds a `Queue<string>` with the zero-in-degree modules (`:295-296`) and drains it, decrementing each dependent's in-degree and enqueuing at zero (`:299-310`). If fewer modules were emitted than exist, the remainder form a cycle, and it throws `InvalidOperationException` naming them (`:313-318`).
 
-- **Why it's built this way**: convention over configuration. Discovery plus sort means no manual ordering and no module-registration list to keep in sync, which is the decision recorded in [ADR-059](https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html) (a disabled module is represented by **stub registrations** rather than by absence, so a dependent always resolves something).
+- **Why it's built this way**: convention over configuration. Discovery plus sort means no manual ordering and no module-registration list to keep in sync, which is the decision recorded in [ADR-059](https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html) (a disabled module is represented by **stub registrations** rather than by absence, so a dependent always resolves something). Making the assembly list an explicit parameter rather than an ambient scan trades one line at the host for deterministic discovery.
 
-- **Where it's used**: constructed directly in each service host's composition root, with a real logger attached through the `init` property, then handed the configuration builder, settings, and environment name, and finally registered as a singleton so startup code can call `SeedAllAsync` later. All four ADC services do this identically (for example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:314-319` and `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:260-264`), as do Store's three (for example `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:241-245`, `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:225-229`). Each of those hosts enables exactly one module in configuration; a monolith host would discover and register all of them through the same loader.
+- **Where it's used**: constructed by [`ModuleHostExtensions.AddModuleHost`](group-12-api-hosting-mapping.md#modulehostextensions), which attaches a logger when the host supplies one and registers the loader as a singleton (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:78-82`), then hands it back on a [`ModuleHostContext`](group-12-api-hosting-mapping.md#modulehostcontext) whose `RegisterModules` step is the actual `DiscoverAndRegister` call (`ModuleHostContext.cs:66-77`). Every ADC and Store service registers that step inside its application pipeline, for example ADC Conference (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:308`, `:347-348`) and Store Catalog (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:122`, `:233`). Each of those hosts enables exactly one module in configuration; the MMCA.Helpdesk monolith instead constructs the loader itself with a console logger and calls `DiscoverAndRegister` directly, naming `typeof(TicketsModule).Assembly` as the one assembly to scan (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:97-113`). Seeding runs later, from [`DatabaseInitializationExtensions`](group-12-api-hosting-mapping.md#databaseinitializationextensions) (`DatabaseInitializationExtensions.cs:111`).
 
-- **Caveats / not-in-source**: two capabilities exist but have no production caller today. Every ADC and Store host calls the five-parameter `DiscoverAndRegister` (the AppDomain scan), not the explicit-assemblies overload its own XML doc recommends. And `ValidateRemoteDependencies` is exercised only by `ModuleLoaderTests` (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:132`, `:145`, `:159`); no `Program.cs` in this workspace calls it after `builder.Build()`. The tests are also the only caller of the explicit-assemblies overload (`ModuleLoaderTests.cs:42`), which their own header comment says is deliberate (`:14`).
+- **Caveats / not-in-source**: `ValidateRemoteDependencies` has no production caller today. It is exercised only by `ModuleLoaderTests` (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:138`, `:151`, `:166`); no `Program.cs` in this workspace calls it after `builder.Build()`, so a mis-declared `RemoteDependencies` entry still surfaces at first request rather than at startup unless a host opts in.
 
 ---
 
 ### DependencyInjection
-> MMCA.Common.Application · `MMCA.Common.Application` · `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:21` · Level 9 · class (static, C# `extension(IServiceCollection)`)
+> MMCA.Common.Application · `MMCA.Common.Application` · `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:25` · Level 11 · class (static, C# `extension(IServiceCollection)`)
 
-- **What it is**: the composition-root extension class that assembles the framework's entire Application layer into the DI container. It exposes five `IServiceCollection` extension methods: `AddApplication()`, `AddApplicationDecorators()`, `ScanModuleApplicationServices<TAssemblyMarker>()`, `AddUserDataExportSection<TSection>()`, and `AddApplicationProfiling()`. Every consuming host calls these, in a specific order, before wiring Infrastructure.
+- **What it is**: the composition-root extension class that assembles the framework's entire Application layer into the DI container. Its single `extension(IServiceCollection services)` block (`:27`) exposes twelve members: `AddApplication()`, `AddApplicationDecorators()`, `ScanModuleApplicationServices<TAssemblyMarker>()` and its `Assembly` overload, `AddEntityCrud<...>()`, `AddEntityUpdateVerb<...>()`, `AddEntityUpdate<...>()`, `AddCommandRequestValidator<TCommand, TRequest>()`, `AddUserDataExportSection<TSection>()`, `AddEventUpcaster<TSource, TTarget, TUpcaster>()`, `AddApplicationProfiling()`, `AddMmcaApplicationPipeline(configure)` and `VerifyDecoratorPipeline()`. Four private helpers below the block implement the pipeline seal (`:701-738`).
 
-- **Depends on**: the core singletons `IDomainEventDispatcher` / [`DomainEventDispatcher`](group-04-events-outbox.md#domaineventdispatcher), [`INavigationMetadataProvider`](group-03-querying-specifications.md#inavigationmetadataprovider), [`IEntityQueryPipeline`](group-03-querying-specifications.md#ientityquerypipeline); the settings bridge [`IApplicationSettings`](#iapplicationsettings) over [`ApplicationSettings`](#applicationsettings); the marker [`ClassReference`](#classreference); the open-generic handler contracts [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult) and [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult); the five command decorators [`TransactionalCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#transactionalcommanddecoratortcommand-tresult), [`ValidatingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#validatingcommanddecoratortcommand-tresult), [`CachingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#cachingcommanddecoratortcommand-tresult), [`LoggingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#loggingcommanddecoratortcommand-tresult), [`FeatureGateCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#featuregatecommanddecoratortcommand-tresult); the three query decorators [`CachingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult), [`LoggingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#loggingquerydecoratortquery-tresult), [`FeatureGateQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#featuregatequerydecoratortquery-tresult); the optional [`ProfilingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#profilingcommanddecoratortcommand-tresult) and [`ProfilingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#profilingquerydecoratortquery-tresult); the scanned contract families [`IDomainEventHandler<in TDomainEvent>`](group-04-events-outbox.md#idomaineventhandlerin-tdomainevent), [`IIntegrationEventHandler<in TIntegrationEvent>`](group-04-events-outbox.md#iintegrationeventhandlerin-tintegrationevent), [`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype), [`IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>`](group-12-api-hosting-mapping.md#ientityrequestmappertentity-tcreaterequest-tidentifiertype); the request-validator bridge [`CommandRequestValidator<TCommand, TRequest>`](group-06-validation.md#commandrequestvalidatortcommand-trequest); and the export contributor contract [`IUserDataExportSection`](#iuserdataexportsection). Externals: **FluentValidation** (`AddValidatorsFromAssemblyContaining`, `IValidator<>`), **Scrutor** (`Scan`, `TryDecorate`), `Microsoft.Extensions.DependencyInjection.Extensions` (`TryAdd*`, `TryAddEnumerable`), `Microsoft.Extensions.Options`.
+- **Depends on**: the core singletons `IDomainEventDispatcher` / [`DomainEventDispatcher`](group-04-events-outbox.md#domaineventdispatcher), [`IEventUpcasterRegistry`](group-05-cqrs-pipeline.md#ieventupcasterregistry) / [`EventUpcasterRegistry`](group-03-querying-specifications.md#eventupcasterregistry), [`INavigationMetadataProvider`](group-03-querying-specifications.md#inavigationmetadataprovider), [`IEntityQueryPipeline`](group-03-querying-specifications.md#ientityquerypipeline); the marker [`ClassReference`](#classreference); the permission registry [`IPermissionRegistry`](group-08-auth.md#ipermissionregistry) / [`UnconfiguredPermissionRegistry`](group-08-auth.md#unconfiguredpermissionregistry); the open-generic handler contracts [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult) and [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult); the seven command decorators [`TransactionalCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#transactionalcommanddecoratortcommand-tresult), [`TimeoutCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#timeoutcommanddecoratortcommand-tresult), [`ValidatingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#validatingcommanddecoratortcommand-tresult), [`CachingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#cachingcommanddecoratortcommand-tresult), [`LoggingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#loggingcommanddecoratortcommand-tresult), [`AuthorizationCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#authorizationcommanddecoratortcommand-tresult), [`FeatureGateCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#featuregatecommanddecoratortcommand-tresult); the six query decorators [`TimeoutQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#timeoutquerydecoratortquery-tresult), [`ValidatingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#validatingquerydecoratortquery-tresult), [`CachingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult), [`LoggingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#loggingquerydecoratortquery-tresult), [`AuthorizationQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#authorizationquerydecoratortquery-tresult), [`FeatureGateQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#featuregatequerydecoratortquery-tresult); the optional [`ProfilingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#profilingcommanddecoratortcommand-tresult) and [`ProfilingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#profilingquerydecoratortquery-tresult); the scanned contract families [`IDomainEventHandler<in TDomainEvent>`](group-04-events-outbox.md#idomaineventhandlerin-tdomainevent), [`IIntegrationEventHandler<in TIntegrationEvent>`](group-04-events-outbox.md#iintegrationeventhandlerin-tintegrationevent), [`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype), [`IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`](group-05-cqrs-pipeline.md#ientitydtoprojectortentity-tentitydto-tidentifiertype), [`IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>`](group-12-api-hosting-mapping.md#ientityrequestmappertentity-tcreaterequest-tidentifiertype), [`IEntityUpdateApplier<TEntity, TUpdateRequest, TIdentifierType>`](group-05-cqrs-pipeline.md#ientityupdateappliertentity-tupdaterequest-tidentifiertype), [`IEntityUpdateCommandApplier<TEntity, TUpdateRequest, TIdentifierType, in TCommand>`](group-05-cqrs-pipeline.md#ientityupdatecommandappliertentity-tupdaterequest-tidentifiertype-in-tcommand); the generic write-side handlers [`CreateEntityHandler<TCreateRequest, TEntity, TIdentifierType, TEntityDTO>`](group-05-cqrs-pipeline.md#createentityhandlertcreaterequest-tentity-tidentifiertype-tentitydto), [`UpdateEntityHandler<TEntity, TEntityDTO, TIdentifierType, TUpdateRequest>`](group-05-cqrs-pipeline.md#updateentityhandlertentity-tentitydto-tidentifiertype-tupdaterequest), [`UpdateEntityCommandHandler<TCommand, TEntity, TEntityDTO, TIdentifierType, TUpdateRequest>`](group-05-cqrs-pipeline.md#updateentitycommandhandlertcommand-tentity-tentitydto-tidentifiertype-tupdaterequest) and [`DeleteEntityHandler<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentityhandlertentity-tidentifiertype) over [`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`](group-05-cqrs-pipeline.md#updateentitycommandtentity-tupdaterequest-tidentifiertype); the request-validator bridge [`CommandRequestValidator<TCommand, TRequest>`](group-06-validation.md#commandrequestvalidatortcommand-trequest) over [`ICommandWithRequest<out TRequest>`](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest); the upcaster contract [`IEventUpcaster`](group-05-cqrs-pipeline.md#ieventupcaster); the export contributor contract [`IUserDataExportSection`](#iuserdataexportsection); the builder [`MmcaApplicationPipelineBuilder`](#mmcaapplicationpipelinebuilder); and the private marker [`DecoratorPipelineSeal`](#decoratorpipelineseal). Externals: **FluentValidation** (`AddValidatorsFromAssemblyContaining`, `AddValidatorsFromAssembly`, `IValidator<>`), **Scrutor** (`Scan`, `TryDecorate`), `Microsoft.Extensions.DependencyInjection.Extensions` (`TryAdd*`, `TryAddEnumerable`), `System.Reflection`.
 
-- **Concept introduced, the CQRS decorator pipeline wiring order (Scrutor `TryDecorate`).** `[Rubric §6, CQRS and Event-Driven]` assesses whether cross-cutting handler concerns are applied uniformly; `[Rubric §2, Design Patterns]` covers the Decorator pattern itself (the individual decorators are taught in [group-05](group-05-cqrs-pipeline.md)). **Scrutor's `TryDecorate` applies decorators in reverse registration order**: the *last* registered call becomes the *outermost* wrapper. `AddApplicationDecorators` (`DependencyInjection.cs:89`) registers the five command decorators in source order Transactional, Validating, Caching, Logging, FeatureGate (`:94-98`), which produces the execution nesting its own XML doc draws (`:53-61`):
+- **Concept introduced, the CQRS decorator pipeline wiring order (Scrutor `TryDecorate`).** `[Rubric §6, CQRS and Event-Driven]` assesses whether cross-cutting handler concerns are applied uniformly; `[Rubric §2, Design Patterns]` covers the Decorator pattern itself (the individual decorators are taught in [group-05](group-05-cqrs-pipeline.md)). **Scrutor's `TryDecorate` applies decorators in reverse registration order**: the *last* registered call becomes the *outermost* wrapper. `AddApplicationDecorators` (`DependencyInjection.cs:115`) registers the seven command decorators in source order Transactional, Timeout, Validating, Caching, Logging, Authorization, FeatureGate (`:129-135`), which produces the execution nesting its own XML doc draws (`:62-72`):
 
   ```
-  FeatureGateCommandDecorator        (outermost, short-circuits if the feature flag is off)
-    -> LoggingCommandDecorator       (measures full pipeline duration of enabled features)
-      -> CachingCommandDecorator     (invalidates cache only AFTER the transaction commits)
-        -> ValidatingCommandDecorator (short-circuits with Result.Failure before any transaction)
-          -> TransactionalCommandDecorator (wraps the handler in a DB transaction if ITransactional)
-            -> ConcreteHandler       (the actual business logic)
+  FeatureGateCommandDecorator            (outermost, short-circuits if the feature flag is off)
+    -> AuthorizationCommandDecorator     (short-circuits with Forbidden if IRequiresPermission)
+      -> LoggingCommandDecorator         (measures full pipeline duration of enabled features)
+        -> CachingCommandDecorator       (invalidates cache only AFTER the transaction commits)
+          -> ValidatingCommandDecorator  (short-circuits with Result.Failure before any budget)
+            -> TimeoutCommandDecorator   (applies the command's own budget if IHasTimeout)
+              -> TransactionalCommandDecorator (DB transaction if ITransactional)
+                -> ConcreteHandler       (the actual business logic)
   ```
 
-  Queries get the lighter three-deep chain FeatureGate, Logging, Caching, handler (`:101-103`), with no validation and no transaction because queries do not mutate. This file is the one place where the register-order versus execute-order inversion has to be held in mind, and the comments on each line say so. The ordering is not arbitrary; the XML doc's design rationale (`:72-86`) gives the reasons: feature gating is outermost so disabled features cost nothing, logging sits inside it so it measures only enabled executions, validation sits *outside* the transaction so malformed commands never open one, cache invalidation sits *outside* validation so cache is cleared only after a valid committed mutation, a business `Result.IsFailure` rolls the transaction back and skips invalidation, and an exception rolls back and propagates through every decorator. The same order is the decision recorded in [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html).
+  Queries get a six-deep chain, FeatureGate, Authorization, Logging, Caching, Validating, Timeout, handler (`:138-143`, drawn at `:76-84`). The ordering is not arbitrary, and the doc's design rationale gives a reason per position (`:86-113`): feature gating is outermost so a disabled feature costs nothing *and* answers identically for every caller rather than leaking which permission guards it; authorization sits directly inside it and outside caching, so a denied request neither reads nor populates the cache; logging measures only enabled executions; validation sits outside the transaction on the command side so a malformed command never opens one, but *inside* caching on the query side, because a cached entry can only exist because that query already passed validation once; cache invalidation sits outside validation so cache is cleared only after a valid committed mutation; and the timeout budget sits inside validation and outside the transaction so it covers the database work that actually hangs and cancels the transaction rather than leaving it open, while on the query side it is innermost so a cache hit never starts a budget. `[Rubric §11, Security]` is why the two authorization decorators are registered unconditionally with a `TryAddSingleton<IPermissionRegistry, UnconfiguredPermissionRegistry>()` fallback (`:124`, comment at `:119-123`): the pipeline cannot activate without a registry at all, so a host with no permission model still resolves every handler while a host that declared its grants keeps its own registry. The order itself is the decision recorded in [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html).
 
-- **Concept introduced, `ScanModuleApplicationServices<TAssemblyMarker>()`, the convention scanner.** `[Rubric §5, Vertical Slice]` (one call wires a whole module's slice types) and `[Rubric §14, Testability]` (handler registration is reproducible in a test host with the same one call). Lines `:119-156` run **seven passes** over the single marker assembly, each with a deliberate lifetime: domain event handlers (`IDomainEventHandler<>`, **singleton**, because they create their own scopes, `:119-123`), integration event handlers (`IIntegrationEventHandler<>`, **singleton**, `:126-130`), DTO mappers (`IEntityDTOMapper<,,>`, **scoped**, registered `AsSelfWithInterfaces`, `:132-136`), request mappers (`IEntityRequestMapper<,,>`, **scoped**, `:138-142`), command handlers (`ICommandHandler<,>`, **scoped**, `:144-148`), query handlers (`IQueryHandler<,>`, **scoped**, `:150-154`), and FluentValidation validators (`:156`). After the passes, a reflection loop (`:160-176`) finds every type in the assembly implementing `ICommandWithRequest<TRequest>`, constructs `CommandRequestValidator<TCommand, TRequest>` and `IValidator<TCommand>` with `MakeGenericType`, and `TryAddTransient`s the pair (`:171-175`), so a command that embeds its own request DTO gets a bridging validator for free. `TryAdd` is load-bearing here: an explicit `IValidator<TCommand>` picked up by the earlier `AddValidatorsFromAssemblyContaining` pass always wins, which the inline comment states (`:158-159`).
+- **Concept introduced, the ordering rule as an enforced invariant.** This file is the one place where register-order versus execute-order inversion has to be held in mind, and it is also where the framework stops relying on a reader holding it. `AddApplicationDecorators()` ends by sealing the collection with [`DecoratorPipelineSeal`](#decoratorpipelineseal) (`:145`), every handler-contributing entry point opens with `ThrowIfPipelineSealed` (`:117`, `:182`, `:335`, `:397`, `:448`, `:614`), and `AddMmcaApplicationPipeline(configure)` (`:612-621`) packages the whole sequence so the decorators are last by construction. `[Rubric §16, Maintainability]` and `[Rubric §14, Testability]`: `VerifyDecoratorPipeline()` (`:649`) is the fitness hook that proves the result, and it works on descriptor **shape** alone, never building a provider, so a test does not have to register a double for every decorator dependency (`:633-638`).
 
-- **Concept introduced, the accumulating contributor registration.** `[Rubric §30, Compliance, Privacy and Data Governance]` assesses whether data-subject obligations are met by design: `AddUserDataExportSection<TSection>()` (`:206`) is how each module contributes the slice of a person's data it owns to one export document ([ADR-076](https://ivanball.github.io/docs/adr/076-data-subject-export.html)). The mechanism is two lines, `TryAddScoped<TSection>()` then `TryAddEnumerable(ServiceDescriptor.Scoped<IUserDataExportSection, TSection>())` (`:209-210`), and both halves matter. `TryAddEnumerable` de-duplicates by *implementation type*, so registering the same section twice adds it once while two different sections both survive, which a plain `AddScoped` would not guarantee. **Scoped**, not singleton, so a section runs inside the request's unit of work and may take repositories or gRPC clients (`:196-198`). Registration order is the order the sections appear in the export document (`:190-194`).
+- **Concept introduced, `ScanModuleApplicationServices`, the convention scanner.** `[Rubric §5, Vertical Slice]` (one call wires a whole module's slice types) and `[Rubric §14, Testability]` (handler registration is reproducible in a test host with the same one call). The marker overload (`:161-163`) just resolves `typeof(TAssemblyMarker).Assembly` and forwards to the `Assembly` overload (`:179`), which runs **nine Scrutor passes** over that single assembly, each with a deliberate lifetime: domain event handlers (`IDomainEventHandler<>`, **singleton**, because they create their own scopes, `:184-189`), integration event handlers (`IIntegrationEventHandler<>`, **singleton**, `:191-196`), DTO mappers (`IEntityDTOMapper<,,>`, **scoped**, `AsSelfWithInterfaces`, `:198-202`), the opt-in DTO projectors (`IEntityDTOProjector<,,>`, **scoped**, `:204-211`, so an entity that has one gets server-side projection on its list reads and one that has none keeps materialize-then-map), request mappers (`IEntityRequestMapper<,,>`, **scoped**, `:213-217`), update appliers (`IEntityUpdateApplier<,,>`, **scoped**, `:219-227`), command-aware appliers (`IEntityUpdateCommandApplier<,,,>`, **scoped**, `:229-236`), command handlers (`ICommandHandler<,>`, **scoped**, `:238-242`) and query handlers (`IQueryHandler<,>`, **scoped**, `:244-248`), followed by `AddValidatorsFromAssembly` (`:250`). After the passes, a reflection loop (`:254-268`) finds every type in the assembly implementing `ICommandWithRequest<TRequest>`, constructs `CommandRequestValidator<TCommand, TRequest>` and `IValidator<TCommand>` with `MakeGenericType`, and `TryAddTransient`s the pair (`:264-267`), so a command that embeds its own request DTO gets a bridging validator for free. `TryAdd` is load-bearing here: an explicit `IValidator<TCommand>` picked up by the earlier `AddValidatorsFromAssembly` pass always wins, which the inline comment states (`:252-253`).
+
+- **Concept introduced, generic write-side registration.** `[Rubric §16, Maintainability]`: `AddEntityCrud<TEntity, TEntityDTO, TIdentifierType, TCreateRequest, TUpdateRequest>()` (`:329`) replaces the three hand-written handler classes a straightforward CRUD aggregate would otherwise need, registering `CreateEntityHandler`, `UpdateEntityHandler` and `DeleteEntityHandler` closed over the aggregate's own types plus the update command's validator bridge (`:337-351`). Two details in its doc are the teaching points (`:289-322`). First, the registrations are **closed generics, not open**, because Scrutor's `TryDecorate` wraps concrete service types: an open `ICommandHandler<,>` registration would resolve completely undecorated and `VerifyDecoratorPipeline()` could not see it (`:299-307`). Second, everything is `TryAdd`, so an aggregate that outgrows one verb registers its own handler for that verb before this call and keeps the generic pair for the other two. `AddEntityUpdateVerb<..., TApplier>()` (`:391`) registers one verb of the update path discriminated by its applier type, and `AddEntityUpdate<TCommand, ...>()` (`:442`) does the same for a derived command that carries state beside the request. All three route their validator wiring through `AddCommandRequestValidator<TCommand, TRequest>()` (`:475-481`), the explicit form of what the scan's reflection bridge does for commands it can see. [ADR-099](https://ivanball.github.io/docs/adr/099-generic-write-side-entity-commands.html) is the decision record.
+
+- **Concept introduced, the accumulating contributor registration.** `[Rubric §30, Compliance, Privacy and Data Governance]` assesses whether data-subject obligations are met by design: `AddUserDataExportSection<TSection>()` (`:508`) is how each module contributes the slice of a person's data it owns to one export document ([ADR-076](https://ivanball.github.io/docs/adr/076-data-subject-export.html)). The mechanism is two lines, `TryAddScoped<TSection>()` then `TryAddEnumerable(ServiceDescriptor.Scoped<IUserDataExportSection, TSection>())` (`:511-512`), and both halves matter. `TryAddEnumerable` de-duplicates by *implementation type*, so registering the same section twice adds it once while two different sections both survive, which a plain `AddScoped` would not guarantee. **Scoped**, not singleton, so a section runs inside the request's unit of work and may take repositories or gRPC clients (`:497-500`). Registration order is the order the sections appear in the export document (`:490-496`). `AddEventUpcaster<TSource, TTarget, TUpcaster>()` (`:551-558`) uses the identical idiom one lifetime up: `TryAddEnumerable(ServiceDescriptor.Singleton<IEventUpcaster, TUpcaster>())`, singleton because upcasters are pure functions over an event instance, with `TSource` and `TTarget` named explicitly so the compiler checks the shape at the registration site ([ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html), rationale at `:525-549`).
 
 - **Walkthrough**
-  - `AddApplication()` (`:29`): `TryAddSingleton` for [`IApplicationSettings`](#iapplicationsettings) resolved from `IOptions<ApplicationSettings>` (`:31`), then `IDomainEventDispatcher`, `INavigationMetadataProvider`, and `IEntityQueryPipeline` (`:33-35`); finally `AddValidatorsFromAssemblyContaining<ClassReference>()` (`:40`) to register the framework's own validators (the comment names `LoginRequestValidator` and `RefreshTokenRequestValidator`), which a module-level scan would never reach because it only scans the module's own assembly (`:37-39`).
-  - `AddApplicationDecorators()` (`:89`): the five command plus three query `TryDecorate` calls described above. It **must** run after every module's `ScanModuleApplicationServices` so Scrutor has concrete handlers to wrap, which the XML doc states (`:46-47`) and MMCA.Common `CLAUDE.md` repeats as the one load-bearing ordering rule.
-  - `ScanModuleApplicationServices<TAssemblyMarker>()` (`:115`, constrained `where TAssemblyMarker : class` at `:116`): the seven-pass scanner plus the request-validator loop.
-  - `AddUserDataExportSection<TSection>()` (`:206`, constrained `where TSection : class, IUserDataExportSection` at `:207`): the accumulating contributor registration. The export handler itself needs no registration here: apps subclass [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery) in their own Application assembly and the scanner above picks the subclass up as an `IQueryHandler` like any other (`:199-204`).
-  - `AddApplicationProfiling()` (`:219`): optional, `TryDecorate`s `ProfilingCommandDecorator<,>` and `ProfilingQueryDecorator<,>` on top (`:221-222`), for use with `IApplicationSettings.UseMiniProfiler`.
+  - `AddApplication()` (`:33`): four `TryAddSingleton` calls, `IDomainEventDispatcher` (`:35`), `IEventUpcasterRegistry` (`:41`, registered unconditionally because with no upcasters it is an empty registry whose operations are the identity, so both delivery paths can depend on it without a null check, `:37-40`), `INavigationMetadataProvider` (`:43`) and `IEntityQueryPipeline` (`:44`), then `AddValidatorsFromAssemblyContaining<ClassReference>()` (`:49`) to register the framework's own validators, which a module-level scan would never reach because it only scans the module's own assembly (`:46-48`).
+  - `AddApplicationDecorators()` (`:115`): guard, permission-registry fallback, thirteen `TryDecorate` calls, seal.
+  - `ScanModuleApplicationServices<TAssemblyMarker>()` (`:161`, constrained `where TAssemblyMarker : class` at `:162`) and `ScanModuleApplicationServices(Assembly)` (`:179`, null-guarded at `:181`): the nine-pass scanner plus the request-validator loop.
+  - `AddEntityCrud` / `AddEntityUpdateVerb` / `AddEntityUpdate` / `AddCommandRequestValidator` (`:329`, `:391`, `:442`, `:475`): the generic write side.
+  - `AddUserDataExportSection<TSection>()` (`:508`, constrained `where TSection : class, IUserDataExportSection` at `:509`) and `AddEventUpcaster<TSource, TTarget, TUpcaster>()` (`:551`): the two accumulating registrations. The export handler itself needs no registration here: apps subclass [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery) in their own Application assembly and the scanner picks the subclass up as an `IQueryHandler` like any other (`:501-506`).
+  - `AddApplicationProfiling()` (`:565`): optional, `TryDecorate`s `ProfilingCommandDecorator<,>` and `ProfilingQueryDecorator<,>` on top (`:567-568`), for use with `ApplicationSettings.UseMiniProfiler`. It deliberately carries no seal guard, so it can be applied after the pipeline is closed.
+  - `AddMmcaApplicationPipeline(configure)` (`:612`): guard, `AddApplication()`, invoke the callback with a new [`MmcaApplicationPipelineBuilder`](#mmcaapplicationpipelinebuilder), return `AddApplicationDecorators()` (`:614-620`). The `configure` callback may be null for a host with no modules (`:578-585`).
+  - `VerifyDecoratorPipeline()` (`:649`): checks the seal first (`:651-656`), then walks the collection keeping the **last** non-keyed closed-generic descriptor per `ICommandHandler<,>` / `IQueryHandler<,>` service type (`:658-674`, last-registration-wins is the container's own rule), and reports every surviving entry whose `ImplementationFactory` is null (`:676-690`). The doc explains why that test is sound: `TryDecorate` rewrites a decorated registration into a factory over its own keyed copy of the original, so an implementation type still sitting on the effective registration is proof nothing wrapped it, and the outermost decorator's own type cannot be read back at all because after decoration it exists only inside a closure (`:639-647`).
 
-- **Why it's built this way**: `[Rubric §3, Clean Architecture]`: registration lives in a static `DependencyInjection.cs` at the composition root, so domain and Application types never reference the container. The pervasive `TryAdd*` and `TryDecorate` pattern lets a consuming app override any framework default simply by registering its own implementation first. The whole class body is a single `extension(IServiceCollection services)` block (`:23`), the C# preview extension-member syntax the framework uses for all DI registration, see [primer §4](00-primer.md#c-extensiont-types-read-this-once).
+- **Why it's built this way**: `[Rubric §3, Clean Architecture]`: registration lives in a static `DependencyInjection.cs` at the composition root, so domain and Application types never reference the container. The pervasive `TryAdd*` and `TryDecorate` pattern lets a consuming app override any framework default simply by registering its own implementation first. The whole class body is a single `extension(IServiceCollection services)` block (`:27`), the C# extension-member syntax the framework uses for its public DI surface ([ADR-106](https://ivanball.github.io/docs/adr/106-extension-members-as-public-di-surface.html), and [primer §4](00-primer.md#4-c-build-and-code-style-conventions) for the syntax itself).
 
-- **Where it's used**: called from every consuming host in the canonical sequence, `AddApplication()`, then one `ScanModuleApplicationServices<ClassReference>()` per module (issued from each module's own composition root), then `AddApplicationDecorators()` last. In ADC the two framework calls bracket the module registration in each service's `Program.cs` (for example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:287` and `:349`, `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:229` and `:303`), with the [`ModuleLoader`](#moduleloader) call in between; Store's hosts follow the identical shape (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:197` and `:248`). `AddUserDataExportSection<TSection>()` is called by ADC's Identity module for its two cross-module sections (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:42-43`) and by Store's `IdentityModule` for its one (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:40`).
+- **Where it's used**: by every consuming host. ADC and Store services call `AddMmcaApplicationPipeline` with the module-discovery step, the cross-service gRPC clients and the broker wiring inside the callback (for example `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:347-352`, `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:233`); MMCA.Helpdesk writes the sequence by hand, `AddApplication()` (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:66`), module discovery (`:104`), `AddApplicationDecorators()` (`:120`). `ScanModuleApplicationServices<ClassReference>()` is called from each module's own composition root (see [`ClassReference`](#classreference) for the seven call sites). `AddUserDataExportSection<TSection>()` is called by ADC's Identity module for its two cross-module sections (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:42-43`) and by Store's `IdentityModule` for its one (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:40`). `VerifyDecoratorPipeline()` is called by the architecture fitness tests (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:66`, `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/ApplicationPipelineCompositionTests.cs:158`).
 
-- **Caveats / not-in-source**: several other classes named `DependencyInjection` exist across the framework and the apps (Infrastructure, API, Grpc, UI, Notifications, and one per module) with the same name but different namespaces and methods. This section covers only the **MMCA.Common.Application root** at `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:21`; the others are documented in their own groups. `AddApplicationProfiling()` has no caller in any host in this workspace.
+- **Caveats / not-in-source**: several other classes named `DependencyInjection` exist across the framework and the apps (Infrastructure, API, Grpc, UI, Notifications, and one per module) with the same name but different namespaces and methods. This section covers only the **MMCA.Common.Application root** at `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:25`; the others are documented in their own groups. `AddApplicationProfiling()` has no caller in any host in this workspace: its only callers are unit tests (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DependencyInjectionTests.cs:113`, `:123`).
 
 ### AssemblyReference
 > MMCA.Common.Domain · `MMCA.Common.Domain` · `MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:8` · Level 0 · class (static)
@@ -771,15 +903,15 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: `System.Reflection.Assembly` (BCL, imported at `AssemblyReference.cs:1`). Nothing first-party, which is why it sits at Level 0. Note that Domain is the innermost layer above `MMCA.Common.Shared`, so this marker could not depend on anything else even if it wanted to.
 
-- **Concept introduced, assembly-marker types for convention scanning.** `[Rubric §2, Design Patterns]` assesses whether recurring problems reach for a recognised, deliberate shape. When registration code or a fitness test needs "every type in this assembly", handing the scanner a purpose-built anchor (`typeof(AssemblyReference).Assembly`) is the idiomatic form: it is far more stable than pointing at a real business type that may later move to another project or be renamed. `[Rubric §1, SOLID]` (DIP): the scan depends on a stable, meaningless token rather than on a concrete domain type. The same two-type pair repeats verbatim in every layer package (`MMCA.Common.Application/AssemblyReference.cs:5`, `MMCA.Common.Infrastructure/AssemblyReference.cs:5`, `MMCA.Common.API/AssemblyReference.cs:8`), so each assembly is self-describing with no cross-layer reference; those sibling copies have their own sections in this chapter and in [Group 12](group-12-api-hosting-mapping.md).
+- **Concept introduced, assembly-marker types for convention scanning.** `[Rubric §2, Design Patterns]` assesses whether recurring problems reach for a recognised, deliberate shape. When registration code or a fitness test needs "every type in this assembly", handing the scanner a purpose-built anchor (`typeof(AssemblyReference).Assembly`) is the idiomatic form: it is far more stable than pointing at a real business type that may later move to another project or be renamed. `[Rubric §1, SOLID]` (DIP): the scan depends on a stable, meaningless token rather than on a concrete domain type. The same two-type pair repeats verbatim in every layer package (`MMCA.Common/Source/Core/MMCA.Common.Application/AssemblyReference.cs:5`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/AssemblyReference.cs:5`, `MMCA.Common/Source/Presentation/MMCA.Common.API/AssemblyReference.cs:8`), so each assembly is self-describing with no cross-layer reference; those sibling copies have their own sections in this chapter and in [Group 12](group-12-api-hosting-mapping.md).
 
 - **Walkthrough**: two `public static readonly` fields, both resolved once at type initialization. `Assembly` is `typeof(AssemblyReference).Assembly` (`AssemblyReference.cs:10`), a self-reference so the field can never point at the wrong assembly. `AssemblyName` is `Assembly.GetName().Name` with a `?? string.Empty` fallback (`AssemblyReference.cs:11`), so the field is non-null even in the pathological case where the runtime reports no simple name.
 
 - **Why it's built this way**: `static readonly` rather than a property means the reflection call happens once per process, and the self-referencing `typeof` makes the anchor refactor-proof: moving the file inside the project changes nothing, and moving it out of the project is exactly the case you would want to notice.
 
-- **Where it's used**: nothing inside MMCA.Common references the Domain copy today. The Application copy backs `AddValidatorsFromAssemblyContaining<ClassReference>()` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:40`) and the Infrastructure copy backs the entity-configuration scan `FromAssemblyOf<ClassReference>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:114`); the Domain layer registers nothing by convention, so its marker stays available rather than exercised.
+- **Where it's used**: nothing inside MMCA.Common references the Domain copy today. The Application copy backs `AddValidatorsFromAssemblyContaining<ClassReference>()` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:49`) and the Infrastructure copy backs the entity-configuration scan `FromAssemblyOf<ClassReference>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:112`); the Domain layer registers nothing by convention, so its marker stays available rather than exercised.
 
-- **Caveats / not-in-source**: the XML doc names architecture tests as a consumer, but the per-repo architecture maps anchor the Domain layer with `typeof(MMCA.Common.Domain.Entities.BaseEntity<>).Assembly` instead (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:16`, and identically in the Helpdesk and ECommerce maps). Whether a downstream consumer outside this workspace scans through this anchor is Not determinable from source here.
+- **Caveats / not-in-source**: the XML doc names architecture tests as a consumer, but the per-repo architecture maps anchor the Domain layer with `typeof(MMCA.Common.Domain.Entities.BaseEntity<>).Assembly` instead (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:22`, and identically at `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/HelpdeskArchitectureMap.cs:16`). Whether a downstream consumer outside this workspace scans through this anchor is Not determinable from source here.
 
 ---
 
@@ -794,7 +926,7 @@ gRPC clients, which is precisely the reversibility
 
 - **Walkthrough**: a single body-less type declaration, `public class ClassReference;` (`AssemblyReference.cs:18`). No members, no constructor, no interface. Deliberately not `sealed` and not `static`, because both would defeat its purpose as a generic argument for helpers that may construct it.
 
-- **Where it's used**: as with its static twin, the Domain copy has no call site inside MMCA.Common; the Application and Infrastructure copies are the ones the composition roots scan through (`MMCA.Common.Application/DependencyInjection.cs:40`, `MMCA.Common.Infrastructure/DependencyInjection.cs:114`).
+- **Where it's used**: as with its static twin, the Domain copy has no call site inside MMCA.Common; the Application and Infrastructure copies are the ones the composition roots scan through (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:49`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:112`).
 
 ---
 
@@ -803,13 +935,13 @@ gRPC clients, which is precisely the reversibility
 
 - **What it is**: a one-member shape interface saying "this command or query targets a single user account". It exposes exactly `UserIdentifierType UserId { get; }` and nothing else.
 
-- **Depends on**: the solution-wide identifier alias `UserIdentifierType` (`global using UserIdentifierType = int;` in `MMCA.Common/Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1`, the convention recorded in [ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)). Nothing else, first-party or external.
+- **Depends on**: the solution-wide identifier alias `UserIdentifierType` (the convention recorded in [ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)). Nothing else, first-party or external; the file has no `using` directives at all (`IUserScopedRequest.cs:1`).
 
 - **Concept introduced, shape interfaces instead of shared request records.** `[Rubric §1, SOLID]` assesses interface segregation and dependency inversion together, and this is the smallest possible instance of both: the shared Users use-case bases need one fact about the incoming message (which account it addresses), so that fact, and only that fact, becomes the contract. The XML doc states the motivation directly (`IUserScopedRequest.cs:3-7`): each app keeps its own command or query record, with its own [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating) choice and its own docs, and simply adds this interface. `[Rubric §16, Maintainability]`: hoisting the *behavior* into a base class while leaving the *record* app-side is what let ADC and Store share the handlers without either app losing a per-app pipeline decision.
 
 - **Walkthrough**: a single interface with a single get-only property (`IUserScopedRequest.cs:11`). There is no base interface and no default member, so implementing it is free for a `record` that already has a `UserId` positional parameter.
 
-- **Where it's used**: extended by [`IUserOwnedRequest`](#iuserownedrequest) and [`IUserScopedCommand<out TRequest>`](#iuserscopedcommandout-trequest), both Level 1 in this chapter. Implemented directly by the one shared query record in the framework, [`GetUserPreferencesQuery`](#getuserpreferencesquery) (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/GetPreferences/GetUserPreferencesQuery.cs:5`).
+- **Where it's used**: extended by [`IUserOwnedRequest`](#iuserownedrequest) and [`IUserScopedCommand<out TRequest>`](#iuserscopedcommandout-trequest), both Level 1 in this chapter. Implemented directly by the one shared query record in the framework, [`GetUserPreferencesQuery`](#getuserpreferencesquery) (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/GetPreferences/GetUserPreferencesQuery.cs:5`), which is the only implementer inside MMCA.Common.
 
 ---
 
@@ -833,22 +965,28 @@ gRPC clients, which is precisely the reversibility
 ### UserUseCaseLog
 > MMCA.Common.Application · `MMCA.Common.Application.Users` · `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserUseCaseLog.cs:11` · Level 0 · class (internal static partial)
 
-- **What it is**: a non-generic holder for the four compile-time-generated log messages emitted by the shared Users use-case bases: password changed, preferences changed, account erased, and a degraded data-export section.
+- **What it is**: a non-generic holder for the eight compile-time-generated log messages emitted by the shared Users use-case bases: password changed, preferences changed, account erased, a degraded data-export section, and the four that trace the forgot-password / reset-password pair.
 
 - **Depends on**: `Microsoft.Extensions.Logging` (`ILogger`, `[LoggerMessage]`, imported at `UserUseCaseLog.cs:1`) and the `UserIdentifierType` alias. No first-party types.
 
 - **Concept introduced, source-generated logging in a non-generic holder.** `[Rubric §13, Observability and Operability]` assesses whether diagnostics are structured, cheap, and consistent. `[LoggerMessage]` is a Roslyn source generator: it emits a strongly typed, allocation-free log call with a pre-compiled message template, so nothing is boxed or formatted when the level is disabled. The subtle part is *where* the methods live. Putting them on a generic base class would produce one generated logger per closed generic type; declaring them once in a plain static holder means every app subclass writes the identical message text, while the **log category** still comes from the `ILogger<THandler>` the subclass injects, so filtering by handler behaves exactly as it did before the shared bases existed (`UserUseCaseLog.cs:5-10`). `[Rubric §16, Maintainability]`: one place to change the wording of a security-relevant or privacy-relevant event.
 
-- **Walkthrough**: four `internal static partial void` declarations, each attributed with a level and a template.
-  - `PasswordChanged`, `Information`, "User {UserId} password changed" (`UserUseCaseLog.cs:13-14`).
-  - `PreferencesChanged`, `Information` (`UserUseCaseLog.cs:16-17`).
-  - `UserErased`, `Information`, "User {UserId} account deleted and personal data anonymized" (`UserUseCaseLog.cs:19-20`).
-  - `ExportSectionUnavailable`, **`Warning`**, "Data-subject export section {Section} unavailable for user {UserId}; export continues with Available=false" (`UserUseCaseLog.cs:22-23`). This is the only one that takes an `Exception`, and it takes it in the generator's conventional second position (after `ILogger`, before the template arguments), so the failure detail is attached to the log entry rather than interpolated into the message.
-  - Every method takes the `ILogger` as its first parameter, which is what lets a generic base pass its own injected logger into a non-generic holder. The class is `internal`, so none of this is public package surface.
+- **Walkthrough**: eight `internal static partial void` declarations, each attributed with a level and a template. Every method takes the `ILogger` as its first parameter, which is what lets a generic base pass its own injected logger into a non-generic holder, and the two that take an `Exception` take it in the generator's conventional second position (after `ILogger`, before the template arguments), so the failure detail is attached to the entry rather than interpolated into the message. The class is `internal`, so none of this is public package surface.
 
-- **Why it's built this way**: the wording of `UserErased` records the erasure model rather than a hard delete, the framework default in [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) (the row survives soft-deleted while personal fields are anonymized). `ExportSectionUnavailable` is at `Warning` and not `Error` on purpose: a degraded section is an expected, handled outcome of a best-effort fan-out, and the request itself still succeeds.
+  | Method | File:Line | Level | Notes |
+  |--------|-----------|-------|-------|
+  | `PasswordChanged` | `UserUseCaseLog.cs:13-14` | Information | "User {UserId} password changed" |
+  | `PreferencesChanged` | `UserUseCaseLog.cs:16-17` | Information | "User {UserId} preferences changed" |
+  | `UserErased` | `UserUseCaseLog.cs:19-20` | Information | "User {UserId} account deleted and personal data anonymized" |
+  | `ExportSectionUnavailable` | `UserUseCaseLog.cs:22-23` | **Warning** | Takes an `Exception`; "export continues with Available=false" |
+  | `PasswordResetRequested` | `UserUseCaseLog.cs:25-26` | Information | Reset email sent |
+  | `PasswordResetEmailFailed` | `UserUseCaseLog.cs:28-29` | **Warning** | Takes an `Exception`; "the issued token stays valid" |
+  | `PasswordResetCompleted` | `UserUseCaseLog.cs:31-32` | Information | "Password reset completed for user {UserId}" |
+  | `PasswordResetRejected` | `UserUseCaseLog.cs:36-37` | Information | Takes only a `string reason`, deliberately **no** user id and no address |
 
-- **Where it's used**: [`ChangePasswordHandlerBase<TUser, TCommand>`](#changepasswordhandlerbasetuser-tcommand) calls `PasswordChanged` after a successful save (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:66`); [`ChangePreferencesHandlerBase<TUser, TCommand>`](#changepreferenceshandlerbasetuser-tcommand) calls `PreferencesChanged` (`.../ChangePreferences/ChangePreferencesHandlerBase.cs:59`); [`DeleteUserHandlerBase<TUser, TCommand>`](#deleteuserhandlerbasetuser-tcommand) calls `UserErased` (`.../DeleteUser/DeleteUserHandlerBase.cs:116`); [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery) calls `ExportSectionUnavailable` from its per-section catch (`.../ExportUserData/ExportUserDataHandlerBase.cs:190`).
+- **Why it's built this way**: the wording of `UserErased` records the erasure model rather than a hard delete, the framework default in [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) (the row survives soft-deleted while personal fields are anonymized). `ExportSectionUnavailable` is at `Warning` and not `Error` on purpose: a degraded section is an expected, handled outcome of a best-effort fan-out, and the request itself still succeeds. `PasswordResetRejected` is the most instructive signature in the file: the comment above it states the rule (`UserUseCaseLog.cs:34-35`), that the reset endpoints answer identically whether or not the address exists, so the log must not become the account-enumeration oracle the HTTP responses refuse to be. That is `[Rubric §11, Security]` applied to telemetry rather than to a response body, and it is why the method carries a free-text `reason` and nothing identifying. `PasswordResetEmailFailed` at `Warning` records the same split: the token was issued and stays valid, so the send failure is operationally interesting but is not a failed request.
+
+- **Where it's used**: [`ChangePasswordHandlerBase<TUser, TCommand>`](#changepasswordhandlerbasetuser-tcommand) calls `PasswordChanged` after a successful save (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:66`); [`ChangePreferencesHandlerBase<TUser, TCommand>`](#changepreferenceshandlerbasetuser-tcommand) calls `PreferencesChanged` (`.../ChangePreferences/ChangePreferencesHandlerBase.cs:59`); [`DeleteUserHandlerBase<TUser, TCommand>`](#deleteuserhandlerbasetuser-tcommand) calls `UserErased` (`.../DeleteUser/DeleteUserHandlerBase.cs:121`); [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery) calls `ExportSectionUnavailable` from its per-section catch (`.../ExportUserData/ExportUserDataHandlerBase.cs:190`); [`ForgotPasswordHandlerBase<TUser, TCommand>`](#forgotpasswordhandlerbasetuser-tcommand) calls `PasswordResetRejected` three times, for a malformed address, an unknown address, and a throttled request (`.../ForgotPassword/ForgotPasswordHandlerBase.cs:60`, `:68`, `:75`), then `PasswordResetEmailFailed` (`:94`) or `PasswordResetRequested` (`:98`); [`ResetPasswordHandlerBase<TUser, TCommand>`](#resetpasswordhandlerbasetuser-tcommand) calls `PasswordResetRejected` for a rejected token and an unresolvable account (`.../ResetPassword/ResetPasswordHandlerBase.cs:66`, `:75`) and `PasswordResetCompleted` on success (`:91`).
 
 ---
 
@@ -857,7 +995,7 @@ gRPC clients, which is precisely the reversibility
 
 - **What it is**: [`IUserScopedRequest`](#iuserscopedrequest) plus the authenticated caller. It adds `CurrentUserId` and the caller's (nullable) role claim, which is exactly the input the shared owner-or-privileged-role check needs.
 
-- **Depends on**: [`IUserScopedRequest`](#iuserscopedrequest) (Level 0, its base interface) and the `UserIdentifierType` alias.
+- **Depends on**: [`IUserScopedRequest`](#iuserscopedrequest) (Level 0, its base interface, `IUserOwnedRequest.cs:8`) and the `UserIdentifierType` alias.
 
 - **Concept introduced, carrying the caller inside the message.** `[Rubric §11, Security]` assesses whether authorization decisions are made deliberately and consistently rather than ad hoc. In this codebase resource-ownership authorization exists on two levels: at the API level as an action filter plus a specification ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)), and at the handler level as this interface plus [`UserOwnershipRule`](#userownershiprule). The controller projects the caller's claims into the command or query, and the handler decides. Putting the caller *in the message* rather than injecting a current-user service into the handler keeps the handler a pure function of its input, which is what makes the shared bases unit-testable with no HTTP context (`[Rubric §14, Testability]`).
 
@@ -865,7 +1003,7 @@ gRPC clients, which is precisely the reversibility
 
 - **Why it's built this way**: the XML doc names the goal (`IUserOwnedRequest.cs:3-7`), a single uniformly applied owner-or-privileged-role check across the account-deletion and data-export use cases in both apps. The role itself is deliberately *not* interpreted here: each app owns its own role vocabulary, so the interface carries the raw claim string and the rule takes an already-evaluated boolean.
 
-- **Where it's used**: the type constraint on all three consumers of the ownership rule: [`DeleteUserHandlerBase<TUser, TCommand>`](#deleteuserhandlerbasetuser-tcommand) (`.../DeleteUser/DeleteUserHandlerBase.cs:42`), [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery) (`.../ExportUserData/ExportUserDataHandlerBase.cs:55`), and the API-layer [`DataExportControllerBase<TQuery>`](group-12-api-hosting-mapping.md#dataexportcontrollerbasetquery) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:63`). It is also the parameter type of [`UserOwnershipRule.CheckOwnership`](#userownershiprule). Implemented app-side by each export query (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataQuery.cs:15`, `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataQuery.cs:16`) and by each delete command.
+- **Where it's used**: the type constraint on all three consumers of the ownership rule: [`DeleteUserHandlerBase<TUser, TCommand>`](#deleteuserhandlerbasetuser-tcommand) (`.../DeleteUser/DeleteUserHandlerBase.cs:42`), [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery) (`.../ExportUserData/ExportUserDataHandlerBase.cs:55`), and the API-layer [`DataExportControllerBase<TQuery>`](group-12-api-hosting-mapping.md#dataexportcontrollerbasetquery) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:62`). It is also the parameter type of [`UserOwnershipRule.CheckOwnership`](#userownershiprule). Implemented app-side by each export query (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataQuery.cs:12`, `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataQuery.cs:13`) and by each delete command, both of which pair it with `ICacheInvalidating` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:14`, `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:17`).
 
 ---
 
@@ -876,13 +1014,13 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: [`IUserScopedRequest`](#iuserscopedrequest) (Level 0, its base interface). Nothing external.
 
-- **Concept, covariant shape interfaces and the deliberate non-overlap with `ICommandWithRequest<TRequest>`.** The type parameter is declared `out TRequest` (`IUserScopedCommand.cs:13`), so `IUserScopedCommand<DerivedRequest>` is usable where `IUserScopedCommand<BaseRequest>` is expected. The more instructive part is the XML doc's warning (`IUserScopedCommand.cs:6-11`): this interface is **deliberately separate** from [`ICommandWithRequest<out TRequest>`](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest), even though both expose a `Request` property, because `ICommandWithRequest` *also* opts the command into automatic [`CommandRequestValidator<TCommand, TRequest>`](group-06-validation.md#commandrequestvalidatortcommand-trequest) registration (see `ScanModuleApplicationServices` in [`DependencyInjection`](#dependencyinjection)). That is a per-app decision: ADC and Store agree on it for the password change and disagree on it for preferences. A command may implement both; implementing this one alone changes no pipeline behavior. `[Rubric §1, SOLID]`: two interfaces because there are two responsibilities, shape versus pipeline opt-in, even though they would collapse neatly into one.
+- **Concept, covariant shape interfaces and the deliberate non-overlap with `ICommandWithRequest<TRequest>`.** The type parameter is declared `out TRequest` (`IUserScopedCommand.cs:13`), so `IUserScopedCommand<DerivedRequest>` is usable where `IUserScopedCommand<BaseRequest>` is expected. The more instructive part is the XML doc's warning (`IUserScopedCommand.cs:6-11`): this interface is **deliberately separate** from [`ICommandWithRequest<out TRequest>`](group-05-cqrs-pipeline.md#icommandwithrequestout-trequest), even though both expose a `Request` property, because `ICommandWithRequest` *also* opts the command into automatic [`CommandRequestValidator<TCommand, TRequest>`](group-06-validation.md#commandrequestvalidatortcommand-trequest) registration (see `ScanModuleApplicationServices` in [`DependencyInjection`](#dependencyinjection), `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:252`). That is a per-app decision: ADC and Store agree on it for the password change and disagree on it for preferences. A command may implement both; implementing this one alone changes no pipeline behavior. `[Rubric §1, SOLID]`: two interfaces because there are two responsibilities, shape versus pipeline opt-in, even though they would collapse neatly into one.
 
 - **Walkthrough**: one added member, `TRequest Request { get; }` (`IUserScopedCommand.cs:16`), on top of the inherited `UserId`.
 
 - **Why it's built this way**: the split is what lets one shared handler base read any app's command uniformly while each app keeps its own validation and cache-invalidation posture. Store's change-password command implements both interfaces (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordCommand.cs:13`) while its preferences command implements only this one (`.../ChangePreferences/ChangePreferencesCommand.cs:12`); ADC's equivalents add `ICacheInvalidating` on top (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordCommand.cs:15`, `.../ChangePreferences/ChangePreferencesCommand.cs:15`).
 
-- **Where it's used**: the constraint on [`ChangePasswordHandlerBase<TUser, TCommand>`](#changepasswordhandlerbasetuser-tcommand) (`.../ChangePassword/ChangePasswordHandlerBase.cs:29`) and [`ChangePreferencesHandlerBase<TUser, TCommand>`](#changepreferenceshandlerbasetuser-tcommand) (`.../ChangePreferences/ChangePreferencesHandlerBase.cs:27`), and the two constraints on [`UserAccountAuthControllerBase<TChangePasswordCommand, TChangePreferencesCommand>`](group-12-api-hosting-mapping.md#useraccountauthcontrollerbasetchangepasswordcommand-tchangepreferencescommand) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/UserAccountAuthControllerBase.cs:47-48`), where the base reads the app-supplied command back only through this interface.
+- **Where it's used**: the constraint on [`ChangePasswordHandlerBase<TUser, TCommand>`](#changepasswordhandlerbasetuser-tcommand) (`.../ChangePassword/ChangePasswordHandlerBase.cs:29`) and [`ChangePreferencesHandlerBase<TUser, TCommand>`](#changepreferenceshandlerbasetuser-tcommand) (`.../ChangePreferences/ChangePreferencesHandlerBase.cs:27`), and the two constraints on [`UserAccountAuthControllerBase<TChangePasswordCommand, TChangePreferencesCommand>`](group-12-api-hosting-mapping.md#useraccountauthcontrollerbasetchangepasswordcommand-tchangepreferencescommand) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/UserAccountAuthControllerBase.cs:47-48`), where the base reads the app-supplied command back only through this interface and its own doc records that the preferences *query* has no equivalent marker (`UserAccountAuthControllerBase.cs:28`).
 
 ---
 
@@ -904,7 +1042,7 @@ gRPC clients, which is precisely the reversibility
 
 - **Why it's built this way**: a `sealed record` with `init` members gives structural equality and immutability for free, which matters because these instances flow straight into a document that must not be mutated after assembly ([ADR-076](https://ivanball.github.io/docs/adr/076-data-subject-export.html)).
 
-- **Where it's used**: the return type of `IUserDataExportSection.ExportAsync` (`IUserDataExportSection.cs:38`), consumed by [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery)'s `RunSectionAsync`, which copies its four fields into a [`UserDataExportSectionDTO`](group-08-auth.md#userdataexportsectiondto) (`ExportUserDataHandlerBase.cs:177-183`). Produced by every concrete section, for example Store's `SalesUserDataExportSection` returning `Complete` with an empty payload for an account with no linked customer (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/SalesUserDataExportSection.cs:45`).
+- **Where it's used**: the return type of `IUserDataExportSection.ExportAsync` (`IUserDataExportSection.cs:38`), consumed by [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery)'s `RunSectionAsync`, which copies its four fields into a [`UserDataExportSectionDTO`](group-08-auth.md#userdataexportsectiondto) (`ExportUserDataHandlerBase.cs:177-183`). Produced by every concrete section, for example Store's `SalesUserDataExportSection` returning `Complete` with an empty payload for an account with no linked customer (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/SalesUserDataExportSection.cs:45`) and with the mapped payload otherwise (`:56`).
 
 ---
 
@@ -920,11 +1058,11 @@ gRPC clients, which is precisely the reversibility
 - **Walkthrough**: two members.
   - `string SectionName { get; }` (`IUserDataExportSection.cs:27`), the stable name the section is published under in the document ("Engagement", "Sales"). The doc calls it part of the contract rather than a label to reword, because it appears verbatim in the package a data subject reads.
   - `Task<UserDataExportSectionResult> ExportAsync(UserIdentifierType userId, CancellationToken cancellationToken = default)` (`IUserDataExportSection.cs:38-40`). Its doc states the tolerance explicitly: throwing is permitted, and the handler degrades the section, but returning `UserDataExportSectionResult.Unavailable` is preferred where the reason is known (`:34-37`).
-  - Registration is a separate one-liner: `AddUserDataExportSection<TSection>()` does `TryAddScoped<TSection>()` plus `TryAddEnumerable(ServiceDescriptor.Scoped<IUserDataExportSection, TSection>())` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:206-212`). `TryAddEnumerable` is the load-bearing call: registrations **accumulate** across modules while the same type registered twice is added once, and registration order becomes document order (`DependencyInjection.cs:187-198`). The lifetime is **scoped**, so a section runs inside the request's unit of work and may take scoped dependencies.
+  - Registration is a separate one-liner: `AddUserDataExportSection<TSection>()` does `TryAddScoped<TSection>()` plus `TryAddEnumerable(ServiceDescriptor.Scoped<IUserDataExportSection, TSection>())` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:508-514`). `TryAddEnumerable` is the load-bearing call: registrations **accumulate** across modules while the same type registered twice is added once, and registration order becomes document order (`DependencyInjection.cs:490-495`). The lifetime is **scoped**, so a section runs inside the request's unit of work and may take scoped dependencies (`DependencyInjection.cs:497-500`).
 
 - **Why it's built this way**: the alternative, a central export handler that knows every module's data, would couple the Identity module to every other module and would break the moment one of them was extracted into its own service. Fan-out over an injected `IEnumerable<IUserDataExportSection>` keeps that knowledge inside each module and turns extraction into a change of what the section calls, not of who contributes.
 
-- **Where it's used**: injected as `IEnumerable<IUserDataExportSection>` into [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery) (`ExportUserDataHandlerBase.cs:51`). Implemented by [`EngagementUserDataExportSection`](group-24-identity-module.md#engagementuserdataexportsection) (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/EngagementUserDataExportSection.cs:20`) and [`NotificationUserDataExportSection`](group-24-identity-module.md#notificationuserdataexportsection) (`.../NotificationUserDataExportSection.cs:19`), both registered in that order (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:42-43`), and by Store's `SalesUserDataExportSection` (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/SalesUserDataExportSection.cs:24`), registered by its Identity module (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:40`).
+- **Where it's used**: injected as `IEnumerable<IUserDataExportSection>` into [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery) (`ExportUserDataHandlerBase.cs:51`). Implemented by [`EngagementUserDataExportSection`](group-24-identity-module.md#engagementuserdataexportsection) and [`NotificationUserDataExportSection`](group-24-identity-module.md#notificationuserdataexportsection), registered in that order (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:42-43`), and by Store's `SalesUserDataExportSection` (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/SalesUserDataExportSection.cs:22`), registered by its Identity module (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:40`). Two more implementations exist only as test doubles that pin the degradation contract, `ThrowingSection` and `CancellingSection` (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/ExportUserDataHandlerBaseTests.cs:309` and `:320`).
 
 - **Caveats / not-in-source**: whether a given section's peer is reachable in a given environment is a deployment fact, not a source fact. The source settles only that an unreachable peer degrades one section.
 
@@ -943,7 +1081,7 @@ gRPC clients, which is precisely the reversibility
 
 - **Why it's built this way**: returning `Error?` rather than throwing keeps the caller on the framework's [Result pattern](group-01-result-error-handling.md#result) ([ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html)): the handler wraps it as `Result.Failure(forbidden)` and the API layer maps it to 403 through the usual error mapping, with no exception unwinding on an expected authorization outcome.
 
-- **Where it's used**: both shared account-scoped bases call it first thing in `HandleAsync`. [`DeleteUserHandlerBase<TUser, TCommand>`](#deleteuserhandlerbasetuser-tcommand) passes `HasDeletePrivilege(command.CurrentUserRole)` and the code `"User.DeleteForbidden"` (`.../DeleteUser/DeleteUserHandlerBase.cs:62-65`); [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery) passes `HasExportPrivilege(query.CurrentUserRole)` and the code `"User.ExportForbidden"` with the message "You can only export your own account data." (`.../ExportUserData/ExportUserDataHandlerBase.cs:81-86`). Both pass their own `HandlerName` as the source, so the error still names the concrete app handler.
+- **Where it's used**: both shared account-scoped bases call it first thing in `HandleAsync`. [`DeleteUserHandlerBase<TUser, TCommand>`](#deleteuserhandlerbasetuser-tcommand) passes `HasDeletePrivilege(command.CurrentUserRole)` and the code `"User.DeleteForbidden"` with the message "You can only delete your own account." (`.../DeleteUser/DeleteUserHandlerBase.cs:62-67`); [`ExportUserDataHandlerBase<TUser, TQuery>`](#exportuserdatahandlerbasetuser-tquery) passes `HasExportPrivilege(query.CurrentUserRole)` and the code `"User.ExportForbidden"` with the message "You can only export your own account data." (`.../ExportUserData/ExportUserDataHandlerBase.cs:81-86`). Both pass their own `HandlerName` as the source, so the error still names the concrete app handler.
 
 ---
 
@@ -971,9 +1109,9 @@ gRPC clients, which is precisely the reversibility
 
 - **Why it's built this way**: [ADR-076](https://ivanball.github.io/docs/adr/076-data-subject-export.html) records the decision, and the shape deliberately mirrors [`DeleteUserHandlerBase<TUser, TCommand>`](#deleteuserhandlerbasetuser-tcommand): the same ownership gate through the same helper, the same privileged-role hook. The credential fields are excluded from the snapshot by contract (`:132-136`): a password hash and salt, a refresh token, and an external-provider key are secrets, not portable personal data.
 
-- **Where it's used**: subclassed in each app's Identity Application assembly, where the convention scanner picks the concrete subclass up as an ordinary `IQueryHandler` with no extra registration (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:199-204`). ADC's `ExportUserDataHandler` closes it over `User` and `ExportUserDataQuery` and overrides only the two abstract members (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs:30-44`, privilege = `UserRole.IsOrganizer`); Store's does the same with its own `User` (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs:39`). Behaviour is pinned by `ExportUserDataHandlerBaseTests`, including a section that throws and a section that cancels (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/ExportUserDataHandlerBaseTests.cs:309` and `:320`).
+- **Where it's used**: subclassed in each app's Identity Application assembly, where the convention scanner picks the concrete subclass up as an ordinary `IQueryHandler` with no extra registration (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:244-248`, and the point is spelled out in the export-section registration doc at `:501-506`). ADC's `ExportUserDataHandler` closes it over `User` and `ExportUserDataQuery` and overrides only the two abstract members (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs:30`, privilege = `UserRole.IsOrganizer` at `:38`, snapshot at `:41`); Store's does the same with its own `User` (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs:34`). Behaviour is pinned by `ExportUserDataHandlerBaseTests`, including a section that throws (`.../ExportUserDataHandlerBaseTests.cs:138`) and a section that cancels (`:217`).
 
-- **Caveats / not-in-source**: the framework also ships an abstract `[FeatureGate]`-d endpoint, [`DataExportControllerBase<TQuery>`](group-12-api-hosting-mapping.md#dataexportcontrollerbasetquery) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:60`), but neither app subclasses it: both kept their own export endpoints on top of this handler base, which the ADR records as an unadopted part of the decision.
+- **Caveats / not-in-source**: the framework also ships an abstract `[FeatureGate]`-d endpoint, [`DataExportControllerBase<TQuery>`](group-12-api-hosting-mapping.md#dataexportcontrollerbasetquery) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:58-59`), but neither app subclasses it: both kept their own export endpoints on top of this handler base, which the ADR records as an unadopted part of the decision.
 
 ---
 
@@ -982,15 +1120,15 @@ gRPC clients, which is precisely the reversibility
 
 - **What it is**: the one shared implementation of [`ISoftDeletedUserValidator`](group-08-auth.md#isoftdeleteduservalidator). It answers a single question, "does a row for this user exist **and** is it soft-deleted", in one query that deliberately bypasses the global soft-delete query filter.
 
-- **Depends on**: [`ISoftDeletedUserValidator`](group-08-auth.md#isoftdeleteduservalidator) (the interface it implements, from `MMCA.Common.Application.Interfaces.Infrastructure`), [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (injected via primary constructor), [`IRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#irepositorytentity-tidentifiertype) (obtained from the unit of work), and [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) as the `TUser` constraint. Its Level 8 position is inherited from that repository and unit-of-work chain, not from any complexity of its own.
+- **Depends on**: [`ISoftDeletedUserValidator`](group-08-auth.md#isoftdeleteduservalidator) (the interface it implements, from `MMCA.Common.Application.Interfaces.Infrastructure`, imported at `SoftDeletedUserValidator.cs:1`), [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (injected via primary constructor), [`IRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#irepositorytentity-tidentifiertype) (obtained from the unit of work), and [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) as the `TUser` constraint (`SoftDeletedUserValidator.cs:2`, `:20`). Its Level 8 position is inherited from that repository and unit-of-work chain, not from any complexity of its own.
 
-- **Concept introduced, closing a generic over the app's aggregate instead of subclassing.** `[Rubric §11, Security]` assesses whether a revoked principal actually loses access: stateless JWT means a token stays valid until it expires, so [ADR-047](https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html) (BR-133) adds a middleware that rejects an authenticated caller whose account has since been soft-deleted, and this class is the lookup behind it. `[Rubric §8, Data Architecture]`: the check must see rows the rest of the application cannot, so it passes `ignoreQueryFilters: true` to punch through the soft-delete global filter for this one predicate. `[Rubric §16, Maintainability]`: because the type is generic over `TUser` rather than abstract, an app supplies only a type argument at registration and needs **no** per-app subclass (`SoftDeletedUserValidator.cs:11-17`).
+- **Concept introduced, closing a generic over the app's aggregate instead of subclassing.** `[Rubric §11, Security]` assesses whether a revoked principal actually loses access: stateless JWT means a token stays valid until it expires, so [ADR-047](https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html) (BR-133, named in the class doc at `SoftDeletedUserValidator.cs:7`) adds a middleware that rejects an authenticated caller whose account has since been soft-deleted, and this class is the lookup behind it. `[Rubric §8, Data Architecture]`: the check must see rows the rest of the application cannot, so it passes `ignoreQueryFilters: true` to punch through the soft-delete global filter for this one predicate. `[Rubric §16, Maintainability]`: because the type is generic over `TUser` rather than abstract, an app supplies only a type argument at registration and needs **no** per-app subclass (`SoftDeletedUserValidator.cs:11-17`).
 
 - **Walkthrough**: a primary-constructor class taking `IUnitOfWork unitOfWork`, constrained `where TUser : AuditableAggregateRootEntity<UserIdentifierType>` (`SoftDeletedUserValidator.cs:19-20`). The single method `IsUserSoftDeletedAsync(UserIdentifierType userId, CancellationToken cancellationToken = default)` (`:23-25`) resolves the repository through `unitOfWork.GetRepository<TUser, UserIdentifierType>()` (`:27`), then returns `repository.ExistsAsync(u => u.Id == userId && u.IsDeleted, ignoreQueryFilters: true, cancellationToken: cancellationToken)` with `ConfigureAwait(false)` (`:30-33`). Note it is `GetRepository` off the unit of work rather than a constructor-injected `IRepository<,>`, which is the framework-wide rule for repository access, and the predicate is written against the open type parameter but closes over the concrete entity at run time, so EF translates it exactly as a hand-written app query would.
 
-- **Why it's built this way**: one query answers both halves of the question (exists and is deleted), so the middleware pays a single round trip and cannot mistake "unknown user" for "deleted user". Expressing the predicate against `TUser` keeps the framework free of any reference to an app's `User` aggregate while still producing a fully translated EF query.
+- **Why it's built this way**: one query answers both halves of the question (exists and is deleted), so the middleware pays a single round trip and cannot mistake "unknown user" for "deleted user" (`SoftDeletedUserValidator.cs:29`). Expressing the predicate against `TUser` keeps the framework free of any reference to an app's `User` aggregate while still producing a fully translated EF query.
 
-- **Where it's used**: registered per app, closed over that app's `User` aggregate: `services.TryAddScoped<ISoftDeletedUserValidator, SoftDeletedUserValidator<User>>()` in `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:35` and `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:41`. The consumer is [`SoftDeletedUserMiddleware`](group-12-api-hosting-mapping.md#softdeletedusermiddleware), which resolves the interface **lazily** per request via `context.RequestServices.GetService<ISoftDeletedUserValidator>()` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:75`), so a host that registers no validator degrades to a no-op instead of failing. Each app also pins the behaviour directly, for example `MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Application.Tests/Users/SoftDeletedUserValidatorTests.cs:34`.
+- **Where it's used**: registered per app, closed over that app's `User` aggregate: `services.TryAddScoped<ISoftDeletedUserValidator, SoftDeletedUserValidator<User>>()` in `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:35` and `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:43`. The consumer is [`SoftDeletedUserMiddleware`](group-12-api-hosting-mapping.md#softdeletedusermiddleware), which resolves the interface **lazily** per request via `context.RequestServices.GetService<ISoftDeletedUserValidator>()` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:75`, rationale in its own doc at `:43`), so a host that registers no validator degrades to a no-op instead of failing. Each app also pins the behaviour directly, across the deleted, live, unknown, and cancellation cases (`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Application.Tests/Users/SoftDeletedUserValidatorTests.cs:15`, tests at `:26`, `:42`, `:58`, and `:74`).
 
 ### AssemblyReference
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/AssemblyReference.cs:5` · Level 0 · class (static)
@@ -1023,9 +1161,9 @@ gRPC clients, which is precisely the reversibility
   - `FaultCounter` (`BrokerMetrics.cs:30-33`), `broker.fault.count`, unit `messages`, tagged by `event_type`.
   - `CircuitOpenCounter` (`:42-45`), `broker.circuit.open.count`, same unit and tag.
 
-- **Why it's built this way**: `internal static readonly` instruments created once at type initialization means the recording sites resolve nothing from DI. The meter name is duplicated as a **literal** in MMCA.Common.Aspire (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:168`) because that package has no reference to Infrastructure, and the doc records that duplication rather than letting the next reader discover it (`BrokerMetrics.cs:8-11`). The comment above the Aspire list states the operational consequence: these instruments are inert in a host that stays on the in-process bus (`Extensions.cs:155-163`).
+- **Why it's built this way**: `internal static readonly` instruments created once at type initialization means the recording sites resolve nothing from DI. The meter name is duplicated as a **literal** in MMCA.Common.Aspire (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:197`) because that package has no reference to Infrastructure, and the doc records that duplication rather than letting the next reader discover it (`BrokerMetrics.cs:8-11`). The comment above the Aspire list states the operational consequence: these instruments are inert in a host that stays on the in-process bus (`Extensions.cs:184-192`).
 
-- **Where it's used**: [`FaultIntegrationEventConsumer<TEvent>`](group-07-persistence-ef-core.md#faultintegrationeventconsumertevent) adds to `FaultCounter` right after logging the fault (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/FaultIntegrationEventConsumer.cs:51-53`), and [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) adds to `CircuitOpenCounter` on the `BrokenCircuitException` branch of its publish path (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:573-579`), where the surrounding comment explains why the counter is per row while the log line is per cycle (`OutboxProcessor.cs:567-572`, `:581-585`). Both recording sites are pinned by tests that listen on the meter name: `FaultIntegrationEventConsumerTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/FaultIntegrationEventConsumerTests.cs:89`) and `OutboxProcessorTests` (`.../Persistence/OutboxProcessorTests.cs:577`).
+- **Where it's used**: [`FaultIntegrationEventConsumer<TEvent>`](group-07-persistence-ef-core.md#faultintegrationeventconsumertevent) adds to `FaultCounter` right after logging the fault (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/FaultIntegrationEventConsumer.cs:51-53`), and [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) adds to `CircuitOpenCounter` on the `BrokenCircuitException` branch of its publish path (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:653-659`), where the surrounding comment explains why the counter is per row while the log line is per cycle (`OutboxProcessor.cs:647-652`, `:661-665`). Both recording sites are pinned by tests that listen on the meter name: `FaultIntegrationEventConsumerTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/FaultIntegrationEventConsumerTests.cs`) and `OutboxProcessorTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/OutboxProcessorTests.cs`).
 
 ---
 
@@ -1040,7 +1178,7 @@ gRPC clients, which is precisely the reversibility
 
 - **Walkthrough**: a single-line body-less type declaration at `AssemblyReference.cs:11` (`public class ClassReference;`). No members.
 
-- **Where it's used**: [`DependencyInjection`](#dependencyinjection)`.AddInfrastructure` calls `services.Scan(scan => scan.FromAssemblyOf<ClassReference>()...)` (`DependencyInjection.cs:113-117`, the anchor itself at `:114`) to discover every `IEntityTypeConfigurationBase<,>` in the Infrastructure assembly and register it as its implemented interfaces with a scoped lifetime.
+- **Where it's used**: [`DependencyInjection`](#dependencyinjection)`.AddInfrastructure` calls `services.Scan(scan => scan.FromAssemblyOf<ClassReference>()...)` (`DependencyInjection.cs:111-115`, the anchor itself at `:112`) to discover every [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#ientitytypeconfigurationbasetentity-tidentifiertype) in the Infrastructure assembly and register it as its implemented interfaces with a scoped lifetime.
 
 ---
 
@@ -1091,7 +1229,7 @@ gRPC clients, which is precisely the reversibility
 
 - **Why it's built this way**: a plain `DEL` would let a caller whose lock had already expired free the *next* holder's lock, which is precisely the double execution the lock exists to prevent (`RedisDistributedLock.cs:32-34`). Doing the comparison inside a Lua script makes compare-and-delete atomic server-side instead of a racy get-then-delete from the client ([ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html)).
 
-- **Where it's used**: constructed by `RedisDistributedLock.TryAcquireAsync` (`RedisDistributedLock.cs:72`). `RedisDistributedLockTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Concurrency/RedisDistributedLockTests.cs:15`) asserts the acquire/release pairing against a mocked `IDatabase`, including the qualified key the handle deletes (`RedisDistributedLockTests.cs:17-18`).
+- **Where it's used**: constructed by `RedisDistributedLock.TryAcquireAsync` (`RedisDistributedLock.cs:72`). `RedisDistributedLockTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Concurrency/RedisDistributedLockTests.cs:15`) asserts the acquire/release pairing against a mocked `IDatabase`, including the qualified key the handle deletes.
 
 ---
 
@@ -1102,7 +1240,7 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: nothing first-party and nothing beyond `string`, `DateTime` and `Guid` from the BCL, which is why it is Level 0.
 
-- **Concept introduced, the framework bookkeeping entity.** `[Rubric §4, DDD]` assesses whether the domain model stays a model of the business: this class is deliberately **not** an `IAuditableEntity` and not an aggregate root, exactly like [`OutboxMessage`](group-04-events-outbox.md#outboxmessage), because it is framework bookkeeping rather than domain state (`ScheduledJobEntry.cs:8-14`). The consequences are concrete: no soft-delete flag, so no global query filter applies to it; no audit stamps, so the save interceptors have nothing to write (which is why the runner can call a plain `SaveChangesAsync` with no user id, `ScheduledJobRunner.cs:316-318`); and no concurrency token, because its concurrency control is the explicit claim lease instead. `[Rubric §8, Data Architecture]`: the table is **host-scoped** and lives in the `Default` data source only, unlike the outbox, which exists once per physical source (`ScheduledJobEntry.cs:15-18`). Jobs belong to a host, not to a database. `[Rubric §11, Security]` by omission: it also carries no user data, which is what keeps it in the audit trail's framework-entity exclusion set alongside the outbox and inbox rows (`Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:113-119`, this type at `:118`).
+- **Concept introduced, the framework bookkeeping entity.** `[Rubric §4, DDD]` assesses whether the domain model stays a model of the business: this class is deliberately **not** an `IAuditableEntity` and not an aggregate root, exactly like [`OutboxMessage`](group-04-events-outbox.md#outboxmessage), because it is framework bookkeeping rather than domain state (`ScheduledJobEntry.cs:8-14`). The consequences are concrete: no soft-delete flag, so no global query filter applies to it; no audit stamps, so the save interceptors have nothing to write (which is why the runner can call a plain `SaveChangesAsync` with no user id, `ScheduledJobRunner.cs:314-319`); and no concurrency token, because its concurrency control is the explicit claim lease instead. `[Rubric §8, Data Architecture]`: the table is **host-scoped** and lives in the `Default` data source only, unlike the outbox, which exists once per physical source (`ScheduledJobEntry.cs:15-18`). Jobs belong to a host, not to a database. `[Rubric §11, Security]` by omission: it also carries no user data, which is what keeps it in the audit trail's framework-entity exclusion set alongside the outbox and inbox rows (`Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:113-119`, this type at `:118`).
 
 - **Walkthrough**, in the order the runner touches them:
   - `JobName` (`ScheduledJobEntry.cs:26`), `required` and `init`-only: the primary key, matching `IScheduledJob.Name`, so a job has exactly one schedule row per host.
@@ -1113,7 +1251,7 @@ gRPC clients, which is precisely the reversibility
 
 - **Why it's built this way**: [ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html) chose to apply the outbox's proven claim-lease idiom to cron rather than adopt Hangfire or Quartz.NET, so the row shape is deliberately the minimum that idiom needs: a due time, a lease, and a token.
 
-- **Where it's used**: mapped by [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext)`.ConfigureScheduler` (`Persistence/DbContexts/ApplicationDbContext.cs:538-563`), which is **gated**: the entity is mapped only when the host set `Scheduler:Enabled` and this context targets the `Default` source (`ApplicationDbContext.cs:530-543`), so a host that never opted in keeps exactly the model, and the migrations, it had before the scheduler shipped. The mapping sets `ToTable("ScheduledJobs", "dbo")` (`:547`), the `JobName` key (`:548`), column widths matching the entity's documented truncation (`:549-552`), and one index on `NextRunOn` with the two lease columns as included columns (`:559-561`), deliberately NOT filtered to unlocked rows, because the poll must also find rows whose lease has expired (that is how a dead replica's work is reclaimed, `ApplicationDbContext.cs:554-558`). Every read and write of the row lives in [`ScheduledJobRunner`](#scheduledjobrunner).
+- **Where it's used**: mapped by [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext)`.ConfigureScheduler` (`Persistence/DbContexts/ApplicationDbContext.cs:594-619`), which is **gated**: the entity is mapped only when the host set `Scheduler:Enabled` and this context targets the `Default` source (`ApplicationDbContext.cs:586-599`, the guard itself at `:596-599`), so a host that never opted in keeps exactly the model, and the migrations, it had before the scheduler shipped, and Cosmos DB never reaches the method at all (`ApplicationDbContext.cs:591-592`). The mapping sets `ToTable("ScheduledJobs", "dbo")` (`:603`), the `JobName` key (`:604`), column widths matching the entity's documented truncation (`:605-608`), and one index on `NextRunOn` with the two lease columns as included columns (`:615-617`), deliberately NOT filtered to unlocked rows, because the poll must also find rows whose lease has expired (that is how a dead replica's work is reclaimed, `ApplicationDbContext.cs:610-614`). Every read and write of the row lives in [`ScheduledJobRunner`](#scheduledjobrunner).
 
 ---
 
@@ -1124,17 +1262,41 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: `System.Diagnostics.Metrics` (BCL) only (`SchedulerMetrics.cs:1`). Nothing first-party.
 
-- **Concept introduced, the one-meter-per-feature instrument holder.** `[Rubric §13, Observability & Operability]` assesses whether a running system can be understood from outside: a background loop is invisible by construction (no request, no response code), so the only evidence that a schedule is healthy is telemetry. The three instruments here are chosen to answer the three operator questions: is it running, how long does it take, and is it on time. `[Rubric §31, Cost/FinOps]` shows up in the same design: the per-occurrence start and finish lines are logged at `Debug` rather than `Information` precisely because a busy schedule would otherwise double the runner's steady-state log volume (`ScheduledJobRunner.cs:578-585`), and the numbers an operator alerts on come from these metrics instead. A host exports them by registering the `MeterName` meter; the Aspire service defaults (`ConfigureOpenTelemetry`) already do (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:167`), and the doc records that the name is duplicated as a literal there because that package has no reference to Infrastructure (`SchedulerMetrics.cs:5-14`).
+- **Concept introduced, the one-meter-per-feature instrument holder.** `[Rubric §13, Observability & Operability]` assesses whether a running system can be understood from outside: a background loop is invisible by construction (no request, no response code), so the only evidence that a schedule is healthy is telemetry. The three instruments here are chosen to answer the three operator questions: is it running, how long does it take, and is it on time. `[Rubric §31, Cost/FinOps]` shows up in the same design: the per-occurrence start and finish lines are logged at `Debug` rather than `Information` precisely because a busy schedule would otherwise double the runner's steady-state log volume (`ScheduledJobRunner.cs:578-585`), and the numbers an operator alerts on come from these metrics instead. A host exports them by registering the `MeterName` meter; the Aspire service defaults (`ConfigureOpenTelemetry`) already do (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:196`), and the doc records that the name is duplicated as a literal there because that package has no reference to Infrastructure (`SchedulerMetrics.cs:5-14`).
 
 - **Walkthrough**:
   - `MeterName = "MMCA.Common.Scheduler"` (`SchedulerMetrics.cs:19`) and the single static `Meter` built from it (`:21`). The class doc is explicit that one meter serves every scheduler instrument and that a second `Meter` with this name must never be created (`SchedulerMetrics.cs:11-14`), since duplicate meters are a classic source of double-counted telemetry. [`BrokerMetrics`](#brokermetrics) repeats the same shape for the broker transport.
-  - `RunCounter` (`SchedulerMetrics.cs:28-31`), `scheduler.job.runs`, tagged by `job` and `outcome`: the failure rate of a schedule is this counter split by outcome.
+  - `RunCounter` (`SchedulerMetrics.cs:28-31`), `scheduler.job.runs`, unit `runs`, tagged by `job` and `outcome`: the failure rate of a schedule is this counter split by outcome.
   - `DurationHistogram` (`:39-42`), `scheduler.job.duration` in **seconds**, tagged by `job`, measured around the job's own `ExecuteAsync` only so it excludes claim and bookkeeping cost. Its stated purpose is the lease relationship: a job whose duration approaches `Scheduler:LeaseSeconds` is about to lose its claim mid-run (`SchedulerMetrics.cs:33-38`).
   - `LagHistogram` (`:50-53`), `scheduler.job.lag` in seconds, the interval between an occurrence becoming due and actually starting. It is floored at zero, and a value near the polling interval is normal for an occurrence that landed just after a cycle (`SchedulerMetrics.cs:44-49`).
 
 - **Why it's built this way**: `internal static readonly` instruments created once at type initialization means the runner records without resolving anything from DI, and keeping the meter name a constant on the same type is what lets a test assert against it. `SchedulerMetricsTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Scheduling/SchedulerMetricsTests.cs:13`) pins the instrument surface.
 
-- **Where it's used**: [`ScheduledJobRunner`](#scheduledjobrunner)`.ExecuteClaimedJobAsync` records the lag before invoking the job (`ScheduledJobRunner.cs:466-467`) and the duration plus the outcome-tagged count after it returns (`ScheduledJobRunner.cs:471-474`).
+- **Where it's used**: [`ScheduledJobRunner`](#scheduledjobrunner)`.ExecuteClaimedJobAsync` records the lag before invoking the job (`ScheduledJobRunner.cs:464-467`) and the duration plus the outcome-tagged count after it returns (`ScheduledJobRunner.cs:471-474`).
+
+---
+
+### ServiceBusEmulatorSupport
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Messaging` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/ServiceBusEmulatorSupport.cs:32` · Level 0 · class (internal, static)
+
+- **What it is**: everything the Azure Service Bus transport needs in order to run against the official local emulator instead of a real namespace, collected in one type so the production branch in `ConfigureBrokerTransport` stays a single unconditional `cfg.Host(connectionString)` (`ServiceBusEmulatorSupport.cs:8-11`). It answers two questions: is this connection string an emulator one, and if so, how do we hand MassTransit the two clients it needs.
+
+- **Depends on**: nothing first-party. Externals: `Azure.Messaging.ServiceBus` (`ServiceBusClient`), `Azure.Messaging.ServiceBus.Administration` (`ServiceBusAdministrationClient`), and MassTransit's `IServiceBusBusFactoryConfigurator` (`ServiceBusEmulatorSupport.cs:1-4`). BCL: `Uri`, `Interlocked`, `CultureInfo`. Its one caller is [`DependencyInjection`](#dependencyinjection)'s private `ConfigureBrokerTransport`, and its input comes from [`MessageBusSettings`](#messagebussettings) (`ConnectionString` plus `EmulatorAdminEndpoint`).
+
+- **Concept introduced, detection that keys off the artifact rather than the environment.** `[Rubric §17, DevOps]` assesses whether development and production run the same paths: the point of the emulator branch is that a local stack exercises the *same* transport production uses, instead of substituting RabbitMQ and discovering Service Bus specific behavior only after deployment. `[Rubric §11, Security]` assesses blast radius: the branch is entered only when the resolved connection string carries `UseDevelopmentEmulator=true`, a token a real namespace never emits, so no production deployment can reach any of this by accident. That is stated as the reason detection is not keyed off an environment name or a separate flag, either of which somebody can set in the wrong place (`ServiceBusEmulatorSupport.cs:12-18`). `[Rubric §32, Dependency & Supply-Chain]`: the whole type exists because of a pinned dependency version. MassTransit v8 has no vendor emulator mode (that shipped in v9, which the workspace excludes because it needs a commercial license), so the only way onto the emulator is the custom-clients `Host` overload, where the caller builds both the data-plane and the management-plane client itself (`ServiceBusEmulatorSupport.cs:19-30`).
+
+- **Walkthrough**:
+  - **The four pieces of state.** `EmulatorMarker` is the literal `"UseDevelopmentEmulator=true"` (`ServiceBusEmulatorSupport.cs:37`). `EmulatorEntityQuota` is one hour, the ceiling the emulator enforces on entity time-to-live and auto-delete-on-idle (`:42`). `EmulatorHostAddress` is `sb://localhost/` (`:48`) and the doc is careful about what it is: it names the bus for the `Host` overload, not a network location, because both clients are already bound to the emulator's actual ports (`:44-47`). `_entityQuotasApplied` is the once-per-process latch (`:54`).
+  - **`IsEmulatorConnectionString` (`:62-64`)** is the whole detection: a null-guard and a `Contains` with `StringComparison.OrdinalIgnoreCase`, so casing in the connection string cannot smuggle a stack onto the wrong branch.
+  - **`ConfigureEmulatorHost` (`:86-101`)** is the entry point. It lowers the process-global quotas (`:93`), derives the management-plane connection string (`:95`), and calls the custom-clients overload with the host address, a new `ServiceBusClient` for the data plane and a new `ServiceBusAdministrationClient` for the management plane (`:97-100`). The `CA2000` suppression above it (`:82-85`) is worth reading rather than skipping: MassTransit takes ownership of the client for the life of the bus, which is the life of the process, so disposing it here would close the connection before the first publish.
+  - **`ApplyEmulatorEntityQuotas` (`:108-118`)** flips `Interlocked.Exchange(ref _entityQuotasApplied, 1) != 0` and returns early on the second call (`:110-113`), then writes three MassTransit statics down to the one-hour quota: `DefaultMessageTimeToLive`, `BasicMessageTimeToLive` and `AutoDeleteOnIdle` (`:115-117`). MassTransit v8's own defaults sit far above the emulator's ceiling (366 days TTL, 427 days auto-delete), so without this every entity it tries to provision is rejected (`:26-29`). Because these are process-global statics, the method is deliberately never reached on the real-namespace path: a production bus keeps MassTransit's defaults (`:103-107`).
+  - **`BuildAdminConnectionString` (`:131-156`)** derives the management-plane string from the AMQP one by swapping in the admin endpoint's host and port. The validation is stricter than "is it an absolute URI" and says why in a comment (`:133-135`): `localhost:5300` *is* an absolute URI, with `localhost` read as the scheme and no host at all, so the check also requires the scheme to be `http` or `https` (`:136-139`). A missing or malformed endpoint throws an `InvalidOperationException` whose message names the setting, the reason (v8 needs a management client on a second port) and the fix, including that an Aspire AppHost gets it for free (`:141-143`). The rebuild itself is a split on `;` that replaces only the `Endpoint=` segment and leaves everything else in place (`:145-155`), which is what keeps the shared-access key name and value byte-identical across both clients: composing a fresh second string is one silent typo away from an admin client that cannot provision anything (`:120-126`).
+
+- **Why it's built this way**: [ADR-066](https://ivanball.github.io/docs/adr/066-broker-transport-selection.html) records the local Service Bus emulator path as part of transport selection, and [ADR-016](https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html) records the MassTransit v8 pin that forces the custom-clients overload and the quota lowering. Keeping all of it in one internal static type is what lets the production branch of `ConfigureBrokerTransport` stay a one-liner, so a reader of the transport wiring sees the production path first and the development affordance as an explicit detour.
+
+- **Where it's used**: `ConfigureBrokerTransport` calls `IsEmulatorConnectionString` and, on a match, `ConfigureEmulatorHost(cfg, connectionString, settings.EmulatorAdminEndpoint)` (`DependencyInjection.cs:965-969`, the production `cfg.Host(connectionString)` in the `else` at `:972`). The admin endpoint is bound from `MessageBus:EmulatorAdminEndpoint` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:49`), which an Aspire AppHost sets from the emulator resource (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:289-291`, alongside `MessageBus__Provider=AzureServiceBus` and the AMQP connection string). The test tier applies the same quota lowering from its own fixture, [`ServiceBusEmulatorFixtureBase`](group-27-testing-infrastructure.md#servicebusemulatorfixturebase) (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/ServiceBusEmulatorFixtureBase.cs:74`), which pins the emulator image (`:61`). `ServiceBusEmulatorSupportTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Messaging/ServiceBusEmulatorSupportTests.cs:15`) covers marker detection including casing, the endpoint swap, the loud failure on a missing or non-HTTP admin endpoint, and the one-hour quota constant.
+
+- **Caveats / not-in-source**: whether a given AppHost run uses the emulator or RabbitMQ is a host and environment decision, so "which transport a developer is on right now" is Not determinable from source here; the source only settles that the emulator branch is reachable exactly when the resolved connection string carries the marker.
 
 ---
 
@@ -1176,7 +1338,7 @@ gRPC clients, which is precisely the reversibility
 
 - **Why it's built this way**: [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html) makes the lock a registration rather than an optional dependency, so a host always resolves *something*; this type is the honest floor of that guarantee. Logging the degradation once, instead of silently behaving like a lock, is what keeps "we have a distributed lock" from becoming a false belief in a multi-replica deployment.
 
-- **Where it's used**: registered by `AddCaching` in the Infrastructure composition root when no `IConnectionMultiplexer` is resolvable (`DependencyInjection.cs:206-208`, inside the `IDistributedLock` factory at `:195-209`; see [`DependencyInjection`](#dependencyinjection)), which covers MMCA.Helpdesk, local single-process runs, and tests. Behavior is pinned by `InProcessDistributedLockTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Concurrency/InProcessDistributedLockTests.cs:12`).
+- **Where it's used**: registered by `AddCaching` in the Infrastructure composition root when no `IConnectionMultiplexer` is resolvable (`DependencyInjection.cs:284-286`, inside the `IDistributedLock` factory at `:273-287`; see [`DependencyInjection`](#dependencyinjection)), which covers MMCA.Helpdesk, local single-process runs, and tests. Behavior is pinned by `InProcessDistributedLockTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Concurrency/InProcessDistributedLockTests.cs:12`).
 
 ---
 
@@ -1207,24 +1369,24 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: `IConnectionMultiplexer` and the rest of StackExchange.Redis (`IDatabase`, `RedisKey`, `RedisValue`, `RedisResult`), `ILogger<RedisDistributedLock>`, and an optional [`CacheKeyNamespace`](group-09-caching.md#cachekeynamespace) (`RedisDistributedLock.cs:24-27`), which is what puts this type at Level 2 rather than Level 1. It returns its nested [`RedisLockHandle`](#redislockhandle).
 
-- **Concept**: the acquire half of the lock taught in two pieces with [`RedisLockHandle`](#redislockhandle). `[Rubric §12, Performance & Scalability]` assesses scale-out correctness: moving the lock into Redis is what makes "only one of these runs at a time" true across replicas instead of true per process, which is the whole reason the abstraction exists (see [`InProcessDistributedLock`](#inprocessdistributedlock) for the degraded alternative). `[Rubric §29, Resilience, Reliability & Business Continuity]` assesses failure behavior: the expiry carried on the `SET` is the crash guard (a holder that dies releases by expiry rather than wedging the key forever, `RedisDistributedLock.cs:12-17`), and the class documents that it is deliberately **single-instance, not Redlock** (`RedisDistributedLock.cs:19-23`), inheriting Redis's failover behavior, which is exactly why the contract is documented as best-effort.
+- **Concept**: the acquire half of the lock taught in two pieces with [`RedisLockHandle`](#redislockhandle). `[Rubric §12, Performance & Scalability]` assesses scale-out correctness: moving the lock into Redis is what makes "only one of these runs at a time" true across replicas instead of true per process, which is the whole reason the abstraction exists (see [`InProcessDistributedLock`](#inprocessdistributedlock) for the degraded alternative). `[Rubric §29, Resilience & Business Continuity]` assesses failure behavior: the expiry carried on the `SET` is the crash guard (a holder that dies releases by expiry rather than wedging the key forever, `RedisDistributedLock.cs:12-17`), and the class documents that it is deliberately **single-instance, not Redlock** (`RedisDistributedLock.cs:19-23`), inheriting Redis's failover behavior, which is exactly why the contract is documented as best-effort.
 
 - **Walkthrough**:
   - **State.** `KeyPrefix` is `"lock:"` (`RedisDistributedLock.cs:30`) so lock entries cannot collide with cache entries in a shared instance. `ReleaseScript` (`RedisDistributedLock.cs:36-37`) is the compare-and-delete Lua taught under [`RedisLockHandle`](#redislockhandle). `PollInterval` is 50 ms (`RedisDistributedLock.cs:40`); unlike the in-process poll, each retry here is a network round trip. `_keys` falls back to `CacheKeyNamespace.None` when no namespace was injected (`RedisDistributedLock.cs:42`), so the `Cache:KeyPrefix` option (when configured) qualifies lock keys the same way it qualifies cache keys.
   - **Argument guards.** `TryAcquireAsync` (`RedisDistributedLock.cs:45-82`) applies the same three checks as the in-process implementation: non-blank key, `ttl` greater than zero, non-negative `wait` (`RedisDistributedLock.cs:51-53`).
-  - **Key and token.** The physical key is `_keys.Qualify(string.Concat("lock:", key))` (`RedisDistributedLock.cs:55`). The token is a fresh `Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)` minted **per acquisition** (`RedisDistributedLock.cs:59`); the release script matches on it, and that is what makes a release owner-scoped instead of "delete whatever is there now" (`RedisDistributedLock.cs:57-58`).
+  - **Key and token.** The physical key is `_keys.Qualify(string.Concat(KeyPrefix, key))` (`RedisDistributedLock.cs:55`). The token is a fresh `Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)` minted **per acquisition** (`RedisDistributedLock.cs:59`); the release script matches on it, and that is what makes a release owner-scoped instead of "delete whatever is there now" (`RedisDistributedLock.cs:57-58`).
   - **The acquire loop** (`RedisDistributedLock.cs:64-81`). `StringSetAsync(redisKey, token, ttl, keepTtl: false, When.NotExists, CommandFlags.None)` (`RedisDistributedLock.cs:66-68`) is a single atomic conditional set carrying the expiry, so exactly one replica can win a key. On success it returns a [`RedisLockHandle`](#redislockhandle) closing over the database, key, token, and logger (`RedisDistributedLock.cs:70-73`); once `Stopwatch.GetElapsedTime(startedAt) >= wait` it returns `null` (`RedisDistributedLock.cs:75-78`); otherwise it delays one `PollInterval` and retries (`RedisDistributedLock.cs:80`).
 
-- **Why it's built this way**: [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html) (revised 2026-08-01) replaced the process-local guard around the idempotency filter's execute-then-store window with this, because a striped semaphore stops serializing anything once a service runs more than one replica. Choosing the one-instance `SET NX PX` lock over Redlock is a stated trade: simpler, dependent on a single Redis, and paired with a contract that tells callers never to lean on it for an invariant persistence can enforce.
+- **Why it's built this way**: [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html) replaced the process-local guard around the idempotency filter's execute-then-store window with this, because a striped semaphore stops serializing anything once a service runs more than one replica. Choosing the one-instance `SET NX PX` lock over Redlock is a stated trade: simpler, dependent on a single Redis, and paired with a contract that tells callers never to lean on it for an invariant persistence can enforce.
 
-- **Where it's used**: selected by `AddCaching` whenever an `IConnectionMultiplexer` is resolvable (`DependencyInjection.cs:198-204`, see [`DependencyInjection`](#dependencyinjection)), passing the same [`CacheKeyNamespace`](group-09-caching.md#cachekeynamespace) the distributed cache gets (`DependencyInjection.cs:202`). The one in-framework caller is the API [`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter); `RedisDistributedLockTests` covers the acquire and release commands against a mocked `IDatabase`.
+- **Where it's used**: selected by `AddCaching` whenever an `IConnectionMultiplexer` is resolvable (`DependencyInjection.cs:276-282`, see [`DependencyInjection`](#dependencyinjection)), passing the same [`CacheKeyNamespace`](group-09-caching.md#cachekeynamespace) the distributed cache gets (`DependencyInjection.cs:280`). The one in-framework caller is the API [`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter); `RedisDistributedLockTests` covers the acquire and release commands against a mocked `IDatabase`.
 
 - **Caveats / not-in-source**: whether a given deployed environment actually supplies the `redis` connection string is an infrastructure/config fact, not a source fact, so "which implementation is live in environment X" is Not determinable from source here; the source only settles that the presence of a registered `IConnectionMultiplexer` decides it.
 
 ---
 
 ### ScheduledJobRunner
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Scheduling` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:39` · Level 8 · class (sealed, partial, BackgroundService)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Scheduling` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:39` · Level 13 · class (sealed, partial, BackgroundService)
 
 - **What it is**: the framework's recurring job scheduler. A `BackgroundService` that runs the host's registered [`IScheduledJob`](group-05-cqrs-pipeline.md#ischeduledjob) implementations on their cron schedules, using a persistent job store ([`ScheduledJobEntry`](#scheduledjobentry)) and the outbox processor's claim-lease idiom so an occurrence executes exactly once across every replica.
 
@@ -1238,7 +1400,7 @@ gRPC clients, which is precisely the reversibility
   - **The smart wait.** `ComputeWaitTime` (`:138-152`) is a pure static function: the polling interval when nothing is registered, otherwise the time until the earliest upcoming occurrence, floored at `MinimumWait` and capped at the configured interval. This is the same "sleep until there is something to do" shape [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) uses, and it is what keeps an idle scheduler from polling on a fixed tick.
   - **`RunCycleAsync` (`:205-228`).** One DI scope per cycle. It resolves the registered jobs (`:208`), returns early when there are none (`:209-212`), takes the context for the `Default` logical source on the configured engine through [`IDataSourceResolver`](group-07-persistence-ef-core.md#idatasourceresolver) (`:214-216`), reconciles registrations, runs due jobs, and finally reads back the earliest `NextRunOn` across the registered names (`:221-227`) which becomes the next wait.
   - **`ResolveRegisteredJobs` (`:235-250`)** groups `GetServices<IScheduledJob>()` by `Name` (ordinal) and keeps the first of each group, logging a collision rather than throwing (`:243-246`). Two jobs sharing a name would share one schedule row, and the design choice is that one mis-registered module must not stop every other job.
-  - **`SyncRegistrationsAsync` (`:259-320`)** reconciles the table against the registered jobs. It reads the stored expressions once (`:267-271`), and for each job compares the resolved expression against the stored one: **unchanged means leave the row alone** (`:279-285`), with the comment naming the bug that would otherwise appear, recomputing `NextRunOn` every cycle would push every schedule forward forever and nothing would ever fire. A changed expression goes through the set-based `UpdateScheduleAsync` (`:326-358`) so a row another replica is currently executing is not disturbed by the change tracker; a new job is inserted (`:299-311`). An unparsable expression parks the row at `DateTime.MaxValue` and records `Skipped` instead of throwing (`:287-308`, and on the update path at `:348-357`).
+  - **`SyncRegistrationsAsync` (`:259-320`)** reconciles the table against the registered jobs. It reads the stored expressions once (`:267-271`), and for each job compares the resolved expression against the stored one: **unchanged means leave the row alone** (`:279-285`), with the comment naming the bug that would otherwise appear, recomputing `NextRunOn` every cycle would push every schedule forward forever and nothing would ever fire. A changed expression goes through the set-based `UpdateScheduleAsync` (`:326-358`) so a row another replica is currently executing is not disturbed by the change tracker; a new job is inserted (`:293-311`). An unparsable expression parks the row at `DateTime.MaxValue` and records `Skipped` instead of throwing (`:287-308`, and on the update path at `:348-357`).
   - **`ResolveCronExpression` (`:162-166`)** is the configuration override point: `Scheduler:Jobs:{Name}:Cron` when present and non-blank, otherwise the job's compiled-in default. `TryGetNextOccurrence` (`:176-197`) wraps Cronos and catches exactly `CronFormatException` and `ArgumentException` (`:189`), converting a malformed expression into a parked row plus an error message rather than a crashed runner.
   - **`RunDueJobsAsync` (`:365-393`)** claims and runs one row at a time, tracking an `attempted` set so each name is tried at most once per cycle (`:370-382`). A [`JobClaim`](#jobclaim) with a null `LockToken` means another replica won that row, so it is skipped rather than retried (`:384-391`).
   - **`TryClaimNextDueAsync` (`:402-440`)** reads the earliest due, unleased row (`:409-416`), mints a `Guid` token and a lease of `Scheduler:LeaseSeconds` from now (`:423-424`), then issues the conditional claim update described above (`:429-437`).
@@ -1248,64 +1410,101 @@ gRPC clients, which is precisely the reversibility
 
 - **Why it's built this way**: [ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html) records the decision to extend the durable polling loop already in production instead of adopting Hangfire or Quartz.NET, on the grounds that the missing piece was a cron expression, not a product, and that every extracted service host ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)) would otherwise have to reason about a new dependency. Cron parsing is the one thing bought rather than built (Cronos, MIT, zero-dependency).
 
-- **Where it's used**: registered by `AddScheduledJobs` through `TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, ScheduledJobRunner>())` (`DependencyInjection.cs:314-315`), deliberately not `AddHostedService`, since the latter appends a descriptor per call and two modules calling it would run two runners racing for the same rows (`DependencyInjection.cs:311-313`). The framework's own scheduled job is [`AuditTrailCleanupJob`](group-07-persistence-ef-core.md#audittrailcleanupjob), registered by `AddAuditTrail` (`DependencyInjection.cs:391`). `ScheduledJobRunnerTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Scheduling/ScheduledJobRunnerTests.cs:22`) drives whole cycles through the internal entry point via a shared `SchedulerTestHarness` (`.../Scheduling/SchedulerTestHarness.cs:28`), and `SchedulerModelGateTests` (`.../Scheduling/SchedulerModelGateTests.cs:26`) pins the model gate.
+- **Where it's used**: registered by `AddScheduledJobs` through `TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, ScheduledJobRunner>())` (`DependencyInjection.cs:401-402`), deliberately not `AddHostedService`, since the latter appends a descriptor per call and two modules calling it would run two runners racing for the same rows (`DependencyInjection.cs:398-400`). The framework's own scheduled job is [`AuditTrailCleanupJob`](group-07-persistence-ef-core.md#audittrailcleanupjob), registered by `AddAuditTrail` (`DependencyInjection.cs:478`). `ScheduledJobRunnerTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Scheduling/ScheduledJobRunnerTests.cs:22`) drives whole cycles through the internal entry point via a shared `SchedulerTestHarness` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Scheduling/SchedulerTestHarness.cs`), and `SchedulerModelGateTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Scheduling/SchedulerModelGateTests.cs:26`) pins the model gate.
 
 - **Caveats / not-in-source**: which hosts actually call `AddScheduledJobs` and set `Scheduler:Enabled` lives in the downstream apps, not in this repository, so the set of deployments running a schedule today is Not determinable from source here.
 
 ---
 
 ### DependencyInjection
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:40` · Level 11 · class (static, extension)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:39` · Level 14 · class (static, extension)
 
-- **What it is**: the single composition root for the entire Infrastructure layer. A static class whose body is one C# preview `extension(IServiceCollection services)` block (`DependencyInjection.cs:42-739`) adding the layer's fifteen registration methods directly onto `IServiceCollection`: `AddInfrastructure(IConfiguration)` (`:50`), `AddCaching(IConfiguration?)` (`:164`), `AddCommonHybridCache(Action<HybridCacheOptions>?)` (`:248`), `AddScheduledJobs(IConfiguration)` (`:304`), `AddScheduledJob<TJob>()` (`:339`), `AddAuditTrail(IConfiguration)` (`:375`), `AddMultiTenancy(IConfiguration)` (`:424`), `AddServices()` (`:442`), `AddEntityConfigurationAssembly(Assembly)` (`:496`), `AddNotificationInfrastructure()` (`:513`), `AddPushNotifications(IConfiguration)` (`:528`), `AddNativePushNotifications(IConfiguration)` (`:563`), `AddAzureBlobFileStorage(IConfiguration)` (`:595`), `AddBrokerMessaging(IConfiguration, Action?)` (`:647`), and `AddTypedServiceClient<TInterface, TImplementation>(string)` (`:721`).
+- **What it is**: the single composition root for the entire Infrastructure layer. A static class whose body is one C# preview `extension(IServiceCollection services)` block (`DependencyInjection.cs:41-837`) adding the layer's fifteen registration methods directly onto `IServiceCollection`: `AddInfrastructure(IConfiguration)` (`:49`), `AddCaching(IConfiguration?)` (`:215`), `AddCommonHybridCache(Action<HybridCacheOptions>?)` (`:326`), `AddScheduledJobs(IConfiguration)` (`:391`), `AddScheduledJob<TJob>()` (`:426`), `AddAuditTrail(IConfiguration)` (`:462`), `AddMultiTenancy(IConfiguration)` (`:511`), `AddServices()` (`:529`), `AddEntityConfigurationAssembly(Assembly)` (`:583`), `AddNotificationInfrastructure()` (`:600`), `AddPushNotifications(IConfiguration)` (`:615`), `AddNativePushNotifications(IConfiguration)` (`:648`), `AddAzureBlobFileStorage(IConfiguration)` (`:680`), `AddBrokerMessaging(IConfiguration, Action?)` (`:732`), and `AddTypedServiceClient<TInterface, TImplementation>(string)` (`:819`). Four private static helpers sit outside the block and below it (`:857`, `:880`, `:919`, `:1010`).
 
-- **Depends on**: nearly every Infrastructure type below it, wired by interface. Persistence: [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory), [`PhysicalDbContextFactory`](group-07-persistence-ef-core.md#physicaldbcontextfactory), [`DataSourceService`](group-07-persistence-ef-core.md#datasourceservice), [`DataSourceResolver`](group-07-persistence-ef-core.md#datasourceresolver), [`EntityDataSourceRegistry`](group-07-persistence-ef-core.md#entitydatasourceregistry), [`DefaultEntityConfigurationAssemblyProvider`](group-07-persistence-ef-core.md#defaultentityconfigurationassemblyprovider), [`EFRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#efrepositorytentity-tidentifiertype), [`RepositoryFactory`](group-07-persistence-ef-core.md#repositoryfactory), [`UnitOfWork`](group-07-persistence-ef-core.md#unitofwork), [`TenantSaveChangesInterceptor`](group-07-persistence-ef-core.md#tenantsavechangesinterceptor). Messaging/outbox: [`IMessageBus`](group-04-events-outbox.md#imessagebus)/[`InProcessMessageBus`](group-04-events-outbox.md#inprocessmessagebus)/[`BrokerMessageBus`](group-04-events-outbox.md#brokermessagebus), [`IEventBus`](group-04-events-outbox.md#ieventbus)/[`InProcessEventBus`](group-04-events-outbox.md#inprocesseventbus), [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor), [`EfInboxStore`](group-04-events-outbox.md#efinboxstore)/[`NoOpInboxStore`](group-04-events-outbox.md#noopinboxstore)/[`InboxDisabledWarningService`](group-04-events-outbox.md#inboxdisabledwarningservice). Cross-cutting: [`ICacheService`](group-09-caching.md#icacheservice) with [`DistributedCacheService`](group-09-caching.md#distributedcacheservice)/[`MemoryCacheService`](group-09-caching.md#memorycacheservice)/[`HybridCacheService`](group-09-caching.md#hybridcacheservice), [`IDistributedLock`](group-05-cqrs-pipeline.md#idistributedlock) with [`RedisDistributedLock`](#redisdistributedlock)/[`InProcessDistributedLock`](#inprocessdistributedlock), [`IJwksProvider`](group-08-auth.md#ijwksprovider)/[`RsaJwksProvider`](group-08-auth.md#rsajwksprovider), [`TokenService`](group-08-auth.md#tokenservice), [`ScheduledJobRunner`](#scheduledjobrunner), [`IAuditTrailReader`](group-05-cqrs-pipeline.md#iaudittrailreader)/[`AuditTrailReader`](group-07-persistence-ef-core.md#audittrailreader), [`JwtForwardingDelegatingHandler`](group-12-api-hosting-mapping.md#jwtforwardingdelegatinghandler). Settings: [`ConnectionStringSettings`](#connectionstringsettings), [`DataSourcesSettings`](#datasourcessettings), [`MessageBusSettings`](#messagebussettings), [`OutboxSettings`](#outboxsettings), [`PersistenceSettings`](#persistencesettings), [`SmtpSettings`](#smtpsettings), [`JwksSettings`](#jwkssettings), [`LoginProtectionSettings`](group-08-auth.md#loginprotectionsettings), [`SchedulerSettings`](#schedulersettings), [`AuditTrailSettings`](#audittrailsettings), [`TenancySettings`](#tenancysettings). Externals: MassTransit v8 (pinned by policy), StackExchange.Redis, `Microsoft.Extensions.Caching.Hybrid`, `Microsoft.AspNetCore.SignalR`, `Microsoft.Azure.NotificationHubs`, `Azure.Storage.Blobs` / `Azure.Identity`, `Microsoft.Extensions.Http.Resilience`.
+- **Depends on**: nearly every Infrastructure type below it, wired by interface. Persistence: [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory), [`PhysicalDbContextFactory`](group-07-persistence-ef-core.md#physicaldbcontextfactory), [`DataSourceService`](group-07-persistence-ef-core.md#datasourceservice), [`DataSourceResolver`](group-07-persistence-ef-core.md#datasourceresolver), [`EntityDataSourceRegistry`](group-07-persistence-ef-core.md#entitydatasourceregistry), [`DefaultEntityConfigurationAssemblyProvider`](group-07-persistence-ef-core.md#defaultentityconfigurationassemblyprovider), [`EFQueryableExecutor`](group-07-persistence-ef-core.md#efqueryableexecutor), [`SqlServerUniqueConstraintViolationDetector`](group-07-persistence-ef-core.md#sqlserveruniqueconstraintviolationdetector), [`EFRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#efrepositorytentity-tidentifiertype), [`RepositoryFactory`](group-07-persistence-ef-core.md#repositoryfactory), [`UnitOfWork`](group-07-persistence-ef-core.md#unitofwork), [`AuditSaveChangesInterceptor`](group-07-persistence-ef-core.md#auditsavechangesinterceptor), [`DomainEventSaveChangesInterceptor`](group-07-persistence-ef-core.md#domaineventsavechangesinterceptor), [`TenantSaveChangesInterceptor`](group-07-persistence-ef-core.md#tenantsavechangesinterceptor). Messaging/outbox: [`IMessageBus`](group-04-events-outbox.md#imessagebus)/[`InProcessMessageBus`](group-04-events-outbox.md#inprocessmessagebus)/[`BrokerMessageBus`](group-04-events-outbox.md#brokermessagebus), [`IEventBus`](group-04-events-outbox.md#ieventbus)/[`InProcessEventBus`](group-04-events-outbox.md#inprocesseventbus)/[`BrokerEventBus`](group-04-events-outbox.md#brokereventbus), [`OutboxSignal`](group-04-events-outbox.md#outboxsignal), [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor), [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice), [`OutboxDisabledNoticeService`](group-04-events-outbox.md#outboxdisablednoticeservice), [`OutboxAdministration`](group-04-events-outbox.md#outboxadministration), [`EfInboxStore`](group-04-events-outbox.md#efinboxstore)/[`NoOpInboxStore`](group-04-events-outbox.md#noopinboxstore)/[`InboxDisabledWarningService`](group-04-events-outbox.md#inboxdisabledwarningservice), [`ServiceBusEmulatorSupport`](#servicebusemulatorsupport). Cross-cutting: [`ICacheService`](group-09-caching.md#icacheservice) with [`DistributedCacheService`](group-09-caching.md#distributedcacheservice)/[`MemoryCacheService`](group-09-caching.md#memorycacheservice)/[`HybridCacheService`](group-09-caching.md#hybridcacheservice), [`IDistributedLock`](group-05-cqrs-pipeline.md#idistributedlock) with [`RedisDistributedLock`](#redisdistributedlock)/[`InProcessDistributedLock`](#inprocessdistributedlock), [`IJwksProvider`](group-08-auth.md#ijwksprovider)/[`RsaJwksProvider`](group-08-auth.md#rsajwksprovider), [`TokenService`](group-08-auth.md#tokenservice), [`LoginProtectionService`](group-08-auth.md#loginprotectionservice), [`PasswordResetTokenService`](group-08-auth.md#passwordresettokenservice), [`EFRefreshSessionStore`](group-07-persistence-ef-core.md#efrefreshsessionstore) with [`RefreshSessionCleanupService`](group-07-persistence-ef-core.md#refreshsessioncleanupservice), [`EventUpcasterStartupValidator`](group-07-persistence-ef-core.md#eventupcasterstartupvalidator), [`ScheduledJobRunner`](#scheduledjobrunner), [`IAuditTrailReader`](group-05-cqrs-pipeline.md#iaudittrailreader)/[`AuditTrailReader`](group-07-persistence-ef-core.md#audittrailreader), [`TenantContext`](group-07-persistence-ef-core.md#tenantcontext), [`CorrelationContext`](group-12-api-hosting-mapping.md#correlationcontext), [`JwtForwardingDelegatingHandler`](group-12-api-hosting-mapping.md#jwtforwardingdelegatinghandler). Settings: [`ConnectionStringSettings`](#connectionstringsettings) with [`ConnectionStringSettingsValidator`](#connectionstringsettingsvalidator), [`DataSourcesSettings`](#datasourcessettings)/[`DataSourceEntrySettings`](#datasourceentrysettings), [`MessageBusSettings`](#messagebussettings), [`OutboxSettings`](#outboxsettings), [`PersistenceSettings`](#persistencesettings), [`SmtpSettings`](#smtpsettings), [`JwksSettings`](#jwkssettings), [`CacheSettings`](#cachesettings), [`QueryCachePipelineSettings`](#querycachepipelinesettings), [`LoginProtectionSettings`](group-08-auth.md#loginprotectionsettings), [`PasswordResetSettings`](group-08-auth.md#passwordresetsettings), [`RefreshSessionSettings`](group-08-auth.md#refreshsessionsettings), [`SchedulerSettings`](#schedulersettings), [`AuditTrailSettings`](#audittrailsettings), [`TenancySettings`](#tenancysettings) with [`TenancySettingsValidator`](#tenancysettingsvalidator), [`PushNotificationSettings`](#pushnotificationsettings), [`NativePushSettings`](#nativepushsettings), [`FileStorageSettings`](#filestoragesettings). Externals: MassTransit v8 (pinned by policy), StackExchange.Redis, `Microsoft.Extensions.Caching.Hybrid`, `Microsoft.AspNetCore.SignalR`, `Microsoft.Azure.NotificationHubs`, `Azure.Storage.Blobs` / `Azure.Identity`, `Microsoft.Extensions.Http.Resilience`, Scrutor.
 
-- **Concept introduced, the mega-composition-root plus the swap-at-the-edge extraction pattern.** `[Rubric §3, Clean Architecture]` assesses whether wiring lives at the edge rather than in the core: every concrete Infrastructure choice is registered here, not in Application or Domain. `[Rubric §10, Cross-Cutting]` and `[Rubric §7, Microservices Readiness]`: the method bodies are the framework's default posture, and each optional capability (broker, scheduler, audit trail, tenancy, hybrid cache, push, native push, blob storage) is a separate opt-in method a host layers on, so the same package runs as a monolith or as an extracted service without recompiling the core. The default everywhere is `TryAdd*`, meaning a host can pre-register its own implementation and the framework will not clobber it; the two places that deliberately break that rule are the broker swap (`Replace`, `:676` and `:682`) and `AddCommonHybridCache` (`RemoveAll`, `:266`), and both say so in a comment. `[Rubric §17, DevOps]`: registering a capability is consistently NOT the same as enabling it, the scheduler and the audit trail both stay inert until their `Enabled` flag is true (`:298-302`, `:356-362`), so a host ships the registration and an environment turns it on.
+- **Concept introduced, the mega-composition-root plus the swap-at-the-edge extraction pattern.** `[Rubric §3, Clean Architecture]` assesses whether wiring lives at the edge rather than in the core: every concrete Infrastructure choice is registered here, not in Application or Domain. `[Rubric §10, Cross-Cutting]` and `[Rubric §7, Microservices Readiness]`: the method bodies are the framework's default posture, and each optional capability (broker, scheduler, audit trail, tenancy, hybrid cache, push, native push, blob storage) is a separate opt-in method a host layers on, so the same package runs as a monolith or as an extracted service without recompiling the core. The default everywhere is `TryAdd*`, meaning a host can pre-register its own implementation and the framework will not clobber it; the places that deliberately break that rule are the broker swap (`Replace`, `:771` and `:777`), `AddCommonHybridCache` (`RemoveAll`, `:352`), and the two push registrations that overwrite their own null defaults (`:631-632`), and each says so in a comment. `[Rubric §17, DevOps]`: registering a capability is consistently NOT the same as enabling it, the scheduler and the audit trail both stay inert until their `Enabled` flag is true (`:385-389`, `:441-449`), so a host ships the registration and an environment turns it on. `[Rubric §15, Best Practices & Code Quality]`: the two places where a misconfiguration would be silent instead throw or warn at startup, which is the running theme of this file.
 
 - **Walkthrough** (in registration order):
-  - **`AddInfrastructure` (`:50-157`)** is the entry point. It registers the model-facing singletons and the three EF save interceptors as singletons because they are stateless with per-save state in a `ConditionalWeakTable` keyed by context (`:55-63`), including [`TenantSaveChangesInterceptor`](group-07-persistence-ef-core.md#tenantsavechangesinterceptor), which is registered unconditionally so a host can never leave the write-side tenancy guard half-wired (`:60-63`). It then binds the settings sections through the options pipeline with `.ValidateDataAnnotations().ValidateOnStart()`: [`ConnectionStringSettings`](#connectionstringsettings) (`:67-70`), [`SmtpSettings`](#smtpsettings) (`:81-84`), [`PersistenceSettings`](#persistencesettings) (`:123-126`), [`OutboxSettings`](#outboxsettings) (`:128-131`), [`LoginProtectionSettings`](group-08-auth.md#loginprotectionsettings) (`:133-136`), [`MessageBusSettings`](#messagebussettings) (`:139-142`) and [`JwksSettings`](#jwkssettings) (`:144-147`), each followed where relevant by a singleton adapter that unwraps `IOptions<T>` onto the matching settings interface (`:65`, `:71`, `:85`). It finishes with the outbox signal plus the two hosted outbox services (`:150-152`) and a call to `AddServices()` (`:154`).
-  - **The named-data-sources note (`:73-77`)** is load-bearing: [`DataSourcesSettings`](#datasourcessettings) is built directly from `configuration.GetSection(...).Get<Dictionary<string, DataSourceEntrySettings>>()` rather than through `AddOptions`, because a root-level dictionary section does not bind through the options pipeline. The resolver and the eager entity registry follow immediately (`:78-79`).
-  - **The physical-factory warning (`:87-93`)**: [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory) is scoped (one per request) and [`PhysicalDbContextFactory`](group-07-persistence-ef-core.md#physicaldbcontextfactory) is a singleton that must **never** be converted to EF context pooling, because each raw context carries per-source constructor state that pooling would silently reuse across databases.
-  - **The Scrutor scan (`:113-117`)** discovers every `IEntityTypeConfigurationBase<,>` in the Infrastructure assembly via `FromAssemblyOf<ClassReference>()` (`:114`) and registers each as its implemented interfaces, scoped to match the DbContext lifetime, closing the loop back to [`ClassReference`](#classreference).
-  - **`AddCaching` (`:164-212`)** does two probes in one method. The cache: if an `IDistributedCache` is registered and is not the no-op `MemoryDistributedCache` (`:178`), it builds [`DistributedCacheService`](group-09-caching.md#distributedcacheservice) over it plus any `IConnectionMultiplexer` and the optional `Cache:KeyPrefix` namespace (`:180-184`); otherwise [`MemoryCacheService`](group-09-caching.md#memorycacheservice) (`:188`), where the keyspace is private to the process so no prefix is needed. The lock: [`RedisDistributedLock`](#redisdistributedlock) when a multiplexer resolves (`:198-204`), [`InProcessDistributedLock`](#inprocessdistributedlock) otherwise (`:206-208`). The comment explains why the lock is registered next to the cache at all (`:191-194`): its one in-framework caller, the API idempotency filter, pairs the two, since the lock guards the execute-then-store window the cache entry closes.
-  - **`AddCommonHybridCache` (`:248-282`)** is the opt-in two-level cache ([ADR-077](https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html)). It configures `HybridCache` with the framework's own TTL policy expressed in HybridCache's option type (`:250-262`), then deliberately does `RemoveAll<ICacheService>()` before `AddSingleton` (`:264-279`) so the call wins whether it runs before or after `AddInfrastructure`. The remarks are honest about the cost of that choice (`:236-241`): `RemoveAll` does not distinguish the framework's registration from a host's own custom `ICacheService`, so calling this is a statement that the two-level cache IS the cache.
-  - **`AddScheduledJobs` (`:304-318`) and `AddScheduledJob<TJob>` (`:339-345`)** wire the recurring-job feature ([ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html)). The first binds [`SchedulerSettings`](#schedulersettings) with validation (`:306-309`) and registers [`ScheduledJobRunner`](#scheduledjobrunner) via `TryAddEnumerable` rather than `AddHostedService` (`:311-315`), so a host or two modules calling it twice cannot run two runners racing for the same rows. The second registers one job scoped, both as the concrete type and into the accumulating `IEnumerable<IScheduledJob>` (`:342-343`); the doc spells out that the job is scoped because the runner resolves it in a fresh scope per execution and it must hold no state between runs (`:332-337`).
-  - **`AddAuditTrail` (`:375-394`)** binds [`AuditTrailSettings`](#audittrailsettings) (`:377-380`), registers the trail interceptor as a singleton for the same statelessness reason as the other three (`:382-384`), the scoped reader (`:386`), and, notably, `AddScheduledJob<AuditTrailCleanupJob>()` (`:391`). Registering the retention job here rather than in `AddScheduledJobs` keeps the two features independent, and the remarks state the operational consequence plainly (`:363-369`): without the scheduler the trail still records every change and nothing is ever purged, so `AuditTrail:RetentionDays` is inert.
-  - **`AddMultiTenancy` (`:424-436`)** binds [`TenancySettings`](#tenancysettings) and adds its validator through `TryAddEnumerable` so two modules calling it do not run the same validation twice (`:431-433`). What it switches on is *resolution*, not isolation: the filter, the interceptor and `ITenantContext` are always present and inert until a tenant resolves (`:402-414`), and a `Tenancy:Tenants:{id}:DataSources:{sourceName}` override naming a source that does not exist fails startup rather than silently falling back to the shared database (`:415-422`).
-  - **`AddServices` (`:442-487`)** registers the small services and encodes a subtle lifetime lesson: [`TokenService`](group-08-auth.md#tokenservice) is a **singleton** (`:461`) with a six-line comment explaining why (`:455-460`): a scoped lifetime disposed the RSA handle at end-of-request while IdentityModel's static `CryptoProviderCache` still held the cached signature provider wrapping it, throwing `ObjectDisposedException` on the next RS256 sign. `[Rubric §11, Security]` (correct signing-key lifecycle). It also sets the default [`IMessageBus`](group-04-events-outbox.md#imessagebus) to [`InProcessMessageBus`](group-04-events-outbox.md#inprocessmessagebus) (`:469`) and the default [`IEventBus`](group-04-events-outbox.md#ieventbus) to [`InProcessEventBus`](group-04-events-outbox.md#inprocesseventbus) (`:463`), registers `ITenantContext` unconditionally with the reasoning inline (`:448-452`), and wires the inert no-op defaults for push (`:473-474`), native push ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html), `:476-479`) and file storage ([ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html), `:481-483`) so hosts can call the opt-in methods unconditionally.
-  - **The opt-in channels.** `AddPushNotifications` (`:528-551`) binds and adapts the settings (`:530-535`), adds SignalR, adds the Redis backplane only when a `redis` connection string exists (`:539-543`), and replaces the null senders (`:546-547`). `AddNativePushNotifications` (`:563-583`) and `AddAzureBlobFileStorage` (`:595-623`) both re-read their section eagerly with `.Get<T>()` (`:568`, `:600`) because the decision whether to register at all has to be made at composition time, and both return early on an incomplete section (`:569-574`, `:601-611`), which is what makes an unconfigured environment a no-op instead of a startup crash. The absolute-URI check at `:606-607` is worth copying: an empty-string `ServiceUri` binds to a *relative* `Uri`, so only `{ IsAbsoluteUri: true }` counts.
-  - **`AddBrokerMessaging` (`:647-701`)** is the extraction pivot. It reads [`MessageBusSettings`](#messagebussettings)`.Provider`, falling back to `new MessageBusSettings()` when the section is absent (`:653-654`); on `InProcess` it returns immediately (`:656-659`), leaving the in-process bus in place; otherwise it calls `AddMassTransit` (`:663-672`) and then **`Replace`s** the scoped [`IMessageBus`](group-04-events-outbox.md#imessagebus) with [`BrokerMessageBus`](group-04-events-outbox.md#brokermessagebus) (`:676`) and [`IEventBus`](group-04-events-outbox.md#ieventbus) with `BrokerEventBus` (`:682`), the deliberate exception to the `TryAdd` rule, because the in-process bus must not run alongside the broker. It also chooses the consumer-side inbox store from `settings.EnableInbox`: [`EfInboxStore`](group-04-events-outbox.md#efinboxstore) when on (`:686-689`), and when off the [`NoOpInboxStore`](group-04-events-outbox.md#noopinboxstore) **plus** an [`InboxDisabledWarningService`](group-04-events-outbox.md#inboxdisabledwarningservice) hosted service (`:690-698`). That second registration is the whole point of the branch: a disabled dedup store looks exactly like an enabled one until a duplicate side effect reaches a customer, so the posture costs one startup Warning to make visible (`:694-696`).
-  - **Transport wiring (`:741-876`)** is factored into three private static helpers outside the extension block: `ResolveBrokerConnectionString` (`:755-764`), `ConfigureBrokerTransport` (`:794-863`) and `BuildRedeliveryIntervals` (`:873-876`). The first two carry a justified `IDE0051` suppression (`:751-754`, `:790-793`) documenting a Roslyn false positive where SDK 10.0.201+ cannot see references crossing the extension-block boundary; the extraction itself exists to keep `AddBrokerMessaging`'s cyclomatic complexity below the analyzer threshold (`:771-772`). Connection-string precedence is explicit (`:741-750`): `MessageBus:ConnectionString`, then `ConnectionStrings:rabbitmq` (what Aspire injects), then `ConnectionStrings:messaging`; without that fallback MassTransit would default to `localhost:5672` and never reach the Aspire-allocated container port.
-  - **Two levels of retry, and one asymmetry between transports.** `[Rubric §29, Resilience & Business Continuity]`: every receive endpoint gets an exponential-backoff `UseMessageRetry` policy driven by [`MessageBusSettings`](#messagebussettings) (`:822-827` for RabbitMQ, `:849-854` for Azure Service Bus). Above it sits second-level `UseDelayedRedelivery`, which reschedules a message through the broker over `RedeliveryIntervalsSeconds` (one minute, ten minutes, one hour by default) so an outage measured in hours does not dead-letter the event; it is registered *before* `UseMessageRetry` so the retry filter stays innermost and every immediate attempt is exhausted first (`:775-780`). The asymmetry is deliberate and documented (`:781-788`): Azure Service Bus schedules messages natively, so redelivery is applied **unconditionally** there (`:839-847`), while RabbitMQ needs the `rabbitmq_delayed_message_exchange` plugin that the Aspire development container does not ship, so it is gated behind `EnableDelayedRedelivery`, default false (`:809-820`). `BuildRedeliveryIntervals` drops non-positive entries and the caller skips the filter entirely on an empty array (`:865-876`), because a zero interval would schedule an immediate redelivery and turn the second level into a hot loop.
-  - **`AddTypedServiceClient` (`:721-738`)** wires a typed `HttpClient` to Aspire service discovery (`http://{serviceName}`, `:731-732`), attaches [`JwtForwardingDelegatingHandler`](group-12-api-hosting-mapping.md#jwtforwardingdelegatinghandler) (`:728`, `:733`) so the inbound bearer token flows downstream, and adds the standard Polly resilience handler (`:736`); the `S5332` suppression at `:730` documents the deliberate cleartext in-cluster address, and the doc notes gRPC is preferred for service-to-service contracts (`:710-715`).
+  - **`AddInfrastructure` (`:49-208`)** is the entry point. It registers the model-facing singletons (`:51-52`) and the three EF save interceptors as singletons because they are stateless with per-save state in a `ConditionalWeakTable` keyed by context (`:54-62`), including [`TenantSaveChangesInterceptor`](group-07-persistence-ef-core.md#tenantsavechangesinterceptor), which is registered unconditionally so a host can never leave the write-side tenancy guard half-wired (`:59-62`).
+  - **Settings binding, and the one rule annotations cannot express.** [`ConnectionStringSettings`](#connectionstringsettings) binds through `AddOptions(...).ValidateDataAnnotations().ValidateOnStart()` (`:64-67`), then [`ConnectionStringSettingsValidator`](#connectionstringsettingsvalidator) is added through `TryAddEnumerable` (`:74-75`) with the reason inline (`:69-73`): "a host must reach some database" spans the `ConnectionStrings` section AND the `DataSources` one, so a SQLite-only host declaring its databases as named sources is legitimate while a host declaring none anywhere is not. The same `TryAddEnumerable` idiom recurs for every validator and startup check in the file, so two modules calling `AddInfrastructure` never run one validation twice.
+  - **The named-data-sources note (`:77-81`)** is load-bearing: [`DataSourcesSettings`](#datasourcessettings) is built directly from `configuration.GetSection(...).Get<Dictionary<string, DataSourceEntrySettings>>()` rather than through `AddOptions`, because a root-level dictionary section does not bind through the options pipeline. The resolver and the eager entity registry follow immediately (`:82-83`).
+  - **The physical-factory warning (`:90-96`)**: [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory) is scoped (one per request) and [`PhysicalDbContextFactory`](group-07-persistence-ef-core.md#physicaldbcontextfactory) is a singleton that must **never** be converted to EF context pooling, because each raw context carries per-source constructor state that pooling would silently reuse across databases. Beside them sit the stateless query executor (`:98`) and the unique-constraint classifier (`:100-103`), the latter `TryAdd`ed so a host on another engine can register its own first and keep it.
+  - **The Scrutor scan (`:111-115`)** discovers every [`IEntityTypeConfigurationBase<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#ientitytypeconfigurationbasetentity-tidentifiertype) in the Infrastructure assembly via `FromAssemblyOf<ClassReference>()` (`:112`) and registers each as its implemented interfaces, scoped to match the DbContext lifetime, closing the loop back to [`ClassReference`](#classreference). `AddCaching(configuration)` is called immediately after (`:117`).
+  - **The auth block (`:131-158`)** binds [`LoginProtectionSettings`](group-08-auth.md#loginprotectionsettings), [`PasswordResetSettings`](group-08-auth.md#passwordresetsettings) and [`RefreshSessionSettings`](group-08-auth.md#refreshsessionsettings) with their scoped services, and gates one hosted service: [`RefreshSessionCleanupService`](group-07-persistence-ef-core.md#refreshsessioncleanupservice) is registered only when `RefreshSessions:Enabled` is true (`:154-158`), on the same flag that maps the table. The comment names the failure it avoids (`:151-153`): an unconditional registration would start an hourly sweep in every service of a modular host, all but one of which has no table to sweep.
+  - **Startup validation of the upcaster graph (`:171-176`)**: [`EventUpcasterStartupValidator`](group-07-persistence-ef-core.md#eventupcasterstartupvalidator) is an `IHostedService` added through `TryAddEnumerable`, so a duplicate source, a self-map or a cycle fails the host at start rather than dead-lettering the first retired-contract message ([ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html)).
+  - **The outbox is a transport decision (`:178-198`).** [`OutboxSignal`](group-04-events-outbox.md#outboxsignal) is always registered (`:178`). Then the message-bus section is read eagerly (`:186-187`), passed to the private `EnsureOutboxAvailableForProvider` guard (`:188`), and [`MessageBusSettings`](#messagebussettings)`.IsOutboxEnabled` decides between the two hosted outbox services ([`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) plus [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice), `:190-194`) and a single [`OutboxDisabledNoticeService`](group-04-events-outbox.md#outboxdisablednoticeservice) (`:197`). The comment states the trade in full (`:180-185`): a broker deployment cannot deliver without the outbox, while a single-process host would pay two hosted services, a table and a poll loop for a hop it never takes, and the `OutboxMessages` table stays mapped either way so flipping the flag is never a migration ([ADR-100](https://ivanball.github.io/docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html)). The operator surface [`OutboxAdministration`](group-04-events-outbox.md#outboxadministration) is scoped, because it creates one child scope per data source it visits (`:200-203`). The method ends by calling `AddServices()` (`:205`).
+  - **`AddCaching` (`:215-290`)** does two probes in one method, and its `IConfiguration` parameter is optional. With configuration it binds the key-prefix options plus [`CacheSettings`](#cachesettings) and the Application layer's [`QueryCachePipelineSettings`](#querycachepipelinesettings) (`:228-241`); without it, both are registered bare so `IOptions<T>` still resolves to framework defaults instead of failing a host that called the parameterless overload (`:242-246`, with the reasoning at `:219-227`). The cache: if an `IDistributedCache` is registered and is not the no-op `MemoryDistributedCache` (`:251`), it builds [`DistributedCacheService`](group-09-caching.md#distributedcacheservice) over it plus any `IConnectionMultiplexer`, the optional [`CacheKeyNamespace`](group-09-caching.md#cachekeynamespace) and the TTL settings (`:253-262`); otherwise [`MemoryCacheService`](group-09-caching.md#memorycacheservice) (`:266`), where the keyspace is private to the process so no prefix is needed. The lock: [`RedisDistributedLock`](#redisdistributedlock) when a multiplexer resolves (`:276-281`), [`InProcessDistributedLock`](#inprocessdistributedlock) otherwise (`:284-286`). The comment explains why the lock is registered next to the cache at all (`:269-272`): its one in-framework caller, the API idempotency filter, pairs the two, since the lock guards the execute-then-store window the cache entry closes.
+  - **`AddCommonHybridCache` (`:326-369`)** is the opt-in two-level cache ([ADR-077](https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html)). It calls `AddHybridCache` (`:328`), then configures `HybridCacheOptions` **through the options pipeline** rather than the `AddHybridCache` callback (`:334-348`), because the TTL policy now comes from the bound `Cache` section and the callback has no service provider to read it from (`:330-333`); the host's own hook runs last so it can override anything the framework set (`:347`). It then deliberately does `RemoveAll<ICacheService>()` before `AddSingleton` (`:350-366`) so the call wins whether it runs before or after `AddInfrastructure`. The remarks are honest about the cost of that choice (`:314-319`): `RemoveAll` does not distinguish the framework's registration from a host's own custom `ICacheService`, so calling this is a statement that the two-level cache IS the cache.
+  - **`AddScheduledJobs` (`:391-405`) and `AddScheduledJob<TJob>` (`:426-432`)** wire the recurring-job feature ([ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html)). The first binds [`SchedulerSettings`](#schedulersettings) with validation (`:393-396`) and registers [`ScheduledJobRunner`](#scheduledjobrunner) via `TryAddEnumerable` rather than `AddHostedService` (`:398-402`), so a host or two modules calling it twice cannot run two runners racing for the same rows. The second registers one job scoped, both as the concrete type and into the accumulating `IEnumerable<IScheduledJob>` (`:429-430`); the doc spells out that the job is scoped because the runner resolves it in a fresh scope per execution and it must hold no state between runs (`:419-424`).
+  - **`AddAuditTrail` (`:462-481`)** binds [`AuditTrailSettings`](#audittrailsettings) (`:464-467`), registers the trail interceptor as a singleton for the same statelessness reason as the other three (`:469-471`), the scoped reader (`:473`), and, notably, `AddScheduledJob<AuditTrailCleanupJob>()` (`:478`). Registering the retention job here rather than in `AddScheduledJobs` keeps the two features independent, and the remarks state the operational consequence plainly (`:450-456`): without the scheduler the trail still records every change and nothing is ever purged, so `AuditTrail:RetentionDays` is inert.
+  - **`AddMultiTenancy` (`:511-523`)** binds [`TenancySettings`](#tenancysettings) and adds [`TenancySettingsValidator`](#tenancysettingsvalidator) through `TryAddEnumerable` (`:518-520`). What it switches on is *resolution*, not isolation: the filter, the interceptor and `ITenantContext` are always present and inert until a tenant resolves (`:489-496`), and a `Tenancy:Tenants:{id}:DataSources:{sourceName}` override naming a source that does not exist fails startup rather than silently falling back to the shared database (`:502-509`).
+  - **`AddServices` (`:529-574`)** registers the small services and encodes a subtle lifetime lesson: [`TokenService`](group-08-auth.md#tokenservice) is a **singleton** (`:548`) with a six-line comment explaining why (`:542-547`): a scoped lifetime disposed the RSA handle at end-of-request while IdentityModel's static `CryptoProviderCache` still held the cached signature provider wrapping it, throwing `ObjectDisposedException` on the next RS256 sign. `[Rubric §11, Security]` (correct signing-key lifecycle). It also sets the default [`IEventBus`](group-04-events-outbox.md#ieventbus) to [`InProcessEventBus`](group-04-events-outbox.md#inprocesseventbus) (`:550`) and the default [`IMessageBus`](group-04-events-outbox.md#imessagebus) to [`InProcessMessageBus`](group-04-events-outbox.md#inprocessmessagebus) (`:556`), registers [`ITenantContext`](group-05-cqrs-pipeline.md#itenantcontext) unconditionally with the reasoning inline (`:535-539`), and wires the inert no-op defaults for push (`:560-561`), native push ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html), `:563-566`) and file storage ([ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html), `:568-571`) so hosts can call the opt-in methods unconditionally. The image processor beside the storage default is the exception: it is dependency-free, so it is always the real one (`:571`).
+  - **The opt-in channels.** `AddPushNotifications` (`:615-636`) binds the settings (`:617-620`), adds SignalR (`:622`), adds the Redis backplane only when a `redis` connection string exists (`:624-628`), and replaces the null senders (`:631-632`). `AddNativePushNotifications` (`:648-668`) and `AddAzureBlobFileStorage` (`:680-708`) both re-read their section eagerly with `.Get<T>()` (`:653`, `:685`) because the decision whether to register at all has to be made at composition time, and both return early on an incomplete section (`:654-659`, `:686-696`), which is what makes an unconfigured environment a no-op instead of a startup crash. The absolute-URI check at `:691-692` is worth copying: an empty-string `ServiceUri` binds to a *relative* `Uri`, so only `{ IsAbsoluteUri: true }` counts.
+  - **`AddBrokerMessaging` (`:732-799`)** is the extraction pivot. It reads [`MessageBusSettings`](#messagebussettings), falling back to `new MessageBusSettings()` when the section is absent (`:738-739`); on `InProcess` it returns immediately (`:741-744`), leaving the in-process bus in place; otherwise it re-runs the outbox guard (`:749`, with the comment at `:746-748`: a service host that wires the broker without the full infrastructure registration must still fail loudly), resolves the connection string (`:751`), calls `AddMassTransit` (`:753-767`) and then **`Replace`s** the scoped [`IMessageBus`](group-04-events-outbox.md#imessagebus) with [`BrokerMessageBus`](group-04-events-outbox.md#brokermessagebus) (`:771`) and [`IEventBus`](group-04-events-outbox.md#ieventbus) with [`BrokerEventBus`](group-04-events-outbox.md#brokereventbus) (`:777`), the deliberate exception to the `TryAdd` rule, because the in-process bus must not run alongside the broker. Inside the MassTransit callback, a configured `EndpointPrefix` installs a `KebabCaseEndpointNameFormatter` carrying that prefix with `includeNamespace: false` (`:755-763`), because every service on a shared broker would otherwise derive the same queue name from the same consumer type and collide.
+  - **The inbox branch (`:784-796`)** chooses the consumer-side dedup store from `settings.IsInboxEnabled`, the resolved posture rather than the raw flag (unset means ON for a broker, `Settings/MessageBusSettings.cs:125`): [`EfInboxStore`](group-04-events-outbox.md#efinboxstore) scoped when on (`:786`), and when off the singleton [`NoOpInboxStore`](group-04-events-outbox.md#noopinboxstore) **plus** an [`InboxDisabledWarningService`](group-04-events-outbox.md#inboxdisabledwarningservice) hosted service (`:790-795`). That second registration is the whole point of the branch: a disabled dedup store looks exactly like an enabled one until a duplicate side effect reaches a customer, so the posture costs one startup Warning to make visible (`:792-794`).
+  - **The four private helpers (`:839-1013`)** sit outside the extension block. `EnsureOutboxAvailableForProvider` (`:857-864`) throws when a broker transport is paired with an explicitly disabled outbox, and the message says why in operational terms (`:861-862`): the outbox is the only publish path a broker deployment has, so the alternative is every cross-service event vanishing while the service looks healthy. `ResolveBrokerConnectionString` (`:880-889`) applies an explicit precedence (`:866-875`): `MessageBus:ConnectionString`, then `ConnectionStrings:rabbitmq` (what Aspire injects), then `ConnectionStrings:messaging`; without that fallback MassTransit would default to `localhost:5672` and never reach the Aspire-allocated container port. `ConfigureBrokerTransport` (`:919-1000`) does the per-transport wiring. `BuildRedeliveryIntervals` (`:1010-1013`) maps the configured seconds to `TimeSpan`s, dropping non-positive entries because a zero interval would schedule an immediate redelivery and turn the second retry level into a hot loop (`:1002-1009`). The first three carry a justified `IDE0051` suppression (`:853-856`, `:876-879`, `:915-918`) documenting a Roslyn false positive: the analyzer in SDK 10.0.201+ does not see references crossing the extension-block boundary.
+  - **Two levels of retry, and one asymmetry between transports.** `[Rubric §29, Resilience & Business Continuity]`: every receive endpoint gets an exponential-backoff `UseMessageRetry` policy driven by [`MessageBusSettings`](#messagebussettings) (`:947-951` for RabbitMQ, `:986-990` for Azure Service Bus). Above it sits second-level `UseDelayedRedelivery`, which reschedules a message through the broker over `RedeliveryIntervalsSeconds` (one minute, ten minutes, one hour by default) so an outage measured in hours does not dead-letter the event; it is registered *before* `UseMessageRetry` so the retry filter stays innermost and every immediate attempt is exhausted first (`:899-905`). The asymmetry is deliberate and documented (`:906-913`): Azure Service Bus schedules messages natively, so redelivery is applied **unconditionally** there (`:976-984`), while RabbitMQ needs the `rabbitmq_delayed_message_exchange` plugin that the Aspire development container does not ship, so it is gated behind `EnableDelayedRedelivery`, default false (`:934-945`).
+  - **The emulator detour (`:959-974`).** On the Azure Service Bus branch, the host call is not unconditional: [`ServiceBusEmulatorSupport`](#servicebusemulatorsupport)`.IsEmulatorConnectionString` decides between `ConfigureEmulatorHost(cfg, connectionString, settings.EmulatorAdminEndpoint)` (`:965-969`) and the production `cfg.Host(connectionString)` (`:972`). The comment states the property that makes this safe (`:961-964`): the emulator token no real namespace emits is the only way in, so the production path is reached byte for byte as before ([ADR-066](https://ivanball.github.io/docs/adr/066-broker-transport-selection.html)).
+  - **`AddTypedServiceClient` (`:819-836`)** wires a typed `HttpClient` to Aspire service discovery (`http://{serviceName}`, `:829-830`), attaches [`JwtForwardingDelegatingHandler`](group-12-api-hosting-mapping.md#jwtforwardingdelegatinghandler) (`:826`, `:831`) so the inbound bearer token flows downstream, and adds the standard Polly resilience handler (`:834`); the `S5332` suppression at `:828` documents the deliberate cleartext in-cluster address, and the doc notes gRPC is preferred for service-to-service contracts (`:808-812`).
 
-- **Why it's built this way**: the `extension(IServiceCollection)` syntax keeps every Infrastructure registration in one file without a proliferation of static helper classes, and pushing all concrete choices into one composition root at the layer edge is what keeps Application and Domain free of framework references ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) for the database-per-service wiring, [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) for the broker/extraction path). See the DI-sequence note in `MMCA.Common/CLAUDE.md`: hosts call `AddApplicationDecorators()` last so Scrutor can decorate handlers already registered, but the relative position of `AddInfrastructure` is not otherwise ordering-sensitive, and `AddCommonHybridCache` is explicitly documented as order-independent in both directions (`:228-235`).
+- **Why it's built this way**: the `extension(IServiceCollection)` syntax keeps every Infrastructure registration in one file without a proliferation of static helper classes ([ADR-106](https://ivanball.github.io/docs/adr/106-extension-members-as-public-di-surface.html)), and pushing all concrete choices into one composition root at the layer edge is what keeps Application and Domain free of framework references ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) for the database-per-service wiring, [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) for the broker/extraction path). See the DI-sequence note in `MMCA.Common/CLAUDE.md`: hosts call `AddApplicationDecorators()` last so Scrutor can decorate handlers already registered, but the relative position of `AddInfrastructure` is not otherwise ordering-sensitive, and `AddCommonHybridCache` is explicitly documented as order-independent in both directions (`:306-313`).
 
 - **Where it's used**: called from each service host's `Program.cs` (the reference apps and the extracted `MMCA.ADC.*` service hosts) after `AddApplication()`; the optional methods (`AddScheduledJobs`, `AddAuditTrail`, `AddMultiTenancy`, `AddCommonHybridCache`, `AddBrokerMessaging`, `AddPushNotifications`, `AddNativePushNotifications`, `AddAzureBlobFileStorage`) are added by the specific hosts that need those capabilities. `AddScheduledJobsTests` (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Scheduling/AddScheduledJobsTests.cs:16`) pins the double-registration behavior of the scheduler pair.
 
 - **Caveats / not-in-source**: the exact set of consuming `Program.cs` files is in the downstream apps (MMCA.ADC / MMCA.Store / MMCA.Helpdesk), not in this repository, so the precise call sites are Not determinable from source here.
 
+### ConnectionStringSettings
+
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ConnectionStringSettings.cs:12` · Level 0 · class (sealed)
+
+- **What it is**: the class bound from the top-level `ConnectionStrings` section, one connection string per supported engine plus the Cosmos database name and the SQL Server migrations assembly. It describes the `Default` physical data source, the one every unmapped logical name collapses onto.
+
+- **Depends on**: nothing first-party and nothing beyond `string` from the BCL, which is what puts it at Level 0. It is read by [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) and cross-checked by [ConnectionStringSettingsValidator](#connectionstringsettingsvalidator).
+
+- **Concept introduced, fail-fast configuration where the rule spans two sections.** `[Rubric §15, Best Practices & Code Quality]` assesses whether misconfiguration is caught early. `AddOptions<T>().Bind(...).ValidateDataAnnotations().ValidateOnStart()` (`DependencyInjection.cs:64-67`) is the pattern every validated settings class in this namespace uses, and [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html) makes it the required form: annotations run during host startup rather than lazily on first resolution. `ValidateOnStart()` is the load-bearing call.
+
+  What this type teaches on top of that is the limit of the annotation approach. No property here is `[Required]`, and the class doc says why (`ConnectionStringSettings.cs:5-10`): SQL Server is the default engine, but a host may run entirely on SQLite or Cosmos and may declare its databases under `DataSources` instead of this section. A `[Required]` attribute can only see one property on one class, so the real invariant ("the host can reach SOME database") is expressed as an `IValidateOptions<T>` implementation registered alongside the binding, [ConnectionStringSettingsValidator](#connectionstringsettingsvalidator) (`DependencyInjection.cs:74-75`). `[Rubric §8, Data Architecture]`: the rule spans both configuration shapes precisely because the physical topology is a deployment decision, not a compile-time one.
+
+- **Walkthrough**: one static field and five `{ get; init; }` strings.
+  - `SectionName = "ConnectionStrings"` (`ConnectionStringSettings.cs:15`), reusing ASP.NET Core's own conventional section so `GetConnectionString(...)` and this class read the same data.
+  - `CosmosConnectionString` (`:18`), empty by default.
+  - `CosmosDatabaseName` (`:21`), the one property with a non-empty default, `"AtlDevCon"`.
+  - `SqliteConnectionString` (`:24`), documented as typically a file path.
+  - `SQLServerConnectionString` (`:27`), the production engine's connection string.
+  - `SQLServerMigrationsAssembly` (`:33`), empty by default, which makes EF fall back to the DbContext assembly (`:29-32`).
+  - The registered validator is the interesting half. `ConnectionStringSettingsValidator.Validate` succeeds when either the top-level section names a database on any engine (`ConnectionStringSettingsValidator.cs:56-59`) or any named `DataSources` entry does (`:66-71`), and otherwise fails with a message that lists both shapes because which one is missing depends on the host (`:38-43`, `:50-52`). Its remarks record the change of rule directly: this replaced a `[Required]` on `SQLServerConnectionString` that failed a legitimate SQLite-only host at startup (`ConnectionStringSettingsValidator.cs:10-24`).
+
+- **Why it's built this way**: `init`-only properties make the bound settings immutable after startup, which [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) relies on, since it classifies every physical source once in its constructor (`DataSourceResolver.cs:54-72`). Keeping the "some database" check at boot rather than at first query is what stops a host from reporting healthy while unable to serve a request (`ConnectionStringSettingsValidator.cs:19-24`).
+
+- **Where it's used**: bound and validated in `AddInfrastructure` (`DependencyInjection.cs:64-75`); consumed by [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) through `IOptions<ConnectionStringSettings>` (`DataSourceResolver.cs:55`, seed construction at `:211-212`, Cosmos database fallback at `:236-237`).
+
+- **Caveats**: the `"AtlDevCon"` Cosmos default (`ConnectionStringSettings.cs:21`) is an application-specific name (the ADC conference database) baked into a framework package; every other default in this namespace is neutral.
+
+---
+
 ### DataSourceEntrySettings
 
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/DataSourceEntrySettings.cs:19` · Level 0 · class (sealed)
 
-- **What it is**: the shape of ONE named entry under the `DataSources` configuration section, the per-logical-source counterpart to the top-level `ConnectionStrings` block. It carries a connection string per engine plus two per-source overrides (Cosmos database name, SQL Server migrations assembly).
+- **What it is**: the shape of ONE named entry under the `DataSources` configuration section, the per-logical-source counterpart to the top-level `ConnectionStrings` block. It carries a connection string per engine plus three per-source overrides (Cosmos database name and a migrations assembly for each relational engine).
 
 - **Depends on**: nothing first-party and nothing beyond `string` from the BCL, which is why it sits at Level 0. It is aggregated by [DataSourcesSettings](#datasourcessettings) and read by [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver).
 
-- **Concept introduced, configuration as the physical-topology dial.** `[Rubric §8, Data Architecture]` assesses how the logical model maps onto physical stores; `[Rubric §7, Microservices Readiness]` assesses whether a module can be lifted out with its own database. The declarative half of that story is [UseDatabaseAttribute](#usedatabaseattribute), which names a *logical* source on an entity configuration. This class is the other half: it says what that logical name physically means in a given deployment. Nothing in the code decides the topology; the same compiled assemblies run as a one-database monolith or as N separate databases depending on how many entries exist here. `[Rubric §16, Maintainability]`: because every property defaults to `string.Empty` (`DataSourceEntrySettings.cs:22-37`), a partially filled entry is legal and each empty value simply falls back to the top-level `ConnectionStrings` value, so a host adds a database by adding one JSON object and nothing else.
+- **Concept introduced, configuration as the physical-topology dial.** `[Rubric §8, Data Architecture]` assesses how the logical model maps onto physical stores; `[Rubric §7, Microservices Readiness]` assesses whether a module can be lifted out with its own database. The declarative half of that story is [UseDatabaseAttribute](#usedatabaseattribute), which names a *logical* source on an entity configuration. This class is the other half: it says what that logical name physically means in a given deployment. Nothing in the code decides the topology; the same compiled assemblies run as a one-database monolith or as N separate databases depending on how many entries exist here. `[Rubric §16, Maintainability]`: because every property defaults to `string.Empty` (`DataSourceEntrySettings.cs:22-52`), a partially filled entry is legal and each empty value falls back to the corresponding top-level value, so a host adds a database by adding one JSON object and nothing else.
 
-- **Walkthrough**: five `{ get; init; }` properties, all defaulting to `string.Empty`.
-  - `CosmosConnectionString` (`DataSourceEntrySettings.cs:22`) and `CosmosDatabaseName` (`DataSourceEntrySettings.cs:25`), the Cosmos pair; the database name falls back to the top-level `CosmosDatabaseName` when empty ([DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) applies that fallback at `DataSourceResolver.cs:114-116` and again at `:196-198`).
-  - `SqliteConnectionString` (`DataSourceEntrySettings.cs:28`), the SQLite path ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html) polyglot persistence).
-  - `SQLServerConnectionString` (`DataSourceEntrySettings.cs:31`), the production engine's connection string.
-  - `SQLServerMigrationsAssembly` (`DataSourceEntrySettings.cs:37`), the EF Core migrations assembly for THIS source. Leaving it empty is not free: the resolver falls back to the top-level value (`DataSourceResolver.cs:189-191`) and logs a warning saying that applying another database's migrations to a separate database is almost always a mistake (`DataSourceResolver.cs:278`).
+- **Walkthrough**: six `{ get; init; }` properties, all defaulting to `string.Empty`.
+  - `CosmosConnectionString` (`DataSourceEntrySettings.cs:22`) and `CosmosDatabaseName` (`:25`), the Cosmos pair; the database name falls back to the top-level `CosmosDatabaseName` when empty ([DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) applies that fallback at `DataSourceResolver.cs:236-237` and again at `:263-265`).
+  - `SqliteConnectionString` (`:28`), the SQLite path ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html) polyglot persistence).
+  - `SqliteMigrationsAssembly` (`:43`), and its doc is worth reading in full (`:30-42`): there is deliberately NO top-level fallback for it. The top-level `ConnectionStrings` section carries only a SQL Server migrations assembly, so a SQLite host declares its own here through an entry that collapses onto `Default`. Without that asymmetry a mixed-engine host would silently hand its SQL Server migrations assembly to a SQLite database.
+  - `SQLServerConnectionString` (`:46`), the production engine's connection string.
+  - `SQLServerMigrationsAssembly` (`:52`), the EF Core migrations assembly for THIS source, documented as falling back to the top-level value when empty (`:48-51`).
+  - The resolver reads the pair through one engine-keyed switch, `GetMigrationsAssembly` (`DataSourceResolver.cs:406-410`), stamps the SQLite value onto the [PhysicalDataSource](group-07-persistence-ef-core.md#physicaldatasource) only for SQLite sources (`DataSourceResolver.cs:399`), and names the offending setting per engine when two logical names collapse onto one database with conflicting values (`DataSourceResolver.cs:431`).
   - The XML doc carries a worked `appsettings.json` example for a `Conference` source (`DataSourceEntrySettings.cs:9-18`), which is the fastest way to see the intended shape.
 
 - **Why it's built this way**: `init`-only properties make a bound entry immutable after startup, and the "empty means inherit" rule is what keeps the single-database default intact: an app that configures no `DataSources` section behaves exactly as it did before the section existed ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
 
-- **Where it's used**: bound as the value type of the dictionary that [DependencyInjection](#dependencyinjection) reads with `configuration.GetSection(DataSourcesSettings.SectionName).Get<Dictionary<string, DataSourceEntrySettings>>()` (`DependencyInjection.cs:75-77`); consumed by [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) when it classifies logical names into physical sources (`DataSourceResolver.cs:97-104`).
+- **Where it's used**: bound as the value type of the dictionary that [DependencyInjection](#dependencyinjection) reads with `configuration.GetSection(DataSourcesSettings.SectionName).Get<Dictionary<string, DataSourceEntrySettings>>()` (`DependencyInjection.cs:79-81`); consumed by [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) when it classifies logical names into physical sources (`DataSourceResolver.cs:215-232`, `:253-265`) and by [ConnectionStringSettingsValidator](#connectionstringsettingsvalidator) when it looks for any configured database (`ConnectionStringSettingsValidator.cs:68-71`).
 
 ---
 
@@ -1317,69 +1516,19 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: `System.Uri` (BCL) only. Its consumers are the Azure SDK types (`BlobServiceClient`, `DefaultAzureCredential`) wired in [DependencyInjection](#dependencyinjection).
 
-- **Concept introduced, the incomplete-section no-op.** `[Rubric §11, Security]` assesses how credentials are handled: the production path sets `ServiceUri` and authenticates with `DefaultAzureCredential`, so no storage key exists to leak, while `ConnectionString` is documented as the local-development alternative (`FileStorageSettings.cs:15-19`). `[Rubric §33, Developer Experience]`: `AddAzureBlobFileStorage` is written so that an incomplete section is a no-op rather than a startup crash, which lets a host call it unconditionally and lets an environment opt in with configuration alone. `[Rubric §15, Best Practices]`: note the deliberate absolute-URI check at `DependencyInjection.cs:606-607`, an empty-string `ServiceUri` binds to a *relative* `Uri`, so a truthiness test would have accepted a useless value; only `{ IsAbsoluteUri: true }` counts, and the comment in the code says exactly that.
+- **Concept introduced, the incomplete-section no-op.** `[Rubric §11, Security]` assesses how credentials are handled: the production path sets `ServiceUri` and authenticates with `DefaultAzureCredential`, so no storage key exists to leak, while `ConnectionString` is documented as the local-development alternative (`FileStorageSettings.cs:15-19`). `[Rubric §33, Developer Experience]`: `AddAzureBlobFileStorage` is written so that an incomplete section is a no-op rather than a startup crash (`DependencyInjection.cs:675-676`), which lets a host call it unconditionally and lets an environment opt in with configuration alone. `[Rubric §15, Best Practices]`: note the deliberate absolute-URI check at `DependencyInjection.cs:691-692`, an empty-string `ServiceUri` binds to a *relative* `Uri`, so a truthiness test would have accepted a useless value; only `{ IsAbsoluteUri: true }` counts, and the comment in the code says exactly that.
 
 - **Walkthrough**:
   - `SectionName = "FileStorage"` (`FileStorageSettings.cs:13`), the same static section-name convention every settings class in this namespace follows.
-  - `ServiceUri` (`FileStorageSettings.cs:16`), nullable `Uri`, the blob service endpoint.
-  - `ConnectionString` (`FileStorageSettings.cs:19`), nullable, the Azurite alternative.
-  - `ContainerName` (`FileStorageSettings.cs:22`), documented as required; the registration bails out when it is blank (`DependencyInjection.cs:601-604`) and again when neither an absolute `ServiceUri` nor a connection string is present (`DependencyInjection.cs:608-611`).
+  - `ServiceUri` (`:16`), nullable `Uri`, the blob service endpoint.
+  - `ConnectionString` (`:19`), nullable, the Azurite alternative.
+  - `ContainerName` (`:22`), documented as required; the registration bails out when it is blank (`DependencyInjection.cs:686-689`) and again when neither an absolute `ServiceUri` nor a connection string is present (`:693-696`).
 
-- **Walkthrough of its one consumer**: `AddAzureBlobFileStorage` binds the options (`DependencyInjection.cs:597-598`), re-reads the section eagerly with `.Get<FileStorageSettings>()` (`DependencyInjection.cs:600`) because the decision to register at all has to be made at composition time, then registers a singleton `BlobContainerClient` built from either the URI plus `DefaultAzureCredential` or the connection string (`DependencyInjection.cs:613-619`) and swaps [IFileStorageService](group-07-persistence-ef-core.md#ifilestorageservice) to [AzureBlobFileStorageService](group-07-persistence-ef-core.md#azureblobfilestorageservice) (`DependencyInjection.cs:620`).
+- **Walkthrough of its one consumer**: `AddAzureBlobFileStorage` binds the options (`DependencyInjection.cs:682-683`), re-reads the section eagerly with `.Get<FileStorageSettings>()` (`:685`) because the decision to register at all has to be made at composition time, then registers a singleton `BlobContainerClient` built from either the URI plus `DefaultAzureCredential` or the connection string (`:698-704`) and swaps [IFileStorageService](group-07-persistence-ef-core.md#ifilestorageservice) to [AzureBlobFileStorageService](group-07-persistence-ef-core.md#azureblobfilestorageservice) (`:705`), replacing the [NullFileStorageService](group-07-persistence-ef-core.md#nullfilestorageservice) default.
 
-- **Why it's built this way**: [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) introduced managed file storage; shipping the pipeline inert and switching it on by configuration means an environment can be provisioned before its storage account exists, and the [NullFileStorageService](group-07-persistence-ef-core.md#nullfilestorageservice) default keeps the container resolvable in the meantime.
+- **Why it's built this way**: [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) chose a configuration-gated storage provider so that a host registers it once and each environment decides whether it is live. Binding the options even in the no-op path (`DependencyInjection.cs:682-683`) means `IOptions<FileStorageSettings>` always resolves, so nothing downstream has to null-check the section.
 
-- **Caveats**: unlike most sections here this one is bound WITHOUT `.ValidateDataAnnotations().ValidateOnStart()` (`DependencyInjection.cs:597-598`), deliberately, since "incomplete" is a supported state rather than a misconfiguration. That is the one sanctioned departure from the fail-fast binding contract ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)).
-
----
-
-### IConnectionStringSettings
-
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/IConnectionStringSettings.cs:6` · Level 0 · interface
-
-- **What it is**: the abstraction over the top-level `ConnectionStrings` section: one connection string per supported engine, the Cosmos database name, and the SQL Server migrations assembly. It describes the `Default` physical data source, the one every unmapped logical name collapses onto.
-
-- **Depends on**: nothing. Implemented by [ConnectionStringSettings](#connectionstringsettings).
-
-- **Concept introduced, settings interfaces alongside the options pattern.** ASP.NET Core's own idiom is to inject `IOptions<T>` of a concrete class. This codebase adds a thin interface per settings group and registers a singleton adapter that unwraps the options for it (`DependencyInjection.cs:71`). `[Rubric §1, SOLID]` (DIP + ISP): a consumer that needs connection strings depends on a five-member contract it can hand-implement in a test, not on `IOptions<ConnectionStringSettings>` plus a live configuration tree. `[Rubric §14, Testability]`: this is what lets [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) take `IConnectionStringSettings` directly in its constructor (`DataSourceResolver.cs:34`) and be unit tested with a stub. `[Rubric §3, Clean Architecture]`: the interface still lives in Infrastructure, not Application, because connection strings are an infrastructure concern; nothing above this layer ever sees it. [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html) records the general rule: expose a settings type through a read-only interface when it must be read outside the binding layer, so the options pipeline does not leak.
-
-- **Walkthrough**: five `{ get; init; }` members, all `string`: `CosmosConnectionString` (`IConnectionStringSettings.cs:9`), `CosmosDatabaseName` (`:12`), `SqliteConnectionString` (`:15`, documented as typically a file path), `SQLServerConnectionString` (`:18`), and `SQLServerMigrationsAssembly` (`:24`, documented to fall back to the DbContext assembly when empty). Note `init` accessors on an *interface*: any implementation must be settable at construction and frozen afterwards, which is exactly what configuration binding does.
-
-- **Why it's built this way**: one interface per section keeps consumers narrow, and the `init`-only shape encodes the fact that settings are startup state, not mutable state ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) depends on these values being stable for the process lifetime, since the resolver classifies sources once).
-
-- **Where it's used**: [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) is the primary consumer (`DataSourceResolver.cs:34`, `:77`, `:97`, `:143`, `:174`, `:262`); the DI adapter is registered at `DependencyInjection.cs:71`.
-
----
-
-### IPushNotificationSettings
-
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/IPushNotificationSettings.cs:6` · Level 0 · interface
-
-- **What it is**: the two-member contract for the `PushNotifications` section: whether the SignalR push pipeline is on, and the hub's endpoint path.
-
-- **Depends on**: nothing. Implemented by [PushNotificationSettings](#pushnotificationsettings).
-
-- **Concept**: the same settings-interface-over-options pattern taught under [IConnectionStringSettings](#iconnectionstringsettings). What is worth noticing here is what the interface deliberately does NOT carry: the concrete class adds a `ChannelKeyPattern` member that [NotificationHub](group-10-notifications.md#notificationhub) reads through `IOptions<PushNotificationSettings>` (`NotificationHub.cs:64`), not through this interface. `[Rubric §9, API & Contract Design]` assesses whether published contracts evolve compatibly; adding a member to a shipped public interface is a source-breaking change for every downstream implementer, so a new knob lands on the concrete class and its consumer takes the concrete options type instead.
-
-- **Walkthrough**: `Enabled` (`IPushNotificationSettings.cs:9`) and `HubPath` (`:12`), both `{ get; init; }`.
-
-- **Where it's used**: registered as a singleton adapter over the bound options inside `AddPushNotifications` (`DependencyInjection.cs:534-535`); the SignalR senders ([SignalRPushNotificationSender](group-10-notifications.md#signalrpushnotificationsender), [SignalRLiveChannelPublisher](group-10-notifications.md#signalrlivechannelpublisher)) are registered in the same call (`DependencyInjection.cs:546-547`).
-
----
-
-### ISmtpSettings
-
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ISmtpSettings.cs:6` · Level 0 · interface
-
-- **What it is**: the contract for the `Smtp` section: host, port, credentials, TLS toggle, and the default sender/recipient addresses.
-
-- **Depends on**: nothing. Implemented by [SmtpSettings](#smtpsettings).
-
-- **Concept**: another instance of the settings-interface pattern from [IConnectionStringSettings](#iconnectionstringsettings). `[Rubric §14, Testability]` is the payoff: [SmtpEmailSender](group-10-notifications.md#smtpemailsender) takes `ISmtpSettings` in its primary constructor (`SmtpEmailSender.cs:12`) and copies each value into a readonly field at construction (`SmtpEmailSender.cs:14-20`), so a test hands it a plain object with no configuration system in play. `[Rubric §11, Security]`: `Password` is a plain `string` on the contract (`ISmtpSettings.cs:18`), so it is only ever as safe as the configuration provider that supplies it (user-secrets or Key Vault, not a committed `appsettings.json`).
-
-- **Walkthrough**: `Host` (`ISmtpSettings.cs:9`), `Port` documented as 1-65535 (`:12`), `Username` (`:15`), `Password` (`:18`), `EnableSsl` (`:21`), `From` (`:24`), and `To`, documented as the default recipient used by the no-argument `SendAsync` overload (`:27`).
-
-- **Where it's used**: [SmtpEmailSender](group-10-notifications.md#smtpemailsender), the [IEmailSender](group-10-notifications.md#iemailsender) implementation; the DI adapter is registered at `DependencyInjection.cs:85`.
+- **Where it's used**: `AddAzureBlobFileStorage` (`DependencyInjection.cs:680-708`) only.
 
 ---
 
@@ -1389,42 +1538,47 @@ gRPC clients, which is precisely the reversibility
 
 - **What it is**: the `Jwks` section that controls whether an Identity service publishes a JSON Web Key Set at `/.well-known/jwks.json`, and where its RSA public key comes from.
 
-- **Depends on**: `System.ComponentModel.DataAnnotations` (`[StringLength]`) only. Consumed by [RsaJwksProvider](group-08-auth.md#rsajwksprovider) through `IOptions<JwksSettings>`.
+- **Depends on**: `System.ComponentModel.DataAnnotations` (`[StringLength]`) only. Consumed by [RsaJwksProvider](group-08-auth.md#rsajwksprovider) and [TokenService](group-08-auth.md#tokenservice) through `IOptions<JwksSettings>`.
 
-- **Concept introduced, key distribution as configuration.** `[Rubric §11, Security]` assesses how trust is established between services. In the monolith, issuer and validator share one process and one symmetric secret. Once a module is extracted, the validator must obtain the issuer's *public* key without sharing anything secret, which is what a JWKS document is for ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html), [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). `[Rubric §7, Microservices Readiness]`: the framework ships the endpoint always and the key set empty, so nothing about a monolith deployment changes until a host flips `Enabled`. The `kid` contract is the subtle part: `KeyId` is published as the JWK `kid` and MUST match the `kid` header on tokens the issuer signs (`JwksSettings.cs:13-14`), otherwise a validator holding a correct key set still cannot pick the right key.
+- **Concept introduced, key distribution as configuration.** `[Rubric §11, Security]` assesses how trust is established between services. In a single-process monolith the issuer and the validator can share one symmetric secret. Once a module is extracted, the validator must obtain the issuer's *public* key without sharing anything secret, which is what a JWKS document is for ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html), [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). `[Rubric §7, Microservices Readiness]`: the framework ships the endpoint always and the key set empty, so nothing about a deployment changes until a host flips `Enabled`. The `kid` contract is the subtle part: `KeyId` is published as the JWK `kid` and must match the `kid` header on tokens the issuer signs (`JwksSettings.cs:12-14`), otherwise a validator holding a correct key set still cannot pick the right key. [TokenService](group-08-auth.md#tokenservice) closes that loop by taking these same options and stamping `KeyId` onto every RS256 token it signs (`TokenService.cs:49-53`, `:58`, `:68`).
 
 - **Walkthrough**:
   - `SectionName = "Jwks"` (`JwksSettings.cs:20`).
-  - `Enabled` (`JwksSettings.cs:26`), defaulting to `false` with the rationale spelled out inline: existing HMAC-only deployments must not start advertising an RSA key set by accident.
-  - `KeyId` (`JwksSettings.cs:34`), `[StringLength(64)]` (`:33`), defaulting to `"default"`.
-  - `RsaPublicKeyPem` (`JwksSettings.cs:41`) and `RsaPublicKeyPath` (`:47`), documented as mutually exclusive; the path form exists for keys mounted as a secret rather than inlined in configuration.
-  - The consuming logic, worth reading alongside: `RsaJwksProvider.BuildKeySet` returns an EMPTY `JsonWebKeySet` when `Enabled` is false (`RsaJwksProvider.cs:30-32`) and again when neither PEM source resolves (`:35-38`); otherwise it imports the PEM, stamps `KeyId` onto the `RsaSecurityKey` (`RsaJwksProvider.cs:44-47`) and tags the JWK `use=sig`, `alg=RS256` (`:50-51`). `ResolvePem` prefers the inline value over the file (`RsaJwksProvider.cs:58-70`), and the key set itself is built once behind a `Lazy<JsonWebKeySet>` (`RsaJwksProvider.cs:22`).
+  - `Enabled` (`:26`), defaulting to `false` with the rationale spelled out inline: existing HMAC-only deployments must not start advertising an RSA key set by accident.
+  - `KeyId` (`:34`), `[StringLength(64)]` (`:33`), defaulting to `"default"`.
+  - `RsaPublicKeyPem` (`:41`) and `RsaPublicKeyPath` (`:47`), documented as mutually exclusive; the path form exists for keys mounted as a secret rather than inlined in configuration.
+  - The consuming logic, worth reading alongside: `RsaJwksProvider.BuildKeySet` returns an EMPTY `JsonWebKeySet` when `Enabled` is false (`RsaJwksProvider.cs:30-33`) and again when neither PEM source resolves (`:36-39`); otherwise it imports the PEM, stamps `KeyId` onto the `RsaSecurityKey` (`:41-47`) and tags the JWK `use=sig`, `alg=RS256` (`:50-51`). `ResolvePem` prefers the inline value over the file (`:58-74`), and the key set is built once behind a `Lazy<JsonWebKeySet>` in `PublicationOnly` mode (`RsaJwksProvider.cs:22-23`) so that one transient IO failure reading the PEM is retried rather than cached forever (`:17-21`).
 
-- **Why it's built this way**: default-off plus an empty key set means the endpoint is safe to map unconditionally (`WebApplicationExtensions.cs:116-118` documents that Identity services are the ones that flip it on), and two key sources cover both "inline it in configuration" and "mount it as a secret" without a second code path in the provider.
+- **Why it's built this way**: default-off plus an empty key set means the endpoint is safe to map unconditionally, and two key sources cover both "inline it in configuration" and "mount it as a secret" without a second code path in the provider.
 
-- **Where it's used**: bound with `.ValidateDataAnnotations().ValidateOnStart()` at `DependencyInjection.cs:144-147`, immediately followed by the [IJwksProvider](group-08-auth.md#ijwksprovider) registration (`DependencyInjection.cs:148`).
+- **Where it's used**: bound with `.ValidateDataAnnotations().ValidateOnStart()` at `DependencyInjection.cs:165-168`, immediately followed by the [IJwksProvider](group-08-auth.md#ijwksprovider) registration (`:169`).
 
 ---
 
 ### JwtSigningAlgorithm
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSigningAlgorithm.cs:18` · Level 0 · enum
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSigningAlgorithm.cs:21` · Level 0 · enum
 
 - **What it is**: a two-value enum selecting how access tokens are signed and validated: symmetric HMAC or asymmetric RSA.
 
-- **Depends on**: nothing. Referenced by [IJwtSettings](#ijwtsettings), [JwtSettings](#jwtsettings), [TokenService](group-08-auth.md#tokenservice), and the API-layer authentication wiring.
+- **Depends on**: nothing. Referenced by [JwtSettings](#jwtsettings), [TokenService](group-08-auth.md#tokenservice), and the API-layer authentication wiring.
 
-- **Concept introduced, the monolith-to-microservice auth switch.** `[Rubric §11, Security]` assesses key management: HS256 requires every validator to hold the *signing* key, which is acceptable only while issuer and validators share a process. RS256 splits the pair, the issuer holds the private key and validators fetch the public key, which is the precondition for extracting a service ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)). `[Rubric §7, Microservices Readiness]`: making this a configuration value rather than a compile-time choice is what lets the same binaries run both topologies. The type's own XML doc states the operational consequence plainly: switching HS256 to RS256 invalidates all existing tokens, a hard cutover (`JwtSigningAlgorithm.cs:14-15`).
+- **Concept introduced, the deployment shape encoded as one configuration value.** `[Rubric §11, Security]` assesses key management: HS256 requires every validator to hold the *signing* key, which is acceptable only while issuer and validators share a process. RS256 splits the pair, the issuer holds the private key and peers validate against the JWKS endpoint, so no peer ever holds the signing key ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)). `[Rubric §7, Microservices Readiness]`: making this a configuration value rather than a compile-time choice is what lets the same binaries run both topologies, and the type's own doc says RS256 is also the right choice for a monolith that intends to extract later, because the token format does not change when it does (`JwtSigningAlgorithm.cs:8-12`). The operational consequence is stated just as plainly: switching a running deployment between the two invalidates every existing token, a hard cutover (`:17-18`).
 
-- **Walkthrough**: `HS256 = 0` (`JwtSigningAlgorithm.cs:21`), explicitly the default so that an unset configuration value binds to the backwards-compatible option; `RS256 = 1` (`:24`). The explicit ordinals matter because a bound enum from configuration falls back to `0`.
+- **Walkthrough**: `HS256 = 0` (`JwtSigningAlgorithm.cs:24`) and `RS256 = 1` (`:27`), both with explicit ordinals.
+  - The default is RS256, and where that default lives is worth being precise about. The enum's zero value is HS256, so a configuration binder that saw an *invalid* value would land there; but a host that simply omits `Jwt:SigningAlgorithm` never has the property set at all, and [JwtSettings](#jwtsettings)'s own initializer holds (`JwtSettings.cs:30`). The default is a property initializer, not the enum ordinal.
+  - [TokenService](group-08-auth.md#tokenservice) branches on the value once, in its constructor, and caches the resulting credentials (`TokenService.cs:65-75`), with the RSA and HMAC builders at `:196` and `:181`. Each builder throws a named `InvalidOperationException` when its key material is missing (`TokenService.cs:186`, `:202`).
+  - The API layer branches on the same value when configuring in-process JWT bearer validation: `BuildValidationParameters` takes the RSA path for RS256 (`WebApplicationBuilderExtensions.cs:628-641`) and, when the public key is absent, throws a message that points the reader at `AddForwardedJwtBearer` for services that fetch the key through JWKS at runtime instead (`:632-635`).
 
-- **Where it's used**: [TokenService](group-08-auth.md#tokenservice) branches on it in its constructor to build credentials (`TokenService.cs:53-61`, with the HMAC and RSA builders at `:166` and `:180-181`); the API layer branches on it when configuring JWT bearer validation (`WebApplicationBuilderExtensions.cs:436`), where selecting RS256 without an `RsaPublicKeyPem` throws a message pointing at `AddForwardedJwtBearer` instead (`WebApplicationBuilderExtensions.cs:438-441`).
+- **Why it's built this way**: both members stay because they encode deployment shapes rather than a compatibility level (`JwtSigningAlgorithm.cs:5-6`). A single-process monolith that will never be split skips RSA key management entirely; everything else gets the algorithm that survives extraction.
+
+- **Where it's used**: [JwtSettings.SigningAlgorithm](#jwtsettings) (`JwtSettings.cs:30`) and its conditional validation (`:72`, `:79`), [TokenService](group-08-auth.md#tokenservice), and `BuildValidationParameters` in the API startup extensions.
 
 ---
 
 ### MessageBusProvider
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:68` · Level 0 · enum
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:199` · Level 0 · enum
 
 - **What it is**: the transport selector for the cross-service message bus. It lives in the same file as [MessageBusSettings](#messagebussettings), immediately below it.
 
@@ -1432,11 +1586,14 @@ gRPC clients, which is precisely the reversibility
 
 - **Concept**: the transport-choice-at-the-edge invariant. `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §7, Microservices Readiness]` both hinge on application code never naming a broker: handlers publish through [IMessageBus](group-04-events-outbox.md#imessagebus), and only this enum plus the registration that reads it decide whether that lands in-process or on a wire. The three values are also a deployment ladder: monolith, dev microservices, production microservices.
 
-- **Walkthrough**: `InProcess = 0` (`MessageBusSettings.cs:73`), the modular-monolith default served by [InProcessMessageBus](group-04-events-outbox.md#inprocessmessagebus); `RabbitMq = 1` (`:78`), MassTransit on RabbitMQ for development and tests; `AzureServiceBus = 2` (`:83`), MassTransit on Azure Service Bus for production. `AddBrokerMessaging` returns without touching the container when the value is `InProcess` (`DependencyInjection.cs:656-658`), and the transport configuration switches on it to pick `UsingRabbitMq` (`DependencyInjection.cs:784-787`) or `UsingAzureServiceBus` (`:803-804`).
+- **Walkthrough**: `InProcess = 0` (`MessageBusSettings.cs:204`), the modular-monolith default served by [InProcessMessageBus](group-04-events-outbox.md#inprocessmessagebus); `RabbitMq = 1` (`:209`), MassTransit on RabbitMQ for development microservice deployments and tests; `AzureServiceBus = 2` (`:214`), MassTransit on Azure Service Bus for production.
+  - `AddBrokerMessaging` re-reads the section eagerly, substituting a default instance when it is absent (`DependencyInjection.cs:738-739`), and returns without touching the container when the value is `InProcess` (`:741-744`).
+  - The transport configuration then switches on the same value to pick `UsingRabbitMq` (`DependencyInjection.cs:924-927`) or `UsingAzureServiceBus` (`:956-957`), with `InProcess` as an explicit arm rather than a fall-through (`:995`).
+  - The enum also gates delivery policy, not just the client type: [MessageBusSettings](#messagebussettings)`.RedeliveryIntervalsSeconds` (`MessageBusSettings.cs:195`, defaulting to `[60, 600, 3600]`) is applied unconditionally on Azure Service Bus, which has native scheduled delivery, and only when `EnableDelayedRedelivery` is set on RabbitMQ, which needs the delayed-message-exchange plugin (`:188-193`).
 
-- **Why it's built this way**: a zero-valued `InProcess` means an absent `MessageBus` section binds to the monolith behavior, so adding the section is opt-in rather than mandatory ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html), [ADR-066](https://ivanball.github.io/docs/adr/066-broker-transport-selection.html)).
+- **Why it's built this way**: a zero-valued `InProcess` means an absent `MessageBus` section binds to the monolith behavior, so adding the section is opt-in rather than mandatory ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). Here the enum ordinal genuinely is the default path, alongside the property initializer at `MessageBusSettings.cs:17`.
 
-- **Where it's used**: [MessageBusSettings.Provider](#messagebussettings) (`MessageBusSettings.cs:17`), and the two `AddBrokerMessaging` branches cited above.
+- **Where it's used**: [MessageBusSettings.Provider](#messagebussettings) (`MessageBusSettings.cs:17`) and the `AddBrokerMessaging` branches cited above.
 
 ---
 
@@ -1448,13 +1605,15 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: nothing first-party; its values feed `Microsoft.Azure.NotificationHubs.NotificationHubClient`.
 
-- **Concept**: the same ship-inert, enable-by-configuration shape taught under [FileStorageSettings](#filestoragesettings), with a concrete operational reason attached. `[Rubric §17, DevOps]` assesses whether deployment and enablement can be sequenced independently: the XML doc records that a hub is provisioned with `Enabled` false until the FCM v1 service account and APNs auth key are uploaded to it (`NativePushSettings.cs:4-7`), so infrastructure lands before credentials do and neither step blocks a release. `[Rubric §29, Resilience]`: the disabled path leaves [NullNativePushSender](group-07-persistence-ef-core.md#nullnativepushsender) in place rather than failing startup, so a missing credential degrades the channel instead of the host.
+- **Concept**: the same ship-inert, enable-by-configuration shape taught under [FileStorageSettings](#filestoragesettings), with a concrete operational reason attached. `[Rubric §17, DevOps]` assesses whether deployment and enablement can be sequenced independently: the XML doc records that a hub is provisioned with `Enabled` false until the FCM v1 service account and APNs auth key are uploaded to it (`NativePushSettings.cs:3-8`), so infrastructure lands before credentials do and neither step blocks a release. `[Rubric §29, Resilience]`: the disabled path leaves the framework's default sender in place rather than failing startup, so a missing credential degrades the channel instead of the host.
 
-- **Walkthrough**: `SectionName = "NativePush"` (`NativePushSettings.cs:12`); `Enabled` (`:15`); nullable `ConnectionString`, documented as a Listen+Send+Manage rule (`:18`); nullable `HubName` (`:21`). `AddNativePushNotifications` binds the options (`DependencyInjection.cs:565-566`), then re-reads the section eagerly and returns early unless all three are present (`DependencyInjection.cs:568-574`); only then does it register the hub client (`:576-578`) and swap [INativePushSender](group-07-persistence-ef-core.md#inativepushsender) and [IPushDeviceRegistrar](group-07-persistence-ef-core.md#ipushdeviceregistrar) to their Azure implementations (`DependencyInjection.cs:579-580`).
+- **Walkthrough**: `SectionName = "NativePush"` (`NativePushSettings.cs:12`); `Enabled` (`:15`); nullable `ConnectionString`, documented as a Listen+Send+Manage rule (`:18`); nullable `HubName` (`:21`).
+  - `AddNativePushNotifications` binds the options (`DependencyInjection.cs:650-651`), then re-reads the section eagerly and returns early unless all three values are present, using a property pattern so an unbound section and a disabled one take the same exit (`:653-659`).
+  - Only then does it register the hub client from the connection string and hub name (`:661-663`) and swap [INativePushSender](group-07-persistence-ef-core.md#inativepushsender) and [IPushDeviceRegistrar](group-07-persistence-ef-core.md#ipushdeviceregistrar) to their Azure implementations (`:664-665`), among them [AzureNotificationHubNativePushSender](group-07-persistence-ef-core.md#azurenotificationhubnativepushsender).
 
 - **Why it's built this way**: [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) chose a configuration-gated channel precisely so hosts can register it unconditionally.
 
-- **Where it's used**: `AddNativePushNotifications` (`DependencyInjection.cs:563-583`) and, through it, [AzureNotificationHubNativePushSender](group-07-persistence-ef-core.md#azurenotificationhubnativepushsender).
+- **Where it's used**: `AddNativePushNotifications` (`DependencyInjection.cs:648-668`).
 
 ---
 
@@ -1466,13 +1625,13 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: `System.ComponentModel.DataAnnotations` (`[Range]`) only.
 
-- **Concept introduced, the defaults-preserve-history rule for new settings sections.** `[Rubric §16, Maintainability]` assesses whether change is additive; the class doc states the policy directly: every property defaults to the value the framework applied implicitly before the section existed, so the section is optional in `appsettings.json` (`PersistenceSettings.cs:6-8`). `[Rubric §12, Performance & Scalability]`: the 30-second default is the previous implicit ADO.NET behavior, and the doc names the case for raising it (reporting-style workloads whose queries legitimately run longer than half a minute, `PersistenceSettings.cs:16-19`). Making that value configurable rather than constant is the difference between "tune it in an environment" and "cut a release".
+- **Concept introduced, the defaults-preserve-history rule for new settings sections.** `[Rubric §16, Maintainability]` assesses whether change is additive; the class doc states the policy directly: every property defaults to the value the framework applied implicitly before the section existed, so the section is optional in `appsettings.json` (`PersistenceSettings.cs:5-9`). `[Rubric §12, Performance & Scalability]`: the 30-second default is the previous implicit ADO.NET behavior, and the doc names the case for raising it (reporting-style workloads whose queries legitimately run longer than half a minute, `:15-20`). Making that value configurable rather than constant is the difference between tuning an environment and cutting a release.
 
-- **Walkthrough**: `SectionName = "Persistence"` (`PersistenceSettings.cs:13`); `CommandTimeoutSeconds` with `[Range(1, 600)]` (`:21`) defaulting to `30` (`:22`). The consuming side is defensive in a way worth copying: [SQLServerDbContext](group-07-persistence-ef-core.md#sqlserverdbcontext) resolves the options with `GetService<IOptions<PersistenceSettings>>()?.Value ?? new PersistenceSettings()` (`SQLServerDbContext.cs:36-37`), so a context built outside the full DI graph (a design-time factory, a test) still gets the documented default rather than a null reference, and applies it via `sql.CommandTimeout(...)` (`SQLServerDbContext.cs:56`).
+- **Walkthrough**: `SectionName = "Persistence"` (`PersistenceSettings.cs:13`); `CommandTimeoutSeconds` with `[Range(1, 600)]` (`:21`) defaulting to `30` (`:22`). The consuming side is defensive in a way worth copying: [SQLServerDbContext](group-07-persistence-ef-core.md#sqlserverdbcontext) resolves the options with `GetService<IOptions<PersistenceSettings>>()?.Value ?? new PersistenceSettings()` (`SQLServerDbContext.cs:36-37`), so a context built outside the full DI graph (a design-time factory, a test) still gets the documented default rather than a null reference, and applies it via `sql.CommandTimeout(...)` (`:56`).
 
 - **Why it's built this way**: a `[Range]`-validated option bound with `ValidateOnStart` turns a typo into a startup failure rather than a per-query surprise ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)).
 
-- **Where it's used**: bound at `DependencyInjection.cs:123-126`; read by [SQLServerDbContext](group-07-persistence-ef-core.md#sqlserverdbcontext).
+- **Where it's used**: bound at `DependencyInjection.cs:121-124`; read by [SQLServerDbContext](group-07-persistence-ef-core.md#sqlserverdbcontext).
 
 ---
 
@@ -1484,15 +1643,37 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: nothing. It is the value type of [SchedulerSettings](#schedulersettings)`.Jobs` (`SchedulerSettings.cs:60`) and is read by [ScheduledJobRunner](#scheduledjobrunner).
 
-- **Concept introduced, code default plus configuration override.** An [IScheduledJob](group-05-cqrs-pipeline.md#ischeduledjob) ships with a `CronExpression` compiled into it, which is the right default because the job's author knows what cadence the work needs. An operator who has to change that cadence for one environment should not need a release. `[Rubric §17, DevOps]` assesses whether operational behavior can be changed without a code change; this pair is the minimal answer: an absent entry leaves the compiled-in schedule in force, and a present, non-blank `Cron` replaces it (`SchedulerSettings.cs:55-59`, `:68-73`). `[Rubric §16, Maintainability]`: the override is keyed by `IScheduledJob.Name`, the job's own stable identity, so configuration and code agree on one name rather than on a class name that refactoring would break.
+- **Concept introduced, code default plus configuration override.** An [IScheduledJob](group-05-cqrs-pipeline.md#ischeduledjob) ships with a `CronExpression` compiled into it, which is the right default because the job's author knows what cadence the work needs. An operator who has to change that cadence for one environment should not need a release. `[Rubric §17, DevOps]` assesses whether operational behavior can be changed without a code change; this pair is the minimal answer: an absent entry leaves the compiled-in schedule in force, and a present, non-blank `Cron` replaces it (`SchedulerSettings.cs:54-59`, `:68-73`). `[Rubric §16, Maintainability]`: the override is keyed by `IScheduledJob.Name`, the job's own stable identity, so configuration and code agree on one name rather than on a class name that refactoring would break.
 
-- **Walkthrough**: a single `string? Cron { get; init; }` (`SchedulerSettings.cs:74`). The whole mechanism lives in the reader, not in this type: `ScheduledJobRunner.ResolveCronExpression` looks the job up by name and takes the override only when it is present AND non-blank, otherwise the job's own expression (`ScheduledJobRunner.cs:162-166`). Blank-means-absent matters, because a JSON key set to `""` is a common way to try to "clear" a value and would otherwise produce an unparseable schedule.
+- **Walkthrough**: a single `string? Cron { get; init; }` (`SchedulerSettings.cs:74`). The whole mechanism lives in the reader, not in this type: `ScheduledJobRunner.ResolveCronExpression` looks the job up by name and takes the override only when it is present AND non-blank, otherwise the job's own expression (`ScheduledJobRunner.cs:162-166`). Blank-means-absent matters, because a JSON key set to `""` is a common way to try to clear a value and would otherwise produce an unparseable schedule.
 
-- **Why it's built this way**: the runner treats a changed expression as a schedule rewrite. On each cycle it compares the resolved expression against the one stored on the [ScheduledJobEntry](#scheduledjobentry) row (`ScheduledJobRunner.cs:273-280`), leaves the row untouched when they match (recomputing every cycle would push the next occurrence forward forever and nothing would ever fire, `:282-284`), and otherwise recomputes the next occurrence from the current instant and updates the row (`:287-297`). So an operator edit is picked up on the next cycle, with no restart, which is what makes the override useful in the first place ([ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html)).
+- **Why it's built this way**: the runner treats a changed expression as a schedule rewrite. On each cycle it reads the stored expressions (`ScheduledJobRunner.cs:267-273`), leaves a row untouched when the resolved expression matches (recomputing every cycle would push the next occurrence forward forever and nothing would ever fire, `:279-285`), and otherwise recomputes the next occurrence from the current instant and either updates the row with a schedule-changed log (`:293-298`) or inserts a new one (`:299-310`). So an operator edit is picked up on the next cycle, with no restart, which is what makes the override useful in the first place ([ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html)).
 
 - **Where it's used**: [ScheduledJobRunner](#scheduledjobrunner) only, through `SchedulerSettings.Jobs`.
 
-- **Caveats**: an override that does not parse is not rejected at startup, unlike the range-checked scalar settings in this namespace. The runner logs the parse failure and records the job as skipped (`ScheduledJobRunner.cs:287-290`, `:301-306`), so a bad cron string is an observable non-run rather than a failed boot.
+- **Caveats**: an override that does not parse is not rejected at startup, unlike the range-checked scalar settings in this namespace. The runner logs the parse failure (`ScheduledJobRunner.cs:287-291`, message at `:569-570`) and records the job with the skipped outcome and a `DateTime.MaxValue` next run (`:301-308`), so a bad cron string is an observable non-run rather than a failed boot.
+
+---
+
+### SmtpSettings
+
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/SmtpSettings.cs:9` · Level 0 · class (sealed)
+
+- **What it is**: the `Smtp` section: host, port, credentials, TLS toggle, and the default sender and recipient addresses. Validated by data annotations at startup (`SmtpSettings.cs:5-8`).
+
+- **Depends on**: `System.ComponentModel.DataAnnotations` for `[Range]` (`SmtpSettings.cs:1`). Consumed by [SmtpEmailSender](group-10-notifications.md#smtpemailsender), the [IEmailSender](group-10-notifications.md#iemailsender) implementation.
+
+- **Concept**: the validate-on-start gate taught under [ConnectionStringSettings](#connectionstringsettings), here guarding a numeric range rather than a cross-section rule. `[Rubric §15, Best Practices & Code Quality]` assesses whether avoidable failures are moved earlier: `[Range(1, 65535)]` on `Port` (`SmtpSettings.cs:21`) means a configuration typo such as `0` or `70000` fails the host at boot with a named error instead of surfacing as a socket exception the first time the application sends mail. Note also the named constant instead of a magic number: `DefaultSmtpPort = 25` is a `public static readonly` field (`:15`) used as the property's own default (`:22`), so the value is discoverable and testable rather than inlined. `[Rubric §11, Security]`: `Password` is a plain `string` (`:28`), so it is only ever as safe as the configuration provider that supplies it (user-secrets or Key Vault, never a committed `appsettings.json`).
+
+- **Walkthrough**: two static fields then seven `{ get; init; }` members.
+  - `SectionName = "Smtp"` (`SmtpSettings.cs:12`) and `DefaultSmtpPort = 25` (`:15`).
+  - `Host` (`:18`), `Port` (`:22`), `Username` (`:25`), `Password` (`:28`), `EnableSsl` (`:31`, defaulting to `false`), `From` (`:34`), `To` (`:37`). Every string defaults to `string.Empty`, so an absent section binds cleanly; only `Port` is range-checked. `To` is documented as the default recipient used by the no-argument `SendAsync` overload (`:36-37`).
+  - The consumer is deliberately plain: [SmtpEmailSender](group-10-notifications.md#smtpemailsender) takes `IOptions<SmtpSettings>` in its primary constructor and snapshots `.Value` into a readonly field (`SmtpEmailSender.cs:13-15`), then builds a fresh `SmtpClient` per send from `Host`/`Port` plus a `NetworkCredential` and `EnableSsl` (`:25-29`), and a `MailMessage` from `From` (`:32-35`).
+  - `EnableSsl` carries a documented analyzer suppression at the call site: S5332 (cleartext protocol) is waived because the value comes from configuration and local development targets MailDev, which offers no TLS (`SmtpEmailSender.cs:24`, restored at `:30`).
+
+- **Why it's built this way**: annotations plus `ValidateOnStart` cost one line at registration and move an entire class of misconfiguration from run time to boot, the contract [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html) describes.
+
+- **Where it's used**: bound with `.ValidateDataAnnotations().ValidateOnStart()` in `AddInfrastructure` (`DependencyInjection.cs:85-88`); read by [SmtpEmailSender](group-10-notifications.md#smtpemailsender).
 
 ---
 
@@ -1504,21 +1685,21 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: nothing. It is the value type of [TenantEntrySettings](#tenantentrysettings)`.DataSources` (`TenancySettings.cs:129`), validated by [TenancySettingsValidator](#tenancysettingsvalidator) and consumed by [DbContextFactory](group-07-persistence-ef-core.md#dbcontextfactory).
 
-- **Concept introduced, two isolation models behind one switch.** `[Rubric §8, Data Architecture]` assesses how tenant data is partitioned. Shared-schema isolation (a `TenantId` column plus a global query filter and [TenantSaveChangesInterceptor](group-07-persistence-ef-core.md#tenantsavechangesinterceptor)) needs no entry here at all: the type's sibling doc says declaring a tenant is only required for the database-per-tenant case (`TenancySettings.cs:109-114`). Adding an entry upgrades exactly one source for exactly one tenant to its own database, and every other source stays shared. `[Rubric §11, Security]`: the strongest isolation available (a separate database) becomes a configuration decision per tenant per source rather than an architectural fork, which is what [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) set out to make possible.
+- **Concept introduced, two isolation models behind one switch.** `[Rubric §8, Data Architecture]` assesses how tenant data is partitioned. Shared-schema isolation (a `TenantId` column plus a global query filter and [TenantSaveChangesInterceptor](group-07-persistence-ef-core.md#tenantsavechangesinterceptor)) needs no entry here at all: the sibling doc says declaring a tenant is only required for the database-per-tenant case, because shared-schema isolation comes from the filter and the interceptor rather than from configuration (`TenancySettings.cs:109-114`). Adding an entry upgrades exactly one source for exactly one tenant to its own database, and every other source stays shared. `[Rubric §11, Security]`: the strongest isolation available (a separate database) becomes a configuration decision per tenant per source rather than an architectural fork, which is what [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) set out to make possible.
 
   The deliberate omission teaches as much as the members: there is no migrations-assembly override, because a tenant database has the same schema as the shared one (`TenancySettings.cs:132-137`). One schema, N connection strings.
 
 - **Walkthrough**: four nullable `{ get; init; }` strings, one per engine plus the Cosmos database name.
   - `SQLServerConnectionString` (`TenancySettings.cs:141`), `SqliteConnectionString` (`:144`), `CosmosConnectionString` (`:147`).
-  - `CosmosDatabaseName` (`:153`), optional: when omitted the shared source's database name is kept, which is how one Cosmos account can serve per-tenant accounts.
-  - The read path is a record `with` clone, and it is the interesting part. `DbContextFactory.ResolveTenantOverride` bails out unless there is a resolved tenant, bound tenancy settings, an entry for that tenant, and an entry for that source name (`DbContextFactory.cs:150-156`), picks the connection string for the source's engine through `TenancySettingsValidator.ConnectionStringFor` (`DbContextFactory.cs:158`, resolver at `TenancySettingsValidator.cs:122-129`), and returns null when the tenant overrides this source on a different engine only (`DbContextFactory.cs:159-163`). Otherwise it clones the shared [PhysicalDataSource](group-07-persistence-ef-core.md#physicaldatasource) with the new connection string and, if supplied, the new Cosmos database name (`DbContextFactory.cs:165-172`).
-  - The clone keeps the ORIGINAL `DataSourceKey`, and the comment above it explains why (`DbContextFactory.cs:142-147`): EF's model cache is keyed on that key, so replacing only the connection string is what lets one compiled model serve every tenant's database.
+  - `CosmosDatabaseName` (`:153`), optional: when omitted the shared source's database name is kept, which is how one Cosmos account can serve per-tenant databases (`:149-152`).
+  - The read path is a record `with` clone, and it is the interesting part. `DbContextFactory.ResolveTenantOverride` bails out unless there is a resolved tenant, bound tenancy settings, an entry for that tenant, and an entry for that source name (`DbContextFactory.cs:145-151`), picks the connection string for the source's engine through `TenancySettingsValidator.ConnectionStringFor` (`:153`, resolver at `TenancySettingsValidator.cs:122-129`), and returns null when the tenant overrides this source on a different engine only (`DbContextFactory.cs:154-158`). Otherwise it clones the shared [PhysicalDataSource](group-07-persistence-ef-core.md#physicaldatasource) with the new connection string and, if supplied, the new Cosmos database name (`:160-167`).
+  - The clone keeps the ORIGINAL [DataSourceKey](group-07-persistence-ef-core.md#datasourcekey), and the comment above it explains why (`DbContextFactory.cs:137-142`): EF's model cache is keyed on that key, so replacing only the connection string is what lets one compiled model serve every tenant's database.
 
 - **Why it's built this way**: `[Rubric §12, Performance & Scalability]` is the reason for the key-preserving clone. A per-tenant `DataSourceKey` would build and cache a separate EF model per tenant, which multiplies startup cost and memory by the tenant count for no schema difference.
 
-- **Where it's used**: [DbContextFactory](group-07-persistence-ef-core.md#dbcontextfactory) at context-creation time, and [TenancySettingsValidator](#tenancysettingsvalidator) at startup, which rejects an entry that declares no connection string at all (`TenancySettingsValidator.cs:76-86`) and an entry whose key is not a real physical source name (`:93-104`). The second check exists because the alternative is a silent fall back to the shared database, which is precisely the failure database-per-tenant is bought to prevent.
+- **Where it's used**: [DbContextFactory](group-07-persistence-ef-core.md#dbcontextfactory) at context-creation time (`DbContextFactory.cs:93-101`), and [TenancySettingsValidator](#tenancysettingsvalidator) at startup, which rejects an entry that declares no connection string at all (`TenancySettingsValidator.cs:75-86`) and an entry whose key is not a real physical source name for the engine it declares (`:93-104`, with the round-trip test at `:117-119`). The second check exists because the alternative is a silent fall back to the shared database, which is precisely the failure database-per-tenant is bought to prevent.
 
-- **Caveats**: an override is keyed by **physical** source name (the name [IDataSourceResolver](group-07-persistence-ef-core.md#idatasourceresolver) produces), not the logical name a module uses. That distinction is invisible in a single-database host, where everything collapses onto `Default`.
+- **Caveats**: an override is keyed by **physical** source name (the name [IDataSourceResolver](group-07-persistence-ef-core.md#idatasourceresolver) produces), not the logical name a module uses (`TenancySettings.cs:123-128`). That distinction is invisible in a single-database host, where everything collapses onto `Default`.
 
 ---
 
@@ -1530,18 +1711,19 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: nothing. Ordered into a list by [TenancySettings](#tenancysettings)`.ResolutionOrder` (`TenancySettings.cs:73`), checked by [TenancySettingsValidator](#tenancysettingsvalidator), and switched on by [TenantResolutionMiddleware](group-12-api-hosting-mapping.md#tenantresolutionmiddleware).
 
-- **Concept introduced, trusted versus asserted identity of a tenant.** `[Rubric §11, Security]` assesses whether an authorization-relevant value can be forged by the caller. The two implemented members are not equivalent and the XML doc says so. `Claim` reads the tenant from the authenticated principal (`TenancySettings.cs:8-13`): the claim was signed by the token issuer, so a caller cannot pick its own tenant. `Header` reads it from a request header (`:15-20`): that is fine for service-to-service calls behind a trusted gateway, and a public edge honoring it lets any caller name any tenant. The default order is claim first, then header (`TenancySettings.cs:56-57`), so the trustworthy source always wins when both are present.
+- **Concept introduced, trusted versus asserted identity of a tenant.** `[Rubric §11, Security]` assesses whether an authorization-relevant value can be forged by the caller. The two implemented members are not equivalent and the XML doc says so. `Claim` reads the tenant from the authenticated principal (`TenancySettings.cs:8-12`): the claim was signed by the token issuer, so a caller cannot pick its own tenant. `Header` reads it from a request header (`:15-19`): fine for service-to-service calls behind a trusted gateway, and a public edge honoring it lets any caller name any tenant. The default order is claim first, then header (`TenancySettings.cs:56-57`), so the trustworthy source always wins when both are present.
 
 - **Walkthrough**: three members with explicit ordinals.
   - `Claim = 0` (`TenancySettings.cs:13`), read via `context.User?.FindFirst(settings.ClaimType)?.Value` (`TenantResolutionMiddleware.cs:111`); the claim type defaults to `tenant_id` (`TenancySettings.cs:83`).
   - `Header = 1` (`:20`), read via `context.Request.Headers[settings.HeaderName].FirstOrDefault()` (`TenantResolutionMiddleware.cs:112`); the header defaults to `X-Tenant-Id` (`TenancySettings.cs:89`).
-  - `Host = 2` (`:27`), which maps to `null` in the middleware switch (`TenantResolutionMiddleware.cs:113`) and is skipped rather than guessed at (`TenantResolutionMiddleware.cs:101`).
+  - `Host = 2` (`:27`), which maps to `null` in the middleware switch (`TenantResolutionMiddleware.cs:113`) and is skipped rather than guessed at (`:101`).
+  - The order is read through `EffectiveResolutionOrder`, not the bound list: an empty `ResolutionOrder` falls back to the framework default pair (`TenancySettings.cs:76-77`). That indirection exists because the configuration binder ADDS to a pre-populated collection rather than replacing it, so a non-empty default would leave a host that configured its own order also running the framework's entries (`:42-48`).
 
-- **Concept, a declared-but-unimplemented member that cannot silently no-op.** `[Rubric §9, API & Contract Design]`: the member exists so the configuration contract is stable when host-based resolution ships (`TenancySettings.cs:22-26`). `[Rubric §15, Best Practices]`: selecting it is not accepted quietly. [TenancySettingsValidator](#tenancysettingsvalidator) walks the effective resolution order and fails options validation with a message naming the two usable values (`TenancySettingsValidator.cs:54-64`), so the host refuses to boot instead of resolving nothing on every request. That is the fail-fast configuration contract ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)) applied to a value data annotations cannot express.
+- **Concept, a declared-but-unimplemented member that cannot silently no-op.** `[Rubric §9, API & Contract Design]`: the member exists so the configuration contract is stable when host-based resolution ships (`TenancySettings.cs:22-26`). `[Rubric §15, Best Practices]`: selecting it is not accepted quietly. [TenancySettingsValidator](#tenancysettingsvalidator) walks the effective resolution order and fails options validation with a message naming the value as defined but not implemented (`TenancySettingsValidator.cs:54-64`), so the host refuses to boot instead of resolving nothing on every request. That is the fail-fast configuration contract ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)) applied to a rule data annotations cannot express.
 
 - **Why it's built this way**: shipping the enum member ahead of the implementation keeps the JSON contract additive, and pairing it with a boot-time rejection removes the only real risk of doing that.
 
-- **Where it's used**: [TenantResolutionMiddleware](group-12-api-hosting-mapping.md#tenantresolutionmiddleware) (`:111-113`), [TenancySettings.EffectiveResolutionOrder](#tenancysettings) (`TenancySettings.cs:76-77`), and [TenancySettingsValidator](#tenancysettingsvalidator) (`:58`).
+- **Where it's used**: [TenantResolutionMiddleware](group-12-api-hosting-mapping.md#tenantresolutionmiddleware) (`:111-113`), [TenancySettings.EffectiveResolutionOrder](#tenancysettings) (`TenancySettings.cs:76-77`), and [TenancySettingsValidator](#tenancysettingsvalidator) (`:56-64`).
 
 ---
 
@@ -1553,45 +1735,46 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: [DataSource](group-07-persistence-ef-core.md#datasource) from `MMCA.Common.Application.Interfaces.Infrastructure` (`AuditTrailSettings.cs:2`), which is what puts it at Level 1, plus `System.ComponentModel.DataAnnotations` for `[Range]`.
 
-- **Concept introduced, a settings flag that gates the MODEL, not just behavior.** Most feature flags in this codebase decide whether code runs. This one also decides whether a table exists. `Enabled` is read in `ApplicationDbContext.OnConfiguring` with `GetService`, not `GetRequiredService`, and the result is cached in a field that the model builder consults (`ApplicationDbContext.cs:271`), so a host that leaves it false has exactly the model it had before the trail shipped and its migrations never see an `AuditTrailEntries` table (`AuditTrailSettings.cs:10-15`). `[Rubric §16, Maintainability]` assesses whether adopting a framework version is additive: this is what makes an opt-in feature genuinely free for a host that does not want it, since a mapped-but-empty table would still have to be migrated. `[Rubric §30, Compliance/Privacy/Data Governance]` assesses whether the system can answer "who changed this, and when": the trail is that answer, and it is off by default because recording history is a data-governance decision an application makes deliberately ([ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html)).
+- **Concept introduced, a settings flag that gates the MODEL, not just behavior.** Most feature flags in this codebase decide whether code runs. This one also decides whether a table exists. `Enabled` is read in [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext) with `GetService`, not `GetRequiredService`, and cached in a field (`ApplicationDbContext.cs:76`, `:291`) that the model builder consults before mapping the entity (`:630`), so a host that leaves it false has exactly the model it had before the trail shipped and its migrations never see an `AuditTrailEntries` table (`AuditTrailSettings.cs:10-15`). `[Rubric §16, Maintainability]` assesses whether adopting a framework version is additive: this is what makes an opt-in feature genuinely free for a host that does not want it, since a mapped-but-empty table would still have to be migrated. `[Rubric §30, Compliance/Privacy/Data Governance]` assesses whether the system can answer "who changed this, and when": the trail is that answer, and it is off by default because recording history is a data-governance decision an application makes deliberately ([ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html)).
 
-  `[Rubric §31, Cost/FinOps]`: the doc on `Enabled` states the cost being avoided directly, a table plus a write per change (`AuditTrailSettings.cs:22-24`). Marking entities with `IAuditedEntity` is the second gate and, as `AddAuditTrail`'s remarks put it, that is where the write volume is actually decided (`DependencyInjection.cs:370-373`).
+  `[Rubric §31, Cost/FinOps]`: the doc on `Enabled` states the cost being avoided directly, a table plus a write per change (`AuditTrailSettings.cs:21-25`). Marking entities with `IAuditedEntity` is the second gate and, as `AddAuditTrail`'s remarks put it, that is where the write volume is actually decided (`DependencyInjection.cs:457-460`).
 
 - **Walkthrough**: one static field and three `init` properties.
   - `SectionName = "AuditTrail"` (`AuditTrailSettings.cs:19`).
-  - `Enabled` (`:26`), defaulting to `false`. Read by [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext) for the model gate (`ApplicationDbContext.cs:271`) and re-checked by the cleanup job before it does any work (`AuditTrailCleanupJob.cs:72-75`).
-  - `RetentionDays` (`:38`), `[Range(1, 3650)]` (`:37`), default `90`. [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob) turns it into a cutoff instant (`AuditTrailCleanupJob.cs:77`) and purges from every relational source in use, skipping Cosmos (`:79-80`).
-  - `DataSource` (`:46`), default `DataSource.SQLServer`. Note the asymmetry the doc calls out (`AuditTrailSettings.cs:40-45`): rows are WRITTEN to every relational source alongside the data they describe, and this value only says which source the v1 reader looks in. [AuditTrailReader](group-07-persistence-ef-core.md#audittrailreader) resolves it against `DataSourceKey.DefaultName` (`AuditTrailReader.cs:54`) and returns empty when the entity type is not in that model (`AuditTrailReader.cs:56`).
+  - `Enabled` (`:26`), defaulting to `false`. Read by [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext) for the model gate (`ApplicationDbContext.cs:291`) and re-checked by the cleanup job before it does any work (`AuditTrailCleanupJob.cs:72-75`).
+  - `RetentionDays` (`:38`), `[Range(1, 3650)]` (`:37`), default `90`. [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob) turns it into a cutoff instant (`AuditTrailCleanupJob.cs:77`) and purges from every relational source in use, skipping Cosmos (`:79-80`) and expanding each source across declared tenants (`:83`).
+  - `DataSource` (`:46`), default `DataSource.SQLServer`. Note the asymmetry the doc calls out (`AuditTrailSettings.cs:40-45`): rows are WRITTEN to every relational source alongside the data they describe, and this value only says which source the v1 reader looks in. [AuditTrailReader](group-07-persistence-ef-core.md#audittrailreader) resolves it against `DataSourceKey.DefaultName` (`AuditTrailReader.cs:53-54`) and returns an empty result when the entity type is not in that model (`:56-59`).
 
-- **Why it's built this way**: `[Rubric §13, Observability & Operability]`. Retention is deliberately NOT self-driving: `AddAuditTrail` registers [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob) (`DependencyInjection.cs:391`) but a job only runs when the host also calls `AddScheduledJobs` and sets `Scheduler:Enabled` (`DependencyInjection.cs:363-368`). Without the scheduler the trail still records everything and `RetentionDays` is inert, which is a documented state rather than a surprise. Registering the job in `AddAuditTrail` rather than in `AddScheduledJobs` keeps the two features independent (`DependencyInjection.cs:388-390`).
+- **Why it's built this way**: `[Rubric §13, Observability & Operability]`. Retention is deliberately NOT self-driving: `AddAuditTrail` registers [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob) (`DependencyInjection.cs:478`) but a job only runs when the host also calls `AddScheduledJobs` and sets `Scheduler:Enabled` (`:453-456`). Without the scheduler the trail still records everything and `RetentionDays` is inert, which is a documented state rather than a surprise. Registering the job in `AddAuditTrail` rather than in `AddScheduledJobs` keeps the two features independent (`:475-477`).
 
-- **Where it's used**: bound with `.ValidateDataAnnotations().ValidateOnStart()` at `DependencyInjection.cs:377-380`; read by [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext), [AuditTrailReader](group-07-persistence-ef-core.md#audittrailreader) (`:38-40`), and [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob) (`:52`, `:60`). Design-time tooling supplies it by hand so a migration can be generated with the table on or off (`DesignTimeDbContextHelper.cs:87-88`). The recording itself is [AuditTrailSaveChangesInterceptor](group-07-persistence-ef-core.md#audittrailsavechangesinterceptor), registered as a singleton at `DependencyInjection.cs:384` and resolved by the context with `GetService` so its absence reads as "not registered" (`ApplicationDbContext.cs:258-261`).
+- **Where it's used**: bound with `.ValidateDataAnnotations().ValidateOnStart()` at `DependencyInjection.cs:464-467`; read by [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext), [AuditTrailReader](group-07-persistence-ef-core.md#audittrailreader) (`:38-40`), and [AuditTrailCleanupJob](group-07-persistence-ef-core.md#audittrailcleanupjob) (`:52`, `:60`). Design-time tooling supplies it by hand so a migration can be generated with the table on or off (`DesignTimeDbContextHelper.cs:141-143`). The recording itself is [AuditTrailSaveChangesInterceptor](group-07-persistence-ef-core.md#audittrailsavechangesinterceptor), registered as a singleton at `DependencyInjection.cs:471` and resolved by the context with `GetService` so its absence reads as "not registered" (`ApplicationDbContext.cs:278`).
 
 ---
 
-### ConnectionStringSettings
+### CacheSettings
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ConnectionStringSettings.cs:9` · Level 1 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/CacheSettings.cs:24` · Level 1 · class (sealed)
 
-- **What it is**: the concrete class bound from the top-level `ConnectionStrings` section, implementing [IConnectionStringSettings](#iconnectionstringsettings). It describes the `Default` physical data source.
+- **What it is**: the `Cache` section's TTL policy: the default entry lifetime, the ceiling on the in-process copy of a two-level entry, and how long a cache miss waits for the per-key populate lock before giving up.
 
-- **Depends on**: [IConnectionStringSettings](#iconnectionstringsettings) (the reason it is Level 1) and `System.ComponentModel.DataAnnotations` for `[Required]`.
+- **Depends on**: [CacheOptions](group-09-caching.md#cacheoptions) from `MMCA.Common.Infrastructure.Caching` (`CacheSettings.cs:1`), which is what puts it at Level 1, plus `Timeout` from the BCL. Consumed by [ICacheService](group-09-caching.md#icacheservice) implementations ([HybridCacheService](group-09-caching.md#hybridcacheservice), [DistributedCacheService](group-09-caching.md#distributedcacheservice)).
 
-- **Concept introduced, validate-on-start as a fail-fast gate.** `[Rubric §15, Best Practices & Code Quality]` assesses whether misconfiguration is caught early. `AddOptions<T>().Bind(...).ValidateDataAnnotations().ValidateOnStart()` (`DependencyInjection.cs:67-70`) is the pattern every validated settings class in this namespace uses, and [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html) makes it the required form: the annotations are evaluated during host startup, not lazily on first resolution, so a host with no SQL Server connection string fails to start with a named error instead of throwing inside the first request. `ValidateOnStart()` is the load-bearing call; without it the same annotations run on first use, which is the exact failure the contract exists to prevent. `[Rubric §13, Observability & Operability]`: a startup failure is far easier to diagnose in a deployment than an intermittent request-time exception.
+- **Concept introduced, fail-open configuration.** `[Rubric §29, Resilience & Business Continuity]` assesses whether a degraded dependency degrades the answer. The class doc states the invariant for the whole section: the cache is an optimization, never the system of record, so no value here can turn a cache outage or a slow populate into an error. A miss, an unreachable cache, or an expired `PopulateLockTimeout` all degrade the request to an uncached read that still runs the real handler and still answers correctly (`CacheSettings.cs:12-17`). `[Rubric §12, Performance & Scalability]`: the populate lock is stampede protection, and giving it a finite timeout trades that protection for a latency bound, which is exactly the tradeoff the remarks spell out (`:52-58`).
 
-- **Walkthrough**:
-  - `SectionName = "ConnectionStrings"` (`ConnectionStringSettings.cs:12`), reusing ASP.NET Core's own conventional section so `GetConnectionString(...)` and this class read the same data.
-  - `CosmosConnectionString` (`ConnectionStringSettings.cs:15`), empty by default.
-  - `CosmosDatabaseName` (`:18`), the one property with a non-empty default, `"AtlDevCon"`.
-  - `SqliteConnectionString` (`:21`), empty by default.
-  - `SQLServerConnectionString` (`:25`), the only `[Required]` member (`:24`); the class doc explains why, SQL Server is the default data source (`ConnectionStringSettings.cs:6-7`).
-  - `SQLServerMigrationsAssembly` (`:28`), empty by default, which makes EF fall back to the DbContext assembly.
+  `[Rubric §16, Maintainability]`: the defaults are not re-typed literals. `DefaultDuration` initializes from [CacheOptions](group-09-caching.md#cacheoptions)`.DefaultDuration` (`CacheSettings.cs:34`, defined as 30 seconds at `CacheOptions.cs:23`), so the configured path and the hard-coded path cannot drift apart, and a host that configures nothing behaves as it did before the section existed (`CacheSettings.cs:5-9`).
 
-- **Why it's built this way**: requiring exactly one engine's connection string keeps polyglot persistence opt-in ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)) while still failing fast on the engine every deployment actually uses.
+- **Concept, one configuration section read by two layers.** The `Cache` section is shared three ways: this class, `CacheKeyPrefixOptions` for the key namespace, and the Application layer's [QueryCachePipelineSettings](#querycachepipelinesettings), which reads the same `Cache:PopulateLockTimeout` key from a layer that cannot reference this assembly (`CacheSettings.cs:18-22`; the Application type declares `SectionName = "Cache"` at `QueryCachePipelineSettings.cs:23` and the same `Timeout.InfiniteTimeSpan` default at `:29`). `[Rubric §3, Clean Architecture]`: the dependency rule forbids Application from referencing Infrastructure, so the duplication is not an accident, it is the price of keeping the layer boundary intact while both views read one operator-facing key.
 
-- **Where it's used**: bound and adapted to the interface at `DependencyInjection.cs:67-71`; read by [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) as the `Default` identity that named sources are compared against (`DataSourceResolver.cs:100`).
+- **Walkthrough**: one static field and three `init` properties.
+  - `SectionName = "Cache"` (`CacheSettings.cs:27`).
+  - `DefaultDuration` (`:34`), the absolute TTL applied when a caller supplies no expiration. [HybridCacheService](group-09-caching.md#hybridcacheservice) uses it as the fallback TTL (`HybridCacheService.cs:272`) and [DistributedCacheService](group-09-caching.md#distributedcacheservice) does the same (`DistributedCacheService.cs:65`).
+  - `LocalCacheDuration` (`:44`), nullable, the ceiling on the L1 copy of a two-level entry so a replica that never sees an invalidation still re-reads L2 within the window. Null keeps the built-in 30-second ceiling (`HybridCacheService.cs:55`), and the effective L1 lifetime is the shorter of the ceiling and the entry's own TTL (`:272-273`). The single-level cache services have no L1 and ignore it.
+  - `PopulateLockTimeout` (`:59`), defaulting to `Timeout.InfiniteTimeSpan`: waiters block until the one request holding the lock has populated the entry. A finite value bounds that wait and lets the waiter proceed uncached, and the remarks note that zero or a negative value means no bound, exactly like the default (`:52-58`).
+  - Both cache services take the options as an OPTIONAL constructor parameter and fall back to a fresh instance (`HybridCacheService.cs:42`, `:90`; `DistributedCacheService.cs:25`, `:38`), so a service constructed outside the container still gets the framework defaults.
 
-- **Caveats**: the `"AtlDevCon"` Cosmos default (`ConnectionStringSettings.cs:18`) is an application-specific name (the ADC conference database) baked into a framework package; every other default in this namespace is neutral.
+- **Why it's built this way**: registration guarantees `IOptions<CacheSettings>` always resolves. When configuration is available the section is bound and validated (`DependencyInjection.cs:232-235`); when the parameterless overload is used, `AddOptions<CacheSettings>()` is still called so the defaults materialize instead of failing the host (`:242-246`, rationale at `:222-227`). The same values are then projected into `HybridCache`'s own option type through the options pipeline rather than the `AddHybridCache` callback, because the callback has no service provider to read the bound section from, and the host's own hook still runs last so it can override anything the framework set (`DependencyInjection.cs:330-345`).
+
+- **Where it's used**: [HybridCacheService](group-09-caching.md#hybridcacheservice) and [DistributedCacheService](group-09-caching.md#distributedcacheservice) through `IOptions<CacheSettings>` (`DependencyInjection.cs:262`, `:365`), and the `HybridCacheOptions` projection at `:334-345`.
 
 ---
 
@@ -1603,206 +1786,252 @@ gRPC clients, which is precisely the reversibility
 
 - **Depends on**: [DataSourceEntrySettings](#datasourceentrysettings) and `DataSourceKey.DefaultName` from the Application layer ([DataSourceKey](group-07-persistence-ef-core.md#datasourcekey)).
 
-- **Concept introduced, a settings class that validates in its own constructor.** Most settings types here are inert bags validated by data annotations. This one is different, and the reason is stated in its own doc: a root-level *dictionary* section does not bind through the options pipeline, so [DependencyInjection](#dependencyinjection) builds the instance by hand from `configuration.GetSection(...).Get<Dictionary<string, DataSourceEntrySettings>>()` and registers it as a singleton (`DataSourcesSettings.cs:8-11`, `DependencyInjection.cs:73-77`). With no options pipeline there is no `ValidateOnStart`, so the constructor becomes the fail-fast gate. `[Rubric §15, Best Practices & Code Quality]`: rejecting a reserved name at construction is the same guarantee `ValidateOnStart` would have given, implemented where the type can enforce it itself. `[Rubric §8, Data Architecture]`: the reserved-name rule protects a real invariant, `Default` is configured through the top-level `ConnectionStrings` section, and letting someone also declare a `DataSources:Default` entry would create two competing definitions of the same physical source.
+- **Concept introduced, a settings class that validates in its own constructor.** Most settings types here are inert bags validated by data annotations. This one is different, and the reason is stated in its own doc: a root-level *dictionary* section does not bind through the options pipeline, so [DependencyInjection](#dependencyinjection) builds the instance by hand from `configuration.GetSection(...).Get<Dictionary<string, DataSourceEntrySettings>>()` and registers it as a singleton (`DataSourcesSettings.cs:8-11`, `DependencyInjection.cs:77-81`). With no options pipeline there is no `ValidateOnStart`, so the constructor becomes the fail-fast gate. `[Rubric §15, Best Practices & Code Quality]`: rejecting a reserved name at construction is the same guarantee `ValidateOnStart` would have given, implemented where the type can enforce it itself. `[Rubric §8, Data Architecture]`: the reserved-name rule protects a real invariant, `Default` is configured through the top-level `ConnectionStrings` section, and letting someone also declare a `DataSources:Default` entry would create two competing definitions of the same physical source.
 
 - **Walkthrough**:
   - `SectionName = "DataSources"` (`DataSourcesSettings.cs:16`).
-  - The constructor takes an optional `IReadOnlyDictionary<string, DataSourceEntrySettings>?` (`DataSourcesSettings.cs:23`) and substitutes an empty ordinal-comparer dictionary when it is null (`:25`), so "no `DataSources` section" is a first-class state rather than a null check at every call site.
-  - It then walks every key (`DataSourcesSettings.cs:27-40`) and throws `InvalidOperationException` twice: on a blank or whitespace name (`:29-32`), and on any name equal to `DataSourceKey.DefaultName` under `OrdinalIgnoreCase` (`:34-39`). The second message is unusually good operator guidance, it names the offending entry and tells the reader that the `Default` source is configured via the top-level `ConnectionStrings` section, so remove or rename the entry.
-  - `Sources` (`DataSourcesSettings.cs:44`), the get-only dictionary the resolver reads.
+  - The constructor takes an optional `IReadOnlyDictionary<string, DataSourceEntrySettings>?` (`:23`) and substitutes an empty ordinal-comparer dictionary when it is null (`:25`), so "no `DataSources` section" is a first-class state rather than a null check at every call site.
+  - It then walks every key (`:27-40`) and throws `InvalidOperationException` twice: on a blank or whitespace name (`:29-32`), and on any name equal to `DataSourceKey.DefaultName` under `OrdinalIgnoreCase` (`:34-39`). The second message is unusually good operator guidance: it names the offending entry and tells the reader that the `Default` source is configured via the top-level `ConnectionStrings` section, so remove or rename the entry.
+  - `Sources` (`:44`), the get-only dictionary the resolver reads.
 
 - **Why it's built this way**: throwing during host construction is the earliest possible point at which a duplicate `Default` definition can be caught; the alternative is a routing bug that surfaces as data landing in the wrong database ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
 
-- **Where it's used**: constructed and registered as a singleton in `AddInfrastructure` (`DependencyInjection.cs:75-77`), immediately before [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) and [EntityDataSourceRegistry](group-07-persistence-ef-core.md#entitydatasourceregistry) (`DependencyInjection.cs:78-79`); consumed by the resolver's constructor (`DataSourceResolver.cs:35`) and its classification pass (`DataSourceResolver.cs:98`, `:104`).
+- **Where it's used**: constructed and registered as a singleton in `AddInfrastructure` (`DependencyInjection.cs:79-81`), immediately before [DataSourceResolver](group-07-persistence-ef-core.md#datasourceresolver) and [EntityDataSourceRegistry](group-07-persistence-ef-core.md#entitydatasourceregistry) (`:82-83`). It is consumed by the resolver's constructor (`DataSourceResolver.cs:56`, `:66-68`), by its "is any database configured for this engine" test (`:134-136`) and its classification pass (`:215`, `:253`), and by [ConnectionStringSettingsValidator](#connectionstringsettingsvalidator), which takes it as an optional constructor dependency so that a container binding the settings without `AddInfrastructure` still validates (`ConnectionStringSettingsValidator.cs:26-31`, `:66-71`).
 
 - **Caveats**: the key comparison for *reservation* is `OrdinalIgnoreCase` (`DataSourcesSettings.cs:34`) while the default backing dictionary uses `StringComparer.Ordinal` (`:25`). The dictionary that configuration binding actually supplies is created by the binder, so its comparer is not determined by this file.
 
-### IJwtSettings
-
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/IJwSettings.cs:10` · Level 1 · interface
-
-- **What it is**: the contract for the `Jwt` configuration section. It carries both signing modes
-  (an HMAC secret and an RSA key pair), the issuer and audience claim values, and the two token
-  lifetimes (`IJwSettings.cs:10-50`).
-
-- **Depends on**: [`JwtSigningAlgorithm`](#jwtsigningalgorithm) (the enum that selects the mode,
-  `IJwSettings.cs:16`), which is what puts this interface at Level 1. Implemented by
-  [`JwtSettings`](#jwtsettings) (`JwtSettings.cs:16`). No externals.
-
-- **Concept**: the settings-interface pattern already taught under
-  [`IConnectionStringSettings`](#iconnectionstringsettings), applied here to the one section whose
-  members are *conditionally* required. The interface deliberately carries no validation attributes
-  at all: which of `SecretForKey`, `RsaPrivateKeyPem` and `RsaPublicKeyPem` is mandatory depends on
-  the value of `SigningAlgorithm`, and a data annotation cannot express that, so the check lives on
-  the concrete [`JwtSettings`](#jwtsettings) as an `IValidatableObject` (`JwtSettings.cs:16`,
-  `:51-66`).
-
-  `[Rubric §11: Security]` assesses credential handling. Two facts are encoded in the contract
-  itself. The doc for `RsaPrivateKeyPem` records the operational rule that the key lives in
-  user-secrets or Key Vault and never in `appsettings.json` (`IJwSettings.cs:27`), and the whole
-  interface is `init`-only, so once options are materialized nothing in the process can rewrite the
-  signing key.
-
-  `[Rubric §7: Microservices Readiness]` assesses whether a boundary can be crossed without a
-  rewrite. `RsaPublicKeyPem` is doubly used: an in-process validator reads it directly, and the
-  Identity service also publishes it at `/.well-known/jwks.json` so extracted services can validate
-  tokens they did not issue (`IJwSettings.cs:32-37`). That is what makes the HMAC-to-RSA switch a
-  configuration change rather than a code change ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)).
-
-- **Walkthrough**: eight `init`-only members, no methods.
-  - `SigningAlgorithm` (`IJwSettings.cs:16`): the mode selector, documented as defaulting to
-    `JwtSigningAlgorithm.HS256` for backwards compatibility.
-  - `SecretForKey` (`:22`): the Base64-encoded HMAC-SHA256 key, required under HS256.
-  - `RsaPrivateKeyPem` (`:29`) and `RsaPublicKeyPem` (`:37`): nullable PEM strings, required under
-    RS256 for issuers and for in-process validators respectively.
-  - `Issuer` (`:40`) and `Audience` (`:43`): the two claim values every validator compares against.
-  - `AccessTokenExpirationMinutes` (`:46`) and `RefreshTokenExpirationDays` (`:49`): the two
-    lifetimes, in different units, matching the short-access-token plus long-refresh-token split
-    ([ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html)).
-
-- **Why it's built this way**: one interface spanning both algorithms means
-  [`TokenService`](group-08-auth.md#tokenservice) takes a single dependency and branches internally
-  on `SigningAlgorithm` in its constructor (`TokenService.cs:53-63`), instead of the host having to
-  register a different service per deployment topology.
-
-- **Where it's used**: adapted from the bound options and registered as a singleton in
-  `AddInfrastructure` (`DependencyInjection.cs:65`), then consumed by
-  [`TokenService`](group-08-auth.md#tokenservice), which stores it in `_jwtSettings`
-  (`TokenService.cs:25`, constructor `:47`) and hands it to `BuildHmacCredentials`
-  (`TokenService.cs:166`) or `BuildRsaCredentials` (`:181`) once, at construction.
-
-- **Caveats**: the file is named `IJwSettings.cs` while the type is `IJwtSettings`
-  (`IJwSettings.cs:10`). The compiler does not care, but a filename-based search for the type will
-  miss it.
-
 ---
+
+### JwtSettings
+
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:16` · Level 1 · class (sealed)
+
+- **What it is**: the `Jwt` section: issuer, audience, signing algorithm, the key material for whichever algorithm is selected, and the two token lifetimes. It adds the piece attributes cannot express, algorithm-aware validation of the key material.
+
+- **Depends on**: [JwtSigningAlgorithm](#jwtsigningalgorithm) (`JwtSettings.cs:30`), which is what puts it at Level 1, plus `System.ComponentModel.DataAnnotations` for `[Required]` and, critically, for the `IValidatableObject` interface (`:1`, `:16`).
+
+- **Concept introduced, `IValidatableObject` for conditional requirements.** Attributes describe a property in isolation, so they cannot say "this one is required only when that one has a particular value". `IValidatableObject` is the options-validation extension point for exactly that case: the type implements a single `Validate` method that yields one `ValidationResult` per failure, and `.ValidateDataAnnotations()` runs it alongside the attribute checks. This class is the framework's canonical example (`JwtSettings.cs:13-14`).
+
+  `[Rubric §11, Security]` assesses credential handling. The HS256 branch does not merely check that a secret is present, it checks the length: fewer than 32 characters fails, and the message explicitly tells the operator to replace the placeholder with a real secret from user-secrets or environment variables (`JwtSettings.cs:72-77`). That is deliberate: a short or shipped-placeholder HMAC key is the failure mode that would otherwise reach production silently.
+
+  `[Rubric §15, Best Practices & Code Quality]` assesses fail-fast posture. Registration pairs the bind with `.ValidateDataAnnotations().ValidateOnStart()` (`WebApplicationBuilderExtensions.cs:540-543`), so both the attribute checks and `Validate` run at boot, not on the first token issued ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)).
+
+- **Walkthrough**: one static field, eight `init` properties, one method.
+  - `SectionName = "Jwt"` (`JwtSettings.cs:19`).
+  - `SigningAlgorithm` (`:30`): defaults to [JwtSigningAlgorithm](#jwtsigningalgorithm)`.RS256`, and the remarks give the reason (`:24-29`): asymmetric signing is what lets a validator verify a token without holding the key that mints one, so a host that never sets `Jwt:SigningAlgorithm` gets the algorithm that survives extraction. A single-host monolith opts into HS256 explicitly.
+  - `SecretForKey` (`:37`), `RsaPrivateKeyPem` (`:43`), `RsaPublicKeyPem` (`:50`): none carries `[Required]`, because whether it is required is decided in `Validate`. The docs are specific about the split: the private key is what an issuer signs with, the public key is what an in-process validator verifies with, and a service that fetches the key through JWKS at runtime leaves the public key unset (`:45-49`).
+  - `Issuer` (`:54`) and `Audience` (`:58`): both `[Required]` (`:53`, `:57`), because they matter in every mode.
+  - `AccessTokenExpirationMinutes` (`:61`), default `15`; `RefreshTokenExpirationDays` (`:64`), default `7`. The short-access-plus-long-refresh split of [ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html), expressed as defaults rather than as required configuration.
+  - `Validate(ValidationContext)` (`:70-85`): an iterator method with two independent checks. Under HS256, `SecretForKey.Length < 32` yields a failure naming `SecretForKey` (`:72-77`); under RS256, a null or whitespace `RsaPrivateKeyPem` yields a failure naming `RsaPrivateKeyPem` (`:79-84`). Note the asymmetry: the private key is enforced here, the public key is not, because a service that only validates fetches it through JWKS.
+  - The in-process validator enforces the other half at wiring time instead: `BuildValidationParameters` throws when RS256 is selected with no `RsaPublicKeyPem`, and the message points at `AddForwardedJwtBearer` for services that should fetch the key at runtime (`WebApplicationBuilderExtensions.cs:628-641`).
+
+- **Why it's built this way**: keeping the conditional rule in code next to the properties it constrains, rather than in the registration call, means every host that binds this section gets the same guarantee without repeating it. The algorithm switch is a hard cutover that invalidates every existing token (`JwtSigningAlgorithm.cs:17-18`), so failing the boot on a half-configured section is much cheaper than discovering it at the first sign or the first validation.
+
+- **Where it's used**: bound in `AddCommonAuthentication` (`WebApplicationBuilderExtensions.cs:540-543`), which then re-reads the section eagerly to build the token validation parameters at wiring time (`:548-551`); consumed by [TokenService](group-08-auth.md#tokenservice) through `IOptions<JwtSettings>`, which branches on the algorithm once in the constructor and caches the credentials (`TokenService.cs:55-76`).
 
 ### MessageBusSettings
 
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:11` · Level 1 · class (sealed)
 
-- **What it is**: the `MessageBus` section: which transport to use, how to reach the broker, how to
-  namespace its queues, how hard to retry a failing consumer, and whether the consumer-side
-  idempotency inbox is on (`MessageBusSettings.cs:11-65`).
+- **What it is**: the `MessageBus` section. It selects the transport, says how to reach the broker,
+  how to namespace its queues, how hard to retry a failing consumer, and whether the two
+  store-and-forward guards (the transactional outbox and the consumer-side idempotency inbox) are on
+  (`MessageBusSettings.cs:5-10`). Despite the name it is the single switch for the whole event
+  delivery posture, not just for the wire protocol.
 
-- **Depends on**: [`MessageBusProvider`](#messagebusprovider), the transport enum declared in the
-  same file (`MessageBusSettings.cs:68-84`). Externals: `System.ComponentModel.DataAnnotations` for
-  the `[StringLength]` and `[Range]` guards (`:1`).
+- **Depends on**: [MessageBusProvider](#messagebusprovider), the transport enum declared at the
+  bottom of the same file (`MessageBusSettings.cs:199-215`). Externals:
+  `System.ComponentModel.DataAnnotations` for the `[StringLength]` and `[Range]` guards (`:1`).
 
-- **Concept introduced: retry policy as configuration rather than code.**
-  `[Rubric §29: Resilience & Business Continuity]` assesses whether transient failures are absorbed
-  before they turn into lost messages. Every broker receive endpoint gets an exponential-backoff
-  `UseMessageRetry` built from three properties of this class, on both transports
-  (`DependencyInjection.cs:794-798` for RabbitMQ, `:811-815` for Azure Service Bus), so a consumer
-  that fails on a transient dependency is retried in-process instead of dead-lettering on the first
-  exception. The remarks are equally instructive about what is deliberately absent: only in-process
-  retry is configured, **not** `UseDelayedRedelivery`, because on RabbitMQ that needs the
-  delayed-message-exchange plugin the Aspire container does not ship
-  (`DependencyInjection.cs:769-774`).
+- **Concept introduced: a tri-state flag that resolves from the transport.** Two of the properties
+  here are `bool?`, not `bool`, and each has a computed companion. `EnableInbox` (`:117`) is the raw
+  configured value and `IsInboxEnabled` (`:125`) is what every framework component actually reads:
+  `EnableInbox ?? Provider != MessageBusProvider.InProcess`. `EnableOutbox` (`:151`) and
+  `IsOutboxEnabled` (`:159`) work identically. The point of the third state is that "the host said
+  nothing" and "the host said false" are different facts. Unset means "let the transport decide",
+  which turns both features ON for a broker and OFF in-process, and an explicit value always wins in
+  both directions. That is why a settings class that could have been a bag of booleans carries
+  derived properties: the resolution rule lives once, next to the data, instead of being repeated at
+  every read site.
 
-  `[Rubric §7: Microservices Readiness]` assesses whether several services can share infrastructure
+  `[Rubric §6, CQRS and Event-Driven]` assesses how reliably a state change turns into a delivered
+  event. Both resolved flags default ON for a broker deliberately, and the XML doc argues the case
+  rather than just stating it: broker delivery is at-least-once by contract, so an ack after a
+  network blip, a redelivery after a lease expiry, or an outbox row republished after a crash all
+  hand the same event to the same handlers twice, and with the inbox off every one of those becomes
+  a duplicate side effect (`:98-109`, [ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)).
+  Symmetrically, a single-process host dispatches every event inside the process that raised it, so
+  the store-and-forward hop buys it two background services, a table and a poll loop for nothing
+  (`:133-141`).
+
+  `[Rubric §29, Resilience and Business Continuity]` assesses whether transient failures are absorbed
+  before they become lost messages. This class configures two independent retry tiers.
+  `RetryLimit` / `RetryMinIntervalSeconds` / `RetryMaxIntervalSeconds` feed the in-process
+  exponential `UseMessageRetry` filter applied to every broker receive endpoint
+  (`DependencyInjection.cs:947-951` for RabbitMQ, `:986-990` for Azure Service Bus).
+  `EnableDelayedRedelivery` and `RedeliveryIntervalsSeconds` feed a second, broker-scheduled tier
+  that sits above it, so a message that exhausts its immediate attempts is scheduled back onto the
+  queue instead of dead-lettering (`:161-195`).
+
+  `[Rubric §7, Microservices Readiness]` assesses whether several services can share infrastructure
   without colliding. `EndpointPrefix` exists so multiple services can live on one broker without
-  fighting over queue names (`MessageBusSettings.cs:28-34`).
+  fighting over queue names: without it, two services with a consumer of the same short type name
+  derive the same kebab-case queue and become competing consumers across a service boundary, where
+  each event reaches only one of them (`:51-64`).
 
-  `[Rubric §6: CQRS & Event-Driven]` assesses reliability of event delivery. `EnableInbox` turns on
-  consumer-side deduplication, the receiving counterpart to the outbox
-  ([ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)).
-
-- **Walkthrough**: one static field then six `init` properties.
-  - `SectionName = "MessageBus"` (`MessageBusSettings.cs:14`).
+- **Walkthrough**: one static field, seven `init` properties, and two computed properties.
+  - `SectionName = "MessageBus"` (`MessageBusSettings.cs:14`), the bind key.
   - `Provider` (`:17`): defaults to `MessageBusProvider.InProcess`, so the modular monolith is the
     zero-configuration case.
-  - `ConnectionString` (`:26`): nullable, and only the FIRST of three sources.
+  - `ConnectionString` (`:26`): nullable, and only the first of three sources.
     `ResolveBrokerConnectionString` prefers it, then falls back to `ConnectionStrings:rabbitmq` and
-    `ConnectionStrings:messaging` (`DependencyInjection.cs:750-759`), which is what Aspire injects
-    via `WithReference(broker)`. Without that fallback MassTransit would default to
-    `localhost:5672` and miss the Aspire-allocated container port (`DependencyInjection.cs:743-744`).
-  - `EndpointPrefix` (`:34`) with `[StringLength(64)]` (`:33`): when it is set, `AddBrokerMessaging`
-    switches on the kebab-case endpoint name formatter (`DependencyInjection.cs:665-668`).
-  - `RetryLimit` (`:43`) with `[Range(0, 20)]` (`:42`), default `5`; `0` disables retries and a
+    `ConnectionStrings:messaging` (`DependencyInjection.cs:880-889`), which is what Aspire injects
+    via `WithReference(broker)`. Without that fallback MassTransit would default to `localhost:5672`
+    and miss the Aspire-allocated container port (`DependencyInjection.cs:866-875`).
+  - `EmulatorAdminEndpoint` (`:49`) with `[StringLength(2048)]` (`:48`): the base address of the
+    Azure Service Bus emulator's HTTP management plane. It exists only because MassTransit is pinned
+    to v8, which has no vendor emulator mode; the one v8 path onto the emulator is the custom-clients
+    `Host` overload that needs a data-plane client AND a management-plane client, and the emulator
+    serves those on two different ports, so the management client cannot be derived from
+    `ConnectionString` alone (`:33-40`). It is read only when the connection string carries
+    `UseDevelopmentEmulator=true` (`DependencyInjection.cs:965-968`), a token no real namespace
+    emits, so the production path is untouched (`:961-964`).
+  - `EndpointPrefix` (`:67`) with `[StringLength(64)]` (`:66`): when set, `AddMassTransit` installs
+    `new KebabCaseEndpointNameFormatter(settings.EndpointPrefix, includeNamespace: false)`
+    (`DependencyInjection.cs:755-763`). `includeNamespace: false` is deliberate: the prefix is the
+    only namespacing applied, so a queue name stays readable and survives a consumer type moving
+    between folders (`:59-63`).
+  - `RetryLimit` (`:76`) with `[Range(0, 20)]` (`:75`), default `5`; `0` disables retries and a
     faulted message goes straight to the `_error` queue.
-  - `RetryMinIntervalSeconds` (`:50`) with `[Range(0, 300)]`, default `1`, and
-    `RetryMaxIntervalSeconds` (`:56`) with `[Range(0, 3600)]`, default `30`: the floor and the cap of
+  - `RetryMinIntervalSeconds` (`:83`) with `[Range(0, 300)]`, default `1`, and
+    `RetryMaxIntervalSeconds` (`:89`) with `[Range(0, 3600)]`, default `30`: the floor and the cap of
     the exponential backoff.
-  - `EnableInbox` (`:64`), default `false`. The doc names the operational precondition: dedup runs
-    through an `InboxMessages` table in the consumer's own database, so the `AddInboxMessages`
-    migration must be applied first (`MessageBusSettings.cs:58-63`). `AddBrokerMessaging` registers
-    the EF-backed store when it is on and a no-op store when it is off
-    (`DependencyInjection.cs:686-693`), so consumer behavior is unchanged until the table exists.
-    [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice) reads the same flag to
-    decide whether to purge inbox rows (`OutboxCleanupService.cs:51`).
+  - `EnableInbox` (`:117`) and `IsInboxEnabled` (`:125`). `AddBrokerMessaging` registers
+    [EfInboxStore](group-04-events-outbox.md#efinboxstore) when the resolved value is true and
+    [NoOpInboxStore](group-04-events-outbox.md#noopinboxstore) plus a startup
+    [InboxDisabledWarningService](group-04-events-outbox.md#inboxdisabledwarningservice) when it is
+    false, so an opt-out is recorded in the log rather than passing silently
+    (`DependencyInjection.cs:784-796`). The `InboxMessages` table is part of the shared relational
+    model created by the standard migrations, so turning it on for a migrated host needs no schema
+    work (`:91-97`).
+  - `EnableOutbox` (`:151`) and `IsOutboxEnabled` (`:159`). `AddInfrastructure` reads the resolved
+    value to decide whether to run [OutboxProcessor](group-04-events-outbox.md#outboxprocessor) and
+    [OutboxCleanupService](group-04-events-outbox.md#outboxcleanupservice) or the single
+    [OutboxDisabledNoticeService](group-04-events-outbox.md#outboxdisablednoticeservice)
+    (`DependencyInjection.cs:186-198`). Turning it off under a broker is not honored:
+    `EnsureOutboxAvailableForProvider` throws at registration, because a broker with no outbox has
+    no delivery channel at all (`DependencyInjection.cs:857-864`, argued at `:142-149`). The check
+    runs in both `AddInfrastructure` (`:188`) and `AddBrokerMessaging` (`:749`) so a service host
+    that wires only the broker still fails loudly. The `OutboxMessages` table stays mapped either
+    way, so flipping the flag is never a migration.
+  - `EnableDelayedRedelivery` (`:179`), default `false`. It gates second-level redelivery on RabbitMQ
+    only, because that transport needs the `rabbitmq_delayed_message_exchange` plugin the Aspire
+    development container does not ship, and enabling it against a plugin-less broker fails at bus
+    start (`:167-172`, `DependencyInjection.cs:934-945`). Azure Service Bus schedules natively, so
+    the flag is deliberately not consulted there and the intervals apply unconditionally
+    (`:173-177`, `DependencyInjection.cs:976-984`).
+  - `RedeliveryIntervalsSeconds` (`:195`): defaults to `[60, 600, 3600]`, one minute, ten minutes and
+    one hour, a spread wide enough to ride out a dependency restart, a failover and a short incident
+    without an operator replaying the error queue by hand (`:181-187`). `BuildRedeliveryIntervals`
+    drops non-positive entries, because a zero or negative interval schedules an immediate
+    redelivery, which is what `UseMessageRetry` already does and would turn the second level into a
+    hot loop; when nothing survives, the caller skips the filter entirely
+    (`DependencyInjection.cs:1002-1013`).
 
-- **Why it's built this way**: defaulting `EnableInbox` to false and swapping in a no-op store keeps
-  a feature that requires a schema migration from breaking a host that has not run it
-  ([ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)); defaulting
-  `Provider` to `InProcess` keeps the monolith the zero-configuration case
-  ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
+- **Why it's built this way**: resolving both guards from the transport rather than shipping fixed
+  defaults is what lets one settings class serve the monolith and the extracted-service topology at
+  the same time ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)),
+  while keeping the at-least-once contract intact where it matters
+  ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html),
+  [ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)). Refusing an
+  outbox-less broker at registration rather than honoring it follows the fail-fast configuration
+  contract ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)):
+  the misconfiguration becomes a startup exception instead of silently dropped events.
 
 - **Where it's used**: bound with `.ValidateDataAnnotations().ValidateOnStart()` in
-  `AddInfrastructure` (`DependencyInjection.cs:139-142`), and re-read eagerly by
-  `AddBrokerMessaging`, which falls back to `new MessageBusSettings()` when the section is absent
-  (`DependencyInjection.cs:653-654`), short-circuits on `InProcess` (`:656-659`), and otherwise
-  replaces [`IMessageBus`](group-04-events-outbox.md#imessagebus) with
-  [`BrokerMessageBus`](group-04-events-outbox.md#brokermessagebus) (`:676`) and
-  [`IEventBus`](group-04-events-outbox.md#ieventbus) with `BrokerEventBus` (`:682`), so publishing
-  goes through the outbox and [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) becomes
-  the only delivery channel.
+  `AddInfrastructure` (`DependencyInjection.cs:160-163`), then re-read eagerly in the same method to
+  gate the outbox hosted services (`:186-198`). `AddBrokerMessaging` reads it again, falling back to
+  `new MessageBusSettings()` when the section is absent (`:738-739`), short-circuits on `InProcess`
+  (`:741-744`), and otherwise replaces [IMessageBus](group-04-events-outbox.md#imessagebus) with
+  [BrokerMessageBus](group-04-events-outbox.md#brokermessagebus) (`:771`) and
+  [IEventBus](group-04-events-outbox.md#ieventbus) with
+  [BrokerEventBus](group-04-events-outbox.md#brokereventbus) (`:777`), so
+  [OutboxProcessor](group-04-events-outbox.md#outboxprocessor) becomes the only delivery channel.
+  [InProcessEventBus](group-04-events-outbox.md#inprocesseventbus) takes the options as an OPTIONAL
+  parameter and consults the resolved outbox flag to choose between writing rows and dispatching
+  directly (`InProcessEventBus.cs:38`, `:80-84`), and
+  [OutboxCleanupService](group-04-events-outbox.md#outboxcleanupservice) reads `IsInboxEnabled` to
+  decide whether to purge inbox rows (`OutboxCleanupService.cs:56`). Emulator wiring is delegated to
+  [ServiceBusEmulatorSupport](#servicebusemulatorsupport). Covered by
+  `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Settings/SettingsTests.cs`, which pins
+  both resolution rules unset and explicit (`SettingsTests.cs:262-263`, `:271-273`, `:286-287`,
+  `:295-297`).
 
-- **Caveats**: MassTransit is pinned to major version 8 by policy across this workspace, and the
-  retry configuration above is written against that API surface.
+- **Caveats**: MassTransit is pinned to major version 8 by workspace policy, and both the retry API
+  surface above and the existence of `EmulatorAdminEndpoint` are consequences of that pin.
 
 ---
 
 ### PushNotificationSettings
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/PushNotificationSettings.cs:6` · Level 1 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/PushNotificationSettings.cs:8` · Level 1 · class (sealed)
 
-- **What it is**: the concrete `PushNotifications` section. It implements
-  [`IPushNotificationSettings`](#ipushnotificationsettings) and adds one member the interface does
-  not carry: the regular expression a SignalR channel key must match
-  (`PushNotificationSettings.cs:6-24`).
+- **What it is**: the `PushNotifications` section: the on switch, the SignalR hub path, and the
+  regular expression a channel key must match before a client may join or leave a channel
+  (`PushNotificationSettings.cs:5-29`).
 
-- **Depends on**: [`IPushNotificationSettings`](#ipushnotificationsettings)
-  (`IPushNotificationSettings.cs:6-13`). No externals, and notably no data annotations.
+- **Depends on**: `NotificationScopeKey` from `MMCA.Common.Shared.Notifications` (`:1`), for the
+  `Pattern` constant that supplies the default. See
+  [NotificationScopeKey](group-10-notifications.md#notificationscopekey). No externals, and notably
+  no data annotations: nothing here has a range or a length to enforce.
 
-- **Concept introduced: allow-listing client-supplied group names.** `[Rubric §11: Security]` and
-  `[Rubric §26: Front-End Security]` both apply. A hub method that takes a channel key and calls
-  `Groups.AddToGroupAsync` is joining a SignalR group named by the *client*; with no constraint, a
-  caller could join any group the server publishes to and receive another tenant's or another
-  event's traffic. `ChannelKeyPattern` is that constraint, defaulting to `"^(event|session):[0-9]+$"`
-  (`PushNotificationSettings.cs:23`), so only `event:` and `session:` keys with a numeric suffix are
-  accepted.
+- **Concept introduced: allow-listing client-supplied group names.** `[Rubric §11, Security]` and
+  `[Rubric §26, Front-End Security]` both apply. A hub method that takes a channel key and calls
+  `Groups.AddToGroupAsync` is joining a SignalR group named by the CLIENT. With no constraint, a
+  caller could join any group the server publishes to and receive another event's or another
+  session's traffic. `ChannelKeyPattern` is that constraint (`PushNotificationSettings.cs:19-29`).
 
-  `[Rubric §9: API & Contract Design]` assesses how additive changes are made. The property is
-  declared on the concrete class only, precisely so
-  [`IPushNotificationSettings`](#ipushnotificationsettings) stays unchanged and no downstream
-  implementer breaks (`PushNotificationSettings.cs:17-22`). The consumer therefore takes
-  `IOptions<PushNotificationSettings>` rather than the interface.
+  `[Rubric §16, Maintainability]` shows up in where the default comes from. The property does not
+  hard-code a regex: it defaults to `NotificationScopeKey.Pattern`
+  (`PushNotificationSettings.cs:29`, the constant `"^(event|session):[0-9]+$"` at
+  `NotificationScopeKey.cs:32`), the SAME constant the producers `NotificationScopeKey.ForEvent` and
+  `ForSession` format against (`NotificationScopeKey.cs:37`, `:43`). Producer and guard therefore
+  cannot drift apart by editing one of them; a host that overrides the pattern from configuration
+  takes that alignment on itself, which the doc says outright (`:22-27`).
 
 - **Walkthrough**: one static field and three `init` properties.
-  - `SectionName = "PushNotifications"` (`PushNotificationSettings.cs:9`).
-  - `Enabled` (`:12`) and `HubPath`, defaulting to `"/hubs/notifications"` (`:15`), both inherited
-    from the interface (`IPushNotificationSettings.cs:9`, `:12`).
-  - `ChannelKeyPattern` (`:23`). Enforcement lives in
-    [`NotificationHub`](group-10-notifications.md#notificationhub): `EnsureValidChannelKey` pulls a
-    `Regex` from a cache keyed on the pattern string (`NotificationHub.cs:63-65`) and throws
-    `HubException("Invalid channel key.")` on an empty or non-matching key (`NotificationHub.cs:67-70`),
-    and both `JoinChannelAsync` (`:46`) and `LeaveChannelAsync` (`:57`) call it before touching
-    `Groups`. The regex is built with a one-second match timeout
-    (`NotificationHub.cs:31`, `:65`), so a pathological configured pattern cannot hang the
-    connection, and the cache is a `ConcurrentDictionary` so join and leave do not recompile the
-    regex per call (`NotificationHub.cs:33-34`).
+  - `SectionName = "PushNotifications"` (`PushNotificationSettings.cs:11`).
+  - `Enabled` (`:14`): plain `bool`, default `false`.
+  - `HubPath` (`:17`): defaults to `"/hubs/notifications"`.
+  - `ChannelKeyPattern` (`:29`). Enforcement lives in
+    [NotificationHub](group-10-notifications.md#notificationhub): `EnsureValidChannelKey` pulls a
+    `Regex` out of a static `ConcurrentDictionary` cache keyed on the pattern string
+    (`NotificationHub.cs:71-73`) and throws `HubException("Invalid channel key.")` on an empty or
+    non-matching key (`NotificationHub.cs:75-78`); both `JoinChannelAsync` (`:46`) and
+    `LeaveChannelAsync` (`:62`) call it before touching `Groups`. The compiled regex carries a
+    one-second match timeout (`NotificationHub.cs:31`, `:73`), so a pathological configured pattern
+    cannot hang the connection, and the cache means join and leave do not recompile per call
+    (`NotificationHub.cs:33-34`).
 
 - **Why it's built this way**: a configurable pattern rather than a hard-coded one lets each
   application define its own channel taxonomy without forking the hub, while the shipped default is
-  restrictive rather than permissive.
+  restrictive rather than permissive. Sourcing that default from the producer's own constant is the
+  cheaper half of the same idea: the safe configuration is also the zero-configuration one.
 
-- **Where it's used**: bound with `.ValidateDataAnnotations().ValidateOnStart()` and adapted to the
-  interface in `AddPushNotifications` (`DependencyInjection.cs:530-535`), which then registers
-  SignalR, optionally adds the Redis backplane when a `redis` connection string is present
-  (`:539-543`), and replaces the null sender with
-  [`SignalRPushNotificationSender`](group-10-notifications.md#signalrpushnotificationsender) (`:546`).
-  The pattern itself is read only by [`NotificationHub`](group-10-notifications.md#notificationhub).
+- **Where it's used**: bound with `.ValidateDataAnnotations().ValidateOnStart()` in
+  `AddPushNotifications` (`DependencyInjection.cs:617-620`), which then registers SignalR (`:622`),
+  adds the Redis backplane when a `redis` connection string is present (`:624-628`), and replaces
+  the null implementations with
+  [SignalRPushNotificationSender](group-10-notifications.md#signalrpushnotificationsender) and
+  [SignalRLiveChannelPublisher](group-10-notifications.md#signalrlivechannelpublisher)
+  (`:631-632`). The settings object itself is injected as `IOptions<PushNotificationSettings>` and
+  read only by [NotificationHub](group-10-notifications.md#notificationhub)
+  (`NotificationHub.cs:72`). The default is pinned by
+  `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Settings/SettingsTests.cs:342-343` and an
+  override by `:352`, `:357`.
+
+- **Caveats**: this class stands alone. There is no `IPushNotificationSettings` abstraction in the
+  current source, so a consumer that wants the values takes the concrete options type.
 
 ---
 
@@ -1811,41 +2040,42 @@ gRPC clients, which is precisely the reversibility
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/SchedulerSettings.cs:16` · Level 1 · class (sealed)
 
 - **What it is**: the `Scheduler` section for the recurring-job runner: the on switch, the fallback
-  poll interval, the row-claim lease, which engine holds the `ScheduledJobs` table, and a
-  per-job cron override map. Every property has a default, so a host that opts in needs only
+  poll interval, the row-claim lease, which engine holds the `ScheduledJobs` table, and a per-job
+  cron override map. Every property has a default, so a host that opts in needs only
   `Scheduler:Enabled` (`SchedulerSettings.cs:6-9`).
 
-- **Depends on**: [`DataSource`](group-07-persistence-ef-core.md#datasource), the engine enum,
-  imported from `MMCA.Common.Application.Interfaces.Infrastructure` (`SchedulerSettings.cs:2`,
-  `:52`), and [`ScheduledJobOverrideSettings`](#scheduledjoboverridesettings), the one-property
-  record-like class declared in the same file (`:66-75`). Externals:
+- **Depends on**: [DataSource](group-07-persistence-ef-core.md#datasource), the engine enum, imported
+  from `MMCA.Common.Application.Interfaces.Infrastructure` (`SchedulerSettings.cs:2`, `:52`), and
+  [ScheduledJobOverrideSettings](#scheduledjoboverridesettings), the one-property class declared at
+  the bottom of the same file (`:66-75`). Externals:
   `System.ComponentModel.DataAnnotations` for `[Range]` (`:1`).
 
-- **Concept introduced: one setting that gates both the behavior and the schema.** Most feature
-  flags gate behavior. `Enabled` also decides whether the `ScheduledJobs` table is mapped into the
-  EF model at all: [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext)
-  reads `IOptions<SchedulerSettings>` with `GetService` (not `GetRequiredService`) and treats an
-  absent registration as disabled, then requires the physical source to be the default one
-  (`ApplicationDbContext.cs:263-268`). The consequence is the one worth learning: a host that leaves
+- **Concept introduced: one setting that gates both the behavior and the schema.** Most feature flags
+  gate behavior. `Enabled` also decides whether the `ScheduledJobs` table is mapped into the EF model
+  at all: [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext) reads
+  `IOptions<SchedulerSettings>` with `GetService` (not `GetRequiredService`) so an absent
+  registration reads as disabled rather than failing every context construction, then additionally
+  requires the physical source to be the default one
+  (`ApplicationDbContext.cs:283-288`). The consequence is the one worth learning: a host that leaves
   the flag false has exactly the model it had before the scheduler shipped, so its migrations never
   see the table (`SchedulerSettings.cs:10-15`).
 
-  `[Rubric §16: Maintainability]` assesses whether adopting a framework feature is additive. Because
+  `[Rubric §16, Maintainability]` assesses whether adopting a framework feature is additive. Because
   registration and activation are separate (`AddScheduledJobs` binds and registers the runner, but
   the runner returns immediately unless `Enabled` is true, `ScheduledJobRunner.cs:77`), a host can
   ship the registration and turn the scheduler on per environment
-  (`DependencyInjection.cs:298-302`).
+  (`DependencyInjection.cs:385-389`).
 
-  `[Rubric §29: Resilience & Business Continuity]` assesses safe behavior under replication.
+  `[Rubric §29, Resilience and Business Continuity]` assesses safe behavior under replication.
   `LeaseSeconds` is what makes multiple replicas safe: a replica claims a job row for that many
   seconds and other replicas skip claimed rows, so no occurrence runs twice; if the claiming replica
   dies mid-execution, the row becomes claimable again once the lease expires
   (`SchedulerSettings.cs:36-43`, applied at `ScheduledJobRunner.cs:424`).
 
-  `[Rubric §31: Cost/FinOps]` assesses idle-cost defaults. `PollingIntervalSeconds` is a *bound* on
+  `[Rubric §31, Cost and FinOps]` assesses idle-cost defaults. `PollingIntervalSeconds` is a BOUND on
   the smart wait, not a hot loop: the runner normally sleeps until the earliest due job and uses this
   value only to cap that sleep and to notice a configuration-driven schedule change
-  (`SchedulerSettings.cs:28-34`, `ScheduledJobRunner.cs:116`).
+  (`SchedulerSettings.cs:28-34`, `ScheduledJobRunner.cs:113-116`).
 
 - **Walkthrough**: one static field, four `init` properties and one get-only dictionary.
   - `SectionName = "Scheduler"` (`SchedulerSettings.cs:19`).
@@ -1859,74 +2089,35 @@ gRPC clients, which is precisely the reversibility
     engine that table lives on; Cosmos DB is not a valid value (`:45-51`). The runner resolves it
     against `DataSourceKey.DefaultName` (`ScheduledJobRunner.cs:216`).
   - `Jobs` (`:60`): a get-only `Dictionary<string, ScheduledJobOverrideSettings>` keyed by
-    [`IScheduledJob`](group-05-cqrs-pipeline.md#ischeduledjob)`.Name` and bound from
+    [IScheduledJob](group-05-cqrs-pipeline.md#ischeduledjob)`.Name` and bound from
     `Scheduler:Jobs:{Name}`. `ResolveCronExpression` takes the override only when the entry exists
-    **and** its `Cron` is non-blank, otherwise the job's compiled-in expression stands
+    AND its `Cron` is non-blank, otherwise the job's compiled-in expression stands
     (`ScheduledJobRunner.cs:162-166`). A changed expression is picked up on the next cycle: the
-    runner rewrites the stored value and recomputes the next occurrence
-    (`ScheduledJobRunner.cs:278-352`).
+    runner compares the resolved expression against the stored one, leaves an unchanged row alone
+    (recomputing it every cycle would push every schedule forward and nothing would ever fire), and
+    otherwise rewrites the stored value and recomputes the next occurrence from the current instant
+    (`ScheduledJobRunner.cs:276-298`).
 
-- **Why it's built this way**: a persistent, database-backed cron scheduler with per-row leases is
-  the decision recorded in [ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html);
-  everything in this class is the operator-facing surface of it. Defaulting every property means the
-  section is optional, which is the same fail-soft-on-absence, fail-fast-on-bad-value posture
+- **Why it's built this way**: a persistent, database-backed cron scheduler with per-row leases is the
+  decision recorded in
+  [ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html); everything in this
+  class is the operator-facing surface of it. Defaulting every property makes the section optional,
+  which is the same fail-soft-on-absence, fail-fast-on-bad-value posture
   [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html) describes:
   the `[Range]` guards run under `ValidateOnStart`, so a bad value fails the boot rather than the
   first cycle.
 
 - **Where it's used**: bound with validation in `AddScheduledJobs`
-  (`DependencyInjection.cs:306-309`), which registers the runner through
+  (`DependencyInjection.cs:393-396`), which registers the runner through
   `TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, ScheduledJobRunner>())` rather than
-  `AddHostedService` precisely so two calls cannot start two runners racing for the same rows
-  (`DependencyInjection.cs:311-315`). Read by `ScheduledJobRunner` (`ScheduledJobRunner.cs:42`,
-  `:46`) and by [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) for
-  the table gate (`ApplicationDbContext.cs:266-268`); the design-time helper supplies a default
-  instance so `dotnet ef` can build a model without a host
-  (`DesignTimeDbContextHelper.cs:82`).
-
----
-
-### SmtpSettings
-
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/SmtpSettings.cs:9` · Level 1 · class (sealed)
-
-- **What it is**: the concrete `Smtp` section implementing [`ISmtpSettings`](#ismtpsettings),
-  validated by data annotations at startup (`SmtpSettings.cs:5-8`).
-
-- **Depends on**: [`ISmtpSettings`](#ismtpsettings) (`ISmtpSettings.cs:6-28`). Externals:
-  `System.ComponentModel.DataAnnotations` for `[Range]` (`SmtpSettings.cs:1`).
-
-- **Concept**: the validate-on-start gate taught under
-  [`ConnectionStringSettings`](#connectionstringsettings), here guarding a numeric range rather than
-  a required value. `[Rubric §15: Best Practices & Code Quality]` assesses whether avoidable
-  failures are moved earlier. `[Range(1, 65535)]` on `Port` (`SmtpSettings.cs:21`) means a
-  configuration typo such as `0` or `70000` fails the host at boot with a named error instead of
-  surfacing as a socket exception the first time the application tries to send mail. Note also the
-  named constant instead of a magic number: `DefaultSmtpPort = 25` is a public `static readonly`
-  field (`:15`) used as the property's own default (`:22`), so the value is discoverable and
-  testable rather than inlined.
-
-- **Walkthrough**: two static fields then the seven interface members.
-  - `SectionName = "Smtp"` (`SmtpSettings.cs:12`) and `DefaultSmtpPort = 25` (`:15`).
-  - `Host` (`:18`), `Port` (`:22`), `Username` (`:25`), `Password` (`:28`), `EnableSsl` (`:31`,
-    defaulting to `false`), `From` (`:34`), `To` (`:37`). Every string defaults to `string.Empty`,
-    so an absent section binds cleanly and fails later at send time; only `Port` is range-checked.
-    `To` is the default recipient used by the no-argument `SendAsync` overload
-    (`ISmtpSettings.cs:26`).
-
-- **Why it's built this way**: annotations plus `ValidateOnStart` cost one line at registration and
-  move an entire class of misconfiguration from run time to boot, the contract
-  [ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html) describes.
-
-- **Where it's used**: bound with `.ValidateDataAnnotations().ValidateOnStart()` and adapted to
-  [`ISmtpSettings`](#ismtpsettings) in `AddInfrastructure` (`DependencyInjection.cs:81-85`);
-  consumed by [`SmtpEmailSender`](group-10-notifications.md#smtpemailsender), which takes the
-  interface as a primary-constructor parameter (`SmtpEmailSender.cs:12`).
-
-- **Caveats**: `EnableSsl` is honored as configured, and nothing in these settings forces TLS on, so
-  requiring it in a deployed environment is a configuration responsibility. The SMTP client
-  construction carries a documented `S5332` suppression because local development targets MailDev,
-  which does not offer TLS (`SmtpEmailSender.cs:29`).
+  `AddHostedService`, precisely so two calls cannot start two runners racing for the same rows
+  (`DependencyInjection.cs:398-402`). Read by
+  [ScheduledJobRunner](#scheduledjobrunner) (`ScheduledJobRunner.cs:42`, `:46`) and by
+  [ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext) for the table gate
+  (`ApplicationDbContext.cs:286-288`); the design-time helper supplies a default instance so
+  `dotnet ef` can build a model without a host
+  ([DesignTimeDbContextHelper](group-07-persistence-ef-core.md#designtimedbcontexthelper),
+  `DesignTimeDbContextHelper.cs:136-137`).
 
 ---
 
@@ -1935,35 +2126,34 @@ gRPC clients, which is precisely the reversibility
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/TenancySettings.cs:121` · Level 1 · class (sealed)
 
 - **What it is**: one declared tenant, bound from `Tenancy:Tenants:{tenantId}`. It holds exactly one
-  member: that tenant's per-data-source connection overrides
-  (`TenancySettings.cs:118-130`).
+  member: that tenant's per-data-source connection overrides (`TenancySettings.cs:118-130`).
 
-- **Depends on**: [`TenantDataSourceOverrideSettings`](#tenantdatasourceoverridesettings), the value
+- **Depends on**: [TenantDataSourceOverrideSettings](#tenantdatasourceoverridesettings), the value
   type of its dictionary (`TenancySettings.cs:129`, declared at `:138`). Held by
-  [`TenancySettings`](#tenancysettings)`.Tenants` (`:115`).
+  [TenancySettings](#tenancysettings)`.Tenants` (`:115`).
 
 - **Concept introduced: declaring a tenant is only required for the database-per-tenant case.** This
   is the single most important thing to read off this class, and it is stated in its own doc
-  (`TenancySettings.cs:109-114`). A shared-schema tenant needs **no** entry here at all, because its
-  isolation comes from the global query filter and the tenant save interceptor, both of which are
-  always registered (`DependencyInjection.cs:60-63`). Configuration is therefore only how a tenant
-  is *promoted* to its own database.
+  (`TenancySettings.cs:109-114`). A shared-schema tenant needs NO entry here at all, because its
+  isolation comes from the global query filter and the
+  [TenantSaveChangesInterceptor](group-07-persistence-ef-core.md#tenantsavechangesinterceptor), both
+  of which are registered unconditionally by `AddInfrastructure` (`DependencyInjection.cs:59-62`).
+  Configuration is therefore only how a tenant is PROMOTED to its own database.
 
-  `[Rubric §8: Data Architecture]` assesses how deliberately data is partitioned. The dictionary is
-  keyed by **physical** data source name (the name
-  [`IDataSourceResolver`](group-07-persistence-ef-core.md#idatasourceresolver) produces, for example
+  `[Rubric §8, Data Architecture]` assesses how deliberately data is partitioned. The dictionary is
+  keyed by PHYSICAL data source name (the name
+  [IDataSourceResolver](group-07-persistence-ef-core.md#idatasourceresolver) produces, for example
   `Default` or `Conference`), and the key choice is load-bearing enough that
-  [`TenancySettingsValidator`](#tenancysettingsvalidator) fails the boot on a key that does not
+  [TenancySettingsValidator](#tenancysettingsvalidator) fails the boot on a key that does not
   round-trip. A tenant can override some sources and share others: a source with an entry is routed
-  to the tenant's own database, a source without one stays shared
-  (`TenancySettings.cs:123-128`).
+  to the tenant's own database, a source without one stays shared (`TenancySettings.cs:123-128`).
 
 - **Walkthrough**: one member.
   - `DataSources` (`TenancySettings.cs:129`): a get-only
-    `Dictionary<string, TenantDataSourceOverrideSettings>`, bound from
+    `Dictionary<string, TenantDataSourceOverrideSettings>` bound from
     `Tenancy:Tenants:{tenantId}:DataSources:{sourceName}`. Get-only is the correct shape for a bound
-    dictionary: the configuration binder populates an existing instance rather than assigning a new
-    one.
+    dictionary, since the configuration binder populates an existing instance rather than assigning
+    a new one.
 
 - **Why it's built this way**: keeping the per-tenant overrides one level below the tenant, rather
   than flattening connection strings onto the tenant entry, is what lets a single tenant be
@@ -1971,83 +2161,98 @@ gRPC clients, which is precisely the reversibility
   [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) records.
 
 - **Where it's used**: read by
-  [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory)`.ResolveTenantOverride`,
-  which looks up the current tenant then the requested source and clones the shared
-  `PhysicalDataSource` with the tenant's connection string while keeping the ORIGINAL
-  `DataSourceKey`, so one compiled EF model serves every tenant's database
-  (`DbContextFactory.cs:148-173`). Also expanded by `TenantDataSourceTargets.Expand`, which turns
-  the shared sources plus every (tenant, overridden source) pair into the list the outbox and
+  [DbContextFactory](group-07-persistence-ef-core.md#dbcontextfactory)`.ResolveTenantOverride`, which
+  looks up the current tenant then the requested source and clones the shared `PhysicalDataSource`
+  with the tenant's connection string while keeping the ORIGINAL `DataSourceKey`, so one compiled EF
+  model serves every tenant's database (`DbContextFactory.cs:143-168`). Also expanded by
+  [TenantDataSourceTargets](group-07-persistence-ef-core.md#tenantdatasourcetargets)`.Expand`, which
+  turns the shared sources plus every (tenant, overridden source) pair into the list the outbox and
   cleanup background services sweep (`TenantDataSourceTargets.cs:66-76`), and validated per entry by
-  [`TenancySettingsValidator`](#tenancysettingsvalidator) (`TenancySettingsValidator.cs:71-106`).
+  [TenancySettingsValidator](#tenancysettingsvalidator) (`TenancySettingsValidator.cs:71-106`).
 
 ---
 
-### JwtSettings
+### ConnectionStringSettingsValidator
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:16` · Level 2 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ConnectionStringSettingsValidator.cs:30` · Level 2 · class (sealed, internal)
 
-- **What it is**: the concrete `Jwt` section. It implements [`IJwtSettings`](#ijwtsettings) and adds
-  the piece the interface cannot express: algorithm-aware validation of the key material
-  (`JwtSettings.cs:16`, `:51-66`).
+- **What it is**: the startup validator for [ConnectionStringSettings](#connectionstringsettings). It
+  enforces exactly one rule: the host must be able to reach at least one database, declared either in
+  the top-level `ConnectionStrings` section or on a named `DataSources` entry
+  (`ConnectionStringSettingsValidator.cs:5-9`).
 
-- **Depends on**: [`IJwtSettings`](#ijwtsettings) and, through it,
-  [`JwtSigningAlgorithm`](#jwtsigningalgorithm) (`JwtSettings.cs:16`, `:22`). Externals:
-  `System.ComponentModel.DataAnnotations` for `[Required]` and, critically, for the
-  `IValidatableObject` interface (`:1`).
+- **Depends on**: [DataSourcesSettings](#datasourcessettings) as an OPTIONAL primary-constructor
+  parameter (`:30`) and [ConnectionStringSettings](#connectionstringsettings) as the validated type
+  (`:31`). Externals: `Microsoft.Extensions.Options` for `IValidateOptions<T>` and
+  `ValidateOptionsResult` (`:1`).
 
-- **Concept introduced: `IValidatableObject` for conditional requirements.** Attributes describe a
-  property in isolation, so they cannot say "this one is required only when that one has a
-  particular value". `IValidatableObject` is the options-validation extension point for exactly that
-  case: the type implements a single `Validate` method that yields one `ValidationResult` per
-  failure, and `.ValidateDataAnnotations()` runs it alongside the attribute checks. This class is
-  the framework's canonical example (`JwtSettings.cs:12-14`).
+- **Concept introduced: the rule that cannot be an attribute.** A data annotation can only see the
+  object it decorates. This rule spans two independently bound configuration sections, and that is
+  the whole reason the class exists. The class remarks say what it replaced: a `[Required]` on
+  `ConnectionStringSettings.SQLServerConnectionString`, which encoded "SQL Server is the only engine
+  a host can boot on" (`:11-18`). That stopped being true once a small application could run entirely
+  on SQLite or Cosmos, declaring its databases through the `DataSources` section and leaving the
+  top-level section empty; the annotation failed such a host at startup even though every one of its
+  entities resolved to a configured database. The registration comment in the composition root makes
+  the same point at the call site (`DependencyInjection.cs:69-73`).
 
-  `[Rubric §11: Security]` assesses credential handling. The HS256 branch does not merely check that
-  a secret is present, it checks the length: fewer than 32 characters fails, and the message
-  explicitly tells the operator to replace the placeholder with a real secret from user-secrets or
-  environment variables (`JwtSettings.cs:53-58`). That is deliberate: a short or shipped-placeholder
-  HMAC key is the failure mode that would otherwise reach production silently.
+  `[Rubric §10, Cross-Cutting Concerns]` assesses whether configuration is validated centrally rather
+  than defensively at each read. The check runs once, at boot, under `ValidateOnStart`, so no
+  downstream component has to ask "did anyone configure a database".
 
-  `[Rubric §15: Best Practices & Code Quality]` assesses fail-fast posture. Registration pairs the
-  bind with `.ValidateDataAnnotations().ValidateOnStart()`
-  (`WebApplicationBuilderExtensions.cs:346-349`), so both the attribute checks and `Validate` run at
-  boot, not on the first token issued
-  ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)).
+  `[Rubric §13, Observability and Operability]` assesses whether a failure tells the operator what to
+  do. `NoDatabaseConfiguredMessage` is an `internal const` (`:38-43`) rather than an inline string,
+  and it lists BOTH shapes (`ConnectionStrings:SQLServerConnectionString`,
+  `ConnectionStrings:SqliteConnectionString`, `ConnectionStrings:CosmosConnectionString`, or
+  `DataSources:Tickets:SqliteConnectionString`) because which one is missing depends on whether the
+  host is a single-database monolith or a database-per-module one. The final sentence states the
+  design decision itself: a host with no database at all cannot serve a request, so it fails here
+  rather than on its first query.
 
-- **Walkthrough**: one static field, eight `init` properties, one method.
-  - `SectionName = "Jwt"` (`JwtSettings.cs:19`).
-  - `SigningAlgorithm` (`:22`): defaults to `JwtSigningAlgorithm.HS256`, which is what makes the
-    monolith the zero-configuration case.
-  - `SecretForKey` (`:25`), `RsaPrivateKeyPem` (`:28`), `RsaPublicKeyPem` (`:31`): none carry
-    `[Required]`, because whether they are required is decided in `Validate`.
-  - `Issuer` (`:35`) and `Audience` (`:39`): both `[Required]` (`:34`, `:38`), because they matter in
-    every mode.
-  - `AccessTokenExpirationMinutes` (`:42`): default `15`. `RefreshTokenExpirationDays` (`:45`):
-    default `7`. The short-access-plus-long-refresh split of
-    [ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html), expressed as
-    defaults rather than as required configuration.
-  - `Validate(ValidationContext)` (`:51-66`): an iterator method with two independent checks. Under
-    HS256, `SecretForKey.Length < 32` yields a failure naming `SecretForKey` (`:53-58`); under
-    RS256, a null or whitespace `RsaPrivateKeyPem` yields a failure naming `RsaPrivateKeyPem`
-    (`:60-65`). Note the asymmetry against the interface docs: the private key is enforced here, the
-    public key is not, because a service that only *validates* remotely fetches the key through JWKS
-    rather than configuring it.
+  `[Rubric §8, Data Architecture]` shows up in what the rule deliberately does NOT weaken. A host
+  with no connection string anywhere still fails to start (`:20-24`). Silently booting one would
+  trade a clear startup failure for an `InvalidOperationException` on the first query, or worse, a
+  service reporting healthy while unable to serve a single request.
 
-- **Why it's built this way**: keeping the conditional rule in code next to the properties it
-  constrains, rather than in the registration call, means every host that binds this section gets the
-  same guarantee without repeating it. The HMAC-to-RSA switch is a hard cutover that invalidates
-  every existing token (`JwtSigningAlgorithm.cs:11-16`), so failing the boot on a half-configured
-  RS256 host is strictly better than issuing tokens nobody can validate
-  ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)).
+- **Walkthrough**: one constant, the interface method, and two predicates.
+  - The primary constructor takes `DataSourcesSettings? dataSources = null` (`:30`). The default is
+    what makes the validator constructible in a container that binds the settings without calling
+    `AddInfrastructure` (`:26-29`); such a container still gets the top-level check.
+  - `NoDatabaseConfiguredMessage` (`:38-43`): `internal const`, so tests assert against the same
+    string the host emits.
+  - `Validate(string? name, ConnectionStringSettings options)` (`:46-53`): null-guards the options,
+    then returns `Success` if either predicate holds and `Fail(NoDatabaseConfiguredMessage)`
+    otherwise. Note the short-circuit `||`: one database anywhere is enough.
+  - `HasTopLevelConnection` (`:56-59`): static, and uses `IsNullOrWhiteSpace` rather than
+    `IsNullOrEmpty` across all three engine properties, which matters because
+    [ConnectionStringSettings](#connectionstringsettings) initialises each of them to
+    `string.Empty` rather than leaving them null (`ConnectionStringSettings.cs:18`, `:24`, `:27`).
+  - `HasNamedConnection` (`:66-71`): instance, because it reads the injected sources. It passes when
+    ANY entry under `DataSources` names a database on any engine. The doc explains why one is enough:
+    an entry carrying a connection string is a physical source the resolver registers, so the host
+    has somewhere to read and write even with the top-level section empty (`:61-65`).
 
-- **Where it's used**: bound with validation in `AddCommonAuthentication`
-  (`WebApplicationBuilderExtensions.cs:346-349`), which then re-reads the section eagerly to build
-  the JWT bearer `TokenValidationParameters`, throwing when the section is missing entirely
-  (`:354-357`). The same registration installs the `OnMessageReceived` event that lifts the token
-  out of the `access_token` query string for `/hubs` requests, because SignalR WebSocket connections
-  cannot send headers (`:359-375`). An adapter exposes the bound instance as
-  [`IJwtSettings`](#ijwtsettings) for [`TokenService`](group-08-auth.md#tokenservice)
-  (`DependencyInjection.cs:65`).
+- **Why it's built this way**: this is one of the two custom `IValidateOptions<T>` implementations the
+  fail-fast configuration contract
+  ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)) records,
+  the other being [TenancySettingsValidator](#tenancysettingsvalidator). Relaxing the SQL Server
+  requirement into a cross-section reachability rule is what made the polyglot persistence story
+  ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)) usable by a host that
+  never touches SQL Server, without giving up the boot-time guarantee for the hosts that do.
+
+- **Where it's used**: registered by `AddInfrastructure` with
+  `TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<ConnectionStringSettings>, ConnectionStringSettingsValidator>())`
+  (`DependencyInjection.cs:74-75`), immediately after the `ValidateOnStart` chain that binds the
+  section (`:64-67`); `TryAddEnumerable`, like the tenancy validator, because two modules calling
+  `AddInfrastructure` must not run the same validation twice. Covered by
+  `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Settings/ConnectionStringSettingsValidatorTests.cs`,
+  which drives the validator directly for each engine and for the named-source shapes
+  (`:19-77`), with no `DataSources` section at all (`:80-82`), and end to end through the real
+  `ValidateOnStart` chain including the SQLite-only host (`:86-111`).
+
+- **Caveats**: the type is `internal`, so a consumer cannot subclass or replace it; a host needing
+  extra connection-string rules registers its own additional
+  `IValidateOptions<ConnectionStringSettings>`.
 
 ---
 
@@ -2057,93 +2262,107 @@ gRPC clients, which is precisely the reversibility
 
 - **What it is**: the `Outbox` section, tuning the outbox background processor and its cleanup
   companion. Every property has a default, so the section is optional and a host with no `Outbox`
-  configuration still runs a working outbox (`OutboxSettings.cs:6-9`).
+  configuration still runs a working outbox (`OutboxSettings.cs:6-9`). Note the division of labour
+  with [MessageBusSettings](#messagebussettings): that class decides WHETHER the outbox runs, this
+  one decides HOW.
 
-- **Depends on**: [`DataSource`](group-07-persistence-ef-core.md#datasource) (the engine enum) and
-  [`DataSourceKey`](group-07-persistence-ef-core.md#datasourcekey) (for its `DefaultName` constant),
-  both imported through `MMCA.Common.Application.Interfaces.Infrastructure`
-  (`OutboxSettings.cs:2`, `:48`, `:57`). Externals: `System.ComponentModel.DataAnnotations` for the
-  `[Range]` attributes (`:1`).
+- **Depends on**: [DataSource](group-07-persistence-ef-core.md#datasource) (the engine enum) and
+  [DataSourceKey](group-07-persistence-ef-core.md#datasourcekey) (for its `DefaultName` constant),
+  both imported through `MMCA.Common.Application.Interfaces.Infrastructure` (`OutboxSettings.cs:2`,
+  `:48`, `:57`). Externals: `System.ComponentModel.DataAnnotations` for the `[Range]` attributes
+  (`:1`).
 
 - **Concept introduced: options binding with a static `SectionName`.** Note the convention that runs
   through every settings class in this group: `public static readonly string SectionName = "Outbox";`
   (`OutboxSettings.cs:13`) is the single source of truth for the section name, referenced at the bind
-  call instead of duplicating the literal. The properties are `init`-only, so once materialized from
-  configuration they are immutable for the process lifetime.
+  call instead of duplicating the literal (`DependencyInjection.cs:127`). The properties are
+  `init`-only, so once materialized from configuration they are immutable for the process lifetime.
 
-  `[Rubric §6: CQRS & Event-Driven]` assesses how reliably state changes turn into dispatched events.
-  This is the knob set for the at-least-once outbox
+  `[Rubric §6, CQRS and Event-Driven]` assesses how reliably state changes turn into dispatched
+  events. This is the knob set for the at-least-once outbox
   ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)): `MaxRetries`
   (`:21`) caps attempts, and `ProcessingDelaySeconds` (`:40`) bounds the duplicate-dispatch window.
   The in-process path (save aggregate and outbox row, dispatch, mark processed) must complete inside
   that delay or the processor may re-dispatch the same event, which is why handlers must be
   idempotent regardless (`:33-38`).
 
-  `[Rubric §29: Resilience & Business Continuity]` assesses behavior under replication and repeated
+  `[Rubric §29, Resilience and Business Continuity]` assesses behavior under replication and repeated
   failure. Three properties carry the weight. `LeaseSeconds` (`:82`) claims a batch for a replica so
   concurrent replicas never double-dispatch, and expires so a dead replica's rows become claimable
-  again (`:75-81`, applied at `OutboxProcessor.cs:422`). `RetryBackoffBaseSeconds` (`:99`) makes the
+  again (`:75-81`, applied at `OutboxProcessor.cs:462`). `RetryBackoffBaseSeconds` (`:99`) makes the
   retry cadence explicit: attempt `n` waits `base * 2^(n-1)`, multiplied by a jitter factor in
   [0.8, 1.2] so rows that failed together do not retry in lockstep, then capped at `LeaseSeconds`
-  (`:84-89`, implemented at `OutboxProcessor.cs:569-576`). The remark is worth reading as a design
+  (`:84-89`, implemented at `OutboxProcessor.cs:734-745`). The remark is worth reading as a design
   lesson: before this setting existed the claim was simply never cleared on failure, so the real
   retry cadence was an accident of the lease (300s) rather than a decision (`:90-97`).
 
-  `[Rubric §31: Cost/FinOps]` assesses cost-relevant defaults. `PollingIntervalSeconds` (`:31`) is a
-  fallback, not a hot loop (`:23-29`): with signal-based wakeup the processor wakes immediately on
-  new entries and otherwise smart-waits until the earliest pending message becomes eligible, so
+  `[Rubric §31, Cost and FinOps]` assesses cost-relevant defaults. `PollingIntervalSeconds` (`:31`)
+  is a fallback, not a hot loop (`:23-29`): with signal-based wakeup the processor wakes immediately
+  on new entries and otherwise smart-waits until the earliest pending message becomes eligible, so
   deployed environments set it high (300 in this workspace) to cut idle SQL polling without adding
   latency for real traffic.
 
-  `[Rubric §8: Data Architecture]` assesses how deliberately data is routed. The
+  `[Rubric §8, Data Architecture]` assesses how deliberately data is routed. The
   `DataSource` / `DatabaseName` pair (`:48`, `:57`) names where integration events published via
-  [`IEventBus`](group-04-events-outbox.md#ieventbus) are written, defaulting to the top-level
+  [IEventBus](group-04-events-outbox.md#ieventbus) are written, defaulting to the top-level
   connection strings so single-database behavior is preserved. It is a per-write target, not a global
-  switch: the doc is explicit that the *processor* still drains the outbox table of every relational
+  switch: the doc is explicit that the PROCESSOR still drains the outbox table of every relational
   physical source in use (`:53-56`).
 
 - **Walkthrough**: one static field then ten `init` properties, eight of them `[Range]`-validated.
   - `SectionName` (`OutboxSettings.cs:13`): static readonly `"Outbox"`, the bind key.
   - `BatchSize` (`:16-17`): `[Range(1, 1000)]`, default `50`; messages per cycle, used both to size
-    the fetch (`OutboxProcessor.cs:401`) and to decide whether more eligible work remains
-    (`OutboxProcessor.cs:315`, `:335`).
+    the fetch (`OutboxProcessor.cs:426`) and to decide whether more eligible work remains
+    (`OutboxProcessor.cs:339`, `:359`).
   - `MaxRetries` (`:20-21`): `[Range(1, 20)]`, default `5`; attempts before a message is treated as
-    dead-lettered and excluded from the poll (`OutboxProcessor.cs:345`, `:398`, `:535`).
+    dead-lettered and excluded from the poll (`OutboxProcessor.cs:369`, `:422`, `:667`). A value of
+    `1` is read as "the host asked for no retries at all" and honored
+    (`OutboxProcessor.cs:705-707`).
   - `PollingIntervalSeconds` (`:30-31`): `[Range(1, 3600)]`, default `2`; the fallback interval.
   - `ProcessingDelaySeconds` (`:39-40`): `[Range(0, 600)]`, default `5`; the eligibility delay,
-    applied as a cutoff on `OccurredOn` (`OutboxProcessor.cs:255`).
+    applied as a cutoff on the message timestamp (`OutboxProcessor.cs:142`, `:273`).
   - `DataSource` (`:48`): default `DataSource.SQLServer`; must be a relational provider (SQL Server
     or SQLite), since the outbox is a table.
   - `DatabaseName` (`:57`): default `DataSourceKey.DefaultName`; the logical source name paired with
     `DataSource`.
-  - `RetentionDays` (`:64-65`): `[Range(0, 3650)]`, default `7`; days a **processed** message is kept
-    before purge, with `0` disabling purging entirely, the pre-1.x behavior
-    (`OutboxCleanupService.cs:57`).
+  - `RetentionDays` (`:64-65`): `[Range(0, 3650)]`, default `7`; days a PROCESSED message is kept
+    before purge, with `0` disabling purging entirely and logging that it did so
+    (`OutboxCleanupService.cs:62`, `:220`).
   - `CleanupIntervalHours` (`:72-73`): `[Range(1, 168)]`, default `6`; the purge sweep cadence,
-    ignored when `RetentionDays` is `0` (`OutboxCleanupService.cs:63`).
+    ignored when `RetentionDays` is `0` (`OutboxCleanupService.cs:68`).
   - `LeaseSeconds` (`:81-82`): `[Range(10, 3600)]`, default `300`; the batch claim window.
   - `RetryBackoffBaseSeconds` (`:98-99`): `[Range(1, 3600)]`, default `10`; the exponential-backoff
     base described above.
   - `DeadLetterRetentionDays` (`:107-108`): `[Range(0, 3650)]`, default `0`, which falls back to
     `RetentionDays`. Set it higher to keep exhausted payloads around for diagnosis and manual replay;
-    the cleanup service keys the dead-letter cutoff on `OccurredOn`, since those rows never got a
-    `ProcessedOn` (`OutboxCleanupService.cs:117-133`).
+    the cleanup service resolves the fallback explicitly before computing its cutoff
+    (`OutboxCleanupService.cs:158-162`).
 
 - **Why it's built this way**: the defaults encode the framework's out-of-the-box posture
   ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) outbox,
   [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) database-per-service):
-  a monolith with no `Outbox` section gets a working at-least-once processor writing to its single
-  default database, while a multi-service deployment overrides `PollingIntervalSeconds`,
-  `DataSource` and `DatabaseName` to tune cost and routing. The `[Range]` guards give fail-fast
-  validation at bind time rather than a bad value surfacing mid-cycle.
+  a host with no `Outbox` section that has the outbox switched on gets a working at-least-once
+  processor writing to its single default database, while a multi-service deployment overrides
+  `PollingIntervalSeconds`, `DataSource` and `DatabaseName` to tune cost and routing. The `[Range]`
+  guards give fail-fast validation at bind time rather than a bad value surfacing mid-cycle
+  ([ADR-070](https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html)).
 
 - **Where it's used**: bound with `.ValidateDataAnnotations().ValidateOnStart()` in
-  `AddInfrastructure` (`DependencyInjection.cs:128-131`). Consumed by
-  [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) (`OutboxProcessor.cs:53`) and
-  [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice)
-  (`OutboxCleanupService.cs:43`) for batching, retry pacing and retention, and by both event buses
-  to pick the write target when publishing an integration event (`InProcessEventBus.cs:27`,
-  `BrokerEventBus.cs:34`) and by `EfInboxStore` (`EfInboxStore.cs:21`).
+  `AddInfrastructure` (`DependencyInjection.cs:126-129`). Consumed by
+  [OutboxProcessor](group-04-events-outbox.md#outboxprocessor) (`OutboxProcessor.cs:57`, `:64`) and
+  [OutboxCleanupService](group-04-events-outbox.md#outboxcleanupservice)
+  (`OutboxCleanupService.cs:48`, `:55`) for batching, retry pacing and retention; by both event buses
+  to pick the write target when publishing an integration event
+  ([InProcessEventBus](group-04-events-outbox.md#inprocesseventbus) `InProcessEventBus.cs:36`, `:77`;
+  [BrokerEventBus](group-04-events-outbox.md#brokereventbus) `BrokerEventBus.cs:34`, `:66`); and by
+  [EfInboxStore](group-04-events-outbox.md#efinboxstore), which deliberately reuses the same
+  `DataSource`/`DatabaseName` pair so the inbox lands in the consumer's own database
+  (`EfInboxStore.cs:41`, `:162`).
+
+- **Caveats**: `BrokerEventBus` throws when the resolved target does not support the outbox table,
+  naming both configuration keys in the message (`BrokerEventBus.cs:75`), so an outbox pointed at
+  Cosmos fails on first publish rather than at bind time; the `[Range]` attributes cannot express
+  "relational engines only".
 
 ---
 
@@ -2156,34 +2375,34 @@ gRPC clients, which is precisely the reversibility
   which paths bypass resolution, and which tenants are declared for database-per-tenant routing
   (`TenancySettings.cs:30-34`).
 
-- **Depends on**: [`TenantResolutionStrategy`](#tenantresolutionstrategy) (the strategy enum in the
-  same file, `:6-28`) and [`TenantEntrySettings`](#tenantentrysettings) (the value type of `Tenants`,
-  `:115`). No externals, and deliberately no data annotations: the checks that matter here are
-  relational, so they live in [`TenancySettingsValidator`](#tenancysettingsvalidator).
+- **Depends on**: [TenantResolutionStrategy](#tenantresolutionstrategy) (the strategy enum at the top
+  of the same file, `:6-28`) and [TenantEntrySettings](#tenantentrysettings) (the value type of
+  `Tenants`, `:115`). No externals, and deliberately no data annotations: the checks that matter here
+  are relational, so they live in [TenancySettingsValidator](#tenancysettingsvalidator).
 
 - **Concept introduced: "empty means the default" for bound collections.** This is a genuine
   configuration-binder trap and the class documents it explicitly (`TenancySettings.cs:41-48`). The
-  .NET configuration binder **adds** to a pre-populated collection rather than replacing it. If
+  .NET configuration binder ADDS to a pre-populated collection rather than replacing it. If
   `ResolutionOrder` shipped pre-filled with `[Claim, Header]`, a host that configured its own order
   would end up running the framework's entries as well. The resolution is a pair of properties: the
-  bound list starts empty (`:73`, `:103`), and the framework reads a computed
-  `Effective*` projection that substitutes a private static default when the bound list is empty
-  (`:76-77`, `:106-107`).
+  bound list starts empty (`:73`, `:103`), and the framework reads a computed `Effective*` projection
+  that substitutes a private static default when the bound list is empty (`:76-77`, `:106-107`).
 
-  `[Rubric §11: Security]` assesses where trust boundaries are drawn. The two implemented strategies
+  `[Rubric §11, Security]` assesses where trust boundaries are drawn. The two implemented strategies
   are not equivalent and the enum says so: `Claim` is the trustworthy source because the claim was
   signed by the token issuer, so a caller cannot pick its own tenant (`:8-13`), while `Header` is
   intended for service-to-service calls behind a trusted gateway, and a public edge that honors it
-  lets any caller name any tenant (`:15-20`). The default order tries `Claim` first
-  (`:56-57`). `RequireTenant` defaults to `true` and is documented as failing closed, because with
-  tenancy switched on an unscoped request would read across every tenant (`:91-96`).
+  lets any caller name any tenant (`:15-20`). The default order tries `Claim` first (`:56-57`).
+  `RequireTenant` defaults to `true` and is documented as failing closed, because with tenancy
+  switched on an unscoped request would read across every tenant (`:91-96`).
 
-  `[Rubric §16: Maintainability]` assesses whether a new capability is additive for existing hosts.
-  `Enabled` gates **resolution**, not isolation: the global query filter and the save interceptor are
-  always registered and are inert whenever no tenant is resolved
-  (`:35-40`, `DependencyInjection.cs:60-63`). A host that never enables tenancy keeps exactly the
-  behavior it had before tenancy shipped, and a host that does enable it can never accidentally leave
-  the write-side guard off.
+  `[Rubric §16, Maintainability]` assesses whether a new capability is additive for existing hosts.
+  `Enabled` gates RESOLUTION, not isolation: the global query filter and the
+  [TenantSaveChangesInterceptor](group-07-persistence-ef-core.md#tenantsavechangesinterceptor) are
+  always registered and are inert whenever no tenant is resolved (`:35-40`,
+  `DependencyInjection.cs:59-62`). A host that never enables tenancy keeps exactly the behavior it
+  had before tenancy shipped, and a host that does enable it can never accidentally leave the
+  write-side guard off.
 
 - **Walkthrough**: one public static field, two private static defaults, then six members.
   - `SectionName = "Tenancy"` (`TenancySettings.cs:53`).
@@ -2208,19 +2427,24 @@ gRPC clients, which is precisely the reversibility
   keeping every relational check in a separate `IValidateOptions<T>` (rather than in attributes) is
   what lets the validator reach the resolved data sources.
 
-- **Where it's used**: bound with validation in `AddMultiTenancy`, alongside the
-  `TryAddEnumerable` registration of [`TenancySettingsValidator`](#tenancysettingsvalidator)
-  (`DependencyInjection.cs:426-433`). Read at request time by
-  [`TenantResolutionMiddleware`](group-12-api-hosting-mapping.md#tenantresolutionmiddleware), which
+- **Where it's used**: bound with validation in `AddMultiTenancy`, alongside the `TryAddEnumerable`
+  registration of [TenancySettingsValidator](#tenancysettingsvalidator)
+  (`DependencyInjection.cs:511-522`). Read at request time by
+  [TenantResolutionMiddleware](group-12-api-hosting-mapping.md#tenantresolutionmiddleware), which
   short-circuits when disabled or on an excluded path (`TenantResolutionMiddleware.cs:62`), walks
-  `EffectiveResolutionOrder` reading the claim or the header (`:107-112`), and returns
-  `400 Bad Request` when nothing resolved and `RequireTenant` is on (`:75`). Read at persistence time
-  by [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory) for per-tenant connection
-  routing (`DbContextFactory.cs:45`, `:148-173`), and by the background services through
-  `TenantDataSourceTargets.Expand` so they sweep every tenant database too
-  (`OutboxProcessor.cs:58`, `OutboxCleanupService.cs:48`, `AuditTrailCleanupJob.cs:55`,
-  `TenantDataSourceTargets.cs:49-79`). All of those take the options as **nullable**, so a host that
-  never called `AddMultiTenancy` resolves `null` and behaves exactly as before.
+  `EffectiveResolutionOrder` reading the claim or the header (`:107-119`), lets the request through
+  unscoped when `RequireTenant` is off (`:75-81`), and otherwise answers `400 Bad Request` (`:83`).
+  Read at persistence time by
+  [DbContextFactory](group-07-persistence-ef-core.md#dbcontextfactory) for per-tenant connection
+  routing (`DbContextFactory.cs:44`, `:143-168`), and by the background services through
+  [TenantDataSourceTargets](group-07-persistence-ef-core.md#tenantdatasourcetargets)`.Expand` so they
+  sweep every tenant database too (`OutboxProcessor.cs:62`, `OutboxCleanupService.cs:53`,
+  `OutboxAdministration.cs:42`, `TenantDataSourceTargets.cs:49-79`). Startup database
+  initialization uses the same expansion to create each tenant's database
+  (`DatabaseInitializationExtensions.cs:132-145`), and the design-time helper supplies a default
+  instance so `dotnet ef` needs no tenancy configuration
+  (`DesignTimeDbContextHelper.cs:132`). All of the runtime consumers take the options as NULLABLE,
+  so a host that never called `AddMultiTenancy` resolves `null` and behaves exactly as before.
 
 ---
 
@@ -2228,42 +2452,44 @@ gRPC clients, which is precisely the reversibility
 
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/TenancySettingsValidator.cs:23` · Level 4 · class (sealed, internal)
 
-- **What it is**: the startup validator for [`TenancySettings`](#tenancysettings). It rejects a
+- **What it is**: the startup validator for [TenancySettings](#tenancysettings). It rejects a
   resolution order naming an unimplemented strategy, and rejects a per-tenant data-source override
   that declares no connection string or names a source that does not exist
   (`TenancySettingsValidator.cs:23-47`).
 
-- **Depends on**: [`IDataSourceResolver`](group-07-persistence-ef-core.md#idatasourceresolver) as an
-  **optional** primary-constructor parameter (`:23`), plus
-  [`DataSource`](group-07-persistence-ef-core.md#datasource) and
-  [`DataSourceKey`](group-07-persistence-ef-core.md#datasourcekey) (`:3-4`, `:27-28`), and the two
-  settings shapes [`TenancySettings`](#tenancysettings) and
-  [`TenantDataSourceOverrideSettings`](#tenantdatasourceoverridesettings). Externals:
+- **Depends on**: [IDataSourceResolver](group-07-persistence-ef-core.md#idatasourceresolver) as an
+  OPTIONAL primary-constructor parameter (`:23`), plus
+  [DataSource](group-07-persistence-ef-core.md#datasource) and
+  [DataSourceKey](group-07-persistence-ef-core.md#datasourcekey) (`:3-4`, `:27-28`), and the two
+  settings shapes [TenancySettings](#tenancysettings) and
+  [TenantDataSourceOverrideSettings](#tenantdatasourceoverridesettings). Externals:
   `Microsoft.Extensions.Options` for `IValidateOptions<T>` and `ValidateOptionsResult` (`:2`), and
   `System.Globalization` for the `CultureInfo.InvariantCulture` message formatting (`:1`, `:79`).
 
 - **Concept introduced: `IValidateOptions<T>` when validation needs other services.**
-  [`JwtSettings`](#jwtsettings) showed `IValidatableObject`, which is the right tool when a rule only
-  involves the settings object itself. This class is the other half of the options-validation story:
-  `IValidateOptions<T>` is a DI-resolved service, so it can inject collaborators. Here that
-  collaborator is the data-source resolver, which is the only thing that knows whether `Conference`
-  is a real physical source in this host. Registration is
+  [JwtSettings](#jwtsettings) shows `IValidatableObject` (`JwtSettings.cs:16`), which is the right
+  tool when a rule only involves the settings object itself. This class is the other half of the
+  options-validation story: `IValidateOptions<T>` is a DI-resolved service, so it can inject
+  collaborators. Here that collaborator is the data-source resolver, which is the only thing that
+  knows whether `Conference` is a real physical source in this host. Registration is
   `TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<TenancySettings>, TenancySettingsValidator>())`
-  (`DependencyInjection.cs:432-433`): `TryAddEnumerable` because two modules calling
-  `AddMultiTenancy` must not run the same validation twice (`DependencyInjection.cs:431`).
+  (`DependencyInjection.cs:519-520`), with `TryAddEnumerable` because two modules calling
+  `AddMultiTenancy` must not run the same validation twice (`DependencyInjection.cs:518`). The same
+  shape is used by [ConnectionStringSettingsValidator](#connectionstringsettingsvalidator); these two
+  are the workspace's only custom `IValidateOptions<T>` implementations.
 
-  `[Rubric §11: Security]` assesses whether misconfiguration can degrade silently. The class doc
+  `[Rubric §11, Security]` assesses whether misconfiguration can degrade silently. The class doc
   states the rationale outright: every failure here would otherwise surface as silent cross-tenant
   behavior at run time, which is exactly the class of bug tenancy exists to prevent, so it is worth a
   failed boot (`TenancySettingsValidator.cs:8-13`). The concrete danger is the override key: an
-  unknown logical name resolves to `Default`, so a typo'd source name would quietly leave that
+  unknown logical name resolves to `Default`, so a mistyped source name would quietly leave that
   tenant on the shared database instead of its own (`:112-116`).
 
-  `[Rubric §15: Best Practices & Code Quality]` assesses the quality of failure messages. Each
-  message names the exact configuration path that is wrong and tells the operator what to do:
-  the missing-connection-string message lists the three acceptable properties and notes that removing
-  the entry keeps the source shared (`:78-85`); the unknown-source message explains that override
-  keys are physical names (`:95-104`); the `Host` strategy message names the two supported values
+  `[Rubric §15, Best Practices and Code Quality]` assesses the quality of failure messages. Each
+  message names the exact configuration path that is wrong and tells the operator what to do: the
+  missing-connection-string message lists the three acceptable properties and notes that removing the
+  entry keeps the source shared (`:78-85`); the unknown-source message explains that override keys
+  are physical names (`:95-104`); the `Host` strategy message names the two supported values
   (`:60-63`).
 
 - **Walkthrough**: one static field, the interface method, three private helpers, one internal
@@ -2273,7 +2499,7 @@ gRPC clients, which is precisely the reversibility
   - `Validate(string? name, TenancySettings options)` (`:31-47`): null-guards the options, collects
     failures into a list, runs the resolution-order check once and the tenant check per declared
     tenant, then returns `ValidateOptionsResult.Success` or `Fail(failures)`. Note that it
-    accumulates **all** failures rather than returning on the first, so one boot attempt reports the
+    accumulates ALL failures rather than returning on the first, so one boot attempt reports the
     whole set.
   - `ValidateResolutionOrder` (`:54-65`): walks `EffectiveResolutionOrder` (so the framework default
     is validated too, not just an explicitly configured order) and fails on
@@ -2291,32 +2517,32 @@ gRPC clients, which is precisely the reversibility
   - `IsKnownPhysicalSource` (`:117-119`): the round-trip test. `Default` always passes; otherwise the
     name must survive `resolver.ResolveLogical(engine, sourceName).Name` unchanged, because an
     unknown logical name collapses onto `Default` and therefore comes back different.
-  - `ConnectionStringFor(DataSource, TenantDataSourceOverrideSettings)` (`:122-129`): `internal
-    static`, a switch expression mapping engine to the matching connection-string property. It is
-    `internal` rather than private because it is reused outside validation, which is the detail worth
-    noting next.
+  - `ConnectionStringFor(DataSource, TenantDataSourceOverrideSettings)` (`:122-129`):
+    `internal static`, a switch expression mapping engine to the matching connection-string property.
+    It is `internal` rather than private because it is reused outside validation, which is the detail
+    worth noting next.
 
 - **Why it's built this way**: the engine-to-property mapping is needed in three places (validation,
   target expansion, and connection routing), so it lives once here and the runtime paths call back
   into the validator's `ConnectionStringFor` rather than re-implementing the switch
   ([ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)). Making the resolver
   optional rather than required is what keeps the validator constructible in a host that binds
-  tenancy without registering `AddInfrastructure`, at the cost of skipping the source-existence
-  check there; the strategy and connection-string checks still run.
+  tenancy without registering `AddInfrastructure`, at the cost of skipping the source-existence check
+  there; the strategy and connection-string checks still run.
 
-- **Where it's used**: registered by `AddMultiTenancy` with `ValidateOnStart` on the options
-  (`DependencyInjection.cs:426-433`). Its `ConnectionStringFor` helper is called at run time by
-  `TenantDataSourceTargets.Expand` when deciding whether a (tenant, source) pair is really overridden
-  (`TenantDataSourceTargets.cs:71`) and by
-  [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory)`.ResolveTenantOverride` when
-  cloning the physical source for a tenant (`DbContextFactory.cs:158`). Covered by
+- **Where it's used**: registered by `AddMultiTenancy` alongside `ValidateOnStart` on the options
+  (`DependencyInjection.cs:511-522`). Its `ConnectionStringFor` helper is called at run time by
+  [TenantDataSourceTargets](group-07-persistence-ef-core.md#tenantdatasourcetargets)`.Expand` when
+  deciding whether a (tenant, source) pair is really overridden (`TenantDataSourceTargets.cs:71`) and
+  by [DbContextFactory](group-07-persistence-ef-core.md#dbcontextfactory)`.ResolveTenantOverride`
+  when cloning the physical source for a tenant (`DbContextFactory.cs:153`). Covered by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Tenancy/AddMultiTenancyTests.cs`,
-  which asserts the registration shape (`:98`) and drives the validator both with and without a
-  resolver (`:168`, `:206`).
+  which asserts the single-registration shape (`:91-98`) and drives the validator both without a
+  resolver (`:168`) and with one (`:206`).
 
-- **Caveats**: the type is `internal`, so it is not part of the framework's public API and a
-  consumer cannot subclass or replace it; a host needing extra tenancy rules registers its own
-  additional `IValidateOptions<TenancySettings>`.
+- **Caveats**: the type is `internal`, so it is not part of the framework's public API and a consumer
+  cannot subclass or replace it; a host needing extra tenancy rules registers its own additional
+  `IValidateOptions<TenancySettings>`.
 
 ### GetUserPreferencesQuery
 
@@ -2383,7 +2609,7 @@ gRPC clients, which is precisely the reversibility
   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/AuthController.cs:32`), and
   both architecture suites use it as the *query* specimen when asserting decorator ordering
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:28`,
-  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:27`).
+  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:28`).
 
 ---
 
@@ -2578,7 +2804,7 @@ gRPC clients, which is precisely the reversibility
 
 - **What it is**: the shared account-erasure workflow: authorize owner-or-privileged-role, soft-delete
   the account, run the app's tail hook, irreversibly anonymize the personal data in place, save, then
-  drain a post-commit queue (`DeleteUserHandlerBase.cs:38`, `:55-119`). It is the most extensible of
+  drain a post-commit queue (`DeleteUserHandlerBase.cs:38`, `:55-124`). It is the most extensible of
   the seven Users bases: one abstract member and one virtual hook.
 
 - **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) and an `ILogger`
@@ -2600,27 +2826,27 @@ gRPC clients, which is precisely the reversibility
   [`IAnonymizable`](group-02-domain-building-blocks.md#ianonymizable) plus
   [`IErasableUser`](group-08-auth.md#ierasableuser): keep the row, overwrite the personal fields with
   non-identifying placeholders, and require `Anonymize()` to be idempotent
-  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAnonymizable.cs:22-31`). This handler is
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAnonymizable.cs:24-30`). This handler is
   where that policy becomes a sequence
   ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)).
 
-  **Concept introduced: interface dispatch as a correctness device.** The comment at `:83-87` is one
+  **Concept introduced: interface dispatch as a correctness device.** The comment at `:88-92` is one
   of the most instructive in the framework. An app's `User` may *hide* the base entity's `Delete()`
   with `public new Result Delete()` to add account-specific behavior such as revoking the refresh
   token. A hidden method is not an override, and member lookup on a generic type parameter prefers the
   members of its **class** constraint, so a bare `user.Delete()` inside this base would bind to
   [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)`.Delete()`
   and silently skip the app's version. The workflow therefore assigns the user to an
-  `IErasableUser` local first and calls through the interface (`:88-89`), because the interface map
+  `IErasableUser` local first and calls through the interface (`:93-94`), because the interface map
   resolves to the most derived `Delete()` the app type declares. The interface's own remarks record
-  the same reasoning from the contract side, including the deliberate choice not to implement it on
-  the base entity so a forgetful consumer fails the generic constraint at compile time rather than
-  losing behavior at run time (`IErasableUser.cs:11-28`).
+  the same reasoning from the contract side (`IErasableUser.cs:13-23`), including the deliberate
+  choice not to implement it on the base entity so a forgetful consumer fails the generic constraint
+  at compile time rather than losing behavior at run time (`IErasableUser.cs:26-27`).
 
   **Concept introduced: the post-commit queue.** `OnAfterSoftDeleteAsync` receives an
-  `ICollection<Func<CancellationToken, Task>> afterCommit` (`:145`). Work that must not happen unless
+  `ICollection<Func<CancellationToken, Task>> afterCommit` (`:150`). Work that must not happen unless
   the erasure actually commits (deleting a blob, writing a cache marker) is *enqueued* rather than run
-  inline, and the base drains the queue in order after `SaveChangesAsync` (`:111-114`). The subtle
+  inline, and the base drains the queue in order after `SaveChangesAsync` (`:116-119`). The subtle
   benefit named in the docs is that the override can hand values it captured before anonymization to a
   post-commit closure without parking them in mutable handler state (`:22-27`), which matters because
   handlers are scoped and a field would be a shared mutable across the whole request.
@@ -2642,25 +2868,25 @@ gRPC clients, which is precisely the reversibility
     specifically so a tail hook can reach further aggregates.
   - `HandlerName` (`:52`): the same `GetType().Name` default that preserves the pre-hoist error
     `source`.
-  - `HandleAsync(TCommand, CancellationToken)` (`:55-119`):
+  - `HandleAsync(TCommand, CancellationToken)` (`:55-124`):
     - Authorization first (`:62-67`) through
       [`UserOwnershipRule.CheckOwnership`](#userownershiprule) (`UserOwnershipRule.cs:38`), with the
       code `"User.DeleteForbidden"` and a message the caller sees; a non-null return is the failure
       (`:68-71`).
     - Load through the write repository (`:73-74`); `Error.NotFound` when absent (`:77`).
-    - `IErasableUser erasable = user; erasable.Delete()` (`:88-89`) with the dispatch rationale above;
-      a failure returns immediately (`:90-93`).
-    - Allocate the `afterCommit` list and call `OnAfterSoftDeleteAsync` (`:95-96`); a failed tail
-      aborts before anything is persisted (`:97-100`).
-    - `erasable.Anonymize()` (`:103`), also short-circuiting on failure (`:104-107`).
-    - `SaveChangesAsync` (`:109`), then the post-commit drain in order (`:111-114`), then the
-      `UserUseCaseLog.UserErased` log (`:116`) and `Result.Success()` (`:118`).
-  - `HasDeletePrivilege(string? currentUserRole)` (`:127`): `protected abstract`. Deliberately
+    - `IErasableUser erasable = user; erasable.Delete()` (`:93-94`) with the dispatch rationale above;
+      a failure returns immediately (`:95-98`).
+    - Allocate the `afterCommit` list and call `OnAfterSoftDeleteAsync` (`:100-101`); a failed tail
+      aborts before anything is persisted (`:102-105`).
+    - `erasable.Anonymize()` (`:108`), also short-circuiting on failure (`:109-112`).
+    - `SaveChangesAsync` (`:114`), then the post-commit drain in order (`:116-119`), then the
+      `UserUseCaseLog.UserErased` log (`:121`) and `Result.Success()` (`:123`).
+  - `HasDeletePrivilege(string? currentUserRole)` (`:132`): `protected abstract`. Deliberately
     abstract rather than virtual-defaulting-to-false, so adopting the base forces an explicit answer
     about which role bypasses ownership.
-  - `OnAfterSoftDeleteAsync(user, command, afterCommit, cancellationToken)` (`:142-147`): `protected
+  - `OnAfterSoftDeleteAsync(user, command, afterCommit, cancellationToken)` (`:147-152`): `protected
     virtual`, defaulting to `Task.FromResult(Result.Success())`. Its position is load-bearing and
-    documented: it runs **after** `Delete()` and **before** `Anonymize()` (`:29-34`), which is the only
+    documented: it runs **after** `Delete()` and **before** `Anonymize()` (`:30-34`), which is the only
     point where an override can both read personal data that anonymization is about to erase and
     enlist further aggregates in the same unit of work. Running it before `Delete()` would let a
     cascaded aggregate's error mask the account's own `AlreadyDeleted` error.
@@ -2671,7 +2897,7 @@ gRPC clients, which is precisely the reversibility
   captures the avatar blob name *before* anonymization clears the URL (`DeleteUserHandler.cs:54`),
   raises the cross-service `UserDeleted` domain event on the aggregate so its outbox row is written by
   the very save that commits the erasure (`:62`), and queues the soft-deleted-user cache marker and
-  the blob deletion as post-commit actions (`:68-84`).
+  the blob deletion as post-commit actions (`:68-85`).
   Store instead cascades in the same unit of work, erasing the linked `Customer` that holds its
   name/email/address PII and returning the Customer's own failure untouched so nothing is persisted
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:35-60`).
@@ -2688,8 +2914,8 @@ gRPC clients, which is precisely the reversibility
   above is a regression test rather than a comment.
 
 - **Caveats**: post-commit actions run after the erasure has already succeeded, so each one owns its
-  own failure handling; the base does not wrap them (`:111-114`, and see the documented expectation at
-  `:135-139`). ADC's override wraps its cache-marker action in a try/catch for exactly that reason
+  own failure handling; the base does not wrap them (`:116-119`, and see the documented expectation at
+  `:140-144`). ADC's override wraps its cache-marker action in a try/catch for exactly that reason
   (`MMCA.ADC/.../DeleteUser/DeleteUserHandler.cs:70-79`). Both apps' `DeleteUserCommand` records are
   [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating), so the cache prefix they carry
   is invalidated by the decorator after the handler returns success, outside this class.
@@ -2729,7 +2955,7 @@ gRPC clients, which is precisely the reversibility
   throttled (`:73-77`), and an email send that threw (`:90-96`). The class remarks state the rule
   outright and name the one exception: only the request validator can produce a 400, and it inspects
   the shape of the address alone (`:20-25`,
-  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ForgotPasswordRequestValidator.cs:6-16`).
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ForgotPasswordRequestValidator.cs:11-16`).
 
   `[Rubric §11: Security]` assesses whether a public endpoint leaks facts about who holds an account.
   The leak surface is wider than the HTTP response, and the code closes it in three places. The result
@@ -2782,7 +3008,7 @@ gRPC clients, which is precisely the reversibility
   enforced by the token service rather than by this handler
   ([ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html);
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:56`, `:71`,
-  `:79-80`). That split is why the handler's only reaction to a throttled request is a log line: it
+  `:140`). That split is why the handler's only reaction to a throttled request is a log line: it
   never learns which limit fired. The command record stays app-side for the same reason it does in the
   ChangePassword hoist, and the base reads it only through `ICommandWithRequest<ForgotPasswordRequest>`
   (`:27-31`).
@@ -2971,7 +3197,7 @@ gRPC clients, which is precisely the reversibility
   [`ResetPasswordRequestValidator`](group-08-auth.md#resetpasswordrequestvalidator) includes the same
   `StrongPasswordRules<T>` set the registration and change-password requests use, so a reset cannot be
   a way around the complexity policy
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ResetPasswordRequestValidator.cs:7-23`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ResetPasswordRequestValidator.cs:12-23`).
 
 - **Where it's used**: subclassed once per app as an empty, name-preserving class
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordHandler.cs:18`,
@@ -2995,6 +3221,113 @@ gRPC clients, which is precisely the reversibility
   already changed. Not determinable from source: whether any deployment configures a
   `ResetFailedAttemptsAsync` implementation that can fail in a way the caller would notice, since the
   contract returns a bare `Task` with no result (`ILoginProtectionService.cs:33`).
+
+---
+
+### CreateMigrationProofTable
+
+> MMCA.Common.Infrastructure.Tests.MigrationsFixture · `MMCA.Common.Infrastructure.Tests.MigrationsFixture` · `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests.MigrationsFixture/CreateMigrationProofTable.cs:24` · Level 13 · class (sealed)
+
+- **What it is**: a real, committed EF Core migration against the framework's single SQLite context.
+  It creates one table, `MigrationProof`, and exists so the framework's migration-apply path can be
+  proved against the kind of artifact a consumer would actually commit rather than against a mock
+  (`CreateMigrationProofTable.cs:24`, `:39-47`).
+
+- **Depends on**: [`SqliteDbContext`](group-07-persistence-ef-core.md#sqlitedbcontext), named in the
+  `[DbContext]` attribute (`:22`). Externals: EF Core's `Migration` base class, `MigrationBuilder`,
+  and the `DbContextAttribute` / `MigrationAttribute` pair from
+  `Microsoft.EntityFrameworkCore.Migrations` and `.Infrastructure` (`:1-2`). Its project takes a
+  single `ProjectReference` on `MMCA.Common.Infrastructure` and is marked `IsPackable=false`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests.MigrationsFixture/MMCA.Common.Infrastructure.Tests.MigrationsFixture.csproj:3`,
+  `:6`).
+
+- **Concept introduced: a test fixture that has to live in its own assembly.** EF Core does not
+  discover migrations by convention over the whole app: it scans one nominated *migrations assembly*
+  and matches the migrations in it to a context by the `[DbContext]` attribute each one carries
+  (`:22`). The framework declares exactly one SQLite context class
+  ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), so any migration
+  compiled into `MMCA.Common.Infrastructure.Tests` would immediately be "pending" for every other test
+  in that assembly that names it as the migrations assembly. One of those tests,
+  `DbContextFactoryMigrationTargetTests`, rests its whole argument on the test assembly declaring
+  **none**. The two facts cannot coexist in one assembly, so the migration was given its own tiny
+  library and only the tests that opt in by naming it ever see it (`:12-18`). The class remarks state
+  that reasoning in the code itself.
+
+  There is a second, smaller lesson in what the file does **not** contain. No `.Designer.cs` and no
+  model snapshot accompany it: neither is needed to apply a migration at run time, and both exist only
+  so `dotnet ef migrations add` can diff the next one (`:19-21`). The direct consequence shows up in
+  `Up`, where the column types are written out by hand because an empty target model supplies nothing
+  (`:37-38`).
+
+  `[Rubric §14: Testability]` assesses whether the hard parts of the system can be exercised for real
+  rather than asserted about. Migration application is exactly such a part: it is startup behavior
+  against a live provider, and mocking it proves nothing. This fixture makes it testable by supplying
+  the one input the production path needs (a committed migration in a nominated assembly) while
+  isolating it from every other test through an assembly boundary.
+
+  `[Rubric §8: Data Architecture]` assesses schema-change discipline. The two public constants are
+  the contract this fixture offers its tests: the migration id recorded in `__EFMigrationsHistory`
+  (`:27`) and the table name that proves the schema, not just the history row, was touched (`:30`).
+  Asserting on both is what separates "EF wrote a history row" from "the schema actually changed".
+
+  `[Rubric §17: DevOps]` assesses whether deployment behavior is verified rather than assumed. The
+  `"None"` initialization strategy, which is what a deployed host runs, has to refuse to start when
+  the schema is behind the code and has to name the pending migration in the failure so an operator
+  knows what to apply. That guard can only be exercised against a genuinely pending, genuinely named
+  migration, which is what this type provides
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Startup/DatabaseInitializationExtensionsTests.cs:143`,
+  `:168`).
+
+- **Walkthrough**: two attributes, two constants, and the migration pair.
+  - `[DbContext(typeof(SqliteDbContext))]` (`:22`): the binding EF uses to decide which context this
+    migration belongs to.
+  - `[Migration(MigrationId)]` (`:23`): the id EF records and reports. Passing the constant rather
+    than a literal is what lets the tests assert on `CreateMigrationProofTable.MigrationId` instead of
+    repeating the string.
+  - `MigrationId` (`:27`): `"20260831000001_CreateMigrationProofTable"`, the timestamp-prefixed form
+    EF expects and the value written into `__EFMigrationsHistory`.
+  - `TableName` (`:30`): `"MigrationProof"`, the table `Up` creates and the evidence a test queries
+    for.
+  - `Up(MigrationBuilder)` (`:33-48`): null-guards the builder (`:35`), then a single `CreateTable`
+    with an autoincrementing `long` `Id` carrying the `Sqlite:Autoincrement` annotation (`:43-44`), a
+    non-null `string Name` (`:45`), and a primary key named `PK_MigrationProof` built from the same
+    constant (`:47`). Every column type is stated explicitly for the empty-target-model reason above.
+  - `Down(MigrationBuilder)` (`:51-56`): drops the table, so the migration is reversible and a test
+    that applies it leaves nothing conceptually stranded.
+
+- **Why it's built this way**: the framework's migration story is a production concern, not a unit
+  test. `MigrateAsync()` on [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory) is
+  the same call a host makes for the `"Migrate"` strategy
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/MigrationApplyProofTests.cs:20-24`),
+  and a proof of it needs a real migration, a real SQLite file, and a real history table. Nominating
+  the assembly is configuration, not code: a data source points at it through
+  `DataSourceEntrySettings.SqliteMigrationsAssembly`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/DataSourceEntrySettings.cs:43`), which
+  is exactly how the tests wire this fixture in (`MigrationApplyProofTests.cs:39-40`, `:57-58`).
+
+- **Where it's used**: by two test classes, in two different assemblies, for two different halves of
+  the same behavior.
+  [`MigrationApplyProofTests`](group-27-testing-infrastructure.md#migrationapplyprooftests) applies it
+  through [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory) and asserts the
+  history row, the created table, and that nothing stays pending
+  (`MigrationApplyProofTests.cs:92-104`); that asking what is pending applies nothing (`:110-120`);
+  and that a second `MigrateAsync` over an up-to-date database is a no-op rather than a re-apply whose
+  `CREATE TABLE` would collide (`:124-133`).
+  [`DatabaseInitializationExtensionsTests`](group-27-testing-infrastructure.md#databaseinitializationextensionstests)
+  uses it for the production guard in
+  [`DatabaseInitializationExtensions`](group-12-api-hosting-mapping.md#databaseinitializationextensions):
+  the `"None"` strategy must throw naming the pending migration and must apply nothing on the way out
+  (`DatabaseInitializationExtensionsTests.cs:152-153`, `:167-174`).
+  Its deliberate non-consumer is
+  [`DbContextFactoryMigrationTargetTests`](group-27-testing-infrastructure.md#dbcontextfactorymigrationtargettests),
+  which needs a migrations assembly that declares nothing.
+
+- **Caveats**: the assembly is a test fixture, never shipped: `IsPackable=false`
+  (`MMCA.Common.Infrastructure.Tests.MigrationsFixture.csproj:3`) and it is listed in
+  `MMCA.Common.slnx` under `Tests/` (`MMCA.Common/MMCA.Common.slnx:37`), so nothing in the published
+  packages carries this migration. Because there is no model snapshot, `dotnet ef migrations add`
+  cannot meaningfully extend this assembly: a second migration here would have to be hand-written the
+  same way.
 
 
 ---
