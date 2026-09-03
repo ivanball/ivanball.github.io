@@ -53,8 +53,11 @@ moving to `IEventBus`.
 **What this means for you:** read the
 [CHANGELOG](https://github.com/ivanball/MMCA.Common/blob/main/CHANGELOG.md) before every bump, not
 just before a major one. Each release that contains a breaking change opens with a bold
-**Breaking:** line and lists the affected APIs under **Removed** or **Changed (Behavior)**. Pin an
-exact version and upgrade deliberately; do not use a floating version range.
+**Breaking:** line and lists the affected APIs under **Removed** or **Changed (Behavior)**. For the
+releases that move namespaces (the feature-by-folder passes, v1.183.0 onward), the repo root
+[UPGRADING.md](https://github.com/ivanball/MMCA.Common/blob/main/UPGRADING.md) keeps the durable
+old-to-new map per release plus the mechanical `using` fix; the same map opens the pull request that
+made the change. Pin an exact version and upgrade deliberately; do not use a floating version range.
 
 ## Consumer rollout
 

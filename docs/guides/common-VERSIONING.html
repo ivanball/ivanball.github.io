@@ -170,8 +170,11 @@
           <p><strong>What this means for you:</strong> read the
           <a href="https://github.com/ivanball/MMCA.Common/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a> before every bump, not
           just before a major one. Each release that contains a breaking change opens with a bold
-          <strong>Breaking:</strong> line and lists the affected APIs under <strong>Removed</strong> or <strong>Changed (Behavior)</strong>. Pin an
-          exact version and upgrade deliberately; do not use a floating version range.</p>
+          <strong>Breaking:</strong> line and lists the affected APIs under <strong>Removed</strong> or <strong>Changed (Behavior)</strong>. For the
+          releases that move namespaces (the feature-by-folder passes, v1.183.0 onward), the repo root
+          <a href="https://github.com/ivanball/MMCA.Common/blob/main/UPGRADING.md" target="_blank" rel="noopener">UPGRADING.md</a> keeps the durable
+          old-to-new map per release plus the mechanical <code>using</code> fix; the same map opens the pull request that
+          made the change. Pin an exact version and upgrade deliberately; do not use a floating version range.</p>
           <h2 id="consumer-rollout">Consumer rollout</h2>
           <p>Per project convention, framework upgrades are <strong>swept across all consumers in one pass</strong>:
           there are no opt-in flags or phased rollouts for a MMCA.Common change. When a release contains a
