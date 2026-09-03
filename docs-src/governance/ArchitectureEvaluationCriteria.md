@@ -47,7 +47,7 @@ difference where one cannot.
 | 3–4 | **Partial** | Several criteria met; meaningful gaps remain; some red flags. |
 | 5–6 | **Adequate** | Most criteria met; functional with rough edges; a few red flags. |
 | 7–8 | **Strong** | Nearly all criteria met well; only minor, isolated gaps; no significant red flags. |
-| 9–10 | **Exemplary** | All criteria met to a high standard; reference-quality. **10 = perfectly implemented: nothing left to improve.** |
+| 9–10 | **Exemplary** | All criteria met to a high standard; reference-quality. **10 = almost perfect: every criterion met at reference quality, no red flags, at most trivial polish left.** |
 
 **Rule of thumb:** the implementation score usually tracks maturity (≈ maturity × 2.5 as a starting
 point), then nudge it up or down for execution quality the coarse maturity level can't express. A
