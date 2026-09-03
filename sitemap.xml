@@ -242,7 +242,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-09-03</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -272,7 +272,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-09-03</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -357,7 +357,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html</loc>
-    <lastmod>2026-09-02</lastmod>
+    <lastmod>2026-09-03</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -377,7 +377,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/068-value-objects-as-validated-primitives.html</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-09-03</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -442,7 +442,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/081-cost-baseline-deploy-gate.html</loc>
-    <lastmod>2026-09-02</lastmod>
+    <lastmod>2026-09-03</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -772,7 +772,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/adc-ArchitectureScorecard.html</loc>
-    <lastmod>2026-09-02</lastmod>
+    <lastmod>2026-09-03</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -797,12 +797,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/store-ArchitectureScorecard.html</loc>
-    <lastmod>2026-09-02</lastmod>
+    <lastmod>2026-09-03</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/store-RemediationBacklog.html</loc>
-    <lastmod>2026-09-02</lastmod>
+    <lastmod>2026-09-03</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

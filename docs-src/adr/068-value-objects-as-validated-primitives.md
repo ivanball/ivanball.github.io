@@ -3,7 +3,10 @@
 ## Status
 Accepted (2026-08-07). Revised 2026-08-31 (`Money`'s non-validating construction paths named, `Currency`'s
 converter counted among the serialization annotations, `Address` added to the adopted set, and the Store/ADC
-anchors refreshed).
+anchors refreshed). Revised 2026-09-03: `Event.OrganizerContactEmail` became `Email?`, the third ADC
+adoption site, so ADC's Domain now holds no primitive email property and matches Store on that count;
+the record also notes why the validator, the length invariant and the column shape were all left
+alone, following the Speaker precedent.
 
 ## Context
 A domain model has two kinds of small type: the **identity** of a thing, and a **value** the thing
@@ -118,9 +121,27 @@ Model a domain value that carries an invariant as an **immutable record value ob
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:39`, validated through
   `Email.Create` at `:166` and passed to the constructor at `:180`, with the same pair repeated on the
   social-login path at `:207,218`) with
-  the same converter (`.../Identity.Infrastructure/.../UserConfiguration.cs:21`) and a speaker's
-  optional email through `NullableEmailValueConverter`
-  (`.../Conference.Infrastructure/.../SpeakerConfiguration.cs:43`). `Money`, `Email` and `Address` are the
+  the same converter (`.../Identity.Infrastructure/.../UserConfiguration.cs:21`) and two optional
+  Conference emails through `NullableEmailValueConverter`: a speaker's
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:31`, mapped at
+  `.../Conference.Infrastructure/Persistence/EntityConfiguration/Speakers/SpeakerConfiguration.cs:43`)
+  and an event's organizer contact
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:59`, validated
+  through `Email.Create` on both the create and update paths (`:186-193`, `:262-269`) and assigned at
+  `:144,288`, mapped at
+  `.../Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:60-62`).
+  With that third site ADC's Domain carries no primitive email property left, matching Store. Two
+  details are worth recording because they look like leftovers and are not: the column is unchanged
+  (`nvarchar(255)`, still nullable) so the conversion needed no migration, and
+  `EventOrganizerContactEmailRules`
+  (`.../Conference.Application/Events/Validation/EventValidationRules.cs:57`, included at `:148`) plus
+  `EventInvariants.OrganizerContactEmailMaxLength`
+  (`.../Conference.Domain/Events/EventInvariants.cs:38`) were both kept, exactly as the Speaker
+  precedent kept its own: the request-side validator still guards the wire string before it reaches
+  `Email.Create`, and the length invariant still drives the column width. The DTO maps back out
+  through `EventDTOMapper.NullableEmailToString`
+  (`.../Conference.Application/Events/DTOs/EventDTOMapper.cs:55`), the twin of the speaker mapper's
+  (`.../Speakers/DTOs/SpeakerDTOMapper.cs:49`). `Money`, `Email` and `Address` are the
   three that got adopted, with `Currency` riding along inside `Money`: no code under `MMCA.Store/Source`
   or `MMCA.ADC/Source` uses `PhoneNumber`, `DateRange` or `DateTimeRange`, and MMCA.Helpdesk adopts none
   of them at all.

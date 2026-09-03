@@ -216,7 +216,10 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-07). Revised 2026-08-31 (<code>Money</code>&#39;s non-validating construction paths named, <code>Currency</code>&#39;s
           converter counted among the serialization annotations, <code>Address</code> added to the adopted set, and the Store/ADC
-          anchors refreshed).</p>
+          anchors refreshed). Revised 2026-09-03: <code>Event.OrganizerContactEmail</code> became <code>Email?</code>, the third ADC
+          adoption site, so ADC&#39;s Domain now holds no primitive email property and matches Store on that count;
+          the record also notes why the validator, the length invariant and the column shape were all left
+          alone, following the Speaker precedent.</p>
           <h2 id="context">Context</h2>
           <p>A domain model has two kinds of small type: the <strong>identity</strong> of a thing, and a <strong>value</strong> the thing
           carries. ADR-048 recorded the identity half: identifiers stay primitives named through a global-using
@@ -327,9 +330,27 @@
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:39</code>, validated through
           <code>Email.Create</code> at <code>:166</code> and passed to the constructor at <code>:180</code>, with the same pair repeated on the
           social-login path at <code>:207,218</code>) with
-          the same converter (<code>.../Identity.Infrastructure/.../UserConfiguration.cs:21</code>) and a speaker&#39;s
-          optional email through <code>NullableEmailValueConverter</code>
-          (<code>.../Conference.Infrastructure/.../SpeakerConfiguration.cs:43</code>). <code>Money</code>, <code>Email</code> and <code>Address</code> are the
+          the same converter (<code>.../Identity.Infrastructure/.../UserConfiguration.cs:21</code>) and two optional
+          Conference emails through <code>NullableEmailValueConverter</code>: a speaker&#39;s
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:31</code>, mapped at
+          <code>.../Conference.Infrastructure/Persistence/EntityConfiguration/Speakers/SpeakerConfiguration.cs:43</code>)
+          and an event&#39;s organizer contact
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:59</code>, validated
+          through <code>Email.Create</code> on both the create and update paths (<code>:186-193</code>, <code>:262-269</code>) and assigned at
+          <code>:144,288</code>, mapped at
+          <code>.../Conference.Infrastructure/Persistence/EntityConfiguration/Events/EventConfiguration.cs:60-62</code>).
+          With that third site ADC&#39;s Domain carries no primitive email property left, matching Store. Two
+          details are worth recording because they look like leftovers and are not: the column is unchanged
+          (<code>nvarchar(255)</code>, still nullable) so the conversion needed no migration, and
+          <code>EventOrganizerContactEmailRules</code>
+          (<code>.../Conference.Application/Events/Validation/EventValidationRules.cs:57</code>, included at <code>:148</code>) plus
+          <code>EventInvariants.OrganizerContactEmailMaxLength</code>
+          (<code>.../Conference.Domain/Events/EventInvariants.cs:38</code>) were both kept, exactly as the Speaker
+          precedent kept its own: the request-side validator still guards the wire string before it reaches
+          <code>Email.Create</code>, and the length invariant still drives the column width. The DTO maps back out
+          through <code>EventDTOMapper.NullableEmailToString</code>
+          (<code>.../Conference.Application/Events/DTOs/EventDTOMapper.cs:55</code>), the twin of the speaker mapper&#39;s
+          (<code>.../Speakers/DTOs/SpeakerDTOMapper.cs:49</code>). <code>Money</code>, <code>Email</code> and <code>Address</code> are the
           three that got adopted, with <code>Currency</code> riding along inside <code>Money</code>: no code under <code>MMCA.Store/Source</code>
           or <code>MMCA.ADC/Source</code> uses <code>PhoneNumber</code>, <code>DateRange</code> or <code>DateTimeRange</code>, and MMCA.Helpdesk adopts none
           of them at all.</li>
