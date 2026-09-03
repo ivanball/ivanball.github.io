@@ -224,10 +224,13 @@
           on <code>apphost-smoke</code>, which is still advisory. The same date records a second change, in MMCA.ADC
           only: <code>backend-test-gate</code> (TD-20, added 2026-08-31) joined <code>deploy.needs</code>, so ADC&#39;s deploy condition
           now tolerates <code>skipped</code> from two conditional test gates rather than one, while MMCA.Store still
-          tolerates it from <code>e2e-gate</code> alone. The three freshness gates and the gate mechanism are unchanged.</p>
+          tolerates it from <code>e2e-gate</code> alone. The three freshness gates and the gate mechanism are unchanged.
+          Revised 2026-09-03: MMCA.Store gained its own <code>backend-test-gate</code>, so the asymmetry the 2026-09-01
+          revision recorded is closed and both repos now run the same complementary pair of conditional test
+          gates; Store&#39;s <code>deploy.yml</code> citations are re-anchored for the lines the new job displaced.</p>
           <h2 id="context">Context</h2>
           <p>A production rollout in both deployed apps waits on a list of jobs in <code>deploy.needs</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1054</code>, <code>MMCA.Store/.github/workflows/deploy.yml:945</code>). Most of
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1054</code>, <code>MMCA.Store/.github/workflows/deploy.yml:999</code>). Most of
           those jobs have the change itself as their subject: a supply-chain audit (ADR-038), a FinOps
           cost check, a chromium end-to-end run against the booted stack. They answer &quot;is this build good.&quot;</p>
           <p>Three kinds of verification cannot answer that question inside a deploy, because they cannot run
@@ -255,29 +258,29 @@
           <li><p><strong>Three recency jobs sit in <code>deploy.needs</code> beside the result-based gates.</strong> <code>dr-freshness</code>,
           <code>load-freshness</code> and <code>cross-service-freshness</code> are listed with <code>supply-chain</code>, <code>cost-guard</code>,
           <code>e2e-gate</code>, <code>foundation</code> and <code>build-images</code>, plus <code>backend-test-gate</code> in ADC only
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1054</code>, <code>MMCA.Store/.github/workflows/deploy.yml:945</code>). Each
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1054</code>, <code>MMCA.Store/.github/workflows/deploy.yml:999</code>). Each
           is a five-minute <code>ubuntu-latest</code> job holding <code>actions: read</code> and <code>contents: read</code> only
           (<code>MMCA.ADC/.github/workflows/deploy.yml:699-705,756-762,815-821</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:603-609,660-666,716-722</code>).</p>
+          <code>MMCA.Store/.github/workflows/deploy.yml:657-663,714-720,770-776</code>).</p>
           </li>
           <li><p><strong>Each gate asks the Actions API for the newest success of one workflow and fails on its age.</strong> The
           window is a job-level <code>FRESHNESS_DAYS</code>: <code>8</code> for the weekly DR drill
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:707</code>, <code>MMCA.Store/.github/workflows/deploy.yml:611</code>), <code>35</code>
-          for the monthly k6 run (<code>:764</code> / <code>:668</code>), <code>5</code> for the weekday-nightly broker tier (ADC <code>:825</code>, Store
-          <code>:726</code>, widened from 3 on 2026-07-18 to tolerate a weekend or holiday, a note carried at
-          <code>:823-824</code> in ADC and <code>:724-725</code> in Store). The DR and load
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:707</code>, <code>MMCA.Store/.github/workflows/deploy.yml:665</code>), <code>35</code>
+          for the monthly k6 run (<code>:764</code> / <code>:722</code>), <code>5</code> for the weekday-nightly broker tier (ADC <code>:825</code>, Store
+          <code>:780</code>, widened from 3 on 2026-07-18 to tolerate a weekend or holiday, a note carried at
+          <code>:823-824</code> in ADC and <code>:778-779</code> in Store). The DR and load
           gates read <code>workflow_runs[0].updated_at</code> from a <code>status=success&amp;per_page=1</code> query against
           <code>dr-drill.yml</code> and <code>load-test.yml</code> respectively
           (<code>MMCA.ADC/.github/workflows/deploy.yml:734-736,791-793</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:638-640,693-695</code>), compute the age in whole days and exit 1
+          <code>MMCA.Store/.github/workflows/deploy.yml:692-694,747-749</code>), compute the age in whole days and exit 1
           when it exceeds the window
           (<code>MMCA.ADC/.github/workflows/deploy.yml:741-748,798-805</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:645-652,700-707</code>).</p>
+          <code>MMCA.Store/.github/workflows/deploy.yml:699-706,754-761</code>).</p>
           </li>
           <li><p><strong>Absence fails; it does not pass.</strong> An empty result (no successful run at all) prints an error
           naming the workflow to dispatch and exits 1, in every one of the three gates
           (<code>MMCA.ADC/.github/workflows/deploy.yml:737-740,794-797,884-887</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:641-644,696-699,780-783</code>); Store&#39;s broker message is the
+          <code>MMCA.Store/.github/workflows/deploy.yml:695-698,750-753,834-837</code>); Store&#39;s broker message is the
           same sentence without the <code>(TD-02 / TD-17)</code> suffix ADC carries.</p>
           </li>
           <li><p><strong>The broker gate keys off the jobs, not the run conclusion.</strong> It enumerates completed runs of
@@ -302,33 +305,34 @@
           (<code>MMCA.ADC/.github/workflows/deploy.yml:8-20</code>, <code>MMCA.Store/.github/workflows/deploy.yml:8-20</code>).
           Every gate reads both into its step environment
           (<code>MMCA.ADC/.github/workflows/deploy.yml:712-713,769-770,830-831</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:616-617,673-674,731-732</code>) and, when the flag is true with
+          <code>MMCA.Store/.github/workflows/deploy.yml:670-671,727-728,785-786</code>) and, when the flag is true with
           an empty justification, emits <code>::error::</code> and exits 1
           (<code>MMCA.ADC/.github/workflows/deploy.yml:717-721</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:621-625</code>). With a justification it writes a headed
+          <code>MMCA.Store/.github/workflows/deploy.yml:675-679</code>). With a justification it writes a headed
           break-glass block plus the reason to the step summary, raises a <code>::warning::</code> annotation carrying
           the same text, and exits 0 (<code>MMCA.ADC/.github/workflows/deploy.yml:722-730</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:626-634</code>). One input governs all three gates.</p>
+          <code>MMCA.Store/.github/workflows/deploy.yml:680-688</code>). One input governs all three gates.</p>
           </li>
           <li><p><strong>The skip path is unreachable on a push.</strong> <code>inputs</code> is empty outside a dispatch, so
           <code>${SKIP_GATES:-false}</code> reads <code>false</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:717</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:621</code>), and every gate additionally carries
+          <code>MMCA.Store/.github/workflows/deploy.yml:675</code>), and every gate additionally carries
           <code>if: github.event_name != &#39;pull_request&#39;</code>
           (<code>MMCA.ADC/.github/workflows/deploy.yml:702,759,818</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:606,663,719</code>): the gates run on push and manual dispatch
+          <code>MMCA.Store/.github/workflows/deploy.yml:660,717,773</code>): the gates run on push and manual dispatch
           only, never on a pull request.</p>
           </li>
           <li><p><strong>A skipped gate still reports success, which is what the deploy condition demands.</strong> The deploy
           runs under <code>always()</code> with explicit per-need results and requires <code>success</code> from each freshness gate
           by name; only a conditional test gate may be <code>skipped</code>
           (<code>MMCA.ADC/.github/workflows/deploy.yml:1080-1093</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:964-976</code>). Store allows that for <code>e2e-gate</code> alone. ADC
-          allows it for <code>e2e-gate</code> and for <code>backend-test-gate</code>, which carry exactly complementary conditions
+          <code>MMCA.Store/.github/workflows/deploy.yml:1026-1039</code>). Both repos allow it for the same two jobs,
+          <code>e2e-gate</code> and <code>backend-test-gate</code>, which carry exactly complementary conditions
           over a code deploy (<code>ui == &#39;true&#39;</code> against <code>ui != &#39;true&#39;</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:396,688</code>), so one of the two always runs and neither has to
+          <code>MMCA.ADC/.github/workflows/deploy.yml:396,688</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:349,645</code>), so one of the two always runs and neither has to
           be made unconditional. Exiting 0 inside the step is what keeps break-glass compatible with that
           contract, and both repos say so in the comment above the condition
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1072</code>, <code>MMCA.Store/.github/workflows/deploy.yml:961</code>).</p>
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1072</code>, <code>MMCA.Store/.github/workflows/deploy.yml:1014-1018</code>).</p>
           </li>
           <li><p><strong>Deploy-time only, and deliberately not a required merge check.</strong> Both repos document the freshness
           gates as push-only jobs that run after merge and must not be added to branch protection, since a job
@@ -340,13 +344,17 @@
           <code>:118-120</code> is what covers <code>cross-service-freshness</code> there.</p>
           </li>
           </ul>
-          <p><strong>Adoption is the two deployed apps: the three freshness gates are near-identical there, the deploy
-          condition around them is not.</strong> ADC&#39;s <code>deploy.needs</code> carries a tenth entry, <code>backend-test-gate</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1054</code>), which Store&#39;s nine-entry list does not
-          (<code>MMCA.Store/.github/workflows/deploy.yml:945</code>); that difference is structural, not a comment. The
+          <p><strong>Adoption is the two deployed apps, and the deploy condition around the gates is now the same shape
+          in both.</strong> Each repo&#39;s <code>deploy.needs</code> carries the same ten entries, <code>backend-test-gate</code> among them
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1054</code>, <code>MMCA.Store/.github/workflows/deploy.yml:999</code>), and
+          each declares that job with the identical condition, the exact complement of its <code>e2e-gate</code>
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:394</code>, <code>MMCA.Store/.github/workflows/deploy.yml:347</code>). So in
+          both repos the deploy condition tolerates <code>skipped</code> from exactly two conditional test gates, of which
+          precisely one runs on any code deploy (<code>MMCA.ADC/.github/workflows/deploy.yml:1092-1093</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1038-1039</code>). The
           gate bodies themselves differ only in comments and messages: Store gives the skip-if-unchanged reason
           for reading jobs first and names neither the advisory job nor the incident
-          (<code>MMCA.Store/.github/workflows/deploy.yml:751-765</code> against
+          (<code>MMCA.Store/.github/workflows/deploy.yml:805-819</code> against
           <code>MMCA.ADC/.github/workflows/deploy.yml:850-869</code>), and ADC&#39;s broker failure messages cite its backlog
           items TD-02 and TD-17 (<code>MMCA.ADC/.github/workflows/deploy.yml:885,893</code>). <strong>MMCA.Helpdesk has no
           deploy pipeline at all</strong>: its <code>.github/workflows/</code> holds four files, <code>ci.yml</code>, the two Claude
@@ -389,7 +397,7 @@
           monthly k6 cron did not fire, and the failure surfaces after merge: the gate job goes red and
           <code>deploy</code> is left skipped by its explicit per-need condition
           (<code>MMCA.ADC/.github/workflows/deploy.yml:1087-1089</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:971-973</code>). The coupling is deliberate, and the cost is a
+          <code>MMCA.Store/.github/workflows/deploy.yml:1033-1035</code>). The coupling is deliberate, and the cost is a
           blocked rollout at whatever moment the schedule happened to lapse.</li>
           <li><strong>Break-glass is auditable but human-judged.</strong> Only non-emptiness is checked: nothing rates the
           reason, there is no second approver, no expiry and no tracked follow-up beyond the step-summary
@@ -402,10 +410,10 @@
           run and the newest round-trip proved an earlier commit, not this one.</li>
           <li><strong>Whole-day arithmetic widens every window.</strong> The age is integer division by 86400 compared with
           <code>-gt</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:741-743</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:647-649</code>), so a proof up to a day older than the stated
+          <code>MMCA.Store/.github/workflows/deploy.yml:701-703</code>), so a proof up to a day older than the stated
           number still passes.</li>
           <li><strong>The broker gate scans a bounded history.</strong> It walks at most the 25 most recent completed runs
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:882</code>, <code>MMCA.Store/.github/workflows/deploy.yml:778</code>); past
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:882</code>, <code>MMCA.Store/.github/workflows/deploy.yml:832</code>); past
           that it reports &quot;no successful run found,&quot; which fails closed but reads as &quot;never ran&quot; rather than
           &quot;not recently.&quot;</li>
           <li><strong>No pull-request signal.</strong> Because the gates are push-only, a contributor cannot learn from the PR

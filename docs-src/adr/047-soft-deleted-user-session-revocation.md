@@ -5,6 +5,9 @@ Accepted (2026-07-15). Revised 2026-08-07 (validator hoisted into a shared gener
 constant moved, the two apps revoke at different speeds). Revised 2026-08-23: the pipeline
 registration moved out of `WebApplicationExtensions` into the named-step `MiddlewarePipelineBuilder`
 (ADR-079), and a tenant-resolution step (ADR-073) now sits between authentication and rate limiting.
+Revised 2026-09-03 (MMCA.Common 1.185.0): the deleted-marker write was lifted out of the apps into
+`DeleteUserHandlerBase`, so the revocation window is now uniform across every consumer and the
+per-app asymmetry the 2026-08-07 revision recorded is gone.
 
 ## Context
 Soft-delete is the framework's default deletion model (ADR-005): `AuditableBaseEntity.Delete()` sets
@@ -70,7 +73,7 @@ by a short cache so the account-status lookup is not paid on every request.
   app closes it over its own `User` at registration and writes no subclass of its own
   (`services.TryAddScoped<ISoftDeletedUserValidator, SoftDeletedUserValidator<User>>()` at
   `MMCA.ADC.Identity.Application/DependencyInjection.cs:35` and
-  `MMCA.Store.Identity.Application/DependencyInjection.cs:46`). The query bypasses the soft-delete
+  `MMCA.Store.Identity.Application/DependencyInjection.cs:44`). The query bypasses the soft-delete
   global query filter deliberately, because a plain read would hide the very row it needs to find.
 - **A 30-second cache amortizes the lookup.** The key shape and the marker lifetime live in a shared
   class rather than inside the middleware, because a module that deletes an account has to write the
@@ -109,21 +112,45 @@ covers the branches: anonymous pass-through, no-validator pass-through with no c
 non-deleted pass, a live deleted 401, a cached-deleted 401 with no database call, and a cached
 non-deleted pass with no database call.
 
-The effect is a **bounded revocation window**, not instant revocation, and the two apps sit at
-different points inside it. Where nothing writes the marker at delete time, a soft-deleted account's
-still-valid tokens keep working only until the cached status expires (at most the 30-second marker
-lifetime once the account has been queried at least once in that window), instead of until the token
-itself expires. That is MMCA.Store today: its `DeleteUserHandler.OnAfterSoftDeleteAsync`
-(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:35-60`)
-erases the linked `Customer` and writes no marker, so revocation there is bounded only by that passive
-window. MMCA.ADC's handler writes one: after the erasure commits it queues
-`SoftDeletedUserCache.MarkDeletedAsync(cacheService, command.UserId, ct)` as an after-commit callback
-(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:68-80`,
-the call at `:72-74`; `SoftDeletedUserCache.MarkDeletedAsync` at `SoftDeletedUserCache.cs:53-61`), so
-the next request bearing an already-issued token is rejected without waiting for the window to elapse.
-The write is best effort: a cache fault is logged and swallowed (`DeleteUserHandler.cs:76-79`)
-rather than failing an erasure that already committed, which drops ADC back to the same
-passive bound Store lives with.
+**The marker write is part of the shared erasure workflow, so the window is uniform.** Without a
+marker the revocation is passive: a soft-deleted account's still-valid tokens keep working until the
+cached status expires (at most the 30-second marker lifetime, once the account has been queried at
+least once in that window) instead of until the token itself expires. Writing the marker at delete
+time collapses that to the next request. That write is not left to each app's delete handler: it is a
+step of `DeleteUserHandlerBase.HandleAsync`, the shared account-erasure workflow in
+`MMCA.Common.Application`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:137-149`),
+so every app that derives from the base gets the identical revocation window with no per-app code.
+
+- **The base requires the cache to do it.** `ICacheService` is a constructor parameter of the base
+  (`DeleteUserHandlerBase.cs:58-61`), so an app cannot derive from it and silently skip the marker;
+  the compiler asks for the dependency.
+- **It runs after the commit and before the app's tail.** The order is
+  `SaveChangesAsync` (`:135`), then `SoftDeletedUserCache.MarkDeletedAsync(cacheService,
+  command.UserId, cancellationToken)` (`:142-144`; `SoftDeletedUserCache.MarkDeletedAsync` at
+  `SoftDeletedUserCache.cs:53-61`), then the queued `afterCommit` actions (`:151-154`). The base's own
+  remarks give the reason (`:31-36`): the app's tail is unbounded work (deleting a blob, calling
+  storage) that can be slow or throw, and every second it takes is a second the deleted account's
+  token still works, so revoking first bounds the exposure to the cache round trip regardless of what
+  the app queued behind it.
+- **It is best effort, and deliberately so.** A non-cancellation exception is caught and logged as a
+  warning via `UserUseCaseLog.SoftDeletedMarkerFailed`
+  (`DeleteUserHandlerBase.cs:146-149`; `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserUseCaseLog.cs:23`)
+  rather than failing an erasure that has already committed irreversibly. A failed write costs only
+  the shortening: revocation falls back to the passive 30-second window, exactly as it behaved before
+  the marker existed (`DeleteUserHandlerBase.cs:24-29`).
+- **Apps are told not to write it themselves.** The `afterCommit` parameter's own documentation says
+  the base already wrote the marker ahead of the tail, so a subclass must not queue a second write
+  (`DeleteUserHandlerBase.cs:175-181`).
+
+Both deployed apps therefore revoke at the same speed. After the 1.185.0 sweep MMCA.ADC's
+`DeleteUserHandler`
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs`)
+keeps only its avatar-blob tail, its hand-rolled after-commit marker closure and its local
+`LogSoftDeletedMarkerFailed` partial having been deleted in favour of the base's; MMCA.Store's
+handler (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs`)
+keeps its linked-`Customer` cascade and gains the marker behavior purely by forwarding the new
+`ICacheService` constructor parameter to the base. Neither app contains a marker write.
 
 ## Rationale
 - **Bounds the stateless-JWT revocation gap cheaply.** Stateless JWT (ADR-004) has no built-in
@@ -151,12 +178,19 @@ passive bound Store lives with.
   exposure. 30 seconds is the chosen balance, and it is a compile-time value
   (`SoftDeletedUserCache.MarkerDuration`, `SoftDeletedUserCache.cs:29`), not configurable per host
   today.
-- **Writing the marker on delete is per-app, not framework-wide.** The framework supplies the shared
-  key and TTL (`SoftDeletedUserCache.MarkDeletedAsync`, `SoftDeletedUserCache.cs:53-61`), but nothing
-  calls it on an application's behalf. ADC's `DeleteUserHandler` calls it
-  (`MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:68-80`); Store's does
-  not (`MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:35-60`), so the
-  two apps genuinely revoke at different speeds from the same middleware.
+- **The marker only covers erasures that go through the shared base.** The framework now both
+  supplies the key and TTL (`SoftDeletedUserCache.MarkDeletedAsync`, `SoftDeletedUserCache.cs:53-61`)
+  and calls it on the app's behalf (`DeleteUserHandlerBase.cs:142-144`), so no app can forget it. What
+  the base cannot cover is a soft-delete that never reaches it: an administrative `IsDeleted = true`
+  applied by a migration, a support script or any handler other than a `DeleteUserHandlerBase`
+  subclass writes no marker, and those deletions still revoke only at the passive 30-second bound.
+  Uniformity here is uniformity across the *erasure use case*, not across every path that can set the
+  flag.
+- **A cache fault silently degrades the window rather than failing.** The write is swallowed and
+  logged at Warning (`DeleteUserHandlerBase.cs:146-149`), which is the right trade for an
+  already-committed irreversible erasure, but it means the shortened window is a best-effort property:
+  the caller gets a success result either way, and only the log says whether revocation was actually
+  accelerated.
 - **Failing open is a deliberate availability-over-strictness trade.** A cache or database failure on
   this path lets the request through instead of rejecting it
   (`SoftDeletedUserMiddleware.cs:93-100`, `:118-125`), so while either store is unhealthy a deleted
@@ -197,7 +231,7 @@ revoke at the same speed.
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:19-34`, its own
    remarks at `:11-17` stating no per-app subclass is needed), closed over each app's `User` at
    registration (`MMCA.ADC.Identity.Application/DependencyInjection.cs:35`, from `:32`;
-   `MMCA.Store.Identity.Application/DependencyInjection.cs:46`, from `:39`). The behavior of the query
+   `MMCA.Store.Identity.Application/DependencyInjection.cs:44`, from `:39`). The behavior of the query
    is what it was; only its location changed.
 2. **The 30-second value moved out of the middleware.** There is no `CacheDuration` member in
    `SoftDeletedUserMiddleware` any more. The figure is
@@ -273,6 +307,52 @@ one new neighbour now sits ahead of it.
    `SoftDeletedUserValidator.cs:19-34` with its constraint at `:20` and query at `:30-33`,
    `SoftDeletedUserCache.cs:29,42-43,53-61`, the two registrations
    (`MMCA.ADC.Identity.Application/DependencyInjection.cs:35`,
-   `MMCA.Store.Identity.Application/DependencyInjection.cs:46`), the two delete handlers
+   `MMCA.Store.Identity.Application/DependencyInjection.cs:44`), the two delete handlers
    (ADC `DeleteUserHandler.cs:68-80`, Store `DeleteUserHandler.cs:35-60`), and
    `MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Middleware/SoftDeletedUserMiddlewareTests.cs`.
+
+## Revision (2026-09-03, MMCA.Common 1.185.0)
+Re-verified against current source. The middleware, the cache design, the 30-second window and the
+fail-open policy are all unchanged. What changed is who writes the deleted marker, and with it the
+central asymmetry this record has carried since 2026-08-07.
+
+1. **The marker write moved into the framework.** `DeleteUserHandlerBase.HandleAsync` now writes it
+   itself, between `SaveChangesAsync` and the app's post-commit tail
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:137-149`,
+   the call at `:142-144`). The base's remarks argue the ordering (`:31-36`): the app's tail is
+   unbounded work, and every second of it is a second a deleted account's token still works, so the
+   revocation goes first and the exposure is bounded by the cache round trip alone.
+2. **`ICacheService` became a required constructor parameter.** The base is now
+   `DeleteUserHandlerBase<TUser, TCommand>(IUnitOfWork unitOfWork, ICacheService cacheService,
+   ILogger logger)` (`DeleteUserHandlerBase.cs:58-61`). This is a breaking constructor change for
+   every subclass, and it is the mechanism that makes the guarantee real: an app cannot derive from
+   the base and quietly omit the marker, because the compiler asks for the dependency.
+3. **The window is uniform, so the "two apps revoke at different speeds" claim is retired.** Item 4
+   of the 2026-08-07 revision and the trade-off that restated it are superseded. ADC's hand-rolled
+   after-commit closure and its local `LogSoftDeletedMarkerFailed` partial were deleted from
+   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs`,
+   leaving only its avatar-blob tail; Store gained the behavior without writing any marker code, by
+   adding an `ICacheService` parameter to
+   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs`
+   and forwarding it to the base. Both landed in the 1.185.0 consumer sweep.
+4. **Best effort is now a framework property rather than an app one.** The base catches any
+   non-cancellation exception from the write and logs it at Warning through
+   `UserUseCaseLog.SoftDeletedMarkerFailed`
+   (`DeleteUserHandlerBase.cs:146-149`;
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Users/UserUseCaseLog.cs:23`), for the reason the
+   remarks give (`:24-29`): the erasure is already committed and irreversible, so a cache fault must
+   not turn it into a failure the caller would retry. On failure the revocation falls back to the
+   passive 30-second bound.
+5. **Subclasses are told not to duplicate it.** The `afterCommit` parameter's documentation states
+   that the base already wrote the marker ahead of the tail
+   (`DeleteUserHandlerBase.cs:175-181`), so a second write from an app hook is a documented mistake
+   rather than a silent duplicate.
+6. **Store registration anchor corrected.** `ISoftDeletedUserValidator` is registered at
+   `MMCA.Store.Identity.Application/DependencyInjection.cs:44`; the `:46` anchor the Decision and both
+   earlier revisions carried is dead. ADC's is unchanged at
+   `MMCA.ADC.Identity.Application/DependencyInjection.cs:35`.
+7. **Re-checked and unchanged**: `SoftDeletedUserMiddleware.cs:31`, `:65-73`, `:75`, `:76-83`, `:85`,
+   `:91`, `:102-106`, `:114-116`, `:131-133`, `:143-147`, `:150`, `:93-100`, `:118-125`, `:135-140`,
+   `ISoftDeletedUserValidator.cs:7,15`, `SoftDeletedUserValidator.cs:19-34`,
+   `SoftDeletedUserCache.cs:29,42-43,53-61`, and the pipeline anchors in
+   `MiddlewarePipelineBuilder.cs` (`:110,118,126,130,134`).

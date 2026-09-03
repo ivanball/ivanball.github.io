@@ -21,7 +21,11 @@ correct the meter inventory this record has been under-reporting, and to note th
 now starts one hop earlier, at the Gateway; see the Revision (2026-08-18) at the end. Amended
 (2026-08-31) to record the application logging pipeline (Serilog as one additional provider beside the
 OpenTelemetry one, never a replacement `ILoggerFactory`), its level and file-sink policy, the pre-DI
-bootstrap logger, and which hosts adopt it; see the Amended (2026-08-31) section at the end.
+bootstrap logger, and which hosts adopt it; see the Amended (2026-08-31) section at the end. Amended
+(2026-09-03): `MMCA.Store.UI.Web` now calls `AddCommonSerilog` instead of hand-rolling the same
+configuration inline, so the "defaults exist in two shapes" cost that amendment recorded is gone and
+eight hosts share one helper; its `Program.cs` citations and the per-host `AddCommonSerilog` /
+bootstrap-factory line anchors are rebased onto their current lines.
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -222,7 +226,7 @@ OpenTelemetry to Azure Monitor provider `AddServiceDefaults` wires (`Extensions.
 all, while its metrics, traces and health endpoints stay green, so the gap reads as a quiet service
 rather than as a misconfiguration. Ordering carries the same weight in the other direction: the helper
 runs BEFORE `AddServiceDefaults()` in every host that uses it (for example
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:98`-`:99`), so the OpenTelemetry
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:100`-`:101`), so the OpenTelemetry
 provider joins the factory Serilog is already in. One fitness test pins the invariant: the built
 container must contain exactly one `SerilogLoggerProvider`
 (`MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Logging/SerilogHostExtensionsTests.cs:156`-`:158`).
@@ -240,24 +244,23 @@ hook (`:50`, invoked at `:120`) instead of forking the helper.
 **A bootstrap logger for the pre-DI window.** Module discovery runs before the DI container exists, so
 there is no `ILogger<T>` to resolve yet. `CreateBootstrapLoggerFactory()` (`:67`-`:68`) returns a
 factory writing to the same global `Log.Logger`, which each host disposes once startup wiring is done
-(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:113`).
+(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:122`).
 
-**Adoption is asymmetric.** All seven ADC/Store service hosts call `AddCommonSerilog`, each in its own
-`Program.cs`: ADC Conference (`:98`), Engagement (`:81`), Identity (`:95`), Notification (`:84`), and
-Store Catalog (`:66`), Identity (`:72`), Sales (`:83`); each pairs it with
-`CreateBootstrapLoggerFactory()` in the same file (ADC `:305`, `:204`, `:243`, `:182`; Store `:113`,
-`:108`, `:121`). Neither Gateway references Serilog in its `Program.cs` at all, and neither does
-`MMCA.ADC.UI.Web`: those three take the plain OpenTelemetry
-logging `AddServiceDefaults` gives them. `MMCA.Store.UI.Web` is a third shape, hand-rolling the same
-configuration inline (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:48`-`:53`, the
-non-Production file sink at `:58`-`:64`) and registering it as one provider (`:74`) without calling the
-helper.
+**Adoption is asymmetric, but there is only one shape of it.** Eight hosts call `AddCommonSerilog`,
+each in its own `Program.cs`: the seven ADC/Store service hosts, ADC Conference (`:100`), Engagement
+(`:83`), Identity (`:96`), Notification (`:86`), and Store Catalog (`:68`), Identity (`:73`), Sales
+(`:85`), plus `MMCA.Store.UI.Web`
+(`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:58`). Each of the seven service hosts pairs
+it with `CreateBootstrapLoggerFactory()` in the same file (ADC `:308`, `:209`, `:247`, `:187`; Store
+`:122`, `:117`, `:131`); `MMCA.Store.UI.Web` does not, because it discovers no modules and so has no
+pre-DI window to cover. The asymmetry that remains is the three hosts with no Serilog at all: neither
+Gateway references it in its `Program.cs`, and neither does `MMCA.ADC.UI.Web`. Those three take the
+plain OpenTelemetry logging `AddServiceDefaults` gives them.
 
-Three costs come with it. **The invariant is guarded in the framework, not at the consumer**: the one
+Two costs come with it. **The invariant is guarded in the framework, not at the consumer**: the one
 test above runs in MMCA.Common, and nothing in a host's own build stops a new service from reaching for
-`UseSerilog()`, whose failure mode is silence in a place nobody watches for absence. **The defaults
-exist in two shapes**, the helper and `MMCA.Store.UI.Web`'s inline copy, so a change to the framework
-defaults reaches seven hosts and misses the eighth. And **`Information` is not the level that reaches
+`UseSerilog()`, whose failure mode is silence in a place nobody watches for absence. And
+**`Information` is not the level that reaches
 the queryable store**: [ADR-098](098-aspire-orchestration-not-testing-or-dashboards.md) records the
 production thinning that floors the OpenTelemetry logging provider at `Warning` while Serilog keeps
 `Information` on container stdout, so the two providers this record puts side by side deliberately
