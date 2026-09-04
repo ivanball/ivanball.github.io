@@ -120,9 +120,18 @@
           <p>Although written against a .NET / DDD / Clean Architecture / CQRS stack (modular monolith
           evolving toward microservices) with a Blazor / MudBlazor front end, the criteria generalize
           to any enterprise codebase and component-based UI.</p>
-          <p>The categories are organized in three parts: <strong>Part A (Application / Backend Architecture</strong>
-          (§1–17), <strong>Part B) Front-End / UI Architecture</strong> (§18–28), and <strong>Part C: Operational,
+          <p>The categories are organized in three parts: <strong>Part A: Application / Backend Architecture</strong>
+          (§1–17), <strong>Part B: Front-End / UI Architecture</strong> (§18–28), and <strong>Part C: Operational,
           Governance &amp; Cross-Cutting Concerns</strong> (§29–34).</p>
+          <p><strong>Rubric version 2 (2026-09-04).</strong> Version 2 keeps 34 categories and every category number, so
+          scorecard rows, backlog items and ADR citations stay stable, and makes two in-place replacements:
+          §10 is now <strong>Messaging &amp; Integration Architecture</strong> (the former Cross-Cutting Concerns facets are
+          scored in §5, §6, §9, §12, §17 and §29) and §16 is now <strong>AI-Native Application Architecture</strong>
+          (the former Maintainability &amp; Evolvability criteria live in §32, §33 and §34). It also adds
+          criteria to §4, §7, §8, §9, §11, §12, §14, §17, §29, §33 and §34. Each scorecard&#39;s header records
+          the rubric version it was scored against; indices that straddle a version boundary carry a
+          different denominator and are comparable only with that note. Decision record:
+          <a href="../adr/110-rubric-v2-category-realignment.html">ADR-110</a>.</p>
           <hr>
           <h2 id="how-to-use-this-rubric">How to Use This Rubric</h2>
           <h3 id="maturity-scale-per-category">Maturity scale (per category)</h3>
@@ -233,13 +242,13 @@
 | 7 | Microservices Readiness       |   3    |                |             |          |                  |
 | 8 | Data Architecture             |   3    |                |             |          |                  |
 | 9 | API &amp; Contract Design         |   2    |                |             |          |                  |
-|10 | Cross-Cutting Concerns        |   2    |                |             |          |                  |
+|10 | Messaging &amp; Integration       |   3    |                |             |          |                  |
 |11 | Security                      |   3    |                |             |          |                  |
 |12 | Performance &amp; Scalability     |   2    |                |             |          |                  |
 |13 | Observability &amp; Operability   |   2    |                |             |          |                  |
 |14 | Testability &amp; Test Strategy   |   3    |                |             |          |                  |
 |15 | Best Practices &amp; Code Quality |   2    |                |             |          |                  |
-|16 | Maintainability &amp; Evolvability|   2    |                |             |          |                  |
+|16 | AI-Native Application Arch    |  2/NA  |                |             |          |                  |
 |17 | DevOps &amp; Deployment           |   2    |                |             |          |                  |
 |   | **Part B: Front-End / UI**|        |                |             |          |                  |
 |18 | UI Architecture &amp; Components  |   3    |                |             |          |                  |
@@ -260,6 +269,8 @@
 |32 | Dependency &amp; Supply-Chain     |  2/3   |                |             |          |                  |
 |33 | Developer Experience &amp; Inner Loop| 2   |                |             |          |                  |
 |34 | Architecture Governance &amp; Docs|   2    |                |             |          |                  |</code></pre>
+          <p>§16 is <strong>N/A</strong> (its weight leaves both denominators) until a product feature calls a language model;
+          §32 is 2 by default and 3 for a published framework.</p>
           <hr>
           <h2 id="1-solid-principles">1. SOLID Principles</h2>
           <p><strong>Intent:</strong> Object/module-level design discipline that keeps code flexible and decoupled.</p>
@@ -329,6 +340,7 @@
           <li><strong>Domain events</strong> raised by aggregates to signal meaningful state changes.</li>
           <li><strong>Factory methods returning <code>Result&lt;T&gt;</code></strong> so invalid entities can&#39;t be constructed.</li>
           <li>Rich behavior on entities, not setters-only.</li>
+          <li><strong>Tenancy model stated</strong>: an ADR records whether the model is single- or multi-tenant; where multi-tenant, the tenant identifier is a strong type on every tenant-owned aggregate, never a naming convention.</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
@@ -388,6 +400,7 @@
           <li><strong>Independent deployability</strong>: services build/test/deploy independently; backward-compatible contracts.</li>
           <li><strong>Distributed observability</strong>: correlation/trace IDs propagate across service hops.</li>
           <li>For a <strong>modular monolith</strong>: modules implement a common contract, are discovered/registered in dependency order, and are extractable without rewrites.</li>
+          <li><strong>Modernization patterns named</strong>: an <strong>Anti-Corruption Layer</strong> wraps any legacy or third-party model at the boundary, and extracting a module or replacing a legacy component follows the <strong>Strangler Fig</strong> route (new path beside old, traffic moved, old path retired), so a rewrite is never the plan.</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
@@ -395,6 +408,7 @@
           <li>Shared database tables read/written by multiple services.</li>
           <li>No resilience policies; a downstream outage cascades.</li>
           <li>Integration via direct DB access instead of contracts/events.</li>
+          <li>A legacy or vendor model leaking into the domain because no translation layer sits at the boundary.</li>
           </ul>
           <p><strong>Default weight:</strong> 3</p>
           <hr>
@@ -409,6 +423,10 @@
           <li>Query efficiency: explicit eager-loading strategy; no N+1; projections for read paths.</li>
           <li>Concurrency handled (optimistic concurrency tokens) where contention exists.</li>
           <li>Per-service data isolation where microservices are in play (see §7).</li>
+          <li><strong>Zero-downtime schema change</strong>: migrations follow expand-contract, so the running version and the new schema coexist through a deploy; a contract step (drop/rename) ships as a separate release.</li>
+          <li><strong>Analytical reads separated from OLTP</strong>: reporting, export and analytics run off CDC, a replica, or an export pipeline, or a documented decision states that none exist; the transactional store is never the BI source of record.</li>
+          <li><strong>Polyglot persistence by decision</strong>: any second engine (document, cache, search, vector) is chosen by ADR with its consistency model stated, not adopted ad hoc.</li>
+          <li><strong>Tenant isolation model</strong> (database, schema, or row with a global filter) is decided by ADR, or single tenancy is stated.</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
@@ -416,6 +434,8 @@
           <li>N+1 queries, <code>Include</code> chains loading whole graphs, client-side evaluation.</li>
           <li>Cross-module/service joins coupling independent contexts.</li>
           <li>Hard deletes where soft-delete is the convention (orphaned references, lost audit trail).</li>
+          <li>A migration that drops or renames in the same release that stops writing the old shape (no expand-contract).</li>
+          <li>Reports and exports running heavy reads against the transactional database with no separation.</li>
           </ul>
           <p><strong>Default weight:</strong> 3</p>
           <hr>
@@ -429,6 +449,7 @@
           <li>Request validation at the edge; DTOs decoupled from domain entities (manual mapping or mapper by ADR).</li>
           <li>Pagination, filtering, sorting conventions are uniform.</li>
           <li>Contracts documented (OpenAPI) and generated/verified, not hand-maintained drift.</li>
+          <li><strong>Contract tests at the boundary</strong>: an OpenAPI baseline diff or consumer-driven contract tests fail the producer&#39;s build on a breaking change; async contracts (integration events) are documented alongside OpenAPI (AsyncAPI or equivalent).</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
@@ -436,27 +457,31 @@
           <li>Breaking changes shipped without versioning; consumers break silently.</li>
           <li>Inconsistent error shapes; 200-with-error-body anti-pattern.</li>
           <li>Undocumented or stale API specs.</li>
+          <li>A breaking change that only a consumer&#39;s production failure could have caught.</li>
           </ul>
           <p><strong>Default weight:</strong> 2</p>
           <hr>
-          <h2 id="10-cross-cutting-concerns">10. Cross-Cutting Concerns</h2>
-          <p><strong>Intent:</strong> Validation, caching, resilience, configuration, and mapping are centralized and consistent.</p>
+          <h2 id="10-messaging--integration-architecture">10. Messaging &amp; Integration Architecture</h2>
+          <p><strong>Intent:</strong> Integration over a broker or an edge gateway is reliable, observable and evolvable: the transport, the failure paths and the long-running processes are deliberate. (§6 scores the in-process command/query pipeline and the outbox write side; this scores what happens once a message leaves the process. Replaced Cross-Cutting Concerns in rubric v2; those facets are scored in §5, §6, §9, §12, §17 and §29.)</p>
           <p><strong>Criteria</strong></p>
           <ul>
-          <li>Validation, logging, transactions handled by pipeline behaviors/decorators: not copy-pasted.</li>
-          <li>Configuration via strongly-typed options, validated at startup; environment-specific overrides clean.</li>
-          <li>Caching strategy explicit (what, where, invalidation) and not hiding correctness bugs.</li>
-          <li>Resilience policies (retry/timeout/circuit-breaker) applied consistently via a shared mechanism.</li>
-          <li>Mapping strategy consistent and decided by ADR (manual vs. library).</li>
+          <li><strong>Broker topology decided by ADR</strong>: transport choice (Service Bus, RabbitMQ, Kafka, in-process), topics vs queues, one publishing boundary per source, and the local/prod parity of that choice (see §33).</li>
+          <li><strong>Delivery semantics stated per consumer</strong>: at-least-once with idempotent consumers (inbox or idempotency key), ordering expectations declared, duplicate handling tested.</li>
+          <li><strong>Dead-letter and poison-message handling</strong>: retries with backoff and a bounded attempt count, then a dead-letter path with an operational procedure (alert, inspect, replay or discard).</li>
+          <li><strong>Retention and replay</strong>: message and outbox retention are bounded and documented; a consumer can be replayed or rebuilt after an outage.</li>
+          <li><strong>Contract evolution</strong>: integration events are versioned; changes are additive unless a new version is published; consumer-driven contract tests (or an equivalent schema gate) catch a breaking producer change before deploy.</li>
+          <li><strong>Long-running processes</strong>: work spanning aggregates or services runs as a saga or process manager with explicit compensation, never as a distributed transaction; the state is persisted and timeouts are defined.</li>
+          <li><strong>Edge integration</strong>: the API gateway / BFF layer routes, aggregates and authenticates without becoming a second business layer; service discovery is configuration, not hard-coded hosts.</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
-          <li>Validation/logging duplicated in every handler.</li>
-          <li>Magic strings for config; secrets in config files.</li>
-          <li>Cache with no invalidation story (stale data) or caching used to mask slow queries.</li>
-          <li>Inconsistent, per-call retry logic.</li>
+          <li>No dead-letter story: a poison message blocks the queue or is silently dropped.</li>
+          <li>Retries without idempotency (duplicate side effects) or without backoff (retry storms).</li>
+          <li>An integration event whose shape changed with no version and no consumer check.</li>
+          <li>A multi-aggregate workflow held open in one database transaction, or compensation that exists only in prose.</li>
+          <li>Gateway code that carries business rules, or a consumer reading a producer&#39;s tables directly.</li>
           </ul>
-          <p><strong>Default weight:</strong> 2</p>
+          <p><strong>Default weight:</strong> 3</p>
           <hr>
           <h2 id="11-security">11. Security</h2>
           <p><strong>Intent:</strong> AuthN/AuthZ, secrets, and data protection are correct by construction.</p>
@@ -469,6 +494,9 @@
           <li>Transport security (TLS), data-at-rest protection, PII handling, and least-privilege access.</li>
           <li>Dependency and package vulnerability scanning in CI (audit sources configured).</li>
           <li>OWASP Top 10 reviewed; rate limiting / anti-automation where exposed.</li>
+          <li><strong>Threat model</strong>: a written threat model exists, is revisited when a trust boundary changes, and its mitigations trace to code or config.</li>
+          <li><strong>Service-to-service authentication</strong>: internal calls (HTTP, gRPC, broker) are authenticated and authorized by identity, never trusted by network position alone; private endpoints and VNets are defense in depth, not the control.</li>
+          <li><strong>Tenant-scoped authorization</strong> where multi-tenant: every query and command carries the tenant scope and a fitness function proves it; single tenancy is stated by ADR.</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
@@ -476,6 +504,7 @@
           <li>Connection strings/keys committed or in appsettings.</li>
           <li>Over-broad permissions (admin everywhere), no least privilege.</li>
           <li>Ignored package audit warnings.</li>
+          <li>Internal services that trust any caller on the network; no threat model, or one nobody has reopened since the first release.</li>
           </ul>
           <p><strong>Default weight:</strong> 3</p>
           <hr>
@@ -496,6 +525,7 @@
           <li>Unbounded queries returning whole tables.</li>
           <li>In-memory state preventing scale-out.</li>
           <li>Provisioning by guesswork (massive over- or under-provisioning) with no load data.</li>
+          <li>A cache with no invalidation story (stale data), or caching used to mask a slow query.</li>
           </ul>
           <p><strong>Default weight:</strong> 2</p>
           <hr>
@@ -530,6 +560,7 @@
           <li><strong>Architecture tests</strong> enforce dependency rules automatically.</li>
           <li>Tests are deterministic, isolated, and run in CI as a gate.</li>
           <li>Coverage tracked on meaningful paths (not chased as a vanity number).</li>
+          <li><strong>Contract tests</strong> sit at the integration tier: API baseline or consumer-driven contract checks and integration-event schema checks run in CI (see §9, §10).</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
@@ -558,24 +589,28 @@
           </ul>
           <p><strong>Default weight:</strong> 2</p>
           <hr>
-          <h2 id="16-maintainability--evolvability">16. Maintainability &amp; Evolvability</h2>
-          <p><strong>Intent:</strong> The system absorbs change cheaply and ages well. (The <em>governance/documentation depth</em> behind this (ADRs, fitness functions, diagrams) is scored separately in §34.)</p>
+          <h2 id="16-ai-native-application-architecture">16. AI-Native Application Architecture</h2>
+          <p><strong>Intent:</strong> Where a product feature calls a language model or an agent, that dependency is governed like any other external system: isolated, versioned, evaluated, observed and bounded in what it may do. (Developer-side AI tooling is scored in §33; this category is about the product. Replaced Maintainability &amp; Evolvability in rubric v2; those criteria live in §32, §33 and §34.)</p>
+          <p><strong>Applicability:</strong> mark <strong>N/A</strong> (excluded from both denominators) when no product feature calls a model, and say so in the scorecard&#39;s N/A note so the scope-out is explicit rather than a silent zero. Score it as soon as a single feature does.</p>
           <p><strong>Criteria</strong></p>
           <ul>
-          <li>Low coupling / high cohesion measured (dependency graphs, change-coupling); modules swap independently.</li>
-          <li>Clear module/package boundaries with explicit, versioned contracts (e.g., shared framework packages consumed downstream).</li>
-          <li><strong>Consistent upgrade strategy</strong>: framework changes rolled out to all consumers together (no long-lived divergent versions) per team policy.</li>
-          <li>Documentation that stays current: ADRs for the <em>why</em>, architecture map for the <em>what</em>.</li>
-          <li>Onboarding cost is low; conventions discoverable.</li>
-          <li>Tech-debt register exists and is serviced.</li>
+          <li><strong>Model calls behind a port</strong>: the application layer depends on an interface; the provider SDK, model routing / AI gateway and prompt assembly live in infrastructure, so a provider or model swap is an adapter change.</li>
+          <li><strong>Prompt and model versioning</strong>: prompts are source-controlled artifacts with a version; the model identifier is pinned per environment and a change is a reviewed change, not config drift.</li>
+          <li><strong>Evaluation gates CI</strong>: a repeatable evaluation suite (golden cases, rubric or judge scoring, regression thresholds) runs before a prompt, model or retrieval change ships.</li>
+          <li><strong>Guardrails at the boundary</strong>: input and output validation, PII redaction before the call and in the trace, injection defenses for retrieved or user content, and a content policy the feature cannot bypass.</li>
+          <li><strong>Least-privilege tool calling</strong>: an agent&#39;s tools are explicit, authorized per caller, and idempotent or confirmable; consequential actions require a human in the loop or an explicit policy that says they do not.</li>
+          <li><strong>Retrieval as data architecture</strong>: vector or hybrid search stores follow §8 (ownership, retention, per-service isolation) and §30 (PII, erasure); embeddings are refreshed when the source changes.</li>
+          <li><strong>LLM observability and cost</strong>: token usage, latency, model id and prompt version are on every trace; per-feature cost is attributable (§31) and alerts exist for runaway spend.</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
-          <li>Shotgun surgery: one change touches many modules.</li>
-          <li>Divergent versions of a shared library across consumers; partial rollouts that linger.</li>
-          <li>Tribal knowledge; undocumented decisions; stale docs contradicting the code.</li>
+          <li>Provider SDK types or prompt strings inside domain or application code.</li>
+          <li>A prompt or model change shipped with no evaluation run.</li>
+          <li>An agent that can call any tool with the caller&#39;s full permissions, or that takes an irreversible action with no confirmation path.</li>
+          <li>User or retrieved content concatenated into a prompt with no injection handling; PII in the prompt log.</li>
+          <li>No idea what a feature costs per call.</li>
           </ul>
-          <p><strong>Default weight:</strong> 2</p>
+          <p><strong>Default weight:</strong> 2 (N/A until a product feature calls a model)</p>
           <hr>
           <h2 id="17-devops--deployment">17. DevOps &amp; Deployment</h2>
           <p><strong>Intent:</strong> Building, releasing, and provisioning are automated, repeatable, and safe. (The <em>local developer experience / inner loop</em> behind this (local orchestration, cross-repo dev, build speed) is scored separately in §33.)</p>
@@ -586,6 +621,8 @@
           <li><strong>Infrastructure as Code</strong> (Bicep/Terraform): environments reproducible; no click-ops drift.</li>
           <li>Secrets/identity via managed identity / OIDC, least privilege for deployment principals.</li>
           <li>Environment parity; configuration externalized per environment.</li>
+          <li>Configuration via strongly-typed options validated at startup; environment overrides are clean and no secret sits in a config file.</li>
+          <li><strong>Progressive delivery</strong>: release is decoupled from deploy via feature flags, slots (blue/green) or canary, or single-slot deploy risk is explicitly accepted in an ADR with a rehearsed rollback; branches are short-lived and trunk-based, gated by CI.</li>
           <li>Cost awareness: provisioning right-sized with evidence; temporary scale-ups tracked with revert plans.</li>
           <li>Containerization/orchestration (or Aspire-style local-to-cloud parity) where applicable.</li>
           </ul>
@@ -595,6 +632,8 @@
           <li>Infra changed by hand in the portal; no IaC source of truth.</li>
           <li>Long-lived elevated credentials; secrets in pipelines.</li>
           <li>Scale-ups left running after the event that needed them.</li>
+          <li>Magic strings for config; secrets in config files.</li>
+          <li>A merge to main that is also a production deploy with no flag, slot or rehearsed rollback.</li>
           </ul>
           <p><strong>Default weight:</strong> 2</p>
           <hr>
@@ -820,7 +859,7 @@
           <p><strong>Default weight:</strong> 3</p>
           <hr>
           <h1 id="part-c-operational-governance--cross-cutting-concerns">Part C: Operational, Governance &amp; Cross-Cutting Concerns</h1>
-          <p>Categories §29–32 span backend and front end and are judged over the system&#39;s full lifecycle.
+          <p>Categories §29–34 span backend and front end and are judged over the system&#39;s full lifecycle.
           They use the same 0–4 maturity scale and weighting.</p>
           <hr>
           <h2 id="29-resilience-reliability--business-continuity">29. Resilience, Reliability &amp; Business Continuity</h2>
@@ -833,6 +872,7 @@
           <li><strong>Disaster recovery</strong>: defined <strong>RTO/RPO</strong> per service; failover/multi-region strategy, or a conscious and documented acceptance of single-region risk.</li>
           <li><strong>Reliability targets</strong>: SLOs/error budgets defined and measured; health/readiness probes drive orchestration and auto-heal.</li>
           <li><strong>Failure testing</strong>: chaos/fault injection or at least documented failure-mode analysis; startup ordering and graceful shutdown verified.</li>
+          <li><strong>One resilience mechanism</strong>: timeout/retry/circuit-breaker policies are applied through a shared pipeline (decorators, named Polly pipelines), never re-implemented per call site.</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
@@ -840,6 +880,7 @@
           <li>Undefined RTO/RPO; &quot;we&#39;d figure it out.&quot;</li>
           <li>Retries without backoff/idempotency (retry storms, duplicate side effects).</li>
           <li>Single points of failure with no failover and no explicit, documented risk acceptance.</li>
+          <li>Inconsistent, per-call retry logic.</li>
           </ul>
           <p><strong>Default weight:</strong> 3</p>
           <hr>
@@ -914,6 +955,7 @@
           <li><strong>Consistent tooling</strong>: analyzers/formatting/<code>.editorconfig</code> enforce the same rules locally as CI; fast pre-merge feedback.</li>
           <li><strong>Local/cloud parity</strong>: local topology mirrors production (Aspire-to-Azure) so integration bugs surface locally, not in prod.</li>
           <li><strong>Discoverable commands</strong>: build/test/migrate/run are each one obvious command.</li>
+          <li><strong>AI-assisted engineering guardrails</strong>: coding agents and workflow scripts run behind enforced hooks (denied destructive commands, deploy confirmation, PR-only landing), their output passes the same CI gates as a human change, and the rules are versioned in the repo.</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
@@ -921,11 +963,12 @@
           <li>Slow builds/tests that discourage running them.</li>
           <li>No cross-repo dev path: must publish a package to test a framework change.</li>
           <li>Local environment diverges from prod (different brokers/DBs) hiding integration bugs.</li>
+          <li>Agentic tooling that can push, deploy or delete with no hook or gate between it and production.</li>
           </ul>
           <p><strong>Default weight:</strong> 2</p>
           <hr>
           <h2 id="34-architecture-governance--documentation">34. Architecture Governance &amp; Documentation</h2>
-          <p><strong>Intent:</strong> Decisions are recorded, conformance is enforced, and the system is documented so it stays coherent as it evolves. (Promoted out of §16: that scores the <em>property</em> of evolvability; this scores the <em>machinery</em> that protects it.)</p>
+          <p><strong>Intent:</strong> Decisions are recorded, conformance is enforced, and the system is documented so it stays coherent as it evolves. (Absorbs the former §16 Maintainability &amp; Evolvability in rubric v2: the evolvability <em>property</em> and the <em>machinery</em> that protects it are scored together here; upgrade strategy lives in §32 and onboarding cost in §33.)</p>
           <p><strong>Criteria</strong></p>
           <ul>
           <li><strong>Decision records</strong>: significant decisions captured as ADRs with context/rationale/consequences, and kept current (e.g., the <code>ADRs/</code> set on manual mapping, navigation populators, outbox dual-dispatch, auth dual-fetch).</li>
@@ -934,6 +977,8 @@
           <li><strong>Documented conventions</strong>: contributor guides (<code>CLAUDE.md</code>) describe patterns, layering rules, and how to extend; discoverable and current.</li>
           <li><strong>Change governance</strong>: a lightweight process for evolving cross-cutting patterns; consistency enforced across modules and repos.</li>
           <li><strong>Traceability</strong>: docs link to code/ADRs; stale docs are detected and pruned.</li>
+          <li><strong>Coupling measured and enforced</strong>: low coupling / high cohesion checked by dependency-graph or change-coupling fitness functions; modules swap independently.</li>
+          <li><strong>Tech-debt register</strong>: one ledger derived from the scorecard, serviced each cycle, with conscious deferrals recorded rather than silently left low.</li>
           </ul>
           <p><strong>Red flags</strong></p>
           <ul>
@@ -941,6 +986,7 @@
           <li>Architecture rules exist only as prose nobody checks (no fitness functions).</li>
           <li>Diagrams/docs that contradict the code (worse than none).</li>
           <li>No documented conventions; every module reinvents patterns.</li>
+          <li>Shotgun surgery: one change touches many modules.</li>
           </ul>
           <p><strong>Default weight:</strong> 2</p>
           <hr>
@@ -959,6 +1005,10 @@
           <li><input disabled="" type="checkbox"> Is provisioning sized from load data rather than guesswork?</li>
           <li><input disabled="" type="checkbox"> Are ADRs present for the non-obvious decisions?</li>
           <li><input disabled="" type="checkbox"> Can a new feature be added as one cohesive slice?</li>
+          <li><input disabled="" type="checkbox"> Is there a dead-letter path with an operational procedure, and is every multi-step workflow a saga with compensation?</li>
+          <li><input disabled="" type="checkbox"> Is there a threat model, and are internal service calls authenticated by identity rather than network position?</li>
+          <li><input disabled="" type="checkbox"> Can a release be switched on or rolled back without a redeploy (flags, slots), or is that risk explicitly accepted?</li>
+          <li><input disabled="" type="checkbox"> If a product feature calls a model, is the call behind a port with an evaluation suite gating CI?</li>
           </ul>
           <p><strong>Front-end / UI:</strong></p>
           <ul>
@@ -1004,13 +1054,13 @@
             <li><a href="#7-microservices-readiness">7. Microservices Readiness</a></li>
             <li><a href="#8-data-architecture">8. Data Architecture</a></li>
             <li><a href="#9-api--contract-design">9. API &amp; Contract Design</a></li>
-            <li><a href="#10-cross-cutting-concerns">10. Cross-Cutting Concerns</a></li>
+            <li><a href="#10-messaging--integration-architecture">10. Messaging &amp; Integration Architecture</a></li>
             <li><a href="#11-security">11. Security</a></li>
             <li><a href="#12-performance--scalability">12. Performance &amp; Scalability</a></li>
             <li><a href="#13-observability--operability">13. Observability &amp; Operability</a></li>
             <li><a href="#14-testability--test-strategy">14. Testability &amp; Test Strategy</a></li>
             <li><a href="#15-best-practices--code-quality">15. Best Practices &amp; Code Quality</a></li>
-            <li><a href="#16-maintainability--evolvability">16. Maintainability &amp; Evolvability</a></li>
+            <li><a href="#16-ai-native-application-architecture">16. AI-Native Application Architecture</a></li>
             <li><a href="#17-devops--deployment">17. DevOps &amp; Deployment</a></li>
             <li><a href="#18-ui-architecture--component-design">18. UI Architecture &amp; Component Design</a></li>
             <li><a href="#19-state-management--data-flow">19. State Management &amp; Data Flow</a></li>
