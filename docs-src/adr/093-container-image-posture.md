@@ -3,7 +3,9 @@
 ## Status
 Accepted (2026-08-23) for the three build decisions below. The two runtime postures in "Open
 postures" are recorded as **undecided**: they describe what the images do today and the trade-off
-each one carries, not a decision to keep doing it.
+each one carries, not a decision to keep doing it. Revised 2026-09-03: the Container Apps sizing
+that decision 3's cold-start argument rests on is now uniform across all six ADC apps, so the
+4-vs-2 split that argument cited is gone. See Revision (2026-09-03) at the end.
 
 ## Context
 Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
@@ -22,7 +24,7 @@ that a later hardening pass starts from a stated position rather than from a dis
 
 The images are built in CI, not by hand: a fan-out `build-images` matrix job with one leg per image
 (`MMCA.ADC/.github/workflows/deploy.yml:960,971-988` for the six ADC legs,
-`MMCA.Store/.github/workflows/deploy.yml:848,859-873` for the five Store legs) runs
+`MMCA.Store/.github/workflows/deploy.yml:902,913-927` for the five Store legs) runs
 `docker/build-push-action@v7` over a buildx builder
 (`MMCA.ADC/.github/workflows/deploy.yml:1005-1010`), pushes each image to ACR under both the commit
 sha and `latest` (`:1017-1018`), and caches layers in that same registry with `mode=max`
@@ -40,7 +42,7 @@ into a shell-local `GITHUB_TOKEN` that lives only for that command, which is the
 lands in image layers, the build cache, and `docker history` (`:8-10`). CI passes it as a
 `secrets:` input to the build action, not a `build-args:` input
 (`MMCA.ADC/.github/workflows/deploy.yml:1024-1025`,
-`MMCA.Store/.github/workflows/deploy.yml:912-913`), and the workflow repeats the constraint in its
+`MMCA.Store/.github/workflows/deploy.yml:966-967`), and the workflow repeats the constraint in its
 own comments (`MMCA.ADC/.github/workflows/deploy.yml:950-953`). Secret *content* is deliberately not
 part of the BuildKit cache key, so rotating the token does not invalidate the restore layer; that is
 safe only because the package set is pinned by committed lock files and any
@@ -72,9 +74,9 @@ and the three Store services and the Store Gateway
 Blazor web hosts do not (`.../MMCA.ADC.UI.Web/Dockerfile:48`,
 `.../MMCA.Store.UI.Web/Dockerfile:47`). The stated purpose is cold start: deploys, restarts and
 scale-out replicas skip first-request JIT (`.../MMCA.ADC.Conference.Service/Dockerfile:39-40`), and
-the containers those replicas land on are fractional-vCPU Container Apps: 0.25 vCPU / 0.5 GiB for
-four of the six ADC apps and 0.5 vCPU / 1 GiB for the other two
-(`MMCA.ADC/infra/main.bicep:1026,1222,1346,1487,1636,1742`). On that much CPU, JIT time is not
+the containers those replicas land on are fractional-vCPU Container Apps: all six ADC apps
+(identity, conference, engagement, notification, gateway, ui) run on 0.25 vCPU / 0.5 GiB
+(`MMCA.ADC/infra/main.bicep:1058,1267,1391,1532,1692,1805`). On that much CPU, JIT time is not
 noise.
 
 **4. Every image is published with `UseAppHost=false` and started through the shared runtime.** The
@@ -158,3 +160,32 @@ described here), [ADR-064](064-deploy-recency-gates.md) (the proof-of-recency pr
 deploy, none of which observes the image contents, which is the gap the open postures above name),
 [ADR-053](053-dual-registry-package-publishing.md) (the dual-registry publishing that makes the credential
 in decision 1 a repository-mapping choice rather than a necessity).
+
+## Revision (2026-09-03)
+
+**Container sizing is uniform, so the ReadyToRun argument applies evenly.** Decision 3 justified
+ReadyToRun by the CPU the replicas land on and cited a split: four ADC apps at 0.25 vCPU / 0.5 GiB
+and two at 0.5 vCPU / 1 GiB. There is no split now. All six ADC container apps, identity,
+conference, engagement, notification, gateway and ui, are declared
+`resources: { cpu: json('0.25'), memory: '0.5Gi' }`
+(`MMCA.ADC/infra/main.bicep:1058,1267,1391,1532,1692,1805`), so every image in that application
+starts on a quarter of a vCPU.
+
+The two that moved are conference and gateway, and each records the measurement and its rollback in
+place rather than in a commit message: conference averages 0.012-0.017 cores with a p95 under 0.03
+against the 0.5 vCPU it previously held, its working set runs 320-380 MB, and a p95 of 376 MB is 73
+percent of the new 512 MiB limit, which is called out as the one to watch
+(`MMCA.ADC/infra/main.bicep:1260-1266`); the gateway shows the same CPU profile with a 190-235 MB
+working set because it is pure YARP forwarding with no `DbContext`
+(`MMCA.ADC/infra/main.bicep:1685-1691`). Reverting either to `{ cpu: json('0.5'), memory: '1Gi' }`
+is one line and one deploy.
+
+Both comments note the consequence that matters here: startup CPU spikes are throttled by the
+smaller quota, so cold start roughly doubles, and revision overlap keeps the previous revision
+serving until readiness goes green so traffic does not see it. That raises rather than weakens the
+case for publishing the service and gateway images ReadyToRun, since the JIT work removed at
+publish time is work the container no longer has quota to do quickly.
+
+Citations for the two Store `build-images` anchors in Context and decision 1 are re-pointed to the
+job and its `secrets:` input (`MMCA.Store/.github/workflows/deploy.yml:902,913-927` and `:966-967`);
+the workflow itself is unchanged in substance.

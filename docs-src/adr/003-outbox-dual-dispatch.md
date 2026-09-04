@@ -41,7 +41,7 @@ Use a dual-dispatch strategy:
   (2026-08-26)) and then dead-lettered, which requires manual investigation.
   A message that **throws during dispatch** is retried up to `Outbox:MaxRetries` (default 5) times,
   then dropped from the eligible set (it stops being polled once `RetryCount >= MaxRetries`).
-- Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` seconds multiplied by a random jitter factor in `[0.8, 1.2]`, capped at `Outbox:LeaseSeconds` (the re-lease at `MMCA.Common/.../Outbox/OutboxProcessor.cs:642-643`, the jitter-then-cap formula in `ComputeRetryBackoffSeconds` at `:732-746`). At the shipped defaults (base 10s, `MaxRetries` 5, lease 300s, batch 50: `MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,99`) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends **about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range**, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).
+- Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` seconds multiplied by a random jitter factor in `[0.8, 1.2]`, capped at `Outbox:LeaseSeconds` (the re-lease at `MMCA.Common/.../Outbox/OutboxProcessor.cs:644-645`, the jitter-then-cap formula in `ComputeRetryBackoffSeconds` at `:734-748`). At the shipped defaults (base 10s, `MaxRetries` 5, lease 300s, batch 50: `MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,99`) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends **about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range**, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).
 - That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: `OutboxProcessor.cs:150-173`), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (`HasMoreEligibleWork` requires progress: `OutboxProcessor.cs:337-339`), so a batch of 50 that fails in full cannot hot-spin the processor.
 - Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup.
 
@@ -110,7 +110,7 @@ a cadence the processor no longer has.
    (`MMCA.Common/.../Settings/OutboxSettings.cs:89-96`). A failure now re-leases its row for
    `RetryBackoffBaseSeconds * 2^(n-1)` seconds, capped at the lease so a permanently failing message
    never holds a claim longer than a dead replica's rows would
-   (`MMCA.Common/.../Outbox/OutboxProcessor.cs:642-643`, formula at `:732-746`). At the shipped defaults that was
+   (`MMCA.Common/.../Outbox/OutboxProcessor.cs:644-645`, formula at `:734-748`). At the shipped defaults that was
    10s, 20s, 40s and 80s between the five attempts: 150 seconds of enforced backoff before
    dead-lettering, shortening the first retries while still throttling a message that will never
    succeed. Those four waits are no longer exact values; the jitter added on 2026-08-07 (see the
@@ -124,7 +124,7 @@ identical across a batch.
 1. **The retry backoff carries random jitter.** The exponential wait is multiplied by a random
    factor in `[0.8, 1.2]` before the lease cap is applied, so the four waits between the five
    attempts are about 8-12s, 16-24s, 32-48s and 64-96s at the shipped defaults instead of exactly
-   10s, 20s, 40s and 80s (`MMCA.Common/.../Outbox/OutboxProcessor.cs:742`, cap applied at `:745`). The reason is the
+   10s, 20s, 40s and 80s (`MMCA.Common/.../Outbox/OutboxProcessor.cs:744`, cap applied at `:747`). The reason is the
    failure mode the backoff alone does not cover: one dependency outage fails all 50 rows of a batch
    in the same instant, and a deterministic curve then retries all 50 on a single shared schedule,
    re-hammering that dependency in synchronized bursts. Jitter spreads the attempts apart. The
@@ -143,23 +143,23 @@ hands a consumer twice.
    `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IHasOrderingKey.cs:24-31`) has that value
    copied onto its outbox row
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:79`,
-   copied at `:115`), and the processor refuses to claim a keyed row while an EARLIER unprocessed,
+   copied at `:116`), and the processor refuses to claim a keyed row while an EARLIER unprocessed,
    non-dead-lettered row carries the same key. The guard lives in the claim itself, as a correlated
    `NOT EXISTS` inside the same `ExecuteUpdateAsync` that takes the lease
-   (`.../Outbox/OutboxProcessor.cs:544-554`, applied at `:473-480`), so a second replica racing the
+   (`.../Outbox/Processing/OutboxProcessor.cs:546-556`, applied at `:475-483`), so a second replica racing the
    same key loses on the row rather than on a check it made before the race started (`:538-542`);
    ordering therefore holds across batches and across scaled-out replicas, not merely within one batch
    (`:439-442`). Within a cycle, the candidate set keeps at most one row per key, so a single batch
-   never dispatches two events of one key in parallel (`:507-520`, reasoning at `:500-505`). This is
+   never dispatches two events of one key in parallel (`:509-525`, reasoning at `:502-508`). This is
    head-of-line blocking by design: a keyed row that is failing and backing off blocks every later row
    with the same key, which is why keys must be as narrow as the ordering requirement really is (one
    key per aggregate serializes that aggregate; a constant key serializes the whole outbox:
    `IHasOrderingKey.cs:15-22`). A row that exhausts its retries stops blocking, so a poison event
-   cannot freeze its key forever (`OutboxProcessor.cs:443-445`, the `RetryCount` term of the predicate
-   at `:553`). Two costs are recorded in code: a batch containing no keyed row runs exactly the query
+   cannot freeze its key forever (`OutboxProcessor.cs:446-447`, the `RetryCount` term of the predicate
+   at `:555`). Two costs are recorded in code: a batch containing no keyed row runs exactly the query
    it always ran, so hosts that never declare a key pay nothing, not even a subquery the optimizer has
    to prove away (`:470-475`); and the predecessor test is on `OccurredOn` alone, so two rows sharing
-   a key and an exact timestamp do not block each other in SQL (`:448-452`, `:554`). A tie at tick
+   a key and an exact timestamp do not block each other in SQL (`:448-452`, `:556`). A tie at tick
    resolution is not an ordering the outbox claims to observe.
 2. **A dead letter is evidence, so it gets its own retention window and a way back.**
    `OutboxCleanupService` sweeps dead-lettered rows on `Outbox:DeadLetterRetentionDays`, falling back
@@ -202,10 +202,10 @@ hands a consumer twice.
    `[EventName("Sales.OrderPlaced.v1")]` on the event class is the one stable-identity mechanism
    (`MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/EventNameAttribute.cs:31-32`, contract at
    `:3-12`): the outbox row stores that name in place of the assembly-qualified type name
-   (`.../Outbox/EventNameResolver.cs:47-51`, written at `.../Outbox/OutboxMessage.cs:106`), so a
+   (`.../Outbox/EventNameResolver.cs:47-51`, written at `.../Outbox/OutboxMessage.cs:107`), so a
    rename, a namespace move and an assembly move all leave the rows already written still resolvable.
    Resolution reads the stored name alone, CLR name first and the attribute scan only when that
-   misses, with the result cached per stored name (`OutboxMessage.cs:146-152`, scan at
+   misses, with the result cached per stored name (`OutboxMessage.cs:147-153`, scan at
    `EventNameResolver.cs:75-81`). The trade-off is that the attribute only ever changes what NEW rows
    store, so it has to be applied BEFORE the refactoring: an event renamed without one orphans every
    row already written under its old CLR name, and those rows dead-letter
@@ -215,7 +215,7 @@ hands a consumer twice.
    simply not be loaded yet (a lazily resolved module assembly, a host still coming up) and a name
    that resolves one cycle later was never a dead letter (`.../Outbox/OutboxProcessor.cs:701-714`,
    reasoning at `:689-695`). Only the second attempt is terminal (`:716-722`), which is also the point
-   at which the operator has had a Warning naming the row (`:712`, message at `:825`). A host that set
+   at which the operator has had a Warning naming the row (`:714`, message at `:826`). A host that set
    `Outbox:MaxRetries` to 1 asked for no retries at all and gets none (`:707-711`). A payload whose
    fields changed shape is a different problem: it needs a new event type and an upcaster (ADR-090).
 5. **The consumer-side inbox is on by default wherever redelivery is possible.**

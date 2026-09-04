@@ -1,7 +1,7 @@
 # ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)
 
 ## Status
-Accepted (re-verified against source 2026-09-01).
+Accepted (re-verified against source 2026-09-03).
 
 ## Update (2026-06-22): Store converged to Profile A
 Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
@@ -90,17 +90,17 @@ adds a dedicated `Http1`-only Kestrel listener whose only job is to answer the p
 `httpGet` probes, on a port that is never exposed via ingress:
 
 - The three Profile A hosts (Identity, Conference, Engagement) listen on **8081**. Bicep injects
-  `HealthProbe__Port=8081` (`MMCA.ADC/infra/main.bicep:1040`, `:1234`, `:1357`) and points startup,
-  liveness, and readiness at it (three `httpGet` probes on 8081, `main.bicep:1149-1173` for
-  Identity, under the explanatory comment at `:1142-1148`). The listener is added from each
-  service's `Program.cs` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:80`,
-  Conference `Program.cs:83`, Engagement `Program.cs:66`); the per-service
+  `HealthProbe__Port=8081` (`MMCA.ADC/infra/main.bicep:1072`, `:1279`, `:1402`) and points startup,
+  liveness, and readiness at it (three `httpGet` probes on 8081, `main.bicep:1187-1212` for
+  Identity, under the explanatory comment at `:1174-1186`). The listener is added from each
+  service's `Program.cs` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:81`,
+  Conference `Program.cs:85`, Engagement `Program.cs:68`); the per-service
   `KestrelConfiguration.ConfigureHttp2WithHealthProbe` helper this update originally named no longer
   exists and has been replaced by a shared framework method (see the 2026-08-07 update below).
 - The mixed-endpoint host (Notification) listens on **8082**, one port above its `grpc` endpoint:
-  `HealthProbe__Port=8082` at `main.bicep:1503`, with all three probes on 8082 at
-  `main.bicep:1558-1583`. Its listener is added from
-  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:69` and is strictly
+  `HealthProbe__Port=8082` at `main.bicep:1548`, with all three probes on 8082 at
+  `main.bicep:1603-1628`. Its listener is added from
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:71` and is strictly
   additive on top of the config-declared 8080 and 8081 endpoints, explicitly so that all four
   services probe the same way.
 
@@ -117,10 +117,10 @@ DB-aware check), which is why ADC moved, and (two days later) why Store followed
 The two-argument call sites are all in the AppHost
 (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:364-366`), which configures the local
 Aspire environment only. In production ACA, ADC's Bicep hardcodes the **direct in-cluster authority**
-`http://${identityApp.name}` on every token-validating service: Conference (`main.bicep:1249`),
-Engagement (`:1371`), and Notification (`:1517`). Identity's own ingress is `transport: 'http2'`
-(`main.bicep:1003`; Conference `:1204` and Engagement `:1331` match, while Notification `:1457`,
-the Gateway `:1625`, and the UI `:1728` stay `'http'`), so envoy accepts the HTTP/1.1 JwtBearer
+`http://${identityApp.name}` on every token-validating service: Conference (`main.bicep:1294`),
+Engagement (`:1416`), and Notification (`:1562`). Identity's own ingress is `transport: 'http2'`
+(`main.bicep:1035`; Conference `:1242` and Engagement `:1376` match, while Notification `:1502`,
+the Gateway `:1670`, and the UI `:1791` stay `'http'`), so envoy accepts the HTTP/1.1 JwtBearer
 metadata fetch and carries it to the container. That is exactly the arrangement the Store update
 above describes, so the
 "JWKS authority differs by environment" nuance is **not** Store-specific: both apps route discovery
@@ -141,17 +141,17 @@ HTTP/1.1 `httpGet`.** The pattern is now uniform:
   the probe port as `Http1`. At this update the two apps carried byte-identical copies of a
   per-service `KestrelConfiguration.ConfigureHttp2WithHealthProbe`; those copies have since been
   folded into one framework method (the 2026-08-07 update below). Store's call sites are
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:63` and
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:57`.
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:64` and
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:59`.
 - **Bicep injects the port and points startup, liveness, and readiness at it.** Store sets
-  `HealthProbe__Port=8081` on Identity (`MMCA.Store/infra/main.bicep:1023`) and Catalog (`:1130`),
+  `HealthProbe__Port=8081` on Identity (`MMCA.Store/infra/main.bicep:1093`) and Catalog (`:1208`),
   with `/alive` for startup and liveness and `/health/ready` for readiness on 8081
-  (`main.bicep:1036-1038` and `:1142-1144`). ADC is unchanged (8081 for the three Profile A hosts,
+  (`main.bicep:1106-1108` and `:1220-1222`). ADC is unchanged (8081 for the three Profile A hosts,
   8082 for Notification): its Bicep line anchors drift with unrelated observability commits, and
-  were last re-verified and corrected in the 2026-07-25 section above on 2026-09-01.
+  were last re-verified and corrected in the 2026-07-25 section above on 2026-09-03.
 - **Hosts whose default endpoint never went Http2-only keep probing their traffic port.** Store's
-  Sales, Gateway, and UI probe 8080 directly (`MMCA.Store/infra/main.bicep:1275-1277`, `:1349-1351`,
-  `:1447-1449`), because an `Http1AndHttp2` endpoint answers the HTTP/1.1 probe on its own.
+  Sales, Gateway, and UI probe 8080 directly (`MMCA.Store/infra/main.bicep:1353-1355`, `:1450-1452`,
+  `:1548-1550`), because an `Http1AndHttp2` endpoint answers the HTTP/1.1 probe on its own.
 
 Rule: the dedicated probe listener is part of Profile A, not an app-specific workaround. A host that
 goes `Http2`-only on cleartext gets the extra `Http1` listener plus `HealthProbe__Port` in its Bicep
@@ -176,13 +176,13 @@ arguments:
 - **Profile A hosts** pass `HttpProtocols.Http2` and keep the default
   `redeclareCleartextEndpoint: true`, because an explicit `Listen` call overrides the container's
   `ASPNETCORE_HTTP_PORTS` binding, so the h2c traffic endpoint has to be re-declared alongside the
-  probe port (`KestrelEndpointExtensions.cs:49-52`). Call sites: ADC Identity `Program.cs:80`,
-  Conference `Program.cs:83`, Engagement `Program.cs:66`; Store Identity `Program.cs:63`, Catalog
-  `Program.cs:57`.
+  probe port (`KestrelEndpointExtensions.cs:49-52`). Call sites: ADC Identity `Program.cs:81`,
+  Conference `Program.cs:85`, Engagement `Program.cs:68`; Store Identity `Program.cs:64`, Catalog
+  `Program.cs:59`.
 - **The mixed-endpoint hosts** pass `HttpProtocols.Http1AndHttp2` with
   `redeclareCleartextEndpoint: false`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:69`, and Store's Sales at
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:74`). That flag is the
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:71`, and Store's Sales at
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:76`). That flag is the
   parameter name for the "strictly additive" behavior the 2026-07-25 update described: a host whose
   endpoints come from configuration must not re-bind a port the configuration already owns
   (`KestrelEndpointExtensions.cs:53-59`, `:64-68`).
@@ -192,19 +192,19 @@ app's source, and every service that constrains its Kestrel protocols does it th
 framework method (the Gateway and UI hosts constrain nothing and keep the platform defaults).
 (This section originally recorded Store's Sales as
 the one holdout still writing the call literally. That is no longer true: Sales runs the
-mixed-endpoint profile on the shared helper, `Program.cs:74`. See the 2026-08-14 update below.)
+mixed-endpoint profile on the shared helper, `Program.cs:76`. See the 2026-08-14 update below.)
 
 **2. Notification's `grpc` endpoint now serves two gRPC services, one of them authorized.** The
 mixed-endpoint profile is no longer a one-edge exception. Notification maps `LiveChannelGrpcService`
 (the best-effort Engagement push ingress,
-`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:262`) and
-`UserNotificationExportGrpcService` with `.RequireAuthorization()` (`:270`) on the same `Http2`-only
+`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:267`) and
+`UserNotificationExportGrpcService` with `.RequireAuthorization()` (`:275`) on the same `Http2`-only
 `grpc` endpoint. The second consumer is Identity: its data-subject export aggregates the user's
 notification inbox rows through the client registered at
-`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:287`, wired by
+`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:291`, wired by
 `identityService.WithReference(notificationService)` locally
 (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:292`) and by the same
-`services__notification__grpc__0` discovery variable in production (`MMCA.ADC/infra/main.bicep:1081`,
+`services__notification__grpc__0` discovery variable in production (`MMCA.ADC/infra/main.bicep:1113`,
 pointing at the `additionalPortMappings` h2c port). The contracts are
 `Protos/live_channel.proto:19` and `Protos/user_notification_export.proto:17` in
 `MMCA.ADC.Notification.Contracts`. Transport-wise nothing changes, which is the point: the one extra
@@ -234,7 +234,7 @@ host to `Http2`-only, but by adding a dedicated `Http2`-only named endpoint besi
 is not only the WebSocket Upgrade handshake. Sales' default endpoint has to stay HTTP/1.1-capable
 because the ACA `http`-transport envoy delivers HTTP/1.1 and because the Gateway forwards Sales'
 REST routes plus the Stripe webhook over HTTP/1.1
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:60-70`).
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:62-72`).
 
 - **Kestrel:** `http` on 8080 `Http1AndHttp2` and `grpc` on 8081 `Http2`, both declared in
   configuration (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:11-13` and
@@ -242,24 +242,24 @@ REST routes plus the Stripe webhook over HTTP/1.1
   grpc 55990, at `:9-20`) for the same reason Notification uses that file rather than a launch
   profile (`:2-6`). The host calls the shared framework method,
   `builder.ConfigureEndpointsWithHealthProbe(HttpProtocols.Http1AndHttp2, redeclareCleartextEndpoint: false)`
-  (`Program.cs:74`), exactly as Notification does.
+  (`Program.cs:76`), exactly as Notification does.
 - **The gRPC service is authorized, not merely internal:** `UserSalesExportGrpcService` is mapped
-  with `.RequireAuthorization()` (`Program.cs:285`) because it returns personal data keyed by a raw
+  with `.RequireAuthorization()` (`Program.cs:295`) because it returns personal data keyed by a raw
   `CustomerId`; the caller forwards the end user's JWT. That matches the reasoning recorded for
   ADC's export endpoint in the 2026-08-07 update.
 - **Discovery:** Identity registers the client with `AddSalesUserExportClient()`
-  (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:231`), whose default service
+  (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:240`), whose default service
   name is the named-endpoint scheme `_grpc.sales`
   (`MMCA.Store/Source/Services/MMCA.Store.Sales.Contracts/DependencyInjection.cs:51`). Locally the
   AppHost wires `identityService.WithReference(salesService)`
   (`MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:232`); in production the Bicep injects
   `services__sales__grpc__0 = http://<prefix>-sales:8081` on Identity
-  (`MMCA.Store/infra/main.bicep:998`).
-- **ACA:** Sales' main ingress stays `transport: 'http'` (`main.bicep:1175`) and the gRPC port is an
-  internal TCP `additionalPortMappings` entry on 8081 (`:1182-1188`), the same TCP-passthrough
+  (`MMCA.Store/infra/main.bicep:1068`).
+- **ACA:** Sales' main ingress stays `transport: 'http'` (`main.bicep:1253`) and the gRPC port is an
+  internal TCP `additionalPortMappings` entry on 8081 (`:1260-1266`), the same TCP-passthrough
   arrangement ADC's Notification uses. Sales still needs no `HealthProbe__Port`: its
   `Http1AndHttp2` default endpoint answers the platform's HTTP/1.1 probes on 8080 directly
-  (`:1275-1277`).
+  (`:1353-1355`).
 
 Consequence for this ADR's taxonomy: **no deployed host is pure Profile B any more.**
 `Http1AndHttp2` survives in both apps only as the default-endpoint half of the mixed-endpoint
@@ -322,7 +322,7 @@ Use when services must **serve** gRPC on cleartext (any bidirectional / inbound 
   inbound gRPC from a dedicated `Http2`-only named endpoint (the mixed-endpoint profile in the update
   above), today two services on that one endpoint: `LiveChannelGrpcService` and the authorized
   `UserNotificationExportGrpcService`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:262`, `:270`). So "serves no
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:267`, `:275`). So "serves no
   inbound gRPC" no longer holds for the host, only for its default endpoint.
 
 ### Profile B: `Http1AndHttp2` + HTTPS/ALPN + no cluster version pair + direct JWKS (Store's original choice; now retained only as the default-endpoint half of the mixed-endpoint profile)
@@ -332,8 +332,8 @@ Use when no service needs to **serve** gRPC on cleartext (consumer-only / one-di
   `"Protocols": "Http1AndHttp2"`), applied today by the shared framework method rather than written
   by hand: the two hosts that keep this profile on their default endpoint both call
   `builder.ConfigureEndpointsWithHealthProbe(HttpProtocols.Http1AndHttp2, redeclareCleartextEndpoint: false)`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:69`,
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:74`). The cleartext endpoint
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:71`,
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:76`). The cleartext endpoint
   defaults to HTTP/1.1 (no ALPN); the **HTTPS** endpoint negotiates HTTP/1.1 **or** HTTP/2 via ALPN.
   gRPC clients use the HTTPS endpoint
   (the AppHost selects the `https` launch profile) so they get HTTP/2 through ALPN.

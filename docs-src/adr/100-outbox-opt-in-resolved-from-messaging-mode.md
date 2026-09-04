@@ -23,7 +23,7 @@ the background services printing log lines about work that never had to happen.
 ADR-021 had already answered the same question on the consumer side. `MessageBus:EnableInbox` became
 `bool?` and `IsInboxEnabled` resolves an unset value from the transport, ON for a broker and OFF for
 in-process, which has no redelivery to dedup
-(`Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:102`). The outbox had no such
+(`Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:102`). The outbox had no such
 resolution: it ran in every host, including the one that had nothing to forward to.
 
 The reverse posture is a real hazard rather than a symmetrical option. A broker deployment publishes
@@ -36,7 +36,7 @@ Make the outbox a three-valued setting resolved from the transport, gate the com
 something, keep the schema, and refuse the one combination that cannot work.
 
 1. **`MessageBus:EnableOutbox` is `bool?` and defaults to unset.**
-   `MessageBusSettings.EnableOutbox` (`Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:151`)
+   `MessageBusSettings.EnableOutbox` (`Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:151`)
    carries the explicit override; `IsOutboxEnabled` (`:159`) is the resolved posture every framework
    component reads: `EnableOutbox ?? Provider != MessageBusProvider.InProcess`. That is character for
    character the inbox rule two properties above it (`:125`). An explicit value wins in both
@@ -46,32 +46,33 @@ something, keep the schema, and refuse the one combination that cannot work.
 2. **Resolution happens once, at registration.** `AddInfrastructure` binds the section, and on the
    enabled path registers `OutboxProcessor` and `OutboxCleanupService`; on the disabled path it
    registers neither and adds `OutboxDisabledNoticeService` instead
-   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:186-198`, reasoning at
-   `:180-185`).
+   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:200-212`, reasoning at
+   `:194-199`).
 
 3. **The row writes are gated at both write points**, not only the background services:
    `InProcessEventBus` takes its direct-dispatch branch when the outbox is off, with no rows, no save
-   and no processor to retry (`Source/Core/MMCA.Common.Infrastructure/Services/InProcessEventBus.cs:42`,
-   branch at `:80-84`, documented at `:69-73`), and `DomainEventSaveChangesInterceptor` captures and
+   and no processor to retry (`Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:43`,
+   branch at `:81-85`, documented at `:70-74`), and `DomainEventSaveChangesInterceptor` captures and
    dispatches in-process without writing rows
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:54`,
-   contract at `:41-44`). Both fall back to the outbox path when no options are resolvable, so a
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:55`,
+   contract at `:42-45`). Both fall back to the outbox path when no options are resolvable, so a
    container that binds neither keeps the previous behavior. This is the same branch a context
    without outbox support (Cosmos) already took, reached by a second condition rather than a new one.
 
 4. **A broker with the outbox explicitly disabled fails at startup.**
    `EnsureOutboxAvailableForProvider` throws when the provider is anything other than `InProcess` and
-   `EnableOutbox` is explicitly `false` (`DependencyInjection.cs:857-864`). The message names the
+   `EnableOutbox` is explicitly `false` (`DependencyInjection.cs:871`, guard at `:873`, throw at
+   `:875-876`). The message names the
    mechanism (`BrokerEventBus` writes the rows, `OutboxProcessor` publishes them), the consequence
    (every cross-service event dropped silently) and the fix. Leaving the setting unset under a broker
    resolves to enabled, so only a deliberate `false` reaches the throw.
 
 5. **Being off is never silent.** `OutboxDisabledNoticeService`
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxDisabledNoticeService.cs:21`)
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxDisabledNoticeService.cs:22`)
    logs one startup line naming exactly what is not running and what it costs: no rows are written,
    neither background service is present, an event whose handler fails is not retried, and a crash
    between the commit and the dispatch loses it, with `MessageBus:EnableOutbox=true` given as the
-   restore path and the absence of any migration stated (`:36`). It is the mirror of the inbox's
+   restore path and the absence of any migration stated (`:37`). It is the mirror of the inbox's
    `InboxDisabledWarningService` (ADR-021).
 
 6. **The EF model does not change.** `OutboxMessage` is configured in `OnModelCreating` for every

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -248,10 +251,10 @@
           <li><strong>It runs after authentication, before authorization.</strong> That position is data in a named-step
           pipeline builder (ADR-079), not a hand-ordered sequence of <code>Use*</code> calls:
           <code>UseCommonMiddlewarePipeline</code>
-          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:46</code>) delegates to the
-          private <code>ApplyPipeline</code> helper (<code>WebApplicationExtensions.cs:138</code>), which seeds the framework steps
-          from <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>WebApplicationExtensions.cs:140</code>;
-          <code>Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:31-156</code>). This middleware
+          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48</code>) delegates to the
+          private <code>ApplyPipeline</code> helper (<code>WebApplicationExtensions.cs:140</code>), which seeds the framework steps
+          from <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>WebApplicationExtensions.cs:142</code>;
+          <code>Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:31-156</code>). This middleware
           is the <code>SoftDeletedUserFilter</code> step (<code>MiddlewarePipelineStepNames.cs:59</code>), applied as
           <code>app.UseMiddleware&lt;SoftDeletedUserMiddleware&gt;()</code> at <code>MiddlewarePipelineBuilder.cs:130</code>. Four
           consecutive steps fix its place: <code>UseAuthentication</code> (<code>:110</code>), then <code>TenantResolutionMiddleware</code>
@@ -261,7 +264,7 @@
           check runs, and the check still gates every downstream endpoint. The order is frozen by a fitness
           function rather than by a comment: <code>MiddlewarePipelineOrderTestsBase.ExpectedStepNames</code> asserts
           <code>SoftDeletedUserFilter</code> between <code>RateLimiting</code> and <code>Authorization</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:51-53</code>).
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:51-53</code>).
           <code>MiddlewarePipelineBuilder.Build()</code>&#39;s startup-validated invariants (<code>MiddlewarePipelineBuilder.cs:257-280</code>)
           do not name this step, so a host that moves it through the configure overload is caught by that
           fitness function, not at startup.</li>
@@ -270,15 +273,15 @@
           (<code>SoftDeletedUserMiddleware.cs:65-73</code>), so unauthenticated traffic pays nothing.</li>
           <li><strong>The account-status check is an abstraction, implemented once in the framework.</strong>
           <code>ISoftDeletedUserValidator</code>
-          (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ISoftDeletedUserValidator.cs:7</code>)
+          (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ISoftDeletedUserValidator.cs:7</code>)
           exposes a single <code>IsUserSoftDeletedAsync(userId, ...)</code> method
           (<code>ISoftDeletedUserValidator.cs:15</code>). One shared generic implementation,
           <code>SoftDeletedUserValidator&lt;TUser&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:19-34</code>), runs
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:20-34</code>), runs
           the filter-bypassing existence query
           <code>repository.ExistsAsync(u =&gt; u.Id == userId &amp;&amp; u.IsDeleted, ignoreQueryFilters: true, ...)</code>
-          (<code>SoftDeletedUserValidator.cs:30-33</code>) against whichever aggregate it is closed over
-          (<code>TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>, <code>SoftDeletedUserValidator.cs:20</code>). Each
+          (<code>SoftDeletedUserValidator.cs:31-34</code>) against whichever aggregate it is closed over
+          (<code>TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>, <code>SoftDeletedUserValidator.cs:21</code>). Each
           app closes it over its own <code>User</code> at registration and writes no subclass of its own
           (<code>services.TryAddScoped&lt;ISoftDeletedUserValidator, SoftDeletedUserValidator&lt;User&gt;&gt;()</code> at
           <code>MMCA.ADC.Identity.Application/DependencyInjection.cs:35</code> and
@@ -435,7 +438,7 @@
           (<code>MMCA.ADC.Identity.Application/Users/SoftDeletedUserValidator.cs:10,21-24</code> and the Store
           equivalent). Neither file exists now. The query lives once in the framework as
           <code>SoftDeletedUserValidator&lt;TUser&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:19-34</code>, its own
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:20-34</code>, its own
           remarks at <code>:11-17</code> stating no per-app subclass is needed), closed over each app&#39;s <code>User</code> at
           registration (<code>MMCA.ADC.Identity.Application/DependencyInjection.cs:35</code>, from <code>:32</code>;
           <code>MMCA.Store.Identity.Application/DependencyInjection.cs:44</code>, from <code>:39</code>). The behavior of the query
@@ -479,11 +482,11 @@
           <ol>
           <li><strong>The registration left <code>WebApplicationExtensions.cs</code> entirely.</strong> That file no longer calls
           <code>UseAuthentication</code>, <code>UseRateLimiter</code>, <code>UseMiddleware&lt;SoftDeletedUserMiddleware&gt;</code> or
-          <code>UseAuthorization</code> at all: <code>UseCommonMiddlewarePipeline</code> (<code>WebApplicationExtensions.cs:46</code>, and the
-          configure overload at <code>:58</code>) only routes into the private <code>ApplyPipeline</code> helper (<code>:138</code>), which
-          seeds <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>:140</code>). Every <code>:96</code>, <code>:108</code>, <code>:109</code> and <code>:110</code>
+          <code>UseAuthorization</code> at all: <code>UseCommonMiddlewarePipeline</code> (<code>WebApplicationExtensions.cs:48</code>, and the
+          configure overload at <code>:60</code>) only routes into the private <code>ApplyPipeline</code> helper (<code>:140</code>), which
+          seeds <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>:142</code>). Every <code>:96</code>, <code>:108</code>, <code>:109</code> and <code>:110</code>
           anchor the Decision and the 2026-08-07 revision carried is therefore dead. The step registrations
-          now live in <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs</code>:
+          now live in <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs</code>:
           <code>UseAuthentication</code> at <code>:110</code>, <code>UseRateLimiter</code> at <code>:126</code>,
           <code>UseMiddleware&lt;SoftDeletedUserMiddleware&gt;()</code> at <code>:130</code>, <code>UseAuthorization</code> at <code>:134</code>. The behavior
           is what it was; the order became data in a named-step builder (ADR-079).</li>
@@ -497,7 +500,7 @@
           names this middleware as the precedent (<code>MiddlewarePipelineBuilder.cs:114-117</code>).</li>
           <li><strong>The order is now held by a fitness function.</strong>
           <code>MiddlewarePipelineOrderTestsBase.ExpectedStepNames</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:38-58</code>) lists
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:38-58</code>) lists
           <code>SoftDeletedUserFilter</code> between <code>RateLimiting</code> and <code>Authorization</code> (<code>:51-53</code>), so a reorder fails a
           test. Note the limit: <code>MiddlewarePipelineBuilder.Build()</code> validates four load-bearing adjacencies at
           startup (<code>MiddlewarePipelineBuilder.cs:257-280</code>) and none of them names this step, so a host that
@@ -511,7 +514,7 @@
           (anonymous pass-through), <code>:75</code> and <code>:76-83</code> (lazy resolution, no-validator pass-through), <code>:85</code>,
           <code>:91</code>, <code>:102-106</code>, <code>:114-116</code>, <code>:131-133</code>, <code>:143-147</code>, <code>:150</code> (the cache/validator path), <code>:93-100</code>,
           <code>:118-125</code>, <code>:135-140</code> (fail-open handlers), <code>ISoftDeletedUserValidator.cs:7,15</code>,
-          <code>SoftDeletedUserValidator.cs:19-34</code> with its constraint at <code>:20</code> and query at <code>:30-33</code>,
+          <code>SoftDeletedUserValidator.cs:20-34</code> with its constraint at <code>:21</code> and query at <code>:31-34</code>,
           <code>SoftDeletedUserCache.cs:29,42-43,53-61</code>, the two registrations
           (<code>MMCA.ADC.Identity.Application/DependencyInjection.cs:35</code>,
           <code>MMCA.Store.Identity.Application/DependencyInjection.cs:44</code>), the two delete handlers
@@ -559,7 +562,7 @@
           <code>MMCA.ADC.Identity.Application/DependencyInjection.cs:35</code>.</li>
           <li><strong>Re-checked and unchanged</strong>: <code>SoftDeletedUserMiddleware.cs:31</code>, <code>:65-73</code>, <code>:75</code>, <code>:76-83</code>, <code>:85</code>,
           <code>:91</code>, <code>:102-106</code>, <code>:114-116</code>, <code>:131-133</code>, <code>:143-147</code>, <code>:150</code>, <code>:93-100</code>, <code>:118-125</code>, <code>:135-140</code>,
-          <code>ISoftDeletedUserValidator.cs:7,15</code>, <code>SoftDeletedUserValidator.cs:19-34</code>,
+          <code>ISoftDeletedUserValidator.cs:7,15</code>, <code>SoftDeletedUserValidator.cs:20-34</code>,
           <code>SoftDeletedUserCache.cs:29,42-43,53-61</code>, and the pipeline anchors in
           <code>MiddlewarePipelineBuilder.cs</code> (<code>:110,118,126,130,134</code>).</li>
           </ol>

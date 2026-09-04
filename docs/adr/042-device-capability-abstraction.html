@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14 and 2026-08-29). The 2026-08-29 amendment adds the UseMmcaMauiErrorHandling…">
+  <meta name="description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14, 2026-08-29 and 2026-09-03). The 2026-08-29 amendment adds the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)">
-  <meta property="og:description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14 and 2026-08-29). The 2026-08-29 amendment adds the UseMmcaMauiErrorHandling…">
+  <meta property="og:description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14, 2026-08-29 and 2026-09-03). The 2026-08-29 amendment adds the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)">
-  <meta name="twitter:description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14 and 2026-08-29). The 2026-08-29 amendment adds the UseMmcaMauiErrorHandling…">
+  <meta name="twitter:description" content="Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14, 2026-08-29 and 2026-09-03). The 2026-08-29 amendment adds the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"042 · Device Capability Abstraction (MAUI Blazor Hybrid)","item":"https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -214,9 +217,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-042-device-capability-abstraction-maui-blazor-hybrid">ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14 and 2026-08-29). The 2026-08-29
-          amendment adds the <code>UseMmcaMauiErrorHandling</code> last-chance handlers and records the hybrid head&#39;s
-          missing ASP.NET Core pipeline as a known constraint.</p>
+          <p>Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14, 2026-08-29 and 2026-09-03). The
+          2026-08-29 amendment adds the <code>UseMmcaMauiErrorHandling</code> last-chance handlers and records the hybrid
+          head&#39;s missing ASP.NET Core pipeline as a known constraint. The 2026-09-03 amendment records the push
+          device-token provider as a second native override that sits outside <code>AddMauiDeviceCapabilities</code>.</p>
           <h2 id="context">Context</h2>
           <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
           (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
@@ -229,11 +233,11 @@
           <p>Two constraints shape the packaging. First, per-head service selection already has a working
           precedent: <code>ITokenStorageService</code> resolves to a per-head implementation registered after
           <code>AddUIShared</code> (<code>builder.Services.AddCommonMauiTokenStorage()</code>,
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:161</code>). Second, MMCA.Common&#39;s CI and release
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:163</code>). Second, MMCA.Common&#39;s CI and release
           pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
           framework&#39;s packages release in lockstep (ADR-016).</p>
           <h2 id="decision">Decision</h2>
-          <p>Add a per-capability contract layer to <code>MMCA.Common.UI</code> and a fifteenth package,
+          <p>Add a per-capability contract layer to <code>MMCA.Common.UI</code> and a dedicated package,
           <code>MMCA.Common.UI.Maui</code>, carrying the native implementations.</p>
           <ul>
           <li><p><strong>One small interface per capability, no aggregate device service.</strong> Contracts live in
@@ -244,15 +248,20 @@
           <code>IBiometricAuthenticator</code>, <code>ISpeechToTextService</code>, <code>IExternalAuthBroker</code>, <code>IDeepLinkDispatcher</code>,
           <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Five more have joined since, for 23 today, all
           TryAdd-registered by <code>AddDeviceCapabilityDefaults</code>
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:30-74</code>) and
-          overridden natively by <code>AddMauiDeviceCapabilities</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:26-62</code>): <code>IGeocodingService</code>
-          (Wave 3), <code>IMediaPickerService</code> (ADR-045), the push pair <code>IPushRegistrationService</code> and
-          <code>IPushDeviceTokenProvider</code> (ADR-044), and <code>IBarcodeScannerService</code> for camera barcode/QR scanning
-          (<code>Capabilities/DependencyInjection.cs:63</code>). Barcode is the one native override that is deliberately NOT in
-          <code>AddMauiDeviceCapabilities</code>: it ships behind the opt-in <code>UseCommonBarcodeScanner</code>
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:37-81</code>): the
+          additions are <code>IGeocodingService</code> (Wave 3), <code>IMediaPickerService</code> (ADR-045), the push pair
+          <code>IPushRegistrationService</code> and <code>IPushDeviceTokenProvider</code> (ADR-044), and <code>IBarcodeScannerService</code>
+          for camera barcode/QR scanning (<code>Capabilities/DependencyInjection.cs:70</code>). <code>AddMauiDeviceCapabilities</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:42-78</code>) natively overrides 20 of
+          the 23. Three stay outside it. <code>IDeepLinkDispatcher</code> needs no override because the shared default
+          IS the real implementation. The other two are deliberately opt-in per head:
+          <code>IPushDeviceTokenProvider</code> comes from the platform-conditional <code>AddMauiPushDeviceTokenProvider</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:118-126</code>, FCM on Android, APNs on
+          iOS/MacCatalyst, nothing on windows, and both providers stay configuration-gated), while
+          <code>AddMauiDeviceCapabilities</code> registers only the <code>IPushRegistrationService</code> half of the push pair
+          (<code>:67</code>); and <code>IBarcodeScannerService</code> ships behind the opt-in <code>UseCommonBarcodeScanner</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104</code>, called by ADC at
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:151</code>), so a head that never scans ships
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:153</code>), so a head that never scans ships
           neither the ZXing handler nor a camera permission declaration. Each capability has an independent
           fallback story, and per-capability contracts let heads adopt incrementally.</p>
           </li>
@@ -323,8 +332,8 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li>A fifteenth package raises release surface: two runners must both succeed for a whole release.
-          Accepted; the <code>publish-maui</code> job is gated by the same tag and SBOM discipline.</li>
+          <li>A second build runner raises release surface: ubuntu and windows must both succeed for a whole
+          release. Accepted; the <code>publish-maui</code> job is gated by the same tag and SBOM discipline.</li>
           <li>The TryAdd-default plus later-plain-Add pattern relies on registration order (<code>AddUIShared</code>
           first). Documented on both extension methods; the order is already load-bearing in every host for
           other reasons.</li>
@@ -347,9 +356,10 @@
           per-head service contract here before a hybrid head can use it.</li>
           <li>Biometrics, speech-to-text, and the external-auth broker now ship native MAUI implementations,
           all three registered by <code>AddMauiDeviceCapabilities()</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:45</code>, <code>:46</code>, <code>:60</code>). The residual
-          trade-off is configuration, not code: <code>MauiExternalAuthBroker</code> registers unconditionally but
-          reports <code>IsAvailable == false</code> (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:39</code>)
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:61</code>, <code>:62</code>, and the broker scoped
+          at <code>:76</code>). The residual trade-off is configuration, not code: <code>MauiExternalAuthBroker</code> registers
+          unconditionally but reports <code>IsAvailable == false</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:39</code>)
           until the head supplies <code>OAuth:MobileRedirectScheme</code>, so a misconfigured head quietly keeps the web
           anchor flow rather than failing fast.</li>
           </ul>

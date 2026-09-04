@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -307,7 +310,7 @@
           <code>dotnet format analyzers MMCA.Helpdesk.slnx --diagnostics SA1210 SA1211 --severity info</code>
           (<code>build/templates/overlay/mmca-app/README.md:110</code>), which restores the two ordering rules.
           <code>IDE0021</code> is not fixable by that command, so the README tells the adopter to fold the constructor
-          by hand and delete the line (<code>README.md:116-119</code>).</li>
+          by hand and delete the line (<code>README.md:117-120</code>).</li>
           </ul>
           <p><strong>The wire-contract freeze ships, guarded rather than removed.</strong>
           <code>IntegrationEventContractTestsBase</code> compares each event&#39;s members as a <strong>set</strong> rather than a
@@ -321,7 +324,7 @@
           unfrozen wire contract behind a README that says it is frozen. That README section tells the adopter
           what the test guards and how to evolve it: an event added or reshaped on purpose is versioned
           (ADR-010) and <code>ExpectedContract</code> updated in the same commit, with the failure printing the live value
-          to paste (<code>build/templates/overlay/mmca-app/README.md:121-133</code>).</p>
+          to paste (<code>build/templates/overlay/mmca-app/README.md:122-134</code>).</p>
           <p><code>mmca-module</code> additionally prints seven numbered wire-ups <code>dotnet new</code> cannot perform
           (<code>templates/mmca-module/.template.config/template.json:255-263</code>): the solution entries for the eight
           new projects, the host and architecture-test project references, the identifier-alias
@@ -371,7 +374,7 @@
           version as a <code>--framework-version</code> parameter instead. Keeping it outside that family also leaves the
           package count in
           <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> unchanged, since its generator
-          counts only packable projects under <code>MMCA.Common/Source/</code> (<code>MMCA.Common/FACTS.md:71</code>), so the CI
+          counts only packable projects under <code>MMCA.Common/Source/</code> (<code>MMCA.Common/FACTS.md:73-74</code>), so the CI
           drift gate is unaffected.</p>
           <p><strong>The token sweep is in the gate on purpose.</strong> <code>sourceName</code> and the symbol replacements run as
           separate passes, so a token that only ever appears nested inside another (<code>Ticket</code> inside <code>Tickets</code>,

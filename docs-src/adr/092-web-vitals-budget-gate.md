@@ -93,13 +93,13 @@ assertions ride the existing deploy-gating E2E suite.
   `dotnet test --project ...E2E.Tests.csproj` with no filter (ADC `.github/workflows/e2e.yml:326-329`,
   Store `:369-372`) and points `WEB_VITALS_OUTPUT_DIR` at the uploaded diagnostics directory (ADC
   `:304`, Store `:364`). `deploy.yml` calls that workflow chromium-only as `e2e-gate` (ADC
-  `deploy.yml:677-692`, Store `:584-595`), and the `deploy` job both lists it in `needs` (ADC
-  `:1054`, Store `:945`) and requires it to be `success` or `skipped` (ADC `:1092`, Store `:976`). A
+  `deploy.yml:677-692`, Store `:634-649`), and the `deploy` job both lists it in `needs` (ADC
+  `:1054`, Store `:999`) and requires it to be `success` or `skipped` (ADC `:1092`, Store `:1038`). A
   front-end performance budget is therefore a production precondition on the same footing as the SBOM,
   the cost guard and the freshness gates, and `deploy.yml` says so where the k6 gate is defined (ADC
-  `:754-755`, Store `:658-659`).
+  `:754-755`, Store `:709-713`).
 - **The framework measures its own UI, under its own looser numbers.** `WebVitalsE2ETests`
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitalsE2ETests.cs:15`) measures the
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:15`) measures the
   backend-less in-process gallery on three pages, login (`:40`), components (`:48`) and grid (`:56`),
   through the same shipped extension, against a `WebVitalsBudget` of LCP 8000 ms, FCP 8000 ms, TTFB
   4000 ms and CLS 0.25 (`:29-30`, constants at `:17-19`). FCP is pinned to the LCP ceiling rather than
@@ -110,7 +110,7 @@ assertions ride the existing deploy-gating E2E suite.
   defined at `:66-69`), which fails when neither TTFB nor FCP was recorded, so an all-zero sample
   cannot clear every ceiling by never having been measured.
 - **The regression behaviour is pinned by unit tests, not by the browser runs.**
-  `WebVitalsBudgetTests` (`.../MMCA.Common.UI.E2E.Tests/WebVitalsBudgetTests.cs:12`) starts no
+  `WebVitalsBudgetTests` (`.../MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsBudgetTests.cs:12`) starts no
   browser and covers exactly what only ever fires on a regression: that the defaults are the good
   band (`:17-26`), that each of the five metrics fails when it exceeds its ceiling (`:45-56`), that a
   0 INP is skipped (`:58-64`), that a caller-supplied budget is honoured in both directions
@@ -152,14 +152,14 @@ accessibility.
 
 ## Trade-offs
 - **The gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-  filter (ADC `deploy.yml:688`, Store `:591`) and `deploy` accepts `skipped` for it (ADC `:1092`,
-  Store `:976`), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
+  filter (ADC `deploy.yml:688`, Store `:645`) and `deploy` accepts `skipped` for it (ADC `:1092`,
+  Store `:1038`), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
   commit. ADC pairs the gate with a `backend-test-gate` carrying the exact inverse condition
   (`deploy.yml:394`, `:396`), but that job runs no browser, so it leaves this budget unmeasured on
   those deploys. Same intended cost trade as the accessibility gate, and the same caveat: "deployed"
   does not always mean "the budget ran on this commit".
 - **It never runs on a pull request.** The E2E project is in neither solution filter and the gate is
-  push/dispatch only (ADC `deploy.yml:688`, Store `:591`), so a regression is caught between merge and
+  push/dispatch only (ADC `deploy.yml:688`, Store `:645`), so a regression is caught between merge and
   rollout, not before merge.
 - **The measured configuration is not the production one.** CI pins the UI to `InteractiveServer`
   (ADC `e2e.yml:218`, Store `:210`), so the numbers describe Server-mode prerender-then-hydrate under

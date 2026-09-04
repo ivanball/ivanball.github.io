@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -240,8 +243,8 @@
           (<code>MMCA.ADC/.github/workflows/load-test.yml:3-6</code>). The Testcontainers broker round-trip needs a Docker
           daemon that the gating jobs deliberately do not have
           (<code>MMCA.ADC/.github/workflows/deploy.yml:810-811</code>). Each therefore lives on its own schedule: weekly
-          Monday for the drill (<code>dr-drill.yml:32</code>, Store <code>:34</code>), monthly for the load test
-          (<code>load-test.yml:18</code> in both repos), weeknights for the broker tier
+          Monday for the drill (<code>dr-drill.yml:33</code> in both repos), monthly for the load test
+          (<code>load-test.yml:23</code>, Store <code>:21</code>), weeknights for the broker tier
           (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:31</code>,
           <code>MMCA.Store/.github/workflows/cross-service-tests.yml:35</code>).</p>
           <p>ADR-009 requires that those objectives exist and that a restore be <strong>drilled</strong>: its DR doc carries a

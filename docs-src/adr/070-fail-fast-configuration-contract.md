@@ -9,7 +9,10 @@ bindings deliberately off the chain, and a custom `IValidateOptions<T>` in use).
 hosts instead of an inline chain per host; source citations re-anchored). Revised 2026-09-01
 (inventory re-counted: fifteen validated chains in the Infrastructure package and twenty framework
 registrations in all, eight framework bindings deliberately off the chain, and two custom
-`IValidateOptions<T>` in use; source citations re-anchored).
+`IValidateOptions<T>` in use; source citations re-anchored). Revised 2026-09-03 (the two cache sections
+are reached through the `AddCaching` call `AddInfrastructure` makes rather than an opt-in method, so
+eleven of the fifteen Infrastructure chains ship to every host and four are opt-in; the exception count
+in the consumer-host paragraph corrected to eight; source citations re-anchored).
 
 ## Context
 Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
@@ -35,32 +38,33 @@ value through `IOptions<T>` of the concrete settings class.**
 
 - **One binding shape, used everywhere.**
   `AddOptions<T>().Bind(configuration.GetSection(T.SectionName)).ValidateDataAnnotations().ValidateOnStart()`
-  is the required form (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:64-67`).
+  is the required form (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:78-81`).
   `.BindConfiguration(T.SectionName)` is the accepted shorthand for the `Bind(GetSection(...))` step and
   is what Store's Sales module uses
-  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:47-50`, `:52-55`, `:57-60`).
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:48-51`, `:53-56`, `:58-61`).
   `ValidateOnStart()` is the load-bearing link: without it the annotations are evaluated lazily on first
   resolution, which is exactly the first-use failure the contract exists to prevent.
 - **The framework owns the base set.** Fifteen sections are bound this way in the Infrastructure package's
-  `DependencyInjection.cs` alone. Nine are inside `AddInfrastructure` (`ConnectionStringSettings`
-  `:64-67`, `SmtpSettings` `:85-88`, `PersistenceSettings` `:121-124`, `OutboxSettings` `:126-129`,
-  `LoginProtectionSettings` `:131-134`, `PasswordResetSettings` `:137-140`, `RefreshSessionSettings`
-  `:145-148`, `MessageBusSettings` `:160-163`, `JwksSettings` `:165-168`), so every host gets them by
-  registering the package. The other six sit in opt-in registration methods a host calls only when it
-  wants the feature: `CacheSettings` (`:232-235`) and `QueryCachePipelineSettings` (`:237-240`) in
-  `AddCaching`, `SchedulerSettings` in `AddScheduledJobs` (`:393-396`), `AuditTrailSettings` in
-  `AddAuditTrail` (`:464-467`), `TenancySettings` in `AddMultiTenancy` (`:513-516`), and
-  `PushNotificationSettings` in `AddPushNotifications` (`:617-620`). The two cache sections take the
-  chain only when the caller passes configuration: the parameterless `AddCaching` overload registers both
-  unbound (`:244-245`), so `IOptions<T>` resolves to the compiled-in defaults instead of failing a host
+  `DependencyInjection.cs` alone. Nine sit directly inside `AddInfrastructure` (`ConnectionStringSettings`
+  `:78-81`, `SmtpSettings` `:99-102`, `PersistenceSettings` `:135-138`, `OutboxSettings` `:140-143`,
+  `LoginProtectionSettings` `:145-148`, `PasswordResetSettings` `:151-154`, `RefreshSessionSettings`
+  `:159-162`, `MessageBusSettings` `:174-177`, `JwksSettings` `:179-182`), and two more arrive through the
+  `services.AddCaching(configuration)` call that `AddInfrastructure` itself makes (`:131`):
+  `CacheSettings` (`:246-249`) and `QueryCachePipelineSettings` (`:251-254`). Those eleven reach every host
+  that registers the package. The remaining four sit in opt-in registration methods a host calls only when
+  it wants the feature: `SchedulerSettings` in `AddScheduledJobs` (`:407-410`), `AuditTrailSettings` in
+  `AddAuditTrail` (`:478-481`), `TenancySettings` in `AddMultiTenancy` (`:527-530`), and
+  `PushNotificationSettings` in `AddPushNotifications` (`:631-634`). The two cache sections take the chain
+  only when the caller passes configuration: the parameterless `AddCaching` overload registers both
+  unbound (`:258-259`), so `IOptions<T>` resolves to the compiled-in defaults instead of failing a caller
   that configures no cache section at all. Five more are bound outside that file: `IdempotencySettings`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:70-73`), `JwtSettings`, bound
   inside `AddCommonAuthentication`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:540-543`,
-  the method starting at `:538`), `ApiSettings`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:33-36`),
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:541-544`,
+  the method starting at `:539`), `ApiSettings`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:37-40`),
   `GatewayRateLimitingSettings`, bound by the Aspire hosting package's `AddGatewayRateLimiting`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:148-151`), and
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:194-197`), and
   `GatewaySettings`, bound by the Gateway package's `AddMmcaGateway`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:54-57`).
   Twenty framework registrations in all.
@@ -70,9 +74,9 @@ value through `IOptions<T>` of the concrete settings class.**
   both sections before it builds the host's `ModuleLoader`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:61-64` and `:69-72`,
   the method starting at `:51`), so ADC's four services
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:306-308`, and the comment at `:297`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:309-311`, and the comment at `:300`
   says what the call binds) and Store's three
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114-116`) each declare the two
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:123-125`) each declare the two
   sections in a single line of host code. The Helpdesk monolith seed still writes both chains out in its
   own `Program.cs` (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:18-21` and `:82-85`), which is
   exactly what the shared call expands to, so the contract reads the same whether a host takes the helper
@@ -80,36 +84,36 @@ value through `IOptions<T>` of the concrete settings class.**
   Stripe.
 - **Validation is data annotations, extended by `IValidatableObject` where a rule spans fields.**
   `JwtSettings` marks `Issuer` and `Audience` `[Required]`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:52-58`) and implements
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:53-58`) and implements
   `IValidatableObject` (`:16`) so key material is checked conditionally on the selected algorithm:
   RS256 (the default) demands `RsaPrivateKeyPem`, HS256 demands a `SecretForKey` of at least 32
   characters (`:70-85`). `ValidateDataAnnotations()` invokes that method, so a host configured for
   RS256 with no private key fails to boot rather than failing to sign its first token.
 - **`IOptions<T>` of the concrete settings class is the one resolution surface.** Code that needs a
   bound section takes it at the point of use: `TokenService` takes `IOptions<JwtSettings>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:56`), `SmtpEmailSender`
-  takes `IOptions<SmtpSettings>` (`.../Services/SmtpEmailSender.cs:13`), `RepositoryFactory` takes
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:55`), `SmtpEmailSender`
+  takes `IOptions<SmtpSettings>` (`.../Mail/SmtpEmailSender.cs:12`), `RepositoryFactory` takes
   `IOptions<ApplicationSettings>`
   (`.../Persistence/Repositories/Factory/RepositoryFactory.cs:15`), and `EntityControllerBase` resolves
   the same options per request in its `MaxPageSize` and `MaxExportRows` accessors
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:62` and `:82`).
   Settings classes declare `get`/`init` members only
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/SmtpSettings.cs:18-37`), so the value a
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Mail/SmtpSettings.cs:18-37`), so the value a
   consumer reads is one it cannot rebind, and there is no second type per section to keep in step with
   the class the chain binds and validates.
 - **Eight recorded exceptions in the framework, on one shared reason: an absent section is a working
   default, not a misconfiguration.** `CacheKeyPrefixOptions` is bound with a bare `services.Configure`
   and no validation, because an absent section must leave cache keys exactly as callers write them (a
   single call inside `AddCaching`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:230`, the method starting
-  at `:215`).
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:244`, the method starting
+  at `:229`).
   `LayoutSettings` binds with `AddOptions().Bind()` and nothing after it for the same reason: it is
-  optional footer copy (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:39-40`),
+  optional footer copy (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:43-44`),
   and the two client-side sections registered beside it bind exactly the same way because an absent
-  section leaves the compiled-in defaults: the staleness policy `UiReadCacheOptions` (`:44-45`) and
-  `NotificationBellOptions` (`:47-48`).
-  `NativePushSettings` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:650-651`)
-  and `FileStorageSettings` (`:682-683`) bind the same way inside their opt-in registration methods,
+  section leaves the compiled-in defaults: the staleness policy `UiReadCacheOptions` (`:48-49`) and
+  `NotificationBellOptions` (`:51-52`).
+  `NativePushSettings` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:664-665`)
+  and `FileStorageSettings` (`:696-697`) bind the same way inside their opt-in registration methods,
   both of which read the section back and turn themselves into a no-op when it is absent or incomplete,
   so a host registers them unconditionally and switches the feature on by configuration alone.
   `SecurityHeadersSettings` binds through an options builder that calls `.Bind` only when configuration
@@ -119,47 +123,47 @@ value through `IOptions<T>` of the concrete settings class.**
   `DataSourcesSettings` is the one exception with a mechanical rather than a policy reason: it is
   constructed directly from the section rather than through `AddOptions`, because a root-level dictionary
   section does not bind through the options pipeline
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:79-81`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:93-95`).
 - **Consumer hosts take the same escape twice, and write the reason at the call site.** ADC's Engagement
   service binds `PointsSettings`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:121-122`) and `CheckInSettings`
-  (`:128-129`) without `ValidateOnStart`: the defaults are working values and an explicit zero is the
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:126-127`) and `CheckInSettings`
+  (`:133-134`) without `ValidateOnStart`: the defaults are working values and an explicit zero is the
   documented per-rule kill switch, so no value an organizer could set should stop that host from booting
-  mid-conference. Both follow the rule the framework's six follow: an exception is legitimate when the
+  mid-conference. Both follow the rule the framework's eight follow: an exception is legitimate when the
   section has no invalid value, and the reason belongs in a comment beside the binding rather than left
   to be inferred from its absence.
 
 **Every layer reads a bound section the same way.** Inside Infrastructure and API that is a constructor
 or per-request `IOptions<T>`: `OutboxProcessor`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:57`),
-`BrokerEventBus` (`.../Services/BrokerEventBus.cs:34`), `LoginProtectionService`
-(`.../Auth/LoginProtectionService.cs:21`), `RsaJwksProvider` (`.../Auth/RsaJwksProvider.cs:15`),
-`SQLServerDbContext` (`.../Persistence/DbContexts/SQLServerDbContext.cs:37`), and `IdempotencyFilter`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:59`),
+`BrokerEventBus` (`.../Messaging/BrokerEventBus.cs:35`), `LoginProtectionService`
+(`.../Auth/LoginProtectionService.cs:21`), `RsaJwksProvider` (`.../Auth/RsaJwksProvider.cs:14`),
+`SQLServerDbContext` (`.../Persistence/DbContexts/SQLServerDbContext.cs:36`), and `IdempotencyFilter`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:428`). Consumer code
-reads its own sections the same way: Store's Sales Infrastructure in `StripeClientFactory.cs:21`,
-`StripePaymentService.cs:62`, `StripeWebhookRegistrationService.cs:29` and
+reads its own sections the same way: Store's Sales Infrastructure in `StripeClientFactory.cs:19`,
+`StripePaymentService.cs:60`, `StripeWebhookRegistrationService.cs:27` and
 `PaymentReconciliationService.cs:35-36`, and ADC's web host in its `/client-config` minimal-API handler
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:145`).
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:148`).
 
 The Application layer names the options pipeline too, and the framework supplies three of those
 injections itself: `AuthenticationServiceBase<TUser>` takes `IOptions<RefreshSessionSettings>`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:58`), the shared
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:61`), the shared
 `ForgotPasswordHandlerBase` takes `IOptions<PasswordResetSettings>`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:39`),
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:40`),
 and `CachingQueryDecorator` takes an optional `IOptions<QueryCachePipelineSettings>`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:46`).
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:48`).
 ADC adds five: its Identity `AuthenticationService`
-(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:53`) and
-`ForgotPasswordHandler` (`.../Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24`), and in
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:55`) and
+`ForgotPasswordHandler` (`.../Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:25`), and in
 Engagement `PointsAwarder`
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/Services/PointsAwarder.cs:31`),
 `GetLeaderboardHandler` (`.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs:30`) and
-`RecordRoomCheckInHandler` (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:30`).
+`RecordRoomCheckInHandler` (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:32`).
 Store adds three: its Identity `AuthenticationService`
-(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:29`)
-and `ForgotPasswordHandler` (`.../Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:25`), and
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:30`)
+and `ForgotPasswordHandler` (`.../Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:26`), and
 `CreateCheckoutSessionCommandValidator`
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionCommandValidator.cs:23`).
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionCommandValidator.cs:22`).
 Only Helpdesk's Application layer names no `IOptions` at all.
 
 The contract is therefore one rule rather than two: the **fail-fast chain is mandatory for every
@@ -168,8 +172,8 @@ how every layer reads the result**, Application included. The injections listed 
 not debt. `PasswordResetSettings` shows what the single surface buys: the framework's own base class
 takes it and both consumer handlers forward their `IOptions<PasswordResetSettings>` straight into that
 base constructor (ADC at
-`.../MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:26`, Store at
-`.../MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:27`), so
+`.../MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:27`, Store at
+`.../MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:28`), so
 what the handler reads is the one instance the host bound and validated at boot, with nothing in
 between to fall out of step with it.
 
@@ -213,15 +217,16 @@ between to fall out of step with it.
 - **Data annotations are the vocabulary.** Anything richer needs `IValidatableObject` or a custom
   `IValidateOptions<T>`, and both escape hatches are in use: the former once, the latter twice.
   `JwtSettings` is the only settings type implementing `IValidatableObject`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:16`). Two sections carry a
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:16`). Two sections carry a
   separate validator class instead, each registered with `TryAddEnumerable` beside the chain that binds
   it so two modules calling the same registration method cannot run the validation twice.
   `TenancySettingsValidator`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/TenancySettingsValidator.cs:23-24`,
-  registered at `DependencyInjection.cs:519-520`) exists because confirming that a tenant's data-source
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:23-24`,
+  registered at `DependencyInjection.cs:533-534`) exists because confirming that a tenant's data-source
   override names a real physical source needs `IDataSourceResolver`, which no annotation can reach.
-  `ConnectionStringSettingsValidator` (`.../Settings/ConnectionStringSettingsValidator.cs:30-31`,
-  registered at `DependencyInjection.cs:74-75`) exists because the "a host must reach some database" rule
+  `ConnectionStringSettingsValidator`
+  (`.../Persistence/DataSources/ConnectionStringSettingsValidator.cs:30-31`,
+  registered at `DependencyInjection.cs:88-89`) exists because the "a host must reach some database" rule
   spans two sections at once, `ConnectionStrings` and `DataSources`, so a SQLite-only host that declares
   its databases as named sources is legitimate while a host declaring none anywhere is not. The cost of
   the second form is that the rule

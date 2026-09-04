@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html" aria-current="page">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -232,11 +235,11 @@
           alert fires, and the app keeps serving traffic while the published claim is false. This workspace had
           exactly that gap, which is why ADC&#39;s guard still carries an explicit block on the stale claim its
           policy once made
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:9-10,16</code>).</p>
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/DataResidencyTests.cs:9-10,16</code>).</p>
           <p>The compliance surface around this is already fitness-enforced wherever a compiler can see it.
           ADR-005&#39;s erasure path is guarded by <code>PiiConventionTestsBase</code>, which fails the build when a domain
           entity carrying a <code>[Pii]</code> property does not implement <code>IAnonymizable</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/PiiConventionTestsBase.cs:3-12</code>).
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:3-12</code>).
           Residency is not a property of any type, so that technique does not reach it: the claim lives in
           prose and the truth lives in a workflow file or a runbook. It is a doc-to-infrastructure consistency
           problem, the same shape ADC already solves for SLO alerts by embedding the Bicep template and the
@@ -249,10 +252,10 @@
           source of truth, and fails the build unless the repo&#39;s <code>PRIVACY.md</code> states that region.</strong></p>
           <ol>
           <li><p><strong>One shared base, one test, authored in the framework.</strong> <code>DataResidencyTestsBase</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DataResidencyTestsBase.cs:14</code>)
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DataResidencyTestsBase.cs:14</code>)
           declares a single <code>[Fact]</code>, <code>PrivacyPolicy_DataStorageRegion_MatchesDeployedRegion</code> (<code>:25-45</code>),
           and names the rubric category it serves in its own summary (<code>:3-13</code>, rubric section 30,
-          Compliance, Privacy and Governance). It is one of the 46 abstract bases in that package&#39;s
+          Compliance, Privacy and Governance). It is one of the 47 abstract bases in that package&#39;s
           <code>Bases/</code> directory, so it is subclassed per repo rather than copied.</p>
           </li>
           <li><p><strong>The repo supplies its own source of truth.</strong> The only abstract behavior is
@@ -286,7 +289,7 @@
           and still carry a contradicting sentence beside it.</p>
           </li>
           <li><p><strong>ADC parses its deploy workflow.</strong> <code>DataResidencyTests</code>
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:12</code>, map at <code>:14</code>)
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/DataResidencyTests.cs:12</code>, map at <code>:14</code>)
           reads <code>.github/workflows/deploy.yml</code>, finds the <code>SQL_LOCATION_OVERRIDE:-</code> marker, asserts it is
           present, and takes the letters and digits that follow it as the region (<code>:20-31</code>, marker at <code>:24</code>,
           assertion at <code>:26-27</code>). That default is the region ADC&#39;s SQL server and database land in
@@ -294,7 +297,7 @@
           pre-migration claim that once contradicted the deployed region (<code>:16</code>, explained at <code>:9-10</code>).</p>
           </li>
           <li><p><strong>Store parses its DR runbook.</strong> <code>DataResidencyTests</code>
-          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DataResidencyTests.cs:12</code>, map at
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/DataResidencyTests.cs:12</code>, map at
           <code>:14</code>) reads <code>infra/DISASTER-RECOVERY.md</code>, finds the single-region sentence by its <code>one region (</code>
           marker and takes the comma-terminated token that follows, asserting both the marker and the
           terminator are present (<code>:20-35</code>, marker at <code>:24</code>, assertions at <code>:26-27</code> and <code>:31-32</code>). Its
@@ -369,8 +372,8 @@
           <li><strong>The markers are load-bearing strings inside files maintained for other reasons.</strong> Renaming the
           workflow&#39;s override variable, or reflowing the DR sentence so its comma moves, breaks the build in
           a repo where nobody touched the privacy policy
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:24</code>,
-          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DataResidencyTests.cs:24,30-32</code>). That
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/DataResidencyTests.cs:24</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/DataResidencyTests.cs:24,30-32</code>). That
           is the intended fail-loud posture, but the cost lands on an unrelated edit.</li>
           <li><strong>The suite needs the repo working tree.</strong> <code>FindRepoRoot</code> walks up for <code>{RepoToken}.slnx</code> and throws
           when it is absent (<code>ArchitectureMapBase.cs:79-90</code>), so this rule cannot run from a copied artifact

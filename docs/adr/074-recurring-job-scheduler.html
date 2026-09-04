@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -219,7 +222,7 @@
           the framework creates no table and starts no runner.</p>
           <h2 id="context">Context</h2>
           <p>The framework had two kinds of background work and neither of them is a schedule.</p>
-          <p><code>OutboxProcessor</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs</code>)
+          <p><code>OutboxProcessor</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs</code>)
           is durable, multi-replica safe and event-driven: it runs when there is a row to drain, and its cadence is a
           consequence of writes, not a calendar. <a href="052-background-job-execution.html">ADR-052</a> is the opposite end: an
           in-process bounded queue plus a hosted drain, started by a request, lost on restart, scoped to one replica
@@ -237,10 +240,10 @@
           <h3 id="the-scheduler-is-the-outbox-claim-lease-pattern-applied-to-cron-not-hangfire-and-not-quartznet">The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET</h3>
           <p>A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
           outbox claims a batch with an <code>ExecuteUpdateAsync</code> that sets <code>LockedUntil</code> and <code>LockToken</code> in one statement
-          (<code>.../Persistence/Outbox/OutboxProcessor.cs:478-479</code>, inside <code>ClaimEligibleAsync</code>, <code>:454</code>) over a shared
+          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:479-483</code>, inside <code>ClaimEligibleAsync</code>, <code>:456</code>) over a shared
           <code>FilterClaimable</code> predicate that admits only rows whose <code>LockedUntil</code> is null or already in the past
-          (<code>:533-535</code>), then re-reads the claimed
-          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:490-493</code>). A due job is claimed the same way, so two replicas can
+          (<code>:535-537</code>), then re-reads the claimed
+          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:492-496</code>). A due job is claimed the same way, so two replicas can
           never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.</p>
           <p>Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
           and host, and a licensing posture that varies by storage provider. Quartz.NET would have brought a large
@@ -295,7 +298,7 @@
           <a href="070-fail-fast-configuration-contract.html">ADR-070</a>, so a malformed scheduler section stops the host at boot
           rather than at 03:00.</p>
           <p><code>SchedulerMetrics</code> (<code>.../Infrastructure/Scheduling/SchedulerMetrics.cs:16</code>) follows the same conventions as
-          <code>OutboxMetrics</code> (<code>.../Persistence/Outbox/OutboxMetrics.cs:16</code>) under
+          <code>OutboxMetrics</code> (<code>.../Persistence/Outbox/Processing/OutboxMetrics.cs:16</code>) under
           <a href="041-observability-and-telemetry.html">ADR-041</a>: one meter per subsystem, never a second <code>Meter</code> with the
           same name, and outcomes carried as tags rather than as separate instruments. It is not an
           instrument-for-instrument copy. The scheduler emits <strong>one</strong> counter, <code>RunCounter</code>, tagged by <code>job</code> and by
@@ -309,12 +312,12 @@
           queue and a schedule has no queue.</p>
           <p>Registration is two calls. <code>AddScheduledJobs(configuration)</code> binds the settings and registers the runner;
           <code>AddScheduledJob&lt;TJob&gt;()</code> adds one job from any module, using the accumulate-across-modules idiom that
-          <code>AddPermissions</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:54</code>)
-          and its <code>EnsurePermissionRegistry</code> helper (<code>:68</code>) already establish. That registration takes <strong>no schedule
-          argument</strong> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:426</code>): the schedule is
+          <code>AddPermissions</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:47</code>)
+          and its <code>EnsurePermissionRegistry</code> helper (<code>:61</code>) already establish. That registration takes <strong>no schedule
+          argument</strong> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:440</code>): the schedule is
           the job&#39;s own <code>CronExpression</code> property, and the one way to retime a shipped job without a release is
           configuration, the <code>Scheduler:Jobs:{Name}:Cron</code> section bound by <code>SchedulerSettings.Jobs</code>
-          (<code>.../Infrastructure/Settings/SchedulerSettings.cs:54-60</code>) into <code>ScheduledJobOverrideSettings.Cron</code> (<code>:74</code>).
+          (<code>.../Infrastructure/Scheduling/SchedulerSettings.cs:54-60</code>) into <code>ScheduledJobOverrideSettings.Cron</code> (<code>:74</code>).
           The runner resolves the two per job on every cycle, the override when it is present and non-blank and the
           compiled-in default otherwise (<code>ResolveCronExpression</code>, <code>.../Infrastructure/Scheduling/ScheduledJobRunner.cs:162</code>).
           The table is created only when the settings flag is on, the same gating <a href="075-audit-trail.html">ADR-075</a> uses.

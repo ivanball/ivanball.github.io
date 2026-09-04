@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -216,9 +219,11 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-21). <strong>Completes the follow-up named in <a href="010-integration-event-schema-versioning.html">ADR-010</a></strong>:
           that record established the versioning policy (a <code>SchemaVersion</code> signal plus a new-type-and-upcaster
-          discipline for breaking changes) and recorded that &quot;the framework does not yet ship an upcaster
-          registration extension point&quot;. It ships one now. ADR-010&#39;s policy is unchanged; this record covers the
-          mechanism that enforces its consumer-side half.</p>
+          discipline for breaking changes) and named the missing upcaster registration extension point as
+          follow-up work. It ships one now. ADR-010&#39;s policy is unchanged; this record covers the
+          mechanism that enforces its consumer-side half. Revised 2026-09-03 (outbox type resolution is no
+          longer assembly-qualified-name-only, so the aliasing trade-off is narrower than recorded, and three
+          citations are re-anchored after the flat-namespace split): see the revision at the end.</p>
           <h2 id="context">Context</h2>
           <p>ADR-010 splits event evolution into a signal and a discipline. The signal (<code>SchemaVersion</code>, a
           fitness-function-gated property on every integration event) shipped with ADR-010 itself. The
@@ -237,7 +242,8 @@
           <h2 id="decision">Decision</h2>
           <ol>
           <li><strong>A typed upcaster abstraction, in the Application layer.</strong>
-          <code>IEventUpcaster&lt;TSource, TTarget&gt;</code> (<code>Source/Core/MMCA.Common.Application/Interfaces/IEventUpcaster.cs</code>)
+          <code>IEventUpcaster&lt;TSource, TTarget&gt;</code>
+          (<code>Source/Core/MMCA.Common.Application/Interfaces/Events/IEventUpcaster.cs</code>)
           is a pure payload mapping from a retired integration-event contract to its successor. A
           non-generic <code>IEventUpcaster</code> base (<code>SourceType</code>, <code>TargetType</code>, <code>Upcast(IIntegrationEvent)</code>) lets
           the registry store and route upcasters by runtime type; the generic interface supplies those
@@ -259,10 +265,12 @@
           integration-event branch to the terminal type before selecting <code>IIntegrationEventHandler&lt;&gt;</code>
           implementations (domain-event dispatch is untouched: intra-module handlers migrate with the
           code). Broker hosts register <code>RegisterUpcastedIntegrationEventConsumer&lt;TOld&gt;()</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs</code>), which
-          binds a dedicated <code>UpcastingIntegrationEventConsumer&lt;TOld&gt;</code> to the retired type: it dedups on the
-          original <code>MessageId</code>, upcasts to the terminal contract, and dispatches that contract&#39;s handlers,
-          rethrowing failures so the standard retry policy applies. The existing
+          (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumerExtensions.cs</code>),
+          which binds a dedicated <code>UpcastingIntegrationEventConsumer&lt;TOld&gt;</code> to the retired type: it dedups on
+          the original <code>MessageId</code>, upcasts to the terminal contract, and dispatches that contract&#39;s handlers,
+          rethrowing failures so the standard retry policy applies. It also registers the retired type&#39;s
+          <code>FaultIntegrationEventConsumer&lt;TOld&gt;</code> unless the call opts out, the same default as the plain
+          registration. The existing
           <code>IntegrationEventConsumer&lt;TEvent&gt;</code> hot path is untouched.</li>
           <li><strong>Registration follows the accumulate-across-modules idiom.</strong>
           <code>services.AddEventUpcaster&lt;TSource, TTarget, TUpcaster&gt;()</code>
@@ -272,7 +280,8 @@
           are idempotent, and the registry is assembled once from the union. The generic source and target
           parameters exist so the call site is shape-checked at compile time.</li>
           <li><strong>Two new fitness functions gate upcaster sanity.</strong> <code>ArchitectureRules.Upcasters.cs</code>
-          (<code>Source/Hosting/MMCA.Common.Testing.Architecture/</code>) adds <code>EventUpcastersHaveUniqueSourceTypes</code>
+          (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/</code>) adds
+          <code>EventUpcastersHaveUniqueSourceTypes</code>
           and <code>EventUpcastersIncreaseSchemaVersion</code> (the target must declare a strictly higher
           <code>SchemaVersion</code> than its source), surfaced as two new facts on <code>EventConventionTestsBase</code> so
           every consumer tree that already subclasses it inherits them with no edit. They pass trivially at
@@ -318,7 +327,11 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           resolves by assembly-qualified name and dead-letters an unresolvable type. That is not a gap this
           mechanism needs to close: the policy keeps the old CLR type alive until every consumer has drained
           it, so resolution always succeeds during the migration window. Remapping stale type names for
-          types deleted ahead of policy would paper over a policy violation rather than support the policy.</li>
+          types deleted ahead of policy would paper over a policy violation rather than support the policy.
+          (<strong>Narrowed by the Revision (2026-09-03)</strong>: the outbox stores a declared event identity when the
+          event carries one and resolves it by that name, so resolution is no longer assembly-qualified-name
+          only. The out-of-scope call stands for this record; the mechanism belongs to
+          <a href="003-outbox-dual-dispatch.html">ADR-003</a>.)</li>
           <li><strong>Producer-side upcasting (rewriting old rows at publish time) is also out of scope</strong>: the outbox
           is an immutable record of what happened, and the consumer-side transform is the one place the old
           shape and the new shape are both in scope.</li>
@@ -328,6 +341,35 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           production use of the pipeline. The fitness functions inherited by every consumer tree gate that
           day&#39;s upcasters already.</li>
           </ul>
+          <h2 id="revision-2026-09-03">Revision (2026-09-03)</h2>
+          <p><strong>The decision, the mechanism, and both delivery paths are unchanged.</strong> What changed is one
+          trade-off&#39;s premise and three file locations.</p>
+          <ol>
+          <li><strong>Outbox type resolution is no longer assembly-qualified-name-only.</strong> <code>OutboxMessage.FromDomainEvent</code>
+          stores <code>EventNameResolver.GetStorageName(type)</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:107</code>),
+          which is the <code>[EventName]</code> declared identity when the event carries one and its assembly-qualified
+          name otherwise. <code>ResolveEventType</code> (<code>OutboxMessage.cs:147</code>) reads that stored name CLR-name-first
+          and falls back to an attribute scan
+          (<code>Type.GetType(typeName) ?? EventNameResolver.FindTypeByDeclaredName(typeName)</code> at <code>:153</code>), so a
+          rename, a namespace move, or an assembly move leaves rows already written still resolvable. That
+          is <a href="003-outbox-dual-dispatch.html">ADR-003</a>&#39;s mechanism, not this one&#39;s, and it does not move the
+          policy: a breaking reshape is still a new type plus an upcaster, and the old contract still stays
+          alive until every consumer has drained it. What the Trade-offs bullet above no longer states
+          correctly is the premise, that resolution keys on the assembly-qualified name alone.</li>
+          <li><strong>The dead-letter half holds, with one retry in front of it.</strong> A row whose type does not resolve
+          goes to <code>HandleUnresolvableType</code>
+          (<code>.../Outbox/Processing/OutboxProcessor.cs:585</code>, on the null return from <code>DeserializeEvent</code> at
+          <code>:582</code>; method at <code>:703</code>), which schedules exactly one
+          more attempt through the normal backoff (skipped when the host configured <code>MaxRetries</code> as 1);
+          only the second miss stamps <code>ProcessedOn</code> and increments the dead-letter counter tagged
+          <code>reason</code> <code>type_unresolvable</code> (<code>:719</code>).</li>
+          <li><strong>Three citations are re-anchored after the flat-namespace split.</strong> <code>IEventUpcaster</code> now lives
+          under <code>MMCA.Common.Application/Interfaces/Events/</code>, <code>IntegrationEventConsumerExtensions</code> under
+          <code>MMCA.Common.Infrastructure/Messaging/Consumers/</code>, and <code>ArchitectureRules.Upcasters.cs</code> under
+          <code>MMCA.Common.Testing.Architecture/Rules/Contracts/</code>. The Decision section carries the current
+          paths; the types and their members are unchanged.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -343,6 +385,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
             </ul>
           </nav>
         </aside>

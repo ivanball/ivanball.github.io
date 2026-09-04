@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -301,13 +304,13 @@
           <code>dotnet test --project ...E2E.Tests.csproj</code> with no filter (ADC <code>.github/workflows/e2e.yml:326-329</code>,
           Store <code>:369-372</code>) and points <code>WEB_VITALS_OUTPUT_DIR</code> at the uploaded diagnostics directory (ADC
           <code>:304</code>, Store <code>:364</code>). <code>deploy.yml</code> calls that workflow chromium-only as <code>e2e-gate</code> (ADC
-          <code>deploy.yml:677-692</code>, Store <code>:584-595</code>), and the <code>deploy</code> job both lists it in <code>needs</code> (ADC
-          <code>:1054</code>, Store <code>:945</code>) and requires it to be <code>success</code> or <code>skipped</code> (ADC <code>:1092</code>, Store <code>:976</code>). A
+          <code>deploy.yml:677-692</code>, Store <code>:634-649</code>), and the <code>deploy</code> job both lists it in <code>needs</code> (ADC
+          <code>:1054</code>, Store <code>:999</code>) and requires it to be <code>success</code> or <code>skipped</code> (ADC <code>:1092</code>, Store <code>:1038</code>). A
           front-end performance budget is therefore a production precondition on the same footing as the SBOM,
           the cost guard and the freshness gates, and <code>deploy.yml</code> says so where the k6 gate is defined (ADC
-          <code>:754-755</code>, Store <code>:658-659</code>).</li>
+          <code>:754-755</code>, Store <code>:709-713</code>).</li>
           <li><strong>The framework measures its own UI, under its own looser numbers.</strong> <code>WebVitalsE2ETests</code>
-          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitalsE2ETests.cs:15</code>) measures the
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:15</code>) measures the
           backend-less in-process gallery on three pages, login (<code>:40</code>), components (<code>:48</code>) and grid (<code>:56</code>),
           through the same shipped extension, against a <code>WebVitalsBudget</code> of LCP 8000 ms, FCP 8000 ms, TTFB
           4000 ms and CLS 0.25 (<code>:29-30</code>, constants at <code>:17-19</code>). FCP is pinned to the LCP ceiling rather than
@@ -318,7 +321,7 @@
           defined at <code>:66-69</code>), which fails when neither TTFB nor FCP was recorded, so an all-zero sample
           cannot clear every ceiling by never having been measured.</li>
           <li><strong>The regression behaviour is pinned by unit tests, not by the browser runs.</strong>
-          <code>WebVitalsBudgetTests</code> (<code>.../MMCA.Common.UI.E2E.Tests/WebVitalsBudgetTests.cs:12</code>) starts no
+          <code>WebVitalsBudgetTests</code> (<code>.../MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsBudgetTests.cs:12</code>) starts no
           browser and covers exactly what only ever fires on a regression: that the defaults are the good
           band (<code>:17-26</code>), that each of the five metrics fails when it exceeds its ceiling (<code>:45-56</code>), that a
           0 INP is skipped (<code>:58-64</code>), that a caller-supplied budget is honoured in both directions
@@ -361,14 +364,14 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:688</code>, Store <code>:591</code>) and <code>deploy</code> accepts <code>skipped</code> for it (ADC <code>:1092</code>,
-          Store <code>:976</code>), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
+          filter (ADC <code>deploy.yml:688</code>, Store <code>:645</code>) and <code>deploy</code> accepts <code>skipped</code> for it (ADC <code>:1092</code>,
+          Store <code>:1038</code>), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
           commit. ADC pairs the gate with a <code>backend-test-gate</code> carrying the exact inverse condition
           (<code>deploy.yml:394</code>, <code>:396</code>), but that job runs no browser, so it leaves this budget unmeasured on
           those deploys. Same intended cost trade as the accessibility gate, and the same caveat: &quot;deployed&quot;
           does not always mean &quot;the budget ran on this commit&quot;.</li>
           <li><strong>It never runs on a pull request.</strong> The E2E project is in neither solution filter and the gate is
-          push/dispatch only (ADC <code>deploy.yml:688</code>, Store <code>:591</code>), so a regression is caught between merge and
+          push/dispatch only (ADC <code>deploy.yml:688</code>, Store <code>:645</code>), so a regression is caught between merge and
           rollout, not before merge.</li>
           <li><strong>The measured configuration is not the production one.</strong> CI pins the UI to <code>InteractiveServer</code>
           (ADC <code>e2e.yml:218</code>, Store <code>:210</code>), so the numbers describe Server-mode prerender-then-hydrate under

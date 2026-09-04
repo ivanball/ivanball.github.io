@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -292,14 +295,14 @@
           hostname-to-tenant map and certificate handling that no consumer needs today.</p>
           <p><code>TenantResolutionMiddleware</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs</code>)
           mirrors <code>CorrelationIdMiddleware</code>, which is a named step of the same edge pipeline
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:40</code>, its name a
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:40</code>, its name a
           constant at <code>MiddlewarePipelineStepNames.cs:20</code>). Tenant resolution is its own step
-          (<code>MiddlewarePipelineBuilder.cs:112-118</code>), placed immediately <strong>after</strong> the <code>Authentication</code> step
-          (<code>:108-110</code>), because a claim-first resolution order requires that <code>HttpContext.User</code> already be populated.
+          (<code>MiddlewarePipelineBuilder.cs:113-119</code>), placed immediately <strong>after</strong> the <code>Authentication</code> step
+          (<code>:109-111</code>), because a claim-first resolution order requires that <code>HttpContext.User</code> already be populated.
           <code>UseCommonMiddlewarePipeline</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:46</code>, with a
-          <code>configure</code> overload at <code>:58</code>) applies the steps through <code>ApplyPipeline</code> (<code>:138</code>), which seeds
-          <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>MiddlewarePipelineBuilder.cs:31</code>): the order is data,
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48</code>, with a
+          <code>configure</code> overload at <code>:60</code>) applies the steps through <code>ApplyPipeline</code> (<code>:140</code>), which seeds
+          <code>MiddlewarePipelineBuilder.CreateDefault()</code> (<code>MiddlewarePipelineBuilder.cs:32</code>): the order is data,
           frozen by the <code>MiddlewarePipelineOrderTestsBase</code> fitness function rather than by a sequence of inline
           <code>Use*</code> calls. Like the <code>SoftDeletedUserFilter</code> step (<code>MiddlewarePipelineBuilder.cs:130</code>, its name at
           <code>MiddlewarePipelineStepNames.cs:59</code>) the tenant step is registered unconditionally and inert by default,
@@ -312,7 +315,7 @@
           <code>CrossTenantWriteException</code> on any Added, Modified, or Deleted entry whose tenant differs from the
           resolved one. It is always registered
           (<code>TryAddSingleton&lt;TenantSaveChangesInterceptor&gt;</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:62</code>), and with no tenant
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:76</code>), and with no tenant
           resolved it is inert for updates, deletes, and every entity that does not carry <code>ITenantEntity</code>: the
           system context is unrestricted on the write side exactly as it is on the read side. Inserts are the one
           exception. <code>StampOrVerifyInsert</code> throws <code>CrossTenantWriteException.ForUnresolvedTenant</code> when an Added
@@ -321,7 +324,7 @@
           because a row that no tenant can ever read is a worse outcome than a failed save; a system scope that
           names the tenant explicitly (a seeder, a per-tenant job) still writes.
           <code>DesignTimeDbContextHelper</code> registers it too
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:131</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:132</code>),
           so <code>dotnet ef</code> scaffolds against exactly the runtime interceptor pipeline for consumers with and without
           tenancy. Its absence is survivable rather than fatal: <code>OnConfiguring</code> resolves the tenant interceptor with
           <code>GetService</code> (<code>ApplicationDbContext.cs:264</code>) and falls back to the two-interceptor chain (<code>:268-270</code>), so a
@@ -359,8 +362,8 @@
           <h3 id="background-work-drains-and-migrates-per-tenant">Background work drains and migrates per tenant</h3>
           <p><code>OutboxProcessor</code> and <code>OutboxCleanupService</code> enumerate <code>(source, tenant?)</code> pairs from <code>TenancySettings</code>
           and call <code>ITenantContext.SetTenant</code> inside the per-source scope before obtaining the context
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:264</code>), so the
-          factory routes to the tenant&#39;s database and the claim-lease update (<code>:477-481</code>, the <code>ExecuteUpdateAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:266</code>), so the
+          factory routes to the tenant&#39;s database and the claim-lease update (<code>:479-483</code>, the <code>ExecuteUpdateAsync</code>
           that sets <code>LockedUntil</code> and <code>LockToken</code>) runs against the right rows. There is deliberately <strong>no <code>OutboxMessage</code> schema change</strong>: a <code>TenantId</code> column
           would force a migration on every consumer on upgrade, for a discriminator the per-tenant database already
           provides and shared-schema tenancy does not need (the row sits in its aggregate&#39;s database either way).</p>

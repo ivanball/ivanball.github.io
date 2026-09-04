@@ -71,8 +71,8 @@ stale update fails inside the UPDATE statement.
   (`:57`, written at `:122`). The action reads them back through
   `SupportsIfMatchAttribute.RequiredToken(HttpContext)` (`:68`) and passes the token to its command,
   as the generic PUT does
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:89` for
-  the attribute, `:102` for the read). No bound argument is written to, so no request model has to
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:90` for
+  the attribute, `:103` for the read). No bound argument is written to, so no request model has to
   loosen its immutability to receive a token.
 - **Three status codes, one problem-details shape.**
   - **A request that states no precondition is `428 Precondition Required`** and the action never
@@ -94,37 +94,37 @@ stale update fails inside the UPDATE statement.
   `Concurrency.PreconditionFailed` (`:192`).
 - **`SetOriginalRowVersion` is the persistence extension point.**
   `IWriteRepository.SetOriginalRowVersion(TEntity, byte[])`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:406`)
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:406`)
   applies the caller's token as the tracked entity's **original** `RowVersion`; the `EFRepository`
   implementation writes it to `Entry(entity).Property(nameof(RowVersion)).OriginalValue`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:74`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:82`).
   The shared write workflow calls it right after loading the aggregate and before the mutation runs
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:290-291`), so
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:291-292`), so
   EF compares the client's token against the row's current value inside the UPDATE statement,
   atomically, with no read-then-check race.
 - **Child entities are reached by the `IRowVersioned` overload.** The first overload is typed to the
   repository's aggregate root (`TEntity`), so a child edit (a `ProductVariant` under a `Product`)
   cannot receive a token through it. A second overload,
   `SetOriginalRowVersion(IRowVersioned childEntity, byte[] rowVersion)` (`IRepository.cs:417`,
-  implemented at `EFRepository.cs:85`), accepts any tracked auditable entity instead, and an update
+  implemented at `EFRepository.cs:86`), accepts any tracked auditable entity instead, and an update
   handler that mutates children through the aggregate's repository stamps each child itself. Both
-  overloads reject a null token (`EFRepository.cs:77`, `:88`): there is no value that means "skip
+  overloads reject a null token (`EFRepository.cs:78`, `:89`): there is no value that means "skip
   the check".
 - **A fitness function keeps the token out of the body.**
   `ArchitectureRules.UpdateRequestsAreNotConcurrencyAware`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:24`)
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Governance.cs:24`)
   scans module Application assemblies for types whose simple name ends in `UpdateRequest` and flags
   any that **does** implement `IConcurrencyAware`, because a token in the body would give the same
   check a second, competing source. `ConcurrencyConventionTestsBase` exposes it as a single `[Fact]`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ConcurrencyConventionTestsBase.cs:14`),
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/ConcurrencyConventionTestsBase.cs:14`),
   and **both** consumers subclass it
-  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/ConcurrencyConventionTests.cs:3`,
-  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/ConcurrencyConventionTests.cs:3`, each
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:3`,
+  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:3`, each
   supplying its own `IArchitectureMap`). A module with no mutable aggregate is legitimately vacuous.
 - **The UI speaks the same format.** `ConcurrencyETag` lives in `MMCA.Common.Shared.Http` rather than
   in the API package precisely so both ends of the exchange can use it: the API reads an `If-Match`
   value with it and the UI writes one. `EntityServiceBase.UpdateAsync`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:176`) passes
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:176`) passes
   `ConcurrencyTagOf(entity)` (`:197`) as the write's `If-Match` (`:184`), and the request client sets
   the header (`:394`), so a Blazor page conditions its writes with no per-page code.
 - **Every table carries the column.** The token exists in the database or it does not exist at all:

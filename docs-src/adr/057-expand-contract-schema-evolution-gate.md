@@ -8,14 +8,14 @@ recorded on acceptance is now history rather than current behavior.
 ## Context
 ADR-030 decides **who** applies a migration: every service host runs `DatabaseInitStrategy = Migrate`
 and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
-`sqlcmd` backstop (`MMCA.Store/.github/workflows/deploy.yml:1123-1131`,
-`MMCA.ADC/.github/workflows/deploy.yml:1297-1307`). It says nothing about what **shape** a migration
+`sqlcmd` backstop (`MMCA.Store/.github/workflows/deploy.yml:1197-1204`,
+`MMCA.ADC/.github/workflows/deploy.yml:1306-1316`). It says nothing about what **shape** a migration
 may take.
 
 That gap is load-bearing because production rollback is **revision-only**. When the post-deploy smoke
 gate fails, the deploy rolls every container app back to its previous revision with
-`az containerapp revision copy --from-revision` (`MMCA.Store/.github/workflows/deploy.yml:1139,1199`,
-`MMCA.ADC/.github/workflows/deploy.yml:1318,1381`). That reverts the **image** and nothing else:
+`az containerapp revision copy --from-revision` (`MMCA.Store/.github/workflows/deploy.yml:1360-1361`,
+`MMCA.ADC/.github/workflows/deploy.yml:1462-1463`). That reverts the **image** and nothing else:
 the new revision already migrated the database on boot, and no down-migration runs. The previous
 release therefore keeps serving traffic against the **new** schema, which is exactly the statement
 both repos' CONTRIBUTING makes (`MMCA.Store/CONTRIBUTING.md:56-59`, `MMCA.ADC/CONTRIBUTING.md:57-60`).

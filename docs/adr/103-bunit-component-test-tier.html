@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-103: bUnit Component-Test Tier as a Shipped Package · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-31).">
+  <meta name="description" content="Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/103-bunit-component-test-tier.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-103: bUnit Component-Test Tier as a Shipped Package">
-  <meta property="og:description" content="Accepted (2026-08-31).">
+  <meta property="og:description" content="Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/103-bunit-component-test-tier.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-103: bUnit Component-Test Tier as a Shipped Package">
-  <meta name="twitter:description" content="Accepted (2026-08-31).">
+  <meta name="twitter:description" content="Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"103 · bUnit Component-Test Tier as a Shipped Package","item":"https://ivanball.github.io/docs/adr/103-bunit-component-test-tier.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -214,7 +217,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-103-bunit-component-test-tier-as-a-shipped-package">ADR-103: bUnit Component-Test Tier as a Shipped Package</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-31).</p>
+          <p>Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the <code>AngleSharp</code> advisory
+          pin travels. See Revision (2026-09-03) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates <strong>structure</strong>
           with NetArchTest. ADR-058 ships the <strong>runtime conformance</strong> suites as abstract bases in
@@ -249,15 +253,15 @@
           symbols, so a move off that line changes this file and no other
           (<code>BunitComponentTestBase.cs:29-34</code>). The line is pinned at <code>bunit</code> 2.9.0 in each repo&#39;s central
           package file (<code>MMCA.Common/Directory.Packages.props:205-206</code>,
-          <code>MMCA.ADC/Directory.Packages.props:31-32</code>, <code>MMCA.Store/Directory.Packages.props:51-52</code>), and the
+          <code>MMCA.ADC/Directory.Packages.props:30-31</code>, <code>MMCA.Store/Directory.Packages.props:50-51</code>), and the
           package carries a direct <code>AngleSharp</code> pin because central package management does not pin
           transitives (<code>MMCA.Common.Testing.UI.csproj:13-15</code>).</li>
           <li><strong>MudBlazor services plus the ADR-067 facades, registered once.</strong> The constructor calls
           <code>Services.AddMudServices()</code> (<code>BunitComponentTestBase.cs:46</code>) and then
           <code>Services.AddCommonUiFacades()</code> (<code>:53</code>), which is the same call the production shell makes from
-          <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:106</code>). That
+          <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:110</code>). That
           call registers <code>IToastService</code> -&gt; <code>MudToastService</code> and <code>IAppDialogService</code> -&gt; <code>MudAppDialogService</code>
-          with <code>TryAdd</code> (<code>DependencyInjection.cs:158-163</code>), so a component test resolves the vendor-neutral
+          with <code>TryAdd</code> (<code>DependencyInjection.cs:162-167</code>), so a component test resolves the vendor-neutral
           facades and exercises the real Mud-backed path, and a test that wants a recording double registers
           one afterwards (last registration wins, <code>BunitComponentTestBase.cs:48-52</code>).</li>
           <li><strong>Loose JSInterop.</strong> <code>JSInterop.Mode = JSRuntimeMode.Loose</code> (<code>:55</code>) so MudBlazor components that
@@ -313,7 +317,7 @@
           Conference&#39;s adds the ADR-042 device-capability defaults and inert configuration
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:19-46</code>), and
           MMCA.Common&#39;s adds the layout-chrome services only its own tests render
-          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:15-46</code>).</li>
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:25-42</code>).</li>
           </ul>
           <p>All six consumer projects sit in the gating CI subset, so the tier runs on every pull request rather
           than on a schedule (<code>MMCA.ADC/MMCA.ADC.CI.slnf:43,49,55</code>,
@@ -335,7 +339,7 @@
           every UI test class in three repos (<code>:29-34</code>).</li>
           <li><strong>Test-time and run-time resolve the same facades.</strong> Because the base calls the production
           <code>AddCommonUiFacades</code> rather than registering its own doubles (<code>:53</code>,
-          <code>MMCA.Common.UI/DependencyInjection.cs:106,158-163</code>), a component test asserts against the real
+          <code>MMCA.Common.UI/DependencyInjection.cs:110,162-167</code>), a component test asserts against the real
           toast and dialog implementations ADR-067 put behind those interfaces, and a test that wants to
           assert on a toast opts into a double explicitly.</li>
           <li><strong>A package matches how every other shipped test tier is delivered.</strong> Runtime conformance
@@ -361,10 +365,15 @@
           (<code>MMCA.Common.Testing.UI.csproj:16,21</code>), so a repo that wanted a different mocking library in its UI
           tests still takes Moq transitively, and a non-MudBlazor UI could not use this base at all.</li>
           <li><strong>The bUnit version is pinned per repo, not by the package.</strong> The package references <code>bunit</code> without
-          a version (<code>MMCA.Common.Testing.UI.csproj:13</code>) and each consumer&#39;s central package file names the
-          number (<code>MMCA.Common/Directory.Packages.props:206</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
-          <code>MMCA.Store/Directory.Packages.props:52</code>), so three files have to agree, and the AngleSharp advisory
-          pin has to be repeated the same way.</li>
+          a version (<code>MMCA.Common.Testing.UI.csproj:13</code>), and every consuming test project references <code>bunit</code>
+          directly as well
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:10</code>),
+          so each repo&#39;s central package file names the number
+          (<code>MMCA.Common/Directory.Packages.props:206</code>, <code>MMCA.ADC/Directory.Packages.props:31</code>,
+          <code>MMCA.Store/Directory.Packages.props:51</code>) and three files have to agree. The <code>AngleSharp</code> advisory
+          pin does not spread that way: it is named once, in <code>MMCA.Common/Directory.Packages.props:210</code>, and
+          reaches consumers transitively through the package&#39;s own direct reference
+          (<code>MMCA.Common.Testing.UI.csproj:15</code>).</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a> (the runtime conformance tier this sits
@@ -379,6 +388,19 @@
           top), <a href="101-common-metapackage.html">ADR-101</a> (why this package stays outside the <code>MMCA.Common</code>
           metapackage), <a href="015-architecture-fitness-functions.html">ADR-015</a> (the structural tier below) and
           <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release the package rides).</p>
+          <h2 id="revision-2026-09-03">Revision (2026-09-03)</h2>
+          <p><strong>The decision and the mechanism are unchanged.</strong> One trade-off&#39;s premise was wrong. &quot;The bUnit
+          version is pinned per repo&quot; said the <code>AngleSharp</code> advisory pin has to be repeated across the three
+          central package files the way the <code>bunit</code> version is. It does not. <code>bunit</code> is named in all three
+          (<code>MMCA.Common/Directory.Packages.props:206</code>, <code>MMCA.ADC/Directory.Packages.props:31</code>,
+          <code>MMCA.Store/Directory.Packages.props:51</code>) because every consuming UI test project takes a direct
+          <code>bunit</code> reference of its own
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:10</code>).
+          <code>AngleSharp</code> is named only in MMCA.Common (<code>MMCA.Common/Directory.Packages.props:210</code>), where it
+          versions the package&#39;s own direct reference (<code>MMCA.Common.Testing.UI.csproj:15</code>); no consumer repo
+          pins it in a central package file or a project file, so consumers inherit the patched version with
+          the package. The trade-off now says so. Citation anchors elsewhere in the record were refreshed at
+          the same time with no change of substance.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -395,6 +417,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
             </ul>
           </nav>
         </aside>

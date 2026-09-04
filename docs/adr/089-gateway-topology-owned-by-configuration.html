@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -262,9 +265,9 @@
           <p><strong>What is genuinely elsewhere is not the route table, and that distinction is worth recording</strong>,
           because it is the duplication a reader assumes exists. The Aspire AppHost holds references and
           start-ordering (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:252-262</code>,
-          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:218-226</code>) and the bicep templates hold
+          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:251-257</code>) and the bicep templates hold
           <code>services__&lt;name&gt;__http__0</code> environment variables on the gateway container app
-          (<code>MMCA.ADC/infra/main.bicep:1652-1655</code>, <code>MMCA.Store/infra/main.bicep:1342-1344</code>). Both are <strong>address
+          (<code>MMCA.ADC/infra/main.bicep:1709-1712</code>, <code>MMCA.Store/infra/main.bicep:1434-1436</code>). Both are <strong>address
           books</strong>: service name to URL, with no path prefix anywhere in them. They answer &quot;where does
           <code>conference</code> resolve&quot; and never &quot;what reaches conference&quot;, so neither is a second route table and
           neither should become one.</p>
@@ -292,11 +295,11 @@
           <p>Each gateway calls <code>AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection(&quot;ReverseProxy&quot;))</code>
           and <code>MapReverseProxy()</code>, and the <code>MapForwarder</code> lists are deleted. ADC wires it at
           <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:112-115</code> and maps it at <code>:158</code>; Store at
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:139-141</code> and <code>:172</code>. Routes and clusters live
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:138-141</code> and <code>:172</code>. Routes and clusters live
           in the gateway&#39;s own <code>appsettings.json</code>: 27 routes over five clusters for ADC (4 identity, 16
           conference, 5 engagement, 2 notification, at
-          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:50-159</code>) and 10 routes over three clusters
-          for Store (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:39-81</code>). Destinations stay
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:58-168</code>) and 10 routes over three clusters
+          for Store (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:42-84</code>). Destinations stay
           Aspire service-discovery names, so nothing about ADR-008&#39;s transport-at-the-edge posture, the AppHost
           wiring or the bicep address book changes: what changed is that the path-prefix-to-cluster mapping is
           data rather than a sequence of calls.</p>
@@ -340,10 +343,10 @@
           the h2c-only hosts declare HTTP/2 with an exact version policy, and the mixed-endpoint hosts (ADC&#39;s
           Notification, Store&#39;s Sales) state neither, keeping the version-negotiating default their websocket
           traffic needs. ADC&#39;s <code>identity</code>, <code>conference</code> and <code>engagement</code> clusters carry <code>Version</code> with
-          <code>RequestVersionExact</code> (<code>appsettings.json:166-169</code>, <code>:175-178</code>, <code>:184-187</code>) and its two Notification
-          clusters carry no <code>HttpRequest</code> block at all (<code>:189-193</code>, <code>:194-198</code>); Store&#39;s <code>catalog</code> and <code>identity</code>
-          clusters carry them (<code>appsettings.json:84-87</code>, <code>:93-96</code>) and its <code>sales</code> cluster states neither
-          (<code>:101-105</code>).</p>
+          <code>RequestVersionExact</code> (<code>appsettings.json:174-177</code>, <code>:183-186</code>, <code>:192-195</code>) and its two Notification
+          clusters carry no <code>HttpRequest</code> block at all (<code>:197-201</code>, <code>:202-206</code>); Store&#39;s <code>catalog</code> and <code>identity</code>
+          clusters carry them (<code>appsettings.json:87-90</code>, <code>:96-99</code>) and its <code>sales</code> cluster states neither
+          (<code>:104-108</code>).</p>
           <p>Resolving that profile is the framework&#39;s job, not each host&#39;s. <code>GatewayClusterProfileConfigFilter</code> in
           the <code>MMCA.Common.Gateway</code> package merges three sources per property rather than per block, so a cluster
           that states one value keeps inheriting the rest: the cluster&#39;s own <code>HttpRequest</code>, then
@@ -358,18 +361,18 @@
           statement in that cluster&#39;s own profile, never a switch applied over the loaded table
           (<code>GatewayClusterProfileConfigFilter.cs:18-22</code>). Both gateways declare their shared profile in that
           section, ADC with the one-hour SignalR override its hub route needs
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:20-27</code>,
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:20-22</code>), so the effective per-cluster
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:27-35</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:22-25</code>), so the effective per-cluster
           policy is readable without opening <code>Program.cs</code> in either.</p>
           <h3 id="5-stores-timeout-parity-is-fixed-in-the-same-move">5. Store&#39;s timeout parity is fixed in the same move</h3>
           <p>Store&#39;s routes gain the activity timeout ADC already has, tied to the same
           <code>HttpResilienceDefaults.TotalRequestTimeout</code> budget, expressed as configuration rather than as a
           constructor argument. Store declares <code>&quot;ActivityTimeout&quot;: &quot;00:01:40&quot;</code> exactly once, as
           <code>MmcaGateway:ClusterRequestDefaults</code>
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:20-22</code>), and the shared cluster profile
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:22-25</code>), and the shared cluster profile
           of section 4 merges those 100 seconds into all three clusters, none of which states a timeout of its
           own. ADC declares the same 100 seconds in the same place, with the one-hour override its hub cluster
-          needs (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:20-27</code>). The route-map test pins the
+          needs (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:27-35</code>). The route-map test pins the
           resolved value on every route
           (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:57</code>, asserted at <code>:259-277</code>) and
           pins the absence of any per-cluster declaration beside it (<code>:228-232</code>), so a cluster that reintroduced

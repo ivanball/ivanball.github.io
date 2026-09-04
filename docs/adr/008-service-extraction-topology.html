@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -247,9 +250,15 @@
           The Domain/Application/Shared code is identical whether it runs in-process or extracted.</li>
           <li><strong>The Gateway is the only client entry point.</strong> It owns the route→service map (<code>/Auth</code>, <code>/Events</code>,
           <code>/Bookmarks</code>, <code>/hubs</code>, <code>/.well-known</code>, …); clients (Blazor/MAUI) never address a service directly. It
-          has no DbContext or controllers: security-headers middleware (ADR-023), CORS, static files, a
-          <code>/privacy</code> minimal-API endpoint, and the route forwarders (ADC; Store&#39;s Gateway is the same minus the
-          static files).</li>
+          has no DbContext or controllers. Its pipeline is edge rate limiting
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:64</code>, <code>:144</code>), one per-downstream readiness check
+          per service (<code>:78</code>), forwarded headers (<code>:124</code>), correlation (<code>:129</code>), security-headers middleware
+          (ADR-023, <code>:84</code>, <code>:134</code>), CORS (<code>:89</code>, <code>:137</code>), static files (<code>:149</code>), a <code>/privacy</code> minimal-API
+          endpoint (<code>:154</code>), and the proxy itself: the route table is loaded from the <code>ReverseProxy</code>
+          configuration section and mapped by <code>MapReverseProxy</code> (<code>:112-115</code>, <code>:158</code>), not expressed as
+          <code>MapForwarder</code> calls in code (ADR-089). Store&#39;s Gateway is the same shape without the static files
+          and the <code>/privacy</code> endpoint, and it additionally layers Azure Key Vault configuration
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:63</code>), which the ADC Gateway does not.</li>
           <li><strong>Cross-service communication uses edge transports:</strong> synchronous calls over gRPC contracts (ADR-007);
           asynchronous flows over the outbox → MassTransit broker (ADR-003, ADR-006). Token validation is
           federated via JWKS through the Gateway (ADR-004). Each service owns its own database (ADR-006).</li>
@@ -282,16 +291,20 @@
           <li><strong>Transport constraints leak into hosting.</strong> The REST services run <code>Http2</code>-only on cleartext for h2c
           gRPC, while Notification runs <code>Http1AndHttp2</code> for its SignalR WebSocket upgrade: a per-host Kestrel
           nuance that didn&#39;t exist in the monolith.</li>
-          <li><strong>Duplicated host wiring.</strong> Each service repeats the same pipeline setup; shared concerns live in
-          <code>MMCA.Common.API</code> / <code>ServiceDefaults</code> to limit the drift.</li>
+          <li><strong>Duplicated host wiring.</strong> Each service repeats the same pipeline setup; shared concerns live in the
+          framework packages (<code>MMCA.Common.API</code>, plus <code>AddServiceDefaults</code> from <code>MMCA.Common.Aspire</code> at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:46</code>) to limit the drift. Neither consumer
+          carries a <code>ServiceDefaults</code> project of its own.</li>
           </ul>
           <h2 id="applicability">Applicability</h2>
           <p>This ADR is framed around ADC (the first repo extracted), but the same topology is now the framework&#39;s
           <strong>standard extraction shape</strong>, not an ADC-only choice. MMCA.Store followed it: one service host per
           module (<code>MMCA.Store.{Catalog,Identity,Sales}.Service</code>) behind a single <code>MMCA.Store.Gateway</code> (also
           pinned to <code>https://localhost:6001</code>), with its combined <code>MMCA.Store.WebAPI</code> host likewise deleted.
-          Store&#39;s cross-service topology differs in transport detail (see ADR-012: both apps now run Profile A),
-          but the extraction shape is identical.</p>
+          Store&#39;s cross-service topology differs in transport detail (see ADR-012: both apps run Profile A on
+          their gRPC-serving edges, while ADC&#39;s Notification and Store&#39;s Sales run the mixed-endpoint profile, an
+          <code>Http1AndHttp2</code> default endpoint beside an <code>Http2</code>-only named gRPC endpoint), but the extraction shape
+          is identical.</p>
           <p><strong>Why ADC extracted, said plainly.</strong> The four hosts
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.{Identity,Conference,Engagement,Notification}.Service</code>) exist
           first of all to demonstrate and continuously exercise the extraction path end to end, because
@@ -299,11 +312,11 @@
           nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
           conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
           six deployables still ship in a single pipeline run from one template
-          (<code>MMCA.ADC/infra/main.bicep:984</code>, <code>:1185</code>, <code>:1312</code>, <code>:1439</code>, <code>:1608</code>, <code>:1711</code>, deployed together by a
-          single <code>azure/arm-deploy</code> step at <code>MMCA.ADC/.github/workflows/deploy.yml:1289-1295</code>), so the
+          (<code>MMCA.ADC/infra/main.bicep:1016</code>, <code>:1223</code>, <code>:1357</code>, <code>:1484</code>, <code>:1653</code>, <code>:1774</code>, deployed together by a
+          single <code>azure/arm-deploy</code> step at <code>MMCA.ADC/.github/workflows/deploy.yml:1298-1304</code>), so the
           independent-deploy benefit this record lists is available rather than taken. What ADC does buy with the split is proof under load that the path
           works: transport stays out of Domain, Application and Shared under a build gate
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MicroserviceExtractionTests.cs:3</code>), and the
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/MicroserviceExtractionTests.cs:3</code>), and the
           genuine cross-process flows (outbox to broker to consumer, and a real gRPC read) run nightly against
           real containers (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:6-10</code>, cadence at <code>:25-31</code>). A
           consumer adopting this topology should extract on an observable constraint (a module that must scale

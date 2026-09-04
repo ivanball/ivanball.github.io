@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -276,7 +279,7 @@
           <code>EventVersioningConventionTests</code> gates a real event in Common&#39;s own build. Enforcement therefore runs
           at five points, not four. (Common&#39;s map declares no modules, so the namespace rule&#39;s Shared-layer half
           is relaxed there: <code>ArchitectureRules.IntegrationEventsResideInSharedIntegrationEventsNamespace</code>
-          (<code>Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Events.cs:28-33</code>) applies the
+          (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:28-33</code>) applies the
           <code>sharedAssemblies</code> check only when <code>map.ModuleNames.Count &gt; 0</code>, which is why the framework&#39;s own
           event may sit in a Domain-assembly <code>*.IntegrationEvents</code> namespace while every module-bearing consumer
           is still held to Shared.) The other four are the consumer trees, which subclass

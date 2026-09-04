@@ -62,7 +62,7 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
   `EventVersioningConventionTests` gates a real event in Common's own build. Enforcement therefore runs
   at five points, not four. (Common's map declares no modules, so the namespace rule's Shared-layer half
   is relaxed there: `ArchitectureRules.IntegrationEventsResideInSharedIntegrationEventsNamespace`
-  (`Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Events.cs:28-33`) applies the
+  (`Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:28-33`) applies the
   `sharedAssemblies` check only when `map.ModuleNames.Count > 0`, which is why the framework's own
   event may sit in a Domain-assembly `*.IntegrationEvents` namespace while every module-bearing consumer
   is still held to Shared.) The other four are the consumer trees, which subclass

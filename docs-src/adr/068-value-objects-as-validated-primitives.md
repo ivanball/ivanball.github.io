@@ -52,7 +52,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   sentinel is `internal` (`Currency.cs:23`), so an external caller still cannot assemble a `Money` whose
   currency was never checked.
 - **That factory shape is fitness-enforced, not conventional.** `ArchitectureRules.DomainFactoriesReturnResult`
-  (`Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Entities.cs:53-79`) walks every
+  (`Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Entities.cs:53-79`) walks every
   concrete class in the Domain and Shared layers and fails the build when a public static `Create`
   exists with no overload returning `Result<TSelf>`, generalizing the aggregate-root rule to value
   objects (ADR-015).

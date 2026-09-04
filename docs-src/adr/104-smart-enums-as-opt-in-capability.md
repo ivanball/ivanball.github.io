@@ -112,7 +112,7 @@ whose members need behavior or data, and nothing in the framework pushes a consu
     (`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs:1-144`, 15
     test methods) covers both lookups, casing, null, per-type `All` scoping and cross-enumeration
     equality and hashing; `EnumerationSerializationTests`
-    (`.../ValueObjects/EnumerationSerializationTests.cs:1-139`, 11 methods) covers both routes to the
+    (`.../ValueObjects/Serialization/EnumerationSerializationTests.cs:1-139`, 11 methods) covers both routes to the
     converter and pins the documented limitation that an unattributed enumeration under unconfigured
     options falls back to the default object shape (`:68-75`); `EnumerationValueConverterTests`
     (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs:1-100`,
@@ -201,7 +201,7 @@ whose members need behavior or data, and nothing in the framework pushes a consu
 - **The type sits in `ValueObjects` without being one.** It lives in the
   `MMCA.Common.Shared.ValueObjects` namespace (`Enumeration.cs:11`) but is out of scope for
   `ValueObjectsAreImmutableSealedInShared`, which only inspects types deriving from `ValueObject`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Immutability.cs:56-74`,
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Immutability.cs:56-74`,
   base-type filter at `:61`). The reason is documented on the type (`Enumeration.cs:26-29`), and
   `RoleValue` takes the same trade-off, but a reader scanning the namespace sees a type the value
   object rules do not cover.

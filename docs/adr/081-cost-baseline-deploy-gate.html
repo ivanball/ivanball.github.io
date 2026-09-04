@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -248,7 +251,7 @@
           provenance), ADR-060 (the performance-regression gate against a committed baseline) and ADR-062 (SLO
           alerting as code). ADR-064 decides the three proof-of-recency gates and enumerates <code>cost-guard</code>
           in passing among the jobs that &quot;have the change itself as their subject&quot;
-          (<code>Website/docs-src/adr/064-deploy-recency-gates.md:16-17,44</code>), but it does not decide it. This record
+          (<code>Website/docs-src/adr/064-deploy-recency-gates.md:21-22,44</code>), but it does not decide it. This record
           does.</p>
           <h2 id="decision">Decision</h2>
           <p>The cost baseline is asserted by a <strong>read-only reusable workflow</strong> that both runs weekly and sits in

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -230,7 +233,7 @@
           component (<code>MMCA.Common.UI/Layout/MainLayout.razor:14</code>), which owns the four Mud providers plus the
           Day/Dark lifecycle in one place. Inside that component <code>MudThemeProvider</code> is bound with
           <code>Theme=&quot;@Theme&quot;</code> and <code>@bind-IsDarkMode</code>
-          (<code>MMCA.Common.UI/Components/MmcaThemeProviders.razor:12</code>), a two-way binding to that component&#39;s own
+          (<code>MMCA.Common.UI/Theme/MmcaThemeProviders.razor:12</code>), a two-way binding to that component&#39;s own
           <code>_isDarkMode</code> field (<code>MmcaThemeProviders.razor:25</code>); no <code>@ref</code> is used. <code>Theme</code> is a <code>MudTheme</code>
           parameter whose default is the already-complete <code>MMCATheme.Instance</code>
           (<code>MmcaThemeProviders.razor:23</code>), so a consuming app that needs its own brand passes a derived
@@ -264,8 +267,8 @@
           </li>
           <li><p><strong>Helpdesk is brought into line.</strong> Its host&#39;s custom <code>MainLayout</code> used a bare <code>&lt;MudThemeProvider /&gt;</code>
           (not even <code>MMCATheme</code>); it now renders the framework&#39;s <code>&lt;MmcaThemeProviders /&gt;</code>
-          (<code>MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:6</code>) plus <code>&lt;CultureSwitcher /&gt;</code> and
-          <code>&lt;ThemeToggle /&gt;</code> in its own <code>MudAppBar</code> (<code>MainLayout.razor:13-14</code>), so the theme, the bound
+          (<code>MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:8</code>) plus <code>&lt;CultureSwitcher /&gt;</code> and
+          <code>&lt;ThemeToggle /&gt;</code> in its own <code>MudAppBar</code> (<code>MainLayout.razor:15-16</code>), so the theme, the bound
           <code>IsDarkMode</code> and the whole lifecycle come from the shared component rather than being restated in
           the host. As an <code>InteractiveServer</code>-only host it has no WASM boundary, but it still reads the
           cookie for consistency.</p>
@@ -289,7 +292,7 @@
           <li><strong>Helpdesk&#39;s custom layout</strong> is still wired separately because it does not inherit Common&#39;s
           <code>MainLayout</code>, but the obligation is now two component tags (<code>&lt;MmcaThemeProviders /&gt;</code> plus
           <code>&lt;ThemeToggle /&gt;</code>) rather than a provider block and its lifecycle: the layout&#39;s own comment
-          (<code>MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:4-5</code>) records that the four Mud providers
+          (<code>MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:6-7</code>) records that the four Mud providers
           and the Day/Dark lifecycle belong to <code>MmcaThemeProviders</code> and that the layout carries only Helpdesk
           chrome. Future hosts that fork the layout inherit that same two-tag obligation.</li>
           <li><strong>Per-user persistence adds a column</strong> to the Identity <code>User</code> (folded into the ADR-027 migration, so no

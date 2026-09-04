@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -233,7 +236,7 @@
           <p>ADR-021 had already answered the same question on the consumer side. <code>MessageBus:EnableInbox</code> became
           <code>bool?</code> and <code>IsInboxEnabled</code> resolves an unset value from the transport, ON for a broker and OFF for
           in-process, which has no redelivery to dedup
-          (<code>Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:102</code>). The outbox had no such
+          (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:102</code>). The outbox had no such
           resolution: it ran in every host, including the one that had nothing to forward to.</p>
           <p>The reverse posture is a real hazard rather than a symmetrical option. A broker deployment publishes
           integration events <strong>exclusively</strong> through the outbox: <code>BrokerEventBus</code> writes the rows and
@@ -244,7 +247,7 @@
           something, keep the schema, and refuse the one combination that cannot work.</p>
           <ol>
           <li><p><strong><code>MessageBus:EnableOutbox</code> is <code>bool?</code> and defaults to unset.</strong>
-          <code>MessageBusSettings.EnableOutbox</code> (<code>Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:151</code>)
+          <code>MessageBusSettings.EnableOutbox</code> (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:151</code>)
           carries the explicit override; <code>IsOutboxEnabled</code> (<code>:159</code>) is the resolved posture every framework
           component reads: <code>EnableOutbox ?? Provider != MessageBusProvider.InProcess</code>. That is character for
           character the inbox rule two properties above it (<code>:125</code>). An explicit value wins in both
@@ -254,32 +257,33 @@
           <li><p><strong>Resolution happens once, at registration.</strong> <code>AddInfrastructure</code> binds the section, and on the
           enabled path registers <code>OutboxProcessor</code> and <code>OutboxCleanupService</code>; on the disabled path it
           registers neither and adds <code>OutboxDisabledNoticeService</code> instead
-          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:186-198</code>, reasoning at
-          <code>:180-185</code>).</p>
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:200-212</code>, reasoning at
+          <code>:194-199</code>).</p>
           </li>
           <li><p><strong>The row writes are gated at both write points</strong>, not only the background services:
           <code>InProcessEventBus</code> takes its direct-dispatch branch when the outbox is off, with no rows, no save
-          and no processor to retry (<code>Source/Core/MMCA.Common.Infrastructure/Services/InProcessEventBus.cs:42</code>,
-          branch at <code>:80-84</code>, documented at <code>:69-73</code>), and <code>DomainEventSaveChangesInterceptor</code> captures and
+          and no processor to retry (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:43</code>,
+          branch at <code>:81-85</code>, documented at <code>:70-74</code>), and <code>DomainEventSaveChangesInterceptor</code> captures and
           dispatches in-process without writing rows
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:54</code>,
-          contract at <code>:41-44</code>). Both fall back to the outbox path when no options are resolvable, so a
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:55</code>,
+          contract at <code>:42-45</code>). Both fall back to the outbox path when no options are resolvable, so a
           container that binds neither keeps the previous behavior. This is the same branch a context
           without outbox support (Cosmos) already took, reached by a second condition rather than a new one.</p>
           </li>
           <li><p><strong>A broker with the outbox explicitly disabled fails at startup.</strong>
           <code>EnsureOutboxAvailableForProvider</code> throws when the provider is anything other than <code>InProcess</code> and
-          <code>EnableOutbox</code> is explicitly <code>false</code> (<code>DependencyInjection.cs:857-864</code>). The message names the
+          <code>EnableOutbox</code> is explicitly <code>false</code> (<code>DependencyInjection.cs:871</code>, guard at <code>:873</code>, throw at
+          <code>:875-876</code>). The message names the
           mechanism (<code>BrokerEventBus</code> writes the rows, <code>OutboxProcessor</code> publishes them), the consequence
           (every cross-service event dropped silently) and the fix. Leaving the setting unset under a broker
           resolves to enabled, so only a deliberate <code>false</code> reaches the throw.</p>
           </li>
           <li><p><strong>Being off is never silent.</strong> <code>OutboxDisabledNoticeService</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxDisabledNoticeService.cs:21</code>)
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxDisabledNoticeService.cs:22</code>)
           logs one startup line naming exactly what is not running and what it costs: no rows are written,
           neither background service is present, an event whose handler fails is not retried, and a crash
           between the commit and the dispatch loses it, with <code>MessageBus:EnableOutbox=true</code> given as the
-          restore path and the absence of any migration stated (<code>:36</code>). It is the mirror of the inbox&#39;s
+          restore path and the absence of any migration stated (<code>:37</code>). It is the mirror of the inbox&#39;s
           <code>InboxDisabledWarningService</code> (ADR-021).</p>
           </li>
           <li><p><strong>The EF model does not change.</strong> <code>OutboxMessage</code> is configured in <code>OnModelCreating</code> for every

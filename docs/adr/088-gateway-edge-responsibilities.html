@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -229,10 +232,14 @@
           point (<code>AddMmcaGateway</code>) joins the Decision, and the declines gain a companion list of
           <strong>delegations</strong>, behaviors the gateway deliberately leaves to a layer better placed to perform them,
           recorded so an audit reads them as decisions rather than as gaps. Both consumer gateways reference
-          the package in package mode (<code>MMCA.ADC/Directory.Packages.props:113</code>,
+          the package in package mode (<code>MMCA.ADC/Directory.Packages.props:115</code>,
           <code>MMCA.Store/Directory.Packages.props:14</code>).</p>
-          <p><strong>Revised 2026-08-31:</strong> both consumers now pin <code>MMCA.Common.Gateway</code> at 1.174.0, and the source
-          citations below are refreshed against current line numbers. Nothing in the decision changes.</p>
+          <p><strong>Revised 2026-08-31:</strong> both consumers pin <code>MMCA.Common.Gateway</code> in lockstep with the rest of the
+          framework rather than on a version of its own (1.185.0 today, at the two lines cited above), and the
+          source citations below are refreshed against current line numbers. Nothing in the decision changes.</p>
+          <p><strong>Revised 2026-09-03:</strong> the citations are refreshed again: the rate-limiting kit&#39;s anchors all moved
+          when the synthetic-traffic bypass tier (the 2026-09-01 amendment below) landed in the same two
+          files. Nothing in the decision changes.</p>
           <h2 id="context">Context</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> made the Gateway the only client entry point and gave it
           three jobs: the route-to-service map, CORS, and forwarding the caller&#39;s <code>Authorization</code> header. Nothing
@@ -304,31 +311,31 @@
           <p><strong>2. Rate limiting at the edge counts anonymous callers, and chains a global concurrency cap behind
           it.</strong> <code>AddGatewayRateLimiting</code> installs a per-client-IP fixed window partitioned on
           <code>Connection.RemoteIpAddress</code> with <strong>no authentication exemption of any kind</strong>
-          (<code>.../Gateway/GatewayRateLimitingExtensions.cs:90</code>, limiter at <code>:98</code>), chained through
-          <code>PartitionedRateLimiter.CreateChained</code> (<code>:181</code>) with a process-wide concurrency limiter (<code>:124-125</code>),
-          rejecting overage with 429 (<code>:176</code>). The two answer different failures: the window answers one noisy
+          (<code>.../Gateway/GatewayRateLimitingExtensions.cs:136</code>, limiter at <code>:144</code>), chained through
+          <code>PartitionedRateLimiter.CreateChained</code> (<code>:227</code>) with a process-wide concurrency limiter (<code>:171-173</code>),
+          rejecting overage with 429 (<code>:222</code>). The two answer different failures: the window answers one noisy
           source, and the concurrency cap answers total in-flight work regardless of how many sources produced
           it, which is the failure a per-IP window structurally cannot see. Defaults live in
           <code>GatewayRateLimitingSettings</code> (section <code>&quot;GatewayRateLimiting&quot;</code>,
-          <code>.../Gateway/GatewayRateLimitingSettings.cs:42</code>): <code>PermitLimit</code> 120 (<code>:51</code>) per <code>WindowSeconds</code> 60
-          (<code>:55</code>), <code>GlobalConcurrencyLimit</code> 200 (<code>:65</code>).</p>
+          <code>.../Gateway/GatewayRateLimitingSettings.cs:50</code>): <code>PermitLimit</code> 120 (<code>:59</code>) per <code>WindowSeconds</code> 60
+          (<code>:63</code>), <code>GlobalConcurrencyLimit</code> 200 (<code>:73</code>).</p>
           <p><strong>The settings are validated twice, because there are two ways in.</strong> The configuration overload binds
           through <code>AddOptions().Bind(section).ValidateDataAnnotations().ValidateOnStart()</code>
-          (<code>GatewayRateLimitingExtensions.cs:148-151</code>), so a host with an out-of-range value refuses to boot,
+          (<code>GatewayRateLimitingExtensions.cs:194-197</code>), so a host with an out-of-range value refuses to boot,
           which is <a href="070-fail-fast-configuration-contract.html">ADR-070</a>&#39;s contract exactly. That alone would not be
           enough here: the limiter closes over an eagerly-bound copy rather than resolving <code>IOptions</code> per
           request, and a caller can hand settings straight to the object overload without passing through the
           options pipeline at all. So the overload every path funnels into runs
-          <code>Validator.ValidateObject(settings, ..., validateAllProperties: true)</code> at registration (<code>:172</code>, with
-          the reasoning stated inline at <code>:169-171</code>). The <code>[Range]</code> bounds on the three numeric settings
-          (<code>GatewayRateLimitingSettings.cs:50</code>, <code>:54</code>, <code>:64</code>) are therefore load-bearing on both paths: an
+          <code>Validator.ValidateObject(settings, ..., validateAllProperties: true)</code> at registration (<code>:218</code>, with
+          the reasoning stated inline at <code>:215-217</code>). The <code>[Range]</code> bounds on the three numeric settings
+          (<code>GatewayRateLimitingSettings.cs:58</code>, <code>:62</code>, <code>:72</code>) are therefore load-bearing on both paths: an
           invalid <code>PermitLimit</code> throws where it is configured, not at the first throttled request.</p>
           <p>Bypasses are two-tier as first recorded (a third, secret-gated tier for synthetic traffic was added in the 2026-09-01 amendment below), and the tiers are different kinds of thing. <strong>Infrastructure bypasses are
           unconditional</strong>: <code>/health</code>, <code>/alive</code> and <code>/.well-known</code> are hard-coded
-          (<code>GatewayRateLimitingExtensions.cs:47</code>, matched by path segment, case-insensitively, <code>:64</code>), because
+          (<code>GatewayRateLimitingExtensions.cs:55</code>, matched by path segment, case-insensitively, <code>:75</code>), because
           throttling them takes down probes and token validation (ADR-004&#39;s JWKS discovery) as a side effect of
           throttling traffic. <strong>Application bypasses are configuration</strong>, through <code>BypassPathPrefixes</code>
-          (<code>GatewayRateLimitingSettings.cs:74</code>, empty by default), and each consumer sets its own list in the
+          (<code>GatewayRateLimitingSettings.cs:82</code>, empty by default), and each consumer sets its own list in the
           gateway&#39;s <code>appsettings.json</code> beside the <code>ReverseProxy</code> route table that same file now declares
           (<a href="089-gateway-topology-owned-by-configuration.html">ADR-089</a>). The two entries are recorded here so they
           are not rediscovered as incidents: Store&#39;s Stripe webhook route (<code>/Payments/{**catch-all}</code>, bypassed
@@ -341,7 +348,7 @@
           negotiate-plus-reconnect storm from one office&#39;s shared address is exactly the pattern a per-IP window
           misreads as abuse (<a href="039-live-channel-push.html">ADR-039</a>).</p>
           <p><strong>A request with no attributable client IP is not limited.</strong> It gets
-          <code>RateLimitPartition.GetNoLimiter</code> (<code>GatewayRateLimitingExtensions.cs:90-95</code>) rather than sharing one
+          <code>RateLimitPartition.GetNoLimiter</code> (<code>GatewayRateLimitingExtensions.cs:141</code>) rather than sharing one
           bucket with every other unattributable request, which is the same fail-open posture ADR-019 chose for
           <code>auth-ip</code> and for the global limiter&#39;s fallback key, for the same reason: a shared &quot;unknown&quot; bucket is
           a single tripwire that one misbehaving caller pulls for everyone behind it.</p>
@@ -538,9 +545,10 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The limiter closes over an eagerly-bound copy of the settings</strong>
-          (<code>GatewayRateLimitingExtensions.cs:154</code>, consumed at <code>:164-172</code>), so an <code>IOptionsMonitor</code> reload
-          never reaches it. Validation is not the gap (both paths validate, see the Decision), but liveness of
-          the value is: changing a limit is a restart, not a config push, which is the opposite of what &quot;it is
+          (<code>GatewayRateLimitingExtensions.cs:199-200</code>, consumed at <code>:229</code> and <code>:231</code>), so an
+          <code>IOptionsMonitor</code> reload never reaches it. Validation is not the gap (both paths validate, see the
+          Decision), but liveness of the value is: changing a limit is a restart, not a config push, which is
+          the opposite of what &quot;it is
           a configuration section&quot; usually implies. The double validation is itself a consequence of that
           shape rather than belt-and-braces, so the two must stay in step: a future change that made the
           limiter resolve <code>IOptions</code> per request would make the registration-time check redundant, and one
@@ -574,7 +582,7 @@
           (<code>GatewayReverseProxyExtensions.cs:59</code>), so the per-route limiter policies never see an
           <code>IOptionsMonitor</code> reload, exactly as the Aspire kit&#39;s limiter does not. The two halves of the
           package differ here, which is worth knowing: the config filters resolve <code>IOptions&lt;GatewaySettings&gt;</code>
-          per construction (<code>Configuration/GatewayClusterProfileConfigFilter.cs:29</code>,
+          per construction (<code>Configuration/GatewayClusterProfileConfigFilter.cs:27</code>,
           <code>Configuration/GatewayHealthCheckDefaultsConfigFilter.cs:19</code>), so a settings change reaches them at
           the next configuration reload while a limit change is still a restart.</li>
           <li><strong>The delegations are correct today because of facts nothing enforces framework-side.</strong> Load
@@ -585,7 +593,7 @@
           recorded decision without failing a build.</li>
           <li><strong>Nothing gates adoption.</strong> A gateway that never calls the three registrations behaves exactly as
           before, and no fitness function names a gateway host. Both consumer gateways do call all three
-          today (ADC <code>Program.cs:64</code>, <code>:78</code>, <code>:112</code>; Store <code>Program.cs:87</code>, <code>:112</code>, <code>:138</code>), but that is a
+          today (ADC <code>Program.cs:64</code>, <code>:78</code>, <code>:114</code>; Store <code>Program.cs:87</code>, <code>:112</code>, <code>:140</code>), but that is a
           wiring habit rather than an enforced invariant, which is the audit-the-inventory caveat ADR-005 and
           ADR-017 both record, now applied to the edge.</li>
           </ul>

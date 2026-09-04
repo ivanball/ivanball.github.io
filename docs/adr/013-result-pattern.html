@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -222,7 +225,9 @@
           <code>MMCA.Common.Shared</code> so the HTTP and gRPC edges classify one aggregate identically, and the round
           trip back into <code>Result</code> is a shipped reader rather than a per-service convention.
           Revised 2026-08-31: the catch-all exception handler now maps <code>CrossTenantWriteException</code> to HTTP 400
-          ahead of its 500 fallback, so a write refused at the tenant boundary reads as a caller fault.</p>
+          ahead of its 500 fallback, so a write refused at the tenant boundary reads as a caller fault.
+          Revised 2026-09-03: the error <code>Code</code> is gated as a per-repo public vocabulary (one literal code, one
+          owning type) by an IL-reading architecture rule.</p>
           <h2 id="context">Context</h2>
           <p>Operations at every layer fail in <em>expected</em> ways: input is invalid, a domain invariant is broken, a
           requested entity is missing, a uniqueness conflict occurs, the caller lacks permission. There are two
@@ -300,10 +305,10 @@
           resolves the status from <code>ErrorTypeSeverity.MostSevere</code>
           (<code>.../MMCA.Common.API/Middleware/ErrorHttpMapping.cs:50-51</code>, called from
           <code>ApiControllerBase.HandleFailure</code> at <code>ApiControllerBase.cs:48</code>) and gRPC&#39;s <code>ToRpcException</code> does
-          the same (<code>.../MMCA.Common.Grpc/ResultGrpcExtensions.cs:115-116</code>, argued at <code>:100-107</code>). Only the
+          the same (<code>.../MMCA.Common.Grpc/ResultGrpcExtensions.cs:116-118</code>, argued at <code>:100-107</code>). Only the
           <em>status</em> is ranked: every error still travels in the ProblemDetails <code>errors</code> array
           (<code>ErrorHttpMapping.cs:61-69</code>) and in the gRPC trailers as <code>error-{i}-code</code> / <code>-message</code> / <code>-type</code>
-          (<code>ResultGrpcExtensions.cs:127-129</code>). Ranking in one place is what makes the two transports agree;
+          (<code>ResultGrpcExtensions.cs:128-130</code>). Ranking in one place is what makes the two transports agree;
           the previous arrangement, with the table inside <code>MMCA.Common.API</code>, left gRPC classifying an
           aggregate by its first error while HTTP classified it by its worst.</p>
           </li>
@@ -375,7 +380,7 @@
           silently lose every field (<code>:438-443</code>). It lives in <code>MMCA.Common.Shared</code> and uses nothing beyond
           the BCL, because the consumer is <code>MMCA.Common.UI</code>, which references Shared only (<code>:14-19</code>).</li>
           <li><strong><code>HttpResultExecutor</code> converts the absence of one.</strong>
-          (<code>.../MMCA.Common.UI/Services/HttpResultExecutor.cs:31</code>.) It does not make the request: it takes
+          (<code>.../MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:31</code>.) It does not make the request: it takes
           the caller&#39;s whole send-and-read operation as a <code>Func&lt;Task&lt;Result&gt;&gt;</code> / <code>Func&lt;Task&lt;Result&lt;T&gt;&gt;&gt;</code> and
           wraps it (<code>:52</code>, <code>:87</code>), so the two halves compose without either knowing the other&#39;s shape. A
           refused connection, a DNS failure, a dropped socket, an unreadable body (<code>HttpRequestException</code>,
@@ -407,17 +412,36 @@
           message never buries it (<code>:145-159</code>, the ordering at <code>:155</code>). The shared <code>ErrorSummary</code> component
           renders the same list as one deduplicating <code>MudAlert</code>, taking a failed <code>Result</code> and the
           <code>MudForm.Errors</code> shape together and rendering nothing at all when there is nothing to say
-          (<code>.../MMCA.Common.UI/Components/ErrorSummary.razor:8</code>, both shapes merged at <code>:81-102</code>, one message
+          (<code>.../MMCA.Common.UI/Components/Forms/ErrorSummary.razor:8</code>, both shapes merged at <code>:81-102</code>, one message
           inline and several as a list so a screen reader announces them as several items, <code>:15-29</code>).</p>
           <p><strong>A component that shows a retry needs the failure, not an exception.</strong>
           <code>MobileInfiniteScrollList</code> takes one page fetcher, <code>FetchPageResult</code>, a required delegate returning
           <code>Task&lt;Result&lt;(IReadOnlyList&lt;TItem&gt; Items, int TotalItems)&gt;&gt;</code>
-          (<code>.../MMCA.Common.UI/Components/MobileInfiniteScrollList.razor.cs:36-38</code>), and renders the failure&#39;s
-          localized message beside its inline retry affordance (<code>:258-266</code>, the message read from the failed
-          <code>Result</code> at <code>:261</code>). A tuple-returning delegate is not offered beside it: a tuple has no way to carry
+          (<code>.../MMCA.Common.UI/Components/Lists/MobileInfiniteScrollList.razor.cs:37-39</code>), and renders the failure&#39;s
+          localized message beside its inline retry affordance (<code>:259-268</code>, the message read from the failed
+          <code>Result</code> at <code>:262</code>). A tuple-returning delegate is not offered beside it: a tuple has no way to carry
           a failure at all, so the component would be left showing a Retry button that cannot name what it is
           retrying. The delegate is checked at initialization, so a call site that omits it throws instead of
           rendering as a load failure that can never succeed (<code>:93-105</code>).</p>
+          <h3 id="the-error-code-is-a-public-vocabulary-gated-for-uniqueness-2026-09-03">The error <code>Code</code> is a public vocabulary, gated for uniqueness (2026-09-03)</h3>
+          <p><code>Code</code> is the half of a failure that crosses the wire verbatim (<code>ErrorHttpMapping.cs:61-69</code>) and the
+          key ADR-027 localizes the message by, so a client switches on <code>Order.NotFound</code> and a support ticket
+          quotes it. Two modules that both ship <code>Item.Invalid</code> make that vocabulary ambiguous, and the
+          ambiguity only surfaces in production
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.ErrorCatalog.cs:31-37</code>).
+          The catalog is therefore frozen the way ADR-010 froze integration-event schemas and ADR-015 Section B
+          froze the <code>.proto</code> contracts. A Mono.Cecil IL scan reads every <code>Error</code> factory call site (<code>:169</code>,
+          <code>:206-208</code>, the recognized members at <code>:17-29</code> and <code>:218-222</code>) across a repo&#39;s per-module Domain and
+          Application assemblies only (<code>:184-189</code>); <code>ErrorCodesAreUnique</code> (<code>:62</code>) fails the build when one
+          literal code is constructed by more than one declaring type (<code>:73</code>), and
+          <code>ErrorCodesUseAnAllowedPrefix</code> (<code>:102</code>) requires the owning prefix. A code built at run time is
+          reported as UNVERIFIABLE rather than passed or failed (<code>:210-213</code>, <code>:151-155</code>). Consumers subclass
+          <code>ErrorCatalogTestsBase</code> (<code>.../Bases/Contracts/ErrorCatalogTestsBase.cs:20</code>, the three facts at <code>:46</code>,
+          <code>:50</code>, <code>:54</code>) and allowlist a deliberately shared code (<code>:35-36</code>) rather than rename a shipped one:
+          Store (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ErrorCatalogTests.cs:19</code>)
+          and ADC (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:20</code>)
+          do; MMCA.Common ships no module catalog and self-tests the rules against fixtures instead
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Contracts/ErrorCatalogFitnessTests.cs:15</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Failures are in the signature.</strong> A method that can fail returns <code>Result&lt;T&gt;</code>, so the caller cannot
@@ -430,7 +454,7 @@
           to write is also the correct one.</li>
           <li><strong>An aggregate answers with its worst problem.</strong> Ranking the categories makes the status independent
           of the order invariants happen to be evaluated in, which is the one thing a caller cannot see and
-          the one thing <code>Result.Combine</code> makes arbitrary (<code>ErrorHttpMapping.cs:34-37</code>, restated on the enum
+          the one thing <code>Result.Combine</code> makes arbitrary (<code>ErrorHttpMapping.cs:40-47</code>, restated on the enum
           itself at <code>ErrorType.cs:5-8</code>).</li>
           <li><strong>Cheap and predictable.</strong> No throw/catch on the common &quot;won&#39;t do it&quot; path.</li>
           <li><strong>One wire contract for both channels.</strong> Whether a request ends in a <code>Result.Failure</code> mapped by
@@ -478,7 +502,7 @@
           <li><strong>An exception reaching a page still costs it the reason.</strong> Where a failed <code>Result</code> carries a
           localized message the page can render, an exception that escapes a consumer-supplied fetcher falls
           back to a generic resource string, because its own text is neither translatable nor safe to render
-          (<code>MobileInfiniteScrollList.razor.cs:247-266</code>, the fallback at <code>:265</code>). Returning <code>Result</code> is what
+          (<code>MobileInfiniteScrollList.razor.cs:248-268</code>, the fallback at <code>:266</code>). Returning <code>Result</code> is what
           makes the specific message available at all; nothing forces a call site to produce one.</li>
           <li>The exception-handler registration order is load-bearing. Because ASP.NET Core stops at the first
           handler that reports the exception handled, a mis-ordered registration (for example the catch-all

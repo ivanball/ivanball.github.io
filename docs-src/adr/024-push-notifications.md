@@ -26,7 +26,7 @@ recipient policy both behind abstractions.
   `SendPushNotificationHandler` (`MMCA.Common.Application`) resolves recipients, creates a
   `PushNotification` aggregate (`MMCA.Common.Domain.Notifications.PushNotifications`, the audit record of
   what was sent, carrying the caller's optional `ScopeKey` alongside the title, body, sender and
-  recipient count, `SendPushNotificationHandler.cs:65-71`), persists one `UserNotification` inbox row
+  recipient count, `SendPushNotificationHandler.cs:66-72`), persists one `UserNotification` inbox row
   per recipient (`MMCA.Common.Domain.Notifications.UserNotifications`, carrying `IsRead` / `ReadOn` with
   an idempotent `MarkAsRead`), and only then dispatches the live push. The inbox is the durable source
   of truth; the push is the best-effort live layer over it.
@@ -62,7 +62,7 @@ recipient policy both behind abstractions.
   (`SendPushNotificationHandler.cs:144-161`), an OS-level native-push channel that reaches devices the
   SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
   push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:565`), so it
+  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:579`), so it
   stays inert until a native hub is configured. The design of that channel is ADR-044's scope; this ADR
   keeps its own on the inbox and SignalR channels, so the "Two-Channel" title names the durable and
   transient channels this record governs, not a hard cap on the number of delivery legs.
@@ -73,7 +73,7 @@ recipient policy both behind abstractions.
   `MapNotificationHub()` maps `NotificationHub` at the configured `HubPath` just when it is true
   (`SignalRExtensions.cs:25`). `AddPushNotifications` binds the section but registers SignalR,
   `SignalRPushNotificationSender` and `SignalRLiveChannelPublisher` unconditionally
-  (`DependencyInjection.cs:615-632`), so the opt-in registration, not the flag, is what decides whether
+  (`DependencyInjection.cs:629-650`), so the opt-in registration, not the flag, is what decides whether
   a send goes through SignalR; with `Enabled: false` the sender is still wired and simply has no hub
   endpoint for clients to connect to.
 
@@ -122,14 +122,14 @@ Records transactional email, a delivery path the channel model above never menti
 unchanged: this closes a documentation gap so the asymmetry reads as deliberate rather than unnoticed.
 
 1. **Email is a framework-registered primitive, not a channel of this ADR.** `IEmailSender`
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IEmailSender.cs:6`) has a
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Mail/IEmailSender.cs:6`) has a
    single implementation, `SmtpEmailSender`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:13`), and it is
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Mail/SmtpEmailSender.cs:12`), and it is
    TryAdd-registered in the same block as the push-sender defaults
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:559`, beside
-   `IPushNotificationSender` at `:560`, `ILiveChannelPublisher` at `:561`, `INativePushSender` at `:565`
-   and `IPushDeviceRegistrar` at `:566`). That block is `AddServices()` (`:529`), which
-   `AddInfrastructure` (`:49`) always calls (`:205`), so every host gets it. Unlike the two push
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:573`, beside
+   `IPushNotificationSender` at `:574`, `ILiveChannelPublisher` at `:575`, `INativePushSender` at `:579`
+   and `IPushDeviceRegistrar` at `:580`). That block is `AddServices()` (`:543`), which
+   `AddInfrastructure` (`:63`) always calls (`:219`), so every host gets it. Unlike the two push
    abstractions it has no null default and no opt-in `Add*` counterpart: the real SMTP sender is always
    the registration, and the framework's own password-reset workflow resolves it (item 3).
 2. **It sits outside the inbox / SignalR / native model.** An email creates no `PushNotification` audit
@@ -139,13 +139,13 @@ unchanged: this closes a documentation gap so the asymmetry reads as deliberate 
    best-effort live layer, recorded send status) apply to it.
 3. **Adoption is three source call sites, one of them inside the framework.** The framework's own
    password-reset workflow sends through the abstraction: `ForgotPasswordHandlerBase`
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:38`)
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:39`)
    takes `IEmailSender` as a primary-constructor dependency and dispatches the reset mail, swallowing
    and logging a send failure so a delivery problem is never reported back to the caller (`:83-96`,
    which would turn the response into an account-existence oracle). Two Identity modules in two repos
    inherit that base and pass their own sender through
-   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:23`,
-   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24`).
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24`,
+   `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:25`).
    The two app-level call sites are both in Store Sales: `OrderPaidHandler`
    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/DomainEventHandlers/OrderPaidHandler.cs:41`)
    and `OrderPaymentFailedSagaHandler`

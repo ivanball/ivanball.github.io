@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-14). Revised 2026-08-31.">
+  <meta name="description" content="Accepted (2026-08-14). Revised 2026-09-03.">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/084-stripe-webhook-ingress.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)">
-  <meta property="og:description" content="Accepted (2026-08-14). Revised 2026-08-31.">
+  <meta property="og:description" content="Accepted (2026-08-14). Revised 2026-09-03.">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/084-stripe-webhook-ingress.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)">
-  <meta name="twitter:description" content="Accepted (2026-08-14). Revised 2026-08-31.">
+  <meta name="twitter:description" content="Accepted (2026-08-14). Revised 2026-09-03.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)","item":"https://ivanball.github.io/docs/adr/084-stripe-webhook-ingress.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -214,7 +217,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-084-stripe-webhook-ingress-acceptance-coded-responses-and-startup-self-registration">ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-14). Revised 2026-08-31.</p>
+          <p>Accepted (2026-08-14). Revised 2026-09-03.</p>
           <h2 id="context">Context</h2>
           <p>Four ADRs already cover how a message crosses a boundary in this workspace. ADR-003 decides how an
           event leaves a service (outbox, at-least-once). ADR-021 decides how a redelivered broker message is
@@ -238,7 +241,7 @@
           deliveries returned 400 and nothing surfaced it (<code>PaymentsController.cs:95-100</code>). Separately, between
           2026-06-12 and 2026-07-30 a disabled-but-still-present endpoint caused a second endpoint to be created
           at the same URL with a brand-new signing secret, invalidating the configured one; 507 deliveries failed
-          in the final week alone (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/StripeWebhookRegistrationService.cs:124-131</code>).
+          in the final week alone (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeWebhookRegistrationService.cs:120-129</code>).
           Both were failures of the <em>ingress contract</em>, not of payment logic.</p>
           <h2 id="decision">Decision</h2>
           <p>Treat third-party webhook ingress as its own contract with two halves: <strong>an acceptance-coded endpoint</strong>
@@ -251,16 +254,16 @@
           (<code>:76</code>). The Gateway forwards <code>/Payments/{**catch-all}</code> to Sales over plain HTTP/1.1: the route is
           declared in the Gateway&#39;s <code>ReverseProxy</code> configuration rather than in code
           (<a href="089-gateway-topology-owned-by-configuration.html">ADR-089</a>), as the <code>sales-payments</code> route
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:77-80</code>) on a <code>sales</code> cluster that
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:80-83</code>) on a <code>sales</code> cluster that
           carries no <code>HttpRequest</code> block at all, so <code>Version</code> and <code>VersionPolicy</code> stay unset
-          (<code>appsettings.json:101-105</code>), unlike <code>catalog</code> (<code>:83-91</code>) and <code>identity</code> (<code>:92-100</code>) which pin
-          <code>Version</code> 2 with <code>RequestVersionExact</code> (<code>:85-86</code>, <code>:94-95</code>); the reasoning is at
+          (<code>appsettings.json:104-108</code>), unlike <code>catalog</code> (<code>:86-94</code>) and <code>identity</code> (<code>:95-103</code>) which pin
+          <code>Version</code> 2 with <code>RequestVersionExact</code> (<code>:88-89</code>, <code>:97-98</code>); the reasoning is at
           <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:124-131</code>, which also notes that the shared
           cluster default deliberately carries no version pair so it can never reach the sales cluster and
           downgrade the webhook path. That is why Sales keeps the ADR-012 mixed-endpoint profile: its
           container app&#39;s ingress stays <code>transport: &#39;http&#39;</code> for REST plus this webhook
-          (<code>MMCA.Store/infra/main.bicep:1175</code>), with a TCP-passthrough <code>additionalPortMappings</code> entry carrying
-          the h2c gRPC port alongside it (<code>:1182-1188</code>).</li>
+          (<code>MMCA.Store/infra/main.bicep:1253</code>), with a TCP-passthrough <code>additionalPortMappings</code> entry carrying
+          the h2c gRPC port alongside it (<code>:1260-1266</code>).</li>
           <li><strong>The status code encodes ACCEPTED, not PROCESSED.</strong> Five error codes return 400, held in a
           <code>FrozenSet</code> named <code>RejectionCodes</code>: <code>SignatureVerificationFailed</code>, <code>ParseFailed</code>, <code>SecretMissing</code>,
           <code>PayloadMissing</code> and <code>SignatureMissing</code> (<code>PaymentsController.cs:39-46</code>, defined at
@@ -280,11 +283,11 @@
           retrying those would fail identically forever (<code>PaymentsController.cs:48-56,90-106,108</code>).</li>
           <li><strong>Verification and parsing are separate steps, so the three provider-side reasons stay distinguishable.</strong>
           <code>EventUtility.ValidateSignature</code> runs first
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/StripePaymentService.cs:329</code>),
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:327</code>),
           then <code>EventUtility.ParseEvent</code> with <code>throwOnApiVersionMismatch: false</code>, so an account whose API
-          version rolled ahead of the pinned library does not reject a correctly signed event (<code>:345-348</code>).
+          version rolled ahead of the pinned library does not reject a correctly signed event (<code>:343-346</code>).
           A missing secret is named as its own deployment gap rather than reported as a bad signature
-          (<code>:314-325</code>). One combined call previously reported all three as a signature failure (<code>:298-307</code>).</li>
+          (<code>:312-323</code>). One combined call previously reported all three as a signature failure (<code>:296-305</code>).</li>
           <li><strong>A rejection logs at <code>Critical</code>, everything else at <code>Warning</code>.</strong> <code>LogWebhookRejected</code> is a
           source-generated <code>Critical</code> message that names the code, the message, and the operational
           consequence (<code>PaymentsController.cs:101,112-116</code>). <code>Critical</code> is deliberate: it clears the production
@@ -299,36 +302,36 @@
           Unhandled event types return success (<code>:46</code>). The command is deliberately <strong>not</strong> <code>ITransactional</code>
           (<code>ProcessPaymentWebhookCommand.cs:8-17</code>).</li>
           <li><strong>The provider-side endpoint registers itself at startup.</strong> <code>StripeWebhookRegistrationService</code> is a
-          <code>BackgroundService</code> (<code>StripeWebhookRegistrationService.cs:27-31</code>) registered by
+          <code>BackgroundService</code> (<code>StripeWebhookRegistrationService.cs:25-29</code>) registered by
           <code>AddModuleSalesInfrastructure</code>
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/DependencyInjection.cs:33</code>). It
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/DependencyInjection.cs:34</code>). It
           skips entirely when <code>WebhookBaseUrl</code> is empty, which is the local-development path where the Stripe
-          CLI forwards instead (<code>:54-58</code>), and skips with a <code>Warning</code> when <code>SecretKey</code> is empty (<code>:60-64</code>).
-          The expected URL is <code>WebhookBaseUrl</code> plus the constant <code>/Payments/webhook</code> (<code>:33,84</code>); production
-          injects <code>Stripe__WebhookBaseUrl</code> as the Gateway FQDN (<code>main.bicep:1268</code>), so the registered endpoint
-          is the Gateway route above. It subscribes exactly three event types (<code>:42-47</code>), and warns when an
-          existing endpoint is missing any of them (<code>:224-234</code>).</li>
+          CLI forwards instead (<code>:52-56</code>), and skips with a <code>Warning</code> when <code>SecretKey</code> is empty (<code>:58-62</code>).
+          The expected URL is <code>WebhookBaseUrl</code> plus the constant <code>/Payments/webhook</code> (<code>:31,82</code>); production
+          injects <code>Stripe__WebhookBaseUrl</code> as the Gateway FQDN (<code>main.bicep:1346</code>), so the registered endpoint
+          is the Gateway route above. It subscribes exactly three event types (<code>:40-45</code>), and warns when an
+          existing endpoint is missing any of them (<code>:222-232</code>).</li>
           <li><strong>It deletes only endpoints it created itself.</strong> Every auto-created endpoint carries the description
-          prefix <code>Auto-registered by MMCA</code> (<code>:40,143-148</code>). <code>IsStaleAutoRegistered</code> returns <code>false</code> for any
-          endpoint without that prefix, so an operator-created endpoint is never touched (<code>:179-185</code>), and
+          prefix <code>Auto-registered by MMCA</code> (<code>:38,141-146</code>). <code>IsStaleAutoRegistered</code> returns <code>false</code> for any
+          endpoint without that prefix, so an operator-created endpoint is never touched (<code>:179-183</code>), and
           <code>true</code> for an auto-registered one whose URL no longer matches or whose status is not <code>enabled</code>
-          (<code>:187-188</code>), which is what collapses the disabled same-URL duplicate that caused the 2026 incident
-          (<code>:164-178</code>). Cleanup is best-effort and per-endpoint isolated: a failed delete is logged and never
-          aborts the others or the reconcile (<code>:91-96,207-221</code>).</li>
+          (<code>:185-186</code>), which is what collapses the disabled same-URL duplicate that caused the 2026 incident
+          (<code>:162-176</code>). Cleanup is best-effort and per-endpoint isolated: a failed delete is logged and never
+          aborts the others or the reconcile (<code>:89-94,205-219</code>).</li>
           <li><strong>The signing secret is minted once, held in memory, and announced for an operator to persist.</strong>
-          Stripe returns a signing secret only at creation time (<code>:153</code>), so the created value is written to
-          the singleton <code>StripeWebhookSecretProvider</code> (<code>:156</code>), a volatile-backed holder
+          Stripe returns a signing secret only at creation time (<code>:151-153</code>), so the created value is written
+          to the singleton <code>StripeWebhookSecretProvider</code> (<code>:154</code>), a volatile-backed holder
           (<code>StripeWebhookSecretProvider.cs:17-27</code>) that <code>StripePaymentService</code> prefers over the configured
-          value on every incoming event (<code>StripePaymentService.cs:310-312</code>). The event is announced at
-          <code>Critical</code> (<code>StripeWebhookRegistrationService.cs:158,256-257</code>) and the raw secret is written to
-          stderr for the operator to copy into <code>Stripe:WebhookSecret</code> (<code>:159-161</code>). When a secret is <em>already</em>
+          value on every incoming event (<code>StripePaymentService.cs:308-310</code>). The event is announced at
+          <code>Critical</code> (<code>StripeWebhookRegistrationService.cs:156,254-255</code>) and the raw secret is written to
+          stderr for the operator to copy into <code>Stripe:WebhookSecret</code> (<code>:157-159</code>). When a secret is <em>already</em>
           configured and a new endpoint still has to be created, a second <code>Critical</code> states that the
-          configured value is now provably stale (<code>:132-135,268</code>).</li>
+          configured value is now provably stale (<code>:130-133,266-267</code>).</li>
           <li><strong>An existing enabled endpoint plus a configured secret is trusted without validation.</strong> That path
-          only verifies event types and returns (<code>:102-110</code>), and its log deliberately does not say &quot;verified&quot;,
+          only verifies event types and returns (<code>:100-108</code>), and its log deliberately does not say &quot;verified&quot;,
           because Stripe never re-reveals a secret and a stale one is undetectable here: it surfaces only as
-          the <code>Critical</code> rejection on the first delivery (<code>:246-251</code>). When the endpoint exists but no secret
-          is known anywhere, the endpoint is deleted and recreated to obtain a fresh one (<code>:112-119</code>).</li>
+          the <code>Critical</code> rejection on the first delivery (<code>:244-249</code>). When the endpoint exists but no secret
+          is known anywhere, the endpoint is deleted and recreated to obtain a fresh one (<code>:110-117</code>).</li>
           </ul>
           <p>Adoption is <strong>Store Sales only</strong>. It is the workspace&#39;s single inbound third-party webhook, and nothing
           in this decision has been generalized into MMCA.Common; recording a single-application pattern as an ADR
@@ -347,29 +350,29 @@
           pointed at the cases a retry can actually fix.</li>
           <li><strong>Three named rejection reasons beat one.</strong> A tampered payload, an unparseable body and a missing
           signing secret need three different responses from a human, and the collapsed version sent on-call
-          after the wrong thing (<code>StripePaymentService.cs:298-307</code>).</li>
+          after the wrong thing (<code>StripePaymentService.cs:296-305</code>).</li>
           <li><strong><code>Critical</code> is the level this environment can see.</strong> The production log floor is <code>Warning</code>
           (<code>PaymentsController.cs:99-100</code>), and a total payment-status outage that logs at <code>Warning</code> is
           indistinguishable from noise: that is exactly how it went unnoticed for weeks.</li>
           <li><strong>Self-registration removes a manual step the platform keeps invalidating.</strong> The public URL is a
           Container Apps default domain, so it changes on a region move; a hand-registered endpoint drifts and
-          a dead one keeps firing failing-webhook alerts (<code>StripeWebhookRegistrationService.cs:91-94</code>).</li>
+          a dead one keeps firing failing-webhook alerts (<code>StripeWebhookRegistrationService.cs:89-92</code>).</li>
           <li><strong>Marker-scoped deletion is what makes automated deletion acceptable.</strong> The service is allowed to
           delete only endpoints it can prove it created, so the worst case of a buggy predicate is a
-          re-registration, never the removal of an operator&#39;s endpoint (<code>:176-177,181-185</code>).</li>
+          re-registration, never the removal of an operator&#39;s endpoint (<code>:174-175,179-183</code>).</li>
           <li><strong>The runtime secret provider keeps the very first boot working.</strong> Without it, an auto-created
           endpoint would reject every delivery until a human copied the secret into configuration and
-          redeployed (<code>:153-156</code>, <code>StripePaymentService.cs:310-312</code>).</li>
+          redeployed (<code>:151-154</code>, <code>StripePaymentService.cs:308-310</code>).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>A startup service that writes to a live third-party account.</strong> Booting a Sales replica creates and
-          deletes webhook endpoints in the real Stripe account (<code>StripeWebhookRegistrationService.cs:117-118,150-151,212-213</code>).
+          deletes webhook endpoints in the real Stripe account (<code>StripeWebhookRegistrationService.cs:115-116,148-149,210-211</code>).
           The blast radius is bounded by the description marker and by the <code>WebhookBaseUrl</code>/<code>SecretKey</code> guards
-          (<code>:54-64</code>), but this is still automated mutation of an external system at boot, and a
+          (<code>:52-62</code>), but this is still automated mutation of an external system at boot, and a
           misconfigured <code>WebhookBaseUrl</code> registers a wrong endpoint rather than failing.</li>
           <li><strong>A signing secret at <code>Critical</code> and on stderr is an operational hazard.</strong> It puts live credential
-          material into the log pipeline (<code>:158-161</code>). That is the deliberate price of zero-touch provisioning:
+          material into the log pipeline (<code>:156-159</code>). That is the deliberate price of zero-touch provisioning:
           the alternative is a first boot where the endpoint exists and every delivery is rejected. It also
           means the secret must be rotated in configuration promptly, and log retention is part of the
           exposure.</li>
@@ -377,19 +380,28 @@
           the Stripe dashboard&#39;s delivery view, so it has to surface through our own telemetry: the <code>Warning</code>
           log (<code>PaymentsController.cs:105</code>) and, for an order left stuck because no webhook ever completed the
           work, the ADR-054 reconciliation sweep (<code>PaymentReconciliationService</code>,
-          <code>DependencyInjection.cs:34-36</code>). The 200 for a post-acceptance failure is itself pinned by test
+          <code>DependencyInjection.cs:35-37</code>). The 200 for a post-acceptance failure is itself pinned by test
           (<code>PaymentsControllerTests.cs:66-73</code>).</li>
           <li><strong>A configured secret is trusted, never validated.</strong> A stale <code>Stripe:WebhookSecret</code> cannot be
-          detected at startup and is discovered only on the first rejected delivery (<code>:246-251</code>). This is a
+          detected at startup and is discovered only on the first rejected delivery (<code>:244-249</code>). This is a
           provider constraint (the secret is never re-revealed), not a choice, but it means startup can log a
           reassuring &quot;endpoint found&quot; line while the deployment is already broken.</li>
           <li><strong>A restart before the operator persists the secret loops.</strong> The no-secret path deletes and recreates
-          the endpoint to mint a fresh one (<code>:112-119,156</code>), so every such restart produces a new secret and
+          the endpoint to mint a fresh one (<code>:110-117,154</code>), so every such restart produces a new secret and
           supersedes the previous one; the loop only ends when a human saves a value into configuration.</li>
-          <li><strong>The endpoint is anonymous and internet-reachable.</strong> Signature verification is the only
-          authentication (<code>StripePaymentService.cs:314-341</code>); an unsigned or wrongly signed request reaches
-          the handler pipeline before it is rejected, and each rejection emits a <code>Critical</code> log, so a hostile
-          caller can generate <code>Critical</code> volume.</li>
+          <li><strong>The endpoint is anonymous, internet-reachable and exempt from the edge rate limiter.</strong> Signature
+          verification is the only authentication (<code>StripePaymentService.cs:312-339</code>); an unsigned or wrongly
+          signed request reaches the handler pipeline before it is rejected, and each rejection emits a
+          <code>Critical</code> log, so a hostile caller can generate <code>Critical</code> volume. Nothing meters that at the
+          Gateway: <code>GatewayRateLimiting.BypassPathPrefixes</code> lists <code>/Payments</code>
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:16-21</code>), which exempts the whole
+          prefix from both edge limiters, the per-client-IP fixed window and the replica-wide concurrency
+          ceiling
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:67-76,131-133,169-170</code>).
+          The exemption is deliberate and stated where the kit is wired up
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:83-86</code>): a 429 is a non-2xx, so throttling
+          Stripe buys the retry storm and the disabled endpoint this whole ADR exists to avoid. The price is
+          that the rejection-log amplification path is bounded only by the caller&#39;s own sending rate.</li>
           <li><strong>Single-module adoption.</strong> None of this lives in MMCA.Common, so a second inbound webhook (in this
           or another repo) starts from a copy of <code>PaymentsController</code> and <code>StripeWebhookRegistrationService</code>
           rather than from a framework contract.</li>

@@ -39,10 +39,10 @@ by a short cache so the account-status lookup is not paid on every request.
 - **It runs after authentication, before authorization.** That position is data in a named-step
   pipeline builder (ADR-079), not a hand-ordered sequence of `Use*` calls:
   `UseCommonMiddlewarePipeline`
-  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:46`) delegates to the
-  private `ApplyPipeline` helper (`WebApplicationExtensions.cs:138`), which seeds the framework steps
-  from `MiddlewarePipelineBuilder.CreateDefault()` (`WebApplicationExtensions.cs:140`;
-  `Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:31-156`). This middleware
+  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48`) delegates to the
+  private `ApplyPipeline` helper (`WebApplicationExtensions.cs:140`), which seeds the framework steps
+  from `MiddlewarePipelineBuilder.CreateDefault()` (`WebApplicationExtensions.cs:142`;
+  `Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:31-156`). This middleware
   is the `SoftDeletedUserFilter` step (`MiddlewarePipelineStepNames.cs:59`), applied as
   `app.UseMiddleware<SoftDeletedUserMiddleware>()` at `MiddlewarePipelineBuilder.cs:130`. Four
   consecutive steps fix its place: `UseAuthentication` (`:110`), then `TenantResolutionMiddleware`
@@ -52,7 +52,7 @@ by a short cache so the account-status lookup is not paid on every request.
   check runs, and the check still gates every downstream endpoint. The order is frozen by a fitness
   function rather than by a comment: `MiddlewarePipelineOrderTestsBase.ExpectedStepNames` asserts
   `SoftDeletedUserFilter` between `RateLimiting` and `Authorization`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:51-53`).
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:51-53`).
   `MiddlewarePipelineBuilder.Build()`'s startup-validated invariants (`MiddlewarePipelineBuilder.cs:257-280`)
   do not name this step, so a host that moves it through the configure overload is caught by that
   fitness function, not at startup.
@@ -61,15 +61,15 @@ by a short cache so the account-status lookup is not paid on every request.
   (`SoftDeletedUserMiddleware.cs:65-73`), so unauthenticated traffic pays nothing.
 - **The account-status check is an abstraction, implemented once in the framework.**
   `ISoftDeletedUserValidator`
-  (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ISoftDeletedUserValidator.cs:7`)
+  (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ISoftDeletedUserValidator.cs:7`)
   exposes a single `IsUserSoftDeletedAsync(userId, ...)` method
   (`ISoftDeletedUserValidator.cs:15`). One shared generic implementation,
   `SoftDeletedUserValidator<TUser>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:19-34`), runs
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:20-34`), runs
   the filter-bypassing existence query
   `repository.ExistsAsync(u => u.Id == userId && u.IsDeleted, ignoreQueryFilters: true, ...)`
-  (`SoftDeletedUserValidator.cs:30-33`) against whichever aggregate it is closed over
-  (`TUser : AuditableAggregateRootEntity<UserIdentifierType>`, `SoftDeletedUserValidator.cs:20`). Each
+  (`SoftDeletedUserValidator.cs:31-34`) against whichever aggregate it is closed over
+  (`TUser : AuditableAggregateRootEntity<UserIdentifierType>`, `SoftDeletedUserValidator.cs:21`). Each
   app closes it over its own `User` at registration and writes no subclass of its own
   (`services.TryAddScoped<ISoftDeletedUserValidator, SoftDeletedUserValidator<User>>()` at
   `MMCA.ADC.Identity.Application/DependencyInjection.cs:35` and
@@ -228,7 +228,7 @@ revoke at the same speed.
    (`MMCA.ADC.Identity.Application/Users/SoftDeletedUserValidator.cs:10,21-24` and the Store
    equivalent). Neither file exists now. The query lives once in the framework as
    `SoftDeletedUserValidator<TUser>`
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:19-34`, its own
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:20-34`, its own
    remarks at `:11-17` stating no per-app subclass is needed), closed over each app's `User` at
    registration (`MMCA.ADC.Identity.Application/DependencyInjection.cs:35`, from `:32`;
    `MMCA.Store.Identity.Application/DependencyInjection.cs:44`, from `:39`). The behavior of the query
@@ -272,11 +272,11 @@ one new neighbour now sits ahead of it.
 
 1. **The registration left `WebApplicationExtensions.cs` entirely.** That file no longer calls
    `UseAuthentication`, `UseRateLimiter`, `UseMiddleware<SoftDeletedUserMiddleware>` or
-   `UseAuthorization` at all: `UseCommonMiddlewarePipeline` (`WebApplicationExtensions.cs:46`, and the
-   configure overload at `:58`) only routes into the private `ApplyPipeline` helper (`:138`), which
-   seeds `MiddlewarePipelineBuilder.CreateDefault()` (`:140`). Every `:96`, `:108`, `:109` and `:110`
+   `UseAuthorization` at all: `UseCommonMiddlewarePipeline` (`WebApplicationExtensions.cs:48`, and the
+   configure overload at `:60`) only routes into the private `ApplyPipeline` helper (`:140`), which
+   seeds `MiddlewarePipelineBuilder.CreateDefault()` (`:142`). Every `:96`, `:108`, `:109` and `:110`
    anchor the Decision and the 2026-08-07 revision carried is therefore dead. The step registrations
-   now live in `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs`:
+   now live in `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs`:
    `UseAuthentication` at `:110`, `UseRateLimiter` at `:126`,
    `UseMiddleware<SoftDeletedUserMiddleware>()` at `:130`, `UseAuthorization` at `:134`. The behavior
    is what it was; the order became data in a named-step builder (ADR-079).
@@ -290,7 +290,7 @@ one new neighbour now sits ahead of it.
    names this middleware as the precedent (`MiddlewarePipelineBuilder.cs:114-117`).
 3. **The order is now held by a fitness function.**
    `MiddlewarePipelineOrderTestsBase.ExpectedStepNames`
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:38-58`) lists
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:38-58`) lists
    `SoftDeletedUserFilter` between `RateLimiting` and `Authorization` (`:51-53`), so a reorder fails a
    test. Note the limit: `MiddlewarePipelineBuilder.Build()` validates four load-bearing adjacencies at
    startup (`MiddlewarePipelineBuilder.cs:257-280`) and none of them names this step, so a host that
@@ -304,7 +304,7 @@ one new neighbour now sits ahead of it.
    (anonymous pass-through), `:75` and `:76-83` (lazy resolution, no-validator pass-through), `:85`,
    `:91`, `:102-106`, `:114-116`, `:131-133`, `:143-147`, `:150` (the cache/validator path), `:93-100`,
    `:118-125`, `:135-140` (fail-open handlers), `ISoftDeletedUserValidator.cs:7,15`,
-   `SoftDeletedUserValidator.cs:19-34` with its constraint at `:20` and query at `:30-33`,
+   `SoftDeletedUserValidator.cs:20-34` with its constraint at `:21` and query at `:31-34`,
    `SoftDeletedUserCache.cs:29,42-43,53-61`, the two registrations
    (`MMCA.ADC.Identity.Application/DependencyInjection.cs:35`,
    `MMCA.Store.Identity.Application/DependencyInjection.cs:44`), the two delete handlers
@@ -353,6 +353,6 @@ central asymmetry this record has carried since 2026-08-07.
    `MMCA.ADC.Identity.Application/DependencyInjection.cs:35`.
 7. **Re-checked and unchanged**: `SoftDeletedUserMiddleware.cs:31`, `:65-73`, `:75`, `:76-83`, `:85`,
    `:91`, `:102-106`, `:114-116`, `:131-133`, `:143-147`, `:150`, `:93-100`, `:118-125`, `:135-140`,
-   `ISoftDeletedUserValidator.cs:7,15`, `SoftDeletedUserValidator.cs:19-34`,
+   `ISoftDeletedUserValidator.cs:7,15`, `SoftDeletedUserValidator.cs:20-34`,
    `SoftDeletedUserCache.cs:29,42-43,53-61`, and the pipeline anchors in
    `MiddlewarePipelineBuilder.cs` (`:110,118,126,130,134`).

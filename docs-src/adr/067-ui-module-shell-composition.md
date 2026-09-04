@@ -61,10 +61,10 @@ Ship the application shell in the framework package and let each module plug int
   layout.
 - **Registration is one call.** `AddUIModule<TModule>()` runs the Scrutor scan for the module's entity
   services and then registers the descriptor as a singleton `IUIModule`
-  (`MMCA.Common.UI/DependencyInjection.cs:203-213`); modules with extra services register the
+  (`MMCA.Common.UI/DependencyInjection.cs:207-217`); modules with extra services register the
   descriptor directly with `AddSingleton<IUIModule, TModule>()` after their own registrations
   (`MMCA.Common.UI/Notifications/DependencyInjection.cs:39`,
-  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:69`).
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:76`).
 - **MudBlazor is the single component vendor, and the framework's own contracts sit in front of it.**
   The shell, its pages and every module UI render MudBlazor components; nothing here mixes in a second
   component library. Where a vendor type would otherwise leak into page and helper code, a framework
@@ -76,7 +76,7 @@ Ship the application shell in the framework package and let each module plug int
   `ConfirmAsync`, where dismissing the prompt counts as declining, so a caller only ever branches on
   `true`. Both facades are registered by one extracted call, `AddCommonUiFacades()`, which
   TryAdd-registers `MudToastService` and `MudAppDialogService` over MudBlazor's `ISnackbar` and
-  `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:158-163`). `AddUIShared` calls it (`:106`),
+  `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:162-167`). `AddUIShared` calls it (`:110`),
   and so does the shipped bUnit base
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:53`),
   so a component test resolves the two contracts without pulling in the rest of the shared-UI surface.
@@ -87,7 +87,7 @@ Ship the application shell in the framework package and let each module plug int
 - **Blazor Web heads feed the same enumeration to the endpoint side.** `MapRazorComponents<App>()`
   takes the module assemblies from `GetServices<IUIModule>()` in addition to the shell assemblies
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:195-209`, which also de-duplicates, and
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:201-212`), so the router's view and the
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:185-196`), so the router's view and the
   endpoint's view of the routable assemblies come from one source.
 
 Adoption today is every module UI in both apps plus the framework's own and its test host: ADC
@@ -101,14 +101,14 @@ the framework's own notification module
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15`); and the
 backend-less component gallery, whose stub descriptor is the only reason its `/components` page is
 routable (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:14`,
-registered at `GalleryHost.cs:90`). Two adopters are **host-only**: ADC's `DeviceUIModule` adds the
+registered at `GalleryHost.cs:91`). Two adopters are **host-only**: ADC's `DeviceUIModule` adds the
 MAUI-only device settings page plus the deep-link listener
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:19`, registered at `MauiProgram.cs:157`), and
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:19`, registered at `MauiProgram.cs:159`), and
 Store's `MauiUIModule` contributes no nav and no pages at all, existing purely to hang the native
 theme sync on the layout extension point (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:14`,
-registered at `MauiProgram.cs:80`). MMCA.Helpdesk deliberately does **not** adopt this: the seed's
+registered at `MauiProgram.cs:81`). MMCA.Helpdesk deliberately does **not** adopt this: the seed's
 Blazor head owns its own `Routes.razor` and `MainLayout` and never calls `AddUIShared`, because it has
-no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:25-28`).
+no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:26-28`).
 
 ## Rationale
 - **One composition model across both tiers.** A module already declares its server-side surface
@@ -155,7 +155,7 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:11-29`).
 - **Blazor Web heads wire the assemblies twice.** The router's `AdditionalAssemblies` and the
   endpoint's `AddAdditionalAssemblies` are separate calls, so both hosts repeat the enumeration in
-  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:195-209`, `MMCA.Store.UI.Web/Program.cs:201-212`); they
+  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:195-209`, `MMCA.Store.UI.Web/Program.cs:185-196`); they
   derive it from the same `IUIModule` registrations, but the duplication is real.
 - **The reference seed does not demonstrate the pattern.** Helpdesk's hand-rolled shell means an
   adopter following it gets the framework's components but not this composition model.

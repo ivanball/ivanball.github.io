@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -361,8 +364,8 @@
           <li><strong>The safety property still holds for those four, because they are not transactional commands.</strong>
           <code>TransactionalCommandDecorator</code> wraps only commands implementing the <code>ITransactional</code> marker and
           passes everything else straight through
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:25-26</code>,
-          marker at <code>.../UseCases/ITransactional.cs:6</code>). No Engagement command implements it, so for these
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:28-29</code>,
+          marker at <code>.../UseCases/Markers/ITransactional.cs:6</code>). No Engagement command implements it, so for these
           handlers <code>SaveChangesAsync</code> is the commit and an enqueue below it is genuinely post-commit. The
           difference from shape 1 is where the ordering lives: in the command handler&#39;s statement order
           rather than in the ADR-003 deferral, so it is a rule a future edit to those handlers has to keep
@@ -374,13 +377,13 @@
           the write is durable.</strong> What changed is who keeps the ordering for shape 2. Three of the four
           command-handler call sites named above contain no <code>SaveChangesAsync</code> of their own: they are
           <code>MutateEntityHandlerBase</code> subclasses
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:319</code>, over the
-          shared <code>MutateEntityHandlerCore</code> at <code>:51</code>), and the base saves once for every subclass.</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:320</code>, over the
+          shared <code>MutateEntityHandlerCore</code> at <code>:52</code>), and the base saves once for every subclass.</p>
           <ol>
           <li><strong>The save is one line in the shared base, not one per handler.</strong>
           <code>MutateEntityHandlerCore.MutateCoreAsync</code> awaits <code>attemptUnitOfWork.SaveChangesAsync</code> at
-          <code>MutateEntityHandlerBase.cs:302</code>, calls <code>LogMutated</code> at <code>:304</code>, then awaits the <code>OnMutatedAsync</code>
-          post-save hook at <code>:305</code>. The enqueue is the body of that hook, so &quot;enqueue below the save&quot; is
+          <code>MutateEntityHandlerBase.cs:303</code>, calls <code>LogMutated</code> at <code>:305</code>, then awaits the <code>OnMutatedAsync</code>
+          post-save hook at <code>:306</code>. The enqueue is the body of that hook, so &quot;enqueue below the save&quot; is
           structural rather than remembered: a subclass has no way to express the other order.<ul>
           <li><code>CloseLivePollHandler</code> declares the base at
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollHandler.cs:24</code>,
@@ -407,8 +410,8 @@
           <li><strong>Point 3 above is narrowed, not withdrawn.</strong> Its premise still holds:
           <code>TransactionalCommandDecorator</code> wraps only commands implementing <code>ITransactional</code> and passes
           everything else straight through
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:25-26</code>,
-          marker at <code>.../UseCases/ITransactional.cs:6</code>), and no Engagement command implements it, so
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:28-29</code>,
+          marker at <code>.../UseCases/Markers/ITransactional.cs:6</code>), and no Engagement command implements it, so
           <code>SaveChangesAsync</code> is the commit for all four sites. What no longer holds is its closing sentence:
           for the three base-class handlers a pipeline does keep the ordering, and the rule a future edit
           has to keep by hand lives in <code>SubmitQuestionHandler</code> alone.</li>

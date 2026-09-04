@@ -1,7 +1,7 @@
 # ADR-058: Runtime Conformance Suites Shipped as a Package
 
 ## Status
-Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, and 2026-08-23).
+Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
@@ -24,30 +24,43 @@ Ship the runtime conformance suites in the **`MMCA.Common.Testing`** package as 
 bases that each consuming host subclasses, and run every one of them against a host that was actually
 booted.
 
-- **Six contract bases, one per runtime contract.** `ProblemDetailsContractTestsBase<TFixture>`
-  (`Source/Hosting/MMCA.Common.Testing/ProblemDetailsContractTestsBase.cs:21`) asserts the two
+- **Seven contract bases, one per runtime contract**, all sitting under
+  `Source/Hosting/MMCA.Common.Testing/Conformance/` in namespace `MMCA.Common.Testing.Conformance`, so
+  every bare `TestsBase.cs` name below resolves inside that folder; the fixtures they boot through sit
+  beside it in `Fixtures/`. `ProblemDetailsContractTestsBase<TFixture>`
+  (`Source/Hosting/MMCA.Common.Testing/Conformance/ProblemDetailsContractTestsBase.cs:22`) asserts the two
   error-shaping paths, ASP.NET Core model validation (400, `application/problem+json` with
   `type`/`traceId`/`errors`, `ProblemDetailsContractTestsBase.cs:30`) and the framework's
   `HandleFailure` Result mapping (404, `ProblemDetailsContractTestsBase.cs:42`), against the shared
-  shape check `AssertProblemDetailsShapeAsync` (`ProblemDetailsContractTestsBase.cs:67`).
-  `OpenApiContractTestsBase<TFixture>` (`OpenApiContractTestsBase.cs:21`) asserts the live
+  shape check `AssertProblemDetailsShapeAsync` (`ProblemDetailsContractTestsBase.cs:68`).
+  `OpenApiContractTestsBase<TFixture>` (`OpenApiContractTestsBase.cs:22`) asserts the live
   `/openapi/v1.json` document is OpenAPI 3.x and still describes the pinned public resources
   (`OpenApiContractTestsBase.cs:53`, `OpenApiContractTestsBase.cs:68`).
-  `ServiceInfoVersioningContractTestsBase<TFixture>` (`ServiceInfoVersioningContractTestsBase.cs:19`)
+  `ServiceInfoVersioningContractTestsBase<TFixture>` (`ServiceInfoVersioningContractTestsBase.cs:20`)
   drives `/ServiceInfo` at `api-version: 1.0` and `2.0` and checks the deprecated/supported reporting
-  headers (`ServiceInfoVersioningContractTestsBase.cs:38`, `:54`). `SecurityHeadersTestsBase`
+  headers (`ServiceInfoVersioningContractTestsBase.cs:39`, `:55`). `SecurityHeadersTestsBase`
   (`SecurityHeadersTestsBase.cs:16`) probes `/alive` and pins six response headers, including
   `Content-Security-Policy: frame-ancestors 'none'` and an HSTS `max-age`
   (`SecurityHeadersTestsBase.cs:29-35`). `GracefulShutdownTestsBase<TEntryPoint>`
-  (`GracefulShutdownTestsBase.cs:24`) calls a real `IHost.StopAsync` under a bounded token and asserts
-  `ApplicationStopping` then `ApplicationStopped` fired (`GracefulShutdownTestsBase.cs:56`, `:58`,
-  `:60`). `DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>`
+  (`GracefulShutdownTestsBase.cs:25`) calls a real `IHost.StopAsync` under a bounded token and asserts
+  `ApplicationStopping` then `ApplicationStopped` fired (`GracefulShutdownTestsBase.cs:57`, `:59`,
+  `:61`). `MmcaGatewayHardeningTestsBase<TEntryPoint>` (`MmcaGatewayHardeningTestsBase.cs:39`) drives a
+  booted gateway through eight edge gates: the per-client-IP rate limiter and its bypass list, the
+  tighter named policy on the credential route, a correlation id generated when the caller supplies
+  none and echoed when it does, one readiness check per downstream service, an active health probe on
+  every cluster, and partitioning by the forwarded client IP rather than the proxy IP
+  (`MmcaGatewayHardeningTestsBase.cs:126`, `:148`, `:184`, `:211`, `:229`, `:246`, `:274`, `:310`).
+  `DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>`
   (`DecoratorPipelineOrderTestsBase.cs:38`) asserts the ADR-014 nesting.
-- **The host is really booted; nothing is inferred from registrations.** The five HTTP-facing suites
-  reach the host through `IIntegrationTestFixture` (`IIntegrationTestFixture.cs:8`) and
-  `IntegrationTestBase<TFixture>` (`IntegrationTestBase.cs:13`), whose `Client` comes from the
-  fixture's `WebApplicationFactory`. Two boot paths ship. Service hosts use
-  `SqlServerIntegrationTestFixtureBase<TEntryPoint>` (`SqlServerIntegrationTestFixtureBase.cs:27`):
+- **The host is really booted; nothing is inferred from registrations.** Three of the six booted-host
+  suites (problem details, OpenAPI, versioning) reach the host through `IIntegrationTestFixture`
+  (`Source/Hosting/MMCA.Common.Testing/Fixtures/IIntegrationTestFixture.cs:8`) and
+  `IntegrationTestBase<TFixture>` (`Fixtures/IntegrationTestBase.cs:13`), whose `Client` comes from the
+  fixture's `WebApplicationFactory`. The other three take a factory directly: security headers through
+  its own abstract `CreateClient()` (`SecurityHeadersTestsBase.cs:42`), graceful shutdown and gateway
+  hardening through a factory the subclass supplies (`GracefulShutdownTestsBase.cs:32`,
+  `MmcaGatewayHardeningTestsBase.cs:61`). Two boot paths ship. Service hosts use
+  `SqlServerIntegrationTestFixtureBase<TEntryPoint>` (`Fixtures/SqlServerIntegrationTestFixtureBase.cs:27`):
   it creates a GUID-named throwaway SQL Server database, pushes the connection string and
   `ASPNETCORE_ENVIRONMENT=Testing` as process environment variables *before* the host is built
   (`SqlServerIntegrationTestFixtureBase.cs:75`, `:76`), lets the host's own `DatabaseInitStrategy=Migrate`
@@ -55,18 +68,20 @@ booted.
   (`SqlServerIntegrationTestFixtureBase.cs:83`), resets data between tests with Respawn
   (`SqlServerIntegrationTestFixtureBase.cs:99`), and drops the database on disposal
   (`SqlServerIntegrationTestFixtureBase.cs:127`). Database-free hosts use
-  `ProductionHostApplicationFactory<TEntryPoint>` (`ProductionHostApplicationFactory.cs:22`), which
-  pins `UseEnvironment("Production")` (`ProductionHostApplicationFactory.cs:36`) so the
+  `ProductionHostApplicationFactory<TEntryPoint>` (`Fixtures/ProductionHostApplicationFactory.cs:23`),
+  which pins `UseEnvironment("Production")` (`ProductionHostApplicationFactory.cs:37`) so the
   production-only branches (restrictive CORS, HSTS emission) are the ones under test, and captures the
-  started `IHost` (`ProductionHostApplicationFactory.cs:29`) because `StopAsync` is not reachable
+  started `IHost` (`ProductionHostApplicationFactory.cs:30`) because `StopAsync` is not reachable
   through the `WebApplicationFactory` surface.
 - **The consumer supplies its host and its host-specific facts, nothing else.** The abstract surface
   is deliberately small: two probe requests for problem details
-  (`ProblemDetailsContractTestsBase.cs:54`, `:60`), a route-count floor and a pinned resource list for
-  OpenAPI (`OpenApiContractTestsBase.cs:37`, `:50`), a client factory for security headers
+  (`ProblemDetailsContractTestsBase.cs:55`, `:61`), a route-count floor and a pinned resource list for
+  OpenAPI (`OpenApiContractTestsBase.cs:38`, `:51`), a client factory for security headers
   (`SecurityHeadersTestsBase.cs:42`), a service-collection configurator for the decorator pipeline
-  (`DecoratorPipelineOrderTestsBase.cs:46`), and for versioning and graceful shutdown nothing at all
-  beyond the fixture or entry point. The two shutdown subclasses are one-line declarations with no body
+  (`DecoratorPipelineOrderTestsBase.cs:46`), the booted factory plus the host's own route-table facts
+  (the permit limit, a limited path, the downstream service names) for gateway hardening
+  (`MmcaGatewayHardeningTestsBase.cs:61`, `:68`, `:71`, `:77`), and for versioning and graceful
+  shutdown nothing at all beyond the fixture or entry point. The two shutdown subclasses are one-line declarations with no body
   (`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GracefulShutdownTests.cs:9`,
   `MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GracefulShutdownTests.cs:9`), and so is the ADC
   versioning subclass (`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ApiVersioningTests.cs:14`).
@@ -74,7 +89,7 @@ booted.
   the registration list.** It builds a `ServiceCollection`, runs the repo's own real registration
   sequence through the subclass, resolves the closed handler interface from the built provider, then
   walks outermost to innermost by reading each decorator's private inner-handler field
-  (`DecoratorPipelineOrderTestsBase.cs:104`) and compares the names against the ADR-014 order
+  (`DecoratorPipelineOrderTestsBase.cs:105`) and compares the names against the ADR-014 order
   (`DecoratorPipelineOrderTestsBase.cs:49`, `:61`). That is what makes it a runtime check: Scrutor
   `TryDecorate` applies decorators in reverse registration order, so a reordered
   `AddApplicationDecorators()` or a module scan that ran after it changes the constructed pipeline
@@ -113,9 +128,17 @@ repo, on ADC Conference (`ApiVersioningTests.cs:14`) and Store Catalog
 (`MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:15`),
 which is enough to keep the machinery exercised but leaves the other five REST hosts unguarded. The
 security-headers and graceful-shutdown suites are subclassed **only on the two Gateway hosts**
-(`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:11`,
-`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:11`, plus the two
-`GracefulShutdownTests` above); no service host asserts either today. The decorator suite is
+(`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:12`,
+`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:12`, plus the two
+`GracefulShutdownTests` above); no service host asserts either today. The gateway-hardening suite is
+subclassed on both Gateway hosts and nowhere else, which is its whole addressable surface: it asserts
+the shared gateway kit's edge behavior, and only a gateway adopts that kit
+(`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:30`,
+`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:35`). Each subclass states
+only its own route-table facts and supplies a Production-pinned factory with a recording forwarder
+standing in for `IHttpForwarder`
+(`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:103`,
+`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:117`). The decorator suite is
 subclassed once per consumer repo and is the one base all three of them run: ADC and Store both
 against the Identity module's `ChangePreferencesCommand` / `GetUserPreferencesQuery` pair
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:27`,
@@ -123,7 +146,7 @@ against the Identity module's `ChangePreferencesCommand` / `GetUserPreferencesQu
 and MMCA.Helpdesk against a real Tickets pair, described below.
 MMCA.Common dogfoods the only base it can, since it ships no host of its own: a synthetic
 `PingCommand`/`PingQuery` pair driven through the framework's own registration sequence
-(`Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21`).
+(`Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:23`).
 
 **MMCA.Helpdesk adopts exactly one of them, the decorator suite**, having adopted none of them when
 this record was written. Its architecture-test project now references `MMCA.Common.Testing` alongside the
@@ -132,18 +155,18 @@ structural package
 and subclasses `DecoratorPipelineOrderTestsBase` against a real Tickets pair: the framework's generic
 `UpdateEntityCommand<Ticket, TicketUpdateRequest, TicketIdentifierType>`, closed over the Ticket
 aggregate by the seed's own `AddEntityCrud` wiring, and the module's hand-written `GetTicketByIdQuery`
-(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:36`,
-`:38`), whose `ConfigureServices` runs the seed's own registration sequence: `AddApplication()`, the
-Tickets module registration, then `AddApplicationDecorators()` last (`:58-60`). Two files in that
-project import the `MMCA.Common.Testing` namespace, and only one of them belongs to this record: that
-decorator subclass (`:12`). The other, `MiddlewarePipelineOrderTests.cs` (`:1`), is a one-line subclass of
-`MiddlewarePipelineOrderTestsBase`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:29`,
+(`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:37`,
+`:39`), whose `ConfigureServices` runs the seed's own registration sequence: `AddApplication()`, the
+Tickets module registration, then `AddApplicationDecorators()` last (`:59-61`). Two files in that
+project import the `MMCA.Common.Testing.Conformance` namespace, and only one of them belongs to this
+record: that decorator subclass (`:13`). The other, `MiddlewarePipelineOrderTests.cs` (`:1`), is a
+one-line subclass of `MiddlewarePipelineOrderTestsBase`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:29`,
 `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15`)
-guarding the ADR-079 shared HTTP edge-pipeline order, not one of the six contract bases above.
+guarding the ADR-079 shared HTTP edge-pipeline order, not one of the seven contract bases above.
 The package reference the domain-test project
 carries (`MMCA.Helpdesk/Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain.Tests/MMCA.Helpdesk.Tickets.Domain.Tests.csproj:8`)
-is still unused. The five HTTP-facing bases have no Helpdesk subclass, so the seed's three test
+is still unused. The six booted-host bases have no Helpdesk subclass, so the seed's three test
 projects remain the Tickets domain and application suites plus the architecture suite, which now
 carries both tiers: the ADR-015 structural bases from the separate `MMCA.Common.Testing.Architecture`
 package (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/GlobalUsings.cs:3`), and
@@ -174,21 +197,24 @@ from `MMCA.Common.Testing` one base from this record's set plus the ADR-079 edge
   once someone writes the subclass. That is the same audit-the-inventory caveat, and the adoption
   inventory above is the current answer to it, not a claim of completeness.
 - **Coverage is uneven by suite.** Security headers and graceful shutdown are Gateway-only, versioning
-  is one host per repo, and Helpdesk has only the decorator suite. Problem details is the one suite now subclassed
-  on every REST host in both consumers (ADC Notification closed the last gap on 2026-08-13). Every
-  remaining hole is an unguarded host for that contract, not a decision that the contract does not
-  apply.
-- **Most of the suites need a real SQL Server.** The five fixture-driven suites live in the per-service
-  integration tier and cannot run in a database-free test pass; only the Gateway pair (no DbContext, no
-  broker) and the decorator suite run in the fast tier. That splits the runtime gate across two CI
+  is one host per repo, and Helpdesk has only the decorator suite. Problem details is the one suite now
+  subclassed on every REST host in both consumers (ADC Notification closed the last gap on 2026-08-13).
+  Gateway hardening is Gateway-only by construction rather than by omission: it asserts the shared
+  gateway kit, so a service host has nothing for it to check. Every remaining hole is an unguarded host
+  for that contract, not a decision that the contract does not apply.
+- **Some of the suites need a real SQL Server.** The three fixture-driven suites (problem details,
+  OpenAPI, versioning) live in the per-service integration tier and cannot run in a database-free test
+  pass; the three Gateway suites (security headers, graceful shutdown, gateway hardening: no DbContext,
+  no broker) and the decorator suite run in the fast tier. That splits the runtime gate across two CI
   jobs with different prerequisites.
 - **The assertions are coarse by construction.** `MinimumPathCount` is a floor, `CorePublicResources`
-  checks presence rather than schema, and the problem-details base checks shape (`status`, `title`, a
+  checks presence rather than exact casing or schema (`OpenApiContractTestsBase.cs:80`), and the
+  problem-details base checks shape (`status`, `title`, a
   diagnostic extension) rather than message content. These catch wholesale regressions, not subtle
   ones.
 - **The decorator check reads private fields.** Unwrapping the chain depends on each decorator holding
   its inner handler in a field that implements the same closed interface
-  (`DecoratorPipelineOrderTestsBase.cs:111-114`); a decorator that stored it differently would silently
+  (`DecoratorPipelineOrderTestsBase.cs:112-115`); a decorator that stored it differently would silently
   end the walk early rather than fail loudly.
 - **A new contract base only reaches consumers at the next lockstep bump.** The suites ship inside the
   package set, so adding one is a framework release plus a consumer sweep (ADR-016), not a local edit
@@ -200,7 +226,8 @@ runtime behavior", is exactly this ADR's scope, and the two tiers ship as two se
 ADR-014 (the decorator execution order `DecoratorPipelineOrderTestsBase` proves at runtime), ADR-013
 (the RFC 9457 ProblemDetails edge contract `ProblemDetailsContractTestsBase` guards), ADR-046 (HTTP
 API versioning, whose "shared fitness contract" is one of these bases), ADR-079 (the shared HTTP edge
-pipeline, whose own order-checking base ships in this same package but is not one of these six),
+pipeline, whose own order-checking base ships beside these in the same `Conformance` folder but is not
+one of these seven),
 ADR-016 (lockstep versioning:
 a new conformance base reaches consumers only through a release and a full sweep). Package inventory
 for the framework lives in `MMCA.Common/FACTS.md`.

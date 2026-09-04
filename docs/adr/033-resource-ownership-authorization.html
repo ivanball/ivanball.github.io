@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -271,7 +274,7 @@
           role) applies no filter.</li>
           <li><strong>The bypass role is the single override on both.</strong> <code>OwnershipHelper.IsAdmin</code>
           (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:17</code>) compares
-          <code>ICurrentUserService.Role</code> (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:22</code>)
+          <code>ICurrentUserService.Role</code> (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:22</code>)
           to its <code>bypassRole</code> argument (<code>&quot;Admin&quot;</code> by default) case-insensitively (<code>OwnershipHelper.cs:20</code>). Both
           enforcement points consult it, so a caller in the bypass role sees and touches any resource through
           either path.</li>
@@ -296,7 +299,7 @@
           audit of the whole controller, not just of the routes that motivated it.</p>
           <p><strong>Adoption.</strong> MMCA.Store wires both in production. The filter guards
           <code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:49</code> and
-          <code>MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:34</code> as a <code>[ServiceFilter]</code>. The
+          <code>MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:35</code> as a <code>[ServiceFilter]</code>. The
           ownership specification scopes list/get queries:
           <code>ShoppingCartsController</code> builds a <code>ShoppingCartByCustomerSpecification</code>
           (<code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:66</code>,
@@ -375,11 +378,11 @@
           </tr>
           <tr>
           <td><code>CustomersController.GetAllAsync</code> (both overloads, <code>:49</code>, <code>:61</code>), <code>GetAllForLookupAsync</code> (<code>:78</code>)</td>
-          <td><code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>:51</code>, <code>:63</code>, <code>:80</code>)</td>
+          <td><code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>:52</code>, <code>:64</code>, <code>:81</code>)</td>
           </tr>
           <tr>
           <td><code>CustomersController.ExportAsync</code> (<code>:110</code>)</td>
-          <td><code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>:112</code>)</td>
+          <td><code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>:113</code>)</td>
           </tr>
           </tbody></table></div>
           <p>Store states each of those guards as a capability, never as a role name: an endpoint requires what it
@@ -387,8 +390,8 @@
           <p><code>CustomersController.CreateAsync</code> was inherited without its own policy and had been relying on the
           filter failing open. Deny-by-default closes that, but only incidentally, because the action happens to
           carry no owner parameter; it now states its own guard,
-          <code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>CustomersController.cs:130</code>) beside the
-          <code>[AllowMissingOwner]</code> opt-out (<code>CustomersController.cs:131</code>), matching the admin-gated create page that
+          <code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>CustomersController.cs:131</code>) beside the
+          <code>[AllowMissingOwner]</code> opt-out (<code>CustomersController.cs:132</code>), matching the admin-gated create page that
           is its only caller (<code>CustomersController.cs:124-127</code>). ADC&#39;s <code>BookmarksController</code> needs no annotation:
           both filtered actions bind a <code>[Required]</code> non-nullable <code>userId</code>, so model validation rejects a missing
           value before the filter runs.</p>
@@ -474,7 +477,7 @@
           <code>RequireAdmin</code> policy; that identifier no longer exists anywhere in MMCA.Store source. The
           annotated actions state <code>[HasPermission(SalesPermissions.ShoppingCartsManage)]</code> and
           <code>[HasPermission(IdentityPermissions.CustomersManage)]</code> instead (ADR-020), including
-          <code>CustomersController.CreateAsync</code> (<code>CustomersController.cs:130</code>).</li>
+          <code>CustomersController.CreateAsync</code> (<code>CustomersController.cs:131</code>).</li>
           <li><strong>The table was two rows short.</strong> Both CSV exports carry <code>[AllowMissingOwner]</code> and were missing:
           <code>ShoppingCartsController.ExportAsync</code> (<code>:178</code>), guarded by the <code>GetReadSpecificationAsync</code> row
           scoping plus the fail-closed gate, and <code>CustomersController.ExportAsync</code> (<code>:110</code>), guarded by the

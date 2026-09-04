@@ -82,14 +82,14 @@ inside its single `InitialCreate` migration
 because those per-service projects postdate the frozen combined-archive lineage that added the ADC
 migration. Adoption inventory as of 2026-09-01: **three ADC services consume from the broker** and
 so use their inbox for real, plus Store Sales. ADC Identity consumes `SpeakerLinkedToUser` and
-`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:290-291`),
-ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:349`), and ADC
+`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:294-295`),
+ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:352`), and ADC
 Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
-`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:281-284`), the
+`EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:286-289`), the
 first of which is ADC's first **self-consumption** over the broker: Engagement publishes
 `AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
 so the inbox is load-bearing there rather than decorative. Store Sales consumes `ProductVariantChanged`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:247`). The remaining three hosts (**ADC
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:257`). The remaining three hosts (**ADC
 Notification**, **Store Catalog** and **Store Identity**) carry `EnableInbox: true` and the table while
 registering no consumer, so their inboxes are provisioned and unused, which is functionally harmless:
 the flag costs one scoped `EfInboxStore` registration and the table stays empty until one of them
@@ -143,12 +143,12 @@ What changed is that the default is now loud.
 
 1. **A broker-connected host with no inbox says so at startup.** `AddBrokerMessaging` returns early
    for `MessageBusProvider.InProcess`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:741-744`), which is
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:755-758`), which is
    what scopes this to hosts that actually talk to a broker: in-process dispatch never redelivers, so
    there is nothing to warn about. Past that early return, the `EnableInbox` branch
-   (`:784-796`) registers `EfInboxStore` as scoped (`:786`) when the flag is set, and on the `else`
-   branch registers `NoOpInboxStore` as a singleton (`:790`) **plus** an `IHostedService` whose only
-   job is to emit one `Warning` line naming the consequence and the fix (`:795`). The service is
+   (`:798-809`) registers `EfInboxStore` as scoped (`:800`) when the flag is set, and on the `else`
+   branch registers `NoOpInboxStore` as a singleton (`:804`) **plus** an `IHostedService` whose only
+   job is to emit one `Warning` line naming the consequence and the fix (`:809`). The service is
    `InboxDisabledWarningService`
    (`.../Persistence/Inbox/InboxDisabledWarningService.cs:20-21`), and it evaluates nothing at
    runtime: `StartAsync` logs unconditionally (`:24-28`), because the condition was already decided by
@@ -158,7 +158,7 @@ What changed is that the default is now loud.
    setting is still `bool` with no initializer, so the default is still `false`, but its own
    documentation now says "RECOMMENDED true for any broker-connected host". (**Superseded by the
    Revision (2026-08-26)**: the property is `bool?` with no initializer
-   (`.../Settings/MessageBusSettings.cs:117`), and its documentation now states the transport-driven
+   (`.../Messaging/MessageBusSettings.cs:117`), and its documentation now states the transport-driven
    resolution rather than a recommendation (`:91-116`).) The Trade-offs entry above ("a broker-consuming service that
    forgets `EnableInbox` gets no dedup") therefore keeps its substance and loses its silence: the
    inventory audit it asks for is now performed by the host at every boot.
@@ -189,7 +189,7 @@ opt-in where redelivery is possible, and its row is no longer a separate write.
 
 1. **`EnableInbox` becomes three-valued, and unset resolves ON for a broker.**
    `MessageBusSettings.EnableInbox` is now `bool?` with no initializer
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:117`), and every
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:117`), and every
    framework component reads the resolved posture instead:
    `IsInboxEnabled => EnableInbox ?? Provider != MessageBusProvider.InProcess` (`:125`). An explicit
    value still wins in both directions (`:110-115`); left unset the transport decides, ON for RabbitMQ
@@ -201,9 +201,9 @@ opt-in where redelivery is possible, and its row is no longer a separate write.
    attempt, a double decrement) unless every handler happens to be idempotent on its own (`:103-108`).
    The registration branch is unchanged in shape and only its condition moved: `AddBrokerMessaging`
    still returns early for `MessageBusProvider.InProcess`
-   (`.../MMCA.Common.Infrastructure/DependencyInjection.cs:741`), so this scopes to broker hosts, and
-   past it `settings.IsInboxEnabled` (`:784`) selects the scoped `EfInboxStore` (`:786`) or the
-   singleton `NoOpInboxStore` plus the startup-warning hosted service (`:790`, `:795`). Reaching
+   (`.../MMCA.Common.Infrastructure/DependencyInjection.cs:755`), so this scopes to broker hosts, and
+   past it `settings.IsInboxEnabled` (`:798`) selects the scoped `EfInboxStore` (`:800`) or the
+   singleton `NoOpInboxStore` plus the startup-warning hosted service (`:804`, `:809`). Reaching
    `InboxDisabledWarningService` therefore now means a **deliberate opt-out** rather than an
    unnoticed default, and its Warning says so, naming the setting, the consequence and the fact that
    the `InboxMessages` table is already part of the model
@@ -226,7 +226,7 @@ opt-in where redelivery is possible, and its row is no longer a separate write.
    being `Added` (`:71-84`), and falls back to the old write-after-handlers path for a caller that
    skipped `TryBeginAsync` (`:86-88`), which is also the path an event whose handlers write nothing
    takes. `IntegrationEventConsumer<TEvent>` is where the three calls sit: the duplicate check and
-   skip (`.../Services/IntegrationEventConsumer.cs:54-58`), the handler loop, and the final
+   skip (`.../Messaging/Consumers/IntegrationEventConsumer.cs:54-58`), the handler loop, and the final
    `CompleteAsync` (`:95`).
    - **The failure path discards the staged row first.** A throwing handler triggers
      `inbox.Abandon(messageId)` before the rethrow that lets MassTransit apply its retry policy

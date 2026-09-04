@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -242,17 +245,17 @@
           <p>Client-side entity data access goes through one hand-written base hierarchy in <code>MMCA.Common.UI</code>.</p>
           <ul>
           <li><strong>One HTTP root: <code>AuthenticatedServiceBase</code></strong>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/AuthenticatedServiceBase.cs:15</code>). It owns
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:15</code>). It owns
           the named <code>&quot;APIClient&quot;</code> (<code>:27</code>), the bearer attachment
           (<code>CreateAuthenticatedClientAsync</code>, <code>:51-70</code>, tolerating the SSR pre-render case where JS interop is
           unavailable, <code>:64-67</code>), the explicit-token variant used to replay a 401 with a freshly refreshed
           token (<code>CreateClientWithToken</code>, <code>:80-87</code>, the client end of ADR-051), the retry policy, and the
           idempotency-key mint. The client itself is registered once, in <code>AddUIShared</code>
-          (<code>.../MMCA.Common.UI/DependencyInjection.cs:81-102</code>): base address from <code>ApiSettings</code>, <code>Accept: application/json</code>, <code>AuthDelegatingHandler</code> plus <code>CultureDelegatingHandler</code>, and a transport timeout
-          pinned to the shared 90-second budget (<code>:97</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19</code>)
+          (<code>.../MMCA.Common.UI/DependencyInjection.cs:81-106</code>): base address from <code>ApiSettings</code>, <code>Accept: application/json</code>, <code>AuthDelegatingHandler</code> plus <code>CultureDelegatingHandler</code>, and a transport timeout
+          pinned to the shared 90-second budget (<code>:101</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:19</code>)
           so the BCL&#39;s uncoordinated 100-second default cannot cut a call off mid-policy.</li>
           <li><strong>Typed CRUD is <code>EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;</code></strong>
-          (<code>.../MMCA.Common.UI/Services/EntityServiceBase.cs:43</code>), implementing
+          (<code>.../MMCA.Common.UI/Services/Api/EntityServiceBase.cs:43</code>), implementing
           <code>IEntityService&lt;TEntityDTO, TIdentifierType&gt;</code> (<code>.../MMCA.Common.UI/Common/Interfaces/IEntityService.cs:20</code>).
           It is a <strong>hand-written typed base over the ADR-034 REST surface, not a generated client</strong>: no Refit,
           Kiota or NSwag client generator appears in any of the four repos&#39; <code>Directory.Packages.props</code>.</li>
@@ -283,7 +286,7 @@
           <code>HttpClient</code> that serves every attempt</strong> (<code>CreateRequestClientAsync</code>, <code>:376-398</code>), which is what
           makes the value constant across the retry burst and therefore dedupable by the ADR-017 filter. Both
           properties are pinned by tests: the same key on every retry
-          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/EntityServiceBaseIdempotencyRetryTests.cs:96</code>),
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Api/EntityServiceBaseIdempotencyRetryTests.cs:96</code>),
           no key on reads, updates or deletes (<code>:118,130,143</code>), and the 501-not-retried / 429-retried edges
           (<code>:156,171</code>).</li>
           <li><strong>The dispatch returns a <code>Result</code>; it does not throw</strong> (2026-08-27, v1.164.0). <code>SendRequestAsync</code>
@@ -299,9 +302,9 @@
           pulled the domain wording out of the ProblemDetails body and <strong>rethrew</strong> it as a
           <code>DomainInvariantViolationException</code> before falling back to <code>EnsureSuccessStatusCode</code>: that helper
           is deleted, not deprecated. <code>ChildEntityServiceBase</code> was converted in the same pass
-          (<code>.../MMCA.Common.UI/Services/ChildEntityServiceBase.cs:37</code>, <code>:53</code>, <code>:71</code>).</li>
+          (<code>.../MMCA.Common.UI/Services/Api/ChildEntityServiceBase.cs:37</code>, <code>:53</code>, <code>:71</code>).</li>
           <li><strong>Join entities use <code>ChildEntityServiceBase</code></strong>
-          (<code>.../MMCA.Common.UI/Services/ChildEntityServiceBase.cs:19</code>), the many-to-many sibling: two
+          (<code>.../MMCA.Common.UI/Services/Api/ChildEntityServiceBase.cs:19</code>), the many-to-many sibling: two
           <code>PostAsync</code> overloads, one reading the created DTO back (<code>:36</code>) and one for an endpoint answering
           204 (<code>:52</code>), plus <code>DeleteByIdAsync</code> (<code>:70</code>). A join row that is not there answers 404, which arrives
           as an <code>ErrorType.NotFound</code> failure, so the caller can still separate &quot;nothing to remove&quot; from &quot;the
@@ -310,26 +313,33 @@
           <li><strong>Non-CRUD services take the root directly and reuse the same policy.</strong> Services whose endpoints are
           not entity CRUD derive from <code>AuthenticatedServiceBase</code> itself and call the inherited <code>RetryPolicy</code>
           by hand, minting a key where the endpoint is <code>[Idempotent]</code> (for example
-          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/LivePollUIService.cs:93,156</code> and
-          <code>.../SessionQuestionUIService.cs:73</code>).</li>
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/SessionLive/LivePollUIService.cs:93,156</code>
+          and <code>.../SessionQuestionUIService.cs:73</code>).</li>
           </ul>
-          <p>Adoption inventory as of 2026-08-31. <strong>Sixteen production services derive from <code>EntityServiceBase</code></strong>:
-          nine in ADC Conference (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/</code>:
-          <code>ActivityService.cs:11</code>, <code>CategoryItemService.cs:11</code>, <code>ConferenceCategoryService.cs:11</code>,
-          <code>EventService.cs:14</code>, <code>QuestionService.cs:11</code>, <code>RoomService.cs:14</code>, <code>SessionService.cs:11</code>,
-          <code>SpeakerService.cs:13</code>, <code>SponsorService.cs:11</code>), six in Store (<code>Catalog.UI/Services/ProductService.cs:15</code>
-          and <code>CategoryService.cs:15</code>; <code>Sales.UI/Services/OrderService.cs:14</code>, <code>ShoppingCartService.cs:15</code>,
-          <code>InventoryItemService.cs:14</code>; <code>Identity.UI/Services/CustomerService.cs:15</code>), and one inside the
-          framework itself (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/PushNotificationService.cs:19</code>).
-          <strong>Four derive from <code>ChildEntityServiceBase</code></strong>, all in ADC Conference
-          (<code>.../Services/ChildEntityServices.cs:22,35,48,61</code>). <strong>Sixteen more take <code>AuthenticatedServiceBase</code>
-          directly</strong>: ten in ADC Engagement, four in ADC Conference (three files: <code>OrganizerFeedbackService.cs</code>
-          declares two of them, at <code>:15</code> and <code>:66</code>), ADC Identity&#39;s <code>UserService.cs:21</code>, and the framework&#39;s
-          <code>NotificationInboxService.cs:28</code>. Store has none of that third kind; its one hand-rolled
-          exception is <code>CartStateService</code>
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/Cart/CartStateService.cs:392</code>), which
-          sits outside the hierarchy and re-implements the key mint locally, honoring the same rule (one key per
-          user action, reused by every attempt, <code>:83-85</code>).</p>
+          <p>Adoption inventory as of 2026-09-04, with every service filed under its aggregate folder.
+          <strong>Sixteen production services derive from <code>EntityServiceBase</code></strong>: nine in ADC Conference
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/</code>:
+          <code>Activities/ActivityService.cs:11</code>, <code>Categories/CategoryItemService.cs:11</code>,
+          <code>Categories/ConferenceCategoryService.cs:11</code>, <code>Events/EventService.cs:16</code>,
+          <code>Questions/QuestionService.cs:11</code>, <code>Rooms/RoomService.cs:15</code>, <code>Sessions/SessionService.cs:11</code>,
+          <code>Speakers/SpeakerService.cs:14</code>, <code>Sponsors/SponsorService.cs:11</code>), six in Store
+          (<code>Catalog.UI/Services/ProductService.cs:27</code> and <code>CategoryService.cs:24</code>;
+          <code>Sales.UI/Services/Orders/OrderService.cs:19</code>, <code>ShoppingCarts/ShoppingCartService.cs:18</code>,
+          <code>Inventory/InventoryItemService.cs:20</code>; <code>Identity.UI/Services/CustomerService.cs:25</code>), and one inside
+          the framework itself
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/PushNotificationService.cs:20</code>).
+          <strong>Four derive from <code>ChildEntityServiceBase</code></strong>, all in ADC Conference and all in one file
+          (<code>.../Services/Common/ChildEntityServices.cs:23,36,49,62</code>). <strong>Sixteen more take
+          <code>AuthenticatedServiceBase</code> directly</strong>: ten in ADC Engagement, four in ADC Conference (three files:
+          <code>Services/Feedback/OrganizerFeedbackService.cs</code> declares two of them, at <code>:17</code> and <code>:68</code>, next to
+          <code>Services/Speakers/SpeakerDashboardService.cs:16</code> and
+          <code>Services/Sessions/Selection/SessionSelectionService.cs:16</code>), ADC Identity&#39;s
+          <code>Services/UserService.cs:22</code>, and the framework&#39;s
+          <code>Services/Notifications/NotificationInboxService.cs:34</code>. Store has none of that third kind; its one
+          hand-rolled exception is <code>CartStateService</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/ShoppingCarts/CartStateService.cs:37</code>),
+          which sits outside the hierarchy and re-implements both the retry policy (<code>:52</code>) and the key mint
+          (<code>:454</code>) locally, honoring the same rule (one key per user action, reused by every attempt, <code>:97-99</code>).</p>
           <h3 id="the-list-page-contract-datagridlistpagebasetdto">The list-page contract: <code>DataGridListPageBase&lt;TDto&gt;</code></h3>
           <p>The consumer side of that data-access contract is equally uniform, and is recorded here rather than
           separately because the two are used as a pair: a list page inherits the base and hands it a fetch
@@ -368,7 +378,7 @@
           </ul>
           <p><strong>Nineteen types inherit this base</strong>: thirteen in ADC and six in Store, eighteen of them routable list
           pages plus ADC&#39;s non-routable <code>AttendeeSearchPanel</code>
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIn/AttendeeSearchPanel.razor.cs:16</code>).
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/AttendeeSearchPanel.razor.cs:16</code>).
           ADR-056 owns the render-mode aspect of the same type (the <code>PersistentComponentState</code> pre-render
           handoff and the <code>InteractiveAuto</code> registration) and carries the same count.</p>
           <h2 id="rationale">Rationale</h2>
@@ -406,10 +416,10 @@
           for the binder, <code>EntityServiceBaseTests.cs</code> for the emitter) rather than end to end.</li>
           <li><strong>Retry budgets stack across hops, and are deliberately bounded rather than eliminated.</strong> A host that
           calls <code>AddServiceDefaults</code> applies the standard resilience handler to every factory client through
-          <code>ConfigureHttpClientDefaults</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:48-64</code>),
+          <code>ConfigureHttpClientDefaults</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:55-71</code>),
           including <code>&quot;APIClient&quot;</code>. Because the UI base already makes up to four attempts, the shared
           per-hop retry count is pinned to <strong>one</strong>
-          (<code>HttpResilienceDefaults.cs:21-28</code>, applied at <code>Extensions.cs:63</code>), with the reason stated in both
+          (<code>HttpResilienceDefaults.cs:21-28</code>, applied at <code>Extensions.cs:70</code>), with the reason stated in both
           places: full budgets at every hop turned a backend brownout into an up-to-16x request storm. The
           cost is that the effective attempt count for a UI action is a product of two layers and cannot be
           read off either one alone.</li>

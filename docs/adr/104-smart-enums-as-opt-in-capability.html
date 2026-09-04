@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html" aria-current="page">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -319,7 +322,7 @@
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs:1-144</code>, 15
           test methods) covers both lookups, casing, null, per-type <code>All</code> scoping and cross-enumeration
           equality and hashing; <code>EnumerationSerializationTests</code>
-          (<code>.../ValueObjects/EnumerationSerializationTests.cs:1-139</code>, 11 methods) covers both routes to the
+          (<code>.../ValueObjects/Serialization/EnumerationSerializationTests.cs:1-139</code>, 11 methods) covers both routes to the
           converter and pins the documented limitation that an unattributed enumeration under unconfigured
           options falls back to the default object shape (<code>:68-75</code>); <code>EnumerationValueConverterTests</code>
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs:1-100</code>,
@@ -411,7 +414,7 @@
           <li><strong>The type sits in <code>ValueObjects</code> without being one.</strong> It lives in the
           <code>MMCA.Common.Shared.ValueObjects</code> namespace (<code>Enumeration.cs:11</code>) but is out of scope for
           <code>ValueObjectsAreImmutableSealedInShared</code>, which only inspects types deriving from <code>ValueObject</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Immutability.cs:56-74</code>,
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Immutability.cs:56-74</code>,
           base-type filter at <code>:61</code>). The reason is documented on the type (<code>Enumeration.cs:26-29</code>), and
           <code>RoleValue</code> takes the same trade-off, but a reader scanning the namespace sees a type the value
           object rules do not cover.</li>

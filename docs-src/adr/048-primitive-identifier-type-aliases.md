@@ -46,7 +46,7 @@ not as a wrapper struct.
   (`Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31`), and constrains the user
   type parameter of `AuthenticationServiceBase<TUser>`
   (`where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IAuthUser`,
-  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:59`), with each consuming
+  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:62`), with each consuming
   app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
@@ -72,7 +72,7 @@ not as a wrapper struct.
   configuration is `EntityTypeConfigurationSQLServer<User, UserIdentifierType>`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13`);
   the repository handle is `GetRepository<User, UserIdentifierType>()`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:43`);
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:44`);
   the API contract is `UserDTO : IBaseDTO<UserIdentifierType>` with a `UserIdentifierType Id`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/UserDTO.cs:8,11`); and the
   integration event carries `UserIdentifierType UserId`

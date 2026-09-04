@@ -29,12 +29,12 @@ Hashing and verification are **PBKDF2-only**. There is one framework `IPasswordH
 path through it, in both directions.
 
 - **One interface, one implementation, one registration.** `IPasswordHasher`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IPasswordHasher.cs:6`)
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/IPasswordHasher.cs:6`)
   has the single implementation `PasswordHasher`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12`), registered
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:12`), registered
   with `TryAddSingleton`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:549`) inside the
-  `AddServices` helper that `AddInfrastructure` calls unconditionally (`DependencyInjection.cs:205`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:563`) inside the
+  `AddServices` helper that `AddInfrastructure` calls unconditionally (`DependencyInjection.cs:219`).
   `TryAdd` semantics keep a host's own prior registration, so the framework supplies the default
   rather than forcing it, and the type is stateless (three private `const` fields and no instance
   state, `PasswordHasher.cs:15`, `:18`, `:24`), which is what makes the singleton lifetime safe.
@@ -55,7 +55,7 @@ path through it, in both directions.
 - **The legacy path is gone, not merely unreachable.** `LegacyHmacSaltSize`, `ComputeLegacyHash` and
   every `HMACSHA512` usage are absent from all `Source/` code in the four repos: a workspace-wide
   search for those three identifiers across `*.cs` matches only the test that proves the removal
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/PasswordHasherSecurityTests.cs:105`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherSecurityTests.cs:105`
   and `:108`). `PasswordHasher.cs` is 64 lines end to end.
 - **A test asserts the rejection rather than the acceptance.**
   `VerifyPassword_RejectsALegacyHmacDigest` (`PasswordHasherSecurityTests.cs:105-115`) builds a
@@ -69,7 +69,7 @@ path through it, in both directions.
   derived at 100,000 iterations (`:69-84`), and reads the three private constants by reflection so a
   lowered or renamed one fails the build (`:88-102`, helper at `:128-136`). At the architecture tier,
   `PasswordHashingFitnessTests` asserts against compiled IL that the type depends on
-  `Rfc2898DeriveBytes` (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PasswordHashingFitnessTests.cs:30-40`)
+  `Rfc2898DeriveBytes` (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PasswordHashingFitnessTests.cs:30-40`)
   and on `CryptographicOperations` (`:43-54`), with a non-vacuity check that the scan actually reaches
   the type (`:24-27`).
 - **`PasswordHasherTests` covers the current format and argument validation only.** The 88-line file
@@ -77,18 +77,18 @@ path through it, in both directions.
   salt, `:50-54` for the correct password, `:57-61` for the wrong one), per-call salt uniqueness
   (`:30-36`) and null/empty argument guards; no legacy-format test remains in it.
 - **All four framework call sites are unchanged by this decision.** Login verification
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:159`) and
-  registration hashing (`:210`) live in the shared base (`:50`, hasher parameter at `:53`);
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:162`) and
+  registration hashing (`:213`) live in the shared base (`:53`, hasher parameter at `:56`);
   change-password verifies then hashes in `ChangePasswordHandlerBase<TUser, TCommand>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:24`,
-  `:55`, `:61`); reset-password hashes in `ResetPasswordHandlerBase<TUser, TCommand>`
-  (`.../UseCases/ResetPassword/ResetPasswordHandlerBase.cs:30`, hashing at `:79`); and seeding hashes
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:25`,
+  `:56`, `:62`); reset-password hashes in `ResetPasswordHandlerBase<TUser, TCommand>`
+  (`.../UseCases/ResetPassword/ResetPasswordHandlerBase.cs:31`, hashing at `:80`); and seeding hashes
   in `IdentityModuleDbSeederBase<TUser>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:38`,
-  `:103`). No file under either app's `Source/` invokes the hasher: ADC and Store only declare the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:39`,
+  `:104`). No file under either app's `Source/` invokes the hasher: ADC and Store only declare the
   parameter and forward it to a Common base
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:44,47,57`,
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:21,24,33`).
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:49,59`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:25,34`).
 - **The security model summary states the same rule.** `MMCA.Common/SECURITY.md:29-35` documents
   PBKDF2-SHA512 with a high iteration count and constant-time comparison as build-failing invariants
   and says outright that PBKDF2 is the only verification path with no legacy HMAC fallback (`:34-35`).

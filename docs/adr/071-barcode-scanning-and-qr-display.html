@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -246,7 +249,7 @@
           scanning ships as an ADR-042 capability whose native half is opt-in per head.</strong></p>
           <ul>
           <li><strong>Display is a component, not a capability.</strong> <code>QrCodeImage</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/QrCodeImage.razor</code>) renders a payload as
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Sharing/QrCodeImage.razor</code>) renders a payload as
           an inline base64 PNG data URI through QRCoder&#39;s managed <code>PngByteQRCode</code> path (<code>:71-74</code>), so it works
           identically on SSR, Server, WASM and MAUI with no per-head registration at all. <code>Payload</code> (<code>:15-17</code>)
           and <code>AltText</code> (<code>:23-25</code>) are both <code>[EditorRequired]</code>, which is what keeps a generated image from
@@ -255,17 +258,17 @@
           broken image (<code>:66-69</code>), and the bitmap is memoized against the three inputs that affect it
           (<code>:42-56</code>), so a parent re-render does not re-encode.</li>
           <li><strong>The error-correction level is a framework enum, not the generator&#39;s.</strong>
-          <code>QrErrorCorrectionLevel</code> (<code>Components/QrErrorCorrectionLevel.cs:9-21</code>: <code>Low</code>, <code>Medium</code> (default),
+          <code>QrErrorCorrectionLevel</code> (<code>Components/Sharing/QrErrorCorrectionLevel.cs:9-21</code>: <code>Low</code>, <code>Medium</code> (default),
           <code>Quartile</code>, <code>High</code>) is mapped onto QRCoder&#39;s <code>ECCLevel</code> inside the component (<code>QrCodeImage.razor:77-83</code>),
           so the package&#39;s public surface does not pin consumers to the generator that happens to back it today.</li>
           <li><strong>Scanning is one contract on the ADR-042 pattern.</strong> <code>IBarcodeScannerService</code>
-          (<code>Services/Capabilities/IBarcodeScannerService.cs:11-20</code>) is two members: <code>bool IsSupported</code> and
+          (<code>Services/Capabilities/Media/IBarcodeScannerService.cs:11-20</code>) is two members: <code>bool IsSupported</code> and
           <code>Task&lt;string?&gt; ScanAsync(CancellationToken cancellationToken = default)</code>. The contract is that an
           implementation <strong>never throws</strong>: an unsupported head, a denied permission, a user-cancelled scan and a
           cancelled token all return <code>null</code> (<code>:3-10</code>), and the decoded payload is documented as untrusted input.
-          <code>NullBarcodeScannerService</code> (<code>Fallbacks/NullBarcodeScannerService.cs:9-16</code>) reports <code>IsSupported == false</code>
+          <code>NullBarcodeScannerService</code> (<code>Services/Capabilities/Media/NullBarcodeScannerService.cs:9-16</code>) reports <code>IsSupported == false</code>
           and returns <code>null</code>, TryAdd-registered by <code>AddDeviceCapabilityDefaults</code>
-          (<code>Services/Capabilities/DependencyInjection.cs:63</code>).</li>
+          (<code>Services/Capabilities/DependencyInjection.cs:70</code>).</li>
           <li><strong>The native implementation is opt-in and deliberately NOT folded into <code>UseMauiDeviceCapabilities</code>.</strong>
           A head asks for the camera by name:
           <code>UseCommonBarcodeScanner(Func&lt;string&gt; cancelText, Func&lt;string&gt; cameraDescription)</code> on
@@ -277,10 +280,10 @@
           reason sits on the opt-in method&#39;s own doc comment (<code>:86-87</code>): a head that never scans should ship
           neither the camera handler nor a camera permission declaration.</li>
           <li><strong>The scan is a modal page with exactly one resolution.</strong> <code>MauiBarcodeScannerService</code>
-          (<code>Capabilities/MauiBarcodeScannerService.cs:24</code>) marshals to the main thread (<code>:67-69</code>), then inside
+          (<code>Capabilities/Media/MauiBarcodeScannerService.cs:24</code>) marshals to the main thread (<code>:67-69</code>), then inside
           <code>ScanOnMainThreadAsync</code> (<code>:79-104</code>) pushes a <code>BarcodeScanPage</code> modally (<code>:94</code>) and pops it in a
           <code>finally</code> (<code>:100-103</code>). The page holds a
-          <code>TaskCompletionSource&lt;string?&gt;</code> (<code>Capabilities/BarcodeScanPage.cs:23-24</code>) that four paths can complete
+          <code>TaskCompletionSource&lt;string?&gt;</code> (<code>Capabilities/Media/BarcodeScanPage.cs:23-24</code>) that four paths can complete
           and only the first wins: a decode, the cancel button, the hardware back gesture, and
           <code>OnDisappearing</code>; the caller&#39;s <code>CancellationToken</code> is bridged to the same <code>Cancel()</code>
           (<code>MauiBarcodeScannerService.cs:97</code>). Only 2D formats are read (<code>BarcodeScanPage.cs:36</code>), because 1D
@@ -328,7 +331,7 @@
           <ul>
           <li><strong>The scan page&#39;s text is the caller&#39;s delegate, not a string (resolved in v1.147.0).</strong>
           <code>cancelText</code> and <code>cameraDescription</code> arrive as <code>Func&lt;string&gt;</code> and are invoked once per scan, when
-          the modal page is built (<code>Capabilities/MauiBarcodeScannerService.cs:65-69</code>), so a head that
+          the modal page is built (<code>Capabilities/Media/MauiBarcodeScannerService.cs:65-69</code>), so a head that
           switches culture at runtime under <a href="027-multi-locale-i18n.html">ADR-027</a> gets the cancel button, page
           title and semantic description in the language that is current at the scan rather than the one
           that was current at startup. The price is on the caller: a head passes the resource lookups

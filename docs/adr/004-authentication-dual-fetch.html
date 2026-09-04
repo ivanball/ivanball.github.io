@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-004: Cross-Service Token Validation via JWKS / OIDC Discovery · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted.">
+  <meta name="description" content="Accepted. Updated 2026-09-03 (JwtSettings / JwtSigningAlgorithm cited at their real Auth/ paths, and the validator registration described with its…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-004: Cross-Service Token Validation via JWKS / OIDC Discovery">
-  <meta property="og:description" content="Accepted.">
+  <meta property="og:description" content="Accepted. Updated 2026-09-03 (JwtSettings / JwtSigningAlgorithm cited at their real Auth/ paths, and the validator registration described with its…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-004: Cross-Service Token Validation via JWKS / OIDC Discovery">
-  <meta name="twitter:description" content="Accepted.">
+  <meta name="twitter:description" content="Accepted. Updated 2026-09-03 (JwtSettings / JwtSigningAlgorithm cited at their real Auth/ paths, and the validator registration described with its…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"004 · Cross-Service Token Validation via JWKS / OIDC Discovery","item":"https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -214,7 +217,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-004-cross-service-token-validation-via-jwks--oidc-discovery">ADR-004: Cross-Service Token Validation via JWKS / OIDC Discovery</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted.</p>
+          <p>Accepted. Updated 2026-09-03 (<code>JwtSettings</code> / <code>JwtSigningAlgorithm</code> cited at their real <code>Auth/</code>
+          paths, and the validator registration described with its current signature and secure-by-default
+          <code>RequireHttpsMetadata</code> resolution).</p>
           <h2 id="context">Context</h2>
           <p>When the modular monolith is extracted into per-module service hosts behind a gateway (ADR-008),
           every service must authenticate the same end-user JWT, but only one service (Identity) issues tokens.
@@ -229,10 +234,10 @@
           <p>Validate cross-service tokens with <strong>asymmetric (RS256) signatures plus JWKS / OIDC discovery</strong>,
           keeping the symmetric (HS256) shared-secret path as the in-process monolith option. The signing
           mode is a single configuration switch (<code>JwtSettings.SigningAlgorithm</code>), and it defaults to <code>RS256</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:30</code>, reasoning at <code>:24-29</code>):
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:30</code>, reasoning at <code>:24-29</code>):
           a host that never sets the key gets the algorithm that survives extraction. A single-process monolith
           opts into HS256 explicitly, alongside the <code>Jwt:SecretForKey</code> that choice requires
-          (<code>.../Settings/JwtSigningAlgorithm.cs:14-19</code>).</p>
+          (<code>.../Auth/JwtSigningAlgorithm.cs:14-19</code>).</p>
           <p><strong>Issuer side (Identity service).</strong></p>
           <ul>
           <li>Identity signs access tokens with its RSA private key (RS256) and publishes only the matching
@@ -250,10 +255,22 @@
           </ul>
           <p><strong>Validator side (every other service).</strong></p>
           <ul>
-          <li><code>AddForwardedJwtBearer(authority, audience)</code> points the JWT bearer middleware at an <code>Authority</code>, so
-          it fetches <code>{authority}/.well-known/openid-configuration</code>, follows <code>jwks_uri</code>, and validates the
-          token signature against the published key. No service except Identity holds key material. ADC&#39;s
-          Conference, Engagement, and Notification services all use this path.</li>
+          <li><code>AddForwardedJwtBearer(authority, audience, configuration, environment, requireHttpsMetadata: null)</code>
+          points the JWT bearer middleware at an <code>Authority</code>, so it fetches
+          <code>{authority}/.well-known/openid-configuration</code>, follows <code>jwks_uri</code>, and validates the token
+          signature against the published key
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:446</code>).
+          No service except Identity holds key material. ADC&#39;s Conference, Engagement, and Notification
+          services all use this path, passing the host&#39;s <code>IConfiguration</code> and <code>IHostEnvironment</code> and leaving
+          <code>requireHttpsMetadata</code> at its default.</li>
+          <li>The metadata fetch is HTTPS-only by default, and the caller supplies configuration and environment
+          so the framework can resolve that: the explicit <code>requireHttpsMetadata</code> argument when it is not
+          null, then the <code>Authentication:JwtBearer:RequireHttpsMetadata</code> configuration key, then <code>true</code>
+          everywhere except Development (<code>.../WebApplicationBuilderExtensions.cs:458-460</code>, key declared at
+          <code>:56</code>). Resolving to <code>false</code> outside Development stays legal, because an internal-ingress h2c
+          authority is a real deployment shape, but it registers <code>InsecureJwtMetadataWarningStartupFilter</code>
+          so the host logs one startup warning naming the key
+          (<code>.../WebApplicationBuilderExtensions.cs:462-466</code>).</li>
           <li><code>ValidIssuer</code> is deliberately <strong>not</strong> pinned: the middleware takes the issuer from the discovery
           document, because the <code>authority</code> is the Aspire service-discovery URL (e.g. <code>http://identity</code>)
           while the token&#39;s <code>iss</code> claim is the public gateway origin (e.g. <code>https://localhost:6001</code>).</li>

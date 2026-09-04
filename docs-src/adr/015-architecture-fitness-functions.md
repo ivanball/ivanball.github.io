@@ -16,6 +16,10 @@ corrected to the floor CI actually applies. See Revision (2026-08-23) at the end
 the public-API gate's file, declaration and coverage figures are corrected in place (sixteen baseline
 pairs, one per published package except `MMCA.Common.UI.Maui`, with the package count left to
 `MMCA.Common/FACTS.md`), and three citations are re-anchored. See Revision (2026-09-01) at the end.
+Revised 2026-09-03: the one accepted namespace cycle changed shape (its middle node is `Messaging`, not
+the dissolved `Settings` folder), the shared rule library and MMCA.Common's own subclasses moved into
+feature folders, and the unshipped-baseline declaration figure is re-counted. See
+Revision (2026-09-03) at the end.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -78,7 +82,7 @@ across 34 abstract `*TestsBase` classes**, of which MMCA.Common's own build exec
 regardless of how many data rows it runs: they are not test-case counts.
 
 **Both new families are required merge gates, not advisory.** They live in
-`Tests/Architecture/MMCA.Common.Architecture.Tests`, which is inside `MMCA.Common.slnx` (`:46`) and
+`Tests/Architecture/MMCA.Common.Architecture.Tests`, which is inside `MMCA.Common.slnx` (`:52`) and
 therefore runs in the `build-and-test` job (`.github/workflows/ci.yml:135-144`), and the public API
 gate fails that same job's build step (`ci.yml:106-108`); `build-and-test` is one of the eight required
 gates on `main` (`CONTRIBUTING.md:60-61`). One caveat: a docs-only PR skips restore, build and test by
@@ -87,7 +91,7 @@ documentation change.
 
 ### `ArchitectureRules.Cycles`: namespace dependency cycles
 `NamespacesHaveNoDependencyCycles(map, allowedCycleNamespaces)`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Cycles.cs:45-47`)
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Layering/ArchitectureRules.Cycles.cs:45-47`)
 builds a namespace graph for **every** layer in the map (`:54`, so all seven for MMCA.Common) and
 reports each strongly connected component in it. Nodes are the layer's root namespace plus one segment
 beneath it (`:137`) and edges never cross assemblies (`:104`). Components are found by mutual
@@ -102,21 +106,25 @@ The exemption hook is checked against the **whole strongly connected component, 
 and not merely the displayed path**: `component.TrueForAll(allowed.Contains)` (`:61`, rationale at
 `:58-60`), so an allowance can never hide a new cycle that merely touches an accepted namespace, and a
 fourth namespace joining an accepted tangle still fails. Consumers subclass `NamespaceCycleTestsBase`
-(`Bases/NamespaceCycleTestsBase.cs:15`, test at `:29`) and override `AllowedCycleNamespaces`. Note that
+(`Bases/Layering/NamespaceCycleTestsBase.cs:15`, test at `:29`) and override `AllowedCycleNamespaces`. Note that
 the XML doc on both the rule (`:41-43`) and the base (`NamespaceCycleTestsBase.cs:22-23`) describes the
 check in terms of the cycle's *path*; the code is the stricter whole-component test above, and the code
 is what runs.
 
 MMCA.Common has exactly one accepted tangle, inside `MMCA.Common.Infrastructure`:
-`root -> Settings -> Persistence -> root`
-(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/NamespaceCycleTests.cs:39-44`), and
-the subclass justifies it **per edge** rather than as a blanket allowance (`:13-38`): the composition
-root binds every settings class, `TenancySettingsValidator` takes an optional `IDataSourceResolver` so
-a tenant override naming a non-existent physical source fails the boot instead of silently resolving
-cross-tenant, and the `EntityTypeConfiguration*` shims carry the `[UseDataSource]` / `[UseDatabase]`
-marker attributes that live in the root namespace precisely because consumers annotate their own
-configurations with them. All three namespaces ship in one assembly and one package, so none is
-independently extractable and the tangle costs nothing the layer rules were protecting.
+`root -> Messaging -> Persistence -> root`
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Layering/NamespaceCycleTests.cs:42-47`),
+and the subclass justifies it **per edge** rather than as a blanket allowance (`:13-41`): the
+composition root binds the buses and their settings, the buses **are** the outbox transport
+(`InProcessEventBus` and `BrokerEventBus` enqueue `OutboxMessage` rows and wake the `OutboxProcessor`
+through `IOutboxSignal`, so splitting the two would put half of one delivery guarantee on each side of
+a package boundary), and the `EntityTypeConfiguration*` shims carry the `[UseDataSource]` /
+`[UseDatabase]` marker attributes that live in the root namespace precisely because consumers annotate
+their own configurations with them. All three namespaces ship in one assembly and one package, so none
+is independently extractable and the tangle costs nothing the layer rules were protecting. The middle
+node changed with the 2026-09 feature-by-folder reorganization and the subclass records the change
+itself (`:38-40`): the `Settings` folder dissolved into the features it configured, and the tenancy
+validator that carried the old `Settings -> Persistence` edge now lives in `Persistence/Tenancy`.
 
 **The rule is a signature-level statement and says so.** The testing package carries no IL or Roslyn
 dependency, so this is pure reflection: a reference that exists only inside a method body (a local, a
@@ -127,14 +135,14 @@ the Trade-offs above already record for the reflection-based rules, stated at th
 
 ### `ArchitectureRules.CancellationTokens`: trailing cancellation tokens
 `AsyncMethodsDeclareTrailingCancellationToken(map, exemptMethods)`
-(`.../ArchitectureRules.CancellationTokens.cs:35-37`) requires every method returning `Task`,
+(`.../Rules/Cqrs/ArchitectureRules.CancellationTokens.cs:35-37`) requires every method returning `Task`,
 `Task<T>`, `ValueTask` or `ValueTask<T>`, **declared** (not inherited) as a public member of a
 publicly-visible type in an `Application` or `Infrastructure` assembly, to take a `CancellationToken`
 as its last parameter named exactly `cancellationToken` (`:15-18`, layer scope at `:45-47`, awaitable
 check at `:105-112`, trailing check at `:120-122`, with distinct diagnostics for a misnamed versus a
 mispositioned parameter at `:129-131`). Members are bound `Public | Instance | Static | DeclaredOnly`
 (`:73-74`), so public **static** methods are in scope and inherited members are not. A method with no
-parameters is not excused: the token would simply be its only parameter (`:18-19`).
+parameters is not excused: the token would simply be its only parameter (`:17-18`).
 
 The stated reason is mechanical pass-through rather than tidiness: a uniform trailing position and
 name is what lets the ADR-014 decorator pipeline, the ADR-055 repositories and the generated clients
@@ -150,14 +158,15 @@ implementation of an interface method declared outside them (`IHostedService.Sta
 `IHealthCheck`, framework middleware). **Declared** ones go through
 `CancellationTokenConventionTestsBase.CancellationTokenExemptMethods` in `"TypeName.MethodName"` form,
 which the rule documents as being for cases where adding the parameter would break a shipped public
-API, with the reason recorded beside the entry (`:44-48`).
+API, with the reason recorded beside the entry (`:30-34`, and the base's own wording at
+`Bases/Cqrs/CancellationTokenConventionTestsBase.cs:21-26`).
 
 The suite found exactly two real violations, both on `NotificationHub`
-(`.../CancellationTokenConventionTests.cs:23-27`), and they are the interesting case because the
+(`.../Cqrs/CancellationTokenConventionTests.cs:23-27`), and they are the interesting case because the
 exemption is not a waiver. A SignalR hub method signature **is** the client-visible RPC contract, bound
 by name and argument list by the dispatcher, and every shipped consumer's client already invokes
-`JoinChannel` / `LeaveChannel` with one argument, so adding a parameter would break the wire contract
-(`:14-22`). The work was made cancellable anyway: both methods pass `Context.ConnectionAborted` straight
+`JoinChannelAsync` / `LeaveChannelAsync` (the two exemption entries, `:25-26`) with one argument, so
+adding a parameter would break the wire contract (`:14-22`). The work was made cancellable anyway: both methods pass `Context.ConnectionAborted` straight
 into their group calls, so the token is there, just not through a parameter reflection can see. The
 exemption records a genuine blind spot in the rule rather than an accepted defect.
 
@@ -175,7 +184,7 @@ outside `MMCA.Common.slnx` and builds only on the windows `build-maui` job acros
 
 The gate is exactly two rules: **RS0016** fails the build on a public member absent from
 `PublicAPI.Shipped.txt` and **RS0017** on a declared member that disappeared
-(`Directory.Build.props:77-80`, intent stated at `:26` and `.editorconfig:885-887`). Neither is
+(`Directory.Build.props:77-80`, intent stated at `:26` and `.editorconfig:888-890`). Neither is
 explicitly set to `error`: both are left at the repository's global analyzer-error default
 (`dotnet_analyzer_diagnostic.severity = error`, `.editorconfig:312`, plus `TreatWarningsAsErrors`,
 `Directory.Build.props:7`), so they are errors by inheritance rather than by their own entry.
@@ -185,20 +194,20 @@ instead of something a consumer discovers after the release.
 The shipped baselines hold **5,034 declarations** across the sixteen files (5,050 non-empty lines, each
 file opening with a `#nullable enable` header; two of them, `MMCA.Common.Gateway` and the `MMCA.Common`
 metapackage, hold the header alone). The `PublicAPI.Unshipped.txt` files are no longer header-only
-stubs: fourteen of the sixteen now carry **1,457 declarations** of surface added since their shipped
+stubs: fourteen of the sixteen now carry **1,486 declarations** of surface added since their shipped
 baseline was last written, the two exceptions being `MMCA.Common.UI.Web` and the `MMCA.Common`
 metapackage. **What is baselined is the surface as of this branch**, which is whichever release
 `MMCA.Common/FACTS.md:14` currently names (v1.154.0 when this revision was written; the figures above
-were re-counted on 2026-09-01), so they cover the Section A additions this
+were re-counted on 2026-09-03), so they cover the Section A additions this
 revision described plus every wave that followed, not a frozen picture of one release. The
 start version is no longer uncited: the gate shipped in v1.153.0, whose changelog entry names
 `Microsoft.CodeAnalysis.PublicApiAnalyzers` on every in-slnx Source project with committed baselines as
-one of three new build gates (`MMCA.Common/CHANGELOG.md:1273-1279`, under the v1.153.0 heading at
-`:1218`). The discipline therefore begins with
+one of three new build gates (`MMCA.Common/CHANGELOG.md:1480-1486`, the analyzer named on `:1484`,
+under the v1.153.0 heading at `:1425`). The discipline therefore begins with
 v1.153.0 rather than applying retroactively.
 
 Three rules from the same analyzer are off, each with the reason recorded rather than silently
-suppressed (`.editorconfig:890-899`): **RS0026 / RS0027** (no multiple public overloads with optional
+suppressed (`.editorconfig:893-902`): **RS0026 / RS0027** (no multiple public overloads with optional
 parameters) because the surface being baselined already ships those pairs, mostly the repository read
 and query methods, so obeying the rule now would mean a breaking signature change on every consumer
 ("off rather than silently baselined as a lie"); and **RS0041** (no oblivious reference types in public
@@ -206,7 +215,7 @@ members) because every hit is inside Razor generated code that is not nullable-a
 ours to annotate. RS0041 additionally sits in the global `NoWarn` (`Directory.Build.props:22-27`), and
 the duplication is load-bearing rather than sloppy: a `dotnet_diagnostic` severity does not reach
 generated code, so the `.editorconfig` entry alone would not suppress it. RS0051-RS0056, the
-internal-API analog over `InternalAPI.Shipped.txt`, are off too (`.editorconfig:900-907`): only the
+internal-API analog over `InternalAPI.Shipped.txt`, are off too (`.editorconfig:903-910`): only the
 public, packaged surface is under contract.
 
 **This formalizes what the `consumer-source-build` canary only sampled.** That CI job builds
@@ -261,7 +270,8 @@ silent, binary-compatible-looking change that breaks every deployed peer, and on
 between it and a release.
 
 `ArchitectureRules.Protos`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Protos.cs:37`) parses a
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Protos.cs:37`)
+parses a
 repository's `.proto` files and compares them against a frozen list. What is pinned is exactly the
 wire: the `package`; every service rpc with its name, request and response types and **both** streaming
 flags (`:198-208`, `:299-312`); every message field with its name, declared type, label and **number**
@@ -272,14 +282,14 @@ What is **deliberately not pinned** is `syntax`, `import` and every `option`, `c
 included (`:27-31`). The line is drawn at "would a deployed peer notice": a reordered import or a
 changed file-level option produces the same bytes on the wire, and pinning them would turn a formatting
 change into a red build. Consumers subclass `ProtoContractTestsBase`
-(`.../Bases/ProtoContractTestsBase.cs:19`), supplying `SolutionFileName`, `ProtoFiles` and
+(`.../Bases/Contracts/ProtoContractTestsBase.cs:19`), supplying `SolutionFileName`, `ProtoFiles` and
 `FrozenProtoContracts`, with one `[Fact]` as the whole body (`:32-34`).
 
 **MMCA.Common ships no `.proto` of its own and does not subclass the base.** The only proto files in
 the repository are a matched fixture pair,
 `Tests/Architecture/MMCA.Common.Architecture.Tests/TestData/fitness-catalog.proto` and its deliberately
 drifted twin, driven through the rule by five `[Fact]`s in `ProtoContractFitnessTests`
-(`.../ProtoContractFitnessTests.cs:14`, the fixture pair at `:20-22`, the cases at `:44`, `:52`, `:66`,
+(`.../Contracts/ProtoContractFitnessTests.cs:14`, the fixture pair at `:20-22`, the cases at `:44`, `:52`, `:66`,
 `:76` and `:89`). A clean fixture proves the
 parser accepts a real contract and a drifted one proves the rule actually fails, a missing path fails
 loudly rather than pinning an empty contract (`:76-87`), and one case asserts the unpinned `syntax`,
@@ -346,7 +356,7 @@ job does and the solution-wide run cannot.
 
 **One citation was re-anchored, not rewritten.** The v1.153.0 changelog bullet naming
 `Microsoft.CodeAnalysis.PublicApiAnalyzers` is verbatim unchanged but has moved to
-`MMCA.Common/CHANGELOG.md:1273-1279` (its release heading at `:1218`) as newer releases were prepended
+`MMCA.Common/CHANGELOG.md:1480-1486` (its release heading at `:1425`) as newer releases were prepended
 above it. Line-anchored citations into an append-at-top file are a known cost of citing this precisely;
 the alternative, citing nothing, is worse. The anchors above are the current ones and are re-anchored
 in place on each audit, since a pointer that has drifted is broken rather than merely superseded.
@@ -378,13 +388,69 @@ why the sentence around them points at `FACTS.md:14` for the release they descri
 **Three citations were re-anchored, not rewritten.** The `Microsoft.CodeAnalysis.PublicApiAnalyzers`
 `PackageVersion` moved to `MMCA.Common/Directory.Packages.props:199` (a `Meziantou.Analyzer` entry was
 inserted above it in the Analyzers block); the v1.153.0 changelog bullet moved to
-`MMCA.Common/CHANGELOG.md:1273-1279` under its heading at `:1218`, the append-at-top cost the
+`MMCA.Common/CHANGELOG.md:1480-1486` under its heading at `:1425`, the append-at-top cost the
 2026-08-23 entry above predicted; and the proto fixture pair's citation now names the test class and
 its five cases (`ProtoContractFitnessTests.cs:14`, `:20-22`, `:44`, `:52`, `:66`, `:76`, `:89`) rather
 than a line inside that file's XML doc comment. The two `FACTS.md` pointers in the Status block moved
 from `:44` / `:47` to `:46` / `:49` as that generated file grew; the dated readings inside the
 revisions above keep their own anchors, since re-pointing a historical number at a line that now says
 something else would be worse than leaving it dated.
+
+## Revision (2026-09-03): the accepted cycle's middle node, the feature-folder move, re-anchored citations
+No rule family joined or left the library in this entry and no decision changed. One accepted allowance
+changed shape, the files that hold the rules and the tests moved, and the citations that moved with them
+are re-anchored.
+
+**The one accepted namespace cycle now runs through `Messaging`, not `Settings`.** The tangle inside
+`MMCA.Common.Infrastructure` is `root -> Messaging -> Persistence -> root`
+(`.../Layering/NamespaceCycleTests.cs:42-47`), and the middle edge's justification changed with it: the
+buses **are** the outbox transport (`InProcessEventBus` and `BrokerEventBus` enqueue `OutboxMessage`
+rows and wake the `OutboxProcessor` through `IOutboxSignal`), where the old `Settings -> Persistence`
+edge rested on `TenancySettingsValidator` taking an optional `IDataSourceResolver`. The `Settings`
+folder dissolved into the features it configured and the tenancy validator now lives in
+`Persistence/Tenancy`, which the subclass records in its own XML doc (`:38-40`). The shape of the
+allowance is unchanged: still exactly one accepted component, still checked against the whole strongly
+connected component rather than a path, so a fourth namespace joining it still fails. The Section A
+passage is rewritten in place rather than kept dated, because it describes a live allowance rather than
+a reading taken on a date.
+
+**The rules and the tests moved into feature folders, and no rule body moved with them.** The shared
+library now groups its rules and bases by concern: `Rules/Layering/ArchitectureRules.Cycles.cs`,
+`Rules/Cqrs/ArchitectureRules.CancellationTokens.cs`, `Rules/Contracts/ArchitectureRules.Protos.cs`,
+`Bases/Layering/NamespaceCycleTestsBase.cs`, `Bases/Cqrs/CancellationTokenConventionTestsBase.cs` and
+`Bases/Contracts/ProtoContractTestsBase.cs`. MMCA.Common's own subclasses follow the same split
+(`Layering/NamespaceCycleTests.cs`, `Cqrs/CancellationTokenConventionTests.cs`,
+`Contracts/ProtoContractFitnessTests.cs`, with `FrameworkSanityTests` under `Governance/` and
+`SpecificationFitnessTests` under `Domain/`). Every line anchor inside those files still resolves, so
+only the directory segment of each citation changed: this is a re-anchor, not a rewrite.
+
+**The unshipped declaration figure was re-counted; the shipped one had not moved.** The
+`PublicAPI.Unshipped.txt` files hold **1,486 declarations** across 1,502 non-empty lines, where the
+2026-09-01 entry read 1,457, and still exactly fourteen of the sixteen carry content (the two
+header-only exceptions are still `MMCA.Common.UI.Web` and the `MMCA.Common` metapackage). The shipped
+baselines are unchanged at 5,034 across 5,050 non-empty lines. That the unshipped side grows between
+audits while the shipped side holds is the gate behaving as designed: surface added since a baseline
+was last written lands in the unshipped file and stays there until a release rolls it over.
+
+**The other re-anchored citations.** The architecture test project's entry in `MMCA.Common.slnx` moved
+from `:46` to `:52`. The v1.153.0 changelog bullet moved a second time, to
+`MMCA.Common/CHANGELOG.md:1480-1486` (the analyzer named on `:1484`) under its heading at `:1425`; that
+is the append-at-top cost the 2026-08-23 entry predicted, now on its second occurrence, and it is
+re-anchored in the two revision entries that cite it as well as in the live text. The three
+`.editorconfig` blocks for the public API gate are `:888-890` (the intent), `:893-902` (the three rules
+turned off with their reasons) and `:903-910` (RS0051-RS0056). The token rule's "a method with no
+parameters is not excused" sentence spans `:17-18`, not `:18-19`. The declared-exemption doc is the
+rule's `exemptMethods` `<param>` at `:30-34`, where `:44-48` had pointed into the method body. And the
+two exempted hub methods are entered as `JoinChannelAsync` and `LeaveChannelAsync`, which is the form
+the rule matches, so the Section A passage now uses those names rather than the shorter ones the
+surrounding XML doc prose uses.
+
+**One known-broken pointer is left broken on purpose.** The dated `FACTS.md` readings inside the
+revisions above keep their original anchors under the convention the 2026-09-01 entry set, so
+`FACTS.md:44` and `:47` as cited there no longer point at the lines those numbers were read from. The
+live pointers in the Status block, `FACTS.md:46` and `:49`, do still resolve to the method and executed
+counts. Re-pointing a historical reading at a line that now says something else would be worse than
+leaving it dated, but a reader following one of those anchors should expect to land on unrelated text.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

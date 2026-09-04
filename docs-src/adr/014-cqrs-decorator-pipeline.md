@@ -52,10 +52,10 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:120`). The seven production service hosts
   compose the same sequence through `AddMmcaApplicationPipeline(pipeline => ...)` instead, which runs it
   in order and seals it (see the Revision (2026-08-26) below): ADC Identity / Conference / Engagement /
-  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:284`, `...Conference.Service/Program.cs:345`,
-  `...Engagement.Service/Program.cs:274`, `...Notification.Service/Program.cs:211`) and Store Identity /
-  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:202`,
-  `...Catalog.Service/Program.cs:225`, `...Sales.Service/Program.cs:225`). Only that decorators-last
+  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:288`, `...Conference.Service/Program.cs:348`,
+  `...Engagement.Service/Program.cs:279`, `...Notification.Service/Program.cs:216`) and Store Identity /
+  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:211`,
+  `...Catalog.Service/Program.cs:234`, `...Sales.Service/Program.cs:235`). Only that decorators-last
   ordering is load-bearing; the relative position of `AddInfrastructure`/`AddAPI` is not.
 
 ## Rationale
@@ -111,39 +111,39 @@ the execution order (outermost to innermost) is now:
 
 1. **Authorization, keyed on `IRequiresPermission`.** The marker is a single member,
    `string Permission { get; }`
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/IRequiresPermission.cs:16,23`).
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Markers/IRequiresPermission.cs:16,23`).
    `AuthorizationCommandDecorator<TCommand, TResult>`
-   (`.../UseCases/Decorators/AuthorizationCommandDecorator.cs:26-29`) and its query twin
-   (`AuthorizationQueryDecorator.cs:21-24`) take `ICurrentUserService` and `IPermissionRegistry`, and
+   (`.../UseCases/Decorators/AuthorizationCommandDecorator.cs:28-31`) and its query twin
+   (`AuthorizationQueryDecorator.cs:23-26`) take `ICurrentUserService` and `IPermissionRegistry`, and
    resolve the check as `permissionRegistry.HasPermission(currentUser.Roles, requiresPermission.Permission)`
-   (`AuthorizationCommandDecorator.cs:61`, `AuthorizationQueryDecorator.cs:56`), against
+   (`AuthorizationCommandDecorator.cs:63`, `AuthorizationQueryDecorator.cs:58`), against
    `bool HasPermission(IEnumerable<string> roles, string permission)`
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/IPermissionRegistry.cs:28`) and the
    `IEnumerable<string> Roles` default interface member on `ICurrentUserService`
    (`.../Interfaces/Infrastructure/ICurrentUserService.cs:45`). A denial returns
-   `Error.Forbidden("Authorization.PermissionDenied", ...)` (`:68-71` / `:63-66`) rather than
+   `Error.Forbidden("Authorization.PermissionDenied", ...)` (`:70-73` / `:65-68`) rather than
    throwing, so it short-circuits as an ordinary ADR-013 failure value; a request that does not
-   implement the marker passes straight through (`:58-59` / `:53-54`). Denials are counted on
+   implement the marker passes straight through (`:60-61` / `:55-56`). Denials are counted on
    `cqrs.authorization.denied.count` (counter `AuthorizationDenied`, unit `{request}`, tag
    `request_type`, `.../Decorators/CqrsMetrics.cs:53-56,76-77`) on the existing `MMCA.Common.Cqrs`
    meter (`CqrsMetrics.cs:24`, ADR-041). This is the pipeline-side surface of ADR-020's permission
    registry, which previously had only the `[HasPermission]` controller attribute.
 2. **Timeout, keyed on `IHasTimeout`.** The marker is `TimeSpan Timeout { get; }`
-   (`.../UseCases/IHasTimeout.cs:14,21`), a `TimeSpan` rather than a seconds int, and a value
+   (`.../UseCases/Markers/IHasTimeout.cs:14,21`), a `TimeSpan` rather than a seconds int, and a value
    `<= TimeSpan.Zero` means "no budget, pass through" (`:17-20`, guard at
-   `TimeoutCommandDecorator.cs:63`). The decorator links a fresh source to the caller's token
+   `TimeoutCommandDecorator.cs:65`). The decorator links a fresh source to the caller's token
    (`CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)` plus
-   `budget.CancelAfter(hasTimeout.Timeout)`, `TimeoutCommandDecorator.cs:66-67`) and invokes the inner
-   handler with `budget.Token` (`:71`). On expiry it returns
-   `Error.Failure("Request.TimedOut", ...)` (`:79-84`); `Request.TimedOut` is the error **code** and
+   `budget.CancelAfter(hasTimeout.Timeout)`, `TimeoutCommandDecorator.cs:68-69`) and invokes the inner
+   handler with `budget.Token` (`:73`). On expiry it returns
+   `Error.Failure("Request.TimedOut", ...)` (`:81-86`); `Request.TimedOut` is the error **code** and
    the `ErrorType` is `Failure`, because the ADR-013 taxonomy has no timeout member (rationale at
-   `TimeoutCommandDecorator.cs:12-17`). **Caller cancellation still propagates unchanged**: the catch
+   `TimeoutCommandDecorator.cs:14-19`). **Caller cancellation still propagates unchanged**: the catch
    is filtered as
    `catch (OperationCanceledException) when (budget.IsCancellationRequested && !cancellationToken.IsCancellationRequested)`
-   (`:73`), so a client that aborted fails the filter and the exception keeps travelling rather than
+   (`:75`), so a client that aborted fails the filter and the exception keeps travelling rather than
    being reported as a timeout. Expiries are counted on `cqrs.timeout.count` (counter
    `TimeoutExpired`, unit `{request}`, tag `request_type`, `CqrsMetrics.cs:59-62,81-82`, recorded at
-   `TimeoutCommandDecorator.cs:76`). The query twin is identical (`TimeoutQueryDecorator.cs:63-84`).
+   `TimeoutCommandDecorator.cs:78`). The query twin is identical (`TimeoutQueryDecorator.cs:65-86`).
 
 **Two placements are load-bearing and are argued in code, not only here.** Authorization sits
 **outside** caching deliberately: a cache lookup ahead of the permission check would serve another
@@ -157,18 +157,18 @@ validation and **outside** the transaction, so an invalid command never consumes
 budget still unwinds through the transactional decorator's rollback path.
 
 **The order is now pinned by a test rather than by comments alone.** `DecoratorPipelineOrderTestsBase`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:38`) resolves the
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/DecoratorPipelineOrderTestsBase.cs:38`) resolves the
 handlers from a real `ServiceCollection` and unwraps the constructed object graph by reflection
 (`:105-125`), asserting both sequences outermost-first (`:49-58` commands, `:61-69` queries) and that
 the innermost element is not itself a decorator (`:96-97`). Both expected sequences are
 `protected virtual`, so a consumer with a different chain can override them. MMCA.Common subclasses it
 against its own registration sequence
-(`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21-39`) without
+(`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:23-41`) without
 overriding either list, so the base order is pinned in Common's default test pass. ADC, Store and
 Helpdesk each subclass the same base
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:27`,
-`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:27`,
-`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:34`),
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:29`,
+`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:29`,
+`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:35`),
 and none of the three overrides either list: the only definitions of `ExpectedCommandDecorators` and
 `ExpectedQueryDecorators` workspace-wide are the base's own
 (`DecoratorPipelineOrderTestsBase.cs:49,61`). All four repos therefore pin the same chain against
@@ -190,36 +190,36 @@ execution order (outermost to innermost) is now:
 - **Queries:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Handler
 
 1. **Validation is no longer command-only.** `ValidatingQueryDecorator<TQuery, TResult>`
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingQueryDecorator.cs:34-37`)
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingQueryDecorator.cs:35-38`)
    is the twin of the command decorator: the same validator resolution, in which **every** registered
    `IValidator<TQuery>` runs, in registration order. The constructor takes
-   `IEnumerable<IValidator<TQuery>> validators` (`:36`), materialized once into an array (`:39`) and
-   iterated sequentially (`:76-86`, errors appended at `:85`), so every broken rule from every
+   `IEnumerable<IValidator<TQuery>> validators` (`:37`), materialized once into an array (`:40`) and
+   iterated sequentially (`:77-87`, errors appended at `:86`), so every broken rule from every
    validator is unioned into one `Result` failure. Running the whole set rather than the first
    registration is deliberate on both sides: a request commonly carries a module-authored validator
    beside a framework or cross-cutting one, and honoring only the first turns the others into dead code
    whose rules go silently unenforced, while running them all lets the caller see every broken rule in
    one response instead of one per round trip (`ValidatingCommandDecorator.cs:18-21`, command loop at
    `:73-83`). The sequential walk is also deliberate: a validator may read through a scoped repository,
-   and a `DbContext` is not thread-safe (`ValidatingQueryDecorator.cs:73-74`). The pass-through when a
+   and a `DbContext` is not thread-safe (`ValidatingQueryDecorator.cs:74-75`). The pass-through when a
    query has no validator is an array-length check, so a query type that registers none pays
-   `_validators.Length == 0` (`:68-71`, twin note at `:13-19`). Queries carrying paging, filter or sort
+   `_validators.Length == 0` (`:69-72`, twin note at `:14-20`). Queries carrying paging, filter or sort
    input therefore reject a malformed request the way commands do instead of pushing the bad values
-   into the data source (`:16-18`). The failure is built through the same reflection-built factory as
-   the command side (`:62-63`), lazily on the first short-circuit rather than in a static initializer,
+   into the data source (`:17-19`). The failure is built through the same reflection-built factory as
+   the command side (`:63-64`), lazily on the first short-circuit rather than in a static initializer,
    because Scrutor decorates unconditionally and an eager initializer would turn an unsupported
    `TResult` into a `TypeInitializationException` at resolve time for a query that never fails
-   validation (`:46-55`).
+   validation (`:47-56`).
 2. **Its placement is the interesting part: inside Caching, outside Timeout.** The registration sits
    between the caching and timeout decorators
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:139`, chain diagram at
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:141`, chain diagram at
    `:75-85`). Validation sits **inside** caching deliberately, which is the opposite of the command
    side's outside-the-transaction placement and follows from what a cache hit means: an entry can only
    exist because the same query already passed validation when that entry was first produced, so
    re-validating on a hit spends work to reach a conclusion already reached (`:97-101`, restated at
-   `ValidatingQueryDecorator.cs:25-27`). It sits **outside** the timeout for the mirror of the
+   `ValidatingQueryDecorator.cs:26-28`). It sits **outside** the timeout for the mirror of the
    command-side reason, so a caller is not charged a slice of its execution budget for validating its
-   own bad input (`ValidatingQueryDecorator.cs:27-29`, `DependencyInjection.cs:104-107`).
+   own bad input (`ValidatingQueryDecorator.cs:28-30`, `DependencyInjection.cs:104-107`).
 3. **`AddMmcaApplicationPipeline(pipeline => ...)` is the composition path, and it seals.**
    (`DependencyInjection.cs:612-621`.) It runs `AddApplication()`, then the caller's handler
    registrations through a small builder (module scans, a `ModuleLoader` run, cross-service client

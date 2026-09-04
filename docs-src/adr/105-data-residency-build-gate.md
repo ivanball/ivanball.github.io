@@ -21,12 +21,12 @@ without anyone opening `PRIVACY.md`, and the failure is silent: nothing breaks, 
 alert fires, and the app keeps serving traffic while the published claim is false. This workspace had
 exactly that gap, which is why ADC's guard still carries an explicit block on the stale claim its
 policy once made
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:9-10,16`).
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/DataResidencyTests.cs:9-10,16`).
 
 The compliance surface around this is already fitness-enforced wherever a compiler can see it.
 ADR-005's erasure path is guarded by `PiiConventionTestsBase`, which fails the build when a domain
 entity carrying a `[Pii]` property does not implement `IAnonymizable`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/PiiConventionTestsBase.cs:3-12`).
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:3-12`).
 Residency is not a property of any type, so that technique does not reach it: the claim lives in
 prose and the truth lives in a workflow file or a runbook. It is a doc-to-infrastructure consistency
 problem, the same shape ADC already solves for SLO alerts by embedding the Bicep template and the
@@ -40,10 +40,10 @@ region where a repo actually provisions its PII-bearing storage from that repo's
 source of truth, and fails the build unless the repo's `PRIVACY.md` states that region.**
 
 1. **One shared base, one test, authored in the framework.** `DataResidencyTestsBase`
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DataResidencyTestsBase.cs:14`)
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DataResidencyTestsBase.cs:14`)
    declares a single `[Fact]`, `PrivacyPolicy_DataStorageRegion_MatchesDeployedRegion` (`:25-45`),
    and names the rubric category it serves in its own summary (`:3-13`, rubric section 30,
-   Compliance, Privacy and Governance). It is one of the 46 abstract bases in that package's
+   Compliance, Privacy and Governance). It is one of the 47 abstract bases in that package's
    `Bases/` directory, so it is subclassed per repo rather than copied.
 
 2. **The repo supplies its own source of truth.** The only abstract behavior is
@@ -77,7 +77,7 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
    and still carry a contradicting sentence beside it.
 
 7. **ADC parses its deploy workflow.** `DataResidencyTests`
-   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:12`, map at `:14`)
+   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/DataResidencyTests.cs:12`, map at `:14`)
    reads `.github/workflows/deploy.yml`, finds the `SQL_LOCATION_OVERRIDE:-` marker, asserts it is
    present, and takes the letters and digits that follow it as the region (`:20-31`, marker at `:24`,
    assertion at `:26-27`). That default is the region ADC's SQL server and database land in
@@ -85,7 +85,7 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
    pre-migration claim that once contradicted the deployed region (`:16`, explained at `:9-10`).
 
 8. **Store parses its DR runbook.** `DataResidencyTests`
-   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DataResidencyTests.cs:12`, map at
+   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/DataResidencyTests.cs:12`, map at
    `:14`) reads `infra/DISASTER-RECOVERY.md`, finds the single-region sentence by its `one region (`
    marker and takes the comma-terminated token that follows, asserting both the marker and the
    terminator are present (`:20-35`, marker at `:24`, assertions at `:26-27` and `:31-32`). Its
@@ -157,8 +157,8 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
 - **The markers are load-bearing strings inside files maintained for other reasons.** Renaming the
   workflow's override variable, or reflowing the DR sentence so its comma moves, breaks the build in
   a repo where nobody touched the privacy policy
-  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:24`,
-  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DataResidencyTests.cs:24,30-32`). That
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/DataResidencyTests.cs:24`,
+  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/DataResidencyTests.cs:24,30-32`). That
   is the intended fail-loud posture, but the cost lands on an unrelated edit.
 - **The suite needs the repo working tree.** `FindRepoRoot` walks up for `{RepoToken}.slnx` and throws
   when it is absent (`ArchitectureMapBase.cs:79-90`), so this rule cannot run from a copied artifact

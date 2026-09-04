@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -404,7 +407,7 @@
           <code>SponsorId</code> proved that: it was added as an optional last parameter (<code>:31</code>), so consumers keep
           deserializing payloads that predate it. It is ADC&#39;s first broker self-consumption: the Engagement
           service both publishes and consumes it
-          (<code>.../Services/MMCA.ADC.Engagement.Service/Program.cs:264-273</code> for the reasoning, <code>:281-284</code> for the
+          (<code>.../Services/MMCA.ADC.Engagement.Service/Program.cs:269-278</code> for the reasoning, <code>:286-289</code> for the
           four <code>RegisterIntegrationEventConsumer&lt;T&gt;</code> calls inside <code>AddBrokerMessaging</code>).</p>
           <p>The two feedback events are new to the Conference module
           (<code>.../Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:20-26</code>,
@@ -428,9 +431,9 @@
           reactivates it (<code>JoinAsync</code>, <code>:84-89</code>, the BR-135 pattern), so nobody&#39;s name is on the board without a
           live opt-in. Erasure is a separate, irreversible promise: <code>EraseDisplayName()</code> (<code>LeaderboardOptIn.cs:119-130</code>)
           overwrites the published name in place when the account behind it is erased, and it is driven by a fourth
-          broker consumer, <code>UserDeleted</code> -&gt; <code>UserDeletedPointsHandler</code> (<code>Program.cs:284</code>, the mapping documented at
-          <code>:258</code>), because the published name is the one piece of personal data the Identity-side erasure cannot
-          reach across the database boundary (<code>Program.cs:260-262</code>). The row itself survives (anonymize-in-place,
+          broker consumer, <code>UserDeleted</code> -&gt; <code>UserDeletedPointsHandler</code> (<code>Program.cs:289</code>, the mapping documented at
+          <code>:263</code>), because the published name is the one piece of personal data the Identity-side erasure cannot
+          reach across the database boundary (<code>Program.cs:265-267</code>). The row itself survives (anonymize-in-place,
           ADR-005). <code>GetLeaderboard</code>
           (<code>.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs</code>) reads only opted-in users&#39; entries
           (<code>:39-46</code>), asks the database for one grouped <code>SUM</code> per attendee rather than reading the ledger rows
@@ -518,8 +521,8 @@
           someone who can: <code>IUniqueConstraintViolationDetector</code>
           (<code>MMCA.Common.Application/Interfaces/Infrastructure/IUniqueConstraintViolationDetector.cs:31</code>) is
           constructor-injected into all three ADC handlers that can lose an insert race, so <code>PointsAwarder</code>
-          (<code>:32</code>, catch filter at <code>:75</code>), <code>SetLeaderboardParticipationHandler</code> (<code>:33</code>, <code>:103</code>) and
-          <code>GetOrCreateMyBadgeHandler</code> (<code>:20</code>, <code>:53</code>) classify one way rather than three. The registered
+          (<code>:32</code>, catch filter at <code>:75</code>), <code>SetLeaderboardParticipationHandler</code> (<code>:34</code>, <code>:104</code>) and
+          <code>GetOrCreateMyBadgeHandler</code> (<code>:21</code>, <code>:54</code>) classify one way rather than three. The registered
           implementation walks the inner exception chain matching <strong>SQL Server error numbers 2601 and 2627
           first</strong> (<code>MMCA.Common.Infrastructure/Persistence/SqlServerUniqueConstraintViolationDetector.cs:34</code>,
           <code>:37</code>, <code>:50-54</code>), and falls back to the message text &quot;duplicate key&quot; or &quot;UNIQUE constraint failed&quot;

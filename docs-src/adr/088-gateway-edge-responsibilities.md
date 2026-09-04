@@ -17,11 +17,16 @@ Three things change below: the one-package constraint in the Context is retired,
 point (`AddMmcaGateway`) joins the Decision, and the declines gain a companion list of
 **delegations**, behaviors the gateway deliberately leaves to a layer better placed to perform them,
 recorded so an audit reads them as decisions rather than as gaps. Both consumer gateways reference
-the package in package mode (`MMCA.ADC/Directory.Packages.props:113`,
+the package in package mode (`MMCA.ADC/Directory.Packages.props:115`,
 `MMCA.Store/Directory.Packages.props:14`).
 
-**Revised 2026-08-31:** both consumers now pin `MMCA.Common.Gateway` at 1.174.0, and the source
-citations below are refreshed against current line numbers. Nothing in the decision changes.
+**Revised 2026-08-31:** both consumers pin `MMCA.Common.Gateway` in lockstep with the rest of the
+framework rather than on a version of its own (1.185.0 today, at the two lines cited above), and the
+source citations below are refreshed against current line numbers. Nothing in the decision changes.
+
+**Revised 2026-09-03:** the citations are refreshed again: the rate-limiting kit's anchors all moved
+when the synthetic-traffic bypass tier (the 2026-09-01 amendment below) landed in the same two
+files. Nothing in the decision changes.
 
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
@@ -105,33 +110,33 @@ composes with a host that has no DI graph beyond YARP.
 **2. Rate limiting at the edge counts anonymous callers, and chains a global concurrency cap behind
 it.** `AddGatewayRateLimiting` installs a per-client-IP fixed window partitioned on
 `Connection.RemoteIpAddress` with **no authentication exemption of any kind**
-(`.../Gateway/GatewayRateLimitingExtensions.cs:90`, limiter at `:98`), chained through
-`PartitionedRateLimiter.CreateChained` (`:181`) with a process-wide concurrency limiter (`:124-125`),
-rejecting overage with 429 (`:176`). The two answer different failures: the window answers one noisy
+(`.../Gateway/GatewayRateLimitingExtensions.cs:136`, limiter at `:144`), chained through
+`PartitionedRateLimiter.CreateChained` (`:227`) with a process-wide concurrency limiter (`:171-173`),
+rejecting overage with 429 (`:222`). The two answer different failures: the window answers one noisy
 source, and the concurrency cap answers total in-flight work regardless of how many sources produced
 it, which is the failure a per-IP window structurally cannot see. Defaults live in
 `GatewayRateLimitingSettings` (section `"GatewayRateLimiting"`,
-`.../Gateway/GatewayRateLimitingSettings.cs:42`): `PermitLimit` 120 (`:51`) per `WindowSeconds` 60
-(`:55`), `GlobalConcurrencyLimit` 200 (`:65`).
+`.../Gateway/GatewayRateLimitingSettings.cs:50`): `PermitLimit` 120 (`:59`) per `WindowSeconds` 60
+(`:63`), `GlobalConcurrencyLimit` 200 (`:73`).
 
 **The settings are validated twice, because there are two ways in.** The configuration overload binds
 through `AddOptions().Bind(section).ValidateDataAnnotations().ValidateOnStart()`
-(`GatewayRateLimitingExtensions.cs:148-151`), so a host with an out-of-range value refuses to boot,
+(`GatewayRateLimitingExtensions.cs:194-197`), so a host with an out-of-range value refuses to boot,
 which is [ADR-070](070-fail-fast-configuration-contract.md)'s contract exactly. That alone would not be
 enough here: the limiter closes over an eagerly-bound copy rather than resolving `IOptions` per
 request, and a caller can hand settings straight to the object overload without passing through the
 options pipeline at all. So the overload every path funnels into runs
-`Validator.ValidateObject(settings, ..., validateAllProperties: true)` at registration (`:172`, with
-the reasoning stated inline at `:169-171`). The `[Range]` bounds on the three numeric settings
-(`GatewayRateLimitingSettings.cs:50`, `:54`, `:64`) are therefore load-bearing on both paths: an
+`Validator.ValidateObject(settings, ..., validateAllProperties: true)` at registration (`:218`, with
+the reasoning stated inline at `:215-217`). The `[Range]` bounds on the three numeric settings
+(`GatewayRateLimitingSettings.cs:58`, `:62`, `:72`) are therefore load-bearing on both paths: an
 invalid `PermitLimit` throws where it is configured, not at the first throttled request.
 
 Bypasses are two-tier as first recorded (a third, secret-gated tier for synthetic traffic was added in the 2026-09-01 amendment below), and the tiers are different kinds of thing. **Infrastructure bypasses are
 unconditional**: `/health`, `/alive` and `/.well-known` are hard-coded
-(`GatewayRateLimitingExtensions.cs:47`, matched by path segment, case-insensitively, `:64`), because
+(`GatewayRateLimitingExtensions.cs:55`, matched by path segment, case-insensitively, `:75`), because
 throttling them takes down probes and token validation (ADR-004's JWKS discovery) as a side effect of
 throttling traffic. **Application bypasses are configuration**, through `BypassPathPrefixes`
-(`GatewayRateLimitingSettings.cs:74`, empty by default), and each consumer sets its own list in the
+(`GatewayRateLimitingSettings.cs:82`, empty by default), and each consumer sets its own list in the
 gateway's `appsettings.json` beside the `ReverseProxy` route table that same file now declares
 ([ADR-089](089-gateway-topology-owned-by-configuration.md)). The two entries are recorded here so they
 are not rediscovered as incidents: Store's Stripe webhook route (`/Payments/{**catch-all}`, bypassed
@@ -145,7 +150,7 @@ negotiate-plus-reconnect storm from one office's shared address is exactly the p
 misreads as abuse ([ADR-039](039-live-channel-push.md)).
 
 **A request with no attributable client IP is not limited.** It gets
-`RateLimitPartition.GetNoLimiter` (`GatewayRateLimitingExtensions.cs:90-95`) rather than sharing one
+`RateLimitPartition.GetNoLimiter` (`GatewayRateLimitingExtensions.cs:141`) rather than sharing one
 bucket with every other unattributable request, which is the same fail-open posture ADR-019 chose for
 `auth-ip` and for the global limiter's fallback key, for the same reason: a shared "unknown" bucket is
 a single tripwire that one misbehaving caller pulls for everyone behind it.
@@ -358,9 +363,10 @@ off and the deployed answer is on.
 
 ## Trade-offs
 - **The limiter closes over an eagerly-bound copy of the settings**
-  (`GatewayRateLimitingExtensions.cs:154`, consumed at `:164-172`), so an `IOptionsMonitor` reload
-  never reaches it. Validation is not the gap (both paths validate, see the Decision), but liveness of
-  the value is: changing a limit is a restart, not a config push, which is the opposite of what "it is
+  (`GatewayRateLimitingExtensions.cs:199-200`, consumed at `:229` and `:231`), so an
+  `IOptionsMonitor` reload never reaches it. Validation is not the gap (both paths validate, see the
+  Decision), but liveness of the value is: changing a limit is a restart, not a config push, which is
+  the opposite of what "it is
   a configuration section" usually implies. The double validation is itself a consequence of that
   shape rather than belt-and-braces, so the two must stay in step: a future change that made the
   limiter resolve `IOptions` per request would make the registration-time check redundant, and one
@@ -394,7 +400,7 @@ off and the deployed answer is on.
   (`GatewayReverseProxyExtensions.cs:59`), so the per-route limiter policies never see an
   `IOptionsMonitor` reload, exactly as the Aspire kit's limiter does not. The two halves of the
   package differ here, which is worth knowing: the config filters resolve `IOptions<GatewaySettings>`
-  per construction (`Configuration/GatewayClusterProfileConfigFilter.cs:29`,
+  per construction (`Configuration/GatewayClusterProfileConfigFilter.cs:27`,
   `Configuration/GatewayHealthCheckDefaultsConfigFilter.cs:19`), so a settings change reaches them at
   the next configuration reload while a limit change is still a restart.
 - **The delegations are correct today because of facts nothing enforces framework-side.** Load
@@ -405,7 +411,7 @@ off and the deployed answer is on.
   recorded decision without failing a build.
 - **Nothing gates adoption.** A gateway that never calls the three registrations behaves exactly as
   before, and no fitness function names a gateway host. Both consumer gateways do call all three
-  today (ADC `Program.cs:64`, `:78`, `:112`; Store `Program.cs:87`, `:112`, `:138`), but that is a
+  today (ADC `Program.cs:64`, `:78`, `:114`; Store `Program.cs:87`, `:112`, `:140`), but that is a
   wiring habit rather than an enforced invariant, which is the audit-the-inventory caveat ADR-005 and
   ADR-017 both record, now applied to the edge.
 

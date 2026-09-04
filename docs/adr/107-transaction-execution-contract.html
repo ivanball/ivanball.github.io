@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-107: Transaction Execution and Commit-Ambiguity Contract · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-03).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/107-transaction-execution-contract.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-107: Transaction Execution and Commit-Ambiguity Contract">
+  <meta property="og:description" content="Accepted (2026-09-03).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/107-transaction-execution-contract.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-107: Transaction Execution and Commit-Ambiguity Contract">
+  <meta name="twitter:description" content="Accepted (2026-09-03).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"107 · Transaction Execution and Commit-Ambiguity Contract","item":"https://ivanball.github.io/docs/adr/107-transaction-execution-contract.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">107 · Transaction Execution and Commit-Ambiguity Contract</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 109 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html" aria-current="page">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-107-transaction-execution-and-commit-ambiguity-contract">ADR-107: Transaction Execution and Commit-Ambiguity Contract</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-09-03).</p>
+          <h2 id="context">Context</h2>
+          <p>Every transactional write in this workspace funnels through one method. <code>IUnitOfWork.ExecuteInTransactionAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:70</code>) is the
+          Application-layer name for it, <code>UnitOfWork</code> forwards straight through
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:88-91</code>), and the implementation is
+          <code>DbContextFactory.ExecuteInTransactionAsync</code>
+          (<code>.../Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:500</code>, contract at
+          <code>.../Factory/IDbContextFactory.cs:70</code>). Two kinds of caller reach it: the ADR-014 pipeline, whose
+          <code>TransactionalCommandDecorator</code> calls it for any command carrying <code>ITransactional</code>
+          (<code>.../Application/UseCases/Decorators/TransactionalCommandDecorator.cs:31</code>), and a handler or service that calls it
+          directly.</p>
+          <p>The name suggests &quot;begin, do work, commit&quot;. The behavior is materially more specific, and every one of those
+          specifics is a durability decision. The delegate runs under EF Core&#39;s execution strategy, which for SQL Server is a
+          retrying one: <code>EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10))</code>
+          (<code>.../Persistence/DbContexts/SQLServerDbContext.cs:63-66</code>). So the delegate can run more than once, the change
+          tracker has to be reset between attempts, in-process event dispatch has to be held back until the data is durable,
+          and a failure of the commit itself must not be retried at all because its outcome is unknown.</p>
+          <p>The neighbouring records decide around this without deciding it. ADR-014 decides that the Transactional decorator
+          wraps a command and rolls back on failure, including on a returned failed <code>Result</code>. ADR-006 lists &quot;no cross-database
+          FKs or transactions&quot; as a trade-off of database-per-service (<code>006-database-per-service.md:56</code>). ADR-054 cites
+          &quot;transactions are per data source and best-effort sequential&quot; as a given it builds compensation on top of
+          (<code>054-saga-compensation-and-reconciliation.md:131</code>). Nothing in ADR-001 through ADR-106 records the execution,
+          retry and ambiguity contract itself, which is the layer all three depend on.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong><code>ExecuteInTransactionAsync</code> is a re-entrant, retriable, commit-once unit: the whole delegate is the retriable
+          work, the commit phase is deliberately outside the retry, and a commit whose outcome cannot be known is reported as
+          <code>TransactionCommitAmbiguousException</code> naming what each physical source did rather than being retried or swallowed.</strong></p>
+          <ol>
+          <li><p><strong>One entry point, per-scope state.</strong> <code>IDbContextFactory</code> and <code>IUnitOfWork</code> are both registered scoped
+          (<code>.../Infrastructure/DependencyInjection.cs:109</code>, <code>:121</code>), and the transaction flag is an instance field
+          (<code>DbContextFactory.cs:76</code>), so the whole contract below is per request scope. <code>BeginTransaction</code> enlists every
+          transaction-capable context and skips one already carrying a transaction (<code>:419</code>, <code>:427-428</code>); a context
+          materialized later in the same scope is enlisted on creation (<code>:107-109</code>).</p>
+          </li>
+          <li><p><strong>A re-entrant call joins the ambient transaction instead of nesting.</strong> When the flag is already set, the method
+          awaits the operation and returns its result directly (<code>:511-512</code>). Begin, commit, rollback and the deferred-event
+          flush belong to the outermost call alone (<code>:458-460</code>), because an inner commit would make the outer scope&#39;s
+          earlier work durable ahead of its own decision. Before this, an <code>ITransactional</code> command whose handler also
+          opened a transaction hit an <code>InvalidOperationException</code> from EF (<code>:504-510</code>). Two tests pin the behavior:
+          <code>ExecuteInTransactionAsync_Nested_DoesNotThrowAndCommitsOnce</code> and
+          <code>ExecuteInTransactionAsync_NestedInnerSucceedsButOuterFails_RollsBackEverything</code>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryTransactionTests.cs:129</code>,
+          <code>:159</code>).</p>
+          </li>
+          <li><p><strong>The whole delegate is the retriable unit, and each attempt starts from a clean change tracker.</strong> The strategy
+          comes from the first transaction-capable context, or from a default context created on the spot so one exists
+          before the handler&#39;s first repository call (<code>:519-521</code>), and the delegate is invoked inside
+          <code>strategy.ExecuteAsync</code> (<code>:525-535</code>). From the second attempt on, <code>ResetForRetry</code> runs first (<code>:529-530</code>): it
+          drops deferred dispatch and calls <code>ChangeTracker.Clear()</code> on every context (<code>:743-749</code>). Without it, entities the
+          failed attempt added are still <code>Added</code> and the retry inserts them a second time, with a duplicate outbox row per
+          event (<code>:474-478</code>). Anything the commit depends on therefore has to be produced inside the delegate, once per
+          attempt.</p>
+          </li>
+          <li><p><strong>A returned failed <code>Result</code> rolls back exactly like a thrown exception.</strong> The attempt inspects the result and
+          calls <code>RollbackTransaction()</code> when <code>IsFailure</code> is true (<code>:564-570</code>), which is the ADR-013 accommodation: a
+          framework that mandates Result-over-exceptions cannot let a handler that saves and then fails a later invariant
+          leave the partial mutation committed. A thrown exception rolls back and rethrows (<code>:605-608</code>), and a cancellation
+          takes a guarded path that falls back to dropping deferred work when the rollback itself throws on an
+          already-closed connection (<code>:588-604</code>).</p>
+          </li>
+          <li><p><strong>The commit is never retried.</strong> <code>TryCommit</code> returns its failure instead of throwing it (<code>:573-575</code>, <code>:622</code>) so
+          the execution strategy sees a completed attempt, and the failure is thrown outside the strategy afterwards
+          (<code>:541-542</code>). Throwing inside would not work: the strategy classifies retriability by walking the whole inner
+          exception chain, so even a wrapper carrying the transient commit error would be retried (<code>:537-540</code>). The reason
+          the commit is excluded is that its outcome is unknowable, since a commit can fail after the database applied it
+          but before the acknowledgement reached the client, and a retry against a possibly-durable commit duplicates every
+          write including the outbox rows (<code>:481-486</code>, and on the exception type at
+          <code>.../Factory/TransactionCommitAmbiguousException.cs:9-13</code>).</p>
+          </li>
+          <li><p><strong>The failure names what each physical source did.</strong> <code>TryCommit</code> snapshots the enlisted contexts in commit order,
+          commits them in turn, and on a throw builds the ambiguity from three groups: the sources already committed, the
+          one that threw, and the ones after it in the order that never committed (<code>DbContextFactory.cs:626-648</code>).
+          <code>TransactionCommitAmbiguousException</code> is public and sealed (<code>TransactionCommitAmbiguousException.cs:22</code>) and
+          exposes <code>CommittedSources</code> (<code>:76</code>), <code>AmbiguousSource</code> (<code>:85</code>) and <code>RolledBackSources</code> (<code>:93</code>); its message is the
+          default ambiguity text plus a &quot;Per-source outcome&quot; clause that omits empty groups, so a single-source failure
+          reads as one clause rather than three (<code>:99-118</code>). With one transactional source, the case every host runs today,
+          the ambiguous source is the whole outcome (<code>:80-83</code>).</p>
+          </li>
+          <li><p><strong>Rollback after a commit failure is best-effort in the literal sense.</strong> <code>AbandonAfterCommitFailure</code> rolls back
+          whatever is still open and swallows a rollback that itself throws, on the grounds that the transaction is already
+          zombied or the connection is gone and the commit ambiguity is the failure worth reporting
+          (<code>DbContextFactory.cs:663-682</code>). A source listed in <code>RolledBackSources</code> therefore wrote nothing that survives
+          (<code>TransactionCommitAmbiguousException.cs:88-91</code>).</p>
+          </li>
+          <li><p><strong>Deferred in-process dispatch is flushed only after a successful commit, and dropped on every other path.</strong>
+          Handlers deferred while a transaction is open are flushed per context immediately after the commit succeeds
+          (<code>DbContextFactory.cs:577-584</code>, <code>.../Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:145</code>).
+          <code>RollbackTransaction</code> drops them (<code>DbContextFactory.cs:444-448</code>, <code>DomainEventSaveChangesInterceptor.cs:162</code>), and
+          so do <code>ResetForRetry</code> between attempts and <code>AbandonAfterCommitFailure</code> after an ambiguous commit (<code>:747</code>, <code>:669</code>).
+          The consequence is stated on the exception: after an ambiguous commit the outbox rows are the only delivery
+          record that survives, and the outbox processor delivers them if the commit did land
+          (<code>TransactionCommitAmbiguousException.cs:16-19</code>).</p>
+          </li>
+          <li><p><strong>The witness row that would close a partial multi-source commit is deliberately not built.</strong> With several
+          sources the commits are sequential, so a failure on the second leaves the first durable: the ambiguity is a
+          partial commit rather than an unknown one, and the caller&#39;s replay is what reconciles it. A marker written inside
+          each source&#39;s transaction that a replay could read to learn what landed would close this, and the code says it is
+          not built because a single transactional source needs none (<code>DbContextFactory.cs:488-497</code>). Reporting the
+          per-source outcome is what makes the partial state observable in the meantime.</p>
+          </li>
+          <li><p><strong>Cosmos is outside the mechanism entirely.</strong> <code>SupportsTransactions</code> returns false for <code>CosmosDbContext</code>
+          (<code>DbContextFactory.cs:754-757</code>), and begin, commit and rollback all filter on it (<code>:427</code>, <code>:434</code>, <code>:441</code>), so a
+          Cosmos context in the same scope is neither enlisted nor rolled back and is never named in an ambiguity report.</p>
+          </li>
+          <li><p><strong>Recovery belongs to the caller, and today that means the ADR-017 idempotency filter.</strong> The remarks say so
+          (<code>:485-486</code>), and the exception is part of the frozen public surface
+          (<code>.../MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:220-228</code>), which is what makes it a contract a caller can
+          bind to rather than an internal detail. No framework or consumer code catches it: across the four repos the type
+          is referenced only by the two files that define it and by
+          <code>.../MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryCommitAmbiguityTests.cs</code>, whose five
+          cases pin the no-rerun wrapper, the dropped dispatch, the ordinary commit path, the still-retried pre-commit
+          failure and the per-source report (<code>:73</code>, <code>:108</code>, <code>:132</code>, <code>:152</code>, <code>:171</code>).</p>
+          </li>
+          <li><p><strong>Adoption is deliberately narrow.</strong> MMCA.ADC has four <code>ITransactional</code> commands
+          (<code>RefreshFromSessionizeCommand.cs:13</code>, <code>LinkUserToSpeakerCommand.cs:13</code>, <code>UnlinkUserFromSpeakerCommand.cs:12</code>,
+          <code>BatchAddSessionQuestionAnswersCommand.cs:24</code>), MMCA.Store has two (<code>ReorderProductImagesCommand.cs:22</code>,
+          <code>UploadProductImageCommand.cs:27</code>) plus four commands whose XML doc records a deliberate opt-out
+          (&quot;Deliberately NOT <code>ITransactional</code>&quot;: <code>VerifyPaymentCommand.cs:11</code>, <code>ProcessPaymentWebhookCommand.cs:9</code>,
+          <code>CheckOutCommand.cs:9</code>, <code>BulkSetInventoryCommand.cs:11</code>), and MMCA.Helpdesk has none. Direct callers are the
+          framework&#39;s own <code>EFRefreshSessionStore</code> rotation
+          (<code>.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:121</code>), ADC&#39;s <code>AuthenticationService</code> for both
+          registration and external login
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:84</code>, <code>:157</code>), and
+          Store&#39;s <code>CheckOutHandler</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:93</code>).</p>
+          </li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Retrying the operation is safe; retrying the commit is not.</strong> A transient failure before the commit leaves
+          nothing durable, so re-running the delegate against a cleared change tracker is the cheap, correct recovery. A
+          transient failure of the commit is a different class of event: the write may already exist. Splitting the two is
+          the whole point of returning the commit failure out of the strategy instead of throwing it inside.</li>
+          <li><strong>An unknown outcome should be reported, not guessed.</strong> The alternatives are retrying (which duplicates whatever
+          landed) or swallowing (which reports success for work that may not exist). Naming the ambiguity, with the provider
+          failure as the inner exception, is the only option that leaves the caller able to do something correct.</li>
+          <li><strong>Per-source outcomes cost nothing and make partial state observable.</strong> The commit loop already knows the order it
+          is walking, so recording which sources committed, which threw and which never ran is bookkeeping on a path that is
+          already failing, and it turns &quot;something went wrong somewhere&quot; into a message a human can act on.</li>
+          <li><strong>Joining a re-entrant call beats forbidding one.</strong> The alternative is a convention that a handler under
+          <code>ITransactional</code> must never open its own transaction, enforced by comments. Joining makes the nest one unit and
+          removes a whole class of <code>InvalidOperationException</code> outright.</li>
+          <li><strong>Post-commit dispatch keeps in-process handlers honest.</strong> An in-process handler that runs inside an uncommitted
+          transaction can act on state that then rolls back. Deferring the flush until after the commit, and dropping it on
+          every failure path, means a handler only ever sees durable state, and the outbox remains the delivery guarantee
+          for everything else (ADR-003).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The ambiguity is a hard failure the caller must handle, and today nobody catches it.</strong> A host with no
+          <code>[Idempotent]</code> coverage on the affected endpoint surfaces it as an unhandled exception. The contract moves the
+          problem to where it can be solved; it does not solve it.</li>
+          <li><strong>A multi-source commit can leave a genuine partial commit, and the reconciliation is manual.</strong> The witness row is
+          not built, so replay plus the outbox is the entire recovery story. That is acceptable only while every host runs a
+          single transactional source, which is a property of today&#39;s deployments rather than a guarantee of the code.</li>
+          <li><strong>The retry contract is a trap for handler authors.</strong> Anything computed outside the delegate but committed inside
+          it is silently wrong on the second attempt, and the change-tracker reset makes the failure quiet rather than loud.
+          Store&#39;s <code>CheckOutHandler</code> carries a long comment explaining exactly this for the one value it keeps outside the
+          delegate (<code>CheckOutHandler.cs:16-24</code>, <code>:80-92</code>), which is discipline, not enforcement.</li>
+          <li><strong>A stale consumer comment still describes the fix as future work.</strong> <code>CheckOutHandler.cs:90-92</code> names
+          &quot;MMCA.Common&#39;s forthcoming commit-phase fix&quot; as what will remove its residual window, but that fix shipped in
+          v1.135.0 (<code>MMCA.Common/CHANGELOG.md:2114</code>) and Store pins v1.185.0
+          (<code>MMCA.Store/Directory.Packages.props:11</code>), so the comment describes a state that has not existed for a while.</li>
+          <li><strong>Cosmos participation is silent.</strong> A Cosmos context in a transactional scope is skipped without a warning
+          (<code>DbContextFactory.cs:754-757</code>), so a future host mixing engines gets partial atomicity with no signal at the call
+          site.</li>
+          <li><strong>The commit-order snapshot makes source order load-bearing.</strong> <code>TryCommit</code> enumerates the context dictionary and
+          that enumeration order is the commit order (<code>DbContextFactory.cs:626-631</code>), so which source is durable after a
+          partial failure is determined by materialization order rather than by anything the caller declared.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the Transactional decorator that is the main caller, and whose
+          2026-07-19 revision decided the failed-<code>Result</code> rollback this record implements),
+          <a href="006-database-per-service.html">ADR-006</a> (database-per-service, whose &quot;no cross-database transactions&quot; trade-off is
+          what makes the sequential best-effort commit the only option),
+          <a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (compensation and reconciliation, which cites this record&#39;s
+          per-data-source best-effort commit as its premise),
+          <a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox that survives an ambiguous commit, and the deferred in-process
+          dispatch that does not),
+          <a href="013-result-pattern.html">ADR-013</a> (Result-over-exceptions, the reason a returned failure has to roll back),
+          <a href="017-request-idempotency.html">ADR-017</a> (the <code>[Idempotent]</code> replay this contract names as the caller&#39;s recovery),
+          <a href="009-resilience-and-recovery-objectives.html">ADR-009</a> (the resilience posture the retrying execution strategy and its
+          five-attempt budget sit inside).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/107-transaction-execution-contract.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

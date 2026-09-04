@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -309,7 +312,7 @@
           <li><strong>Opt-in per endpoint.</strong> A route that should state a capability but carries a bare <code>[Authorize]</code> is
           authenticated-only, and nothing flags it: the same audit-the-inventory caveat as ADR-005
           (<code>IAnonymizable</code>) and ADR-017 (<code>[Idempotent]</code>). Some routes are deliberately in that category (a
-          signed-in user managing their own device installations, <code>DevicesController.cs:24</code>), which is what
+          signed-in user managing their own device installations, <code>DevicesController.cs:25</code>), which is what
           makes the inventory a judgement call rather than a rule a test could assert.</li>
           <li><strong>Grants must be registered before the host is built.</strong> The registry is built once on first
           resolve; an <code>AddPermissions(...)</code> call after it has been materialized is not seen. Permission

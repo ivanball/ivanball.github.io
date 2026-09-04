@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -271,7 +274,7 @@
           <h3 id="the-page-loop-is-how-the-row-cap-is-answered">The page loop is how the row cap is answered</h3>
           <p><code>ExportAsync</code> does not issue one unpaged query. It loops server-side over the existing paged
           <code>IEntityQueryService.GetAllAsync</code>
-          (<code>Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:60</code>) at a page size of
+          (<code>Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityQueryService.cs:60</code>) at a page size of
           <code>ApplicationSettings.MaxPageSize</code>
           (<code>Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17</code>, default 500), writing each
           page&#39;s rows into the response as they materialize, until a page comes back short or the export cap is
@@ -350,7 +353,7 @@
           <h3 id="adoption-is-automatic-and-the-sweep-work-is-contract-snapshots">Adoption is automatic, and the sweep work is contract snapshots</h3>
           <p>ADC, Store, and Helpdesk inherit <code>/export</code> on every <code>EntityControllerBase</code> derivative the moment they take
           the pin (Helpdesk&#39;s <code>TicketsController</code> derives from the base at
-          <code>Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/Controllers/TicketsController.cs:60</code> and carries no export
+          <code>Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/Controllers/TicketsController.cs:61</code> and carries no export
           code of its own). No registration call exists to make. The visible work in each consumer sweep PR is
           re-baselining the OpenAPI contract snapshots asserted by <code>OpenApiContractTestsBase</code>
           (<a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a>), which otherwise fail on the added path.</p>
@@ -404,10 +407,12 @@
           its admin gate relaxed back to ownership scoping with only the fail-closed owner check left at
           <code>:224-235</code>), <code>ShoppingCartsController</code> the async one (<code>:206</code>). ADC&#39;s Conference controllers express
           their read predicates as specifications through the same hooks (<code>EventsController.GetExportSpecification()</code>
-          at <code>Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventsController.cs:74-75</code>,
-          <code>SessionQuestionAnswersController.cs:96</code>, and async overrides on <code>SessionsController.cs:76</code>,
-          <code>SpeakersController.cs:104</code>, <code>SponsorsController.cs:68</code> among others), and keep their <code>Forbid</code> gates on
-          bulk export anyway (<code>EventsController.cs:141-144</code>, <code>SessionsController.cs:248-251</code>): a deliberate
+          at <code>Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:74-75</code>,
+          <code>Controllers/Sessions/SessionQuestionAnswersController.cs:96</code>, and async overrides on
+          <code>Controllers/Sessions/SessionsController.cs:77</code>, <code>Controllers/Speakers/SpeakersController.cs:105</code>,
+          <code>Controllers/Sponsors/SponsorsController.cs:69</code> among others), and keep their <code>Forbid</code> gates on
+          bulk export anyway (<code>Controllers/Events/EventsController.cs:141-144</code>,
+          <code>Controllers/Sessions/SessionsController.cs:248-251</code>): a deliberate
           privileged-reader-only policy on a whole-catalog file, not a gap in what the framework can scope.
           v1.151.0 also hardened the formatter: binary and collection properties produce no column instead of
           rendering type names (<code>IsExportableType</code>, <code>:667-670</code>), and a <code>fields=</code> request naming one fails

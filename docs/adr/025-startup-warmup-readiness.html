@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -251,9 +254,9 @@
           <li><strong>A readiness gate that starts closed.</strong> <code>WarmupReadinessGate</code> (singleton) begins not-ready;
           <code>WarmupReadinessHealthCheck</code> is registered tagged <code>ready</code> and reports <code>Unhealthy</code> until the gate opens.
           <code>MapDefaultEndpoints()</code> maps <code>/health/ready</code> to every check tagged neither <code>live</code> nor <code>optional</code>
-          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:350-353</code>), so while warm-up is running the replica&#39;s
+          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:433-436</code>), so while warm-up is running the replica&#39;s
           readiness endpoint reports not-ready and the platform keeps traffic off it. (<code>/alive</code> maps only the
-          <code>live</code>-tagged self check, <code>Extensions.cs:334-337</code>, so liveness is unaffected and the container is not
+          <code>live</code>-tagged self check, <code>Extensions.cs:417-420</code>, so liveness is unaffected and the container is not
           restarted.) The second exclusion, <code>optional</code> (<code>HealthCheckTags.cs:32</code>), covers a dependency the app
           degrades gracefully without: a distributed cache sitting behind an in-memory fallback, a broker behind
           a retrying outbox. Those checks are still reported on <code>/health</code>, so the degradation stays visible, but
@@ -313,14 +316,14 @@
           (<code>:46</code>, <code>:95-98</code>), whose in-memory <code>TestServer</code> never opens a socket. Failures follow the same rule as
           the rest of the subsystem: caught, logged at warning level, never fatal (<code>:141-146</code>, <code>:205-207</code>). Both
           production apps subclass and register it: ADC in Conference
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:28</code>, registered
-          at <code>Program.cs:254</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:29</code>,
-          <code>Program.cs:153</code>) and Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:29</code>,
-          <code>Program.cs:165</code>); Store in Catalog
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:29</code>,
-          <code>Program.cs:154</code>), Identity (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:31</code>,
-          <code>Program.cs:135</code>) and Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:32</code>,
-          <code>Program.cs:148</code>).</li>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22</code>, registered
+          at <code>Program.cs:257</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code>,
+          <code>Program.cs:158</code>) and Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23</code>,
+          <code>Program.cs:169</code>); Store in Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23</code>,
+          <code>Program.cs:163</code>), Identity (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25</code>,
+          <code>Program.cs:144</code>) and Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26</code>,
+          <code>Program.cs:158</code>).</li>
           <li><strong>Extensible per host.</strong> <code>AddWarmupReadiness()</code> registers the gate, the runner, the readiness health
           check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
           <code>AddWarmupTask&lt;T&gt;()</code>, which is also how a <code>SelfHttpWarmupTaskBase</code> subclass enters the run.</li>
@@ -361,7 +364,7 @@
           ceiling (<code>WarmupHostedService.cs:42</code>, applied at <code>:69</code>), and a task that trips it surfaces as a
           <code>TimeoutException</code>, is logged, and lets the gate open (<code>:77-82</code>). The number deliberately sits above the
           90-second shared Polly total-request timeout that already bounds the built-in OIDC task&#39;s HTTP call
-          (<code>Extensions.cs:62</code>, <code>HttpResilienceDefaults.cs:19</code>), so a host-registered task doing non-HTTP work,
+          (<code>Extensions.cs:61</code>, <code>HttpResilienceDefaults.cs:19</code>), so a host-registered task doing non-HTTP work,
           which previously had no bound at all, now inherits the same backstop. Two costs follow. A replica whose
           warm-up hangs stays out of rotation for the full two minutes before it is admitted, so the ceiling
           bounds the damage rather than making it cheap. And <code>WaitAsync</code> abandons rather than cancels, so the

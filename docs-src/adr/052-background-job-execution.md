@@ -146,8 +146,8 @@ both shapes.
 3. **The safety property still holds for those four, because they are not transactional commands.**
    `TransactionalCommandDecorator` wraps only commands implementing the `ITransactional` marker and
    passes everything else straight through
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:25-26`,
-   marker at `.../UseCases/ITransactional.cs:6`). No Engagement command implements it, so for these
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:28-29`,
+   marker at `.../UseCases/Markers/ITransactional.cs:6`). No Engagement command implements it, so for these
    handlers `SaveChangesAsync` is the commit and an enqueue below it is genuinely post-commit. The
    difference from shape 1 is where the ordering lives: in the command handler's statement order
    rather than in the ADR-003 deferral, so it is a rule a future edit to those handlers has to keep
@@ -159,13 +159,13 @@ both shapes.
 the write is durable.** What changed is who keeps the ordering for shape 2. Three of the four
 command-handler call sites named above contain no `SaveChangesAsync` of their own: they are
 `MutateEntityHandlerBase` subclasses
-(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:319`, over the
-shared `MutateEntityHandlerCore` at `:51`), and the base saves once for every subclass.
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:320`, over the
+shared `MutateEntityHandlerCore` at `:52`), and the base saves once for every subclass.
 
 1. **The save is one line in the shared base, not one per handler.**
    `MutateEntityHandlerCore.MutateCoreAsync` awaits `attemptUnitOfWork.SaveChangesAsync` at
-   `MutateEntityHandlerBase.cs:302`, calls `LogMutated` at `:304`, then awaits the `OnMutatedAsync`
-   post-save hook at `:305`. The enqueue is the body of that hook, so "enqueue below the save" is
+   `MutateEntityHandlerBase.cs:303`, calls `LogMutated` at `:305`, then awaits the `OnMutatedAsync`
+   post-save hook at `:306`. The enqueue is the body of that hook, so "enqueue below the save" is
    structural rather than remembered: a subclass has no way to express the other order.
    - `CloseLivePollHandler` declares the base at
      `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollHandler.cs:24`,
@@ -190,8 +190,8 @@ shared `MutateEntityHandlerCore` at `:51`), and the base saves once for every su
 3. **Point 3 above is narrowed, not withdrawn.** Its premise still holds:
    `TransactionalCommandDecorator` wraps only commands implementing `ITransactional` and passes
    everything else straight through
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:25-26`,
-   marker at `.../UseCases/ITransactional.cs:6`), and no Engagement command implements it, so
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:28-29`,
+   marker at `.../UseCases/Markers/ITransactional.cs:6`), and no Engagement command implements it, so
    `SaveChangesAsync` is the commit for all four sites. What no longer holds is its closing sentence:
    for the three base-class handlers a pipeline does keep the ordering, and the rule a future edit
    has to keep by hand lives in `SubmitQuestionHandler` alone.

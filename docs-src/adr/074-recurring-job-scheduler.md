@@ -8,7 +8,7 @@ the framework creates no table and starts no runner.
 ## Context
 The framework had two kinds of background work and neither of them is a schedule.
 
-`OutboxProcessor` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs`)
+`OutboxProcessor` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs`)
 is durable, multi-replica safe and event-driven: it runs when there is a row to drain, and its cadence is a
 consequence of writes, not a calendar. [ADR-052](052-background-job-execution.md) is the opposite end: an
 in-process bounded queue plus a hosted drain, started by a request, lost on restart, scoped to one replica
@@ -29,10 +29,10 @@ scheduling product (Hangfire or Quartz.NET) or to extend the durable polling loo
 ### The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET
 A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
 outbox claims a batch with an `ExecuteUpdateAsync` that sets `LockedUntil` and `LockToken` in one statement
-(`.../Persistence/Outbox/OutboxProcessor.cs:478-479`, inside `ClaimEligibleAsync`, `:454`) over a shared
+(`.../Persistence/Outbox/Processing/OutboxProcessor.cs:479-483`, inside `ClaimEligibleAsync`, `:456`) over a shared
 `FilterClaimable` predicate that admits only rows whose `LockedUntil` is null or already in the past
-(`:533-535`), then re-reads the claimed
-set by `LockToken` so a partial claim processes only its own rows (`:490-493`). A due job is claimed the same way, so two replicas can
+(`:535-537`), then re-reads the claimed
+set by `LockToken` so a partial claim processes only its own rows (`:492-496`). A due job is claimed the same way, so two replicas can
 never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.
 
 Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
@@ -96,7 +96,7 @@ job that must run for every window is not served by this scheduler.
 rather than at 03:00.
 
 `SchedulerMetrics` (`.../Infrastructure/Scheduling/SchedulerMetrics.cs:16`) follows the same conventions as
-`OutboxMetrics` (`.../Persistence/Outbox/OutboxMetrics.cs:16`) under
+`OutboxMetrics` (`.../Persistence/Outbox/Processing/OutboxMetrics.cs:16`) under
 [ADR-041](041-observability-and-telemetry.md): one meter per subsystem, never a second `Meter` with the
 same name, and outcomes carried as tags rather than as separate instruments. It is not an
 instrument-for-instrument copy. The scheduler emits **one** counter, `RunCounter`, tagged by `job` and by
@@ -111,12 +111,12 @@ queue and a schedule has no queue.
 
 Registration is two calls. `AddScheduledJobs(configuration)` binds the settings and registers the runner;
 `AddScheduledJob<TJob>()` adds one job from any module, using the accumulate-across-modules idiom that
-`AddPermissions` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:54`)
-and its `EnsurePermissionRegistry` helper (`:68`) already establish. That registration takes **no schedule
-argument** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:426`): the schedule is
+`AddPermissions` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:47`)
+and its `EnsurePermissionRegistry` helper (`:61`) already establish. That registration takes **no schedule
+argument** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:440`): the schedule is
 the job's own `CronExpression` property, and the one way to retime a shipped job without a release is
 configuration, the `Scheduler:Jobs:{Name}:Cron` section bound by `SchedulerSettings.Jobs`
-(`.../Infrastructure/Settings/SchedulerSettings.cs:54-60`) into `ScheduledJobOverrideSettings.Cron` (`:74`).
+(`.../Infrastructure/Scheduling/SchedulerSettings.cs:54-60`) into `ScheduledJobOverrideSettings.Cron` (`:74`).
 The runner resolves the two per job on every cycle, the override when it is present and non-blank and the
 compiled-in default otherwise (`ResolveCronExpression`, `.../Infrastructure/Scheduling/ScheduledJobRunner.cs:162`).
 The table is created only when the settings flag is on, the same gating [ADR-075](075-audit-trail.md) uses.

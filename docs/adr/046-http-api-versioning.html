@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -241,29 +244,29 @@
           proves two live versions coexist.</p>
           <ul>
           <li><strong>One registration wires the whole policy.</strong> <code>AddCommonApiVersioning</code>
-          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:244</code>) deliberately
+          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:245</code>) deliberately
           does <strong>not</strong> set <code>DefaultApiVersion</code>: <code>1.0</code> is already the <code>Asp.Versioning</code> library default, and the
           API explorer inherits both it and <code>AssumeDefaultVersionWhenUnspecified</code> from the versioning options,
           so restating either one trips AV0011/AV0024. The code comment recording that omission is at
-          <code>WebApplicationBuilderExtensions.cs:246</code>-<code>WebApplicationBuilderExtensions.cs:248</code>. What the registration does set: it assumes the default
+          <code>WebApplicationBuilderExtensions.cs:247</code>-<code>WebApplicationBuilderExtensions.cs:249</code>. What the registration does set: it assumes the default
           version when a caller sends no header
-          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:251</code>), reports
+          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:252</code>), reports
           the supported/deprecated versions on every response (<code>ReportApiVersions = true</code>,
-          <code>WebApplicationBuilderExtensions.cs:252</code>), and selects the version from an <code>api-version</code> request
-          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:253</code>). The
+          <code>WebApplicationBuilderExtensions.cs:253</code>), and selects the version from an <code>api-version</code> request
+          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:254</code>). The
           reader is header-based deliberately: routes and query strings stay version-free, so a caller opts
           into a newer shape by adding one header rather than changing the URL.</li>
           <li><strong>The API explorer is wired for versioned OpenAPI.</strong> The same call chains <code>.AddMvc()</code> then
-          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:254</code>,
-          <code>WebApplicationBuilderExtensions.cs:255</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
-          (<code>WebApplicationBuilderExtensions.cs:257</code>) and substituting the version into the URL where a host
-          routes one (<code>SubstituteApiVersionInUrl = true</code>, <code>WebApplicationBuilderExtensions.cs:258</code>). The
+          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:255</code>,
+          <code>WebApplicationBuilderExtensions.cs:256</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
+          (<code>WebApplicationBuilderExtensions.cs:258</code>) and substituting the version into the URL where a host
+          routes one (<code>SubstituteApiVersionInUrl = true</code>, <code>WebApplicationBuilderExtensions.cs:259</code>). The
           explorer&#39;s default-version behavior is inherited rather than configured, exactly as the comment
-          above it records (<code>WebApplicationBuilderExtensions.cs:246</code>-<code>WebApplicationBuilderExtensions.cs:248</code>). That
+          above it records (<code>WebApplicationBuilderExtensions.cs:247</code>-<code>WebApplicationBuilderExtensions.cs:249</code>). That
           group format feeds the <code>v1</code> OpenAPI document <code>AddCommonOpenApi</code> registers
-          (<code>WebApplicationBuilderExtensions.cs:403</code>), which
+          (<code>WebApplicationBuilderExtensions.cs:404</code>), which
           <code>MapCommonOpenApi</code> serves at <code>/openapi/v1.json</code> outside Production only
-          (<code>Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:34</code>, guarded at
+          (<code>Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:34</code>, guarded at
           <code>OpenApiEndpointExtensions.cs:36</code> and mapped at <code>OpenApiEndpointExtensions.cs:38</code>).</li>
           <li><strong>A shipped exemplar proves two versions coexist.</strong> <code>ServiceInfoControllerBase</code>
           (<code>Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30</code>) serves the same
@@ -287,10 +290,10 @@
           live rather than theoretical.</li>
           <li><strong>A shared fitness contract keeps the machinery exercised.</strong>
           <code>ServiceInfoVersioningContractTestsBase&lt;TFixture&gt;</code>
-          (<code>Source/Hosting/MMCA.Common.Testing/ServiceInfoVersioningContractTestsBase.cs:19</code>) sends
+          (<code>Source/Hosting/MMCA.Common.Testing/Conformance/ServiceInfoVersioningContractTestsBase.cs:20</code>) sends
           <code>api-version: 1.0</code> and <code>2.0</code> over the real host and asserts the v1.0 minimal shape carries an
-          <code>api-deprecated-versions</code> header (<code>ServiceInfoVersioningContractTestsBase.cs:38</code>) while the v2.0
-          evolved shape carries <code>api-supported-versions</code> (<code>ServiceInfoVersioningContractTestsBase.cs:54</code>).
+          <code>api-deprecated-versions</code> header (<code>ServiceInfoVersioningContractTestsBase.cs:39</code>) while the v2.0
+          evolved shape carries <code>api-supported-versions</code> (<code>ServiceInfoVersioningContractTestsBase.cs:55</code>).
           Because the controller ships in <code>MMCA.Common.API</code>, the whole test body is identical across repos:
           each consumer&#39;s subclass supplies only its fixture (for example ADC&#39;s <code>ApiVersioningTests</code>,
           <code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ApiVersioningTests.cs:14</code>,
@@ -311,9 +314,9 @@
           current host was affected either way, which is precisely why the failure could ship unnoticed.</li>
           <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
           in their startup: ADC&#39;s Conference
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:165</code>) and Identity
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:146</code>) hosts, Store&#39;s Catalog host
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:129</code>), and the same call is made
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:168</code>) and Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:150</code>) hosts, Store&#39;s Catalog host
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:138</code>), and the same call is made
           by the other extracted hosts and by the monolith reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:34</code>).</li>
           </ul>
