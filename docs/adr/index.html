@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 109 ADRs</summary>
+        <summary>All 110 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -208,6 +208,7 @@
         <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
         <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
         <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
           </ol>
         </nav>
       </details>
@@ -769,6 +770,11 @@
           <td><a href="109-feature-by-folder-convention.html">109</a></td>
           <td>Feature-by-folder layout as an enforced convention</td>
           <td>The aggregate names the first folder level in Domain, Application and Shared; UI, API and Infrastructure put a technical root first and the aggregate beneath it, with the same plural name in every project of a module; no folder holds more than twelve direct code files (<code>FolderWidthTestsBase</code>, subclassed in all four repos, a <code>.razor</code> + <code>.razor.cs</code> pair counting once, generated files and <code>Migrations/</code>/<code>Platforms/</code> trees skipped); namespaces follow folders (IDE0130 under <code>TreatWarningsAsErrors</code>), so a folder move is a public-API rename on a lockstep-released package family shipped as a breaking release with an <code>UPGRADING.md</code> map; and a module sub-folder is never named <code>Domain</code>, <code>Application</code>, <code>Infrastructure</code>, <code>API</code> or <code>UI</code> because <code>ModuleNameConventions</code> derives the schema, container and data-source name from those namespace segments (review-enforced). Moves run through <code>Tools/Scripts/move-namespace.ps1</code>. Recorded cost: the v1.183.0-v1.185.0 sweep is why most ADR path citations drifted in the 2026-09-03 audit.</td>
+          </tr>
+          <tr>
+          <td><a href="110-rubric-v2-category-realignment.html">110</a></td>
+          <td>Rubric v2: category realignment at 34</td>
+          <td>The 34-category evaluation rubric is versioned, and version 2 replaces two overlap-heavy categories in place rather than growing the list: §10 Cross-Cutting Concerns (four of its five criteria already scored in §5, §6, §9, §12 and §29) becomes <strong>Messaging &amp; Integration Architecture</strong> at weight 3 (broker topology by ADR, delivery semantics per consumer, dead-letter and poison handling, retention and replay, contract evolution with consumer-driven tests, sagas with compensation, gateway/BFF discipline), and §16 Maintainability &amp; Evolvability (its unique coupling and tech-debt criteria folded into §34, upgrades into §32, onboarding into §33) becomes <strong>AI-Native Application Architecture</strong>, N/A until a product feature calls a model. Eleven categories gain criteria the topic map exposed as blind spots: sagas, ACL and Strangler Fig, analytical/OLTP separation, expand-contract, polyglot by ADR, contract tests, threat model and service-to-service auth, progressive delivery, a single resilience mechanism, agentic-tooling guardrails, and a stated tenancy model. Category numbers are stable, so every scorecard row, backlog item and ADR citation survives; the cost is a denominator change (Σweight 81→80 for Common, 80→79 for ADC and Store) recorded in each scorecard header, §10 carried at prior scores until its first re-score against the new criteria, and prose in onboarding, articles and the wiki that names the two old titles until the governance commands refresh it.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

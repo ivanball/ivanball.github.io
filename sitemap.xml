@@ -586,6 +586,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html</loc>
+    <lastmod>2026-09-04</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://ivanball.github.io/docs/onboarding/index.html</loc>
     <lastmod>2026-09-02</lastmod>
     <priority>0.8</priority>
@@ -782,42 +787,42 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/index.html</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-09-04</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/adc-ArchitectureScorecard.html</loc>
-    <lastmod>2026-09-03</lastmod>
+    <lastmod>2026-09-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/adc-RemediationBacklog.html</loc>
-    <lastmod>2026-09-02</lastmod>
+    <lastmod>2026-09-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/ArchitectureEvaluationCriteria.html</loc>
-    <lastmod>2026-09-03</lastmod>
+    <lastmod>2026-09-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/common-ArchitectureScorecard.html</loc>
-    <lastmod>2026-09-02</lastmod>
+    <lastmod>2026-09-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/common-RemediationBacklog.html</loc>
-    <lastmod>2026-09-02</lastmod>
+    <lastmod>2026-09-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/store-ArchitectureScorecard.html</loc>
-    <lastmod>2026-09-03</lastmod>
+    <lastmod>2026-09-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/store-RemediationBacklog.html</loc>
-    <lastmod>2026-09-03</lastmod>
+    <lastmod>2026-09-04</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

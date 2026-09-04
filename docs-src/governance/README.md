@@ -5,6 +5,7 @@ The governance artifacts behind the MMCA platform: the shared 34-category evalua
 ## The rubric
 
 - [Architecture Evaluation Criteria](ArchitectureEvaluationCriteria.md): the 34-category rubric (Maturity 0-4 and Implementation 0-10 per category) that all three application repos are scored against.
+- Rubric version 2 (2026-09-04) replaced §10 and §16 in place (Messaging & Integration Architecture; AI-Native Application Architecture) and added criteria across eleven categories, keeping 34 categories and stable numbering: [ADR-110](../adr/110-rubric-v2-category-realignment.md).
 
 ## Scorecards and backlogs
 
