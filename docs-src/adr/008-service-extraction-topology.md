@@ -7,7 +7,10 @@ calls in code. YARP `ReverseProxy` configuration becomes the single route source
 HTTP version policy moves into cluster configuration, and a route-map test becomes the drift gate. The
 topology decision itself is unchanged. See also
 [ADR-088](088-gateway-edge-responsibilities.md) (2026-08-18) for the cross-cutting behavior the Gateway
-gains at the same time, which is the first added to it since this record.
+gains at the same time, which is the first added to it since this record. Revised 2026-09-04: the
+extraction sequence this topology supports is named as the **Strangler Fig** route (a new service
+beside the combined host, one route prefix moved at a time at the Gateway, the old host retired last);
+ADC's own history was a one-step cutover and is recorded as such below.
 
 ## Context
 ADC began as a modular monolith: one `MMCA.ADC.WebAPI` host loaded every module (Identity, Conference,
@@ -35,6 +38,17 @@ and front them with a single **YARP reverse-proxy Gateway** (`MMCA.ADC.Gateway`,
 - **Each service is the monolith with one module enabled.** The hosts still run `ModuleLoader`, just with
   `Modules:{Module}:Enabled=true` for their own module; disabled peers are satisfied by `Disabled*` stubs.
   The Domain/Application/Shared code is identical whether it runs in-process or extracted.
+- **Extraction follows the Strangler Fig route; a rewrite is never the plan.** Nothing in the topology
+  needs a big-bang switch. A module is extracted by (1) starting its single-module service host beside
+  the combined host, which keeps running with that module turned off (`Modules:{Module}:Enabled=false`)
+  and its peers satisfied by the `Disabled*` stubs the `ModuleLoader` registers for disabled modules
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:12`, `:101`); (2) moving
+  that module's route prefix at the Gateway from the combined host's cluster to the new service's, one
+  YARP `ReverseProxy` configuration change under ADR-089 and no client change, because the Gateway is
+  the only entry point; and (3) retiring the combined host once no route points at it. Old path and
+  new path coexist until traffic has moved, and step (2) reverses by flipping the same route back. ADC
+  took the shortest form of this route, extracting all four modules in one step and deleting
+  `MMCA.ADC.WebAPI` at the end; a consumer with a live monolith should move one module at a time.
 - **The Gateway is the only client entry point.** It owns the route→service map (`/Auth`, `/Events`,
   `/Bookmarks`, `/hubs`, `/.well-known`, …); clients (Blazor/MAUI) never address a service directly. It
   has no DbContext or controllers. Its pipeline is edge rate limiting
