@@ -87,7 +87,7 @@ invalidates it and no fixed value is correct for every generated name:
   `dotnet format analyzers MMCA.Helpdesk.slnx --diagnostics SA1210 SA1211 --severity info`
   (`build/templates/overlay/mmca-app/README.md:110`), which restores the two ordering rules.
   `IDE0021` is not fixable by that command, so the README tells the adopter to fold the constructor
-  by hand and delete the line (`README.md:116-119`).
+  by hand and delete the line (`README.md:117-120`).
 
 **The wire-contract freeze ships, guarded rather than removed.**
 `IntegrationEventContractTestsBase` compares each event's members as a **set** rather than a
@@ -101,7 +101,7 @@ exactly one `IntegrationEventContractTests` class in the staged fitness map and 
 unfrozen wire contract behind a README that says it is frozen. That README section tells the adopter
 what the test guards and how to evolve it: an event added or reshaped on purpose is versioned
 (ADR-010) and `ExpectedContract` updated in the same commit, with the failure printing the live value
-to paste (`build/templates/overlay/mmca-app/README.md:121-133`).
+to paste (`build/templates/overlay/mmca-app/README.md:122-134`).
 
 `mmca-module` additionally prints seven numbered wire-ups `dotnet new` cannot perform
 (`templates/mmca-module/.template.config/template.json:255-263`): the solution entries for the eight
@@ -158,7 +158,7 @@ policy. This package ships from a different repo on a different cadence and pins
 version as a `--framework-version` parameter instead. Keeping it outside that family also leaves the
 package count in
 [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) unchanged, since its generator
-counts only packable projects under `MMCA.Common/Source/` (`MMCA.Common/FACTS.md:71`), so the CI
+counts only packable projects under `MMCA.Common/Source/` (`MMCA.Common/FACTS.md:73-74`), so the CI
 drift gate is unaffected.
 
 **The token sweep is in the gate on purpose.** `sourceName` and the symbol replacements run as

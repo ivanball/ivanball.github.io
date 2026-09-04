@@ -51,7 +51,7 @@ at unrelated text. See the Revision (2026-08-31) at the end).
 Every read an application handler performs has to come from somewhere, and the shape of that contract
 decides whether the module can still be lifted into its own service later (ADR-007, ADR-008). The
 framework already keeps persistence out of Application by reference: the interfaces live in
-`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs` and the EF
+`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs` and the EF
 implementation in
 `Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:19-21`, so no
 Application project references EF Core. That is not enough on its own. A repository that hands back
@@ -99,7 +99,7 @@ keeps the raw `IQueryable` surfaces out of Application code.
   a queryable at all.
 - **Application code must not touch those queryables, and a fitness rule fails the build.**
   `RawQueryableConventionTestsBase.ApplicationLayer_DoesNotUseRawQueryableSurfaces`
-  (`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/RawQueryableConventionTestsBase.cs:61`)
+  (`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/RawQueryableConventionTestsBase.cs:61`)
   scans the `.cs` files of each mapped module's Application project (`:45-58`, `:71-82`) for
   `.Table` / `.TableNoTracking*` member access (`:103`). The stated reason is the extraction promise:
   a raw-queryable handler is EF-coupled and its query shape cannot move behind a gRPC boundary
@@ -121,7 +121,7 @@ keeps the raw `IQueryable` surfaces out of Application code.
   (`Source/Core/MMCA.Common.Domain/Specifications/OwnedByUserSpecification.cs:20`, `:29-30`) and is
   closed over the entity type at the call site, which is how ADC scopes an attendee to their own
   answers
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:75`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:75`).
 - **Specifications compose.** `AndSpecification` (`Specification.cs:81`), `OrSpecification` (`:105`),
   and `NotSpecification` (`:128`) each expose a `Criteria` that delegates to the internal
   `SpecificationComposer` (`:146`). `Combine` (`:155`) rebinds the right operand's parameter onto the
@@ -134,18 +134,18 @@ keeps the raw `IQueryable` surfaces out of Application code.
   no hand-written class. Composition is used in production: ADC's paged session read ANDs the
   public-session specification with the speaker-scoped one rather than substituting, because dropping
   the public filter would leak non-accepted sessions to non-privileged callers
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:110`,
-  `:128`, rationale at `:100-104`). Since 2026-08-21 all three composing call sites write the fluent
-  form, `publicSpecification.And(...)` (`SessionsController.cs:128`), and the hand-built
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:111`,
+  `:129`, rationale at `:101-105`). Since 2026-08-21 all three composing call sites write the fluent
+  form, `publicSpecification.And(...)` (`SessionsController.cs:129`), and the hand-built
   `new AndSpecification<...>(a, b)` construction no longer appears in any consumer.
 - **The specification enters the same query pipeline, not a parallel one.** `IEntityQueryService`
   takes an optional `ISpecification<TEntity, TIdentifierType>` on every DTO or entity read: the two
   `GetAllAsync` overloads, `GetEntityByIdAsync`, and `GetByIdAsync`
-  (`Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:40`, `:63`, `:110`,
+  (`Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityQueryService.cs:40`, `:63`, `:110`,
   `:131`). The other two reads on the interface take a raw predicate rather than a specification,
   `GetAllForLookupAsync` (`:87-91`) and `ExistsAsync` (`:143-146`).
   `EntityQueryService` passes the specification's `Criteria` into the query parameters
-  (`Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:286` on the list path, `:518`
+  (`Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:287` on the list path, `:519`
   in `BuildQueryAsync`) alongside the dynamic filters, sorting, and paging. Cross-source predicates are produced the same way:
   `CrossSourceSpecification.BuildAsync`
   (`Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:39`) resolves the
@@ -154,19 +154,19 @@ keeps the raw `IQueryable` surfaces out of Application code.
 
 Enforcement of the queryable ban is **opt-in per repository, by subclassing the base**, and today
 three repositories opt in. MMCA.Common scans its own framework Application project
-(`Tests/Architecture/MMCA.Common.Architecture.Tests/RawQueryableConventionTests.cs:18-22`),
+(`Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:18-22`),
 MMCA.ADC scans its mapped Identity/Conference/Engagement Application projects plus the thin
 Notification module appended by hand
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/RawQueryableConventionTests.cs:21-30`),
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:21-30`),
 and MMCA.Store scans its Catalog/Sales/Identity Application projects
-(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/RawQueryableConventionTests.cs`).
+(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs`).
 Store adopted on the 2026-07-28 drift wave with an **empty** `AllowedFiles`: its Application layer
 had zero raw-queryable uses at adoption, so unlike the other two it starts with no exemptions to
 ratchet down. MMCA.Helpdesk has no subclass, so its Application code is not scanned today. The
 rule also ships with a documented exemption list, `AllowedFiles`
 (`RawQueryableConventionTestsBase.cs:38`), used as an adoption ratchet (`:24-27`): MMCA.Common
 exempts six files, the generic query pipeline itself (`EntityQueryService.cs`, which builds its base
-query from `Table` / `TableNoTracking` at `EntityQueryService.cs:298` and `:510-512`) plus five Notifications
+query from `Table` / `TableNoTracking` at `EntityQueryService.cs:299` and `:511-513`) plus five Notifications
 handlers (`RawQueryableConventionTests.cs:26-36`), and MMCA.ADC exempts eight, the Engagement live
 layer and bookmark aggregations, the Identity user-list projection, and the Notification GDPR export
 (`MMCA.ADC/.../RawQueryableConventionTests.cs:34-52`).
@@ -198,9 +198,9 @@ describing it in the comments its template staging script carries
 
 What has not changed is the wiring, and that is deliberate. `IUnitOfWork` hands out only the
 composites (`IRepository` at
-`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IUnitOfWork.cs:19`, `IReadRepository`
+`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:19`, `IReadRepository`
 at `:29`), and the container registers only the open generic `IRepository<,>`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:105`). Every narrowed holder is
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:119`). Every narrowed holder is
 assigned from `IUnitOfWork.GetReadRepository<,>()` (or `GetRepository<,>()` where the same handler
 also writes) and narrows by an implicit reference conversion at the assignment, because
 `IReadRepository` derives from both narrow interfaces (`IRepository.cs:330-331`). Nothing
@@ -355,7 +355,7 @@ dependents by name, and the projecting `ListAsync` is among the members they cal
 
 ### 4. Projection can be pushed into SQL
 An optional `IEntityDTOProjector<TEntity, TEntityDTO, TIdentifierType>`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOProjector.cs:51`) exposes one
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityDTOProjector.cs:51`) exposes one
 member, `IQueryable<TEntityDTO> ProjectTo(IQueryable<TEntity> source)` (`:62`), and is auto-registered
 by the Application assembly scan (`.../Application/DependencyInjection.cs:209`). When one is
 registered, the read takes a server-side path, `ExecuteProjectedAsync`
@@ -364,12 +364,12 @@ registered, the read takes a server-side path, `ExecuteProjectedAsync`
 sorting and paging (`:101-105`), so the database returns only the DTO's columns instead of whole
 entities that are mapped in memory afterwards.
 
-The guard has **three** conditions, not two (`EntityQueryService.cs:489`): a projector must be
+The guard has **three** conditions, not two (`EntityQueryService.cs:490`): a projector must be
 registered, the read must not be tracking, and `NavigationMetadata.UnsupportedIncludes` must be empty,
 that last set being the navigations requiring manual batch loading because they cross a data source
 (`INavigationMetadata.cs:40`). Miss any one and the read falls back to materialize-then-map, which is
 exactly today's behavior, so this is a pure opt-in optimization with no change in results. The call
-site is `EntityQueryService.cs:303`, reached by both list overloads (`:227` delegates to `:248`). The
+site is `EntityQueryService.cs:304`, reached by both list overloads (`:228` delegates to `:249`). The
 reference implementation is `PushNotificationDTOProjector`
 (`.../Application/Notifications/PushNotifications/DTOs/PushNotificationDTOProjector.cs:35`, registered
 at `.../Notifications/DependencyInjection.cs:51`), which wraps the existing Mapperly mapper's
@@ -455,8 +455,8 @@ change, none of them behavioral:
 
 - **Fluent composition replaced hand-built combinators.** The workspace's three composing call sites
   now write `a.And(b)`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:128`,
-  `.../SpeakersController.cs:173`, and
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:129`,
+  `.../Speakers/SpeakersController.cs:174`, and
   `.../MMCA.ADC.Conference.Application/Common/PublicConferenceVisibility.cs:148-149`), so the
   `SpecificationExtensions` members from the Revision (2026-08-18) have production callers and
   `new AndSpecification<...>(a, b)` no longer appears in any consumer.

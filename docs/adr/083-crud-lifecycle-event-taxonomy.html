@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -282,9 +285,9 @@
           to <code>Added</code>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:46-47</code>).
           Because integration-event shapes are snapshot-frozen by an architecture test
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Events.cs:45-58</code>),
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:45-58</code>),
           <code>State:DomainEntityState</code> is a committed line of the wire contract
-          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/IntegrationEventContractTests.cs:11</code>),
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:11</code>),
           so retyping or removing the discriminator fails the build and, under ADR-010, requires a new event
           type rather than a silent reshape.</li>
           <li><strong>The shared base is the convenience; the discriminator shape is the convention.</strong> Fourteen concrete
@@ -314,9 +317,11 @@
           transitions) and <strong>1 in Helpdesk</strong>: <strong>32</strong> in total.</li>
           <li><strong>Nothing enforces the taxonomy.</strong> The shared fitness rules require domain events to be sealed and to
           live in a <code>*.DomainEvents</code> namespace
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Naming.cs:66-75</code>), to
-          be immutable (<code>ArchitectureRules.Immutability.cs:34-38</code>), and require integration events to inherit
-          <code>BaseIntegrationEvent</code> and declare an <code>int SchemaVersion</code> (<code>ArchitectureRules.Events.cs:6-25</code>), but no
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Naming.cs:66-75</code>), to
+          be immutable (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Immutability.cs:34-38</code>),
+          and require integration events to inherit
+          <code>BaseIntegrationEvent</code> and declare an <code>int SchemaVersion</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:6-25</code>), but no
           rule mentions <code>EntityChangedEvent</code> or the discriminator. The framework&#39;s own coverage of the base is
           five unit tests over two test doubles, one <code>int</code>-keyed and one <code>Guid</code>-keyed
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/DomainEvents/EntityChangedEventTests.cs:10-59</code>,
@@ -331,7 +336,7 @@
           aggregate deliberately raises <strong>no</strong> <code>Added</code> event, with creation signalled after commit by a separate
           integration event instead
           (<code>.../Tickets.Domain/Tickets/Ticket.cs:81-84</code>, published at
-          <code>.../Tickets.Application/Tickets/UseCases/Create/CreateTicketHandler.cs:42-43</code>); the audit handler&#39;s doc
+          <code>.../Tickets.Application/Tickets/UseCases/Create/CreateTicketHandler.cs:43-45</code>); the audit handler&#39;s doc
           records exactly that gap (<code>TicketChangedAuditHandler.cs:13-14</code>). Outside the four repos, the two-module
           <code>MMCA.ECommerce</code> companion sample carries two more adopters on the same pattern
           (<code>MMCA.ECommerce/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/DomainEvents/ProductChanged.cs:15</code>,

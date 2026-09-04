@@ -80,9 +80,9 @@ the package's own workflow bases, and wire it as a required merge check and a de
   three contexts block merges (`MMCA.Common/CONTRIBUTING.md:63-64`, enumerated in the branch-protection
   payload at `:174-176`).
 - **Both deployed apps gate the deploy on it.** `MMCA.ADC/.github/workflows/deploy.yml:689` and
-  `MMCA.Store/.github/workflows/deploy.yml:592` call the reusable `e2e.yml` workflow chromium-only
-  (ADC `:691`, Store `:594`) against the full Aspire stack, and the `deploy` job waits on that gate
-  (ADC `:1054`, Store `:945`).
+  `MMCA.Store/.github/workflows/deploy.yml:646` call the reusable `e2e.yml` workflow chromium-only
+  (ADC `:691`, Store `:648`) against the full Aspire stack, and the `deploy` job waits on that gate
+  (ADC `:1054`, Store `:999`).
 - **The gate already owns design-token decisions.** Contrast values in the shared theme are set to
   what the scan will accept, with the ratio recorded in place: light-palette `WarningContrastText`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:33`, rationale at `:29-32`,
@@ -119,7 +119,7 @@ subclasses three of the four
 `E2ETestBase` directly
 (`ProfileManagementTests.cs:8`) because the ADC profile page supports only password change and account
 deletion, so it does not inherit the base's profile scan. Beyond the Identity bases each app carries a
-dedicated suite: ADC's `Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17` holds 31 page
+dedicated suite: ADC's `Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:27` holds 31 page
 scans (10 through `ScanGridAsync`, 21 strict) and Store's
 `Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17` holds 23 (6 grid, 17 strict).
 **MMCA.Helpdesk adopts none of it**: it pins the package version
@@ -165,8 +165,8 @@ accessibility gate today.
   not machine-checkable and are covered by the manual screen-reader checklist in
   [common-ACCESSIBILITY.md](../guides/common-ACCESSIBILITY.md), which is a periodic human pass, not a gate.
 - **The deploy gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-  filter (ADC `deploy.yml:688`, Store `deploy.yml:591`), and `deploy` accepts `success` or `skipped` for it
-  (ADC `:1092`, Store `:976`), so a backend-only or infra-only deploy ships without a browser scan. That
+  filter (ADC `deploy.yml:688`, Store `deploy.yml:645`), and `deploy` accepts `success` or `skipped` for it
+  (ADC `:1092`, Store `:1038`), so a backend-only or infra-only deploy ships without a browser scan. That
   is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
   gate as backstop, but it does mean "deployed" does not always mean "axe ran on this commit".
 - **Consumer breadth is hand-maintained.** Nothing forces a new page into `AccessibilityTests`, so

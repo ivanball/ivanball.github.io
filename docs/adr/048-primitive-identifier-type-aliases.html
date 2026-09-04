@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -257,7 +260,7 @@
           (<code>Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31</code>), and constrains the user
           type parameter of <code>AuthenticationServiceBase&lt;TUser&gt;</code>
           (<code>where TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;, IAuthUser</code>,
-          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:59</code>), with each consuming
+          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:62</code>), with each consuming
           app supplying the concrete <code>User</code> entity that satisfies it.
           Consumers follow the same pattern: ADC Identity
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2</code>),
@@ -283,7 +286,7 @@
           configuration is <code>EntityTypeConfigurationSQLServer&lt;User, UserIdentifierType&gt;</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13</code>);
           the repository handle is <code>GetRepository&lt;User, UserIdentifierType&gt;()</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:43</code>);
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:44</code>);
           the API contract is <code>UserDTO : IBaseDTO&lt;UserIdentifierType&gt;</code> with a <code>UserIdentifierType Id</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/UserDTO.cs:8,11</code>); and the
           integration event carries <code>UserIdentifierType UserId</code>

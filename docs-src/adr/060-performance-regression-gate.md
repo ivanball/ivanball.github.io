@@ -21,7 +21,7 @@ problem this record answers.
 
 No existing ADR covers it. ADR-015's fitness functions assert **structure and registration**, and
 say so explicitly: they are "not runtime behavior"
-(`Website/docs-src/adr/015-architecture-fitness-functions.md:48`). ADR-038 gates the supply chain
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:68`). ADR-038 gates the supply chain
 (SBOM, lock files, vulnerability audit), which is provenance, not cost. ADR-041 instruments
 production, so it observes a regression **after** it deploys rather than failing the PR that
 introduced it. Nothing owned the statement "a performance regression must fail the merge."
@@ -109,8 +109,9 @@ counterpart, a Core Web Vitals budget asserted per deploy inside the chromium e2
   slows the other, so the machine cancels out of the quotient. That is what makes a latency assertion
   valid on hardware nobody controls: the gate never claims to know how fast the runner is, only that
   one path stayed enormously faster than the other.
-- **The ratio encodes the invariant that actually matters.** `Specification<TEntity, TId>` caches its
-  compiled delegate per instance (`MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:27,32`),
+- **The ratio encodes the invariant that actually matters.**
+  `Specification<TEntity, TIdentifierType>` caches its compiled delegate per instance
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:15,27,32`),
   and the two benchmarks are exactly the production path (one instance reused) and the anti-pattern
   the cache exists to avoid (a fresh instance per evaluation, recompiling every call)
   (`SpecificationBenchmarks.cs:36-42`). If someone deletes the cache field, moves the compile into
@@ -160,7 +161,7 @@ counterpart, a Core Web Vitals budget asserted per deploy inside the chromium e2
 - **The gate runs on pull requests only.** CI has no `push: main` trigger
   (`MMCA.Common/.github/workflows/ci.yml:14-16`), and `release.yml` does not run `build/perfgate` (it
   only mentions the project in a NuGet cache-key comment,
-  `MMCA.Common/.github/workflows/release.yml:26,109`), so a release tag is not re-verified against
+  `MMCA.Common/.github/workflows/release.yml:26,110`), so a release tag is not re-verified against
   the baseline.
 - **A green context does not always mean the benchmarks ran.** On a documentation-only PR the heavy
   steps are skipped by the `changes` classifier while all required contexts still post green, which

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -238,7 +241,12 @@
           (2026-09-03): <code>MMCA.Store.UI.Web</code> now calls <code>AddCommonSerilog</code> instead of hand-rolling the same
           configuration inline, so the &quot;defaults exist in two shapes&quot; cost that amendment recorded is gone and
           eight hosts share one helper; its <code>Program.cs</code> citations and the per-host <code>AddCommonSerilog</code> /
-          bootstrap-factory line anchors are rebased onto their current lines.</p>
+          bootstrap-factory line anchors are rebased onto their current lines. Amended again (2026-09-03) to
+          record the probe-telemetry cost knob (<code>Telemetry:FilterProbeTelemetry</code>, the one knob that is on by
+          default) and the metric-drop views that make the two metrics knobs authoritative over the Azure
+          Monitor distro, and to rebase the Aspire service-defaults, CQRS decorator and outbox citations (the
+          outbox processor and its metrics now live under <code>Persistence/Outbox/Processing/</code>) onto their current
+          lines; see the &quot;Amended (2026-09-03): probe telemetry&quot; section at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -259,11 +267,13 @@
           <ul>
           <li><p><strong>One shared telemetry baseline on every host.</strong> <code>ConfigureOpenTelemetry</code>
           (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:121</code>) wires OpenTelemetry logging with formatted
-          messages and scopes (<code>Extensions.cs:125</code>), metrics from ASP.NET Core (unconditional,
-          <code>Extensions.cs:132</code>) plus <code>HttpClient</code> and the runtime (each gated behind a cost knob, see below),
-          and tracing from ASP.NET Core and <code>HttpClient</code> (<code>Extensions.cs:176</code>-<code>Extensions.cs:177</code>). It is
-          called from <code>AddServiceDefaults</code> (<code>Extensions.cs:41</code>), so a host opts in once and every project in
-          the Aspire model inherits the same pipeline.</p>
+          messages and scopes (<code>Extensions.cs:132</code>-<code>Extensions.cs:133</code>), metrics from ASP.NET Core
+          (unconditional, <code>Extensions.cs:139</code>) plus <code>HttpClient</code> and the runtime (each gated behind a cost
+          knob, see below), and tracing from ASP.NET Core and <code>HttpClient</code>, added either with the
+          probe-telemetry filters attached (<code>Extensions.cs:230</code>-<code>Extensions.cs:233</code>) or plain
+          (<code>Extensions.cs:237</code>-<code>Extensions.cs:238</code>) depending on the knob the Amended (2026-09-03) section
+          records. It is called from <code>AddServiceDefaults</code> (<code>Extensions.cs:41</code>), so a host opts in once and
+          every project in the Aspire model inherits the same pipeline.</p>
           </li>
           <li><p><strong>Custom RED metrics from the CQRS pipeline.</strong> A single meter <code>MMCA.Common.Cqrs</code>
           (<code>Source/Core/MMCA.Common.Application/UseCases/Decorators/CqrsMetrics.cs:24</code>) publishes two duration
@@ -272,26 +282,28 @@
           logging decorator routes all three of its exits through a private <code>RecordDuration</code> helper, so the
           measurement cannot be skipped. The command helper calls <code>CqrsMetrics.CommandDuration.Record(...)</code>
           tagged by <code>command</code> and <code>outcome</code>
-          (<code>Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:79</code>, in the
-          <code>RecordDuration</code> helper declared at <code>:78</code>) and the query helper does the same for <code>QueryDuration</code>
-          (<code>Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:77</code>, helper at
-          <code>:76</code>).
+          (<code>Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:80</code>, in the
+          <code>RecordDuration</code> helper declared at <code>:79</code>) and the query helper does the same for <code>QueryDuration</code>
+          (<code>Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:78</code>, helper at
+          <code>:77</code>).
           The <code>outcome</code> tag takes <code>completed</code>, <code>failed</code> (a <code>Result</code> failure), or <code>exception</code>, one call site per
-          path (<code>LoggingCommandDecorator.cs:48</code>, <code>:43</code>, <code>:57</code>; the query equivalents at
-          <code>LoggingQueryDecorator.cs:45</code>, <code>:40</code>, <code>:54</code>), so count gives rate, the tag gives errors, and the
+          path (<code>LoggingCommandDecorator.cs:49</code>, <code>:44</code>, <code>:58</code>; the query equivalents at
+          <code>LoggingQueryDecorator.cs:46</code>, <code>:41</code>, <code>:55</code>), so count gives rate, the tag gives errors, and the
           histogram gives duration. The Aspire host subscribes the meter by literal name
-          (<code>Extensions.cs:165</code>).</p>
+          (<code>Extensions.cs:200</code>).</p>
           </li>
           <li><p><strong>An outbox dead-letter counter.</strong> The outbox instruments live in their own static type
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMetrics.cs:16</code>), which owns the
-          meter <code>MMCA.Common.Outbox</code> (<code>OutboxMetrics.cs:19</code>) and the counter <code>outbox.dead_letter.count</code>
-          (<code>OutboxMetrics.cs:41</code>-<code>OutboxMetrics.cs:42</code>). <code>OutboxProcessor</code> increments it on both dead-letter
-          paths, tagged by <code>event_type</code> and by a <code>reason</code> that tells them apart: <code>type_unresolvable</code> when a
-          message&#39;s event type cannot be resolved (<code>OutboxProcessor.cs:717</code>-<code>OutboxProcessor.cs:720</code>), and
-          <code>retries_exhausted</code> when a failing message reaches <code>MaxRetries</code> and drops out of the poll
-          (<code>OutboxProcessor.cs:672</code>-<code>OutboxProcessor.cs:675</code>). The processor&#39;s activity source publishes outbox
-          spans under the same name (<code>OutboxProcessor.cs:85</code>); both the meter and the trace source are
-          registered by literal name in the Aspire defaults (<code>Extensions.cs:164</code>, <code>Extensions.cs:175</code>).</p>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxMetrics.cs:16</code>), which
+          owns the meter <code>MMCA.Common.Outbox</code> (<code>OutboxMetrics.cs:19</code>) and the counter <code>outbox.dead_letter.count</code>
+          (<code>OutboxMetrics.cs:41</code>-<code>OutboxMetrics.cs:42</code>). <code>OutboxProcessor</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs</code>) increments
+          it on both dead-letter paths, tagged by <code>event_type</code> and by a <code>reason</code> that tells them apart:
+          <code>type_unresolvable</code> when a message&#39;s event type cannot be resolved
+          (<code>OutboxProcessor.cs:719</code>-<code>OutboxProcessor.cs:722</code>), and <code>retries_exhausted</code> when a failing message
+          reaches <code>MaxRetries</code> and drops out of the poll
+          (<code>OutboxProcessor.cs:674</code>-<code>OutboxProcessor.cs:677</code>). The processor&#39;s activity source publishes outbox
+          spans under the same name (<code>OutboxProcessor.cs:87</code>); both the meter and the trace source are
+          registered by literal name in the Aspire defaults (<code>Extensions.cs:199</code>, <code>Extensions.cs:210</code>).</p>
           </li>
           <li><p><strong>Correlation-ID middleware ties the request together.</strong> <code>CorrelationIdMiddleware</code>
           (<code>Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:15</code>) uses the
@@ -301,48 +313,53 @@
           (<code>CorrelationIdMiddleware.cs:36</code>), and echoes it on the response
           (<code>CorrelationIdMiddleware.cs:39</code>, inside the <code>OnStarting</code> callback registered at
           <code>CorrelationIdMiddleware.cs:37</code>). The CQRS logging decorators stamp that same id into every log
-          scope (read at <code>LoggingCommandDecorator.cs:24</code>, stamped by <code>BeginCommandScope</code> at <code>:26</code>), so logs,
+          scope (read at <code>LoggingCommandDecorator.cs:25</code>, stamped by <code>BeginCommandScope</code> at <code>:27</code>), so logs,
           the correlation id, and the trace id line up for one request.</p>
           </li>
           <li><p><strong>Two high-volume metric families gated behind cost knobs, on by default.</strong> ASP.NET Core metrics are
-          always wired (<code>Extensions.cs:132</code>), but the two heaviest AppMetrics contributors on a low-traffic
+          always wired (<code>Extensions.cs:139</code>), but the two heaviest AppMetrics contributors on a low-traffic
           multi-service deployment are conditional. <code>HttpClient</code> connection and request metrics are added only
-          when <code>Telemetry:DisableHttpClientMetrics</code> is unset or false (<code>Extensions.cs:141</code>, adding
-          instrumentation at <code>Extensions.cs:143</code>), and .NET runtime metrics (<code>dotnet.gc.*</code>, <code>jit.*</code>,
-          <code>thread_pool.*</code>) only when <code>Telemetry:DisableRuntimeMetrics</code> is unset or false (<code>Extensions.cs:150</code>,
-          adding at <code>Extensions.cs:152</code>). Both keys are read by <code>IsInstrumentationDisabled</code>
-          (<code>Extensions.cs:388</code>-<code>Extensions.cs:389</code>), which drops the family only when the value parses as boolean <code>true</code>; absent,
+          when <code>Telemetry:DisableHttpClientMetrics</code> is unset or false (<code>Extensions.cs:148</code>, adding
+          instrumentation at <code>Extensions.cs:168</code>), and .NET runtime metrics (<code>dotnet.gc.*</code>, <code>jit.*</code>,
+          <code>thread_pool.*</code>) only when <code>Telemetry:DisableRuntimeMetrics</code> is unset or false (<code>Extensions.cs:175</code>,
+          adding at <code>Extensions.cs:187</code>). Skipping the instrumentation is not enough on its own, so each
+          disabled branch also drops the whole meter with a <code>View</code> (<code>Extensions.cs:160</code>-<code>Extensions.cs:164</code> for
+          <code>System.Net.Http</code> plus <code>System.Net.NameResolution</code>, <code>Extensions.cs:180</code>-<code>Extensions.cs:183</code> for
+          <code>System.Runtime</code>): the Azure Monitor distro adds those meters itself, and a <code>View</code> applies to the
+          whole <code>MeterProvider</code> regardless of which component added them, which is what makes each knob
+          authoritative rather than advisory. Both keys are read by <code>IsInstrumentationDisabled</code>
+          (<code>Extensions.cs:471</code>-<code>Extensions.cs:472</code>), which drops the family only when the value parses as boolean <code>true</code>; absent,
           blank, or unparseable falls back to keeping the instrumentation, so a typo cannot silently blind a
           whole metric family. A deployed host sets one or both to <code>true</code> to cut ingestion cost; outbound
           dependency latency is still captured as traces when <code>HttpClient</code> metrics are dropped.</p>
           </li>
           <li><p><strong>Head-based sampling as a cost knob, off by default.</strong> <code>Telemetry:TracesSampleRatio</code>
-          (<code>Extensions.cs:188</code>, parsed by <code>TryGetTraceSampleRatio</code> at <code>Extensions.cs:365</code>, which reads the
-          key at <code>Extensions.cs:368</code>) is unset by default, so a host samples everything and behavior does not
+          (<code>Extensions.cs:261</code>, parsed by <code>TryGetTraceSampleRatio</code> at <code>Extensions.cs:448</code>, which reads the
+          key at <code>Extensions.cs:451</code>) is unset by default, so a host samples everything and behavior does not
           change. A deployed host sets a ratio in
           the open interval (0,1) to keep that fraction of traces; the value wraps a <code>TraceIdRatioBasedSampler</code>
-          in a <code>ParentBasedSampler</code> (<code>Extensions.cs:192</code>) so a sampled-in request keeps its whole trace across
+          in a <code>ParentBasedSampler</code> (<code>Extensions.cs:262</code>) so a sampled-in request keeps its whole trace across
           service boundaries. A key that is absent, unparseable, or outside (0,1) falls back to sample-all
-          (<code>Extensions.cs:369</code>-<code>Extensions.cs:373</code>), so a typo can never silently drop all telemetry.</p>
+          (<code>Extensions.cs:452</code>-<code>Extensions.cs:457</code>), so a typo can never silently drop all telemetry.</p>
           </li>
           <li><p><strong>Outbox poll spans are filtered out of export.</strong> <code>OutboxPollFilterProcessor</code>
           (<code>Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15</code>), registered before
-          the exporters (<code>Extensions.cs:184</code>), clears the <code>Recorded</code> flag on the recurring <code>OutboxPoll</code> span
+          the exporters (<code>Extensions.cs:246</code>), clears the <code>Recorded</code> flag on the recurring <code>OutboxPoll</code> span
           and its children (<code>OutboxPollFilterProcessor.cs:45</code>). The poll query runs inside that span, opened at
-          the top of <code>FetchCandidatesAsync</code> (<code>OutboxProcessor.cs:411</code>, span started at <code>OutboxProcessor.cs:417</code>,
-          named at <code>OutboxProcessor.cs:73</code>), so steady-state polling does not flood Application Insights. Real
+          the top of <code>FetchCandidatesAsync</code> (<code>OutboxProcessor.cs:413</code>, span started at <code>OutboxProcessor.cs:419</code>,
+          named at <code>OutboxProcessor.cs:75</code>), so steady-state polling does not flood Application Insights. Real
           outbox work is untouched: each per-message <code>OutboxProcess</code> span is started by <code>StartOutboxActivity</code>
-          (called once per message at <code>OutboxProcessor.cs:577</code>, declared at <code>OutboxProcessor.cs:773</code>) under an
+          (called once per message at <code>OutboxProcessor.cs:579</code>, declared at <code>OutboxProcessor.cs:775</code>) under an
           explicit parent context restored from the message&#39;s stored trace and span ids
-          (<code>OutboxProcessor.cs:780</code>-<code>OutboxProcessor.cs:783</code>), span started at
-          <code>OutboxProcessor.cs:785</code>-<code>OutboxProcessor.cs:788</code>, so it is never a child of the poll span.</p>
+          (<code>OutboxProcessor.cs:782</code>-<code>OutboxProcessor.cs:785</code>), span started at
+          <code>OutboxProcessor.cs:787</code>-<code>OutboxProcessor.cs:790</code>, so it is never a child of the poll span.</p>
           </li>
           <li><p><strong>Dual exporters, either or both.</strong> <code>AddOpenTelemetryExporters</code> enables OTLP when
-          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:280</code>-<code>Extensions.cs:281</code>, the Aspire dashboard sets it, exporter
-          wired at <code>Extensions.cs:285</code>) and Azure Monitor via <code>UseAzureMonitor</code> (<code>Extensions.cs:293</code>) when
-          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present (read at <code>Extensions.cs:288</code>-<code>Extensions.cs:289</code>, checked at
-          <code>Extensions.cs:291</code>, and set by the cloud deployment). Both can be active at once
-          (<code>Extensions.cs:276</code>), so local development ships to the
+          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:363</code>-<code>Extensions.cs:364</code>, the Aspire dashboard sets it, exporter
+          wired at <code>Extensions.cs:368</code>) and Azure Monitor via <code>UseAzureMonitor</code> (<code>Extensions.cs:376</code>) when
+          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present (read at <code>Extensions.cs:371</code>-<code>Extensions.cs:372</code>, checked at
+          <code>Extensions.cs:374</code>, and set by the cloud deployment). Both can be active at once
+          (<code>Extensions.cs:359</code>), so local development ships to the
           Aspire dashboard and production ships to workspace-based Application Insights with no code change.</p>
           </li>
           </ul>
@@ -369,8 +386,8 @@
           <ul>
           <li><strong>Custom instrumentation carries a maintenance cost.</strong> The Aspire package has no reference to
           Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-          literals (the meter subscriptions at <code>Extensions.cs:164</code>-<code>Extensions.cs:170</code> and the trace source at
-          <code>Extensions.cs:175</code>, and the sync notes at <code>CqrsMetrics.cs:8</code>, <code>OutboxMetrics.cs:8</code> and
+          literals (the meter subscriptions at <code>Extensions.cs:199</code>-<code>Extensions.cs:205</code> and the trace source at
+          <code>Extensions.cs:210</code>, and the sync notes at <code>CqrsMetrics.cs:8</code>, <code>OutboxMetrics.cs:8</code> and
           <code>OutboxPollFilterProcessor.cs:17</code>). A rename on one side silently stops export until the literal is
           updated. That is the price of the decoupled package graph.</li>
           <li><strong>Sampling trades trace completeness for cost.</strong> A sampled-out trace is simply gone; deep debugging
@@ -397,11 +414,11 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:102</code>, instrument at <code>:107-115</code>)
           counts a swallowed fire-and-forget side effect, the helper&#39;s whole purpose being that the caller does
           not see the failure. Both are subscribed in the Aspire defaults
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:169-170</code>).</p>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:204-205</code>).</p>
           <p><strong>The meter inventory in the Decision above is wrong and has been for a while.</strong> This record names two
           meters, and <a href="087-broker-poison-message-handling.html">ADR-087</a> called <code>MMCA.Common.Broker</code> &quot;a third&quot;,
           which was already an undercount. The authoritative list is the subscription block itself
-          (<code>Extensions.cs:164-170</code>), which now carries <strong>seven</strong>: <code>MMCA.Common.Outbox</code>, <code>MMCA.Common.Cqrs</code>,
+          (<code>Extensions.cs:199-205</code>), which now carries <strong>seven</strong>: <code>MMCA.Common.Outbox</code>, <code>MMCA.Common.Cqrs</code>,
           <code>MMCA.Common.Idempotency</code>, <code>MMCA.Common.Scheduler</code>, <code>MMCA.Common.Broker</code>, <code>MMCA.Common.OutputCache</code>,
           <code>MMCA.Common.BestEffort</code>. Two of them (<code>Idempotency</code>, <code>Scheduler</code>) were never recorded here at all.
           Read that block, not this prose, when the question is what the framework exports.</p>
@@ -419,7 +436,7 @@
           than two.</p>
           <h2 id="amended-2026-08-31">Amended (2026-08-31)</h2>
           <p>The log side of this record. Until now it named only the OpenTelemetry logging call inside
-          <code>ConfigureOpenTelemetry</code> (<code>Extensions.cs:125</code>); what a host actually WRITES its application log lines
+          <code>ConfigureOpenTelemetry</code> (<code>Extensions.cs:130</code>); what a host actually WRITES its application log lines
           through was undocumented.</p>
           <p><strong>Serilog is registered as ONE additional provider, never through <code>UseSerilog()</code>.</strong> <code>AddCommonSerilog</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Logging/SerilogHostExtensions.cs:48</code>) builds the
@@ -468,6 +485,52 @@
           production thinning that floors the OpenTelemetry logging provider at <code>Warning</code> while Serilog keeps
           <code>Information</code> on container stdout, so the two providers this record puts side by side deliberately
           carry different volumes.</p>
+          <h2 id="amended-2026-09-03-probe-telemetry">Amended (2026-09-03): probe telemetry</h2>
+          <p>Health probes were the trace bill. Container Apps liveness and readiness probes, the gateway&#39;s
+          downstream aggregate probes, YARP active health checks and the availability web test accounted for
+          every AppRequests row in both production workspaces, and their children (the health check&#39;s SQL
+          <code>SELECT 1</code>, the Redis PING, the gateway&#39;s <code>HttpClient</code> calls to each backend&#39;s <code>/alive</code>) for most of
+          the AppDependencies rows. None of it carries end-user signal, and none of it is touched by
+          <code>Telemetry:TracesSampleRatio</code>, because probe spans are exactly what a ratio sampler is asked to keep
+          proportionally.</p>
+          <p><strong>A third cost knob, and the only one that defaults to on.</strong> <code>Telemetry:FilterProbeTelemetry</code>
+          (<code>Extensions.cs:35</code>) is read by <code>IsProbeTelemetryFilterEnabled</code>
+          (<code>Extensions.cs:483</code>-<code>Extensions.cs:484</code>) at <code>Extensions.cs:224</code>. It inverts the fail-safe direction
+          of the other knobs on purpose: absent, blank or unparseable all mean &quot;filter&quot;, and only an explicit
+          boolean <code>false</code> turns filtering off, for a host debugging its own probes. What a probe path is comes
+          from one place, <code>HealthEndpointPaths.IsProbePath</code>
+          (<code>Source/Hosting/MMCA.Common.Aspire/HealthEndpointPaths.cs:29</code>-<code>:33</code>): <code>/alive</code>, <code>/health</code>, and
+          anything below <code>/health/</code>, case-insensitively.</p>
+          <p><strong>Two instrumentation predicates plus one processor, because probe spans arrive by three routes.</strong>
+          With the knob on, the tracing setup attaches both filters to the default-named instrumentation
+          options (<code>Extensions.cs:230</code>-<code>Extensions.cs:233</code>; the unfiltered branch at
+          <code>Extensions.cs:237</code>-<code>Extensions.cs:238</code> is plain <code>AddAspNetCoreInstrumentation</code> and
+          <code>AddHttpClientInstrumentation</code>). <code>ProbeTelemetryFilter.ShouldCollectRequest</code>
+          (<code>Source/Hosting/MMCA.Common.Aspire/Telemetry/ProbeTelemetryFilter.cs:40</code>) refuses the inbound probe
+          request span and stamps an <code>mmca.probe</code> marker tag on it (<code>ProbeTelemetryFilter.cs:33</code>, set at
+          <code>:51</code>), because a refused request never gets its <code>url.path</code> written and its descendants would
+          otherwise have no way to recognize their own ancestor.
+          <code>ProbeTelemetryFilter.ShouldCollectOutgoing</code> (<code>:62</code>-<code>:63</code>) refuses outbound probe calls that are not
+          descendants of any inbound request, the gateway&#39;s <code>DownstreamServiceHealthCheck</code> calls and YARP&#39;s
+          active checks, both driven by background timers. The descendants are handled by
+          <code>ProbeTelemetryFilterProcessor</code>
+          (<code>Source/Hosting/MMCA.Common.Aspire/Telemetry/ProbeTelemetryFilterProcessor.cs:20</code>), registered only
+          when the knob is on and, like the outbox poll filter, before the exporters
+          (<code>Extensions.cs:253</code>): it walks the in-process parent chain (<code>ProbeTelemetryFilterProcessor.cs:52</code>),
+          matches the marker or a server span whose path, route or display name is a probe (<code>:66</code>-<code>:79</code>), and
+          clears <code>Recorded</code> plus <code>IsAllDataRequested</code> (<code>:59</code>-<code>:60</code>) at both <code>OnStart</code> (<code>:29</code>) and <code>OnEnd</code>
+          (<code>:40</code>), since a client span carries no identifying tag yet when it starts. Unlike the two metrics
+          knobs, these filters need no view: configuring the default-named options also covers the
+          instrumentation the Azure Monitor distro adds.</p>
+          <p>Metrics are deliberately untouched (<code>Extensions.cs:222</code>-<code>Extensions.cs:223</code>):
+          <code>http.server.request.duration</code>, Kestrel and routing instruments keep flowing, so probe traffic stays
+          on dashboards.</p>
+          <p>Two costs come with it. <strong>&quot;Did the probe pass&quot; is no longer answerable from traces</strong>, the same
+          blindness poll-span filtering already accepts for the outbox, so that question belongs to metrics
+          and the health endpoints (<a href="025-startup-warmup-readiness.html">ADR-025</a>) instead. And <strong>this knob fails
+          toward dropping data</strong> while sampling and the two metrics toggles fail toward keeping it: a host that
+          adds a real route below <code>/health/</code> has its traces filtered by <code>IsProbePath</code>&#39;s prefix match with no
+          error and no log line.</p>
           <h2 id="related">Related</h2>
           <p>ADR-003 (the outbox whose dead-letter counter and poll-span filtering this defines), ADR-014 (the
           CQRS decorator pipeline that emits the RED histograms as a byproduct of its logging decorators),
@@ -493,6 +556,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#amended-2026-08-31">Amended (2026-08-31)</a></li>
+            <li><a href="#amended-2026-09-03-probe-telemetry">Amended (2026-09-03): probe telemetry</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

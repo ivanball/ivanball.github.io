@@ -20,7 +20,7 @@ intended end state but is not yet wired for theme (see Decision 3).
    component (`MMCA.Common.UI/Layout/MainLayout.razor:14`), which owns the four Mud providers plus the
    Day/Dark lifecycle in one place. Inside that component `MudThemeProvider` is bound with
    `Theme="@Theme"` and `@bind-IsDarkMode`
-   (`MMCA.Common.UI/Components/MmcaThemeProviders.razor:12`), a two-way binding to that component's own
+   (`MMCA.Common.UI/Theme/MmcaThemeProviders.razor:12`), a two-way binding to that component's own
    `_isDarkMode` field (`MmcaThemeProviders.razor:25`); no `@ref` is used. `Theme` is a `MudTheme`
    parameter whose default is the already-complete `MMCATheme.Instance`
    (`MmcaThemeProviders.razor:23`), so a consuming app that needs its own brand passes a derived
@@ -54,8 +54,8 @@ intended end state but is not yet wired for theme (see Decision 3).
 
 6. **Helpdesk is brought into line.** Its host's custom `MainLayout` used a bare `<MudThemeProvider />`
    (not even `MMCATheme`); it now renders the framework's `<MmcaThemeProviders />`
-   (`MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:6`) plus `<CultureSwitcher />` and
-   `<ThemeToggle />` in its own `MudAppBar` (`MainLayout.razor:13-14`), so the theme, the bound
+   (`MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:8`) plus `<CultureSwitcher />` and
+   `<ThemeToggle />` in its own `MudAppBar` (`MainLayout.razor:15-16`), so the theme, the bound
    `IsDarkMode` and the whole lifecycle come from the shared component rather than being restated in
    the host. As an `InteractiveServer`-only host it has no WASM boundary, but it still reads the
    cookie for consistency.
@@ -76,7 +76,7 @@ intended end state but is not yet wired for theme (see Decision 3).
 - **Helpdesk's custom layout** is still wired separately because it does not inherit Common's
   `MainLayout`, but the obligation is now two component tags (`<MmcaThemeProviders />` plus
   `<ThemeToggle />`) rather than a provider block and its lifecycle: the layout's own comment
-  (`MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:4-5`) records that the four Mud providers
+  (`MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:6-7`) records that the four Mud providers
   and the Day/Dark lifecycle belong to `MmcaThemeProviders` and that the layout carries only Helpdesk
   chrome. Future hosts that fork the layout inherit that same two-tag obligation.
 - **Per-user persistence adds a column** to the Identity `User` (folded into the ADR-027 migration, so no

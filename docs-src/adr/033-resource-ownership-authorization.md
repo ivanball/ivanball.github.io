@@ -61,7 +61,7 @@ bypass role (`Admin` by default).
   role) applies no filter.
 - **The bypass role is the single override on both.** `OwnershipHelper.IsAdmin`
   (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:17`) compares
-  `ICurrentUserService.Role` (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:22`)
+  `ICurrentUserService.Role` (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:22`)
   to its `bypassRole` argument (`"Admin"` by default) case-insensitively (`OwnershipHelper.cs:20`). Both
   enforcement points consult it, so a caller in the bypass role sees and touches any resource through
   either path.
@@ -87,7 +87,7 @@ audit of the whole controller, not just of the routes that motivated it.
 
 **Adoption.** MMCA.Store wires both in production. The filter guards
 `MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:49` and
-`MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:34` as a `[ServiceFilter]`. The
+`MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:35` as a `[ServiceFilter]`. The
 ownership specification scopes list/get queries:
 `ShoppingCartsController` builds a `ShoppingCartByCustomerSpecification`
 (`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:66`,
@@ -154,8 +154,8 @@ guard that replaces the check named at each site:
 | `ShoppingCartsController.GetAllAsync` (both overloads, `:98`, `:113`) | `ShoppingCartByCustomerSpecification` through `GetReadSpecificationAsync` already narrows the rows to the caller, plus the `RequireResolvableOwner()` gate (`:106`, `:126`) |
 | `ShoppingCartsController.GetAllForLookupAsync` (`:142`) | `[HasPermission(SalesPermissions.ShoppingCartsManage)]` (`:144`) |
 | `ShoppingCartsController.ExportAsync` (`:178`) | the same `GetReadSpecificationAsync` scoping the list endpoints read, plus the `RequireResolvableOwner()` gate (`:188`) |
-| `CustomersController.GetAllAsync` (both overloads, `:49`, `:61`), `GetAllForLookupAsync` (`:78`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:51`, `:63`, `:80`) |
-| `CustomersController.ExportAsync` (`:110`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:112`) |
+| `CustomersController.GetAllAsync` (both overloads, `:49`, `:61`), `GetAllForLookupAsync` (`:78`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:52`, `:64`, `:81`) |
+| `CustomersController.ExportAsync` (`:110`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:113`) |
 
 Store states each of those guards as a capability, never as a role name: an endpoint requires what it
 does and the module's grant table decides who holds it (ADR-020).
@@ -163,8 +163,8 @@ does and the module's grant table decides who holds it (ADR-020).
 `CustomersController.CreateAsync` was inherited without its own policy and had been relying on the
 filter failing open. Deny-by-default closes that, but only incidentally, because the action happens to
 carry no owner parameter; it now states its own guard,
-`[HasPermission(IdentityPermissions.CustomersManage)]` (`CustomersController.cs:130`) beside the
-`[AllowMissingOwner]` opt-out (`CustomersController.cs:131`), matching the admin-gated create page that
+`[HasPermission(IdentityPermissions.CustomersManage)]` (`CustomersController.cs:131`) beside the
+`[AllowMissingOwner]` opt-out (`CustomersController.cs:132`), matching the admin-gated create page that
 is its only caller (`CustomersController.cs:124-127`). ADC's `BookmarksController` needs no annotation:
 both filtered actions bind a `[Required]` non-nullable `userId`, so model validation rejects a missing
 value before the filter runs.
@@ -251,7 +251,7 @@ Behavior changed on both adopters since the 2026-08-01 pass, so this is not an a
    `RequireAdmin` policy; that identifier no longer exists anywhere in MMCA.Store source. The
    annotated actions state `[HasPermission(SalesPermissions.ShoppingCartsManage)]` and
    `[HasPermission(IdentityPermissions.CustomersManage)]` instead (ADR-020), including
-   `CustomersController.CreateAsync` (`CustomersController.cs:130`).
+   `CustomersController.CreateAsync` (`CustomersController.cs:131`).
 3. **The table was two rows short.** Both CSV exports carry `[AllowMissingOwner]` and were missing:
    `ShoppingCartsController.ExportAsync` (`:178`), guarded by the `GetReadSpecificationAsync` row
    scoping plus the fail-closed gate, and `CustomersController.ExportAsync` (`:110`), guarded by the

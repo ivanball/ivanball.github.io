@@ -64,7 +64,7 @@ different URL.
 ### The page loop is how the row cap is answered
 `ExportAsync` does not issue one unpaged query. It loops server-side over the existing paged
 `IEntityQueryService.GetAllAsync`
-(`Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:60`) at a page size of
+(`Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityQueryService.cs:60`) at a page size of
 `ApplicationSettings.MaxPageSize`
 (`Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17`, default 500), writing each
 page's rows into the response as they materialize, until a page comes back short or the export cap is
@@ -153,7 +153,7 @@ without a special case for this one. A failure detected before streaming begins 
 ### Adoption is automatic, and the sweep work is contract snapshots
 ADC, Store, and Helpdesk inherit `/export` on every `EntityControllerBase` derivative the moment they take
 the pin (Helpdesk's `TicketsController` derives from the base at
-`Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/Controllers/TicketsController.cs:60` and carries no export
+`Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/Controllers/TicketsController.cs:61` and carries no export
 code of its own). No registration call exists to make. The visible work in each consumer sweep PR is
 re-baselining the OpenAPI contract snapshots asserted by `OpenApiContractTestsBase`
 ([ADR-058](058-runtime-conformance-suites-as-a-package.md)), which otherwise fail on the added path.
@@ -206,10 +206,12 @@ re-baselining the OpenAPI contract snapshots asserted by `OpenApiContractTestsBa
   its admin gate relaxed back to ownership scoping with only the fail-closed owner check left at
   `:224-235`), `ShoppingCartsController` the async one (`:206`). ADC's Conference controllers express
   their read predicates as specifications through the same hooks (`EventsController.GetExportSpecification()`
-  at `Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventsController.cs:74-75`,
-  `SessionQuestionAnswersController.cs:96`, and async overrides on `SessionsController.cs:76`,
-  `SpeakersController.cs:104`, `SponsorsController.cs:68` among others), and keep their `Forbid` gates on
-  bulk export anyway (`EventsController.cs:141-144`, `SessionsController.cs:248-251`): a deliberate
+  at `Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:74-75`,
+  `Controllers/Sessions/SessionQuestionAnswersController.cs:96`, and async overrides on
+  `Controllers/Sessions/SessionsController.cs:77`, `Controllers/Speakers/SpeakersController.cs:105`,
+  `Controllers/Sponsors/SponsorsController.cs:69` among others), and keep their `Forbid` gates on
+  bulk export anyway (`Controllers/Events/EventsController.cs:141-144`,
+  `Controllers/Sessions/SessionsController.cs:248-251`): a deliberate
   privileged-reader-only policy on a whole-catalog file, not a gap in what the framework can scope.
   v1.151.0 also hardened the formatter: binary and collection properties produce no column instead of
   rendering type names (`IsExportableType`, `:667-670`), and a `fields=` request naming one fails

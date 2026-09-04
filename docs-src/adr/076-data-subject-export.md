@@ -40,8 +40,8 @@ because the owner-or-privileged-role idiom "was written out four times across th
 deletion and data export, in each)" (`UserOwnershipRule.cs:9-20`). The same remarks record why it was
 hoisted as a plain helper instead of a base class: "because the two data-export handlers stay app-level
 (their projections are entirely app-specific)". Deletion did get a base class, `DeleteUserHandlerBase`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:38`),
-which calls that helper at `DeleteUserHandlerBase.cs:62`.
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:58`),
+which calls that helper at `DeleteUserHandlerBase.cs:83`.
 
 **This record supersedes that reasoning for the export half.** It treated a handler as one indivisible
 thing, either app-specific or not. It is two: an orchestration (authorize, load, fan out, degrade,
@@ -72,7 +72,7 @@ The base class (`.../Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs`
 constraints similar to `DeleteUserHandlerBase` but not identical: both constrain `TUser` to
 `AuditableAggregateRootEntity<UserIdentifierType>` and `TQuery`/`TCommand` to `IUserOwnedRequest`
 (`ExportUserDataHandlerBase.cs:54-55`), and deletion additionally requires `TUser : IErasableUser`
-(`DeleteUserHandlerBase.cs:41`) because it calls `Anonymize()`. Export never does, so it does not ask
+(`DeleteUserHandlerBase.cs:62`) because it calls `Anonymize()`. Export never does, so it does not ask
 for that interface: a user aggregate can be exportable without being erasable. The base runs the same
 `UserOwnershipRule.CheckOwnership` gate with the export error code, and exposes a `HasDeletePrivilege`-style hook so the app supplies its own role
 vocabulary (ADC evaluates `UserRole.IsOrganizer`, Store evaluates `UserRole.IsAdmin`). It then loads the

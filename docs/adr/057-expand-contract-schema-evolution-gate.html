@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -220,13 +223,13 @@
           <h2 id="context">Context</h2>
           <p>ADR-030 decides <strong>who</strong> applies a migration: every service host runs <code>DatabaseInitStrategy = Migrate</code>
           and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
-          <code>sqlcmd</code> backstop (<code>MMCA.Store/.github/workflows/deploy.yml:1123-1131</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1297-1307</code>). It says nothing about what <strong>shape</strong> a migration
+          <code>sqlcmd</code> backstop (<code>MMCA.Store/.github/workflows/deploy.yml:1197-1204</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1306-1316</code>). It says nothing about what <strong>shape</strong> a migration
           may take.</p>
           <p>That gap is load-bearing because production rollback is <strong>revision-only</strong>. When the post-deploy smoke
           gate fails, the deploy rolls every container app back to its previous revision with
-          <code>az containerapp revision copy --from-revision</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1139,1199</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1318,1381</code>). That reverts the <strong>image</strong> and nothing else:
+          <code>az containerapp revision copy --from-revision</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1360-1361</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1462-1463</code>). That reverts the <strong>image</strong> and nothing else:
           the new revision already migrated the database on boot, and no down-migration runs. The previous
           release therefore keeps serving traffic against the <strong>new</strong> schema, which is exactly the statement
           both repos&#39; CONTRIBUTING makes (<code>MMCA.Store/CONTRIBUTING.md:56-59</code>, <code>MMCA.ADC/CONTRIBUTING.md:57-60</code>).

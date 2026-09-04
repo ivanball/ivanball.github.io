@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-058: Runtime Conformance Suites Shipped as a Package · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, and 2026-08-23).">
+  <meta name="description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-058: Runtime Conformance Suites Shipped as a Package">
-  <meta property="og:description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, and 2026-08-23).">
+  <meta property="og:description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-058: Runtime Conformance Suites Shipped as a Package">
-  <meta name="twitter:description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, and 2026-08-23).">
+  <meta name="twitter:description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"058 · Runtime Conformance Suites Shipped as a Package","item":"https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -214,7 +217,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-058-runtime-conformance-suites-shipped-as-a-package">ADR-058: Runtime Conformance Suites Shipped as a Package</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, and 2026-08-23).</p>
+          <p>Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).</p>
           <h2 id="context">Context</h2>
           <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
           explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
@@ -234,30 +237,43 @@
           bases that each consuming host subclasses, and run every one of them against a host that was actually
           booted.</p>
           <ul>
-          <li><strong>Six contract bases, one per runtime contract.</strong> <code>ProblemDetailsContractTestsBase&lt;TFixture&gt;</code>
-          (<code>Source/Hosting/MMCA.Common.Testing/ProblemDetailsContractTestsBase.cs:21</code>) asserts the two
+          <li><strong>Seven contract bases, one per runtime contract</strong>, all sitting under
+          <code>Source/Hosting/MMCA.Common.Testing/Conformance/</code> in namespace <code>MMCA.Common.Testing.Conformance</code>, so
+          every bare <code>TestsBase.cs</code> name below resolves inside that folder; the fixtures they boot through sit
+          beside it in <code>Fixtures/</code>. <code>ProblemDetailsContractTestsBase&lt;TFixture&gt;</code>
+          (<code>Source/Hosting/MMCA.Common.Testing/Conformance/ProblemDetailsContractTestsBase.cs:22</code>) asserts the two
           error-shaping paths, ASP.NET Core model validation (400, <code>application/problem+json</code> with
           <code>type</code>/<code>traceId</code>/<code>errors</code>, <code>ProblemDetailsContractTestsBase.cs:30</code>) and the framework&#39;s
           <code>HandleFailure</code> Result mapping (404, <code>ProblemDetailsContractTestsBase.cs:42</code>), against the shared
-          shape check <code>AssertProblemDetailsShapeAsync</code> (<code>ProblemDetailsContractTestsBase.cs:67</code>).
-          <code>OpenApiContractTestsBase&lt;TFixture&gt;</code> (<code>OpenApiContractTestsBase.cs:21</code>) asserts the live
+          shape check <code>AssertProblemDetailsShapeAsync</code> (<code>ProblemDetailsContractTestsBase.cs:68</code>).
+          <code>OpenApiContractTestsBase&lt;TFixture&gt;</code> (<code>OpenApiContractTestsBase.cs:22</code>) asserts the live
           <code>/openapi/v1.json</code> document is OpenAPI 3.x and still describes the pinned public resources
           (<code>OpenApiContractTestsBase.cs:53</code>, <code>OpenApiContractTestsBase.cs:68</code>).
-          <code>ServiceInfoVersioningContractTestsBase&lt;TFixture&gt;</code> (<code>ServiceInfoVersioningContractTestsBase.cs:19</code>)
+          <code>ServiceInfoVersioningContractTestsBase&lt;TFixture&gt;</code> (<code>ServiceInfoVersioningContractTestsBase.cs:20</code>)
           drives <code>/ServiceInfo</code> at <code>api-version: 1.0</code> and <code>2.0</code> and checks the deprecated/supported reporting
-          headers (<code>ServiceInfoVersioningContractTestsBase.cs:38</code>, <code>:54</code>). <code>SecurityHeadersTestsBase</code>
+          headers (<code>ServiceInfoVersioningContractTestsBase.cs:39</code>, <code>:55</code>). <code>SecurityHeadersTestsBase</code>
           (<code>SecurityHeadersTestsBase.cs:16</code>) probes <code>/alive</code> and pins six response headers, including
           <code>Content-Security-Policy: frame-ancestors &#39;none&#39;</code> and an HSTS <code>max-age</code>
           (<code>SecurityHeadersTestsBase.cs:29-35</code>). <code>GracefulShutdownTestsBase&lt;TEntryPoint&gt;</code>
-          (<code>GracefulShutdownTestsBase.cs:24</code>) calls a real <code>IHost.StopAsync</code> under a bounded token and asserts
-          <code>ApplicationStopping</code> then <code>ApplicationStopped</code> fired (<code>GracefulShutdownTestsBase.cs:56</code>, <code>:58</code>,
-          <code>:60</code>). <code>DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;</code>
+          (<code>GracefulShutdownTestsBase.cs:25</code>) calls a real <code>IHost.StopAsync</code> under a bounded token and asserts
+          <code>ApplicationStopping</code> then <code>ApplicationStopped</code> fired (<code>GracefulShutdownTestsBase.cs:57</code>, <code>:59</code>,
+          <code>:61</code>). <code>MmcaGatewayHardeningTestsBase&lt;TEntryPoint&gt;</code> (<code>MmcaGatewayHardeningTestsBase.cs:39</code>) drives a
+          booted gateway through eight edge gates: the per-client-IP rate limiter and its bypass list, the
+          tighter named policy on the credential route, a correlation id generated when the caller supplies
+          none and echoed when it does, one readiness check per downstream service, an active health probe on
+          every cluster, and partitioning by the forwarded client IP rather than the proxy IP
+          (<code>MmcaGatewayHardeningTestsBase.cs:126</code>, <code>:148</code>, <code>:184</code>, <code>:211</code>, <code>:229</code>, <code>:246</code>, <code>:274</code>, <code>:310</code>).
+          <code>DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;</code>
           (<code>DecoratorPipelineOrderTestsBase.cs:38</code>) asserts the ADR-014 nesting.</li>
-          <li><strong>The host is really booted; nothing is inferred from registrations.</strong> The five HTTP-facing suites
-          reach the host through <code>IIntegrationTestFixture</code> (<code>IIntegrationTestFixture.cs:8</code>) and
-          <code>IntegrationTestBase&lt;TFixture&gt;</code> (<code>IntegrationTestBase.cs:13</code>), whose <code>Client</code> comes from the
-          fixture&#39;s <code>WebApplicationFactory</code>. Two boot paths ship. Service hosts use
-          <code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code> (<code>SqlServerIntegrationTestFixtureBase.cs:27</code>):
+          <li><strong>The host is really booted; nothing is inferred from registrations.</strong> Three of the six booted-host
+          suites (problem details, OpenAPI, versioning) reach the host through <code>IIntegrationTestFixture</code>
+          (<code>Source/Hosting/MMCA.Common.Testing/Fixtures/IIntegrationTestFixture.cs:8</code>) and
+          <code>IntegrationTestBase&lt;TFixture&gt;</code> (<code>Fixtures/IntegrationTestBase.cs:13</code>), whose <code>Client</code> comes from the
+          fixture&#39;s <code>WebApplicationFactory</code>. The other three take a factory directly: security headers through
+          its own abstract <code>CreateClient()</code> (<code>SecurityHeadersTestsBase.cs:42</code>), graceful shutdown and gateway
+          hardening through a factory the subclass supplies (<code>GracefulShutdownTestsBase.cs:32</code>,
+          <code>MmcaGatewayHardeningTestsBase.cs:61</code>). Two boot paths ship. Service hosts use
+          <code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code> (<code>Fixtures/SqlServerIntegrationTestFixtureBase.cs:27</code>):
           it creates a GUID-named throwaway SQL Server database, pushes the connection string and
           <code>ASPNETCORE_ENVIRONMENT=Testing</code> as process environment variables <em>before</em> the host is built
           (<code>SqlServerIntegrationTestFixtureBase.cs:75</code>, <code>:76</code>), lets the host&#39;s own <code>DatabaseInitStrategy=Migrate</code>
@@ -265,18 +281,20 @@
           (<code>SqlServerIntegrationTestFixtureBase.cs:83</code>), resets data between tests with Respawn
           (<code>SqlServerIntegrationTestFixtureBase.cs:99</code>), and drops the database on disposal
           (<code>SqlServerIntegrationTestFixtureBase.cs:127</code>). Database-free hosts use
-          <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code> (<code>ProductionHostApplicationFactory.cs:22</code>), which
-          pins <code>UseEnvironment(&quot;Production&quot;)</code> (<code>ProductionHostApplicationFactory.cs:36</code>) so the
+          <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code> (<code>Fixtures/ProductionHostApplicationFactory.cs:23</code>),
+          which pins <code>UseEnvironment(&quot;Production&quot;)</code> (<code>ProductionHostApplicationFactory.cs:37</code>) so the
           production-only branches (restrictive CORS, HSTS emission) are the ones under test, and captures the
-          started <code>IHost</code> (<code>ProductionHostApplicationFactory.cs:29</code>) because <code>StopAsync</code> is not reachable
+          started <code>IHost</code> (<code>ProductionHostApplicationFactory.cs:30</code>) because <code>StopAsync</code> is not reachable
           through the <code>WebApplicationFactory</code> surface.</li>
           <li><strong>The consumer supplies its host and its host-specific facts, nothing else.</strong> The abstract surface
           is deliberately small: two probe requests for problem details
-          (<code>ProblemDetailsContractTestsBase.cs:54</code>, <code>:60</code>), a route-count floor and a pinned resource list for
-          OpenAPI (<code>OpenApiContractTestsBase.cs:37</code>, <code>:50</code>), a client factory for security headers
+          (<code>ProblemDetailsContractTestsBase.cs:55</code>, <code>:61</code>), a route-count floor and a pinned resource list for
+          OpenAPI (<code>OpenApiContractTestsBase.cs:38</code>, <code>:51</code>), a client factory for security headers
           (<code>SecurityHeadersTestsBase.cs:42</code>), a service-collection configurator for the decorator pipeline
-          (<code>DecoratorPipelineOrderTestsBase.cs:46</code>), and for versioning and graceful shutdown nothing at all
-          beyond the fixture or entry point. The two shutdown subclasses are one-line declarations with no body
+          (<code>DecoratorPipelineOrderTestsBase.cs:46</code>), the booted factory plus the host&#39;s own route-table facts
+          (the permit limit, a limited path, the downstream service names) for gateway hardening
+          (<code>MmcaGatewayHardeningTestsBase.cs:61</code>, <code>:68</code>, <code>:71</code>, <code>:77</code>), and for versioning and graceful
+          shutdown nothing at all beyond the fixture or entry point. The two shutdown subclasses are one-line declarations with no body
           (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GracefulShutdownTests.cs:9</code>,
           <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GracefulShutdownTests.cs:9</code>), and so is the ADC
           versioning subclass (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ApiVersioningTests.cs:14</code>).</li>
@@ -284,7 +302,7 @@
           the registration list.</strong> It builds a <code>ServiceCollection</code>, runs the repo&#39;s own real registration
           sequence through the subclass, resolves the closed handler interface from the built provider, then
           walks outermost to innermost by reading each decorator&#39;s private inner-handler field
-          (<code>DecoratorPipelineOrderTestsBase.cs:104</code>) and compares the names against the ADR-014 order
+          (<code>DecoratorPipelineOrderTestsBase.cs:105</code>) and compares the names against the ADR-014 order
           (<code>DecoratorPipelineOrderTestsBase.cs:49</code>, <code>:61</code>). That is what makes it a runtime check: Scrutor
           <code>TryDecorate</code> applies decorators in reverse registration order, so a reordered
           <code>AddApplicationDecorators()</code> or a module scan that ran after it changes the constructed pipeline
@@ -323,9 +341,17 @@
           (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:15</code>),
           which is enough to keep the machinery exercised but leaves the other five REST hosts unguarded. The
           security-headers and graceful-shutdown suites are subclassed <strong>only on the two Gateway hosts</strong>
-          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:11</code>,
-          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:11</code>, plus the two
-          <code>GracefulShutdownTests</code> above); no service host asserts either today. The decorator suite is
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:12</code>,
+          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:12</code>, plus the two
+          <code>GracefulShutdownTests</code> above); no service host asserts either today. The gateway-hardening suite is
+          subclassed on both Gateway hosts and nowhere else, which is its whole addressable surface: it asserts
+          the shared gateway kit&#39;s edge behavior, and only a gateway adopts that kit
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:30</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:35</code>). Each subclass states
+          only its own route-table facts and supplies a Production-pinned factory with a recording forwarder
+          standing in for <code>IHttpForwarder</code>
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:103</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:117</code>). The decorator suite is
           subclassed once per consumer repo and is the one base all three of them run: ADC and Store both
           against the Identity module&#39;s <code>ChangePreferencesCommand</code> / <code>GetUserPreferencesQuery</code> pair
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:27</code>,
@@ -333,7 +359,7 @@
           and MMCA.Helpdesk against a real Tickets pair, described below.
           MMCA.Common dogfoods the only base it can, since it ships no host of its own: a synthetic
           <code>PingCommand</code>/<code>PingQuery</code> pair driven through the framework&#39;s own registration sequence
-          (<code>Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:21</code>).</p>
+          (<code>Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:23</code>).</p>
           <p><strong>MMCA.Helpdesk adopts exactly one of them, the decorator suite</strong>, having adopted none of them when
           this record was written. Its architecture-test project now references <code>MMCA.Common.Testing</code> alongside the
           structural package
@@ -341,18 +367,18 @@
           and subclasses <code>DecoratorPipelineOrderTestsBase</code> against a real Tickets pair: the framework&#39;s generic
           <code>UpdateEntityCommand&lt;Ticket, TicketUpdateRequest, TicketIdentifierType&gt;</code>, closed over the Ticket
           aggregate by the seed&#39;s own <code>AddEntityCrud</code> wiring, and the module&#39;s hand-written <code>GetTicketByIdQuery</code>
-          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:36</code>,
-          <code>:38</code>), whose <code>ConfigureServices</code> runs the seed&#39;s own registration sequence: <code>AddApplication()</code>, the
-          Tickets module registration, then <code>AddApplicationDecorators()</code> last (<code>:58-60</code>). Two files in that
-          project import the <code>MMCA.Common.Testing</code> namespace, and only one of them belongs to this record: that
-          decorator subclass (<code>:12</code>). The other, <code>MiddlewarePipelineOrderTests.cs</code> (<code>:1</code>), is a one-line subclass of
-          <code>MiddlewarePipelineOrderTestsBase</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/MiddlewarePipelineOrderTestsBase.cs:29</code>,
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:37</code>,
+          <code>:39</code>), whose <code>ConfigureServices</code> runs the seed&#39;s own registration sequence: <code>AddApplication()</code>, the
+          Tickets module registration, then <code>AddApplicationDecorators()</code> last (<code>:59-61</code>). Two files in that
+          project import the <code>MMCA.Common.Testing.Conformance</code> namespace, and only one of them belongs to this
+          record: that decorator subclass (<code>:13</code>). The other, <code>MiddlewarePipelineOrderTests.cs</code> (<code>:1</code>), is a
+          one-line subclass of <code>MiddlewarePipelineOrderTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MiddlewarePipelineOrderTestsBase.cs:29</code>,
           <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15</code>)
-          guarding the ADR-079 shared HTTP edge-pipeline order, not one of the six contract bases above.
+          guarding the ADR-079 shared HTTP edge-pipeline order, not one of the seven contract bases above.
           The package reference the domain-test project
           carries (<code>MMCA.Helpdesk/Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain.Tests/MMCA.Helpdesk.Tickets.Domain.Tests.csproj:8</code>)
-          is still unused. The five HTTP-facing bases have no Helpdesk subclass, so the seed&#39;s three test
+          is still unused. The six booted-host bases have no Helpdesk subclass, so the seed&#39;s three test
           projects remain the Tickets domain and application suites plus the architecture suite, which now
           carries both tiers: the ADR-015 structural bases from the separate <code>MMCA.Common.Testing.Architecture</code>
           package (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/GlobalUsings.cs:3</code>), and
@@ -384,21 +410,24 @@
           once someone writes the subclass. That is the same audit-the-inventory caveat, and the adoption
           inventory above is the current answer to it, not a claim of completeness.</li>
           <li><strong>Coverage is uneven by suite.</strong> Security headers and graceful shutdown are Gateway-only, versioning
-          is one host per repo, and Helpdesk has only the decorator suite. Problem details is the one suite now subclassed
-          on every REST host in both consumers (ADC Notification closed the last gap on 2026-08-13). Every
-          remaining hole is an unguarded host for that contract, not a decision that the contract does not
-          apply.</li>
-          <li><strong>Most of the suites need a real SQL Server.</strong> The five fixture-driven suites live in the per-service
-          integration tier and cannot run in a database-free test pass; only the Gateway pair (no DbContext, no
-          broker) and the decorator suite run in the fast tier. That splits the runtime gate across two CI
+          is one host per repo, and Helpdesk has only the decorator suite. Problem details is the one suite now
+          subclassed on every REST host in both consumers (ADC Notification closed the last gap on 2026-08-13).
+          Gateway hardening is Gateway-only by construction rather than by omission: it asserts the shared
+          gateway kit, so a service host has nothing for it to check. Every remaining hole is an unguarded host
+          for that contract, not a decision that the contract does not apply.</li>
+          <li><strong>Some of the suites need a real SQL Server.</strong> The three fixture-driven suites (problem details,
+          OpenAPI, versioning) live in the per-service integration tier and cannot run in a database-free test
+          pass; the three Gateway suites (security headers, graceful shutdown, gateway hardening: no DbContext,
+          no broker) and the decorator suite run in the fast tier. That splits the runtime gate across two CI
           jobs with different prerequisites.</li>
           <li><strong>The assertions are coarse by construction.</strong> <code>MinimumPathCount</code> is a floor, <code>CorePublicResources</code>
-          checks presence rather than schema, and the problem-details base checks shape (<code>status</code>, <code>title</code>, a
+          checks presence rather than exact casing or schema (<code>OpenApiContractTestsBase.cs:80</code>), and the
+          problem-details base checks shape (<code>status</code>, <code>title</code>, a
           diagnostic extension) rather than message content. These catch wholesale regressions, not subtle
           ones.</li>
           <li><strong>The decorator check reads private fields.</strong> Unwrapping the chain depends on each decorator holding
           its inner handler in a field that implements the same closed interface
-          (<code>DecoratorPipelineOrderTestsBase.cs:111-114</code>); a decorator that stored it differently would silently
+          (<code>DecoratorPipelineOrderTestsBase.cs:112-115</code>); a decorator that stored it differently would silently
           end the walk early rather than fail loudly.</li>
           <li><strong>A new contract base only reaches consumers at the next lockstep bump.</strong> The suites ship inside the
           package set, so adding one is a framework release plus a consumer sweep (ADR-016), not a local edit
@@ -410,7 +439,8 @@
           ADR-014 (the decorator execution order <code>DecoratorPipelineOrderTestsBase</code> proves at runtime), ADR-013
           (the RFC 9457 ProblemDetails edge contract <code>ProblemDetailsContractTestsBase</code> guards), ADR-046 (HTTP
           API versioning, whose &quot;shared fitness contract&quot; is one of these bases), ADR-079 (the shared HTTP edge
-          pipeline, whose own order-checking base ships in this same package but is not one of these six),
+          pipeline, whose own order-checking base ships beside these in the same <code>Conformance</code> folder but is not
+          one of these seven),
           ADR-016 (lockstep versioning:
           a new conformance base reaches consumers only through a release and a full sweep). Package inventory
           for the framework lives in <code>MMCA.Common/FACTS.md</code>.</p>

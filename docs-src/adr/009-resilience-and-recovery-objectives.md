@@ -74,10 +74,10 @@ both recorded in full in [ADR-087](087-broker-poison-message-handling.md).
 
 1. **The outbox's broker publish is now a resilience objective.** `OutboxProcessor` holds a Polly
    `ResiliencePipeline`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:99`,
-   built at `:755-766`) and wraps exactly one call in it, the broker publish (`:596-600`); the
-   in-process dispatch branch (`:602-605`) and every database call sit outside it by construction
-   (`:88-91`). Its parameters live beside the HTTP ones as
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:101`,
+   built at `:757-768`) and wraps exactly one call in it, the broker publish (`:598-602`); the
+   in-process dispatch branch (`:604-607`) and every database call sit outside it by construction
+   (`:89-92`). Its parameters live beside the HTTP ones as
    `BrokerResilienceDefaults`
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/BrokerResilienceDefaults.cs:24`: a 0.5
    failure ratio over a 30-second sampling window, a minimum throughput of 10, and a 15-second break),
@@ -89,11 +89,11 @@ both recorded in full in [ADR-087](087-broker-poison-message-handling.md).
    instead of one per message.
 2. **A per-query database circuit breaker was evaluated and rejected.** It is not a gap and it is not
    scheduled. EF Core's `EnableRetryOnFailure` execution strategy
-   (`.../Persistence/DbContexts/SQLServerDbContext.cs:64-67`, five retries with a ten-second maximum
-   delay, alongside `CommandTimeoutSeconds` at `:56`) already owns retrying at the persistence layer
-   and constrains how a user-initiated transaction may be written (`:61-63`, restated at
-   `.../Application/Interfaces/Infrastructure/IUnitOfWork.cs:63`), which is why the strategy is
-   materialized explicitly in `DbContextFactory` (`:524`). A Polly breaker wrapped around a call the
+   (`.../Persistence/DbContexts/SQLServerDbContext.cs:63-66`, five retries with a ten-second maximum
+   delay, alongside `CommandTimeoutSeconds` at `:55`) already owns retrying at the persistence layer
+   and constrains how a user-initiated transaction may be written (`:60-62`, restated at
+   `.../Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:60-69`), which is why the strategy is
+   materialized explicitly in `DbContextFactory` (`:525`). A Polly breaker wrapped around a call the
    strategy is already retrying would either count one logical failure many times or force the
    strategy to be replaced, and replacing it is an EF execution-strategy rework rather than a
    resilience addition. **The EF retry strategy plus the command timeout remains the database

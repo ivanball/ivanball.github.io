@@ -1,7 +1,9 @@
 # ADR-004: Cross-Service Token Validation via JWKS / OIDC Discovery
 
 ## Status
-Accepted.
+Accepted. Updated 2026-09-03 (`JwtSettings` / `JwtSigningAlgorithm` cited at their real `Auth/`
+paths, and the validator registration described with its current signature and secure-by-default
+`RequireHttpsMetadata` resolution).
 
 ## Context
 When the modular monolith is extracted into per-module service hosts behind a gateway (ADR-008),
@@ -18,10 +20,10 @@ the public issuer URL.
 Validate cross-service tokens with **asymmetric (RS256) signatures plus JWKS / OIDC discovery**,
 keeping the symmetric (HS256) shared-secret path as the in-process monolith option. The signing
 mode is a single configuration switch (`JwtSettings.SigningAlgorithm`), and it defaults to `RS256`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:30`, reasoning at `:24-29`):
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:30`, reasoning at `:24-29`):
 a host that never sets the key gets the algorithm that survives extraction. A single-process monolith
 opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice requires
-(`.../Settings/JwtSigningAlgorithm.cs:14-19`).
+(`.../Auth/JwtSigningAlgorithm.cs:14-19`).
 
 **Issuer side (Identity service).**
 - Identity signs access tokens with its RSA private key (RS256) and publishes only the matching
@@ -38,10 +40,22 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   `Jwt:Issuer` is unset, so a non-Identity host serving the same route exposes nothing.
 
 **Validator side (every other service).**
-- `AddForwardedJwtBearer(authority, audience)` points the JWT bearer middleware at an `Authority`, so
-  it fetches `{authority}/.well-known/openid-configuration`, follows `jwks_uri`, and validates the
-  token signature against the published key. No service except Identity holds key material. ADC's
-  Conference, Engagement, and Notification services all use this path.
+- `AddForwardedJwtBearer(authority, audience, configuration, environment, requireHttpsMetadata: null)`
+  points the JWT bearer middleware at an `Authority`, so it fetches
+  `{authority}/.well-known/openid-configuration`, follows `jwks_uri`, and validates the token
+  signature against the published key
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:446`).
+  No service except Identity holds key material. ADC's Conference, Engagement, and Notification
+  services all use this path, passing the host's `IConfiguration` and `IHostEnvironment` and leaving
+  `requireHttpsMetadata` at its default.
+- The metadata fetch is HTTPS-only by default, and the caller supplies configuration and environment
+  so the framework can resolve that: the explicit `requireHttpsMetadata` argument when it is not
+  null, then the `Authentication:JwtBearer:RequireHttpsMetadata` configuration key, then `true`
+  everywhere except Development (`.../WebApplicationBuilderExtensions.cs:458-460`, key declared at
+  `:56`). Resolving to `false` outside Development stays legal, because an internal-ingress h2c
+  authority is a real deployment shape, but it registers `InsecureJwtMetadataWarningStartupFilter`
+  so the host logs one startup warning naming the key
+  (`.../WebApplicationBuilderExtensions.cs:462-466`).
 - `ValidIssuer` is deliberately **not** pinned: the middleware takes the issuer from the discovery
   document, because the `authority` is the Aspire service-discovery URL (e.g. `http://identity`)
   while the token's `iss` claim is the public gateway origin (e.g. `https://localhost:6001`).

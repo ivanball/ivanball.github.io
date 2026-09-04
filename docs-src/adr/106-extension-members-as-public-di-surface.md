@@ -14,15 +14,15 @@ MMCA.Helpdesk's web host is the minimal case, calling `services.AddApplication()
 What is unusual is how those methods are declared. None of them is a classic static extension method
 with a `this` parameter. Each is a member of a C# `extension(T)` block: `AddApplication` is written
 as `public IServiceCollection AddApplication()` inside `extension(IServiceCollection services)`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:27`, method at `:32`), and
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:29`, method at `:35`), and
 `AddInfrastructure`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:41`, method at `:49`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:55`, method at `:63`),
 `AddAPI` (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:27`, method at
-`:44`) and `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:24`,
-method at `:30`) take the identical shape. The framework says so on the types themselves:
+`:44`) and `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:28`,
+method at `:34`) take the identical shape. The framework says so on the types themselves:
 Infrastructure's DI class documents itself as using "C# preview extension types to add methods
-directly to `IServiceCollection`" (`Infrastructure/DependencyInjection.cs:36-37`) and UI's repeats it
-for `AddUIShared` (`UI/DependencyInjection.cs:20`).
+directly to `IServiceCollection`" (`Infrastructure/DependencyInjection.cs:50-51`) and UI's repeats it
+for `AddUIShared` (`UI/DependencyInjection.cs:24`).
 
 Compiling that requires a preview language version, and every repo in the workspace sets one:
 `LangVersion preview` in `MMCA.Common/Directory.Build.props:6`, `MMCA.Store/Directory.Build.props:15`,
@@ -54,32 +54,34 @@ method is what keeps the choice reversible, and the public-API baselines record 
    is installed.
 
 2. **Twenty-three `extension(IServiceCollection services)` blocks are the DI surface.** Measured on
-   2026-09-01 across `MMCA.Common/Source`, there are 23 such blocks in 23 files, spread over ten
-   packages: Application (`Application/DependencyInjection.cs:27`,
-   `Application/Notifications/DependencyInjection.cs:28`), Infrastructure
-   (`Infrastructure/DependencyInjection.cs:41`), API (`API/DependencyInjection.cs:27`,
+   2026-09-04 across `MMCA.Common/Source`, there are 23 such blocks in 23 files, spread over ten
+   packages: Application (`Application/DependencyInjection.cs:29`,
+   `Application/Notifications/DependencyInjection.cs:29`), Infrastructure
+   (`Infrastructure/DependencyInjection.cs:55`), API (`API/DependencyInjection.cs:27`,
    `API/Authentication/ExternalAuthExtensions.cs:30`,
    `API/Authorization/AuthorizationExtensions.cs:14`,
    `API/Caching/OutputCacheEvictionExtensions.cs:95`, `API/Startup/MiniProfilerExtensions.cs:11`,
-   `API/Startup/WebApplicationBuilderExtensions.cs:237`), UI (`UI/DependencyInjection.cs:24`,
+   `API/Startup/WebApplicationBuilderExtensions.cs:238`), UI (`UI/DependencyInjection.cs:28`,
    `UI/Notifications/DependencyInjection.cs:14`,
-   `UI/Services/Capabilities/DependencyInjection.cs:18`), UI.Web
-   (`UI.Web/DependencyInjection.cs:16`), UI.Maui (`UI.Maui/DependencyInjection.cs:18`), Grpc
-   (`Grpc/DependencyInjection.cs:17`), Aspire (`Aspire/Extensions.cs:298`,
+   `UI/Services/Capabilities/DependencyInjection.cs:25`), UI.Web
+   (`UI.Web/DependencyInjection.cs:16`), UI.Maui (`UI.Maui/DependencyInjection.cs:34`), Grpc
+   (`Grpc/DependencyInjection.cs:17`), Aspire (`Aspire/Extensions.cs:381`,
    `Aspire/GatewayCorsExtensions.cs:18`, `Aspire/Security/SecurityHeaders.cs:212`,
-   `Aspire/Gateway/GatewayRateLimitingExtensions.cs:133`,
+   `Aspire/Gateway/GatewayRateLimitingExtensions.cs:179`,
    `Aspire/Gateway/GatewayHealthCheckExtensions.cs:96`), Gateway
    (`Gateway/RateLimiting/GatewayRoutePolicyExtensions.cs:29`) and Testing
-   (`Testing/FeatureManagementTestExtensions.cs:12`, `Testing/RateLimiterTestExtensions.cs:13`).
+   (`Testing/Support/FeatureManagementTestExtensions.cs:12`,
+   `Testing/Support/RateLimiterTestExtensions.cs:13`).
    A plain text search finds 26 occurrences of that exact receiver, because three of them are
    analyzer-suppression justification strings rather than declarations
-   (`Infrastructure/DependencyInjection.cs:856`, `:879`, `:918`).
+   (`Infrastructure/DependencyInjection.cs:870`, `:893`, `:932`).
 
-3. **The idiom reaches well past DI.** The same measurement finds 82 `extension` blocks across 65
+3. **The idiom reaches well past DI.** The same measurement finds 83 `extension` blocks across 66
    files under `MMCA.Common/Source`. Receivers include `WebApplicationBuilder`
    (`API/Startup/ModuleHostExtensions.cs:24`, `Aspire/Logging/SerilogHostExtensions.cs:29`),
-   `WebApplication` (`API/Startup/WebApplicationExtensions.cs:35`), `IEndpointRouteBuilder`
-   (`API/Startup/JwksEndpointExtensions.cs:22`, `API/SessionCookies/SessionCookieEndpoints.cs:20`),
+   `WebApplication` (`API/Startup/WebApplicationExtensions.cs:37`), `IEndpointRouteBuilder`
+   (`API/Startup/Endpoints/JwksEndpointExtensions.cs:22`,
+   `API/SessionCookies/SessionCookieEndpoints.cs:20`),
    `IApplicationBuilder` (`Gateway/ForwardedHeadersExtensions.cs:25`),
    `IDistributedApplicationBuilder` and `IResourceBuilder<ProjectResource>`
    (`Aspire.Hosting/Extensions.cs:126`, `:340`, `:410`), `IPage` and `ILocator`
@@ -95,8 +97,10 @@ method is what keeps the choice reversible, and the public-API baselines record 
    record describes.
 
 5. **Consumers write them too.** The idiom is not confined to the framework: MMCA.ADC declares 20
-   blocks across 20 files under `Source` (one per module DI class, plus the three service-contract
-   packages and `AppHost/BrokerSelection.cs`), MMCA.Store 16 across 16, and MMCA.Helpdesk 3 across 3
+   blocks across 20 files under `Source` (14 module DI classes, the four service-contract packages,
+   `AppHost/BrokerSelection.cs` and
+   `Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs`),
+   MMCA.Store 16 across 16, and MMCA.Helpdesk 3 across 3
    (`Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs` and
    its `.API` and `.Infrastructure` siblings). The reference seed teaches the shape by using it.
 
@@ -114,7 +118,7 @@ method is what keeps the choice reversible, and the public-API baselines record 
    (`Application/PublicAPI.Shipped.txt:64`, container at `:63`) and as
    `static MMCA.Common.Application.DependencyInjection.AddApplication(this ...IServiceCollection! services)`
    (`:701`). Across the repo there are 187 `.extension` lines in 13 `PublicAPI.Shipped.txt` files and
-   55 in 11 `PublicAPI.Unshipped.txt` files, covering 14 packages. Gateway's whole surface is still
+   58 in 11 `PublicAPI.Unshipped.txt` files, covering 14 packages. Gateway's whole surface is still
    unshipped: its `PublicAPI.Shipped.txt` contains only `#nullable enable`, and both shapes of
    `UseCommonForwardedHeaders` sit in `Gateway/PublicAPI.Unshipped.txt:12` and `:98`.
 
@@ -127,7 +131,7 @@ method is what keeps the choice reversible, and the public-API baselines record 
    A method emits `Name(this T x)`; a property emits `get_Name(T x)`. Those are different members.
 
 9. **The MAUI package uses the idiom but sits outside the gate.** `MMCA.Common.UI.Maui` declares two
-   blocks (`UI.Maui/DependencyInjection.cs:18` on `IServiceCollection`,
+   blocks (`UI.Maui/DependencyInjection.cs:34` on `IServiceCollection`,
    `UI.Maui/HostingDependencyInjection.cs:17` on `MauiAppBuilder`) and is the one project excluded
    from the public-API analyzer, because it lives outside `MMCA.Common.slnx` and builds only on the
    windows MAUI job (`MMCA.Common/Directory.Build.props:86`, reason at `:82-85`, naming ADR-042). Its
@@ -141,11 +145,11 @@ method is what keeps the choice reversible, and the public-API baselines record 
     in an ADC E2E page object. IDE0051 ("unused private member") misses calls that cross from inside
     a block to a private member of the containing class on SDK 10.0.201 and later, and is suppressed
     three times in one file with that reason spelled out
-    (`Infrastructure/DependencyInjection.cs:856`, `:879`, `:918`).
+    (`Infrastructure/DependencyInjection.cs:867`, `:890`, `:929`).
 
 11. **A fitness function has to know the emitted shape.** The `DomainThrowsOnlyArgumentGuards` rule
-    (`Testing.Architecture/ArchitectureRules.DomainThrows.cs:67`) walks IL and would otherwise flag
-    the skeleton members an `extension(T)` block leaves in a Domain assembly, whose
+    (`Testing.Architecture/Rules/Domain/ArchitectureRules.DomainThrows.cs:67`) walks IL and would
+    otherwise flag the skeleton members an `extension(T)` block leaves in a Domain assembly, whose
     `NotSupportedException` nobody typed. It skips any method carrying
     `System.Runtime.CompilerServices.ExtensionMarkerAttribute` (constant at `:8`, filter at `:88`,
     predicate at `:174-178`, documented at `:157-173`).
@@ -173,7 +177,7 @@ method is what keeps the choice reversible, and the public-API baselines record 
   (`Directory.Build.props:78-79`) mean any change to an extension member, including one caused by a
   compiler change to the emitted shape, shows up as a text diff in `PublicAPI.Shipped.txt` before a
   package is published, which is the same protection ADR-015 gives every other member.
-- **Consistency across four repos beats a mixed idiom.** With 82 blocks in the framework and 39 more
+- **Consistency across four repos beats a mixed idiom.** With 83 blocks in the framework and 39 more
   across ADC, Store and Helpdesk, a partial adoption would mean a reader has to know which of two
   declaration styles a given `Add*` uses. The property is set once per repo in
   `Directory.Build.props` and the shape is uniform.
@@ -188,7 +192,7 @@ method is what keeps the choice reversible, and the public-API baselines record 
   and seven more, `release.yml:24`, `:108`), so the compiler and the analyzers that interpret these
   blocks can change on any patch release with no repo edit. That is not hypothetical: the IDE0051
   suppressions record behavior that differs between SDK 10.0.201 and the 10.0.104 the same comment
-  names (`Infrastructure/DependencyInjection.cs:856`).
+  names (`Infrastructure/DependencyInjection.cs:870`).
 - **Method to property inside a block is a binary break, and it does not look like one.** Both are
   members of the same block and the source edit is two words, but the emitted classic member changes
   from `Name(this T)` to `get_Name(T)` (`Domain/PublicAPI.Shipped.txt:68` beside `:224`, against
@@ -199,21 +203,21 @@ method is what keeps the choice reversible, and the public-API baselines record 
   suppression is a place where a genuine future hit on that type is silenced too, and the IDE0051
   ones carry an explicit "remove this once Roslyn fixes it" that nothing enforces.
 - **Anything reflecting over the assemblies has to special-case the marker attribute.** The
-  architecture fitness rule already does (`ArchitectureRules.DomainThrows.cs:8`, `:174-178`). Any
-  future rule, source generator or documentation tool that walks methods in a framework assembly
-  inherits the same requirement, and the failure mode is a false positive on a body no developer
-  wrote.
-- **The public-API baselines are roughly doubled for this surface.** 187 shipped and 55 unshipped
+  architecture fitness rule already does
+  (`Testing.Architecture/Rules/Domain/ArchitectureRules.DomainThrows.cs:8`, `:174-178`). Any future
+  rule, source generator or documentation tool that walks methods in a framework assembly inherits
+  the same requirement, and the failure mode is a false positive on a body no developer wrote.
+- **The public-API baselines are roughly doubled for this surface.** 187 shipped and 58 unshipped
   `.extension` lines sit alongside their `static ...(this ...)` counterparts, so a single new
   registration method costs two or three baseline lines instead of one, and a reviewer reading a
   baseline diff sees the same member twice.
 - **The one package with no gate is the one with the least coverage.** `MMCA.Common.UI.Maui`'s two
-  blocks (`UI.Maui/DependencyInjection.cs:18`, `UI.Maui/HostingDependencyInjection.cs:17`) are
+  blocks (`UI.Maui/DependencyInjection.cs:34`, `UI.Maui/HostingDependencyInjection.cs:17`) are
   excluded from RS0016/RS0017 (`Directory.Build.props:86`), so a reshape there would reach a
   published package without the text diff that protects the other thirteen.
 - **The declaration reads as an instance method that is not one.**
-  `public IServiceCollection AddApplication()` (`Application/DependencyInjection.cs:32`) has no
-  visible receiver parameter; the receiver comes from the enclosing block header five lines up. That
+  `public IServiceCollection AddApplication()` (`Application/DependencyInjection.cs:35`) has no
+  visible receiver parameter; the receiver comes from the enclosing block header six lines up. That
   is the ergonomic benefit and the readability cost in the same line, and it is why three suppression
   justifications had to explain the block boundary in prose rather than point at a rule.
 

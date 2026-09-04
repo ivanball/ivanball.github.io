@@ -41,9 +41,9 @@ gets it.
 - **A readiness gate that starts closed.** `WarmupReadinessGate` (singleton) begins not-ready;
   `WarmupReadinessHealthCheck` is registered tagged `ready` and reports `Unhealthy` until the gate opens.
   `MapDefaultEndpoints()` maps `/health/ready` to every check tagged neither `live` nor `optional`
-  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:350-353`), so while warm-up is running the replica's
+  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:433-436`), so while warm-up is running the replica's
   readiness endpoint reports not-ready and the platform keeps traffic off it. (`/alive` maps only the
-  `live`-tagged self check, `Extensions.cs:334-337`, so liveness is unaffected and the container is not
+  `live`-tagged self check, `Extensions.cs:417-420`, so liveness is unaffected and the container is not
   restarted.) The second exclusion, `optional` (`HealthCheckTags.cs:32`), covers a dependency the app
   degrades gracefully without: a distributed cache sitting behind an in-memory fallback, a broker behind
   a retrying outbox. Those checks are still reported on `/health`, so the degradation stays visible, but
@@ -103,14 +103,14 @@ gets it.
   (`:46`, `:95-98`), whose in-memory `TestServer` never opens a socket. Failures follow the same rule as
   the rest of the subsystem: caught, logged at warning level, never fatal (`:141-146`, `:205-207`). Both
   production apps subclass and register it: ADC in Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:28`, registered
-  at `Program.cs:254`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:29`,
-  `Program.cs:153`) and Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:29`,
-  `Program.cs:165`); Store in Catalog
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:29`,
-  `Program.cs:154`), Identity (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:31`,
-  `Program.cs:135`) and Sales (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:32`,
-  `Program.cs:148`).
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22`, registered
+  at `Program.cs:257`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23`,
+  `Program.cs:158`) and Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23`,
+  `Program.cs:169`); Store in Catalog
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23`,
+  `Program.cs:163`), Identity (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25`,
+  `Program.cs:144`) and Sales (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26`,
+  `Program.cs:158`).
 - **Extensible per host.** `AddWarmupReadiness()` registers the gate, the runner, the readiness health
   check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
   `AddWarmupTask<T>()`, which is also how a `SelfHttpWarmupTaskBase` subclass enters the run.
@@ -149,7 +149,7 @@ gets it.
   ceiling (`WarmupHostedService.cs:42`, applied at `:69`), and a task that trips it surfaces as a
   `TimeoutException`, is logged, and lets the gate open (`:77-82`). The number deliberately sits above the
   90-second shared Polly total-request timeout that already bounds the built-in OIDC task's HTTP call
-  (`Extensions.cs:62`, `HttpResilienceDefaults.cs:19`), so a host-registered task doing non-HTTP work,
+  (`Extensions.cs:61`, `HttpResilienceDefaults.cs:19`), so a host-registered task doing non-HTTP work,
   which previously had no bound at all, now inherits the same backstop. Two costs follow. A replica whose
   warm-up hangs stays out of rotation for the full two minutes before it is admitted, so the ceiling
   bounds the damage rather than making it cheap. And `WaitAsync` abandons rather than cancels, so the

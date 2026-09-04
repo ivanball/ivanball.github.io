@@ -4,6 +4,8 @@
 Accepted (2026-06-07). Supersedes the earlier "deliberately one shared database" stance.
 Clarified 2026-06-27: the single context class became **one sealed context class per engine** when
 ADR-018 added the orthogonal engine axis (the `Name`/database axis here is unchanged).
+Updated 2026-09-03: the legacy `AtlDevCon` archive database no longer exists (dropped 2026-09-02);
+rollback now restores from a bacpac blob.
 
 ## Context
 When the modules were first extracted into independently-deployable services, all services in an
@@ -30,8 +32,10 @@ Adopt **database-per-service**: each service owns its own physical database with
   `DataSourceResolver`, and to an engine by configuration base class (`[UseDataSource]`, ADR-018).
   The forbidden split is *per-module*, not per-engine.
 - **ADC** runs `ADC_Identity`, `ADC_Conference`, `ADC_Engagement`, `ADC_Notification`: locally on
-  the shared Aspire SQL container and in Azure as four Basic-tier databases. The legacy `AtlDevCon`
-  database is retained **read-only** as an archive and rollback path.
+  the shared Aspire SQL container and in Azure as four Basic-tier databases. Those four are the
+  entire application data estate: the legacy `AtlDevCon` database was exported to the bacpac blob
+  `sql-archive/AtlDevCon-20260902.bacpac` and dropped on 2026-09-02, `infra/main.bicep` no longer
+  declares it, and that blob (not a live database) is the rollback source of record.
 - **Per-source outbox.** Each database has its own `OutboxMessages`; the `OutboxProcessor` drains
   only the sources its host owns, so no service ever sees another's rows.
 - **Cross-service references are scalar IDs, not FKs.** `CrossDataSourceDegradeConvention` removes

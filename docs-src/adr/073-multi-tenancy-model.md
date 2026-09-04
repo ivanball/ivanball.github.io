@@ -89,14 +89,14 @@ hostname-to-tenant map and certificate handling that no consumer needs today.
 
 `TenantResolutionMiddleware` (`Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs`)
 mirrors `CorrelationIdMiddleware`, which is a named step of the same edge pipeline
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/MiddlewarePipelineBuilder.cs:40`, its name a
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:40`, its name a
 constant at `MiddlewarePipelineStepNames.cs:20`). Tenant resolution is its own step
-(`MiddlewarePipelineBuilder.cs:112-118`), placed immediately **after** the `Authentication` step
-(`:108-110`), because a claim-first resolution order requires that `HttpContext.User` already be populated.
+(`MiddlewarePipelineBuilder.cs:113-119`), placed immediately **after** the `Authentication` step
+(`:109-111`), because a claim-first resolution order requires that `HttpContext.User` already be populated.
 `UseCommonMiddlewarePipeline`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:46`, with a
-`configure` overload at `:58`) applies the steps through `ApplyPipeline` (`:138`), which seeds
-`MiddlewarePipelineBuilder.CreateDefault()` (`MiddlewarePipelineBuilder.cs:31`): the order is data,
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48`, with a
+`configure` overload at `:60`) applies the steps through `ApplyPipeline` (`:140`), which seeds
+`MiddlewarePipelineBuilder.CreateDefault()` (`MiddlewarePipelineBuilder.cs:32`): the order is data,
 frozen by the `MiddlewarePipelineOrderTestsBase` fitness function rather than by a sequence of inline
 `Use*` calls. Like the `SoftDeletedUserFilter` step (`MiddlewarePipelineBuilder.cs:130`, its name at
 `MiddlewarePipelineStepNames.cs:59`) the tenant step is registered unconditionally and inert by default,
@@ -110,7 +110,7 @@ it is registered between the two at `:266`). It stamps `TenantId` on Added entri
 `CrossTenantWriteException` on any Added, Modified, or Deleted entry whose tenant differs from the
 resolved one. It is always registered
 (`TryAddSingleton<TenantSaveChangesInterceptor>`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:62`), and with no tenant
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:76`), and with no tenant
 resolved it is inert for updates, deletes, and every entity that does not carry `ITenantEntity`: the
 system context is unrestricted on the write side exactly as it is on the read side. Inserts are the one
 exception. `StampOrVerifyInsert` throws `CrossTenantWriteException.ForUnresolvedTenant` when an Added
@@ -119,7 +119,7 @@ exception. `StampOrVerifyInsert` throws `CrossTenantWriteException.ForUnresolved
 because a row that no tenant can ever read is a worse outcome than a failed save; a system scope that
 names the tenant explicitly (a seeder, a per-tenant job) still writes.
 `DesignTimeDbContextHelper` registers it too
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:131`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:132`),
 so `dotnet ef` scaffolds against exactly the runtime interceptor pipeline for consumers with and without
 tenancy. Its absence is survivable rather than fatal: `OnConfiguring` resolves the tenant interceptor with
 `GetService` (`ApplicationDbContext.cs:264`) and falls back to the two-interceptor chain (`:268-270`), so a
@@ -161,8 +161,8 @@ for a soft-delete-inclusive read to cross tenants.
 ### Background work drains and migrates per tenant
 `OutboxProcessor` and `OutboxCleanupService` enumerate `(source, tenant?)` pairs from `TenancySettings`
 and call `ITenantContext.SetTenant` inside the per-source scope before obtaining the context
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:264`), so the
-factory routes to the tenant's database and the claim-lease update (`:477-481`, the `ExecuteUpdateAsync`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:266`), so the
+factory routes to the tenant's database and the claim-lease update (`:479-483`, the `ExecuteUpdateAsync`
 that sets `LockedUntil` and `LockToken`) runs against the right rows. There is deliberately **no `OutboxMessage` schema change**: a `TenantId` column
 would force a migration on every consumer on upgrade, for a discriminator the per-tenant database already
 provides and shared-schema tenancy does not need (the row sits in its aggregate's database either way).

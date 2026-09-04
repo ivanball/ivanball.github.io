@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -250,8 +253,8 @@
           deletion and data export, in each)&quot; (<code>UserOwnershipRule.cs:9-20</code>). The same remarks record why it was
           hoisted as a plain helper instead of a base class: &quot;because the two data-export handlers stay app-level
           (their projections are entirely app-specific)&quot;. Deletion did get a base class, <code>DeleteUserHandlerBase</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:38</code>),
-          which calls that helper at <code>DeleteUserHandlerBase.cs:62</code>.</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:58</code>),
+          which calls that helper at <code>DeleteUserHandlerBase.cs:83</code>.</p>
           <p><strong>This record supersedes that reasoning for the export half.</strong> It treated a handler as one indivisible
           thing, either app-specific or not. It is two: an orchestration (authorize, load, fan out, degrade,
           envelope) identical in both apps, and projections app-specific in both. The projections being
@@ -277,7 +280,7 @@
           constraints similar to <code>DeleteUserHandlerBase</code> but not identical: both constrain <code>TUser</code> to
           <code>AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code> and <code>TQuery</code>/<code>TCommand</code> to <code>IUserOwnedRequest</code>
           (<code>ExportUserDataHandlerBase.cs:54-55</code>), and deletion additionally requires <code>TUser : IErasableUser</code>
-          (<code>DeleteUserHandlerBase.cs:41</code>) because it calls <code>Anonymize()</code>. Export never does, so it does not ask
+          (<code>DeleteUserHandlerBase.cs:62</code>) because it calls <code>Anonymize()</code>. Export never does, so it does not ask
           for that interface: a user aggregate can be exportable without being erasable. The base runs the same
           <code>UserOwnershipRule.CheckOwnership</code> gate with the export error code, and exposes a <code>HasDeletePrivilege</code>-style hook so the app supplies its own role
           vocabulary (ADC evaluates <code>UserRole.IsOrganizer</code>, Store evaluates <code>UserRole.IsAdmin</code>). It then loads the

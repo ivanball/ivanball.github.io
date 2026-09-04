@@ -95,7 +95,7 @@ identifier type is a generic parameter on `BaseEntity<TIdentifierType>`
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34`), `IBaseDTO<TIdentifierType>`
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IBaseDTO.cs:9`) and
 `IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOMapper.cs:14`)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityDTOMapper.cs:14`)
 ([ADR-001](001-manual-dto-mapping.md)), the repository handles
 ([ADR-055](055-repository-and-specification-contract.md)) and the generic entity query surface
 ([ADR-034](034-generic-entity-query-layer.md)), so the change is not confined to leaf code.

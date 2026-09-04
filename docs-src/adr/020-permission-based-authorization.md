@@ -97,7 +97,7 @@ tests.
 - **Opt-in per endpoint.** A route that should state a capability but carries a bare `[Authorize]` is
   authenticated-only, and nothing flags it: the same audit-the-inventory caveat as ADR-005
   (`IAnonymizable`) and ADR-017 (`[Idempotent]`). Some routes are deliberately in that category (a
-  signed-in user managing their own device installations, `DevicesController.cs:24`), which is what
+  signed-in user managing their own device installations, `DevicesController.cs:25`), which is what
   makes the inventory a judgement call rather than a rule a test could assert.
 - **Grants must be registered before the host is built.** The registry is built once on first
   resolve; an `AddPermissions(...)` call after it has been materialized is not seen. Permission

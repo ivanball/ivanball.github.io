@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -223,18 +226,18 @@
           back, retry or 500 an operation whose real work already succeeded.</p>
           <p>Five records each answer that question locally, for their own feature, and each answer is right:
           ADR-024 makes a push delivery failure non-fatal and records <code>MarkAsFailed</code> instead
-          (<code>024-push-notifications.md:55</code>), ADR-026 makes cross-service cache eviction best-effort so a broken
+          (<code>024-push-notifications.md:57</code>), ADR-026 makes cross-service cache eviction best-effort so a broken
           eviction store cannot dead-letter a coherence hint, ADR-076 degrades a data-subject export per section
-          rather than failing the package (<code>076-data-subject-export.md:74</code>), ADR-091 composes the reset email in
+          rather than failing the package (<code>076-data-subject-export.md:82-83</code>), ADR-091 composes the reset email in
           the handler and delivers it best-effort, &quot;awaited and its failure caught, logged and swallowed&quot;
           (<code>091-cache-backed-password-reset.md:71-76</code>), and ADR-054 makes compensation best-effort per order
-          line (<code>054-saga-compensation-and-reconciliation.md:158</code>). What none of them decides is the <strong>policy</strong>:
+          line (<code>054-saga-compensation-and-reconciliation.md:161</code>). What none of them decides is the <strong>policy</strong>:
           which failures may be swallowed at all, at what severity, whether cancellation counts as one of them,
           and how a swallow is made visible to somebody who is not reading the log. Answered per call site, that
           produces a repo full of hand-rolled <code>catch (Exception)</code> blocks, each choosing its own severity, its
           own treatment of cancellation and its own decision to count nothing. ADR-041 records the counter this
-          record&#39;s helper emits and notes that it is wired to no alert (<code>041-observability-and-telemetry.md:175-180</code>,
-          <code>:197-200</code>), but it records the instrument, not the contract behind it.</p>
+          record&#39;s helper emits and notes that it is wired to no alert (<code>041-observability-and-telemetry.md:197-202</code>,
+          <code>:219-222</code>), but it records the instrument, not the contract behind it.</p>
           <h2 id="decision">Decision</h2>
           <p>One framework helper defines the contract, and a swallow that does not go through it is a deliberate,
           documented exception.</p>
@@ -256,7 +259,7 @@
           <code>operation</code> tag (<code>:115</code>). It is a meter of its own rather than a counter folded into
           <code>MMCA.Common.Cqrs</code>, because best-effort dispatch is not part of the CQRS pipeline and an operator can
           drop or keep it independently of the RED metrics (<code>:93-97</code>). The Aspire service defaults subscribe it
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:170</code>).</li>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:205</code>).</li>
           <li><strong>The operation name is a low-cardinality constant.</strong> It becomes a metric tag (<code>:22</code>), so call sites
           pass a <code>const</code> or a fixed prefix plus a value from a small fixed set. A blank name throws
           <code>ArgumentException</code> and a null logger or action throws <code>ArgumentNullException</code> (<code>:51-53</code>): the helper
@@ -309,7 +312,7 @@
           <code>cache.eviction.failed</code> on the <code>MMCA.Common.OutputCache</code> meter
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:51-62</code>): it is
           the one documented non-reuse of this helper inside the framework, and ADR-026 records the rationale
-          (<code>026-caching-strategy.md:412-417</code>).</p>
+          (<code>026-caching-strategy.md:507-511</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>One policy beats five local leniencies.</strong> Each feature record is still right about its own
@@ -340,9 +343,9 @@
           (<code>.../Submit/SubmitQuestionHandler.cs:125-127</code>).</li>
           <li><strong>The counter is failure-only and alerts on nothing.</strong> A healthy system emits zero, and zero is
           indistinguishable from a host that never wired the meter. ADR-041 puts it in exactly that gap
-          (<code>041-observability-and-telemetry.md:197-200</code>).</li>
+          (<code>041-observability-and-telemetry.md:219-222</code>).</li>
           <li><strong>The meter name is a duplicated literal.</strong> <code>MMCA.Common.Aspire</code> subscribes it by string because that
-          package has no reference to Application (<code>BestEffort.cs:89-92</code>, <code>Extensions.cs:170</code>), so a rename has
+          package has no reference to Application (<code>BestEffort.cs:89-92</code>, <code>Extensions.cs:205</code>), so a rename has
           to move in two places or the metric silently stops being exported.</li>
           <li><strong>A swallow is still a loss.</strong> The helper decides that the caller does not see the failure; it does
           not make the side effect happen. A cache entry heals on its own TTL, but a lost broadcast never

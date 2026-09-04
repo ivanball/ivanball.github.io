@@ -73,9 +73,9 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   to `Added`
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:46-47`).
   Because integration-event shapes are snapshot-frozen by an architecture test
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Events.cs:45-58`),
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:45-58`),
   `State:DomainEntityState` is a committed line of the wire contract
-  (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/IntegrationEventContractTests.cs:11`),
+  (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:11`),
   so retyping or removing the discriminator fails the build and, under ADR-010, requires a new event
   type rather than a silent reshape.
 - **The shared base is the convenience; the discriminator shape is the convention.** Fourteen concrete
@@ -105,9 +105,11 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   transitions) and **1 in Helpdesk**: **32** in total.
 - **Nothing enforces the taxonomy.** The shared fitness rules require domain events to be sealed and to
   live in a `*.DomainEvents` namespace
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Naming.cs:66-75`), to
-  be immutable (`ArchitectureRules.Immutability.cs:34-38`), and require integration events to inherit
-  `BaseIntegrationEvent` and declare an `int SchemaVersion` (`ArchitectureRules.Events.cs:6-25`), but no
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Naming.cs:66-75`), to
+  be immutable (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Immutability.cs:34-38`),
+  and require integration events to inherit
+  `BaseIntegrationEvent` and declare an `int SchemaVersion`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:6-25`), but no
   rule mentions `EntityChangedEvent` or the discriminator. The framework's own coverage of the base is
   five unit tests over two test doubles, one `int`-keyed and one `Guid`-keyed
   (`MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/DomainEvents/EntityChangedEventTests.cs:10-59`,
@@ -122,7 +124,7 @@ factory": `Ticket`'s identifier is database-generated, so it is still `0` at fac
 aggregate deliberately raises **no** `Added` event, with creation signalled after commit by a separate
 integration event instead
 (`.../Tickets.Domain/Tickets/Ticket.cs:81-84`, published at
-`.../Tickets.Application/Tickets/UseCases/Create/CreateTicketHandler.cs:42-43`); the audit handler's doc
+`.../Tickets.Application/Tickets/UseCases/Create/CreateTicketHandler.cs:43-45`); the audit handler's doc
 records exactly that gap (`TicketChangedAuditHandler.cs:13-14`). Outside the four repos, the two-module
 `MMCA.ECommerce` companion sample carries two more adopters on the same pattern
 (`MMCA.ECommerce/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/DomainEvents/ProductChanged.cs:15`,

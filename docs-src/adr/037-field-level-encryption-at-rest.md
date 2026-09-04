@@ -87,7 +87,7 @@ rest with authenticated encryption, applied per property in an entity configurat
    (`EncryptedStringConverter.cs:231`, `:236`), so the authentication tag covers it. Rewriting the version
    byte of a stored value fails decryption rather than silently selecting a different key, and it fails even
    when the substituted version happens to map to the same key (test at
-   `Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EncryptedStringConverterTests.cs:226`, which
+   `Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Encryption/EncryptedStringConverterTests.cs:226`, which
    registers one key under two versions and still gets a `CryptographicException`).
 
 6. **Ciphertext is non-deterministic.** A fresh random nonce per encryption
@@ -120,7 +120,7 @@ rest with authenticated encryption, applied per property in an entity configurat
    still reachable.
 
 10. **Unit-tested but not yet adopted.** `EncryptedStringConverterTests`
-    (`Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EncryptedStringConverterTests.cs:6`) covers a
+    (`Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Encryption/EncryptedStringConverterTests.cs:6`) covers a
     plaintext round-trip (`EncryptedStringConverterTests.cs:10`), a Unicode round-trip
     (`EncryptedStringConverterTests.cs:129`), non-deterministic output (`EncryptedStringConverterTests.cs:24`,
     `:38`), the 32-byte key generation (`EncryptedStringConverterTests.cs:52`, `:61`), the invalid-length and
@@ -287,6 +287,6 @@ of the caller's dictionary (`:281`), and the version byte the single-key constru
 
 The work this revision documents landed via MMCA.Common PR #247 and is included in v1.153.0 (tagged
 2026-08-18), so the versioned envelope and key ring are now in published packages. It is included
-rather than featured: the `[1.153.0]` changelog entry (`MMCA.Common/CHANGELOG.md:1218`) does not name
+rather than featured: the `[1.153.0]` changelog entry (`MMCA.Common/CHANGELOG.md:1425`) does not name
 the converter, which is in the release because it merged to `main` before the tag. Adoption is
 unchanged at zero: no entity configuration in any of the four repositories wires the converter.

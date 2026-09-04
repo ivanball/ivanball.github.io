@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -306,10 +309,10 @@
           <ol>
           <li><strong>The outbox&#39;s broker publish is now a resilience objective.</strong> <code>OutboxProcessor</code> holds a Polly
           <code>ResiliencePipeline</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:99</code>,
-          built at <code>:755-766</code>) and wraps exactly one call in it, the broker publish (<code>:596-600</code>); the
-          in-process dispatch branch (<code>:602-605</code>) and every database call sit outside it by construction
-          (<code>:88-91</code>). Its parameters live beside the HTTP ones as
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:101</code>,
+          built at <code>:757-768</code>) and wraps exactly one call in it, the broker publish (<code>:598-602</code>); the
+          in-process dispatch branch (<code>:604-607</code>) and every database call sit outside it by construction
+          (<code>:89-92</code>). Its parameters live beside the HTTP ones as
           <code>BrokerResilienceDefaults</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/BrokerResilienceDefaults.cs:24</code>: a 0.5
           failure ratio over a 30-second sampling window, a minimum throughput of 10, and a 15-second break),
@@ -321,11 +324,11 @@
           instead of one per message.</li>
           <li><strong>A per-query database circuit breaker was evaluated and rejected.</strong> It is not a gap and it is not
           scheduled. EF Core&#39;s <code>EnableRetryOnFailure</code> execution strategy
-          (<code>.../Persistence/DbContexts/SQLServerDbContext.cs:64-67</code>, five retries with a ten-second maximum
-          delay, alongside <code>CommandTimeoutSeconds</code> at <code>:56</code>) already owns retrying at the persistence layer
-          and constrains how a user-initiated transaction may be written (<code>:61-63</code>, restated at
-          <code>.../Application/Interfaces/Infrastructure/IUnitOfWork.cs:63</code>), which is why the strategy is
-          materialized explicitly in <code>DbContextFactory</code> (<code>:524</code>). A Polly breaker wrapped around a call the
+          (<code>.../Persistence/DbContexts/SQLServerDbContext.cs:63-66</code>, five retries with a ten-second maximum
+          delay, alongside <code>CommandTimeoutSeconds</code> at <code>:55</code>) already owns retrying at the persistence layer
+          and constrains how a user-initiated transaction may be written (<code>:60-62</code>, restated at
+          <code>.../Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:60-69</code>), which is why the strategy is
+          materialized explicitly in <code>DbContextFactory</code> (<code>:525</code>). A Polly breaker wrapped around a call the
           strategy is already retrying would either count one logical failure many times or force the
           strategy to be replaced, and replacing it is an EF execution-strategy rework rather than a
           resilience addition. <strong>The EF retry strategy plus the command timeout remains the database

@@ -29,8 +29,8 @@ load run drives sustained traffic at production read endpoints
 (`MMCA.ADC/.github/workflows/load-test.yml:3-6`). The Testcontainers broker round-trip needs a Docker
 daemon that the gating jobs deliberately do not have
 (`MMCA.ADC/.github/workflows/deploy.yml:810-811`). Each therefore lives on its own schedule: weekly
-Monday for the drill (`dr-drill.yml:32`, Store `:34`), monthly for the load test
-(`load-test.yml:18` in both repos), weeknights for the broker tier
+Monday for the drill (`dr-drill.yml:33` in both repos), monthly for the load test
+(`load-test.yml:23`, Store `:21`), weeknights for the broker tier
 (`MMCA.ADC/.github/workflows/cross-service-tests.yml:31`,
 `MMCA.Store/.github/workflows/cross-service-tests.yml:35`).
 

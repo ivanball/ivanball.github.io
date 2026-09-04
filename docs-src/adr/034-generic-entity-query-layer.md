@@ -11,7 +11,7 @@ an `AddEntityCrud` registration for all three verbs, and a `CrudEntityController
 PUT. The PUT ships on a **new derived base** rather than on `AggregateRootEntityControllerBase`, whose
 generic arity is deliberately unchanged; everything below is untouched.
 Revised (2026-08-31): the update-applier interface is named `IEntityUpdateCommandApplier`
-(`Source/Core/MMCA.Common.Application/UseCases/IEntityUpdateCommandApplier.cs:38`); source
+(`Source/Core/MMCA.Common.Application/UseCases/Crud/IEntityUpdateCommandApplier.cs:38`); source
 citations below rebased to their current lines.
 
 ## Context
@@ -47,12 +47,12 @@ contract, supplied by two controller bases over a shared query pipeline.
 
 2. **Generic write controller.** `AggregateRootEntityControllerBase<TEntity,
    TEntityDTO, TIdentifierType, TCreateRequest>`
-   (`Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:27`)
+   (`Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:28`)
    inherits all of the above and adds `[HttpPost]` create
-   (`AggregateRootEntityControllerBase.cs:58`, returning 201 `CreatedAtRoute` at
-   `:72`) and `[HttpDelete("{id}")]`
-   (`AggregateRootEntityControllerBase.cs:84`). The create action is decorated with
-   `[Idempotent]` (`AggregateRootEntityControllerBase.cs:59`) so a retried POST does
+   (`AggregateRootEntityControllerBase.cs:59`, returning 201 `CreatedAtRoute` at
+   `:73`) and `[HttpDelete("{id}")]`
+   (`AggregateRootEntityControllerBase.cs:85`). The create action is decorated with
+   `[Idempotent]` (`AggregateRootEntityControllerBase.cs:60`) so a retried POST does
    not create a duplicate (ADR-017).
 
 3. **Sparse fieldsets via `fields`.** A comma-separated `fields` query parameter
@@ -115,23 +115,23 @@ contract, supplied by two controller bases over a shared query pipeline.
   not unbounded in the engine: each property is filtered only by a registered
   `IFilterStrategy` whose `SupportedOperators` are validated before the database is
   touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:119`,
-  invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:266`),
+  invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:267`),
   and `MaxUnboundedResultLimit` (`EntityQueryPipeline.cs:23`) plus the `MaxPageSize`
   clamp (`EntityControllerBase.cs:168`) bound the result size.
 - **Composes with manual DTO mapping (ADR-001).** Entities are projected to DTOs by
-  an injected `IEntityDTOMapper` (`EntityQueryService.cs:35`, property at `:90`) via
-  `DTOMapper.MapToDTOs` (`EntityQueryService.cs:324`); a `DTOToEntityPropertyMap`
-  (`EntityQueryService.cs:100`) translates DTO field names to entity property paths
+  an injected `IEntityDTOMapper` (`EntityQueryService.cs:36`, property at `:91`) via
+  `DTOMapper.MapToDTOs` (`EntityQueryService.cs:325`); a `DTOToEntityPropertyMap`
+  (`EntityQueryService.cs:101`) translates DTO field names to entity property paths
   for filter and sort, so the wire contract speaks DTO names while the engine speaks
   entity names.
 - **Composes with populators (ADR-002).** The unsupported-include path delegates to
-  `INavigationPopulator` (`EntityQueryService.cs:36`), the same cross-source batch
+  `INavigationPopulator` (`EntityQueryService.cs:37`), the same cross-source batch
   loader that bridges relationships EF cannot JOIN.
 
 ## Trade-offs
 - **The wire contract tracks the entity model.** Filterable, sortable, and
   projectable surface is the entity's property set. A model change is an API change
-  unless mediated by the DTO and `DTOToEntityPropertyMap` (`EntityQueryService.cs:100`),
+  unless mediated by the DTO and `DTOToEntityPropertyMap` (`EntityQueryService.cs:101`),
   which is the boundary that decouples the two when needed.
 - **Dynamic filtering is an injection and over-fetch surface.** Arbitrary
   client-supplied property/operator/value triples are an attack surface; it is
@@ -146,7 +146,7 @@ contract, supplied by two controller bases over a shared query pipeline.
   purpose-built endpoint; the query contract (filter key syntax, operators) must be
   learned once rather than read off each endpoint.
 - **Opting out means overriding the base.** All four reads and the two writes are
-  `virtual` (`EntityControllerBase.cs:109`, `AggregateRootEntityControllerBase.cs:63`),
+  `virtual` (`EntityControllerBase.cs:109`, `AggregateRootEntityControllerBase.cs:64`),
   so a controller that needs bespoke behavior overrides the specific action rather
   than abandoning the base, but the default surface is opt-out, not opt-in.
 
@@ -155,7 +155,7 @@ ADR-001 (manual DTO mapping: the generic controllers project through
 `IEntityDTOMapper`), ADR-002 (navigation populators: the unsupported-include path),
 ADR-013 (Result pattern at the edge: every action returns through
 `HandleFailure(result.Errors)`, `EntityControllerBase.cs:128`), ADR-017 (idempotency:
-the generic create is `[Idempotent]`, `AggregateRootEntityControllerBase.cs:59`),
+the generic create is `[Idempotent]`, `AggregateRootEntityControllerBase.cs:60`),
 ADR-019 (rate limiting: these GET routes are the authenticated read surface the
 always-on global limiter caps per principal).
 
@@ -195,8 +195,8 @@ rebased to their current declaration and call-site lines.
 
 1. **The fast-path predicate is named `TryGetFastPathIncludes`.** Revision item 4 above referred to it
    as `IsPrimaryKeyOnlyLookup`, a symbol that no longer exists in the framework source. The current
-   method (`Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:161`, called from the
-   by-id fast path at `EntityQueryService.cs:129`) both decides whether the request is a plain key
+   method (`Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:162`, called from the
+   by-id fast path at `EntityQueryService.cs:130`) both decides whether the request is a plain key
    lookup and returns the navigations it must eager-load. The described behavior is unchanged:
    requested include flags no longer disqualify on their own, and only unsupported (cross-source)
-   includes send the read back to the pipeline (`EntityQueryService.cs:184-187`).
+   includes send the read back to the pipeline (`EntityQueryService.cs:185-188`).

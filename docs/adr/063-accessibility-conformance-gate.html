@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -288,9 +291,9 @@
           three contexts block merges (<code>MMCA.Common/CONTRIBUTING.md:63-64</code>, enumerated in the branch-protection
           payload at <code>:174-176</code>).</li>
           <li><strong>Both deployed apps gate the deploy on it.</strong> <code>MMCA.ADC/.github/workflows/deploy.yml:689</code> and
-          <code>MMCA.Store/.github/workflows/deploy.yml:592</code> call the reusable <code>e2e.yml</code> workflow chromium-only
-          (ADC <code>:691</code>, Store <code>:594</code>) against the full Aspire stack, and the <code>deploy</code> job waits on that gate
-          (ADC <code>:1054</code>, Store <code>:945</code>).</li>
+          <code>MMCA.Store/.github/workflows/deploy.yml:646</code> call the reusable <code>e2e.yml</code> workflow chromium-only
+          (ADC <code>:691</code>, Store <code>:648</code>) against the full Aspire stack, and the <code>deploy</code> job waits on that gate
+          (ADC <code>:1054</code>, Store <code>:999</code>).</li>
           <li><strong>The gate already owns design-token decisions.</strong> Contrast values in the shared theme are set to
           what the scan will accept, with the ratio recorded in place: light-palette <code>WarningContrastText</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:33</code>, rationale at <code>:29-32</code>,
@@ -327,7 +330,7 @@
           <code>E2ETestBase</code> directly
           (<code>ProfileManagementTests.cs:8</code>) because the ADC profile page supports only password change and account
           deletion, so it does not inherit the base&#39;s profile scan. Beyond the Identity bases each app carries a
-          dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 31 page
+          dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:27</code> holds 31 page
           scans (10 through <code>ScanGridAsync</code>, 21 strict) and Store&#39;s
           <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 23 (6 grid, 17 strict).
           <strong>MMCA.Helpdesk adopts none of it</strong>: it pins the package version
@@ -374,8 +377,8 @@
           not machine-checkable and are covered by the manual screen-reader checklist in
           <a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, which is a periodic human pass, not a gate.</li>
           <li><strong>The deploy gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
-          filter (ADC <code>deploy.yml:688</code>, Store <code>deploy.yml:591</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
-          (ADC <code>:1092</code>, Store <code>:976</code>), so a backend-only or infra-only deploy ships without a browser scan. That
+          filter (ADC <code>deploy.yml:688</code>, Store <code>deploy.yml:645</code>), and <code>deploy</code> accepts <code>success</code> or <code>skipped</code> for it
+          (ADC <code>:1092</code>, Store <code>:1038</code>), so a backend-only or infra-only deploy ships without a browser scan. That
           is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
           gate as backstop, but it does mean &quot;deployed&quot; does not always mean &quot;axe ran on this commit&quot;.</li>
           <li><strong>Consumer breadth is hand-maintained.</strong> Nothing forces a new page into <code>AccessibilityTests</code>, so

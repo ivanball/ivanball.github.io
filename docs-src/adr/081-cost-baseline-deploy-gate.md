@@ -39,7 +39,7 @@ This is the FinOps sibling of the deploy gates the framework already records: AD
 provenance), ADR-060 (the performance-regression gate against a committed baseline) and ADR-062 (SLO
 alerting as code). ADR-064 decides the three proof-of-recency gates and enumerates `cost-guard`
 in passing among the jobs that "have the change itself as their subject"
-(`Website/docs-src/adr/064-deploy-recency-gates.md:16-17,44`), but it does not decide it. This record
+(`Website/docs-src/adr/064-deploy-recency-gates.md:21-22,44`), but it does not decide it. This record
 does.
 
 ## Decision

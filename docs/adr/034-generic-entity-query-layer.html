@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -224,7 +227,7 @@
           PUT. The PUT ships on a <strong>new derived base</strong> rather than on <code>AggregateRootEntityControllerBase</code>, whose
           generic arity is deliberately unchanged; everything below is untouched.
           Revised (2026-08-31): the update-applier interface is named <code>IEntityUpdateCommandApplier</code>
-          (<code>Source/Core/MMCA.Common.Application/UseCases/IEntityUpdateCommandApplier.cs:38</code>); source
+          (<code>Source/Core/MMCA.Common.Application/UseCases/Crud/IEntityUpdateCommandApplier.cs:38</code>); source
           citations below rebased to their current lines.</p>
           <h2 id="context">Context</h2>
           <p>Every module exposes many entities, and most of them need the same read and write
@@ -255,12 +258,12 @@
           (<code>EntityControllerBase.cs:410</code>).</p>
           </li>
           <li><p><strong>Generic write controller.</strong> <code>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;</code>
-          (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:27</code>)
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:28</code>)
           inherits all of the above and adds <code>[HttpPost]</code> create
-          (<code>AggregateRootEntityControllerBase.cs:58</code>, returning 201 <code>CreatedAtRoute</code> at
-          <code>:72</code>) and <code>[HttpDelete(&quot;{id}&quot;)]</code>
-          (<code>AggregateRootEntityControllerBase.cs:84</code>). The create action is decorated with
-          <code>[Idempotent]</code> (<code>AggregateRootEntityControllerBase.cs:59</code>) so a retried POST does
+          (<code>AggregateRootEntityControllerBase.cs:59</code>, returning 201 <code>CreatedAtRoute</code> at
+          <code>:73</code>) and <code>[HttpDelete(&quot;{id}&quot;)]</code>
+          (<code>AggregateRootEntityControllerBase.cs:85</code>). The create action is decorated with
+          <code>[Idempotent]</code> (<code>AggregateRootEntityControllerBase.cs:60</code>) so a retried POST does
           not create a duplicate (ADR-017).</p>
           </li>
           <li><p><strong>Sparse fieldsets via <code>fields</code>.</strong> A comma-separated <code>fields</code> query parameter
@@ -325,24 +328,24 @@
           not unbounded in the engine: each property is filtered only by a registered
           <code>IFilterStrategy</code> whose <code>SupportedOperators</code> are validated before the database is
           touched (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:119</code>,
-          invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:266</code>),
+          invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:267</code>),
           and <code>MaxUnboundedResultLimit</code> (<code>EntityQueryPipeline.cs:23</code>) plus the <code>MaxPageSize</code>
           clamp (<code>EntityControllerBase.cs:168</code>) bound the result size.</li>
           <li><strong>Composes with manual DTO mapping (ADR-001).</strong> Entities are projected to DTOs by
-          an injected <code>IEntityDTOMapper</code> (<code>EntityQueryService.cs:35</code>, property at <code>:90</code>) via
-          <code>DTOMapper.MapToDTOs</code> (<code>EntityQueryService.cs:324</code>); a <code>DTOToEntityPropertyMap</code>
-          (<code>EntityQueryService.cs:100</code>) translates DTO field names to entity property paths
+          an injected <code>IEntityDTOMapper</code> (<code>EntityQueryService.cs:36</code>, property at <code>:91</code>) via
+          <code>DTOMapper.MapToDTOs</code> (<code>EntityQueryService.cs:325</code>); a <code>DTOToEntityPropertyMap</code>
+          (<code>EntityQueryService.cs:101</code>) translates DTO field names to entity property paths
           for filter and sort, so the wire contract speaks DTO names while the engine speaks
           entity names.</li>
           <li><strong>Composes with populators (ADR-002).</strong> The unsupported-include path delegates to
-          <code>INavigationPopulator</code> (<code>EntityQueryService.cs:36</code>), the same cross-source batch
+          <code>INavigationPopulator</code> (<code>EntityQueryService.cs:37</code>), the same cross-source batch
           loader that bridges relationships EF cannot JOIN.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The wire contract tracks the entity model.</strong> Filterable, sortable, and
           projectable surface is the entity&#39;s property set. A model change is an API change
-          unless mediated by the DTO and <code>DTOToEntityPropertyMap</code> (<code>EntityQueryService.cs:100</code>),
+          unless mediated by the DTO and <code>DTOToEntityPropertyMap</code> (<code>EntityQueryService.cs:101</code>),
           which is the boundary that decouples the two when needed.</li>
           <li><strong>Dynamic filtering is an injection and over-fetch surface.</strong> Arbitrary
           client-supplied property/operator/value triples are an attack surface; it is
@@ -357,7 +360,7 @@
           purpose-built endpoint; the query contract (filter key syntax, operators) must be
           learned once rather than read off each endpoint.</li>
           <li><strong>Opting out means overriding the base.</strong> All four reads and the two writes are
-          <code>virtual</code> (<code>EntityControllerBase.cs:109</code>, <code>AggregateRootEntityControllerBase.cs:63</code>),
+          <code>virtual</code> (<code>EntityControllerBase.cs:109</code>, <code>AggregateRootEntityControllerBase.cs:64</code>),
           so a controller that needs bespoke behavior overrides the specific action rather
           than abandoning the base, but the default surface is opt-out, not opt-in.</li>
           </ul>
@@ -366,7 +369,7 @@
           <code>IEntityDTOMapper</code>), ADR-002 (navigation populators: the unsupported-include path),
           ADR-013 (Result pattern at the edge: every action returns through
           <code>HandleFailure(result.Errors)</code>, <code>EntityControllerBase.cs:128</code>), ADR-017 (idempotency:
-          the generic create is <code>[Idempotent]</code>, <code>AggregateRootEntityControllerBase.cs:59</code>),
+          the generic create is <code>[Idempotent]</code>, <code>AggregateRootEntityControllerBase.cs:60</code>),
           ADR-019 (rate limiting: these GET routes are the authenticated read surface the
           always-on global limiter caps per principal).</p>
           <h2 id="revision-2026-07-24">Revision (2026-07-24)</h2>
@@ -405,11 +408,11 @@
           <ol>
           <li><strong>The fast-path predicate is named <code>TryGetFastPathIncludes</code>.</strong> Revision item 4 above referred to it
           as <code>IsPrimaryKeyOnlyLookup</code>, a symbol that no longer exists in the framework source. The current
-          method (<code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:161</code>, called from the
-          by-id fast path at <code>EntityQueryService.cs:129</code>) both decides whether the request is a plain key
+          method (<code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:162</code>, called from the
+          by-id fast path at <code>EntityQueryService.cs:130</code>) both decides whether the request is a plain key
           lookup and returns the navigations it must eager-load. The described behavior is unchanged:
           requested include flags no longer disqualify on their own, and only unsupported (cross-source)
-          includes send the read back to the pipeline (<code>EntityQueryService.cs:184-187</code>).</li>
+          includes send the read back to the pipeline (<code>EntityQueryService.cs:185-188</code>).</li>
           </ol>
           
         <div class="doc-foot btn-row">

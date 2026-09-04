@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -336,10 +339,10 @@
           <code>[NonIdempotent(&quot;&quot;)]</code> compiles and passes.</p>
           <h3 id="the-gate-every-post-declares-an-intent">The gate: every POST declares an intent</h3>
           <p><code>ArchitectureRules.PostActionsDeclareIdempotencyIntent</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Idempotency.cs:44</code>)
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.Idempotency.cs:44</code>)
           flags any action carrying <code>[HttpPost]</code> that has neither <code>[Idempotent]</code> nor <code>[NonIdempotent]</code>
           (<code>:67-74</code>). Consumers inherit it through <code>IdempotencyConventionTestsBase</code>
-          (<code>.../Bases/IdempotencyConventionTestsBase.cs:10</code>), whose single <code>[Fact]</code>
+          (<code>.../Bases/Cqrs/IdempotencyConventionTestsBase.cs:10</code>), whose single <code>[Fact]</code>
           <code>PostActions_ShouldDeclare_IdempotencyIntent</code> (<code>:14-16</code>) is the whole body, in the ADR-015 pattern.</p>
           <p>Three scope facts matter for reading a green result correctly. The lookup is <strong>inherit-aware</strong>
           (<code>GetCustomAttributes(inherit: true)</code>, <code>:80-82</code>), so a consumer overriding a shared controller action
@@ -350,20 +353,20 @@
           reference to <code>MMCA.Common.API</code> and means a differently-named lookalike attribute does not count.</p>
           <h3 id="the-shared-auth-controllers-declare-both-ways-and-the-split-is-the-interesting-part">The shared auth controllers declare both ways, and the split is the interesting part</h3>
           <p><code>AuthControllerBase</code> marks register <code>[Idempotent]</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:91-92</code>), which is
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:93-94</code>), which is
           the canonical double-submit: a user pressing the button twice should get one account and one response.
-          Login (<code>:67-68</code>), refresh (<code>:115-116</code>) and revoke (<code>:142-143</code>, with the per-session revoke at
-          <code>:205-206</code>) are <code>[NonIdempotent]</code>, as is the OAuth code exchange
-          (<code>.../Controllers/OAuthControllerBase.cs:148-149</code>). Token issuance must never be replay-cached,
+          Login (<code>:69-70</code>), refresh (<code>:117-118</code>) and revoke (<code>:144-145</code>, with the per-session revoke at
+          <code>:207-208</code>) are <code>[NonIdempotent]</code>, as is the OAuth code exchange
+          (<code>.../Controllers/OAuthControllerBase.cs:149-150</code>). Token issuance must never be replay-cached,
           and the sharpest case is refresh: <a href="050-jwt-refresh-token-rotation.html">ADR-050</a> rotates the stored
           refresh token on every use, so a cached replay would hand a client a token pair that has already been
           rotated away and revoked, turning this filter&#39;s safety feature into an authentication failure. The
-          OAuth <code>complete</code> action is a <code>[HttpGet]</code> (<code>OAuthControllerBase.cs:86</code>) and is therefore outside the
+          OAuth <code>complete</code> action is a <code>[HttpGet]</code> (<code>OAuthControllerBase.cs:87</code>) and is therefore outside the
           gate&#39;s scope rather than unmarked.</p>
           <h3 id="the-no-op-without-a-key-contract-is-now-pinned-by-tests">The no-op-without-a-key contract is now pinned by tests</h3>
           <p>The Decision has always said an absent or blank <code>Idempotency-Key</code> means the action runs normally. That
           is now asserted rather than asserted-about: the filter returns <code>next()</code> untouched at the action stage
-          with no key (<code>.../Idempotency/IdempotencyFilter.cs:133-138</code>), only enables request buffering when a key
+          with no key (<code>.../Idempotency/IdempotencyFilter.cs:132-136</code>), only enables request buffering when a key
           is present (<code>:121-122</code>), and treats blank as absent (<code>:163-170</code>), with
           <code>Tests/Presentation/MMCA.Common.API.Tests/Idempotency/IdempotencyFilterPassthroughTests.cs:46</code>, <code>:68</code>
           and <code>:85</code> covering the missing-header, blank-header and unbuffered-body cases. That matters because it

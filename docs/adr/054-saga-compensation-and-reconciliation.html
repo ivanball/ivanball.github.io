@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -251,15 +254,15 @@
           performs the guarded transition and saves, and nothing else
           (<code>.../Orders/UseCases/Cancel/CancelOrderHandler.cs:42-49</code>); restoring stock is
           <code>OrderCancelledSagaHandler : IDomainEventHandler&lt;OrderCancelled&gt;</code>
-          (<code>.../Orders/Saga/OrderCancelledSagaHandler.cs:31-34</code>) and notifying the customer of a failed
+          (<code>.../Orders/Saga/OrderCancelledSagaHandler.cs:30-34</code>) and notifying the customer of a failed
           payment is <code>OrderPaymentFailedSagaHandler</code> (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:20-22</code>).
           A new compensating action is a new handler, not an edit to the command.</li>
           <li><strong>Each handler runs in its own DI scope.</strong> Domain-event handlers are registered as singletons
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:184-189</code>), so every one
-          opens its own scope through <code>IServiceScopeFactory</code> (<code>OrderCancelledSagaHandler.cs:41</code>,
+          opens its own scope through <code>IServiceScopeFactory</code> (<code>OrderCancelledSagaHandler.cs:40</code>,
           <code>OrderPaymentFailedSagaHandler.cs:29</code>,
-          <code>.../Infrastructure/Services/PaymentReconciliationService.cs:89,132</code>), and the ones that persist
-          resolve their own <code>IUnitOfWork</code> inside it (<code>OrderCancelledSagaHandler.cs:42</code>,
+          <code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:89,132</code>), and the ones that persist
+          resolve their own <code>IUnitOfWork</code> inside it (<code>OrderCancelledSagaHandler.cs:41</code>,
           <code>PaymentReconciliationService.cs:91,133</code>). <code>OrderPaymentFailedSagaHandler</code> is the exception that
           shows the rule: it resolves only <code>ICustomerService</code> and <code>IEmailSender</code>
           (<code>OrderPaymentFailedSagaHandler.cs:30-31</code>) and persists nothing, because its compensation is a
@@ -270,7 +273,7 @@
           <code>MarkInventoryRestored</code> refuses a second call and refuses a non-cancelled order
           (<code>Order.cs:302-325</code>). The handler checks the marker first
           (<code>OrderCancelledSagaHandler.cs:56-62</code>), applies the increases through a pure domain service
-          (<code>.../Domain/Services/InventoryRestorationDomainService.cs:14-34</code>), then one
+          (<code>.../Domain/Inventory/InventoryRestorationDomainService.cs:14-34</code>), then one
           <code>SaveChangesAsync</code> commits the increases and the marker together
           (<code>OrderCancelledSagaHandler.cs:94-102</code>). Same database, one transaction: the marker cannot exist
           without the writes it guards, and the writes cannot land unmarked.</li>
@@ -297,9 +300,9 @@
           pass the marker check carry the same original token into their update: one commits, the other gets
           <code>DbUpdateConcurrencyException</code> and its outbox retry then finds the committed marker and skips.</li>
           <li><strong>A periodic sweep drives the transitions a lost webhook would have.</strong>
-          <code>PaymentReconciliationService</code> (<code>.../Infrastructure/Services/PaymentReconciliationService.cs:33-38</code>)
+          <code>PaymentReconciliationService</code> (<code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:33-38</code>)
           is registered as a hosted service by the Sales module&#39;s infrastructure
-          (<code>.../Infrastructure/DependencyInjection.cs:34-36</code>). Each cycle selects the oldest orders that have
+          (<code>.../Infrastructure/DependencyInjection.cs:37</code>). Each cycle selects the oldest orders that have
           sat in <code>PaymentInitiated</code> past a cutoff, ordered, bounded and projected to ids entirely in SQL
           (<code>PaymentReconciliationService.cs:101-109</code>) over a dedicated filtered index
           (<code>.../Persistence/EntityConfiguration/OrderConfiguration.cs:53-59</code>), asks Stripe for the session&#39;s
@@ -319,7 +322,7 @@
           </ul>
           <p>The loop shape is deliberate and shared, and it lives in the framework rather than in the sweep.
           MMCA.Common ships it as an abstract base class, <code>PeriodicBackgroundService</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20-42</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/PeriodicBackgroundService.cs:20-42</code>),
           whose <code>ExecuteAsync</code> owns the enablement gate, the startup delay, the per-cycle <code>try</code>/<code>catch</code> that
           never kills the loop, and every wait through <code>TimeProvider</code>
           (<code>PeriodicBackgroundService.cs:45-87</code>). <code>PaymentReconciliationService</code> derives from it
@@ -372,7 +375,7 @@
           <li><strong>Compensation is best-effort per line, and names what it could not restore.</strong> <code>RestoreInventory</code>
           skips an order line whose <code>InventoryItem</code> row is missing
           (<code>InventoryRestorationDomainService.cs:22-27</code>), but the skip is not silent: the unmatched variant
-          ids are collected and returned to the caller (<code>InventoryRestorationDomainService.cs:26,33</code>), and
+          ids are collected and returned to the caller (<code>InventoryRestorationDomainService.cs:25,32</code>), and
           the handler logs them at Warning naming each one
           (<code>OrderCancelledSagaHandler.cs:81-87</code>, message at <code>OrderCancelledSagaHandler.cs:115</code>). The marker
           still commits anyway, so that quantity is never restored and nothing retries it: withholding the
@@ -394,7 +397,7 @@
           swallow its failures itself.</li>
           <li><strong>The sweep is not replica-leased.</strong> The outbox processor claims rows with a lease before working
           them (ADR-003); the sweep takes no such claim, so at the configured <code>maxReplicas: 2</code>
-          (<code>MMCA.Store/infra/main.bicep:1281</code>) two replicas can pick the same stuck order and each spend a
+          (<code>MMCA.Store/infra/main.bicep:1359</code>) two replicas can pick the same stuck order and each spend a
           Stripe status call. Correctness holds through the concurrency token; the duplicated external call
           does not deduplicate.</li>
           <li><strong>Every compensating action needs its own marker.</strong> There is no generic mechanism: the ADR-021

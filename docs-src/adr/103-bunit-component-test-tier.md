@@ -1,7 +1,8 @@
 # ADR-103: bUnit Component-Test Tier as a Shipped Package
 
 ## Status
-Accepted (2026-08-31).
+Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the `AngleSharp` advisory
+pin travels. See Revision (2026-09-03) at the end.
 
 ## Context
 Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates **structure**
@@ -39,15 +40,15 @@ fixes every choice above once, in one file.
   symbols, so a move off that line changes this file and no other
   (`BunitComponentTestBase.cs:29-34`). The line is pinned at `bunit` 2.9.0 in each repo's central
   package file (`MMCA.Common/Directory.Packages.props:205-206`,
-  `MMCA.ADC/Directory.Packages.props:31-32`, `MMCA.Store/Directory.Packages.props:51-52`), and the
+  `MMCA.ADC/Directory.Packages.props:30-31`, `MMCA.Store/Directory.Packages.props:50-51`), and the
   package carries a direct `AngleSharp` pin because central package management does not pin
   transitives (`MMCA.Common.Testing.UI.csproj:13-15`).
 - **MudBlazor services plus the ADR-067 facades, registered once.** The constructor calls
   `Services.AddMudServices()` (`BunitComponentTestBase.cs:46`) and then
   `Services.AddCommonUiFacades()` (`:53`), which is the same call the production shell makes from
-  `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:106`). That
+  `AddUIShared` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:110`). That
   call registers `IToastService` -> `MudToastService` and `IAppDialogService` -> `MudAppDialogService`
-  with `TryAdd` (`DependencyInjection.cs:158-163`), so a component test resolves the vendor-neutral
+  with `TryAdd` (`DependencyInjection.cs:162-167`), so a component test resolves the vendor-neutral
   facades and exercises the real Mud-backed path, and a test that wants a recording double registers
   one afterwards (last registration wins, `BunitComponentTestBase.cs:48-52`).
 - **Loose JSInterop.** `JSInterop.Mode = JSRuntimeMode.Loose` (`:55`) so MudBlazor components that
@@ -103,7 +104,7 @@ fixes every choice above once, in one file.
   Conference's adds the ADR-042 device-capability defaults and inert configuration
   (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:19-46`), and
   MMCA.Common's adds the layout-chrome services only its own tests render
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:15-46`).
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:25-42`).
 
 All six consumer projects sit in the gating CI subset, so the tier runs on every pull request rather
 than on a schedule (`MMCA.ADC/MMCA.ADC.CI.slnf:43,49,55`,
@@ -125,7 +126,7 @@ where a Blazor UI exists.
   every UI test class in three repos (`:29-34`).
 - **Test-time and run-time resolve the same facades.** Because the base calls the production
   `AddCommonUiFacades` rather than registering its own doubles (`:53`,
-  `MMCA.Common.UI/DependencyInjection.cs:106,158-163`), a component test asserts against the real
+  `MMCA.Common.UI/DependencyInjection.cs:110,162-167`), a component test asserts against the real
   toast and dialog implementations ADR-067 put behind those interfaces, and a test that wants to
   assert on a toast opts into a double explicitly.
 - **A package matches how every other shipped test tier is delivered.** Runtime conformance
@@ -150,10 +151,15 @@ where a Blazor UI exists.
   (`MMCA.Common.Testing.UI.csproj:16,21`), so a repo that wanted a different mocking library in its UI
   tests still takes Moq transitively, and a non-MudBlazor UI could not use this base at all.
 - **The bUnit version is pinned per repo, not by the package.** The package references `bunit` without
-  a version (`MMCA.Common.Testing.UI.csproj:13`) and each consumer's central package file names the
-  number (`MMCA.Common/Directory.Packages.props:206`, `MMCA.ADC/Directory.Packages.props:32`,
-  `MMCA.Store/Directory.Packages.props:52`), so three files have to agree, and the AngleSharp advisory
-  pin has to be repeated the same way.
+  a version (`MMCA.Common.Testing.UI.csproj:13`), and every consuming test project references `bunit`
+  directly as well
+  (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:10`),
+  so each repo's central package file names the number
+  (`MMCA.Common/Directory.Packages.props:206`, `MMCA.ADC/Directory.Packages.props:31`,
+  `MMCA.Store/Directory.Packages.props:51`) and three files have to agree. The `AngleSharp` advisory
+  pin does not spread that way: it is named once, in `MMCA.Common/Directory.Packages.props:210`, and
+  reaches consumers transitively through the package's own direct reference
+  (`MMCA.Common.Testing.UI.csproj:15`).
 
 ## Related
 [ADR-058](058-runtime-conformance-suites-as-a-package.md) (the runtime conformance tier this sits
@@ -168,3 +174,17 @@ and the `IToastService` / `IAppDialogService` facades this base registers throug
 top), [ADR-101](101-common-metapackage.md) (why this package stays outside the `MMCA.Common`
 metapackage), [ADR-015](015-architecture-fitness-functions.md) (the structural tier below) and
 [ADR-016](016-lockstep-versioning-masstransit-pin.md) (the lockstep release the package rides).
+
+## Revision (2026-09-03)
+**The decision and the mechanism are unchanged.** One trade-off's premise was wrong. "The bUnit
+version is pinned per repo" said the `AngleSharp` advisory pin has to be repeated across the three
+central package files the way the `bunit` version is. It does not. `bunit` is named in all three
+(`MMCA.Common/Directory.Packages.props:206`, `MMCA.ADC/Directory.Packages.props:31`,
+`MMCA.Store/Directory.Packages.props:51`) because every consuming UI test project takes a direct
+`bunit` reference of its own
+(`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:10`).
+`AngleSharp` is named only in MMCA.Common (`MMCA.Common/Directory.Packages.props:210`), where it
+versions the package's own direct reference (`MMCA.Common.Testing.UI.csproj:15`); no consumer repo
+pins it in a central package file or a project file, so consumers inherit the patched version with
+the package. The trade-off now says so. Citation anchors elsewhere in the record were refreshed at
+the same time with no change of substance.

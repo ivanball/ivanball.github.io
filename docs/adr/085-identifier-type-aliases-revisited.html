@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -300,7 +303,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34</code>), <code>IBaseDTO&lt;TIdentifierType&gt;</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IBaseDTO.cs:9</code>) and
           <code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOMapper.cs:14</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityDTOMapper.cs:14</code>)
           (<a href="001-manual-dto-mapping.html">ADR-001</a>), the repository handles
           (<a href="055-repository-and-specification-contract.html">ADR-055</a>) and the generic entity query surface
           (<a href="034-generic-entity-query-layer.html">ADR-034</a>), so the change is not confined to leaf code.</p>

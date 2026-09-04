@@ -37,7 +37,7 @@ would be the app-local duplication ADR-042 exists to prevent.
 scanning ships as an ADR-042 capability whose native half is opt-in per head.**
 
 - **Display is a component, not a capability.** `QrCodeImage`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/QrCodeImage.razor`) renders a payload as
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Sharing/QrCodeImage.razor`) renders a payload as
   an inline base64 PNG data URI through QRCoder's managed `PngByteQRCode` path (`:71-74`), so it works
   identically on SSR, Server, WASM and MAUI with no per-head registration at all. `Payload` (`:15-17`)
   and `AltText` (`:23-25`) are both `[EditorRequired]`, which is what keeps a generated image from
@@ -46,17 +46,17 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
   broken image (`:66-69`), and the bitmap is memoized against the three inputs that affect it
   (`:42-56`), so a parent re-render does not re-encode.
 - **The error-correction level is a framework enum, not the generator's.**
-  `QrErrorCorrectionLevel` (`Components/QrErrorCorrectionLevel.cs:9-21`: `Low`, `Medium` (default),
+  `QrErrorCorrectionLevel` (`Components/Sharing/QrErrorCorrectionLevel.cs:9-21`: `Low`, `Medium` (default),
   `Quartile`, `High`) is mapped onto QRCoder's `ECCLevel` inside the component (`QrCodeImage.razor:77-83`),
   so the package's public surface does not pin consumers to the generator that happens to back it today.
 - **Scanning is one contract on the ADR-042 pattern.** `IBarcodeScannerService`
-  (`Services/Capabilities/IBarcodeScannerService.cs:11-20`) is two members: `bool IsSupported` and
+  (`Services/Capabilities/Media/IBarcodeScannerService.cs:11-20`) is two members: `bool IsSupported` and
   `Task<string?> ScanAsync(CancellationToken cancellationToken = default)`. The contract is that an
   implementation **never throws**: an unsupported head, a denied permission, a user-cancelled scan and a
   cancelled token all return `null` (`:3-10`), and the decoded payload is documented as untrusted input.
-  `NullBarcodeScannerService` (`Fallbacks/NullBarcodeScannerService.cs:9-16`) reports `IsSupported == false`
+  `NullBarcodeScannerService` (`Services/Capabilities/Media/NullBarcodeScannerService.cs:9-16`) reports `IsSupported == false`
   and returns `null`, TryAdd-registered by `AddDeviceCapabilityDefaults`
-  (`Services/Capabilities/DependencyInjection.cs:63`).
+  (`Services/Capabilities/DependencyInjection.cs:70`).
 - **The native implementation is opt-in and deliberately NOT folded into `UseMauiDeviceCapabilities`.**
   A head asks for the camera by name:
   `UseCommonBarcodeScanner(Func<string> cancelText, Func<string> cameraDescription)` on
@@ -68,10 +68,10 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
   reason sits on the opt-in method's own doc comment (`:86-87`): a head that never scans should ship
   neither the camera handler nor a camera permission declaration.
 - **The scan is a modal page with exactly one resolution.** `MauiBarcodeScannerService`
-  (`Capabilities/MauiBarcodeScannerService.cs:24`) marshals to the main thread (`:67-69`), then inside
+  (`Capabilities/Media/MauiBarcodeScannerService.cs:24`) marshals to the main thread (`:67-69`), then inside
   `ScanOnMainThreadAsync` (`:79-104`) pushes a `BarcodeScanPage` modally (`:94`) and pops it in a
   `finally` (`:100-103`). The page holds a
-  `TaskCompletionSource<string?>` (`Capabilities/BarcodeScanPage.cs:23-24`) that four paths can complete
+  `TaskCompletionSource<string?>` (`Capabilities/Media/BarcodeScanPage.cs:23-24`) that four paths can complete
   and only the first wins: a decode, the cancel button, the hardware back gesture, and
   `OnDisappearing`; the caller's `CancellationToken` is bridged to the same `Cancel()`
   (`MauiBarcodeScannerService.cs:97`). Only 2D formats are read (`BarcodeScanPage.cs:36`), because 1D
@@ -118,7 +118,7 @@ windows-job build and pack.
 ## Trade-offs
 - **The scan page's text is the caller's delegate, not a string (resolved in v1.147.0).**
   `cancelText` and `cameraDescription` arrive as `Func<string>` and are invoked once per scan, when
-  the modal page is built (`Capabilities/MauiBarcodeScannerService.cs:65-69`), so a head that
+  the modal page is built (`Capabilities/Media/MauiBarcodeScannerService.cs:65-69`), so a head that
   switches culture at runtime under [ADR-027](027-multi-locale-i18n.md) gets the cancel button, page
   title and semantic description in the language that is current at the scan rather than the one
   that was current at startup. The price is on the caller: a head passes the resource lookups

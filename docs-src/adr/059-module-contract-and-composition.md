@@ -87,17 +87,17 @@ rather than by absence.
   collection, which deliberately skips the BR-49 / BR-91 eligibility checks
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DisabledSessionBookmarkValidationService.cs:30-39`);
   `DisabledEventLiveValidationService`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/DisabledEventLiveValidationService.cs:22-63`)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/DisabledEventLiveValidationService.cs:23-64`)
   fails open across all four of the members it has grown to: an always-open live window for an event
-  (`:25-26`) and for a session (`:34-42`), every sponsor reported as belonging to a published event
-  under a default id and an empty name (`:49-50`), and a room's own id echoed back as the current
-  session with an empty title (`:58-62`).
+  (`:25-27`) and for a session (`:29-43`), every sponsor reported as belonging to a published event
+  under a default id and an empty name (`:45-51`), and a room's own id echoed back as the current
+  session with an empty title (`:53-63`).
   The dependent's code path does not branch on "is the module here": it resolves the interface and
   gets a documented degraded answer.
 - **`Dependencies` declares the graph; `RequiresDependencies` decides whether a gap is fatal.** The
   loader computes the module's disabled dependencies, then narrows them to "unsatisfied" by removing
   any name the consumer listed under `Modules:{Module}:RemoteDependencies`
-  (`ModuleLoader.cs:131-136`, `ModulesSettings.cs:30-32`,
+  (`ModuleLoader.cs:131-137`, `ModulesSettings.cs:30-32`,
   `ModuleSettings.cs:38`). With `RequiresDependencies = true` an unsatisfied dependency throws at
   startup with remediation text naming the three options (`ModuleLoader.cs:139-147`); with the
   default `false` the loader logs a warning and the module runs against the stub
@@ -169,7 +169,7 @@ and ADC Notification declares `["Identity"]` remote
 Conference enables one module and declares nothing remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25`) even though it wires
 Engagement's `IBookmarkCountService` as a gRPC client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:347`), because
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350`), because
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale
@@ -226,13 +226,13 @@ Engagement's `IBookmarkCountService` as a gRPC client
   (`DependencyInjection.cs:200-207`, `ModuleLoader.cs:323-324,332-333`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** ADC Conference consumes
   Engagement's `IBookmarkCountService` over gRPC without listing Engagement in `Dependencies`
-  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:347`), so neither the
+  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:350`), so neither the
   topological sort nor the `RequiresDependencies` check knows about that edge. Nothing derives
   `Dependencies` from the interfaces a module actually resolves. What is pinned is the declaration
   against a written expectation: `ModuleConformanceTestsBase<TModule>` asserts `Name`, `Dependencies`,
   `RequiresDependencies` (read through the `IModule` interface, so a leaf module is checked against
   the framework defaults too) and what `RegisterDisabledStubs` puts in the container
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ModuleConformanceTestsBase.cs:21-64`).
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ModuleConformanceTestsBase.cs:21-64`).
   That turns a silent edit of a declaration into a red test, but it is opt-in per module and five of
   the eight subclass it today (Store Catalog, Identity and Sales; ADC Identity and Notification);
   ADC Conference, ADC Engagement and Helpdesk Tickets have no subclass, so for those three the

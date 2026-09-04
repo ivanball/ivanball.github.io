@@ -10,6 +10,8 @@ return `Result` end to end instead of throwing, the severity ranking is hoisted 
 trip back into `Result` is a shipped reader rather than a per-service convention.
 Revised 2026-08-31: the catch-all exception handler now maps `CrossTenantWriteException` to HTTP 400
 ahead of its 500 fallback, so a write refused at the tenant boundary reads as a caller fault.
+Revised 2026-09-03: the error `Code` is gated as a per-repo public vocabulary (one literal code, one
+owning type) by an IL-reading architecture rule.
 
 ## Context
 Operations at every layer fail in *expected* ways: input is invalid, a domain invariant is broken, a
@@ -84,10 +86,10 @@ not exceptions.
   resolves the status from `ErrorTypeSeverity.MostSevere`
   (`.../MMCA.Common.API/Middleware/ErrorHttpMapping.cs:50-51`, called from
   `ApiControllerBase.HandleFailure` at `ApiControllerBase.cs:48`) and gRPC's `ToRpcException` does
-  the same (`.../MMCA.Common.Grpc/ResultGrpcExtensions.cs:115-116`, argued at `:100-107`). Only the
+  the same (`.../MMCA.Common.Grpc/ResultGrpcExtensions.cs:116-118`, argued at `:100-107`). Only the
   *status* is ranked: every error still travels in the ProblemDetails `errors` array
   (`ErrorHttpMapping.cs:61-69`) and in the gRPC trailers as `error-{i}-code` / `-message` / `-type`
-  (`ResultGrpcExtensions.cs:127-129`). Ranking in one place is what makes the two transports agree;
+  (`ResultGrpcExtensions.cs:128-130`). Ranking in one place is what makes the two transports agree;
   the previous arrangement, with the table inside `MMCA.Common.API`, left gRPC classifying an
   aggregate by its first error while HTTP classified it by its worst.
 - Exceptions are reserved for the genuinely exceptional: programming errors (null-argument guards) and
@@ -156,7 +158,7 @@ Two halves make a service method honestly typed, and they are deliberately separ
   silently lose every field (`:438-443`). It lives in `MMCA.Common.Shared` and uses nothing beyond
   the BCL, because the consumer is `MMCA.Common.UI`, which references Shared only (`:14-19`).
 - **`HttpResultExecutor` converts the absence of one.**
-  (`.../MMCA.Common.UI/Services/HttpResultExecutor.cs:31`.) It does not make the request: it takes
+  (`.../MMCA.Common.UI/Services/Api/HttpResultExecutor.cs:31`.) It does not make the request: it takes
   the caller's whole send-and-read operation as a `Func<Task<Result>>` / `Func<Task<Result<T>>>` and
   wraps it (`:52`, `:87`), so the two halves compose without either knowing the other's shape. A
   refused connection, a DNS failure, a dropped socket, an unreadable body (`HttpRequestException`,
@@ -189,18 +191,39 @@ same `ErrorTypeSeverity` rank the edges use, so a real 403 leads and an incident
 message never buries it (`:145-159`, the ordering at `:155`). The shared `ErrorSummary` component
 renders the same list as one deduplicating `MudAlert`, taking a failed `Result` and the
 `MudForm.Errors` shape together and rendering nothing at all when there is nothing to say
-(`.../MMCA.Common.UI/Components/ErrorSummary.razor:8`, both shapes merged at `:81-102`, one message
+(`.../MMCA.Common.UI/Components/Forms/ErrorSummary.razor:8`, both shapes merged at `:81-102`, one message
 inline and several as a list so a screen reader announces them as several items, `:15-29`).
 
 **A component that shows a retry needs the failure, not an exception.**
 `MobileInfiniteScrollList` takes one page fetcher, `FetchPageResult`, a required delegate returning
 `Task<Result<(IReadOnlyList<TItem> Items, int TotalItems)>>`
-(`.../MMCA.Common.UI/Components/MobileInfiniteScrollList.razor.cs:36-38`), and renders the failure's
-localized message beside its inline retry affordance (`:258-266`, the message read from the failed
-`Result` at `:261`). A tuple-returning delegate is not offered beside it: a tuple has no way to carry
+(`.../MMCA.Common.UI/Components/Lists/MobileInfiniteScrollList.razor.cs:37-39`), and renders the failure's
+localized message beside its inline retry affordance (`:259-268`, the message read from the failed
+`Result` at `:262`). A tuple-returning delegate is not offered beside it: a tuple has no way to carry
 a failure at all, so the component would be left showing a Retry button that cannot name what it is
 retrying. The delegate is checked at initialization, so a call site that omits it throws instead of
 rendering as a load failure that can never succeed (`:93-105`).
+
+### The error `Code` is a public vocabulary, gated for uniqueness (2026-09-03)
+
+`Code` is the half of a failure that crosses the wire verbatim (`ErrorHttpMapping.cs:61-69`) and the
+key ADR-027 localizes the message by, so a client switches on `Order.NotFound` and a support ticket
+quotes it. Two modules that both ship `Item.Invalid` make that vocabulary ambiguous, and the
+ambiguity only surfaces in production
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.ErrorCatalog.cs:31-37`).
+The catalog is therefore frozen the way ADR-010 froze integration-event schemas and ADR-015 Section B
+froze the `.proto` contracts. A Mono.Cecil IL scan reads every `Error` factory call site (`:169`,
+`:206-208`, the recognized members at `:17-29` and `:218-222`) across a repo's per-module Domain and
+Application assemblies only (`:184-189`); `ErrorCodesAreUnique` (`:62`) fails the build when one
+literal code is constructed by more than one declaring type (`:73`), and
+`ErrorCodesUseAnAllowedPrefix` (`:102`) requires the owning prefix. A code built at run time is
+reported as UNVERIFIABLE rather than passed or failed (`:210-213`, `:151-155`). Consumers subclass
+`ErrorCatalogTestsBase` (`.../Bases/Contracts/ErrorCatalogTestsBase.cs:20`, the three facts at `:46`,
+`:50`, `:54`) and allowlist a deliberately shared code (`:35-36`) rather than rename a shipped one:
+Store (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ErrorCatalogTests.cs:19`)
+and ADC (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:20`)
+do; MMCA.Common ships no module catalog and self-tests the rules against fixtures instead
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Contracts/ErrorCatalogFitnessTests.cs:15`).
 
 ## Rationale
 - **Failures are in the signature.** A method that can fail returns `Result<T>`, so the caller cannot
@@ -213,7 +236,7 @@ rendering as a load failure that can never succeed (`:93-105`).
   to write is also the correct one.
 - **An aggregate answers with its worst problem.** Ranking the categories makes the status independent
   of the order invariants happen to be evaluated in, which is the one thing a caller cannot see and
-  the one thing `Result.Combine` makes arbitrary (`ErrorHttpMapping.cs:34-37`, restated on the enum
+  the one thing `Result.Combine` makes arbitrary (`ErrorHttpMapping.cs:40-47`, restated on the enum
   itself at `ErrorType.cs:5-8`).
 - **Cheap and predictable.** No throw/catch on the common "won't do it" path.
 - **One wire contract for both channels.** Whether a request ends in a `Result.Failure` mapped by
@@ -260,7 +283,7 @@ rendering as a load failure that can never succeed (`:93-105`).
 - **An exception reaching a page still costs it the reason.** Where a failed `Result` carries a
   localized message the page can render, an exception that escapes a consumer-supplied fetcher falls
   back to a generic resource string, because its own text is neither translatable nor safe to render
-  (`MobileInfiniteScrollList.razor.cs:247-266`, the fallback at `:265`). Returning `Result` is what
+  (`MobileInfiniteScrollList.razor.cs:248-268`, the fallback at `:266`). Returning `Result` is what
   makes the specific message available at all; nothing forces a call site to produce one.
 - The exception-handler registration order is load-bearing. Because ASP.NET Core stops at the first
   handler that reports the exception handled, a mis-ordered registration (for example the catch-all

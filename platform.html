@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">16</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">106</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">109</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">119</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -408,7 +408,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>106 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>109 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -515,10 +515,13 @@
           <a class="adr" href="docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html"><span class="adr-num">100</span><span><span class="adr-title">The Outbox Is Resolved from the Messaging Mode, Not Always On</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Amends ADR-003 (the outbox runs when the transport needs it, rather than in every host unconditionally) and…</span></span></a>
           <a class="adr" href="docs/adr/101-common-metapackage.html"><span class="adr-num">101</span><span><span class="adr-title">An MMCA.Common Metapackage for the Core Six</span><span class="adr-sum">Accepted (2026-08-29, framework v1.170.0). Extends ADR-053 (the metapackage ships to both registries from the same tag, through the same workflow) and…</span></span></a>
           <a class="adr" href="docs/adr/102-pbkdf2-only-password-hashing.html"><span class="adr-num">102</span><span><span class="adr-title">PBKDF2-Only Password Hashing</span><span class="adr-sum">Accepted (2026-08-31). Supersedes ADR-032.</span></span></a>
-          <a class="adr" href="docs/adr/103-bunit-component-test-tier.html"><span class="adr-num">103</span><span><span class="adr-title">bUnit Component-Test Tier as a Shipped Package</span><span class="adr-sum">Accepted (2026-08-31).</span></span></a>
+          <a class="adr" href="docs/adr/103-bunit-component-test-tier.html"><span class="adr-num">103</span><span><span class="adr-title">bUnit Component-Test Tier as a Shipped Package</span><span class="adr-sum">Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.</span></span></a>
           <a class="adr" href="docs/adr/104-smart-enums-as-opt-in-capability.html"><span class="adr-num">104</span><span><span class="adr-title">Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</span><span class="adr-sum">Accepted (2026-08-31).</span></span></a>
           <a class="adr" href="docs/adr/105-data-residency-build-gate.html"><span class="adr-num">105</span><span><span class="adr-title">The Published Data-Residency Claim as a Build Gate</span><span class="adr-sum">Accepted (2026-09-01).</span></span></a>
           <a class="adr" href="docs/adr/106-extension-members-as-public-di-surface.html"><span class="adr-num">106</span><span><span class="adr-title">C# Extension Members as the Public DI Registration Surface</span><span class="adr-sum">Accepted (2026-09-01).</span></span></a>
+          <a class="adr" href="docs/adr/107-transaction-execution-contract.html"><span class="adr-num">107</span><span><span class="adr-title">Transaction Execution and Commit-Ambiguity Contract</span><span class="adr-sum">Accepted (2026-09-03).</span></span></a>
+          <a class="adr" href="docs/adr/108-distributed-lock-primitive.html"><span class="adr-num">108</span><span><span class="adr-title">Cross-Replica Mutual Exclusion via IDistributedLock</span><span class="adr-sum">Accepted (2026-09-03).</span></span></a>
+          <a class="adr" href="docs/adr/109-feature-by-folder-convention.html"><span class="adr-num">109</span><span><span class="adr-title">Feature-by-Folder Layout as an Enforced Convention</span><span class="adr-sum">Accepted (2026-09-03).</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -544,9 +547,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">169 documents</span>
+            <span class="kicker kicker--accent">172 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 106 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 18 guides and specifications.</p>
+            <p>Every collection indexed in one place: 109 Architecture Decision Records, the 38-document onboarding guide, 7 governance artifacts, and 18 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->

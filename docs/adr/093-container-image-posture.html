@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -216,7 +219,9 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-23) for the three build decisions below. The two runtime postures in &quot;Open
           postures&quot; are recorded as <strong>undecided</strong>: they describe what the images do today and the trade-off
-          each one carries, not a decision to keep doing it.</p>
+          each one carries, not a decision to keep doing it. Revised 2026-09-03: the Container Apps sizing
+          that decision 3&#39;s cold-start argument rests on is now uniform across all six ADC apps, so the
+          4-vs-2 split that argument cited is gone. See Revision (2026-09-03) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
           MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -232,7 +237,7 @@
           that a later hardening pass starts from a stated position rather than from a discovery.</p>
           <p>The images are built in CI, not by hand: a fan-out <code>build-images</code> matrix job with one leg per image
           (<code>MMCA.ADC/.github/workflows/deploy.yml:960,971-988</code> for the six ADC legs,
-          <code>MMCA.Store/.github/workflows/deploy.yml:848,859-873</code> for the five Store legs) runs
+          <code>MMCA.Store/.github/workflows/deploy.yml:902,913-927</code> for the five Store legs) runs
           <code>docker/build-push-action@v7</code> over a buildx builder
           (<code>MMCA.ADC/.github/workflows/deploy.yml:1005-1010</code>), pushes each image to ACR under both the commit
           sha and <code>latest</code> (<code>:1017-1018</code>), and caches layers in that same registry with <code>mode=max</code>
@@ -249,7 +254,7 @@
           lands in image layers, the build cache, and <code>docker history</code> (<code>:8-10</code>). CI passes it as a
           <code>secrets:</code> input to the build action, not a <code>build-args:</code> input
           (<code>MMCA.ADC/.github/workflows/deploy.yml:1024-1025</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:912-913</code>), and the workflow repeats the constraint in its
+          <code>MMCA.Store/.github/workflows/deploy.yml:966-967</code>), and the workflow repeats the constraint in its
           own comments (<code>MMCA.ADC/.github/workflows/deploy.yml:950-953</code>). Secret <em>content</em> is deliberately not
           part of the BuildKit cache key, so rotating the token does not invalidate the restore layer; that is
           safe only because the package set is pinned by committed lock files and any
@@ -279,9 +284,9 @@
           Blazor web hosts do not (<code>.../MMCA.ADC.UI.Web/Dockerfile:48</code>,
           <code>.../MMCA.Store.UI.Web/Dockerfile:47</code>). The stated purpose is cold start: deploys, restarts and
           scale-out replicas skip first-request JIT (<code>.../MMCA.ADC.Conference.Service/Dockerfile:39-40</code>), and
-          the containers those replicas land on are fractional-vCPU Container Apps: 0.25 vCPU / 0.5 GiB for
-          four of the six ADC apps and 0.5 vCPU / 1 GiB for the other two
-          (<code>MMCA.ADC/infra/main.bicep:1026,1222,1346,1487,1636,1742</code>). On that much CPU, JIT time is not
+          the containers those replicas land on are fractional-vCPU Container Apps: all six ADC apps
+          (identity, conference, engagement, notification, gateway, ui) run on 0.25 vCPU / 0.5 GiB
+          (<code>MMCA.ADC/infra/main.bicep:1058,1267,1391,1532,1692,1805</code>). On that much CPU, JIT time is not
           noise.</p>
           <p><strong>4. Every image is published with <code>UseAppHost=false</code> and started through the shared runtime.</strong> The
           <code>final</code> stage is the <code>base</code> stage plus the publish output, <code>ENV ASPNETCORE_ENVIRONMENT=Production</code>,
@@ -362,6 +367,30 @@
           deploy, none of which observes the image contents, which is the gap the open postures above name),
           <a href="053-dual-registry-package-publishing.html">ADR-053</a> (the dual-registry publishing that makes the credential
           in decision 1 a repository-mapping choice rather than a necessity).</p>
+          <h2 id="revision-2026-09-03">Revision (2026-09-03)</h2>
+          <p><strong>Container sizing is uniform, so the ReadyToRun argument applies evenly.</strong> Decision 3 justified
+          ReadyToRun by the CPU the replicas land on and cited a split: four ADC apps at 0.25 vCPU / 0.5 GiB
+          and two at 0.5 vCPU / 1 GiB. There is no split now. All six ADC container apps, identity,
+          conference, engagement, notification, gateway and ui, are declared
+          <code>resources: { cpu: json(&#39;0.25&#39;), memory: &#39;0.5Gi&#39; }</code>
+          (<code>MMCA.ADC/infra/main.bicep:1058,1267,1391,1532,1692,1805</code>), so every image in that application
+          starts on a quarter of a vCPU.</p>
+          <p>The two that moved are conference and gateway, and each records the measurement and its rollback in
+          place rather than in a commit message: conference averages 0.012-0.017 cores with a p95 under 0.03
+          against the 0.5 vCPU it previously held, its working set runs 320-380 MB, and a p95 of 376 MB is 73
+          percent of the new 512 MiB limit, which is called out as the one to watch
+          (<code>MMCA.ADC/infra/main.bicep:1260-1266</code>); the gateway shows the same CPU profile with a 190-235 MB
+          working set because it is pure YARP forwarding with no <code>DbContext</code>
+          (<code>MMCA.ADC/infra/main.bicep:1685-1691</code>). Reverting either to <code>{ cpu: json(&#39;0.5&#39;), memory: &#39;1Gi&#39; }</code>
+          is one line and one deploy.</p>
+          <p>Both comments note the consequence that matters here: startup CPU spikes are throttled by the
+          smaller quota, so cold start roughly doubles, and revision overlap keeps the previous revision
+          serving until readiness goes green so traffic does not see it. That raises rather than weakens the
+          case for publishing the service and gateway images ReadyToRun, since the JIT work removed at
+          publish time is work the container no longer has quota to do quickly.</p>
+          <p>Citations for the two Store <code>build-images</code> anchors in Context and decision 1 are re-pointed to the
+          job and its <code>secrets:</code> input (<code>MMCA.Store/.github/workflows/deploy.yml:902,913-927</code> and <code>:966-967</code>);
+          the workflow itself is unchanged in substance.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -379,6 +408,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
             </ul>
           </nav>
         </aside>

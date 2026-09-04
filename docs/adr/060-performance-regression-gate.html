@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -231,7 +234,7 @@
           problem this record answers.</p>
           <p>No existing ADR covers it. ADR-015&#39;s fitness functions assert <strong>structure and registration</strong>, and
           say so explicitly: they are &quot;not runtime behavior&quot;
-          (<code>Website/docs-src/adr/015-architecture-fitness-functions.md:48</code>). ADR-038 gates the supply chain
+          (<code>Website/docs-src/adr/015-architecture-fitness-functions.md:68</code>). ADR-038 gates the supply chain
           (SBOM, lock files, vulnerability audit), which is provenance, not cost. ADR-041 instruments
           production, so it observes a regression <strong>after</strong> it deploys rather than failing the PR that
           introduced it. Nothing owned the statement &quot;a performance regression must fail the merge.&quot;</p>
@@ -317,8 +320,9 @@
           slows the other, so the machine cancels out of the quotient. That is what makes a latency assertion
           valid on hardware nobody controls: the gate never claims to know how fast the runner is, only that
           one path stayed enormously faster than the other.</li>
-          <li><strong>The ratio encodes the invariant that actually matters.</strong> <code>Specification&lt;TEntity, TId&gt;</code> caches its
-          compiled delegate per instance (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:27,32</code>),
+          <li><strong>The ratio encodes the invariant that actually matters.</strong>
+          <code>Specification&lt;TEntity, TIdentifierType&gt;</code> caches its compiled delegate per instance
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:15,27,32</code>),
           and the two benchmarks are exactly the production path (one instance reused) and the anti-pattern
           the cache exists to avoid (a fresh instance per evaluation, recompiling every call)
           (<code>SpecificationBenchmarks.cs:36-42</code>). If someone deletes the cache field, moves the compile into
@@ -369,7 +373,7 @@
           <li><strong>The gate runs on pull requests only.</strong> CI has no <code>push: main</code> trigger
           (<code>MMCA.Common/.github/workflows/ci.yml:14-16</code>), and <code>release.yml</code> does not run <code>build/perfgate</code> (it
           only mentions the project in a NuGet cache-key comment,
-          <code>MMCA.Common/.github/workflows/release.yml:26,109</code>), so a release tag is not re-verified against
+          <code>MMCA.Common/.github/workflows/release.yml:26,110</code>), so a release tag is not re-verified against
           the baseline.</li>
           <li><strong>A green context does not always mean the benchmarks ran.</strong> On a documentation-only PR the heavy
           steps are skipped by the <code>changes</code> classifier while all required contexts still post green, which

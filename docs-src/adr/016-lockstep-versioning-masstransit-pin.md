@@ -63,7 +63,7 @@ Two related governance questions had no recorded answer:
    MINOR bumps, and the version number is therefore not a breakage signal on its own
    (`Website/docs-src/guides/common-VERSIONING.md:43-50`). It is safe because every first-party
    caller moves in the same change set, an API removal is proven against Helpdesk's source build
-   first (`common-VERSIONING.md:58-64`), and there is no `[Obsolete]` grace period to keep in step
+   first (`common-VERSIONING.md:67-68`), and there is no `[Obsolete]` grace period to keep in step
    (`common-VERSIONING.md:66-72`).
 3. **Pin a commercial-license dependency below its paid major, enforced by a fitness function.**
    `DependencyVersionTestsBase` parses `Directory.Packages.props` and fails the build when a pinned
@@ -72,12 +72,12 @@ Two related governance questions had no recorded answer:
    one) and `SixLabors.ImageSharp` below major 4 (v4 demands a Six Labors key at BUILD time, so its
    MSBuild targets fail outright), each mirrored as a dependabot major-update ignore so the bump is
    never even proposed
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-60`,
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:17-60`,
    `MMCA.Common/Directory.Packages.props:90-97`, `MMCA.Common/.github/dependabot.yml:57-60`).
    MassTransit is the original instance; ImageSharp is what showed the rule generalizes.
 
    The assertions run in MMCA.Common only, the one repo that subclasses the base
-   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/DependencyVersionTests.cs:9`).
+   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`).
    Helpdesk declares neither package. Store and ADC take `MassTransit` and `MassTransit.RabbitMQ`
    transitively through `MMCA.Common.Infrastructure`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:34-36`),
@@ -91,7 +91,7 @@ Two related governance questions had no recorded answer:
    a different v8 patch would still be inside the decision.
    They still do not subclass the test: its default list also names the two package ids they do not
    declare, and the rule fails on a pin it cannot find
-   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:42-45`).
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Governance.cs:42-45`).
 
 ## Rationale
 - **One version, one compatibility story.** Lockstep removes the N-package matrix: "everything on
@@ -128,11 +128,12 @@ candidates are recorded now so the eventual move is a comparison and not a scram
 What makes any of them a bounded change is where MassTransit actually sits. The whole
 `using MassTransit` surface is **eight files across two packages**. Seven are in
 `MMCA.Common.Infrastructure`: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:3`,
-`Services/BrokerMessageBus.cs:1`, `Services/IntegrationEventConsumer.cs:1`,
-`Services/IntegrationEventConsumerExtensions.cs:1`, `Services/UpcastingIntegrationEventConsumer.cs:1`,
-`Services/FaultIntegrationEventConsumer.cs:1` and `Messaging/ServiceBusEmulatorSupport.cs:4`; the
-eighth is `Source/Hosting/MMCA.Common.Testing/ServiceBusEmulatorFixtureBase.cs:5`. The last two are
-the emulator test tier rather than the transport: each one lowers the process-global
+`Messaging/BrokerMessageBus.cs:1`, `Messaging/Consumers/IntegrationEventConsumer.cs:1`,
+`Messaging/Consumers/IntegrationEventConsumerExtensions.cs:1`,
+`Messaging/Consumers/UpcastingIntegrationEventConsumer.cs:3`,
+`Messaging/Consumers/FaultIntegrationEventConsumer.cs:1` and `Messaging/ServiceBusEmulatorSupport.cs:4`;
+the eighth is `Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs:5`. The
+last two are the emulator test tier rather than the transport: each one lowers the process-global
 `MassTransit.AzureServiceBusTransport.Defaults` entity quotas the emulator rejects
 (`ServiceBusEmulatorSupport.cs:115-117`, `ServiceBusEmulatorFixtureBase.cs:74-76`), a v8 constraint
 that moves with that tier, not with the bus. The files that reference MassTransit **types**
@@ -165,13 +166,13 @@ Three candidates, **none adopted and none evaluated against a running broker her
 
 The trial point is the same for all three and it is additive: a new case in the `MessageBusProvider`
 switch inside `ConfigureBrokerTransport`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:919`, switch at `:924`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:933`, switch at `:938`,
 enum at `Settings/MessageBusSettings.cs:199`), so a candidate ships **beside** RabbitMQ and Service
 Bus instead of replacing either, and a consumer opts in by configuration. The two artifacts that move
 with a decision are the pin
 (`MMCA.Common/Directory.Packages.props:90-94`, the three entries at `:95-97`) and the fitness
 function that reads it
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-22`,
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:17-22`,
 the major ceiling at `:24-37`), plus the dependabot ignore they are paired with.
 
 A proving ground already exists: both consumers' nightlies run an Azure Service Bus emulator smoke

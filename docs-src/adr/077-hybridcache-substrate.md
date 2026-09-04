@@ -31,8 +31,8 @@ front of the distributed L2) that removes exactly that cost.
 Adopting it is not a drop-in replacement, because ADR-026 also records a production failure that
 constrains the design. `ICacheService.IncrementAsync` is a read-modify-write rather than Redis `INCR`
 because of a storage-format mismatch documented at the implementation
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:127-145`, override
-at `:146`): `INCR` writes a Redis string while `StackExchangeRedisCache` stores every entry as a Redis
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:125-144`, override
+at `:145`): `INCR` writes a Redis string while `StackExchangeRedisCache` stores every entry as a Redis
 hash, so an `INCR`-written counter answers `WRONGTYPE` on the next read and surfaces as a 500 on the
 endpoint that owns the counter. A second cache implementation writing a different payload shape into the
 same keys is the same failure with a different author, and a rolling deploy guarantees both writers are
@@ -80,13 +80,13 @@ the member with its native two-level primitive.
 
 ### `HybridCacheService`
 A new `internal sealed partial class HybridCacheService : ICacheService`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:37`) implements the
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:36`) implements the
 interface over `HybridCache`. It takes its dependencies through a primary constructor,
 `(HybridCache hybrid, ILogger<HybridCacheService> logger, IConnectionMultiplexer? connectionMultiplexer = null, CacheKeyNamespace? keyNamespace = null, IOptions<CacheSettings>? cacheSettings = null)`
 (`:37-42`), the last three optional because a host without Redis still resolves the service, prefix eviction
 is the only operation that needs the multiplexer, and a directly constructed instance falls back to
-`new CacheSettings()` (`:90`) for its TTL policy. The registration passes all three explicitly rather than
-leaving them to the container, the settings included (`DependencyInjection.cs:365`), so a registered service
+`new CacheSettings()` (`:89`) for its TTL policy. The registration passes all three explicitly rather than
+leaving them to the container, the settings included (`DependencyInjection.cs:379`), so a registered service
 reads its durations from the bound `Cache` section rather than from the defaults. It is `partial` for the
 `LoggerMessage` source generator (`:303-316`), not because the type is split across hand-written files.
 
@@ -110,7 +110,7 @@ reads its durations from the bound `Cache` section rather than from the defaults
   call, so both evict through one implementation and the existing Redis-tier tests over
   `DistributedCacheService` prove the extraction is behavior-identical. The scan pattern is the
   caller's prefix qualified into this keyspace, `{namespace}hc:{prefix}*`
-  (`HybridCacheService.cs:162-181`), this service's own keyspace and no other. The
+  (`HybridCacheService.cs:161-180`), this service's own keyspace and no other. The
   delete is a caller-supplied callback, and here it is `hybrid.RemoveAsync` rather than a raw key delete,
   because a raw delete would clear L2 and leave the calling replica's L1 copy serving the value it just
   invalidated.
@@ -125,14 +125,14 @@ the L1 benefit for free, because their reads go through `GetAsync`.
 
 ### Registration is one opt-in call
 `AddCommonHybridCache(Action<HybridCacheOptions>? configure = null)`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:326`) calls `AddHybridCache` with
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:340`) calls `AddHybridCache` with
 defaults matching `CacheOptions` (`LocalCacheExpiration` 30 seconds), then `RemoveAll<ICacheService>()`
-(`:352`) and an `AddSingleton<ICacheService>` **factory** (`:353`), not the two-generic-argument
+(`:366`) and an `AddSingleton<ICacheService>` **factory** (`:367`), not the two-generic-argument
 `AddSingleton<ICacheService, HybridCacheService>` form: the lambda resolves the logger (falling back to
 `NullLogger` when none is registered), the optional `IConnectionMultiplexer`, the `CacheKeyNamespace` and the
 `IOptions<CacheSettings>` itself and hands them to the constructor, rather than leaving the optional
 parameters to the container. Remove-then-add makes the call order-independent against `AddInfrastructure`,
-whose `AddCaching` registers its substrate with `TryAddSingleton` (`:248`): the opt-in wins either way.
+whose `AddCaching` registers its substrate with `TryAddSingleton` (`:262`): the opt-in wins either way.
 
 ### Tags are deferred
 `HybridCache.RemoveByTagAsync` would eventually retire prefix invalidation and its SCAN cost, and it is not

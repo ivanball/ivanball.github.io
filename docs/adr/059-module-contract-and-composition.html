@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -297,17 +300,17 @@
           collection, which deliberately skips the BR-49 / BR-91 eligibility checks
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DisabledSessionBookmarkValidationService.cs:30-39</code>);
           <code>DisabledEventLiveValidationService</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/DisabledEventLiveValidationService.cs:22-63</code>)
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/DisabledEventLiveValidationService.cs:23-64</code>)
           fails open across all four of the members it has grown to: an always-open live window for an event
-          (<code>:25-26</code>) and for a session (<code>:34-42</code>), every sponsor reported as belonging to a published event
-          under a default id and an empty name (<code>:49-50</code>), and a room&#39;s own id echoed back as the current
-          session with an empty title (<code>:58-62</code>).
+          (<code>:25-27</code>) and for a session (<code>:29-43</code>), every sponsor reported as belonging to a published event
+          under a default id and an empty name (<code>:45-51</code>), and a room&#39;s own id echoed back as the current
+          session with an empty title (<code>:53-63</code>).
           The dependent&#39;s code path does not branch on &quot;is the module here&quot;: it resolves the interface and
           gets a documented degraded answer.</li>
           <li><strong><code>Dependencies</code> declares the graph; <code>RequiresDependencies</code> decides whether a gap is fatal.</strong> The
           loader computes the module&#39;s disabled dependencies, then narrows them to &quot;unsatisfied&quot; by removing
           any name the consumer listed under <code>Modules:{Module}:RemoteDependencies</code>
-          (<code>ModuleLoader.cs:131-136</code>, <code>ModulesSettings.cs:30-32</code>,
+          (<code>ModuleLoader.cs:131-137</code>, <code>ModulesSettings.cs:30-32</code>,
           <code>ModuleSettings.cs:38</code>). With <code>RequiresDependencies = true</code> an unsatisfied dependency throws at
           startup with remediation text naming the three options (<code>ModuleLoader.cs:139-147</code>); with the
           default <code>false</code> the loader logs a warning and the module runs against the stub
@@ -378,7 +381,7 @@
           Conference enables one module and declares nothing remote
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25</code>) even though it wires
           Engagement&#39;s <code>IBookmarkCountService</code> as a gRPC client
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:347</code>), because
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350</code>), because
           <code>ConferenceModule</code> never declares Engagement in <code>Dependencies</code>.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -436,13 +439,13 @@
           (<code>DependencyInjection.cs:200-207</code>, <code>ModuleLoader.cs:323-324,332-333</code>).</li>
           <li><strong>The dependency graph is a hand-written declaration, not a derived fact.</strong> ADC Conference consumes
           Engagement&#39;s <code>IBookmarkCountService</code> over gRPC without listing Engagement in <code>Dependencies</code>
-          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:347</code>), so neither the
+          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:350</code>), so neither the
           topological sort nor the <code>RequiresDependencies</code> check knows about that edge. Nothing derives
           <code>Dependencies</code> from the interfaces a module actually resolves. What is pinned is the declaration
           against a written expectation: <code>ModuleConformanceTestsBase&lt;TModule&gt;</code> asserts <code>Name</code>, <code>Dependencies</code>,
           <code>RequiresDependencies</code> (read through the <code>IModule</code> interface, so a leaf module is checked against
           the framework defaults too) and what <code>RegisterDisabledStubs</code> puts in the container
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ModuleConformanceTestsBase.cs:21-64</code>).
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ModuleConformanceTestsBase.cs:21-64</code>).
           That turns a silent edit of a declaration into a red test, but it is opt-in per module and five of
           the eight subclass it today (Store Catalog, Identity and Sales; ADC Identity and Notification);
           ADC Conference, ADC Engagement and Helpdesk Tickets have no subclass, so for those three the

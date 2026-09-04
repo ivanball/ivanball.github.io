@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -283,8 +286,8 @@
           (<code>:57</code>, written at <code>:122</code>). The action reads them back through
           <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code> (<code>:68</code>) and passes the token to its command,
           as the generic PUT does
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:89</code> for
-          the attribute, <code>:102</code> for the read). No bound argument is written to, so no request model has to
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:90</code> for
+          the attribute, <code>:103</code> for the read). No bound argument is written to, so no request model has to
           loosen its immutability to receive a token.</p>
           </li>
           <li><p><strong>Three status codes, one problem-details shape.</strong></p>
@@ -309,12 +312,12 @@
           </li>
           <li><p><strong><code>SetOriginalRowVersion</code> is the persistence extension point.</strong>
           <code>IWriteRepository.SetOriginalRowVersion(TEntity, byte[])</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:406</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:406</code>)
           applies the caller&#39;s token as the tracked entity&#39;s <strong>original</strong> <code>RowVersion</code>; the <code>EFRepository</code>
           implementation writes it to <code>Entry(entity).Property(nameof(RowVersion)).OriginalValue</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:74</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:82</code>).
           The shared write workflow calls it right after loading the aggregate and before the mutation runs
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/MutateEntityHandlerBase.cs:290-291</code>), so
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:291-292</code>), so
           EF compares the client&#39;s token against the row&#39;s current value inside the UPDATE statement,
           atomically, with no read-then-check race.</p>
           </li>
@@ -322,27 +325,27 @@
           repository&#39;s aggregate root (<code>TEntity</code>), so a child edit (a <code>ProductVariant</code> under a <code>Product</code>)
           cannot receive a token through it. A second overload,
           <code>SetOriginalRowVersion(IRowVersioned childEntity, byte[] rowVersion)</code> (<code>IRepository.cs:417</code>,
-          implemented at <code>EFRepository.cs:85</code>), accepts any tracked auditable entity instead, and an update
+          implemented at <code>EFRepository.cs:86</code>), accepts any tracked auditable entity instead, and an update
           handler that mutates children through the aggregate&#39;s repository stamps each child itself. Both
-          overloads reject a null token (<code>EFRepository.cs:77</code>, <code>:88</code>): there is no value that means &quot;skip
+          overloads reject a null token (<code>EFRepository.cs:78</code>, <code>:89</code>): there is no value that means &quot;skip
           the check&quot;.</p>
           </li>
           <li><p><strong>A fitness function keeps the token out of the body.</strong>
           <code>ArchitectureRules.UpdateRequestsAreNotConcurrencyAware</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:24</code>)
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Governance.cs:24</code>)
           scans module Application assemblies for types whose simple name ends in <code>UpdateRequest</code> and flags
           any that <strong>does</strong> implement <code>IConcurrencyAware</code>, because a token in the body would give the same
           check a second, competing source. <code>ConcurrencyConventionTestsBase</code> exposes it as a single <code>[Fact]</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ConcurrencyConventionTestsBase.cs:14</code>),
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/ConcurrencyConventionTestsBase.cs:14</code>),
           and <strong>both</strong> consumers subclass it
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/ConcurrencyConventionTests.cs:3</code>,
-          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/ConcurrencyConventionTests.cs:3</code>, each
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:3</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/ConcurrencyConventionTests.cs:3</code>, each
           supplying its own <code>IArchitectureMap</code>). A module with no mutable aggregate is legitimately vacuous.</p>
           </li>
           <li><p><strong>The UI speaks the same format.</strong> <code>ConcurrencyETag</code> lives in <code>MMCA.Common.Shared.Http</code> rather than
           in the API package precisely so both ends of the exchange can use it: the API reads an <code>If-Match</code>
           value with it and the UI writes one. <code>EntityServiceBase.UpdateAsync</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:176</code>) passes
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/EntityServiceBase.cs:176</code>) passes
           <code>ConcurrencyTagOf(entity)</code> (<code>:197</code>) as the write&#39;s <code>If-Match</code> (<code>:184</code>), and the request client sets
           the header (<code>:394</code>), so a Blazor page conditions its writes with no per-page code.</p>
           </li>

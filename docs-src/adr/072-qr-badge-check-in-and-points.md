@@ -167,7 +167,7 @@ as the row (ADR-003), and it carries `Scope` as a **string** (`:26`) so a new sc
 `SponsorId` proved that: it was added as an optional last parameter (`:31`), so consumers keep
 deserializing payloads that predate it. It is ADC's first broker self-consumption: the Engagement
 service both publishes and consumes it
-(`.../Services/MMCA.ADC.Engagement.Service/Program.cs:264-273` for the reasoning, `:281-284` for the
+(`.../Services/MMCA.ADC.Engagement.Service/Program.cs:269-278` for the reasoning, `:286-289` for the
 four `RegisterIntegrationEventConsumer<T>` calls inside `AddBrokerMessaging`).
 
 The two feedback events are new to the Conference module
@@ -194,9 +194,9 @@ Opting out soft-deletes the row (`LeaveAsync`, `:118-136`, `active.Delete()` at 
 reactivates it (`JoinAsync`, `:84-89`, the BR-135 pattern), so nobody's name is on the board without a
 live opt-in. Erasure is a separate, irreversible promise: `EraseDisplayName()` (`LeaderboardOptIn.cs:119-130`)
 overwrites the published name in place when the account behind it is erased, and it is driven by a fourth
-broker consumer, `UserDeleted` -> `UserDeletedPointsHandler` (`Program.cs:284`, the mapping documented at
-`:258`), because the published name is the one piece of personal data the Identity-side erasure cannot
-reach across the database boundary (`Program.cs:260-262`). The row itself survives (anonymize-in-place,
+broker consumer, `UserDeleted` -> `UserDeletedPointsHandler` (`Program.cs:289`, the mapping documented at
+`:263`), because the published name is the one piece of personal data the Identity-side erasure cannot
+reach across the database boundary (`Program.cs:265-267`). The row itself survives (anonymize-in-place,
 ADR-005). `GetLeaderboard`
 (`.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs`) reads only opted-in users' entries
 (`:39-46`), asks the database for one grouped `SUM` per attendee rather than reading the ledger rows
@@ -284,8 +284,8 @@ check-in history followed as `check_ins = 6` (`:45`) with an `EngagementCheckInE
   someone who can: `IUniqueConstraintViolationDetector`
   (`MMCA.Common.Application/Interfaces/Infrastructure/IUniqueConstraintViolationDetector.cs:31`) is
   constructor-injected into all three ADC handlers that can lose an insert race, so `PointsAwarder`
-  (`:32`, catch filter at `:75`), `SetLeaderboardParticipationHandler` (`:33`, `:103`) and
-  `GetOrCreateMyBadgeHandler` (`:20`, `:53`) classify one way rather than three. The registered
+  (`:32`, catch filter at `:75`), `SetLeaderboardParticipationHandler` (`:34`, `:104`) and
+  `GetOrCreateMyBadgeHandler` (`:21`, `:54`) classify one way rather than three. The registered
   implementation walks the inner exception chain matching **SQL Server error numbers 2601 and 2627
   first** (`MMCA.Common.Infrastructure/Persistence/SqlServerUniqueConstraintViolationDetector.cs:34`,
   `:37`, `:50-54`), and falls back to the message text "duplicate key" or "UNIQUE constraint failed"

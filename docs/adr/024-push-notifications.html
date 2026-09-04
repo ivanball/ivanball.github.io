@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -237,7 +240,7 @@
           <code>SendPushNotificationHandler</code> (<code>MMCA.Common.Application</code>) resolves recipients, creates a
           <code>PushNotification</code> aggregate (<code>MMCA.Common.Domain.Notifications.PushNotifications</code>, the audit record of
           what was sent, carrying the caller&#39;s optional <code>ScopeKey</code> alongside the title, body, sender and
-          recipient count, <code>SendPushNotificationHandler.cs:65-71</code>), persists one <code>UserNotification</code> inbox row
+          recipient count, <code>SendPushNotificationHandler.cs:66-72</code>), persists one <code>UserNotification</code> inbox row
           per recipient (<code>MMCA.Common.Domain.Notifications.UserNotifications</code>, carrying <code>IsRead</code> / <code>ReadOn</code> with
           an idempotent <code>MarkAsRead</code>), and only then dispatches the live push. The inbox is the durable source
           of truth; the push is the best-effort live layer over it.</li>
@@ -273,7 +276,7 @@
           (<code>SendPushNotificationHandler.cs:144-161</code>), an OS-level native-push channel that reaches devices the
           SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
           push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:565</code>), so it
+          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:579</code>), so it
           stays inert until a native hub is configured. The design of that channel is ADR-044&#39;s scope; this ADR
           keeps its own on the inbox and SignalR channels, so the &quot;Two-Channel&quot; title names the durable and
           transient channels this record governs, not a hard cap on the number of delivery legs.</li>
@@ -284,7 +287,7 @@
           <code>MapNotificationHub()</code> maps <code>NotificationHub</code> at the configured <code>HubPath</code> just when it is true
           (<code>SignalRExtensions.cs:25</code>). <code>AddPushNotifications</code> binds the section but registers SignalR,
           <code>SignalRPushNotificationSender</code> and <code>SignalRLiveChannelPublisher</code> unconditionally
-          (<code>DependencyInjection.cs:615-632</code>), so the opt-in registration, not the flag, is what decides whether
+          (<code>DependencyInjection.cs:629-650</code>), so the opt-in registration, not the flag, is what decides whether
           a send goes through SignalR; with <code>Enabled: false</code> the sender is still wired and simply has no hub
           endpoint for clients to connect to.</li>
           </ul>
@@ -334,14 +337,14 @@
           unchanged: this closes a documentation gap so the asymmetry reads as deliberate rather than unnoticed.</p>
           <ol>
           <li><strong>Email is a framework-registered primitive, not a channel of this ADR.</strong> <code>IEmailSender</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IEmailSender.cs:6</code>) has a
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Mail/IEmailSender.cs:6</code>) has a
           single implementation, <code>SmtpEmailSender</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:13</code>), and it is
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Mail/SmtpEmailSender.cs:12</code>), and it is
           TryAdd-registered in the same block as the push-sender defaults
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:559</code>, beside
-          <code>IPushNotificationSender</code> at <code>:560</code>, <code>ILiveChannelPublisher</code> at <code>:561</code>, <code>INativePushSender</code> at <code>:565</code>
-          and <code>IPushDeviceRegistrar</code> at <code>:566</code>). That block is <code>AddServices()</code> (<code>:529</code>), which
-          <code>AddInfrastructure</code> (<code>:49</code>) always calls (<code>:205</code>), so every host gets it. Unlike the two push
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:573</code>, beside
+          <code>IPushNotificationSender</code> at <code>:574</code>, <code>ILiveChannelPublisher</code> at <code>:575</code>, <code>INativePushSender</code> at <code>:579</code>
+          and <code>IPushDeviceRegistrar</code> at <code>:580</code>). That block is <code>AddServices()</code> (<code>:543</code>), which
+          <code>AddInfrastructure</code> (<code>:63</code>) always calls (<code>:219</code>), so every host gets it. Unlike the two push
           abstractions it has no null default and no opt-in <code>Add*</code> counterpart: the real SMTP sender is always
           the registration, and the framework&#39;s own password-reset workflow resolves it (item 3).</li>
           <li><strong>It sits outside the inbox / SignalR / native model.</strong> An email creates no <code>PushNotification</code> audit
@@ -351,13 +354,13 @@
           best-effort live layer, recorded send status) apply to it.</li>
           <li><strong>Adoption is three source call sites, one of them inside the framework.</strong> The framework&#39;s own
           password-reset workflow sends through the abstraction: <code>ForgotPasswordHandlerBase</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:38</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:39</code>)
           takes <code>IEmailSender</code> as a primary-constructor dependency and dispatches the reset mail, swallowing
           and logging a send failure so a delivery problem is never reported back to the caller (<code>:83-96</code>,
           which would turn the response into an account-existence oracle). Two Identity modules in two repos
           inherit that base and pass their own sender through
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:23</code>,
-          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24</code>).
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:24</code>,
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:25</code>).
           The two app-level call sites are both in Store Sales: <code>OrderPaidHandler</code>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/DomainEventHandlers/OrderPaidHandler.cs:41</code>)
           and <code>OrderPaymentFailedSagaHandler</code>

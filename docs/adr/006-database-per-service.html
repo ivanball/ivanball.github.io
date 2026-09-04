@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 106 ADRs</summary>
+        <summary>All 109 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -206,6 +206,9 @@
         <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
         <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
           </ol>
         </nav>
       </details>
@@ -216,7 +219,9 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-06-07). Supersedes the earlier &quot;deliberately one shared database&quot; stance.
           Clarified 2026-06-27: the single context class became <strong>one sealed context class per engine</strong> when
-          ADR-018 added the orthogonal engine axis (the <code>Name</code>/database axis here is unchanged).</p>
+          ADR-018 added the orthogonal engine axis (the <code>Name</code>/database axis here is unchanged).
+          Updated 2026-09-03: the legacy <code>AtlDevCon</code> archive database no longer exists (dropped 2026-09-02);
+          rollback now restores from a bacpac blob.</p>
           <h2 id="context">Context</h2>
           <p>When the modules were first extracted into independently-deployable services, all services in an
           app still pointed at a <strong>single shared SQL database</strong> with a single <code>OutboxMessages</code> table. That
@@ -240,8 +245,10 @@
           <code>DataSourceResolver</code>, and to an engine by configuration base class (<code>[UseDataSource]</code>, ADR-018).
           The forbidden split is <em>per-module</em>, not per-engine.</li>
           <li><strong>ADC</strong> runs <code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>: locally on
-          the shared Aspire SQL container and in Azure as four Basic-tier databases. The legacy <code>AtlDevCon</code>
-          database is retained <strong>read-only</strong> as an archive and rollback path.</li>
+          the shared Aspire SQL container and in Azure as four Basic-tier databases. Those four are the
+          entire application data estate: the legacy <code>AtlDevCon</code> database was exported to the bacpac blob
+          <code>sql-archive/AtlDevCon-20260902.bacpac</code> and dropped on 2026-09-02, <code>infra/main.bicep</code> no longer
+          declares it, and that blob (not a live database) is the rollback source of record.</li>
           <li><strong>Per-source outbox.</strong> Each database has its own <code>OutboxMessages</code>; the <code>OutboxProcessor</code> drains
           only the sources its host owns, so no service ever sees another&#39;s rows.</li>
           <li><strong>Cross-service references are scalar IDs, not FKs.</strong> <code>CrossDataSourceDegradeConvention</code> removes

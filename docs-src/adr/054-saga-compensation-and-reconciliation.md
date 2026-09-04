@@ -40,15 +40,15 @@ saga-timeout backstop for steps that depend on an external system.
   performs the guarded transition and saves, and nothing else
   (`.../Orders/UseCases/Cancel/CancelOrderHandler.cs:42-49`); restoring stock is
   `OrderCancelledSagaHandler : IDomainEventHandler<OrderCancelled>`
-  (`.../Orders/Saga/OrderCancelledSagaHandler.cs:31-34`) and notifying the customer of a failed
+  (`.../Orders/Saga/OrderCancelledSagaHandler.cs:30-34`) and notifying the customer of a failed
   payment is `OrderPaymentFailedSagaHandler` (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:20-22`).
   A new compensating action is a new handler, not an edit to the command.
 - **Each handler runs in its own DI scope.** Domain-event handlers are registered as singletons
   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:184-189`), so every one
-  opens its own scope through `IServiceScopeFactory` (`OrderCancelledSagaHandler.cs:41`,
+  opens its own scope through `IServiceScopeFactory` (`OrderCancelledSagaHandler.cs:40`,
   `OrderPaymentFailedSagaHandler.cs:29`,
-  `.../Infrastructure/Services/PaymentReconciliationService.cs:89,132`), and the ones that persist
-  resolve their own `IUnitOfWork` inside it (`OrderCancelledSagaHandler.cs:42`,
+  `.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:89,132`), and the ones that persist
+  resolve their own `IUnitOfWork` inside it (`OrderCancelledSagaHandler.cs:41`,
   `PaymentReconciliationService.cs:91,133`). `OrderPaymentFailedSagaHandler` is the exception that
   shows the rule: it resolves only `ICustomerService` and `IEmailSender`
   (`OrderPaymentFailedSagaHandler.cs:30-31`) and persists nothing, because its compensation is a
@@ -59,7 +59,7 @@ saga-timeout backstop for steps that depend on an external system.
   `MarkInventoryRestored` refuses a second call and refuses a non-cancelled order
   (`Order.cs:302-325`). The handler checks the marker first
   (`OrderCancelledSagaHandler.cs:56-62`), applies the increases through a pure domain service
-  (`.../Domain/Services/InventoryRestorationDomainService.cs:14-34`), then one
+  (`.../Domain/Inventory/InventoryRestorationDomainService.cs:14-34`), then one
   `SaveChangesAsync` commits the increases and the marker together
   (`OrderCancelledSagaHandler.cs:94-102`). Same database, one transaction: the marker cannot exist
   without the writes it guards, and the writes cannot land unmarked.
@@ -86,9 +86,9 @@ saga-timeout backstop for steps that depend on an external system.
   pass the marker check carry the same original token into their update: one commits, the other gets
   `DbUpdateConcurrencyException` and its outbox retry then finds the committed marker and skips.
 - **A periodic sweep drives the transitions a lost webhook would have.**
-  `PaymentReconciliationService` (`.../Infrastructure/Services/PaymentReconciliationService.cs:33-38`)
+  `PaymentReconciliationService` (`.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:33-38`)
   is registered as a hosted service by the Sales module's infrastructure
-  (`.../Infrastructure/DependencyInjection.cs:34-36`). Each cycle selects the oldest orders that have
+  (`.../Infrastructure/DependencyInjection.cs:37`). Each cycle selects the oldest orders that have
   sat in `PaymentInitiated` past a cutoff, ordered, bounded and projected to ids entirely in SQL
   (`PaymentReconciliationService.cs:101-109`) over a dedicated filtered index
   (`.../Persistence/EntityConfiguration/OrderConfiguration.cs:53-59`), asks Stripe for the session's
@@ -108,7 +108,7 @@ saga-timeout backstop for steps that depend on an external system.
 
 The loop shape is deliberate and shared, and it lives in the framework rather than in the sweep.
 MMCA.Common ships it as an abstract base class, `PeriodicBackgroundService`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20-42`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/PeriodicBackgroundService.cs:20-42`),
 whose `ExecuteAsync` owns the enablement gate, the startup delay, the per-cycle `try`/`catch` that
 never kills the loop, and every wait through `TimeProvider`
 (`PeriodicBackgroundService.cs:45-87`). `PaymentReconciliationService` derives from it
@@ -161,7 +161,7 @@ adopted.
 - **Compensation is best-effort per line, and names what it could not restore.** `RestoreInventory`
   skips an order line whose `InventoryItem` row is missing
   (`InventoryRestorationDomainService.cs:22-27`), but the skip is not silent: the unmatched variant
-  ids are collected and returned to the caller (`InventoryRestorationDomainService.cs:26,33`), and
+  ids are collected and returned to the caller (`InventoryRestorationDomainService.cs:25,32`), and
   the handler logs them at Warning naming each one
   (`OrderCancelledSagaHandler.cs:81-87`, message at `OrderCancelledSagaHandler.cs:115`). The marker
   still commits anyway, so that quantity is never restored and nothing retries it: withholding the
@@ -183,7 +183,7 @@ adopted.
   swallow its failures itself.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
-  (`MMCA.Store/infra/main.bicep:1281`) two replicas can pick the same stuck order and each spend a
+  (`MMCA.Store/infra/main.bicep:1359`) two replicas can pick the same stuck order and each spend a
   Stripe status call. Correctness holds through the concurrency token; the duplicated external call
   does not deduplicate.
 - **Every compensating action needs its own marker.** There is no generic mechanism: the ADR-021

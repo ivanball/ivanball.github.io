@@ -1,9 +1,10 @@
 # ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)
 
 ## Status
-Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14 and 2026-08-29). The 2026-08-29
-amendment adds the `UseMmcaMauiErrorHandling` last-chance handlers and records the hybrid head's
-missing ASP.NET Core pipeline as a known constraint.
+Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14, 2026-08-29 and 2026-09-03). The
+2026-08-29 amendment adds the `UseMmcaMauiErrorHandling` last-chance handlers and records the hybrid
+head's missing ASP.NET Core pipeline as a known constraint. The 2026-09-03 amendment records the push
+device-token provider as a second native override that sits outside `AddMauiDeviceCapabilities`.
 
 ## Context
 The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
@@ -18,12 +19,12 @@ in it would break the web heads at compile time.
 Two constraints shape the packaging. First, per-head service selection already has a working
 precedent: `ITokenStorageService` resolves to a per-head implementation registered after
 `AddUIShared` (`builder.Services.AddCommonMauiTokenStorage()`,
-`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:161`). Second, MMCA.Common's CI and release
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:163`). Second, MMCA.Common's CI and release
 pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
 framework's packages release in lockstep (ADR-016).
 
 ## Decision
-Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
+Add a per-capability contract layer to `MMCA.Common.UI` and a dedicated package,
 `MMCA.Common.UI.Maui`, carrying the native implementations.
 
 - **One small interface per capability, no aggregate device service.** Contracts live in
@@ -34,15 +35,20 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   `IBiometricAuthenticator`, `ISpeechToTextService`, `IExternalAuthBroker`, `IDeepLinkDispatcher`,
   `IConnectivityStatusService`, `ILocalCacheStore`). Five more have joined since, for 23 today, all
   TryAdd-registered by `AddDeviceCapabilityDefaults`
-  (`Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:30-74`) and
-  overridden natively by `AddMauiDeviceCapabilities`
-  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:26-62`): `IGeocodingService`
-  (Wave 3), `IMediaPickerService` (ADR-045), the push pair `IPushRegistrationService` and
-  `IPushDeviceTokenProvider` (ADR-044), and `IBarcodeScannerService` for camera barcode/QR scanning
-  (`Capabilities/DependencyInjection.cs:63`). Barcode is the one native override that is deliberately NOT in
-  `AddMauiDeviceCapabilities`: it ships behind the opt-in `UseCommonBarcodeScanner`
+  (`Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:37-81`): the
+  additions are `IGeocodingService` (Wave 3), `IMediaPickerService` (ADR-045), the push pair
+  `IPushRegistrationService` and `IPushDeviceTokenProvider` (ADR-044), and `IBarcodeScannerService`
+  for camera barcode/QR scanning (`Capabilities/DependencyInjection.cs:70`). `AddMauiDeviceCapabilities`
+  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:42-78`) natively overrides 20 of
+  the 23. Three stay outside it. `IDeepLinkDispatcher` needs no override because the shared default
+  IS the real implementation. The other two are deliberately opt-in per head:
+  `IPushDeviceTokenProvider` comes from the platform-conditional `AddMauiPushDeviceTokenProvider`
+  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:118-126`, FCM on Android, APNs on
+  iOS/MacCatalyst, nothing on windows, and both providers stay configuration-gated), while
+  `AddMauiDeviceCapabilities` registers only the `IPushRegistrationService` half of the push pair
+  (`:67`); and `IBarcodeScannerService` ships behind the opt-in `UseCommonBarcodeScanner`
   (`Source/Presentation/MMCA.Common.UI.Maui/HostingDependencyInjection.cs:104`, called by ADC at
-  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:151`), so a head that never scans ships
+  `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:153`), so a head that never scans ships
   neither the ZXing handler nor a camera permission declaration. Each capability has an independent
   fallback story, and per-capability contracts let heads adopt incrementally.
 
@@ -110,8 +116,8 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   stays fast and MAUI TFMs get built at all.
 
 ## Trade-offs
-- A fifteenth package raises release surface: two runners must both succeed for a whole release.
-  Accepted; the `publish-maui` job is gated by the same tag and SBOM discipline.
+- A second build runner raises release surface: ubuntu and windows must both succeed for a whole
+  release. Accepted; the `publish-maui` job is gated by the same tag and SBOM discipline.
 - The TryAdd-default plus later-plain-Add pattern relies on registration order (`AddUIShared`
   first). Documented on both extension methods; the order is already load-bearing in every host for
   other reasons.
@@ -134,8 +140,9 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   per-head service contract here before a hybrid head can use it.
 - Biometrics, speech-to-text, and the external-auth broker now ship native MAUI implementations,
   all three registered by `AddMauiDeviceCapabilities()`
-  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:45`, `:46`, `:60`). The residual
-  trade-off is configuration, not code: `MauiExternalAuthBroker` registers unconditionally but
-  reports `IsAvailable == false` (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:39`)
+  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:61`, `:62`, and the broker scoped
+  at `:76`). The residual trade-off is configuration, not code: `MauiExternalAuthBroker` registers
+  unconditionally but reports `IsAvailable == false`
+  (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:39`)
   until the head supplies `OAuth:MobileRedirectScheme`, so a misconfigured head quietly keeps the web
   anchor flow rather than failing fast.
