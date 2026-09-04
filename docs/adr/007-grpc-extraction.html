@@ -220,7 +220,8 @@
           <h2 id="status">Status</h2>
           <p>Accepted. Revised 2026-08-23 (the <code>[ServiceContract]</code> marker now has a dedicated fitness rule behind
           it, <code>ServiceContractPurityTestsBase</code>, subclassed in all four repos; it is a ratchet that no marked
-          type triggers yet).</p>
+          type triggers yet). Revised 2026-09-04: the <code>*.Contracts</code> gRPC adapter is named for what it is, the
+          module&#39;s <strong>Anti-Corruption Layer</strong>; no code changed.</p>
           <h2 id="context">Context</h2>
           <p>Once modules became separate service processes, the in-process interface calls between them (e.g.
           Conference → Engagement&#39;s <code>IBookmarkCountService</code>, Engagement → Conference&#39;s
@@ -233,7 +234,14 @@
           <ul>
           <li><strong><code>*.Contracts</code> projects</strong> hold the <code>.proto</code> definitions plus a gRPC adapter that implements the
           <strong>same in-process service interface</strong> the modules already used. Any project ending in <code>.Contracts</code>
-          auto-compiles <code>Protos/**/*.proto</code> with both server and client stubs (<code>Directory.Build.props</code>).</li>
+          auto-compiles <code>Protos/**/*.proto</code> with both server and client stubs (<code>Directory.Build.props</code>).
+          That adapter is the module&#39;s <strong>Anti-Corruption Layer</strong>: it is the only place the peer&#39;s wire model
+          (generated protobuf messages and client stubs) meets the module&#39;s own interface and <code>Result&lt;T&gt;</code>
+          types, so a peer&#39;s contract never leaks into Domain or Application. The convention is documented on
+          the typed-client registration itself (&quot;register a hand-written adapter that implements the C#
+          interface contract and delegates to this typed gRPC client&quot;,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:58-60</code>) and enforced by the
+          transport fitness rule below, which forbids gRPC and protobuf types outside the adapter&#39;s layer.</li>
           <li><strong>Typed clients</strong> via <code>AddTypedGrpcClient&lt;T&gt;(serviceName)</code> resolve <code>http://&lt;service&gt;</code> through
           Aspire service discovery, wrapped in the standard Polly resilience pipeline and a
           <code>JwtForwardingClientInterceptor</code> (the inbound bearer token is forwarded downstream).</li>

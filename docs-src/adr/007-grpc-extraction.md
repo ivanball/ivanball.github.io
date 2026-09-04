@@ -3,7 +3,8 @@
 ## Status
 Accepted. Revised 2026-08-23 (the `[ServiceContract]` marker now has a dedicated fitness rule behind
 it, `ServiceContractPurityTestsBase`, subclassed in all four repos; it is a ratchet that no marked
-type triggers yet).
+type triggers yet). Revised 2026-09-04: the `*.Contracts` gRPC adapter is named for what it is, the
+module's **Anti-Corruption Layer**; no code changed.
 
 ## Context
 Once modules became separate service processes, the in-process interface calls between them (e.g.
@@ -19,6 +20,13 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
 - **`*.Contracts` projects** hold the `.proto` definitions plus a gRPC adapter that implements the
   **same in-process service interface** the modules already used. Any project ending in `.Contracts`
   auto-compiles `Protos/**/*.proto` with both server and client stubs (`Directory.Build.props`).
+  That adapter is the module's **Anti-Corruption Layer**: it is the only place the peer's wire model
+  (generated protobuf messages and client stubs) meets the module's own interface and `Result<T>`
+  types, so a peer's contract never leaks into Domain or Application. The convention is documented on
+  the typed-client registration itself ("register a hand-written adapter that implements the C#
+  interface contract and delegates to this typed gRPC client",
+  `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:58-60`) and enforced by the
+  transport fitness rule below, which forbids gRPC and protobuf types outside the adapter's layer.
 - **Typed clients** via `AddTypedGrpcClient<T>(serviceName)` resolve `http://<service>` through
   Aspire service discovery, wrapped in the standard Polly resilience pipeline and a
   `JwtForwardingClientInterceptor` (the inbound bearer token is forwarded downstream).
