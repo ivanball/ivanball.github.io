@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 110 ADRs</summary>
+        <summary>All 111 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -210,6 +210,7 @@
         <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
         <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
         <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
           </ol>
         </nav>
       </details>
@@ -238,9 +239,11 @@
           That adapter is the module&#39;s <strong>Anti-Corruption Layer</strong>: it is the only place the peer&#39;s wire model
           (generated protobuf messages and client stubs) meets the module&#39;s own interface and <code>Result&lt;T&gt;</code>
           types, so a peer&#39;s contract never leaks into Domain or Application. The convention is documented on
-          the typed-client registration itself (&quot;register a hand-written adapter that implements the C#
-          interface contract and delegates to this typed gRPC client&quot;,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:58-60</code>) and enforced by the
+          the typed-client registration itself (&quot;register a hand-written adapter that implements the consuming
+          module&#39;s own C# interface contract ... and delegates to this typed gRPC client. That adapter IS the
+          consuming module&#39;s Anti-Corruption Layer&quot;,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:69-76</code>, with the package&#39;s
+          own class remarks naming both this pattern and the Strangler Fig route at <code>:15-24</code>) and enforced by the
           transport fitness rule below, which forbids gRPC and protobuf types outside the adapter&#39;s layer.</li>
           <li><strong>Typed clients</strong> via <code>AddTypedGrpcClient&lt;T&gt;(serviceName)</code> resolve <code>http://&lt;service&gt;</code> through
           Aspire service discovery, wrapped in the standard Polly resilience pipeline and a

@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 110 ADRs</summary>
+        <summary>All 111 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -209,6 +209,7 @@
         <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
         <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
         <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
           </ol>
         </nav>
       </details>
@@ -775,6 +776,11 @@
           <td><a href="110-rubric-v2-category-realignment.html">110</a></td>
           <td>Rubric v2: category realignment at 34</td>
           <td>The 34-category evaluation rubric is versioned, and version 2 replaces two overlap-heavy categories in place rather than growing the list: §10 Cross-Cutting Concerns (four of its five criteria already scored in §5, §6, §9, §12 and §29) becomes <strong>Messaging &amp; Integration Architecture</strong> at weight 3 (broker topology by ADR, delivery semantics per consumer, dead-letter and poison handling, retention and replay, contract evolution with consumer-driven tests, sagas with compensation, gateway/BFF discipline), and §16 Maintainability &amp; Evolvability (its unique coupling and tech-debt criteria folded into §34, upgrades into §32, onboarding into §33) becomes <strong>AI-Native Application Architecture</strong>, N/A until a product feature calls a model. Eleven categories gain criteria the topic map exposed as blind spots: sagas, ACL and Strangler Fig, analytical/OLTP separation, expand-contract, polyglot by ADR, contract tests, threat model and service-to-service auth, progressive delivery, a single resilience mechanism, agentic-tooling guardrails, and a stated tenancy model. Category numbers are stable, so every scorecard row, backlog item and ADR citation survives; the cost is a denominator change (Σweight 81→80 for Common, 80→79 for ADC and Store) recorded in each scorecard header, §10 carried at prior scores until its first re-score against the new criteria, and prose in onboarding, articles and the wiki that names the two old titles until the governance commands refresh it.</td>
+          </tr>
+          <tr>
+          <td><a href="111-ai-session-scoring-governance.html">111</a></td>
+          <td>AI session scoring governance</td>
+          <td>ADC&#39;s one product feature that calls a language model, governed as a production dependency. The call sits behind <code>IAiScoringService</code> (declared in Application, carrying <code>ModelId</code> and <code>PromptVersion</code>), model <code>claude-haiku-4-5</code>, and both versions are persisted on every <code>SessionAiScore</code> row (<code>PromptVersion</code> <code>nvarchar(32)</code>, expand-only migration defaulting pre-column rows to <code>legacy</code>) so a score is attributable to the exact reviewer brief behind it. A SHA-256 hash of the rendered prompt is pinned per version in <code>Golden/prompt-versions.json</code>, so a prompt edit without a bump fails a test instead of silently re-basing every score on the dashboard; the five-step change protocol (bump, record hash, run the live judge, review drift case by case, accept a mixed-version dashboard) is in the suite&#39;s README. The <code>ai-eval-gate</code> job is in <code>deploy.needs</code>: golden replay plus prompt contract on every code deploy (seven recorded cases, no key, <code>--minimum-expected-tests 1</code>), and the paid live judge only when the diff touches the scoring paths. Input guardrails are a delimited <code>&lt;session_proposal&gt;</code> envelope with angle brackets escaped, a named anti-injection paragraph wiring an override attempt to the existing 1.0 penalty, and email/phone redaction of submitted free text (names deliberately kept, they are the credibility evidence). Output is schema-constrained structured JSON with refusal, empty and partial responses all failing rather than defaulting, and the weighted overall computed in C#, never by the model. Cost is <code>scoring.tokens.input</code>/<code>scoring.tokens.output</code> tagged by model and prompt version on meter <code>MMCA.ADC.Conference.Scoring</code>, with a 30-day rolling token-ceiling alert; the real spend control is that the only trigger is a permission-gated organizer click and nothing starts unrequested paid work. Costs: recorded-response replay cannot see model drift, the live judge needs the key in CI and reports green when it skips, and score semantics change on every prompt bump.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

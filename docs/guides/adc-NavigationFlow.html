@@ -178,6 +178,7 @@
         PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
         PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
         PubSponsors[&quot;/conference/sponsors&lt;br/&gt;Sponsors, grouped by tier&quot;]
+        PubActivities[&quot;/conference/activities&lt;br/&gt;Activity List, filtered by event&quot;]
     end
 
     Home[&quot;/  Home Page&quot;]
@@ -186,6 +187,7 @@
     Home --&gt;|nav menu| PubSessions
     Home --&gt;|nav menu| PubSpeakers
     Home --&gt;|nav menu, sponsor strip| PubSponsors
+    Home --&gt;|nav menu| PubActivities
     Home --&gt;|auth links| Login
     Home --&gt;|auth links| Register
 
@@ -229,6 +231,7 @@
         PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
         PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
         PubSponsors[&quot;/conference/sponsors&lt;br/&gt;Sponsors, grouped by tier&quot;]
+        PubActivities[&quot;/conference/activities&lt;br/&gt;Activity List, filtered by event&quot;]
     end
 
     subgraph Engagement[&quot;Engagement / Feedback&quot;]
@@ -246,12 +249,18 @@
         MyPoints[&quot;/points&lt;br/&gt;My Points, leaderboard opt-in&quot;]
     end
 
+    subgraph QrLanding[&quot;Scanned QR Landings, no nav item&quot;]
+        SponsorVisit[&quot;/engage/sponsors/{SponsorId}&lt;br/&gt;Sponsor Visit recorded&quot;]
+        RoomCheckIn[&quot;/engage/rooms/{RoomId}&lt;br/&gt;Room Check-In recorded&quot;]
+    end
+
     Home[&quot;/  Home Page&quot;]
 
     Home --&gt;|nav menu| PubEvents
     Home --&gt;|nav menu| PubSessions
     Home --&gt;|nav menu| PubSpeakers
     Home --&gt;|nav menu| PubSponsors
+    Home --&gt;|nav menu| PubActivities
     Home --&gt;|nav menu| MyProfile
     Home --&gt;|nav menu| HappeningNow
     Home --&gt;|nav menu| MyBadge
@@ -260,6 +269,10 @@
     HappeningNow --&gt;|join a running session| SessionLive
     PubSessionDetail --&gt;|join live| SessionLive
     SessionLive --&gt;|back| PubSessionDetail
+
+    PrintedQr[&quot;Printed QR code&lt;br/&gt;sponsor booth sign or session-room door&quot;]
+    PrintedQr -.-&gt;|scan, deep link only| SponsorVisit
+    PrintedQr -.-&gt;|scan, deep link only| RoomCheckIn
 
     Login --&gt;|on success| Home
     Register --&gt;|on success| Home
@@ -295,6 +308,7 @@
 
     subgraph Speaker[&quot;Speaker Area&quot;]
         Dashboard[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;]
+        SpeakerQr[&quot;/speaker/qr&lt;br/&gt;My Speaker QR credential&quot;]
         Presenter[&quot;/conference/sessions/{Id}/present&lt;br/&gt;Presenter View&quot;]
     end
 
@@ -306,6 +320,7 @@
         PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
         PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
         PubSponsors[&quot;/conference/sponsors&lt;br/&gt;Sponsors, grouped by tier&quot;]
+        PubActivities[&quot;/conference/activities&lt;br/&gt;Activity List, filtered by event&quot;]
     end
 
     subgraph Engagement[&quot;Engagement / Feedback&quot;]
@@ -319,8 +334,10 @@
     Home --&gt;|nav menu| PubSessions
     Home --&gt;|nav menu| PubSpeakers
     Home --&gt;|nav menu| PubSponsors
+    Home --&gt;|nav menu| PubActivities
     Home --&gt;|nav menu| MyProfile
     Home --&gt;|nav menu| Dashboard
+    Home --&gt;|nav menu, User section| SpeakerQr
 
     Dashboard --&gt;|present a session| Presenter
 
@@ -344,7 +361,7 @@
     SessionFeedback --&gt;|cancel| PubSessionDetail</pre>
           <hr>
           <h2 id="4-organizer">4. Organizer</h2>
-          <p>Authenticated users with the <code>Organizer</code> role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors), user management, feedback analytics, the badge <strong>check-in</strong> and attendance pages, the points overview, and the AI-assisted <strong>Session Selection Dashboard</strong>. These items appear under the nav menu&#39;s <em>Admin</em> section (most grouped under &quot;Conference&quot;).</p>
+          <p>Authenticated users with the <code>Organizer</code> role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, activities), user management, feedback analytics, the badge <strong>check-in</strong> and attendance pages, the points overview, and the AI-assisted <strong>Session Selection Dashboard</strong>. These items appear under the nav menu&#39;s <em>Admin</em> section (most grouped under &quot;Conference&quot;).</p>
           <pre class="mermaid">flowchart TD
     subgraph Auth[&quot;Authentication&quot;]
         Login[&quot;/login&lt;br/&gt;Login&quot;]
@@ -363,6 +380,7 @@
         PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Public Speaker List&quot;]
         PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Public Speaker Detail&quot;]
         PubSponsors[&quot;/conference/sponsors&lt;br/&gt;Public Sponsors, grouped by tier&quot;]
+        PubActivities[&quot;/conference/activities&lt;br/&gt;Public Activity List&quot;]
     end
 
     subgraph Engagement[&quot;Engagement / Feedback&quot;]
@@ -408,6 +426,12 @@
         SponsorDetail[&quot;/sponsors/{Id}&lt;br/&gt;Edit Sponsor&quot;]
     end
 
+    subgraph ActivityMgmt[&quot;Organizer: Activity Management&quot;]
+        ActivityList[&quot;/activities&lt;br/&gt;Activity List&quot;]
+        ActivityCreate[&quot;/activities/create&lt;br/&gt;Create Activity&quot;]
+        ActivityDetail[&quot;/activities/{Id}&lt;br/&gt;Edit Activity&quot;]
+    end
+
     subgraph CheckIn[&quot;Organizer: Check-In and Rewards&quot;]
         Scan[&quot;/check-in&lt;br/&gt;Scan Badges&lt;br/&gt;camera on MAUI, search on web&quot;]
         Attendance[&quot;/organizer/attendance&lt;br/&gt;Attendance Overview&quot;]
@@ -433,6 +457,7 @@
     Home --&gt;|nav menu| QuestionList
     Home --&gt;|nav menu| RoomList
     Home --&gt;|nav menu| SponsorList
+    Home --&gt;|nav menu| ActivityList
     Home --&gt;|nav menu| Scan
     Home --&gt;|nav menu| Attendance
     Home --&gt;|nav menu| PointsOverview
@@ -511,10 +536,17 @@
     SponsorList --&gt;|row click| SponsorDetail
     SponsorCreate --&gt;|on success| SponsorDetail
     SponsorCreate --&gt;|back| SponsorList
-    SponsorDetail --&gt;|back| SponsorList</pre>
+    SponsorDetail --&gt;|back| SponsorList
+
+    %% Activity CRUD
+    ActivityList --&gt;|create| ActivityCreate
+    ActivityList --&gt;|row click| ActivityDetail
+    ActivityCreate --&gt;|on success| ActivityDetail
+    ActivityCreate --&gt;|back| ActivityList
+    ActivityDetail --&gt;|back| ActivityList</pre>
           <hr>
           <h2 id="5-functionality-flows-attendee--speaker">5. Functionality Flows (Attendee &amp; Speaker)</h2>
-          <p>The diagrams in sections 1-4 map <em>which pages</em> each actor can reach. The diagrams below map <em>how attendees and speakers accomplish each functionality</em>, including inline actions (bookmarking, schedule filtering, dashboard editing) that are not separate pages. Pages appear as <code>route</code> nodes; edge labels are user actions. Flows in 5.3-5.5 require authentication.</p>
+          <p>The diagrams in sections 1-4 map <em>which pages</em> each actor can reach. The diagrams below map <em>how attendees and speakers accomplish each functionality</em>, including inline actions (bookmarking, schedule filtering, dashboard editing) that are not separate pages. Pages appear as <code>route</code> nodes; edge labels are user actions. Flows in 5.3-5.5 and 5.8 require authentication; 5.9 covers one public route and three Organizer-only ones.</p>
           <h3 id="51-account--identity">5.1 Account &amp; Identity</h3>
           <pre class="mermaid">flowchart TD
     Visitor([&quot;Visitor&quot;]) --&gt;|Register| Register[&quot;/register&lt;br/&gt;Register&quot;]
@@ -573,7 +605,9 @@
     Dash --&gt; MySessions[&quot;My Sessions list&quot;]
     MySessions --&gt;|bookmark-count badge| Counts[&quot;See attendee bookmark counts&quot;]
     MySessions --&gt;|expand review icon| Feedback[&quot;View ratings avg and count, plus text comments&quot;]
-    MySessions --&gt;|session title| SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]</pre>
+    MySessions --&gt;|session title| SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
+    Home --&gt;|nav menu, User section| Qr[&quot;/speaker/qr&lt;br/&gt;My Speaker QR credential&quot;]
+    Qr --&gt;|claim missing on a typed or bookmarked URL| QrNotLinked[&quot;Info: account is not linked to a Speaker&quot;]</pre>
           <h3 id="56-conference-day-live-layer-adr-039">5.6 Conference-Day Live Layer (ADR-039)</h3>
           <p>The live layer is the conference-day surface: it appears for any authenticated user, and the
           moderation controls appear only for the session&#39;s presenter or an Organizer. The client renders
@@ -602,6 +636,34 @@
     Device --&gt; Reminders[&quot;Session reminders: schedule local notifications for bookmarked sessions&quot;]
     Device --&gt; Biometrics[&quot;Biometric unlock toggle&quot;]
     Device --&gt; Prefs[&quot;Device preferences persisted on-device&quot;]</pre>
+          <h3 id="58-scanned-qr-landings-deep-link-only">5.8 Scanned QR Landings (deep link only)</h3>
+          <p>Two routable pages have no nav item anywhere: an attendee arrives by pointing a phone at a printed
+          code. Both need authentication only, and both are safe to rescan.</p>
+          <pre class="mermaid">flowchart TD
+    Booth[&quot;Printed QR code on a sponsor booth sign&quot;] --&gt;|scan| SponsorVisit[&quot;/engage/sponsors/{SponsorId}&lt;br/&gt;Sponsor Visit&quot;]
+    Door[&quot;Printed QR code on a session-room door&quot;] --&gt;|scan| RoomCheckIn[&quot;/engage/rooms/{RoomId}&lt;br/&gt;Room Check-In&quot;]
+
+    SponsorVisit -.-&gt;|not signed in| Login[&quot;/login&lt;br/&gt;Login, then back to the scanned route&quot;]
+    RoomCheckIn -.-&gt;|not signed in| Login
+
+    SponsorVisit --&gt;|first scan| VisitRecorded[&quot;Visit recorded, points hint shown&quot;]
+    SponsorVisit --&gt;|rescan| VisitRepeat[&quot;Info: already visited, with the earlier timestamp&quot;]
+
+    RoomCheckIn --&gt;|first scan| CheckedIn[&quot;Check-in recorded for the session in that room&quot;]
+    RoomCheckIn --&gt;|rescan, or organizer already scanned at the door| CheckInRepeat[&quot;Info: already checked in, one check-in per session&quot;]</pre>
+          <h3 id="59-activities">5.9 Activities</h3>
+          <p><code>/conference/activities</code> is the public, unauthenticated companion to the Organizer activity CRUD
+          pages. It lists the activities of the selected event and is the only activity route with no
+          authorization attribute at all; the three management routes are Organizer-only.</p>
+          <pre class="mermaid">flowchart TD
+    Home[&quot;/&lt;br/&gt;Home&quot;] --&gt;|nav menu, Activities| PubActivities[&quot;/conference/activities&lt;br/&gt;Activity List&quot;]
+    PubActivities --&gt; EventChip[&quot;Chip: showing the selected event&quot;]
+    PubActivities --&gt; Search[&quot;Search and filter the listed activities&quot;]
+    OrgHome[&quot;/&lt;br/&gt;Home, Organizer&quot;] --&gt;|nav menu, Conference group| Manage[&quot;/activities&lt;br/&gt;Activity List, Organizer&quot;]
+    Manage --&gt;|create| Create[&quot;/activities/create&lt;br/&gt;Create Activity&quot;]
+    Manage --&gt;|row click| Edit[&quot;/activities/{Id}&lt;br/&gt;Edit Activity&quot;]
+    Create --&gt;|on success| Edit
+    Edit --&gt;|back| Manage</pre>
           <hr>
           <h2 id="navigation-patterns">Navigation Patterns</h2>
           <h3 id="authentication-redirects">Authentication Redirects</h3>
@@ -616,14 +678,15 @@
           <li><strong>Roles:</strong> <code>Organizer</code> is the only elevated role; every other authenticated user is an <code>Attendee</code> (the default). There is no separate &quot;Admin&quot; role.</li>
           <li><strong>Speaker:</strong> not a role, but an attendee whose account is linked to a Speaker, surfaced as the <code>speaker_id</code> JWT claim (auto-linked by email match at registration, or linked manually by an organizer).</li>
           <li><strong>In-page rights, not route rights:</strong> the live layer gates <em>panels</em>, not routes. <code>/conference/sessions/{Id}/live</code> is one page for everyone authenticated; the moderation panel renders only when the caller is the session&#39;s presenter or an Organizer, and the server re-checks that on every moderation call (BR-236), so the client-side gate is convenience, not security.</li>
-          <li><strong>Menu-driven visibility:</strong> the left nav is built from each module&#39;s <code>IUIModule.NavItems</code>. Items declare a required role (<code>Organizer</code>) or claim (<code>speaker_id</code>); the menu hides what the current user can&#39;t use. Organizer items sit in the <em>Admin</em> nav section (most grouped under &quot;Conference&quot;); &quot;My Profile&quot; and the Speaker &quot;Dashboard&quot; sit in the <em>User</em> section.</li>
+          <li><strong>Menu-driven visibility:</strong> the left nav is built from each module&#39;s <code>IUIModule.NavItems</code>. Items declare a required role (<code>Organizer</code>) or claim (<code>speaker_id</code>); the menu hides what the current user can&#39;t use. Organizer items sit in the <em>Admin</em> nav section (most grouped under &quot;Conference&quot;); &quot;My Profile&quot;, the Speaker &quot;Dashboard&quot; and the speaker&#39;s &quot;QR&quot; item sit in the <em>User</em> section. &quot;Activities&quot; appears twice under two different items: a public one pointing at <code>/conference/activities</code> with no requirement, and an Organizer one pointing at <code>/activities</code> under the &quot;Conference&quot; admin group. The speaker QR item declares <code>RequiredClaim: &quot;speaker_id&quot;</code>, so it is hidden from an attendee whose account is not linked to a Speaker; the page itself carries only <code>[Authorize]</code> and answers a typed or bookmarked URL with an explanatory alert rather than an empty card.</li>
           <li><strong>Page guards (<code>@attribute [Authorize…]</code>):</strong><ul>
-          <li><em>Organizer role required:</em> <code>/sessions/selection-dashboard</code>, <code>/events/{EventId}/feedback</code>, <code>/sessions/{SessionId}/feedback</code>, and every conference/user management page (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>, <code>/conferencecategories</code>, <code>/questions</code>, <code>/rooms</code>, <code>/users</code>), each carrying a page-level <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> (e.g. <code>EventList.razor</code>, <code>UserList.razor</code>). The shared <code>Routes.razor</code> renders the Forbidden page for an authenticated non-Organizer; the inherited <code>RegisteredUser_AdminPages_ShouldBeForbidden</code> E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth). The sponsor management pages (<code>/sponsors</code>, <code>/sponsors/create</code>, <code>/sponsors/{Id}</code>) and the check-in and rewards pages (<code>/check-in</code>, <code>/organizer/attendance</code>, <code>/organizer/points</code>) carry the same page-level attribute, and their <strong>writes</strong> are additionally permission-checked API-side (<code>conference:sponsors:manage</code>, <code>engagement:checkin:manage</code>, <code>engagement:points:view-overview</code>), so the role opens the page and the permission authorizes the call.</li>
-          <li><em>Authentication only:</em> <code>/profile</code>, <code>/profile/claims</code>, <code>/speaker/dashboard</code>, <code>/my-badge</code>, <code>/points</code>, both attendee feedback forms, the conference-day live pages (<code>/happening-now</code>, <code>/conference/sessions/{Id}/live</code>, <code>/conference/sessions/{Id}/present</code>), and <code>/speakers/{Id}</code> (SpeakerDetail is the one management page still gated by plain <code>[Authorize]</code> because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).</li>
-          <li><em>Public (no attribute):</em> all <code>/conference/*</code> read pages, except the two live-layer routes above, plus the two password-reset pages (<code>/forgot-password</code>, <code>/reset-password</code>), which ship in the framework UI package and are reachable only by an unauthenticated visitor&#39;s own action (the &quot;Forgot password?&quot; link on <code>/login</code> or the link in the reset email).</li>
+          <li><em>Organizer role required:</em> <code>/sessions/selection-dashboard</code>, <code>/events/{EventId}/feedback</code>, <code>/sessions/{SessionId}/feedback</code>, and every conference/user management page (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>, <code>/conferencecategories</code>, <code>/questions</code>, <code>/rooms</code>, <code>/users</code>), each carrying a page-level <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> (e.g. <code>EventList.razor</code>, <code>UserList.razor</code>). The shared <code>Routes.razor</code> renders the Forbidden page for an authenticated non-Organizer; the inherited <code>RegisteredUser_AdminPages_ShouldBeForbidden</code> E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth). The sponsor management pages (<code>/sponsors</code>, <code>/sponsors/create</code>, <code>/sponsors/{Id}</code>), the activity management pages (<code>/activities</code>, <code>/activities/create</code>, <code>/activities/{Id}</code>, each <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> on <code>ActivityList.razor</code>, <code>ActivityCreate.razor</code> and <code>ActivityDetail.razor</code>) and the check-in and rewards pages (<code>/check-in</code>, <code>/organizer/attendance</code>, <code>/organizer/points</code>) carry the same page-level attribute, and their <strong>writes</strong> are additionally permission-checked API-side (<code>conference:sponsors:manage</code>, <code>engagement:checkin:manage</code>, <code>engagement:points:view-overview</code>), so the role opens the page and the permission authorizes the call.</li>
+          <li><em>Authentication only:</em> <code>/profile</code>, <code>/profile/claims</code>, <code>/speaker/dashboard</code>, <code>/speaker/qr</code>, <code>/my-badge</code>, <code>/points</code>, the two scanned engagement landings (<code>/engage/sponsors/{SponsorId}</code>, <code>/engage/rooms/{RoomId}</code>), both attendee feedback forms, the conference-day live pages (<code>/happening-now</code>, <code>/conference/sessions/{Id}/live</code>, <code>/conference/sessions/{Id}/present</code>), and <code>/speakers/{Id}</code> (SpeakerDetail is the one management page still gated by plain <code>[Authorize]</code> because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).</li>
+          <li><em>Public (no attribute):</em> all <code>/conference/*</code> read pages including <code>/conference/activities</code> (the public activity list, filtered by the selected event), except the two live-layer routes above, plus the two password-reset pages (<code>/forgot-password</code>, <code>/reset-password</code>), which ship in the framework UI package and are reachable only by an unauthenticated visitor&#39;s own action (the &quot;Forgot password?&quot; link on <code>/login</code> or the link in the reset email).</li>
           <li><em>MAUI head only:</em> <code>/settings/device</code> is registered by <code>DeviceUIModule</code> and exists in no web head.</li>
           </ul>
           </li>
+          <li><strong>Deep-link-only routes:</strong> <code>/engage/sponsors/{SponsorId}</code> and <code>/engage/rooms/{RoomId}</code> contribute no nav item and appear in no menu. An attendee reaches them only by scanning a printed QR code (a sponsor booth sign, a session-room door), and both carry a plain <code>[Authorize]</code>, so the scan of an unauthenticated visitor lands on <code>/login</code> first. Both are idempotent: a rescan reports the existing visit or check-in as information rather than as an error, and an organizer having already scanned the attendee at the door yields the same one check-in.</li>
           <li><strong>Feature-gated surfaces:</strong> the badge and check-in pages (<code>/my-badge</code>, <code>/check-in</code>, <code>/organizer/attendance</code>) and the points pages (<code>/points</code>, <code>/organizer/points</code>) call APIs behind the <code>Engagement.CheckIn</code> and <code>Engagement.Points</code> flags. With a flag off the controller returns <strong>404</strong> rather than 403 (ADR-031) and the page renders empty; the route itself is not removed.</li>
           <li><strong>One route, two input surfaces:</strong> <code>/check-in</code> renders the camera scan card only where the barcode-scanner capability reports itself supported (the MAUI head, <a href="../adr/071-barcode-scanning-and-qr-display.html">ADR-071</a>). The manual attendee-search panel is always rendered, so on the web and Windows heads that search <em>is</em> the check-in surface rather than a degraded fallback. The page adapts; it does not branch on platform.</li>
           </ul>
