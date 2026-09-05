@@ -27,7 +27,7 @@ an in-process object or a wire hop.
 couple to Domain, Application, or Infrastructure; see [primer §1](00-primer.md#1-the-big-picture)).
 There are six: [`DependencyInjection`](#dependencyinjection) (the registration surface,
 `AddGrpcServiceDefaults()` server-side and `AddTypedGrpcClient<TClient>(serviceName)` client-side, at
-`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:15`),
+`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:25`),
 [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) (server-side: turns a failed
 `Result` into an `RpcException`),
 [`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (client-side: forwards the
@@ -79,7 +79,7 @@ registered by the module when the peer is disabled. `Replace` wins over both, so
 resolved interface is always the gRPC adapter pointing at the extracted peer. Ordering is not left to
 chance: each host registers these helpers as steps inside
 `services.AddMmcaApplicationPipeline(pipeline => pipeline.Register(moduleHost.RegisterModules).Register(s => s.AddConferenceSessionValidationClient())...)`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:278-282`), so module discovery runs
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:279-283`), so module discovery runs
 first and the client replacements run after it, in declaration order.
 
 **`Result` over the wire, the outbound half.** The codebase's pervasive
@@ -132,8 +132,8 @@ and substitutes the real message (plus any inner exception's message) rather tha
 `Error.Failure`, which would map to `InvalidArgument` and wrongly blame the caller.
 
 **Auth and the network shape.** Every typed client wired by `AddTypedGrpcClient<TClient>`
-(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:66`) gets a
-[`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (`DependencyInjection.cs:72-77`)
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:87`) gets a
+[`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (`DependencyInjection.cs:93-98`)
 that copies the inbound `Authorization` header off the current `HttpContext` onto the outgoing call's
 metadata, so the caller's JWT rides along to the downstream service and distributed authorization
 works without each handler threading a token by hand. It is a no-op outside an HTTP request, for
@@ -146,23 +146,23 @@ downstream service validates that forwarded token against the issuer's **JWKS**,
 ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html); see
 [`RsaJwksProvider`](group-08-auth.md#rsajwksprovider) / [`IJwksProvider`](group-08-auth.md#ijwksprovider)).
 The server half also sets `EnableDetailedErrors = false` and adds server reflection
-(`DependencyInjection.cs:33`, `:36`), so tools like grpcurl can introspect the schema without exception
+(`DependencyInjection.cs:43`, `:36`), so tools like grpcurl can introspect the schema without exception
 detail leaking to callers. `[Rubric §11, Security]` is touched three times over here: federated JWT
 validation rather than a shared secret, token forwarding that never widens the caller's authority, and
 detailed errors kept off.
 
 **The transport is HTTP/2 cleartext (h2c) with prior knowledge.** The client addresses
-`http://{serviceName}` (`DependencyInjection.cs:75-76`), resolved by **Aspire service discovery**,
+`http://{serviceName}` (`DependencyInjection.cs:96-97`), resolved by **Aspire service discovery**,
 because Aspire's project-resource discovery does not reliably expose an `https` key for these peers;
-the Sonar cleartext warning is suppressed in place with that rationale (`DependencyInjection.cs:74`). A
-deliberate `SocketsHttpHandler` override (`DependencyInjection.cs:89-97`) forces
+the Sonar cleartext warning is suppressed in place with that rationale (`DependencyInjection.cs:95`). A
+deliberate `SocketsHttpHandler` override (`DependencyInjection.cs:110-118`) forces
 `EnableMultipleHttp2Connections` and re-applies the pooled-lifetime and keep-alive values from
 [`HttpResilienceDefaults`](group-16-aspire-orchestration.md#httpresiliencedefaults), because the global
 `ConfigureHttpClientDefaults` from `MMCA.Common.Aspire` applies to *all* `HttpClient`s and its wrapper
 can defeat HTTP/2 negotiation. On top of that, `AddStandardResilienceHandler` gives every gRPC client
 an explicit Polly pipeline sourced entirely from
 [`GrpcResilienceDefaults`](group-16-aspire-orchestration.md#grpcresiliencedefaults)
-(`DependencyInjection.cs:106-115`): the attempt timeout, total timeout, and retry budget are the same
+(`DependencyInjection.cs:127-136`): the attempt timeout, total timeout, and retry budget are the same
 values the HTTP defaults use, and the circuit-breaker values are spelled out (`FailureRatio` 0.5,
 `MinimumThroughput` 10, `BreakDuration` 10 seconds, at
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:27-33`) precisely
@@ -189,18 +189,18 @@ prefix selects it.
 `MMCA.ADC/Source/Services/*/Protos/`, each with a generated client, a hand-written adapter, and a
 server-side service class. Reading them as consumer to producer: Engagement to Conference for
 `ISessionBookmarkValidationService` and `IEventLiveValidationService`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:280-281`), Engagement to Notification
-for the best-effort live-channel push (`Program.cs:282`, replacing the framework's
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:281-282`), Engagement to Notification
+for the best-effort live-channel push (`Program.cs:283`, replacing the framework's
 [`NullLiveChannelPublisher`](group-10-notifications.md#nulllivechannelpublisher) behind
 [`ILiveChannelPublisher`](group-10-notifications.md#ilivechannelpublisher)), Conference to Engagement
 for `IBookmarkCountService` on the speaker dashboard
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:349`), Notification to Identity for
-attendee user ids (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:217`), and
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350`), Notification to Identity for
+attendee user ids (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:218`), and
 Identity to Engagement plus Identity to Notification for the cross-service data-subject export
 aggregation (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:290-291`). Server sides are
 mapped in each host with `AddGrpcServiceDefaults()` plus `app.MapGrpcService<...>()`, mostly behind
 `.RequireAuthorization()`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:361`, `:396-397`).
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:362`, `:396-397`).
 
 **The startup-ordering edge worth knowing.** Conference and Engagement call *each other*, so the
 AppHost gives Engagement a `WithReference(conference).WaitFor(conference)` but the reverse Conference
@@ -223,7 +223,7 @@ consumer the moment its first contract type is marked. In ADC six interfaces car
 (`ISessionBookmarkValidationService`, `IEventLiveValidationService`, `IBookmarkCountService`,
 `IUserEngagementExportService`, `IAttendeeQueryService`, `IUserNotificationExportService`), and Store
 marks its own. Two fitness functions read the attribute by full name
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Contracts.cs:10`): the
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Contracts.cs:10`): the
 **purity** rule, that a contract type must not reach into the producing service's Domain, Application,
 or Infrastructure (`ArchitectureRules.Contracts.cs:32`, exposed through
 [`ServiceContractPurityTestsBase`](group-27-testing-infrastructure.md#servicecontractpuritytestsbase)),
@@ -234,7 +234,7 @@ which is why every gRPC adapter above is `internal sealed`. Alongside them,
 [`MicroserviceExtractionTestsBase`](group-27-testing-infrastructure.md#microserviceextractiontestsbase)
 forbids MassTransit and gRPC types from leaking into Application, Domain, or Shared. Each repo
 subclasses all three (for example
-`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/ServiceContractPurityTests.cs:9`). That is the
+`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/ServiceContractPurityTests.cs:9`). That is the
 executable governance keeping this transport genuinely at the edge
 `[Rubric §34, Architecture Governance & Documentation]` and `[Rubric §15, Best Practices & Code
 Quality]`. Generated gRPC client classes need no attribute: they are part of the contract surface by
@@ -294,7 +294,7 @@ virtue of their `.proto`.
   duplicate-header guard means it composes safely with other interceptors.
 - **Where it's used**: registered automatically by `AddTypedGrpcClient<TClient>` in this group's
   [`DependencyInjection`](#dependencyinjection)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:72,77`), so every typed gRPC
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:93,98`), so every typed gRPC
   client an ADC or Store service host builds gets it without explicit wiring.
 
 ### ServiceContractAttribute
@@ -313,7 +313,7 @@ virtue of their `.proto`.
   `[Rubric §34, Architecture Governance & Documentation]` apply: the invariant stated in the attribute's
   own doc comment (`ServiceContractAttribute.cs:6-9`) is not advisory, it is executed as a fitness
   function. `ArchitectureRules.ServiceContractsDoNotDependOnServiceInternals`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Contracts.cs:32`)
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Contracts.cs:32`)
   scans every assembly the repo's architecture map registers, selects the types that carry the marker
   (`MeetCustomRule(CarriesServiceContractAttribute)`, line 44, matched by the full type name string held
   in `ServiceContractAttributeFullName`, lines 10-11), and asserts none of them depends on the producing
@@ -330,7 +330,7 @@ virtue of their `.proto`.
   tooling and tests then enforce, and the marker is deliberately **attribute-driven rather than
   layer-driven**. The remarks on
   `ServiceContractPurityTestsBase`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ServiceContractPurityTestsBase.cs:9-11`)
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ServiceContractPurityTestsBase.cs:9-11`)
   explain why: no repo registers a `Layer.Contracts` entry in its architecture map today, so a
   layer-iterating rule would pass vacuously forever, while scanning every mapped assembly for the marker
   catches contract types wherever they actually live (in practice, in each module's `*.Shared` project).
@@ -349,7 +349,7 @@ virtue of their `.proto`.
   [`ISessionBookmarkValidationService`](group-17-conference-domain.md#isessionbookmarkvalidationservice)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10`),
   [`IEventLiveValidationService`](group-17-conference-domain.md#ieventlivevalidationservice)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IEventLiveValidationService.cs:11`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/IEventLiveValidationService.cs:12`),
   `IUserEngagementExportService`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/IUserEngagementExportService.cs:13`),
   and `IUserNotificationExportService`
@@ -364,7 +364,7 @@ virtue of their `.proto`.
   [`ServiceContractPurityTestsBase`](group-27-testing-infrastructure.md#servicecontractpuritytestsbase)
   (`ServiceContractPurityTestsBase.cs:20-26`) and
   [`ContractImplementationTestsBase`](group-27-testing-infrastructure.md#contractimplementationtestsbase)
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ContractImplementationTestsBase.cs:20,34`),
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/ContractImplementationTestsBase.cs:20,34`),
   which Common, ADC, Store, and Helpdesk each subclass in their architecture-test project.
 - **Caveats / not-in-source**: generated gRPC client and server classes are **not** marked; the doc
   comment (`ServiceContractAttribute.cs:16-17`) states they are part of the contract surface by virtue of
@@ -464,7 +464,7 @@ virtue of their `.proto`.
   `Error` is deliberate for a *domain* failure: a rejected command is an expected outcome, not a fault.
 - **Where it's used**: registered by `AddGrpcServiceDefaults()` in this group's
   [`DependencyInjection`](#dependencyinjection)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:28,32`), which adds it to the
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:38,42`), which adds it to the
   gRPC server pipeline of every extracted service host. Its live counterparts are the gRPC service
   implementations that call `result.ThrowIfFailure()`, for example
   [`SessionBookmarksGrpcService`](group-20-conference-api-grpc.md#sessionbookmarksgrpcservice)
@@ -568,12 +568,16 @@ virtue of their `.proto`.
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/SessionBookmarkValidationServiceGrpcAdapter.cs:58,85`).
 
 ### DependencyInjection
-> MMCA.Common.Grpc · `MMCA.Common.Grpc` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:15` · Level 4 · class (static)
+> MMCA.Common.Grpc · `MMCA.Common.Grpc` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:25` · Level 4 · class (static)
 
 - **What it is**: the gRPC infrastructure registration class. It is a C# `extension(IServiceCollection)`
-  block (line 17, see [primer §4](00-primer.md#4-c-build-and-code-style-conventions)) exposing two
+  block (line 27, see [primer §4](00-primer.md#4-c-build-and-code-style-conventions)) exposing two
   methods: `AddGrpcServiceDefaults()` for the server side and
-  `AddTypedGrpcClient<TClient>(string serviceName)` for the client side.
+  `AddTypedGrpcClient<TClient>(string serviceName)` for the client side. Its class-level `<remarks>`
+  (lines 15-24) states the package's job in one place: this is the extraction boundary for a module
+  lifted out of the modular monolith, it carries transport concerns only, and consuming modules keep
+  the generated protobuf types out of their application and domain code behind a hand-written adapter
+  that is the module's Anti-Corruption Layer.
 - **Depends on**: [`GrpcResultExceptionInterceptor`](#grpcresultexceptioninterceptor) (Level 3),
   [`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (Level 0), and
   [`GrpcResilienceDefaults`](group-16-aspire-orchestration.md#grpcresiliencedefaults) /
@@ -590,58 +594,65 @@ virtue of their `.proto`.
   Security]` appears twice here in a form worth noticing: detailed errors are switched off so internal
   exception text never leaks over the wire, and the transport is cleartext h2c *by design* for in-cluster
   east-west calls, which is why the S5332 analyzer is suppressed with an explicit justification
-  (lines 74 and 78) rather than silently.
+  (lines 95 and 99, its justification text pointing back at the class-level extraction boundary
+  remarks) rather than silently.
 - **Walkthrough**
-  - `AddGrpcServiceDefaults()` (line 26): `TryAddSingleton<GrpcResultExceptionInterceptor>()` (line 28),
+  - `AddGrpcServiceDefaults()` (line 36): `TryAddSingleton<GrpcResultExceptionInterceptor>()` (line 38),
     then `AddGrpc(options => { options.Interceptors.Add<GrpcResultExceptionInterceptor>(); options.EnableDetailedErrors = false; })`
-    (lines 30-34), then `AddGrpcReflection()` (line 36) so tools such as `grpcurl` can introspect the
+    (lines 40-44), then `AddGrpcReflection()` (line 46) so tools such as `grpcurl` can introspect the
     schema. Returns `services` for chaining.
-  - `AddTypedGrpcClient<TClient>(string serviceName)` (line 66) does four things in order. First it
-    validates the name (`ArgumentException.ThrowIfNullOrWhiteSpace`, line 69) and registers
-    `AddHttpContextAccessor()` plus `TryAddTransient<JwtForwardingClientInterceptor>()` (lines 71-72).
+  - `AddTypedGrpcClient<TClient>(string serviceName)` (line 87) does four things in order. First it
+    validates the name (`ArgumentException.ThrowIfNullOrWhiteSpace`, line 90) and registers
+    `AddHttpContextAccessor()` plus `TryAddTransient<JwtForwardingClientInterceptor>()` (lines 92-93).
     Second it calls `AddGrpcClient<TClient>` with the address `new Uri($"http://{serviceName}")`
-    (lines 75-76), resolved by Aspire service discovery, and attaches
-    `.AddInterceptor<JwtForwardingClientInterceptor>(InterceptorScope.Client)` (line 77). Third it
-    **forces the primary handler** to a `SocketsHttpHandler` (lines 89-97) with
+    (lines 96-97), resolved by Aspire service discovery, and attaches
+    `.AddInterceptor<JwtForwardingClientInterceptor>(InterceptorScope.Client)` (line 98). Third it
+    **forces the primary handler** to a `SocketsHttpHandler` (lines 110-118) with
     `EnableMultipleHttp2Connections = true` and the connection-hygiene values re-applied from
     `HttpResilienceDefaults`: `PooledConnectionLifetime` (10 minutes), `PooledConnectionIdleTimeout`
     (5 minutes), `KeepAlivePingDelay` (60 seconds), `KeepAlivePingTimeout` (30 seconds), and
     `KeepAlivePingPolicy = WithActiveRequests`
     (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:34,37,40,43`).
-    Fourth it layers `AddStandardResilienceHandler` back on (lines 106-115), setting every knob from
+    Fourth it layers `AddStandardResilienceHandler` back on (lines 127-136), setting every knob from
     [`GrpcResilienceDefaults`](group-16-aspire-orchestration.md#grpcresiliencedefaults): a 30-second
     attempt timeout and 90-second total request timeout re-exposed from the outbound-HTTP path, one
     retry beyond the initial attempt, and an explicit circuit breaker (60-second sampling window,
     `FailureRatio` 0.5, `MinimumThroughput` 10, `BreakDuration` 10 seconds)
     (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:15-33`). It returns
-    the original `IHttpClientBuilder` (line 116), not the resilience-pipeline builder, so callers can
+    the original `IHttpClientBuilder` (line 137), not the resilience-pipeline builder, so callers can
     keep chaining.
 - **Why it's built this way**: three deliberate decisions live here, each documented inline and each
   worth reading before changing anything.
-  1. **h2c (HTTP/2 cleartext) over `http://{serviceName}`, not HTTPS** (lines 43-52). Aspire's
+  1. **h2c (HTTP/2 cleartext) over `http://{serviceName}`, not HTTPS** (lines 54-62). Aspire's
      project-resource endpoint discovery from `launchSettings.json` does not reliably create a
      `services__<name>__https__0` discovery key, and the resolver silently falls back to `http`
      regardless of the requested scheme. The target service must therefore serve HTTP/2 on its cleartext
      endpoint (`Kestrel:EndpointDefaults:Protocols = "Http2"`) or Kestrel rejects the frames with
      `HTTP_1_1_REQUIRED`. The per-host transport choices are
      [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html).
-  2. **The explicit `SocketsHttpHandler`** (lines 80-88). The global `ConfigureHttpClientDefaults` from
+  2. **The explicit `SocketsHttpHandler`** (lines 101-109). The global `ConfigureHttpClientDefaults` from
      `MMCA.Common.Aspire` applies to *all* `HttpClient` instances including this gRPC one, and its
      standard resilience pipeline can wrap the primary handler in a way that defeats HTTP/2 negotiation.
      Setting `SocketsHttpHandler` explicitly bypasses that wrapper for the gRPC client only, which is
      precisely why the pooled-lifetime and keep-alive values have to be re-applied from the same
      `HttpResilienceDefaults` source of truth: the override drops whatever the global default had set.
   3. **The circuit breaker is stated explicitly, not left at the library defaults** (comment at
-     lines 99-105, values at `GrpcResilienceDefaults.cs:26-33`). An east-west gRPC call addresses a peer
+     lines 120-126, values at `GrpcResilienceDefaults.cs:26-33`). An east-west gRPC call addresses a peer
      directly and bypasses the Gateway's active health checks, so the breaker is the only thing that
      notices a peer going bad. Timeouts and the retry budget, by contrast, are re-exposed from
      `HttpResilienceDefaults` so the two paths cannot drift.
 
-  Application code should typically register a hand-written adapter implementing the C# service
-  interface (for example `ISessionBookmarkValidationService`) that delegates to the generated typed
-  client, so the rest of the app never sees gRPC types (doc comment lines 56-61, and
-  [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) /
-  [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
+  The doc comment is explicit that application code should **not** consume the generated client
+  directly (lines 66-76): register a hand-written adapter implementing the consuming module's own C#
+  interface contract (for example `ISessionBookmarkValidationService`) that delegates to the typed
+  gRPC client. That adapter *is* the module's Anti-Corruption Layer: the one place where the peer's
+  wire model (the generated protobuf types) is translated into the module's own interface contract and
+  domain types, so the peer's contract never leaks inward past it. The source names the pattern and
+  cites [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) (line 75). Extraction
+  itself follows the Strangler Fig route (lines 77-82,
+  [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)): the new service
+  host is stood up beside the modular monolith, the typed client and its Anti-Corruption Layer adapter
+  move traffic to it, and the in-process path is retired last.
 - **Where it's used**: each extracted service host calls `AddGrpcServiceDefaults()` server-side (ADC's
   Conference, Engagement, Identity, and Notification `Program.cs`, and Store's Catalog, Identity, and
   Sales `Program.cs`); each consumer wires `AddTypedGrpcClient<TClient>("<servicename>")` indirectly

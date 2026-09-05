@@ -162,7 +162,7 @@ the domain type: the value is not a caller's to choose (`ITenantEntity.cs:16-20`
 64-character `string` on purpose, because it arrives from a claim, a header, or configuration, all of
 which are strings (`ITenantEntity.cs:22-25`). Adopting tenancy is three things together: marking
 entities, calling `AddMultiTenancy(configuration)`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:511`), and setting
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:525`), and setting
 `Tenancy:Enabled` (`ITenantEntity.cs:26-31`); a host that never resolves a tenant behaves exactly as it
 did before ([ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)).
 
@@ -179,7 +179,7 @@ require it, because the two answer different questions: `IAuditableEntity` stamp
 `IAuditedEntity` records the SEQUENCE that produced it, and when both are present the trail rows see the
 freshly stamped values because the trail is captured after the stamping interceptor has run
 (`IAuditedEntity.cs:16-21`). Like tenancy, recording is host-gated behind `AddAuditTrail(configuration)`
-(`DependencyInjection.cs:462`) plus `AuditTrail:Enabled`, so marking an entity in a host that never
+(`DependencyInjection.cs:476`) plus `AuditTrail:Enabled`, so marking an entity in a host that never
 opted in is inert (`IAuditedEntity.cs:23-26`).
 
 [`IReactivatable`](#ireactivatable)
@@ -204,20 +204,20 @@ private list, doing nothing yet. On save, EF Core interceptors take over.
 captures every tracked [`IAggregateRoot`](#iaggregateroot) that has pending events via
 `context.ChangeTracker.Entries<IAggregateRoot>()`, snapshotting each aggregate's event list at capture
 time
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:206`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:207`,
 `:220-224`), serializes them into [`OutboxMessage`](group-04-events-outbox.md#outboxmessage) rows **in
-the same transaction** as the data (`DomainEventSaveChangesInterceptor.cs:235-245`), then after a
+the same transaction** as the data (`DomainEventSaveChangesInterceptor.cs:236-246`), then after a
 successful save dispatches the local [`IDomainEvent`](group-04-events-outbox.md#idomainevent)s in
 process, marks their outbox rows processed, and removes exactly the captured events from each aggregate
-(`DomainEventSaveChangesInterceptor.cs:360-363`). That last step is why `IAggregateRoot` grew
+(`DomainEventSaveChangesInterceptor.cs:361-364`). That last step is why `IAggregateRoot` grew
 `RemoveDomainEvents`: clearing wholesale would also discard anything a handler raised on the same
 aggregate during in-process dispatch, and those events would never dispatch and never reach the outbox
 (`IAggregateRoot.cs:25-31`). Integration events
 ([`IIntegrationEvent`](group-04-events-outbox.md#iintegrationevent)) deliberately get rows but no
 in-process dispatch; the [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) publishes them
-(`DomainEventSaveChangesInterceptor.cs:248-256`). Inside a transactional command the whole flush is
+(`DomainEventSaveChangesInterceptor.cs:249-257`). Inside a transactional command the whole flush is
 deferred until after commit through a `DeferredDispatch` record
-(`DomainEventSaveChangesInterceptor.cs:312-313`), so a handler never acts on state that could still roll
+(`DomainEventSaveChangesInterceptor.cs:313-314`), so a handler never acts on state that could still roll
 back. The [`DomainEntityState`](#domainentitystate) enum (`Unchanged`/`Added`/`Updated`/`Deleted`, with
 explicit numeric values at
 `MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:9-12`) is the small vocabulary an
@@ -239,7 +239,7 @@ every row already written under the old name; with it, the row records a name no
 while the outbox holds pending rows is a two-step move, drain first and then rename
 (`EventNameAttribute.cs:15-19`). [`EventNameResolver`](group-04-events-outbox.md#eventnameresolver)
 reads the attribute in both directions
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/EventNameResolver.cs:38` and
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/EventNameResolver.cs:38` and
 `:80`), and a versioned name leaves room for the upcasting path
 ([ADR-090](https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html)).
 
@@ -248,10 +248,10 @@ reads the attribute in both directions
 contract: an event returns a key naming the entity whose stream must stay sequential, typically the
 aggregate id, or `null` to opt that individual instance out (`IHasOrderingKey.cs:26-30`). The outbox
 copies the value onto the row it writes
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:115`) and the
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:116`) and the
 processor refuses to claim a row while an earlier unprocessed, non-dead-lettered row carries the same
 key in the same data source
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:550-551`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:552-553`,
 with an in-batch guard at `:516`), so ordering holds across batches and across scaled-out replicas
 rather than only within one batch. Read the doc comment before adopting it, because the trade-off is
 explicit: this is head-of-line blocking by design, so keys must be as NARROW as the requirement really
@@ -276,11 +276,11 @@ the only way in runs through validation, so an invalid `Email`, `Money`, `Addres
 simply cannot be constructed ([ADR-068](https://ivanball.github.io/docs/adr/068-value-objects-as-validated-primitives.html)).
 The validation logic itself is factored out into static *invariants* classes,
 [`AddressInvariants`](#addressinvariants)
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:9`),
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:9`),
 [`EmailInvariants`](#emailinvariants)
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/EmailInvariants.cs:11`), and
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/EmailInvariants.cs:11`), and
 [`PhoneNumberInvariants`](#phonenumberinvariants)
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/PhoneNumberInvariants.cs:11`), which also
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/PhoneNumberInvariants.cs:11`), which also
 publish the length constants that EF entity configurations and FluentValidation validators reuse
 (`Email` at 256 characters, `EmailInvariants.cs:14`; `PhoneNumber` between 7 and 20,
 `PhoneNumberInvariants.cs:14-17`; the six address field limits at `AddressInvariants.cs:12-27`), so the
@@ -306,8 +306,8 @@ class folds them together with `Result.Combine` so one call reports every broken
 The concrete value objects split into a few patterns worth knowing up front:
 
 - **Owned-type composites**: [`Address`](#address)
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Address.cs:16`) and [`Money`](#money)
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Money.cs:21`) are stored by EF as `OwnsOne`
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Address.cs:16`) and [`Money`](#money)
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Money.cs:21`) are stored by EF as `OwnsOne`
   nested columns; both carry `[DataContract]` with ordered `[DataMember(Order = n)]` properties to pin
   the serialization shape (`Address.cs:19-40`, `Money.cs:20-35`). `Address` requires only
   `AddressLine1` and leaves the other five fields optional for international formats
@@ -321,7 +321,7 @@ The concrete value objects split into a few patterns worth knowing up front:
   than a hand-rolled `OwnsOne` block, so the currency round-trip fallback is not re-typed per entity
   (`Money.cs:14-19`).
 - **Closed enumeration**: [`Currency`](#currency)
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Currency.cs:14`) is a record with a private
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Currency.cs:14`) is a record with a private
   constructor (`Currency.cs:31`) and a fixed `All` set of exactly `Usd` and `Eur` (`Currency.cs:54-58`),
   plus an `internal` `None` sentinel that is deliberately *not* in `All` and never reaches API consumers
   (`Currency.cs:23`). `FromCode` is the only public way to get one and matches case-insensitively
@@ -329,18 +329,18 @@ The concrete value objects split into a few patterns worth knowing up front:
   serializes it as its bare ISO-4217 code on the wire, throwing a `JsonException` on a non-string token
   or an unknown code when reading (`Currency.cs:78-85`).
 - **Converted scalars**: [`Email`](#email)
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Email.cs:16`) and
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Email.cs:16`) and
   [`PhoneNumber`](#phonenumber)
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/PhoneNumber.cs:16`) are stored via EF
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/PhoneNumber.cs:16`) are stored via EF
   `HasConversion` (not `OwnsOne`) through the shipped `EmailValueConverter` /
   `PhoneNumberValueConverter` pairs (and their nullable siblings), so the column stays a flat
   `nvarchar` (`Email.cs:7-13`, `PhoneNumber.cs:7-14`). Both normalize on creation (`Email` trims then
   lowercases with `ToLowerInvariant`, `Email.cs:30-39`; `PhoneNumber` trims, `PhoneNumber.cs:36`) and
   override `ToString` to return the underlying value (`Email.cs:44`, `PhoneNumber.cs:40`).
 - **Interval pairs**: [`DateRange`](#daterange)
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/DateRange.cs:9`, `DateOnly` based) and
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Time/DateRange.cs:9`, `DateOnly` based) and
   [`DateTimeRange`](#datetimerange)
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/DateTimeRange.cs:10`, full precision) are
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Time/DateTimeRange.cs:10`, full precision) are
   near-identical: a validated start/end pair with `Overlaps`, `Contains`, `Deconstruct`, and a
   length/duration accessor (`LengthInDays` at `DateRange.cs:38`, `Duration` at `DateTimeRange.cs:39`);
   `Create` rejects `end < start` (`DateRange.cs:30-35`, `DateTimeRange.cs:31-36`). Read the boundary
@@ -366,7 +366,7 @@ for the one case they cannot cover
 
 The interesting part is what it deliberately does *not* do. It does **not** derive from
 [`ValueObject`](#valueobject), because the `ValueObjectsAreImmutableSealedInShared` fitness rule
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Immutability.cs:56`)
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Immutability.cs:56`)
 forces every `ValueObject` derivative to be a sealed record in the Shared layer, which would forbid the
 static-member idiom this type exists for (`Enumeration.cs:26-29`). It also does not implement
 `IEquatable<T>`, for the same S4035 reason [`BaseEntity<TIdentifierType>`](#baseentitytidentifiertype)
@@ -394,9 +394,9 @@ data-subject PII, and it is a property-only, non-inherited, single-use attribute
 Three mechanisms rely on the marker today. First, an architecture fitness test asserts that any entity
 declaring a `[Pii]` property also implements [`IAnonymizable`](#ianonymizable), so every piece of
 personal data has an erasure path (`PiiConventionTests`, driven by the shared `PiiConventionTestsBase`,
-at `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiConventionTests.cs:13` over the rule
+at `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiConventionTests.cs:13` over the rule
 body at
-`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:11-17`; the
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Governance.cs:11-17`; the
 scan is structurally vacuous inside the framework itself because no data-subject type lives in
 `MMCA.Common.Domain`). Second, [`PiiRedactor`](#piiredactor)
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:24`) is the redaction half: it
@@ -544,7 +544,7 @@ in it.
   bites, see [primer §6](00-primer.md#6-the-34-category-architecture-evaluation-lens).
 - **Where it's used**: the call sites in shipped code are Blazor detail pages turning their
   `[Parameter] string` route value into the module's identifier alias, for example
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speaker/SpeakerDetail.razor.cs:105`,
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:106`,
   `.../Pages/Session/SessionDetail.razor.cs:104`, `.../Pages/Event/EventDetail.razor.cs:86`, and
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/Feedback/EventFeedback.razor.cs:254`;
   Store's detail pages import the same namespace (for example
@@ -578,7 +578,7 @@ in it.
     (`EventNameAttribute.cs:31`). `Inherited = false` is load-bearing: a derived event does not
     silently borrow its base's identity, and
     [`EventNameResolver`](group-04-events-outbox.md#eventnameresolver) reflects with `inherit: false`
-    to match (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/EventNameResolver.cs:38`).
+    to match (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/EventNameResolver.cs:38`).
   - A primary constructor takes the name and `Name` exposes it (`EventNameAttribute.cs:32,35`).
   - `Validated(string)` (`EventNameAttribute.cs:43-47`) runs
     `ArgumentException.ThrowIfNullOrWhiteSpace` at construction (line 45): a blank identity would be
@@ -601,14 +601,14 @@ in it.
   attribute" answer (`EventNameResolver.cs:26,35-38`) and exposes three views: `GetStorageName`
   (declared name, else assembly-qualified name, `:47-51`) written into
   [`OutboxMessage`](group-04-events-outbox.md#outboxmessage)`.EventType`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:106`);
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:107`);
   `GetInboxName` (declared name, else short type name, `:59-60`) used as the inbox dedup key by
   `IntegrationEventConsumer`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumer.cs:43`) and
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:43`) and
   `UpcastingIntegrationEventConsumer` (`.../UpcastingIntegrationEventConsumer.cs:62`); and
   `FindTypeByDeclaredName` (`:75-81`), the reverse lookup that scans loaded assemblies when a stored
   name is not a CLR type name, reached from `OutboxMessage`'s cached type resolution
-  (`OutboxMessage.cs:152`) and degrading gracefully past an unloadable assembly (`:90-100`).
+  (`OutboxMessage.cs:153`) and degrading gracefully past an unloadable assembly (`:90-100`).
   Applied today to the framework's own
   [`OutputCacheEvictionRequested`](group-04-events-outbox.md#outputcacheevictionrequested)
   (`MMCA.Common/Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:28`)
@@ -625,9 +625,9 @@ in it.
   and Helpdesk's `TicketOpenedIntegrationEvent`
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/Tickets/IntegrationEvents/TicketOpenedIntegrationEvent.cs:16`).
   Covered by `OutboxMessageTests`
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/OutboxMessageTests.cs:25`) and
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Outbox/OutboxMessageTests.cs:25`) and
   `IntegrationEventConsumerTests`
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/IntegrationEventConsumerTests.cs:17`).
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Messaging/Consumers/IntegrationEventConsumerTests.cs:17`).
 - **Caveats / not-in-source**: uniqueness of the declared name is a documented requirement
   (`EventNameAttribute.cs:20-22`), not an enforced one. No fitness test or startup check asserts that
   two event types in the same host do not declare the same name; `FindTypeByDeclaredName` simply takes
@@ -717,14 +717,14 @@ in it.
   [`AuditTrailEntry`](group-07-persistence-ef-core.md#audittrailentry) rows and is registered last,
   after the audit and domain-event interceptors, so it diffs final values
   (`AuditTrailSaveChangesInterceptor.cs:26-29`). The host gate is `AddAuditTrail`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:462`) plus
-  [`AuditTrailSettings`](group-14-module-system-composition.md#audittrailsettings)`.Enabled`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/AuditTrailSettings.cs:26`, an
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:476`) plus
+  [`AuditTrailSettings`](group-07-persistence-ef-core.md#audittrailsettings)`.Enabled`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26`, an
   uninitialized `bool` and therefore `false` unless configured). Marked aggregates today: ADC's
   [`User`](group-24-identity-module.md#user)
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:35`, rationale at
   `User.cs:27-30`), `Event`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:23`), `Session`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:24`), `Session`
   (`.../Sessions/Session.cs:22`), `Speaker` (`.../Speakers/Speaker.cs:22`), `CheckIn`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:28`),
   `PointsEntry` (`.../Points/PointsEntry.cs:31`), and Helpdesk's `Ticket`
@@ -733,7 +733,7 @@ in it.
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:12,16`).
   The opting-in hosts are the three ADC services
   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:232`,
-  `MMCA.ADC.Conference.Service/Program.cs:296`, `MMCA.ADC.Engagement.Service/Program.cs:197`) and the
+  `MMCA.ADC.Conference.Service/Program.cs:297`, `MMCA.ADC.Engagement.Service/Program.cs:198`) and the
   Helpdesk web host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78`).
 - **Caveats / not-in-source**: retention is not automatic. `AuditTrailSettings.RetentionDays` defaults
   to 90 (`AuditTrailSettings.cs:38`), but the doc comment states the purge only happens if the host
@@ -825,19 +825,19 @@ in it.
     individual event instance out of ordered delivery even though its type implements the interface.
     That is why the framework does an instance-level interface test rather than a type-level flag, and
     the code comment at the copy site says so
-    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:112-115`).
+    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:113-116`).
 - **Why it's built this way**: ordering is enforced at **claim** time rather than at fetch time, which
   is what makes it survive batching and scale-out
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:439-446`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:441-448`).
   Making it opt-in per event keeps the unordered fast path free: a batch containing no keyed row runs
   exactly the query it always ran, with no subquery for the optimizer to prove away
-  (`OutboxProcessor.cs:470-475`). The decision is recorded in
+  (`OutboxProcessor.cs:472-477`). The decision is recorded in
   [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) (`003-outbox-dual-dispatch.md:142-157`).
 - **Where it's used**: [`OutboxMessage`](group-04-events-outbox.md#outboxmessage) copies the key onto
-  the row it writes (`OutboxMessage.cs:85` for the column, `:115` inside `FromDomainEvent` at `:98`).
+  the row it writes (`OutboxMessage.cs:86` for the column, `:115` inside `FromDomainEvent` at `:98`).
   [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) enforces it in two places:
-  `SelectOrderedCandidates` (`OutboxProcessor.cs:507-524`) keeps at most one row per key in this
-  cycle's candidate set (`:516`), and `FilterUnblocked` (`OutboxProcessor.cs:544-554`) adds the
+  `SelectOrderedCandidates` (`OutboxProcessor.cs:509-526`) keeps at most one row per key in this
+  cycle's candidate set (`:516`), and `FilterUnblocked` (`OutboxProcessor.cs:546-556`) adds the
   `NOT EXISTS` predicate to the claim update itself, so a second replica racing the same key loses on
   the row rather than on a check made before the race (`:550-554`; the retry-count conjunct at `:552`
   is what lets a dead-lettered predecessor stop blocking). The storage side is configured on
@@ -845,16 +845,16 @@ in it.
   non-Unicode column (`.../Persistence/DbContexts/ApplicationDbContext.cs:538`) and the filtered
   `IX_OutboxMessages_Ordering` index over `(OrderingKey, OccurredOn)`, which stays empty for hosts that
   never declare a key (`ApplicationDbContext.cs:554-562`). Covered by `OutboxProcessorOrderingTests`
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/OutboxProcessorOrderingTests.cs:100,180,196`)
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Outbox/Processing/OutboxProcessorOrderingTests.cs:101,181,197`)
   and `OutboxMessageTests` (`.../OutboxMessageTests.cs:111,119`).
 - **Caveats / not-in-source**: no event in ADC, Store or Helpdesk implements this interface today; the
   only implementors in the workspace are test doubles
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/OutboxMessageTests.cs:20` and
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Outbox/OutboxMessageTests.cs:20` and
   `.../DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:284`). The capability is shipped and
   tested, not exercised by an application event. Ordering is also **not** total under a timestamp tie:
   the predecessor test is on `OccurredOn` alone, so two rows sharing a key and an exact timestamp are
   ordered within a cycle by `Id` but neither blocks the other in SQL, which the code states as a
-  deliberate non-guarantee (`OutboxProcessor.cs:448-453`).
+  deliberate non-guarantee (`OutboxProcessor.cs:450-455`).
 
 ### IRowVersioned
 > MMCA.Common.Domain · `MMCA.Common.Domain.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11` · Level 0 · interface
@@ -870,7 +870,7 @@ in it.
   client sends back the token it last read, and the `UPDATE` includes it in the `WHERE` clause. If
   someone else changed the row in between, zero rows match, EF Core raises
   `DbUpdateConcurrencyException`, and the API maps that to `409 Conflict`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:399-403`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:399-403`).
   The interesting design point is *why the token needs its own interface at all*: the repository's
   aggregate-typed overload `SetOriginalRowVersion(TEntity, byte[])` (`IRepository.cs:406`) can only
   reach the aggregate **root**, because `TEntity` is the root type. A child entity edit (a
@@ -894,13 +894,13 @@ in it.
   every auditable entity (aggregate roots **and** their children) satisfies it. Consumed by
   [`IRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#irepositorytentity-tidentifiertype)
   (`IRepository.cs:417`) and implemented in
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:85-92`,
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:86-93`,
   which casts the child to `object`, walks to
   `_context.Entry(...).Property(nameof(AuditableBaseEntity<>.RowVersion))` and assigns `OriginalValue`;
   the decorator forwards both overloads unchanged
   (`.../EFRepositoryDecorator.cs:41-46`).
 - **Caveats / not-in-source**: both `SetOriginalRowVersion` overloads reject a null token outright with
-  `ArgumentNullException.ThrowIfNull` (`EFRepository.cs:76-77,87-88`), but neither rejects an **empty**
+  `ArgumentNullException.ThrowIfNull` (`EFRepository.cs:77-78,88-89`), but neither rejects an **empty**
   array: `[]` is assigned as the original value like any other token. Whether an empty token can ever
   match a real SQL Server `rowversion` is not determinable from source here; it is decided by the
   provider's comparison, not by this code.
@@ -961,9 +961,9 @@ in it.
   [`CrossTenantWriteException`](group-07-persistence-ef-core.md#crosstenantwriteexception) rather than
   writing a row nobody can read (`:101-110`), and a declared-versus-current mismatch is rejected the
   same way (`:123`). The host gate is `AddMultiTenancy`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:511`) plus
-  [`TenancySettings`](group-14-module-system-composition.md#tenancysettings) (`Tenancy:Enabled` at
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/TenancySettings.cs:67`, claim-then-header
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:525`) plus
+  [`TenancySettings`](group-07-persistence-ef-core.md#tenancysettings) (`Tenancy:Enabled` at
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:67`, claim-then-header
   resolution order at `TenancySettings.cs:57`). The only entities marked in the workspace apps today
   are Helpdesk's `Ticket` and its child `TicketComment`
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:26` and
@@ -972,7 +972,7 @@ in it.
   today.
 - **Caveats / not-in-source**: `Tenancy:Enabled` gates **resolution**, not isolation. The filter and the
   interceptor are always registered and are inert whenever no tenant is resolved
-  (`TenancySettings.cs:37-39`, and the registration note at `DependencyInjection.cs:535`), so an
+  (`TenancySettings.cs:37-39`, and the registration note at `DependencyInjection.cs:549`), so an
   untenanted code path (a job, a seeder) reads every tenant's rows by design. That is the documented
   behavior, not an oversight, but it means "tenant safety" is a property of the request pipeline
   resolving a tenant, not of the entity marker alone.
@@ -1018,7 +1018,7 @@ in it.
   `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30`). The erasure detection lives
   **once** in the shared `MMCA.Common.Testing.Architecture` package: the
   `EntitiesWithPiiImplementAnonymizable` rule
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:11-21`)
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Governance.cs:11-21`)
   scans every Domain-layer type for a `[Pii]` property via the `HasPiiProperty` helper (same file,
   lines 48-50), which matches by attribute type *name* (`a.GetType().Name == "PiiAttribute"`), not a
   typed `GetCustomAttribute<PiiAttribute>()`, because the rule library does not reference the Domain
@@ -1026,14 +1026,14 @@ in it.
   `MMCA.Common.Domain.Interfaces.IAnonymizable` (`ArchitectureRules.Governance.cs:7,16`) so a
   same-named local interface cannot satisfy the rule. Each repo then supplies a thin sealed subclass of
   `PiiConventionTestsBase`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/PiiConventionTestsBase.cs:7`)
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/PiiConventionTestsBase.cs:7`)
   that just passes its `IArchitectureMap`:
-  `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiConventionTests.cs:13` (the *scan*
+  `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiConventionTests.cs:13` (the *scan*
   is structurally vacuous today, the framework Domain ships no data-subject type),
-  `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/PiiConventionTests.cs:3`, and
+  `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/PiiConventionTests.cs:3`, and
   `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/PiiConventionTests.cs:3`. The framework
   closes that vacuity gap with a non-vacuous companion, `PiiErasureContractFitnessTests`
-  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiErasureContractFitnessTests.cs:19`),
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiErasureContractFitnessTests.cs:19`),
   which forces a representative `[Pii]`-carrying sample through both halves end to end (recognized and
   masked by [`PiiRedactor`](#piiredactor), then erased idempotently via [`IAnonymizable`](#ianonymizable)).
   Two reflective readers exist in shipped code: `PiiRedactor` itself
@@ -1113,7 +1113,7 @@ in it.
   [`DomainEventSaveChangesInterceptor`](group-07-persistence-ef-core.md#domaineventsavechangesinterceptor)
   during persistence, whose `ClearDomainEvents(CapturedState)` helper retires exactly what it captured
   by calling `RemoveDomainEvents` per capture
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:355-364`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:356-365`),
   on the deferred-transaction path (`:312`) and after in-process dispatch (`:331`).
 
 ### PiiRedactor
@@ -1178,7 +1178,7 @@ in it.
   It is unit-verified by `PiiRedactorTests`
   (`MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Privacy/PiiRedactorTests.cs`, G25) and exercised
   end to end (composed with [`IAnonymizable`](#ianonymizable)) by `PiiErasureContractFitnessTests`
-  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiErasureContractFitnessTests.cs:19`).
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiErasureContractFitnessTests.cs:19`).
 - **Caveats / not-in-source**: `Redact` and `RedactToString` have **no production call site**; only
   tests invoke them (`PiiRedactorTests.cs:35,46,53,58,68` and `PiiErasureContractFitnessTests.cs:29,42,46,69`),
   so the log-side control is ready and tested but opt-in per call site rather than an automatic
@@ -1207,7 +1207,7 @@ in it.
   [`PiiAttribute`](#piiattribute) story ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)): `[Pii]` marks *what* is PII; `IAnonymizable` defines
   *how* it is erased. `[Rubric §34, Architecture Governance & Documentation]`: an architecture rule
   asserts that any Domain type with a `[Pii]` property implements `IAnonymizable`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:11-21`),
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Governance.cs:11-21`),
   enforcing the contract executably rather than by review.
 - **Walkthrough**: `Anonymize()` (line 30): a `Result` return type (not `void`) because anonymization
   can fail, and the doc comment describes the failure case as "a failure describing why anonymization
@@ -1230,7 +1230,7 @@ in it.
   `new` (`User.cs:341`, rationale at `User.cs:22-25`), and the implementation is `User.Anonymize` at
   `User.cs:363`. Enforced by `PiiConventionTests` (G25), and exercised together with
   [`PiiRedactor`](#piiredactor) by `PiiErasureContractFitnessTests`
-  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiErasureContractFitnessTests.cs:19`).
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiErasureContractFitnessTests.cs:19`).
 
 ### IReactivatable
 > MMCA.Common.Domain · `MMCA.Common.Domain.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IReactivatable.cs:19` · Level 3 · interface
@@ -1311,7 +1311,7 @@ in it.
   enforceable, not for shared behaviour. `[Rubric §34, Architecture Governance]` (assesses whether
   rules are executable rather than aspirational): the family is policed by the fitness rule
   `ArchitectureRules.ValueObjectsAreImmutableSealedInShared`
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Immutability.cs:56`),
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Immutability.cs:56`),
   driven from `ImmutabilityTestsBase.ValueObjects_ShouldBe_ImmutableSealedAndInShared`
   (`.../Bases/ImmutabilityTestsBase.cs:25`), which every repo subclasses. That rule is why every
   derivative below is a `sealed record` living in the Shared layer.
@@ -1325,8 +1325,111 @@ in it.
 - **Caveats / not-in-source**: equality is purely structural; if a future value object held a mutable
   collection, record equality would compare references, not contents. None of the current ones do.
 
+### BaseEntity<TIdentifierType>
+> MMCA.Common.Domain · `MMCA.Common.Domain.Entities` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34` · Level 1 · class (abstract)
+
+- **What it is**: the concrete root of the entity hierarchy. It implements
+  [`IBaseEntity<TIdentifierType>`](#ibaseentitytidentifiertype) with a single `required init` `Id`
+  and supplies **identity equality** (`==`, `!=`, `Equals`, `GetHashCode`) for every entity in both
+  applications.
+- **Depends on**: [`IBaseEntity<TIdentifierType>`](#ibaseentitytidentifiertype) (Level 0). Externals
+  are BCL only: `EqualityComparer<T>`, `HashCode`, and `SuppressMessageAttribute`.
+- **Concept introduced, entity identity equality.** `[Rubric §4, Domain-Driven Design]` (assesses
+  whether the model distinguishes entities from value objects: an entity is defined by its
+  identifier over time, a value object by its contents). The contrast with
+  [`ValueObject`](#valueobject) two levels up is the whole point: value objects compare by value,
+  entities compare by id. The class states it in the remarks (`BaseEntity.cs:16-18`): two instances
+  are equal when they are the same concrete type and carry the same **assigned** `Id`, so the same
+  row loaded twice through two different contexts compares equal instead of answering the reference
+  comparison the CLR would give by default.
+  <br>The second half of the concept is **transience**. An entity whose `Id` is still the identifier
+  type's default (zero for an `int` alias, `null` for a reference alias) has not been identified yet,
+  which is exactly the state of an [`IdValueGeneratedAttribute`](#idvaluegeneratedattribute) entity
+  before the database stamps its key. Two such instances are equal only when they are the same
+  reference (`BaseEntity.cs:20-24`), because a default id means "not identified yet", not
+  "identified as zero".
+  <br>`[Rubric §1, SOLID]` (assesses substitutability among other things): the type guard
+  `other.GetType() == GetType()` (`BaseEntity.cs:74`) is what keeps the equality contract symmetric
+  under inheritance. A derived entity never compares equal to its base or to a sibling type.
+  `[Rubric §15, Best Practices & Code Quality]` (assesses whether analyzer suppressions are scoped
+  and justified rather than blanket): the one suppression here, S3875 on `operator ==`
+  (`BaseEntity.cs:47-50`), carries a paragraph of justification explaining why the rule's own escape
+  hatch (`IEquatable<T>`) is deliberately not taken.
+- **Walkthrough**
+  - `public required TIdentifierType Id { get; init; }` (`BaseEntity.cs:37`): `required` means a
+    factory method cannot forget to set it; `init` means nothing can change it afterwards. Both
+    construction paths land here, an application factory setting the value explicitly and EF Core
+    materializing an existing row (`BaseEntity.cs:7-9`).
+  - `operator ==` / `operator !=` (`BaseEntity.cs:51-52`, `BaseEntity.cs:60-61`): the `==` operator
+    treats `null` as equal only to `null` and otherwise delegates straight to `Equals`, so there is
+    exactly one equality implementation rather than two that can drift.
+  - `Equals(object?)` (`BaseEntity.cs:71-77`): four conjoined guards after the reference check, the
+    type is `BaseEntity<TIdentifierType>`, the concrete types match, **both** ids are assigned, and
+    the ids compare equal under `EqualityComparer<TIdentifierType>.Default`.
+  - `GetHashCode()` (`BaseEntity.cs:93`): `HashCode.Combine(GetType(), Id)`, matching `Equals` for
+    any entity that already has an id.
+  - `HasAssignedId(TIdentifierType id)` (`BaseEntity.cs:102-103`): the private test, expressed as
+    "not equal to `default`" through the default comparer so it handles both shapes an identifier
+    alias can take (zero for an integer key, `null` for a reference key).
+- **Why it's built this way**: the class deliberately does **not** implement `IEquatable<T>`
+  (`BaseEntity.cs:26-31`). An unsealed `IEquatable<T>` breaks the equality contract for subclasses
+  (Sonar S4035), so equality is provided through the type-guarded `object.Equals` override instead,
+  and a sealed derived entity may layer a strongly-typed `IEquatable<TSelf>` on top. The same
+  trade-off is documented for the same reason on
+  [`Enumeration<TEnumeration>`](#enumerationtenumeration) and
+  [`RoleValue`](group-08-auth.md#rolevalue).
+- **Where it's used**: base of [`AuditableBaseEntity<TIdentifierType>`](#auditablebaseentitytidentifiertype)
+  and, transitively, of [`AuditableAggregateRootEntity<TIdentifierType>`](#auditableaggregaterootentitytidentifiertype);
+  every domain entity in MMCA.ADC, MMCA.Store, and MMCA.Helpdesk inherits from one of those two.
+  The aggregate helpers
+  [`AuditableAggregateRootEntity<TIdentifierType>.GetChildOrNotFound`](#auditableaggregaterootentitytidentifiertype)
+  and `RestoreChild` rely on this `Id` equality for their in-memory child lookups.
+- **Caveats / not-in-source**: the hash **changes** when a database-generated key is stamped
+  (`BaseEntity.cs:84-90`), so an `[IdValueGenerated]` entity must not be put into a `HashSet<T>` or
+  used as a dictionary key before the save that assigns its id, or it becomes unfindable in its own
+  collection afterwards. Code that has to track pre-save instances keys them by reference instead:
+  [`DomainEventSaveChangesInterceptor`](group-07-persistence-ef-core.md#domaineventsavechangesinterceptor)
+  builds its exclusion set with `ReferenceEqualityComparer.Instance`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:187`),
+  and `RemoveDomainEvents` does the same
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:43`).
+
+### EntityTypeExtensions
+> MMCA.Common.Domain · `MMCA.Common.Domain.Extensions` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Extensions/EntityTypeExtensions.cs:9` · Level 1 · class (static, extension block)
+
+- **What it is**: a 21-line static class that adds one computed property, `IsIdValueGenerated`, to
+  `System.Type`, answering "does this entity let the database assign its key?".
+- **Depends on**: [`IdValueGeneratedAttribute`](#idvaluegeneratedattribute) (Level 0) and
+  `System.Reflection` from the BCL.
+- **Concept reinforced, C# `extension(T)` members.** The `extension(Type entityType)` block
+  (`EntityTypeExtensions.cs:11`) is the same preview language feature introduced by
+  [`DomainHelper`](#domainhelper); here it is used to hang a **property** (not a method) off a type
+  the framework does not own, so call sites read `typeof(Ticket).IsIdValueGenerated` rather than
+  `EntityTypeExtensions.IsIdValueGenerated(typeof(Ticket))`. `[Rubric §8, Data Architecture]`
+  (assesses whether key-generation strategy is a deliberate, declared decision rather than an
+  accident of configuration): the strategy is declared once, as an attribute on the entity, and this
+  property is the single reader of that declaration. `[Rubric §16, Maintainability]`: the reflection
+  call lives in exactly one place, so a change in how the strategy is declared is a one-file change.
+- **Walkthrough**: the whole implementation is one expression-bodied property
+  (`EntityTypeExtensions.cs:19`): `entityType.GetCustomAttribute<IdValueGeneratedAttribute>() is not
+  null`. There is no caching layer in this file; the doc comment (`EntityTypeExtensions.cs:13-18`)
+  states the intended caller, a factory method deciding at runtime whether to assign an explicit id
+  or pass `default`.
+- **Why it's built this way**: a factory cannot ask EF Core what the key strategy is (the Domain
+  layer sits below Infrastructure and has no `DbContext`), so the declaration has to live on the
+  domain type itself. An attribute plus a reflection reader keeps the Domain layer self-contained
+  and keeps the strategy visible on the entity where a reader of the code will look for it.
+- **Where it's used**: entity factory methods across every consumer, always in the same shape,
+  `bool isIdValueGenerated = typeof(T).IsIdValueGenerated;` immediately before building the entity:
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:107`,
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs:67`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:88`, and
+  `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:74`. Covered
+  by `EntityTypeExtensionsTests`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Extensions/EntityTypeExtensionsTests.cs:16`).
+
 ### Address
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Address.cs:16` · Level 3 · record (sealed)
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Contact` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Address.cs:16` · Level 3 · record (sealed)
 
 - **What it is**: an immutable value object for a postal address. `AddressLine1` is required; the
   remaining five fields (`AddressLine2`, `City`, `State`, `ZipCode`, `Country`) are nullable to
@@ -1373,12 +1476,12 @@ in it.
 - **Where it's used**: the Store Identity `Customer` aggregate owns one (configuration cited above,
   with every `HasMaxLength` reading an `AddressInvariants` constant, `CustomerConfiguration.cs:47-73`);
   [`RegisterRequest`](group-08-auth.md#registerrequest) carries an optional `Address? Address = null`
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RegisterRequest.cs:18`); the
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Requests/RegisterRequest.cs:18`); the
   [`AddressLine1Rules<T>`](group-06-validation.md#addressline1rulest) family and
   [`AddressValidator`](group-06-validation.md#addressvalidator) validate the request-side shape.
 
 ### AddressInvariants
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:9` · Level 3 · class (static)
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Contact` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:9` · Level 3 · class (static)
 
 - **What it is**: a static helper holding the address field **max-length constants** (shared by EF
   configurations and FluentValidation validators) plus two invariant checks that return
@@ -1413,145 +1516,8 @@ in it.
   and by the [`AddressLine1Rules<T>`](group-06-validation.md#addressline1rulest) family in the
   Application layer.
 
-### Currency
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Currency.cs:14` · Level 3 · record (sealed)
-
-- **What it is**: an ISO 4217 currency value object built as a **closed set**: `Currency.Usd` and
-  `Currency.Eur` are the only public instances (`Currency.cs:26,29`), the constructor is private
-  (`Currency.cs:31`), and `None` is an `internal` sentinel used by [`Money`](#money)
-  (`Currency.cs:23`).
-- **Depends on**: [`CurrencyJsonConverter`](#currencyjsonconverter) (mutual cycle),
-  [`Error`](group-01-result-error-handling.md#error),
-  [`Result`](group-01-result-error-handling.md#result), [`ValueObject`](#valueobject).
-- **Documented cycle, `Currency` and `CurrencyJsonConverter`.** Both live in the same file
-  (`Currency.cs:14` and `Currency.cs:73`). `Currency` carries
-  `[JsonConverter(typeof(CurrencyJsonConverter))]` (`Currency.cs:13`) while the converter's `Read`
-  calls `Currency.FromCode` (`Currency.cs:83`). The mutual reference puts both at Level 3.
-- **Concept introduced, the closed-set (type-safe enum) value object.** `[Rubric §4, DDD]`
-  (eliminates primitive obsession: no raw `"USD"` strings travelling through the domain). Instead of
-  a `string`, all code holds `Currency.Usd`, a statically typed singleton. Validation happens once, at
-  the boundary, in `FromCode`; inside the domain you are guaranteed to hold a known currency. Adding
-  a currency means adding a field and listing it in `All` (`Currency.cs:54-58`), which is the single
-  extension point.
-- **Walkthrough**
-  - `EmptyCurrency` / `InvalidCurrency` (`Currency.cs:17,20`): pre-built `Error.Validation` singletons
-    for the two failure paths, so `FromCode` allocates nothing on a bad call.
-  - `None` (`Currency.cs:23`): `internal static readonly Currency None = new(string.Empty)`, the
-    empty-code sentinel; the doc comment (`Currency.cs:10-11`) is explicit that it is never exposed to
-    API consumers.
-  - `Code` (`Currency.cs:34`): `string` with an `init` accessor, the ISO three-letter code.
-  - `FromCode(string code)` (`Currency.cs:41`): empty-guard first (`Currency.cs:43-44`), then a
-    case-insensitive `FirstOrDefault` scan over `All` (`Currency.cs:46`), returning the *singleton*
-    on success, so `Currency.Usd` is reference-identical everywhere.
-  - `All` (`Currency.cs:54`): `IReadOnlyCollection<Currency>` collection expression containing `Usd`
-    and `Eur`.
-- **Why it's built this way**: pre-constructed singletons remove per-call allocation and make
-  comparison trivial; the closed set makes an unknown code representable only *outside* the domain.
-  `[Rubric §12, Performance & Scalability]` for the allocation-free path.
-- **Where it's used**: [`Money`](#money) holds a `Currency` (`Money.cs:35`);
-  [`CurrencyJsonConverter`](#currencyjsonconverter) serializes it; the API layer registers its own
-  [`CurrencyJsonConverter`](group-12-api-hosting-mapping.md#currencyjsonconverter) into MVC's
-  `JsonSerializerOptions` in `AddAPI`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:53`).
-- **Caveats / not-in-source**: `All` has exactly two entries today. A deployment needing a third
-  currency changes framework source, not configuration.
-
-### CurrencyJsonConverter
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Currency.cs:73` · Level 3 · class (sealed)
-
-- **What it is**: a `JsonConverter<Currency>` that writes [`Currency`](#currency) as its ISO code
-  string and reads it back through `Currency.FromCode`.
-- **Depends on**: [`Currency`](#currency) (mutual cycle, see above) and `System.Text.Json`.
-- **Concept introduced, the strict boundary converter.** `[Rubric §9, API & Contract Design]`
-  (assesses consistent, stable serialization) and `[Rubric §11, Security]` (assesses input rejected at
-  the edge rather than coerced). The class doc (`Currency.cs:61-72`) states the design goal in one
-  sentence: a non-string token and an unknown code both throw, "matching the API-layer converter so
-  non-MVC paths (cache, outbox, integration events, typed HttpClient calls) fail the same way MVC
-  model binding does". That matters because a `Currency` crosses far more than the controller
-  boundary: it is also serialized into outbox rows and cache entries.
-- **Walkthrough**
-  - `Read` (`Currency.cs:76`): rejects any token that is not a JSON string with
-    `throw new JsonException("Currency must be a string.")` (`Currency.cs:78-79`), so `{"currency": 5}`
-    fails loudly instead of coercing; then `Currency.FromCode(code)` (`Currency.cs:83`) and a second
-    `JsonException` naming the offending code on failure (`Currency.cs:84-85`). Throwing (rather than
-    returning a `Result`) is correct here: malformed JSON is a deserialization error, not a domain
-    outcome.
-  - `Write` (`Currency.cs:91-92`): `writer.WriteStringValue(value.Code)`. The wire shape is just the
-    three-letter string.
-  - Null handling: `HandleNull` is left at its default `false` (documented at `Currency.cs:68-71`), so
-    System.Text.Json short-circuits a JSON `null` before this converter runs and a `Currency?` or
-    `Money?` member still deserializes to `null` rather than throwing.
-- **Where it's used**: applied automatically through the `[JsonConverter]` attribute on `Currency`
-  (`Currency.cs:13`); the separate API-layer
-  [`CurrencyJsonConverter`](group-12-api-hosting-mapping.md#currencyjsonconverter) is registered
-  globally in `AddAPI`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:53`).
-- **Caveats / not-in-source**: there is no version sentinel. If the closed code set ever shrinks,
-  deserializing a previously stored code (a stale cache entry, an old outbox row) throws
-  `JsonException`.
-
-### DateRange
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/DateRange.cs:9` · Level 3 · record (sealed)
-
-- **What it is**: an immutable value object for a date-only range (`DateOnly Start`, `DateOnly End`,
-  `DateRange.cs:12,15`), inclusive on both ends, with the single invariant that `End` is not before
-  `Start`.
-- **Depends on**: [`Error`](group-01-result-error-handling.md#error),
-  [`Result`](group-01-result-error-handling.md#result), [`ValueObject`](#valueobject), and BCL
-  `DateOnly`.
-- **Concept reinforced, the lightweight single-invariant factory.** `[Rubric §4, DDD]` (a temporal
-  range is a domain concept, not a loose pair of dates). Compare with [`Address`](#address):
-  `Address.Create` delegates to a separate invariant class because six constants and multiple error
-  codes justify one; `DateRange.Create` (`DateRange.cs:30-35`) expresses its one rule inline as a
-  conditional expression. Calibrating the ceremony to the number of rules is the convention here.
-- **Walkthrough**
-  - `Create(DateOnly start, DateOnly end)` (`DateRange.cs:30`): returns
-    `Error.Validation("DateRange.Invalid", ...)` when `end < start`, otherwise
-    `Result.Success(new DateRange(start, end))` through the private constructor (`DateRange.cs:17`).
-    It uses `Error.Validation`, not `Error.Invariant`, because the inputs are raw caller-supplied
-    dates: a validation problem, not corrupted internal state.
-  - `LengthInDays` (`DateRange.cs:38`): `End.DayNumber - Start.DayNumber`, avoiding `TimeSpan`
-    arithmetic on `DateOnly`.
-  - `Overlaps(DateRange other)` (`DateRange.cs:46`): `ArgumentNullException.ThrowIfNull(other)` then
-    the standard half-open formula `Start < other.End && End > other.Start` (`DateRange.cs:48-49`).
-  - `Contains(DateOnly instant)` (`DateRange.cs:55`): inclusive on both ends,
-    `instant >= Start && instant <= End`.
-  - `Deconstruct` (`DateRange.cs:61`): enables `var (start, end) = dateRange`.
-- **Why it's built this way**: `DateOnly` rather than `DateTime` signals that the concept carries no
-  time-of-day and no time zone; wrapping the pair in a type makes swapping `start` and `end` at a call
-  site impossible.
-- **Where it's used**: no production entity in ADC or Store holds a `DateRange` today; it is a shipped
-  framework primitive covered by `MMCA.Common.Shared.Tests/ValueObjects/DateRangeTests.cs`. The ADC
-  Conference `Event` enforces the same rule over two loose `DateOnly` parameters instead, via
-  `EventInvariants.EnsureDateRangeIsValid`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:113`,
-  called from `Event.cs:173` and `Event.cs:234`), with the request-side counterpart
-  `EventDateRangeRules<T>`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:91`).
-  That is the honest state of the code: the primitive exists, the app has not adopted it.
-
-### DateTimeRange
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/DateTimeRange.cs:10` · Level 3 · record (sealed)
-
-- **What it is**: the `DateTime`-precision sibling of [`DateRange`](#daterange), carrying
-  `DateTime Start` and `DateTime End` (`DateTimeRange.cs:13,16`).
-- **Depends on**: [`Error`](group-01-result-error-handling.md#error),
-  [`Result`](group-01-result-error-handling.md#result), [`ValueObject`](#valueobject).
-- **Concept**: identical to [`DateRange`](#daterange); this section cross-references rather than
-  repeating. The only behavioural difference is the derived member: `Duration` (`DateTimeRange.cs:39`)
-  returns `End - Start` as a `TimeSpan`, where `DateRange` returns an integer day count.
-- **Walkthrough**: `Create(DateTime start, DateTime end)` (`DateTimeRange.cs:31`) uses the same
-  conditional-expression pattern with `Error.Validation("DateTimeRange.Invalid", ...)`;
-  `Overlaps` (`DateTimeRange.cs:46`), `Contains` (`DateTimeRange.cs:55`) and `Deconstruct`
-  (`DateTimeRange.cs:61`) mirror `DateRange` line for line.
-- **Where it's used**: as with `DateRange`, no ADC or Store entity holds one today; coverage is
-  `MMCA.Common.Shared.Tests/ValueObjects/DateTimeRangeTests.cs`.
-- **Caveats / not-in-source**: `Start` and `End` are plain `DateTime`, so the type carries no time
-  zone or `DateTimeKind` guarantee. Nothing in the source normalizes them to UTC; a caller mixing
-  kinds would get arithmetic that compiles and lies.
-
 ### EmailInvariants
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/EmailInvariants.cs:11` · Level 3 · class (static, partial)
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Contact` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/EmailInvariants.cs:11` · Level 3 · class (static, partial)
 
 - **What it is**: the invariant checks for email addresses (not empty, at most 256 characters, and a
   practical format check) plus the shared `MaxLength` constant.
@@ -1738,7 +1704,7 @@ in it.
   the base itself.
 
 ### PhoneNumberInvariants
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/PhoneNumberInvariants.cs:11` · Level 3 · class (static, partial)
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Contact` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/PhoneNumberInvariants.cs:11` · Level 3 · class (static, partial)
 
 - **What it is**: the invariant checks for phone numbers: not empty, a length between 7 and 20
   characters, and a character-class format check via `[GeneratedRegex]`.
@@ -1761,251 +1727,6 @@ in it.
 - **Where it's used**: called by [`PhoneNumber.Create`](#phonenumber)
   (`PhoneNumber.cs:32`); `MinLength` and `MaxLength` are the constants EF configurations and
   FluentValidation rules read.
-
-### Email
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Email.cs:16` · Level 4 · record (sealed)
-
-- **What it is**: a validated, normalized value object for an email address. Every construction path
-  goes through `Create`, which rejects invalid formats and lowercases the result; the private
-  constructor exists for JSON round-tripping only.
-- **Depends on**: [`ValueObject`](#valueobject) (Level 0), [`EmailInvariants`](#emailinvariants)
-  (Level 3), [`Result<T>`](group-01-result-error-handling.md#result) (Level 2).
-- **Concept introduced, normalization at construction plus implicit conversion.** `[Rubric §4,
-  Domain-Driven Design]` (rich value objects with invariant-protected construction). Three ideas
-  combine here: (1) the `[JsonConstructor]`-tagged private constructor (`Email.cs:22-23`) keeps
-  ad-hoc construction out while letting System.Text.Json rehydrate; (2) `Create` validates *and
-  normalizes*, returning `Result<Email>` instead of throwing; (3)
-  `public static implicit operator string(Email email)` (`Email.cs:45`) lets an `Email` drop into a
-  `string` position without a cast, a pragmatic bridge for code that has not adopted the value object
-  yet. The `#pragma warning disable CA1308` around `ToLowerInvariant` (`Email.cs:38-40`) is a scoped
-  suppression with its justification on the same line ("Email addresses are conventionally lowercase
-  per RFC 5321"). `[Rubric §15, Best Practices & Code Quality]` (suppressions are narrow and
-  explained, never blanket).
-- **Walkthrough**
-  - `Value` (`Email.cs:20`): getter-only `string`, the normalized address, tagged
-    `[DataMember(Order = 1)]` under the class-level `[DataContract]` (`Email.cs:15`).
-  - `Create(string value)` (`Email.cs:30`): trims null-safely with `value?.Trim() ?? string.Empty`
-    (`Email.cs:32`), calls `EmailInvariants.EnsureEmailIsValid(trimmed, nameof(Create))`
-    (`Email.cs:34`), propagates `result.Errors` on failure (`Email.cs:36`), and only then lowercases
-    (`Email.cs:39`). Order matters: validation runs on the trimmed input, normalization on the
-    validated value.
-  - `implicit operator string` (`Email.cs:45`) and `ToString()` (`Email.cs:48`): both return `Value`.
-- **Why it's built this way**: normalizing once at construction means the rest of the system can
-  compare, index and store emails case-insensitively without a `.ToLower()` at every use. The remarks
-  (`Email.cs:7-14`) also pin the persistence shape: EF maps this with `HasConversion`, **not**
-  `OwnsOne`, so the column stays a flat `nvarchar`, and the framework ships the converter pair rather
-  than asking each configuration to hand-roll the lambdas:
-  [`EmailValueConverter`](group-07-persistence-ef-core.md#emailvalueconverter)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/EmailValueConverter.cs:33`)
-  and
-  [`NullableEmailValueConverter`](group-07-persistence-ef-core.md#nullableemailvalueconverter)
-  (`.../EmailValueConverter.cs:60`) for an optional `Email?`.
-- **Where it's used**: the Store Identity `Customer` aggregate holds `public Email Email`
-  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:36`) and
-  builds it through `Email.Create` in both `Create` (`Customer.cs:77`) and `ChangeEmail`
-  (`Customer.cs:153`); its EF configuration applies `.HasConversion(new EmailValueConverter())`
-  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:36`).
-  Note the layering: `RegisterRequest` still carries a raw `string Email`
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RegisterRequest.cs`), and the conversion into the
-  value object happens inside the domain factory. `[Rubric §9, API & Contract Design]`.
-
-### Money
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Money.cs:21` · Level 4 · record (sealed)
-
-- **What it is**: a value object pairing a `decimal Amount` with a [`Currency`](#currency)
-  (`Money.cs:31,35`), carrying arithmetic operators, a `Result`-safe `Add`, and `Currency.None` as a
-  zero-accumulator sentinel.
-- **Depends on**: [`ValueObject`](#valueobject) (Level 0), [`Currency`](#currency) (Level 3),
-  [`Error`](group-01-result-error-handling.md#error) (Level 1),
-  [`Result<T>`](group-01-result-error-handling.md#result) (Level 2).
-- **Concept introduced, behaviour on the value object (and a deliberate two-path API).** `[Rubric §4,
-  DDD]` (a rich value object encapsulates behaviour, not just data). `Money` is the most
-  concept-dense type in this group:
-  - **Errors as named constants.** `NoCurrency` and `CurrencyMismatch` (`Money.cs:24,27`) are
-    `public static readonly Error` fields, so a caller can compare against the constant instead of
-    string-matching a message.
-  - **Two addition paths.** `operator +` (`Money.cs:84`) delegates to `Add` and *throws*
-    `InvalidOperationException` carrying `result.Errors[0].Message` when the currencies clash
-    (`Money.cs:86-89`); the doc comment above it (`Money.cs:77-80`) tells you to "prefer `Add` for
-    Result-based error handling". This is an intentional usability trade-off: operator syntax for
-    trusted arithmetic inside one currency, the `Result` path for anything derived from untrusted
-    input.
-  - **`Currency.None` as an additive identity.** `AddUnchecked` (`Money.cs:131-138`) returns the other
-    operand untouched when either side has no currency, which is what makes `Zero()` usable as an
-    `Aggregate` seed before the target currency is known.
-  - **Fail-fast round-trip constructor.** The `[JsonConstructor]` private constructor
-    (`Money.cs:51-58`) calls `ArgumentNullException.ThrowIfNull(currency)`, and its doc comment
-    (`Money.cs:40-47`) explains the contract: "no currency" is `Currency.None`, never `null`, so a
-    materializer that yields `null` is a broken contract and is surfaced here rather than as a
-    NullReferenceException three layers away. `[Rubric §15, Best Practices & Code Quality]`.
-  - **A narrow test back-door.** `internal static Money CreateUnsafe(decimal, Currency)`
-    (`Money.cs:153`) is exposed to test assemblies through `InternalsVisibleTo`, giving tests a way to
-    build otherwise-illegal values without opening a public hole.
-- **Walkthrough**
-  - `Amount` (`Money.cs:31`) and `Currency` (`Money.cs:35`): `init`-only, `[DataMember(Order = 1)]`
-    and `[DataMember(Order = 2)]` under `[DataContract]` (`Money.cs:20`). `IsNegative`
-    (`Money.cs:38`) is a computed predicate; negative amounts are explicitly allowed (refunds,
-    adjustments).
-  - `Create(decimal amount, Currency currency)` (`Money.cs:67`): null-guards the reference, then
-    rejects `Currency.None` with `NoCurrency` (`Money.cs:71-72`), because external callers must name a
-    real currency.
-  - `operator +` (`Money.cs:84`) and `operator *` (`Money.cs:96`, by an `int` quantity), with
-    `Multiply(Money, int)` (`Money.cs:124`) as the named alias the operator-averse analyzers expect.
-  - `Add(Money first, Money second)` (`Money.cs:107`): returns `CurrencyMismatch` enriched with
-    `.WithSource(nameof(Add))` and `.WithTarget($"{first.Currency.Code} + {second.Currency.Code}")`
-    (`Money.cs:112-114`) **only** when both sides carry a real and differing currency; otherwise it
-    delegates to `AddUnchecked`.
-  - `Zero()` (`Money.cs:142`) returns `new(0, Currency.None)`; `Zero(Currency)` (`Money.cs:147`) fixes
-    the currency. `IsZero()` (`Money.cs:157`) is `this == Zero(Currency)`, which works precisely
-    because record equality is structural.
-- **Why it's built this way**: putting arithmetic on the type removes scattered `a.Amount + b.Amount`
-  expressions that quietly ignore currency. Persistence follows the same "ship the helper" rule as
-  `Email`: the remarks (`Money.cs:14-19`) direct configurations at
-  `EntityTypeBuilderExtensions.OwnsMoney`
-  ([group-07](group-07-persistence-ef-core.md#entitytypebuilderextensions),
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:51`),
-  which produces the amount column plus ISO-code column mapping together with the currency round-trip
-  fallback every hand-rolled `OwnsOne` block would otherwise have to repeat.
-- **Where it's used**: the Store Sales `Order` aggregate holds `public Money Total`
-  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:37`), seeds it with
-  `Money.Zero()` (`Order.cs:77`), takes `Money UnitPrice` on its line-item tuple (`Order.cs:92`) and
-  accumulates with `Money.Add(order.Total, unitPrice * quantity)` (`Order.cs:109`), the exact
-  combination of the `None` identity, the `*` operator and the `Result`-safe `Add` described above.
-  The Catalog module carries prices the same way, and the UI formats values through
-  [`MoneyExtensions`](group-15-common-ui-framework.md#moneyextensions).
-
-### PhoneNumber
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/PhoneNumber.cs:16` · Level 4 · record (sealed)
-
-- **What it is**: a validated, trimmed value object for a phone number, structurally parallel to
-  [`Email`](#email).
-- **Depends on**: [`ValueObject`](#valueobject) (Level 0),
-  [`PhoneNumberInvariants`](#phonenumberinvariants) (Level 3),
-  [`Result<T>`](group-01-result-error-handling.md#result) (Level 2).
-- **Concept**: the same private-constructor + static-factory + implicit-conversion shape taught under
-  [`Email`](#email); this section cross-references rather than repeating it. One difference worth
-  noting: there is no case normalization (a phone number has no case), and `Create` validates the
-  **raw** string then stores `value.Trim()` (`PhoneNumber.cs:32,36`), whereas `Email.Create` trims
-  first and validates the trimmed value. `PhoneNumberInvariants.EnsurePhoneNumberIsValid` trims
-  internally before its length and format checks (`PhoneNumberInvariants.cs:37`), so the two orderings
-  agree in practice.
-- **Walkthrough**: `Value` (`PhoneNumber.cs:20`, getter-only, `[DataMember(Order = 1)]` under
-  `[DataContract]` at `PhoneNumber.cs:15`); the `[JsonConstructor]` private constructor
-  (`PhoneNumber.cs:22-23`); `Create(string value)` (`PhoneNumber.cs:30`) delegating to
-  `PhoneNumberInvariants.EnsurePhoneNumberIsValid` and returning `Result.Failure<PhoneNumber>` with
-  the propagated errors (`PhoneNumber.cs:34`); the implicit `operator string`
-  (`PhoneNumber.cs:41`) and `ToString()` (`PhoneNumber.cs:44`).
-- **Why it's built this way**: as with `Email`, the remarks (`PhoneNumber.cs:7-14`) specify
-  `HasConversion` rather than `OwnsOne` so the column stays `nvarchar`, and point at the shipped
-  [`PhoneNumberValueConverter`](group-07-persistence-ef-core.md#phonenumbervalueconverter)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/PhoneNumberValueConverter.cs:33`)
-  and its `NullablePhoneNumberValueConverter` sibling (`.../PhoneNumberValueConverter.cs:61`).
-- **Where it's used**: no ADC or Store entity holds a `PhoneNumber` today; the type and its EF
-  converters ship for adopters, and behaviour is pinned by
-  `MMCA.Common.Shared.Tests/ValueObjects/PhoneNumberTests.cs`.
-
-### BaseEntity<TIdentifierType>
-> MMCA.Common.Domain · `MMCA.Common.Domain.Entities` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34` · Level 1 · class (abstract)
-
-- **What it is**: the concrete root of the entity hierarchy. It implements
-  [`IBaseEntity<TIdentifierType>`](#ibaseentitytidentifiertype) with a single `required init` `Id`
-  and supplies **identity equality** (`==`, `!=`, `Equals`, `GetHashCode`) for every entity in both
-  applications.
-- **Depends on**: [`IBaseEntity<TIdentifierType>`](#ibaseentitytidentifiertype) (Level 0). Externals
-  are BCL only: `EqualityComparer<T>`, `HashCode`, and `SuppressMessageAttribute`.
-- **Concept introduced, entity identity equality.** `[Rubric §4, Domain-Driven Design]` (assesses
-  whether the model distinguishes entities from value objects: an entity is defined by its
-  identifier over time, a value object by its contents). The contrast with
-  [`ValueObject`](#valueobject) two levels up is the whole point: value objects compare by value,
-  entities compare by id. The class states it in the remarks (`BaseEntity.cs:16-18`): two instances
-  are equal when they are the same concrete type and carry the same **assigned** `Id`, so the same
-  row loaded twice through two different contexts compares equal instead of answering the reference
-  comparison the CLR would give by default.
-  <br>The second half of the concept is **transience**. An entity whose `Id` is still the identifier
-  type's default (zero for an `int` alias, `null` for a reference alias) has not been identified yet,
-  which is exactly the state of an [`IdValueGeneratedAttribute`](#idvaluegeneratedattribute) entity
-  before the database stamps its key. Two such instances are equal only when they are the same
-  reference (`BaseEntity.cs:20-24`), because a default id means "not identified yet", not
-  "identified as zero".
-  <br>`[Rubric §1, SOLID]` (assesses substitutability among other things): the type guard
-  `other.GetType() == GetType()` (`BaseEntity.cs:74`) is what keeps the equality contract symmetric
-  under inheritance. A derived entity never compares equal to its base or to a sibling type.
-  `[Rubric §15, Best Practices & Code Quality]` (assesses whether analyzer suppressions are scoped
-  and justified rather than blanket): the one suppression here, S3875 on `operator ==`
-  (`BaseEntity.cs:47-50`), carries a paragraph of justification explaining why the rule's own escape
-  hatch (`IEquatable<T>`) is deliberately not taken.
-- **Walkthrough**
-  - `public required TIdentifierType Id { get; init; }` (`BaseEntity.cs:37`): `required` means a
-    factory method cannot forget to set it; `init` means nothing can change it afterwards. Both
-    construction paths land here, an application factory setting the value explicitly and EF Core
-    materializing an existing row (`BaseEntity.cs:7-9`).
-  - `operator ==` / `operator !=` (`BaseEntity.cs:51-52`, `BaseEntity.cs:60-61`): the `==` operator
-    treats `null` as equal only to `null` and otherwise delegates straight to `Equals`, so there is
-    exactly one equality implementation rather than two that can drift.
-  - `Equals(object?)` (`BaseEntity.cs:71-77`): four conjoined guards after the reference check, the
-    type is `BaseEntity<TIdentifierType>`, the concrete types match, **both** ids are assigned, and
-    the ids compare equal under `EqualityComparer<TIdentifierType>.Default`.
-  - `GetHashCode()` (`BaseEntity.cs:93`): `HashCode.Combine(GetType(), Id)`, matching `Equals` for
-    any entity that already has an id.
-  - `HasAssignedId(TIdentifierType id)` (`BaseEntity.cs:102-103`): the private test, expressed as
-    "not equal to `default`" through the default comparer so it handles both shapes an identifier
-    alias can take (zero for an integer key, `null` for a reference key).
-- **Why it's built this way**: the class deliberately does **not** implement `IEquatable<T>`
-  (`BaseEntity.cs:26-31`). An unsealed `IEquatable<T>` breaks the equality contract for subclasses
-  (Sonar S4035), so equality is provided through the type-guarded `object.Equals` override instead,
-  and a sealed derived entity may layer a strongly-typed `IEquatable<TSelf>` on top. The same
-  trade-off is documented for the same reason on
-  [`Enumeration<TEnumeration>`](#enumerationtenumeration) and
-  [`RoleValue`](group-08-auth.md#rolevalue).
-- **Where it's used**: base of [`AuditableBaseEntity<TIdentifierType>`](#auditablebaseentitytidentifiertype)
-  and, transitively, of [`AuditableAggregateRootEntity<TIdentifierType>`](#auditableaggregaterootentitytidentifiertype);
-  every domain entity in MMCA.ADC, MMCA.Store, and MMCA.Helpdesk inherits from one of those two.
-  The aggregate helpers
-  [`AuditableAggregateRootEntity<TIdentifierType>.GetChildOrNotFound`](#auditableaggregaterootentitytidentifiertype)
-  and `RestoreChild` rely on this `Id` equality for their in-memory child lookups.
-- **Caveats / not-in-source**: the hash **changes** when a database-generated key is stamped
-  (`BaseEntity.cs:84-90`), so an `[IdValueGenerated]` entity must not be put into a `HashSet<T>` or
-  used as a dictionary key before the save that assigns its id, or it becomes unfindable in its own
-  collection afterwards. Code that has to track pre-save instances keys them by reference instead:
-  [`DomainEventSaveChangesInterceptor`](group-07-persistence-ef-core.md#domaineventsavechangesinterceptor)
-  builds its exclusion set with `ReferenceEqualityComparer.Instance`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:186`),
-  and `RemoveDomainEvents` does the same
-  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:43`).
-
-### EntityTypeExtensions
-> MMCA.Common.Domain · `MMCA.Common.Domain.Extensions` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Extensions/EntityTypeExtensions.cs:9` · Level 1 · class (static, extension block)
-
-- **What it is**: a 21-line static class that adds one computed property, `IsIdValueGenerated`, to
-  `System.Type`, answering "does this entity let the database assign its key?".
-- **Depends on**: [`IdValueGeneratedAttribute`](#idvaluegeneratedattribute) (Level 0) and
-  `System.Reflection` from the BCL.
-- **Concept reinforced, C# `extension(T)` members.** The `extension(Type entityType)` block
-  (`EntityTypeExtensions.cs:11`) is the same preview language feature introduced by
-  [`DomainHelper`](#domainhelper); here it is used to hang a **property** (not a method) off a type
-  the framework does not own, so call sites read `typeof(Ticket).IsIdValueGenerated` rather than
-  `EntityTypeExtensions.IsIdValueGenerated(typeof(Ticket))`. `[Rubric §8, Data Architecture]`
-  (assesses whether key-generation strategy is a deliberate, declared decision rather than an
-  accident of configuration): the strategy is declared once, as an attribute on the entity, and this
-  property is the single reader of that declaration. `[Rubric §16, Maintainability]`: the reflection
-  call lives in exactly one place, so a change in how the strategy is declared is a one-file change.
-- **Walkthrough**: the whole implementation is one expression-bodied property
-  (`EntityTypeExtensions.cs:19`): `entityType.GetCustomAttribute<IdValueGeneratedAttribute>() is not
-  null`. There is no caching layer in this file; the doc comment (`EntityTypeExtensions.cs:13-18`)
-  states the intended caller, a factory method deciding at runtime whether to assign an explicit id
-  or pass `default`.
-- **Why it's built this way**: a factory cannot ask EF Core what the key strategy is (the Domain
-  layer sits below Infrastructure and has no `DbContext`), so the declaration has to live on the
-  domain type itself. An attribute plus a reflection reader keeps the Domain layer self-contained
-  and keeps the strategy visible on the entity where a reader of the code will look for it.
-- **Where it's used**: entity factory methods across every consumer, always in the same shape,
-  `bool isIdValueGenerated = typeof(T).IsIdValueGenerated;` immediately before building the entity:
-  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:107`,
-  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs:67`,
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:88`, and
-  `MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:74`. Covered
-  by `EntityTypeExtensionsTests`
-  (`MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Extensions/EntityTypeExtensionsTests.cs:16`).
 
 ### AuditableBaseEntity<TIdentifierType>
 > MMCA.Common.Domain · `MMCA.Common.Domain.Entities` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13` · Level 3 · class (abstract)
@@ -2082,6 +1803,83 @@ in it.
   (`AuditSaveChangesInterceptor.cs:98-102`), so updating an already-deleted row keeps the stamps of
   the delete that produced it rather than refreshing them.
 
+### Email
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Contact` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Email.cs:16` · Level 4 · record (sealed)
+
+- **What it is**: a validated, normalized value object for an email address. Every construction path
+  goes through `Create`, which rejects invalid formats and lowercases the result; the private
+  constructor exists for JSON round-tripping only.
+- **Depends on**: [`ValueObject`](#valueobject) (Level 0), [`EmailInvariants`](#emailinvariants)
+  (Level 3), [`Result<T>`](group-01-result-error-handling.md#result) (Level 2).
+- **Concept introduced, normalization at construction plus implicit conversion.** `[Rubric §4,
+  Domain-Driven Design]` (rich value objects with invariant-protected construction). Three ideas
+  combine here: (1) the `[JsonConstructor]`-tagged private constructor (`Email.cs:22-23`) keeps
+  ad-hoc construction out while letting System.Text.Json rehydrate; (2) `Create` validates *and
+  normalizes*, returning `Result<Email>` instead of throwing; (3)
+  `public static implicit operator string(Email email)` (`Email.cs:45`) lets an `Email` drop into a
+  `string` position without a cast, a pragmatic bridge for code that has not adopted the value object
+  yet. The `#pragma warning disable CA1308` around `ToLowerInvariant` (`Email.cs:38-40`) is a scoped
+  suppression with its justification on the same line ("Email addresses are conventionally lowercase
+  per RFC 5321"). `[Rubric §15, Best Practices & Code Quality]` (suppressions are narrow and
+  explained, never blanket).
+- **Walkthrough**
+  - `Value` (`Email.cs:20`): getter-only `string`, the normalized address, tagged
+    `[DataMember(Order = 1)]` under the class-level `[DataContract]` (`Email.cs:15`).
+  - `Create(string value)` (`Email.cs:30`): trims null-safely with `value?.Trim() ?? string.Empty`
+    (`Email.cs:32`), calls `EmailInvariants.EnsureEmailIsValid(trimmed, nameof(Create))`
+    (`Email.cs:34`), propagates `result.Errors` on failure (`Email.cs:36`), and only then lowercases
+    (`Email.cs:39`). Order matters: validation runs on the trimmed input, normalization on the
+    validated value.
+  - `implicit operator string` (`Email.cs:45`) and `ToString()` (`Email.cs:48`): both return `Value`.
+- **Why it's built this way**: normalizing once at construction means the rest of the system can
+  compare, index and store emails case-insensitively without a `.ToLower()` at every use. The remarks
+  (`Email.cs:7-14`) also pin the persistence shape: EF maps this with `HasConversion`, **not**
+  `OwnsOne`, so the column stays a flat `nvarchar`, and the framework ships the converter pair rather
+  than asking each configuration to hand-roll the lambdas:
+  [`EmailValueConverter`](group-07-persistence-ef-core.md#emailvalueconverter)
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/EmailValueConverter.cs:33`)
+  and
+  [`NullableEmailValueConverter`](group-07-persistence-ef-core.md#nullableemailvalueconverter)
+  (`.../EmailValueConverter.cs:60`) for an optional `Email?`.
+- **Where it's used**: the Store Identity `Customer` aggregate holds `public Email Email`
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:36`) and
+  builds it through `Email.Create` in both `Create` (`Customer.cs:77`) and `ChangeEmail`
+  (`Customer.cs:153`); its EF configuration applies `.HasConversion(new EmailValueConverter())`
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:36`).
+  Note the layering: `RegisterRequest` still carries a raw `string Email`
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RegisterRequest.cs`), and the conversion into the
+  value object happens inside the domain factory. `[Rubric §9, API & Contract Design]`.
+
+### PhoneNumber
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Contact` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/PhoneNumber.cs:16` · Level 4 · record (sealed)
+
+- **What it is**: a validated, trimmed value object for a phone number, structurally parallel to
+  [`Email`](#email).
+- **Depends on**: [`ValueObject`](#valueobject) (Level 0),
+  [`PhoneNumberInvariants`](#phonenumberinvariants) (Level 3),
+  [`Result<T>`](group-01-result-error-handling.md#result) (Level 2).
+- **Concept**: the same private-constructor + static-factory + implicit-conversion shape taught under
+  [`Email`](#email); this section cross-references rather than repeating it. One difference worth
+  noting: there is no case normalization (a phone number has no case), and `Create` validates the
+  **raw** string then stores `value.Trim()` (`PhoneNumber.cs:32,36`), whereas `Email.Create` trims
+  first and validates the trimmed value. `PhoneNumberInvariants.EnsurePhoneNumberIsValid` trims
+  internally before its length and format checks (`PhoneNumberInvariants.cs:37`), so the two orderings
+  agree in practice.
+- **Walkthrough**: `Value` (`PhoneNumber.cs:20`, getter-only, `[DataMember(Order = 1)]` under
+  `[DataContract]` at `PhoneNumber.cs:15`); the `[JsonConstructor]` private constructor
+  (`PhoneNumber.cs:22-23`); `Create(string value)` (`PhoneNumber.cs:30`) delegating to
+  `PhoneNumberInvariants.EnsurePhoneNumberIsValid` and returning `Result.Failure<PhoneNumber>` with
+  the propagated errors (`PhoneNumber.cs:34`); the implicit `operator string`
+  (`PhoneNumber.cs:41`) and `ToString()` (`PhoneNumber.cs:44`).
+- **Why it's built this way**: as with `Email`, the remarks (`PhoneNumber.cs:7-14`) specify
+  `HasConversion` rather than `OwnsOne` so the column stays `nvarchar`, and point at the shipped
+  [`PhoneNumberValueConverter`](group-07-persistence-ef-core.md#phonenumbervalueconverter)
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/PhoneNumberValueConverter.cs:33`)
+  and its `NullablePhoneNumberValueConverter` sibling (`.../PhoneNumberValueConverter.cs:61`).
+- **Where it's used**: no ADC or Store entity holds a `PhoneNumber` today; the type and its EF
+  converters ship for adopters, and behaviour is pinned by
+  `MMCA.Common.Shared.Tests/ValueObjects/PhoneNumberTests.cs`.
+
 ### AuditableAggregateRootEntity<TIdentifierType>
 > MMCA.Common.Domain · `MMCA.Common.Domain.Entities` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:13` · Level 4 · class (abstract)
 
@@ -2157,8 +1955,8 @@ in it.
   (`:190-195`).
 - **Where it's used**: base class for every aggregate root in the consumers. ADC's `Event` uses
   three `DeleteChildren` calls in one `Result.Combine`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:334-336`),
-  `RestoreChild` for room reinstatement (`Event.cs:469`) and `RemoveChildOrNotFound` for room
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:361-363`),
+  `RestoreChild` for room reinstatement (`Event.cs:496`) and `RemoveChildOrNotFound` for room
   removal (`Event.cs:486`); `Session` cascades to its speakers and question answers
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:288-289`) and
   `Category` to its items
@@ -2166,7 +1964,7 @@ in it.
   event queue is drained by
   [`DomainEventSaveChangesInterceptor`](group-07-persistence-ef-core.md#domaineventsavechangesinterceptor),
   which calls `RemoveDomainEvents` per captured entry
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:363`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:364`).
   Covered by
   [`AuditableAggregateRootEntityTests`](group-27-testing-infrastructure.md#auditableaggregaterootentitytests)
   and
@@ -2174,6 +1972,208 @@ in it.
 - **Caveats / not-in-source**: `SetItems` and the child helpers operate purely on the in-memory
   collection. If an aggregate was loaded without its children included, `GetChildOrNotFound` returns
   `NotFound` for a child that exists in the database; nothing in this class detects that case.
+
+### Currency
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Financial` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Currency.cs:14` · Level 3 · record (sealed)
+
+- **What it is**: an ISO 4217 currency value object built as a **closed set**: `Currency.Usd` and
+  `Currency.Eur` are the only public instances (`Currency.cs:26,29`), the constructor is private
+  (`Currency.cs:31`), and `None` is an `internal` sentinel used by [`Money`](#money)
+  (`Currency.cs:23`).
+- **Depends on**: [`CurrencyJsonConverter`](#currencyjsonconverter) (mutual cycle),
+  [`Error`](group-01-result-error-handling.md#error),
+  [`Result`](group-01-result-error-handling.md#result), [`ValueObject`](#valueobject).
+- **Documented cycle, `Currency` and `CurrencyJsonConverter`.** Both live in the same file
+  (`Currency.cs:14` and `Currency.cs:73`). `Currency` carries
+  `[JsonConverter(typeof(CurrencyJsonConverter))]` (`Currency.cs:13`) while the converter's `Read`
+  calls `Currency.FromCode` (`Currency.cs:83`). The mutual reference puts both at Level 3.
+- **Concept introduced, the closed-set (type-safe enum) value object.** `[Rubric §4, DDD]`
+  (eliminates primitive obsession: no raw `"USD"` strings travelling through the domain). Instead of
+  a `string`, all code holds `Currency.Usd`, a statically typed singleton. Validation happens once, at
+  the boundary, in `FromCode`; inside the domain you are guaranteed to hold a known currency. Adding
+  a currency means adding a field and listing it in `All` (`Currency.cs:54-58`), which is the single
+  extension point.
+- **Walkthrough**
+  - `EmptyCurrency` / `InvalidCurrency` (`Currency.cs:17,20`): pre-built `Error.Validation` singletons
+    for the two failure paths, so `FromCode` allocates nothing on a bad call.
+  - `None` (`Currency.cs:23`): `internal static readonly Currency None = new(string.Empty)`, the
+    empty-code sentinel; the doc comment (`Currency.cs:10-11`) is explicit that it is never exposed to
+    API consumers.
+  - `Code` (`Currency.cs:34`): `string` with an `init` accessor, the ISO three-letter code.
+  - `FromCode(string code)` (`Currency.cs:41`): empty-guard first (`Currency.cs:43-44`), then a
+    case-insensitive `FirstOrDefault` scan over `All` (`Currency.cs:46`), returning the *singleton*
+    on success, so `Currency.Usd` is reference-identical everywhere.
+  - `All` (`Currency.cs:54`): `IReadOnlyCollection<Currency>` collection expression containing `Usd`
+    and `Eur`.
+- **Why it's built this way**: pre-constructed singletons remove per-call allocation and make
+  comparison trivial; the closed set makes an unknown code representable only *outside* the domain.
+  `[Rubric §12, Performance & Scalability]` for the allocation-free path.
+- **Where it's used**: [`Money`](#money) holds a `Currency` (`Money.cs:35`);
+  [`CurrencyJsonConverter`](#currencyjsonconverter) serializes it; the API layer registers its own
+  [`CurrencyJsonConverter`](group-12-api-hosting-mapping.md#currencyjsonconverter) into MVC's
+  `JsonSerializerOptions` in `AddAPI`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:53`).
+- **Caveats / not-in-source**: `All` has exactly two entries today. A deployment needing a third
+  currency changes framework source, not configuration.
+
+### DateRange
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Time` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Time/DateRange.cs:9` · Level 3 · record (sealed)
+
+- **What it is**: an immutable value object for a date-only range (`DateOnly Start`, `DateOnly End`,
+  `DateRange.cs:12,15`), inclusive on both ends, with the single invariant that `End` is not before
+  `Start`.
+- **Depends on**: [`Error`](group-01-result-error-handling.md#error),
+  [`Result`](group-01-result-error-handling.md#result), [`ValueObject`](#valueobject), and BCL
+  `DateOnly`.
+- **Concept reinforced, the lightweight single-invariant factory.** `[Rubric §4, DDD]` (a temporal
+  range is a domain concept, not a loose pair of dates). Compare with [`Address`](#address):
+  `Address.Create` delegates to a separate invariant class because six constants and multiple error
+  codes justify one; `DateRange.Create` (`DateRange.cs:30-35`) expresses its one rule inline as a
+  conditional expression. Calibrating the ceremony to the number of rules is the convention here.
+- **Walkthrough**
+  - `Create(DateOnly start, DateOnly end)` (`DateRange.cs:30`): returns
+    `Error.Validation("DateRange.Invalid", ...)` when `end < start`, otherwise
+    `Result.Success(new DateRange(start, end))` through the private constructor (`DateRange.cs:17`).
+    It uses `Error.Validation`, not `Error.Invariant`, because the inputs are raw caller-supplied
+    dates: a validation problem, not corrupted internal state.
+  - `LengthInDays` (`DateRange.cs:38`): `End.DayNumber - Start.DayNumber`, avoiding `TimeSpan`
+    arithmetic on `DateOnly`.
+  - `Overlaps(DateRange other)` (`DateRange.cs:46`): `ArgumentNullException.ThrowIfNull(other)` then
+    the standard half-open formula `Start < other.End && End > other.Start` (`DateRange.cs:48-49`).
+  - `Contains(DateOnly instant)` (`DateRange.cs:55`): inclusive on both ends,
+    `instant >= Start && instant <= End`.
+  - `Deconstruct` (`DateRange.cs:61`): enables `var (start, end) = dateRange`.
+- **Why it's built this way**: `DateOnly` rather than `DateTime` signals that the concept carries no
+  time-of-day and no time zone; wrapping the pair in a type makes swapping `start` and `end` at a call
+  site impossible.
+- **Where it's used**: no production entity in ADC or Store holds a `DateRange` today; it is a shipped
+  framework primitive covered by `MMCA.Common.Shared.Tests/ValueObjects/DateRangeTests.cs`. The ADC
+  Conference `Event` enforces the same rule over two loose `DateOnly` parameters instead, via
+  `EventInvariants.EnsureDateRangeIsValid`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:114`,
+  called from `Event.cs:179` and `Event.cs:252`), with the request-side counterpart
+  `EventDateRangeRules<T>`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:91`).
+  That is the honest state of the code: the primitive exists, the app has not adopted it.
+
+### DateTimeRange
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Time` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Time/DateTimeRange.cs:10` · Level 3 · record (sealed)
+
+- **What it is**: the `DateTime`-precision sibling of [`DateRange`](#daterange), carrying
+  `DateTime Start` and `DateTime End` (`DateTimeRange.cs:13,16`).
+- **Depends on**: [`Error`](group-01-result-error-handling.md#error),
+  [`Result`](group-01-result-error-handling.md#result), [`ValueObject`](#valueobject).
+- **Concept**: identical to [`DateRange`](#daterange); this section cross-references rather than
+  repeating. The only behavioural difference is the derived member: `Duration` (`DateTimeRange.cs:39`)
+  returns `End - Start` as a `TimeSpan`, where `DateRange` returns an integer day count.
+- **Walkthrough**: `Create(DateTime start, DateTime end)` (`DateTimeRange.cs:31`) uses the same
+  conditional-expression pattern with `Error.Validation("DateTimeRange.Invalid", ...)`;
+  `Overlaps` (`DateTimeRange.cs:46`), `Contains` (`DateTimeRange.cs:55`) and `Deconstruct`
+  (`DateTimeRange.cs:61`) mirror `DateRange` line for line.
+- **Where it's used**: as with `DateRange`, no ADC or Store entity holds one today; coverage is
+  `MMCA.Common.Shared.Tests/ValueObjects/DateTimeRangeTests.cs`.
+- **Caveats / not-in-source**: `Start` and `End` are plain `DateTime`, so the type carries no time
+  zone or `DateTimeKind` guarantee. Nothing in the source normalizes them to UTC; a caller mixing
+  kinds would get arithmetic that compiles and lies.
+
+### CurrencyJsonConverter
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Financial` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Currency.cs:73` · Level 3 · class (sealed)
+
+- **What it is**: a `JsonConverter<Currency>` that writes [`Currency`](#currency) as its ISO code
+  string and reads it back through `Currency.FromCode`.
+- **Depends on**: [`Currency`](#currency) (mutual cycle, see above) and `System.Text.Json`.
+- **Concept introduced, the strict boundary converter.** `[Rubric §9, API & Contract Design]`
+  (assesses consistent, stable serialization) and `[Rubric §11, Security]` (assesses input rejected at
+  the edge rather than coerced). The class doc (`Currency.cs:61-72`) states the design goal in one
+  sentence: a non-string token and an unknown code both throw, "matching the API-layer converter so
+  non-MVC paths (cache, outbox, integration events, typed HttpClient calls) fail the same way MVC
+  model binding does". That matters because a `Currency` crosses far more than the controller
+  boundary: it is also serialized into outbox rows and cache entries.
+- **Walkthrough**
+  - `Read` (`Currency.cs:76`): rejects any token that is not a JSON string with
+    `throw new JsonException("Currency must be a string.")` (`Currency.cs:78-79`), so `{"currency": 5}`
+    fails loudly instead of coercing; then `Currency.FromCode(code)` (`Currency.cs:83`) and a second
+    `JsonException` naming the offending code on failure (`Currency.cs:84-85`). Throwing (rather than
+    returning a `Result`) is correct here: malformed JSON is a deserialization error, not a domain
+    outcome.
+  - `Write` (`Currency.cs:91-92`): `writer.WriteStringValue(value.Code)`. The wire shape is just the
+    three-letter string.
+  - Null handling: `HandleNull` is left at its default `false` (documented at `Currency.cs:68-71`), so
+    System.Text.Json short-circuits a JSON `null` before this converter runs and a `Currency?` or
+    `Money?` member still deserializes to `null` rather than throwing.
+- **Where it's used**: applied automatically through the `[JsonConverter]` attribute on `Currency`
+  (`Currency.cs:13`); the separate API-layer
+  [`CurrencyJsonConverter`](group-12-api-hosting-mapping.md#currencyjsonconverter) is registered
+  globally in `AddAPI`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:53`).
+- **Caveats / not-in-source**: there is no version sentinel. If the closed code set ever shrinks,
+  deserializing a previously stored code (a stale cache entry, an old outbox row) throws
+  `JsonException`.
+
+### Money
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects.Financial` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Financial/Money.cs:21` · Level 4 · record (sealed)
+
+- **What it is**: a value object pairing a `decimal Amount` with a [`Currency`](#currency)
+  (`Money.cs:31,35`), carrying arithmetic operators, a `Result`-safe `Add`, and `Currency.None` as a
+  zero-accumulator sentinel.
+- **Depends on**: [`ValueObject`](#valueobject) (Level 0), [`Currency`](#currency) (Level 3),
+  [`Error`](group-01-result-error-handling.md#error) (Level 1),
+  [`Result<T>`](group-01-result-error-handling.md#result) (Level 2).
+- **Concept introduced, behaviour on the value object (and a deliberate two-path API).** `[Rubric §4,
+  DDD]` (a rich value object encapsulates behaviour, not just data). `Money` is the most
+  concept-dense type in this group:
+  - **Errors as named constants.** `NoCurrency` and `CurrencyMismatch` (`Money.cs:24,27`) are
+    `public static readonly Error` fields, so a caller can compare against the constant instead of
+    string-matching a message.
+  - **Two addition paths.** `operator +` (`Money.cs:84`) delegates to `Add` and *throws*
+    `InvalidOperationException` carrying `result.Errors[0].Message` when the currencies clash
+    (`Money.cs:86-89`); the doc comment above it (`Money.cs:77-80`) tells you to "prefer `Add` for
+    Result-based error handling". This is an intentional usability trade-off: operator syntax for
+    trusted arithmetic inside one currency, the `Result` path for anything derived from untrusted
+    input.
+  - **`Currency.None` as an additive identity.** `AddUnchecked` (`Money.cs:131-138`) returns the other
+    operand untouched when either side has no currency, which is what makes `Zero()` usable as an
+    `Aggregate` seed before the target currency is known.
+  - **Fail-fast round-trip constructor.** The `[JsonConstructor]` private constructor
+    (`Money.cs:51-58`) calls `ArgumentNullException.ThrowIfNull(currency)`, and its doc comment
+    (`Money.cs:40-47`) explains the contract: "no currency" is `Currency.None`, never `null`, so a
+    materializer that yields `null` is a broken contract and is surfaced here rather than as a
+    NullReferenceException three layers away. `[Rubric §15, Best Practices & Code Quality]`.
+  - **A narrow test back-door.** `internal static Money CreateUnsafe(decimal, Currency)`
+    (`Money.cs:153`) is exposed to test assemblies through `InternalsVisibleTo`, giving tests a way to
+    build otherwise-illegal values without opening a public hole.
+- **Walkthrough**
+  - `Amount` (`Money.cs:31`) and `Currency` (`Money.cs:35`): `init`-only, `[DataMember(Order = 1)]`
+    and `[DataMember(Order = 2)]` under `[DataContract]` (`Money.cs:20`). `IsNegative`
+    (`Money.cs:38`) is a computed predicate; negative amounts are explicitly allowed (refunds,
+    adjustments).
+  - `Create(decimal amount, Currency currency)` (`Money.cs:67`): null-guards the reference, then
+    rejects `Currency.None` with `NoCurrency` (`Money.cs:71-72`), because external callers must name a
+    real currency.
+  - `operator +` (`Money.cs:84`) and `operator *` (`Money.cs:96`, by an `int` quantity), with
+    `Multiply(Money, int)` (`Money.cs:124`) as the named alias the operator-averse analyzers expect.
+  - `Add(Money first, Money second)` (`Money.cs:107`): returns `CurrencyMismatch` enriched with
+    `.WithSource(nameof(Add))` and `.WithTarget($"{first.Currency.Code} + {second.Currency.Code}")`
+    (`Money.cs:112-114`) **only** when both sides carry a real and differing currency; otherwise it
+    delegates to `AddUnchecked`.
+  - `Zero()` (`Money.cs:142`) returns `new(0, Currency.None)`; `Zero(Currency)` (`Money.cs:147`) fixes
+    the currency. `IsZero()` (`Money.cs:157`) is `this == Zero(Currency)`, which works precisely
+    because record equality is structural.
+- **Why it's built this way**: putting arithmetic on the type removes scattered `a.Amount + b.Amount`
+  expressions that quietly ignore currency. Persistence follows the same "ship the helper" rule as
+  `Email`: the remarks (`Money.cs:14-19`) direct configurations at
+  `EntityTypeBuilderExtensions.OwnsMoney`
+  ([group-07](group-07-persistence-ef-core.md#entitytypebuilderextensions),
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:51`),
+  which produces the amount column plus ISO-code column mapping together with the currency round-trip
+  fallback every hand-rolled `OwnsOne` block would otherwise have to repeat.
+- **Where it's used**: the Store Sales `Order` aggregate holds `public Money Total`
+  (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:37`), seeds it with
+  `Money.Zero()` (`Order.cs:90`), takes `Money UnitPrice` on its line-item tuple (`Order.cs:105`) and
+  accumulates with `Money.Add(order.Total, unitPrice * quantity)` (`Order.cs:122`), the exact
+  combination of the `None` identity, the `*` operator and the `Result`-safe `Add` described above.
+  The Catalog module carries prices the same way, and the UI formats values through
+  [`MoneyExtensions`](group-15-common-ui-framework.md#moneyextensions).
 
 ### CommonInvariants
 > MMCA.Common.Domain · `MMCA.Common.Domain.Invariants` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Invariants/CommonInvariants.cs:13` · Level 5 · class (static)
@@ -2252,7 +2252,7 @@ in it.
   module invariant classes in every consumer. In MMCA.ADC alone there are 78 call sites across 18
   files, for example
   [`EventInvariants`](group-17-conference-domain.md#eventinvariants)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:72-73`,
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:73-74`,
   `:96`, `:112`, `:151`),
   [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants),
   [`SpeakerInvariants`](group-17-conference-domain.md#speakerinvariants),

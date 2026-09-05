@@ -190,23 +190,31 @@
   │
   └─ Post-deploy ─ `az acr run` purge of the BuildKit cache manifests this run
                   orphaned, continue-on-error (deploy.yml:1492-1499)</code></pre>
-          <p>Phases 1 and 2 are their own jobs (<code>deploy.yml:906</code>, <code>deploy.yml:960</code>) rather than steps inside
+          <p>Phases 1 and 2 are their own jobs (<code>deploy.yml:1089</code>, <code>deploy.yml:1143</code>) rather than steps inside
           <code>deploy</code>, so they overlap the ~20-minute chromium <code>e2e-gate</code> instead of sitting on the critical
-          path (<code>deploy.yml:898-905</code>, <code>:940-948</code>). Nothing is rolled out there: <code>build-images</code> only pushes
-          tags, and the <code>deploy</code> job (<code>deploy.yml:1051-1499</code>) still waits on every gate before <code>main.bicep</code>
-          points a container app at any of them. That gate list (<code>deploy.yml:1054</code>) is <code>supply-chain</code>,
-          <code>cost-guard</code>, the three freshness gates, <code>foundation</code>, <code>build-images</code>, and then <strong>exactly one</strong> of
-          the two complementary test gates: the chromium <code>e2e-gate</code> on a UI diff or <code>backend-test-gate</code> on
-          every other code diff (<code>deploy.yml:1074-1079</code>, <code>:1092-1093</code>). The two conditions are exact
-          complements, which is what keeps the invariant &quot;no production deploy without test execution&quot; true
-          without either gate having to be unconditional.</p>
+          path (<code>deploy.yml:1081-1088</code>, <code>:1123-1131</code>). Nothing is rolled out there: <code>build-images</code> only pushes
+          tags, and the <code>deploy</code> job (<code>deploy.yml:1234-1690</code>) still waits on every gate before <code>main.bicep</code>
+          points a container app at any of them. That gate list (<code>deploy.yml:1237</code>) is <code>supply-chain</code>,
+          <code>cost-guard</code>, the <strong>four</strong> freshness gates (<code>dr-freshness</code>, <code>load-freshness</code>,
+          <code>cross-service-freshness</code> and <code>cross-browser-freshness</code>), <code>foundation</code>, <code>build-images</code>,
+          <code>ai-eval-gate</code>, and then <strong>exactly one</strong> of the two complementary test gates: the chromium
+          <code>e2e-gate</code> on a UI diff or <code>backend-test-gate</code> on every other code diff (<code>deploy.yml:1261-1268</code>,
+          <code>:1282-1284</code>). Those last two conditions are exact complements, which is what keeps the invariant
+          &quot;no production deploy without test execution&quot; true without either gate having to be unconditional.
+          The two newest entries are <code>cross-browser-freshness</code>, which asserts a recent successful firefox
+          <strong>and</strong> webkit leg on <code>e2e.yml</code>, so cross-engine coverage is enforced without putting
+          either engine back on the per-deploy critical path, and <code>ai-eval-gate</code>, which runs the AI session
+          scorer&#39;s golden-replay and prompt-contract tiers on every code deploy and adds the paid live judge
+          only when the diff touches the scoring code (<code>deploy.yml:1242-1246</code>). Both are <code>deploy.yml</code> jobs and
+          belong to the CI/CD chapter; they matter here because the feature <code>ai-eval-gate</code> guards is the same
+          one the token-ceiling alert in <code>main.bicep</code> bounds at runtime (see below).</p>
           <p>The <strong>shared resource group</strong> is <code>acc-rg</code> in the QiMata Sponsorship subscription (East US 2), read
           from the <code>AZURE_RESOURCE_GROUP</code> repository variable (<code>deploy.yml:24</code>) and named in the SQL-region
-          comment (<code>deploy.yml:1153-1158</code>). Both Bicep files target <code>resourceGroup</code> scope (<code>main.bicep:1</code>,
+          comment (<code>deploy.yml:1344-1349</code>). Both Bicep files target <code>resourceGroup</code> scope (<code>main.bicep:1</code>,
           <code>foundation.bicep:1</code>) and are applied with <strong>Incremental</strong> deployment mode, Azure adds and updates
           declared resources but never deletes absent ones. Incremental mode is also why removing a resource
           from a template is only half of a decommission: the legacy <code>AtlDevCon</code> database left <code>main.bicep</code>
-          on 2026-09-02 and an operator still had to drop it by hand afterwards (<code>main.bicep:635-647</code>), and it
+          on 2026-09-02 and an operator still had to drop it by hand afterwards (<code>main.bicep:701-713</code>), and it
           is why the Notification Hubs namespace can be referenced as an existing resource rather than
           declared (see the Notification Hub section below).</p>
           <p>[Rubric §17, DevOps &amp; Deployment] assesses whether infrastructure is code-managed, idempotent,
@@ -272,8 +280,8 @@
           reference source paths across multiple <code>Source/</code> subdirectories and the shared <code>Directory.Packages.props</code>.</p>
           <p>The infrastructure stanza (<code>azure.yaml:47-49</code>) sets <code>provider: bicep</code> and <code>path: infra</code>, pointing
           <code>azd</code> at the <code>infra/</code> directory where both <code>foundation.bicep</code> and <code>main.bicep</code> live. In practice
-          the CI pipeline invokes the Bicep files directly via <code>azure/arm-deploy</code> (<code>deploy.yml:932-938</code>,
-          <code>:1298-1304</code>), not via <code>azd</code>, but the <code>azure.yaml</code> manifest keeps the project <code>azd</code>-compatible for
+          the CI pipeline invokes the Bicep files directly via <code>azure/arm-deploy</code> (<code>deploy.yml:1115-1121</code>,
+          <code>:1489-1495</code>), not via <code>azd</code>, but the <code>azure.yaml</code> manifest keeps the project <code>azd</code>-compatible for
           local developer use and future tooling.</p>
           <p>[Rubric §33, Developer Experience &amp; Inner Loop] assesses how quickly a developer can go from
           clone to running. <code>azure.yaml</code> lets a developer with the right Azure credentials run <code>azd up</code> to
@@ -282,7 +290,7 @@
           <hr>
           <h2 id="infrafoundationbicep-long-lived-shared-infrastructure"><code>infra/foundation.bicep</code>, long-lived shared infrastructure</h2>
           <p><strong>File:</strong> <code>MMCA.ADC/infra/foundation.bicep</code></p>
-          <p>Foundation is deployed first (CI/CD chapter: <code>deploy.yml:932-938</code>) on every run. It provisions
+          <p>Foundation is deployed first (CI/CD chapter: <code>deploy.yml:1115-1121</code>) on every run. It provisions
           three resources: the Azure Container Registry, a scheduled purge task on that registry, and the Log
           Analytics workspace. The registry and the workspace are what <em>everything else</em> depends on but that
           almost never change: the registry stores images that live across many deploys, and the workspace
@@ -316,7 +324,7 @@
           <code>uniqueString(resourceGroup().id, environmentName)</code>. All generated resource names incorporate it,
           ensuring uniqueness within the subscription while remaining deterministic across re-runs. That
           determinism is also why the <code>foundation</code> job has to promote its outputs to job outputs
-          (<code>deploy.yml:903-905</code>): <code>acrName</code> cannot be recomputed outside Bicep. The same <code>commonTags</code> set
+          (<code>deploy.yml:1086-1088</code>): <code>acrName</code> cannot be recomputed outside Bicep. The same <code>commonTags</code> set
           used in <code>main.bicep</code> is applied here too (<code>foundation.bicep:17-23</code>), so cost attribution covers the
           foundation resources as well as the application ones.</p>
           <h3 id="log-analytics-workspace-foundationbicep28-45">Log Analytics Workspace (<code>foundation.bicep:28-45</code>)</h3>
@@ -327,10 +335,10 @@ workspaceCapping: { dailyQuotaGb: 1 }</code></pre>
           <p>PerGB2018 is the pay-as-you-go tier. The 30-day minimum is Azure&#39;s floor for this SKU, shorter
           retention is rejected (and the memory note <code>reference_log_analytics_sku_limits.md</code> records this
           hard constraint). All six container apps ship their logs here via the Container Apps environment&#39;s
-          <code>appLogsConfiguration</code> (<code>main.bicep:896-902</code>), and <code>main.bicep</code>&#39;s Application Insights component
+          <code>appLogsConfiguration</code> (<code>main.bicep:962-968</code>), and <code>main.bicep</code>&#39;s Application Insights component
           uses it as its workspace backing store, meaning traces and metrics land in the same workspace. The
           same destination is also what makes the platform&#39;s own <code>ContainerAppSystemLogs_CL</code> table queryable,
-          which the revision-activation alert below depends on (<code>main.bicep:401</code>).</p>
+          which the revision-activation alert below depends on (<code>main.bicep:404</code>).</p>
           <p><code>workspaceCapping.dailyQuotaGb: 1</code> (<code>foundation.bicep:41-43</code>) is a FinOps circuit breaker, not a
           sizing decision. Normal ingestion is around 0.4 GB/day, so the ceiling never bites in steady state;
           it exists to bound a runaway telemetry storm (a metrics or log loop) instead of leaving a
@@ -406,7 +414,7 @@ steps:
           allowance is billed as storage overage.</p>
           <p><strong>The second step exists because the first one structurally cannot reach the build cache</strong>
           (<code>foundation.bicep:77-87</code>). The <code>build-images</code> matrix exports <code>cache-to=type=registry,…,mode=max</code>
-          into a <code>buildcache</code> repository (<code>deploy.yml:1033</code>), and <code>mode=max</code> writes one tag per image (six
+          into a <code>buildcache</code> repository (<code>deploy.yml:1216</code>), and <code>mode=max</code> writes one tag per image (six
           tags, every one refreshed on every deploy) plus a large tree of <strong>untagged</strong> layer manifests behind
           those tags. A tag refreshed on every deploy is never three days old, so the daily step above aged
           nothing out and the untagged manifests it orphaned were never swept: they reached about 111 GB,
@@ -416,11 +424,11 @@ steps:
           build is about to read, and <code>--ago 1h --untagged</code> is the part that reclaims space, because a
           manifest the current deploy&#39;s cache push has already orphaned is garbage the moment it is written.</p>
           <p>The same purge runs a second time, from <code>deploy.yml</code> itself, as the last step of the <code>deploy</code> job
-          (<code>deploy.yml:1492-1499</code>): <code>az acr run</code> with the identical <code>buildcache</code> filter, <code>continue-on-error: true</code>. The daily task is the floor; running it again minutes after the deploy that created the
+          (<code>deploy.yml:1683-1690</code>): <code>az acr run</code> with the identical <code>buildcache</code> filter, <code>continue-on-error: true</code>. The daily task is the floor; running it again minutes after the deploy that created the
           garbage is what keeps a Basic-tier registry under its included storage instead of paying a day&#39;s
           worth of overage. It is deliberately positioned <strong>after</strong> the rollout and the smoke gate and cannot
           fail the run, because housekeeping must never block a deploy that has already shipped
-          (<code>deploy.yml:1488-1491</code>).</p>
+          (<code>deploy.yml:1679-1682</code>).</p>
           <p>Two things make the scheduled version credential-free, which is why it is a task and not another
           OIDC job. <code>acr</code> in the step command is the registry&#39;s built-in task alias for
           <code>mcr.microsoft.com/acr/acr-cli</code>, and a scheduled task authenticates to its own home registry
@@ -436,11 +444,11 @@ steps:
           <h3 id="outputs-foundationbicep129-131">Outputs (<code>foundation.bicep:129-131</code>)</h3>
           <p><code>acrName</code>, <code>acrLoginServer</code>, and <code>logAnalyticsName</code> are the three values threaded from Phase 1
           into Phase 2 (docker push target) and then into Phase 3 (<code>main.bicep</code> parameters). Because Phases 1
-          to 3 are separate jobs, they cross the job boundary as job outputs (<code>deploy.yml:918-921</code>) and
-          are read as <code>needs.foundation.outputs.*</code>: see <code>deploy.yml:1000</code>
-          (<code>az acr login --name ${{ needs.foundation.outputs.acrName }}</code>), <code>deploy.yml:1017-1018</code> (the two
-          image tags), <code>deploy.yml:1164-1165</code> (the <code>acrName</code>/<code>logAnalyticsName</code> parameter assembly), and
-          <code>deploy.yml:1497</code> (the post-deploy cache purge).</p>
+          to 3 are separate jobs, they cross the job boundary as job outputs (<code>deploy.yml:1101-1104</code>) and
+          are read as <code>needs.foundation.outputs.*</code>: see <code>deploy.yml:1183</code>
+          (<code>az acr login --name ${{ needs.foundation.outputs.acrName }}</code>), <code>deploy.yml:1200-1201</code> (the two
+          image tags), <code>deploy.yml:1355-1356</code> (the <code>acrName</code>/<code>logAnalyticsName</code> parameter assembly), and
+          <code>deploy.yml:1688</code> (the post-deploy cache purge).</p>
           <hr>
           <h2 id="deployment-parameters-assembled-at-deploy-time-not-committed">Deployment parameters, assembled at deploy time, not committed</h2>
           <p>There is <strong>no <code>infra/main.parameters.json</code> file</strong> in the repository, the tracked <code>infra/</code> directory
@@ -449,37 +457,37 @@ steps:
           A local <code>bicep build</code> also drops <code>infra/main.json</code> beside them, which is why <code>/infra/*.json</code> is
           gitignored (<code>.gitignore:9</code>): the compiled ARM template is a build artifact, never a source of
           truth. The parameters fed to <code>main.bicep</code> are built <strong>from scratch at deploy time</strong> by <code>deploy.yml</code>&#39;s
-          &quot;Build deployment parameters file&quot; step (<code>deploy.yml:1108-1296</code>), which writes
+          &quot;Build deployment parameters file&quot; step (<code>deploy.yml:1299-1487</code>), which writes
           <code>/tmp/deploy-params.json</code> with <code>jq</code>.</p>
           <p>How it works:</p>
           <ul>
           <li><strong>Two fail-fast pre-checks run before any <code>jq</code> call</strong>, both for the same reason: catch a missing
           repository setting with an actionable error rather than letting Bicep validation report it as a
           parameter-binding failure minutes later. The first fails when the <code>ALERT_EMAIL</code> repository
-          variable is empty (<code>deploy.yml:1138-1141</code>), because <code>alertEmailAddress</code> is a <strong>required</strong>
-          <code>main.bicep</code> parameter with no default (<code>main.bicep:115-117</code>), and an alert rule wired to no
+          variable is empty (<code>deploy.yml:1329-1332</code>), because <code>alertEmailAddress</code> is a <strong>required</strong>
+          <code>main.bicep</code> parameter with no default (<code>main.bicep:118-120</code>), and an alert rule wired to no
           notification channel is a silent failure. The second fails when either RSA key secret is empty
-          (<code>deploy.yml:1143-1149</code>): <code>rsaPrivateKeyPem</code> and <code>rsaPublicKeyPem</code> are also required parameters
+          (<code>deploy.yml:1334-1340</code>): <code>rsaPrivateKeyPem</code> and <code>rsaPublicKeyPem</code> are also required parameters
           with no default (<code>main.bicep:38-44</code>) because Identity signs RS256 and publishes JWKS, and there
           is no other signing path.</li>
-          <li>A base <code>jq -n</code> invocation (<code>deploy.yml:1161-1189</code>) emits the always-present parameters,
+          <li>A base <code>jq -n</code> invocation (<code>deploy.yml:1352-1380</code>) emits the always-present parameters,
           <code>environmentName</code>, <code>sqlLocation</code>, <code>acrName</code>, <code>logAnalyticsName</code>, <code>sqlAdminPassword</code>, and the six
           <code>*Image</code> URLs, into the ARM <code>deploymentParameters</code> JSON shape. <code>acrName</code> and <code>logAnalyticsName</code>
           are the Phase 1 foundation outputs; the image URLs are the <code>sha</code>-tagged ACR references;
           <code>sqlAdminPassword</code> comes from the <code>SQL_ADMIN_PASSWORD</code> GitHub secret. <code>sqlLocation</code> defaults to
-          <code>westus2</code> (<code>deploy.yml:1158</code>) because the sponsor subscription blocks <code>Microsoft.Sql</code> in the RG&#39;s
+          <code>westus2</code> (<code>deploy.yml:1349</code>) because the sponsor subscription blocks <code>Microsoft.Sql</code> in the RG&#39;s
           region. The two RSA keys are appended immediately after, unconditionally
-          (<code>deploy.yml:1193-1196</code>), because they are required.</li>
+          (<code>deploy.yml:1384-1387</code>), because they are required.</li>
           <li>Optional parameters (GitHub OAuth, Google OAuth, the four Sign in with Apple pieces, the
           Anthropic key, the five SMTP settings, the synthetic-traffic bypass key, the alert email, and the
           three staged managed-identity SQL inputs) are conditionally appended with further <code>jq --arg</code>
-          calls (<code>deploy.yml:1199-1296</code>) <strong>only when their env var is non-empty</strong>. <code>jq --arg</code> JSON-escapes
+          calls (<code>deploy.yml:1390-1487</code>) <strong>only when their env var is non-empty</strong>. <code>jq --arg</code> JSON-escapes
           multi-line values correctly, critical for the Apple <code>.p8</code> PEM, which contains newlines. Anything
           not appended falls back to the <code>@secure()</code> parameter&#39;s empty-string default in <code>main.bicep</code>,
           which the template&#39;s feature flags (<code>hasAnthropic</code>, <code>hasAppleOAuth</code>, …) read to disable the
           corresponding feature.</li>
           <li><code>useManagedIdentitySql</code> is the one boolean: it is appended as a literal JSON <code>true</code> only when the
-          <code>USE_MANAGED_IDENTITY_SQL</code> repository variable is exactly <code>&quot;true&quot;</code> (<code>deploy.yml:1293-1296</code>), keeping
+          <code>USE_MANAGED_IDENTITY_SQL</code> repository variable is exactly <code>&quot;true&quot;</code> (<code>deploy.yml:1484-1487</code>), keeping
           the Bicep parameter typed.</li>
           </ul>
           <p>[Rubric §11, Security] is directly served: there is no checked-in parameters file to leak secrets from at
@@ -490,15 +498,16 @@ steps:
           <h2 id="inframainbicep-the-full-application-infrastructure"><code>infra/main.bicep</code>, the full application infrastructure</h2>
           <p><strong>File:</strong> <code>MMCA.ADC/infra/main.bicep</code></p>
           <p><code>main.bicep</code> declares every application-layer Azure resource: Application Insights, three SLO
-          scheduled query rules and their action group, three operational scheduled query rules, a Gateway
-          availability web test and its severity-1 alert, a saved SLO workbook (<code>main.bicep:534-554</code>), the
+          scheduled query rules and their action group, three operational scheduled query rules, one
+          conditional AI-scoring token-ceiling rule (<code>main.bicep:460-522</code>), a Gateway
+          availability web test and its severity-1 alert, a saved SLO workbook (<code>main.bicep:600-620</code>), the
           monthly cost budget, SQL Server with the four per-service databases, Service Bus, references to the
           manually provisioned Notification Hub, the blob storage account with its two declared containers
           (public avatars and the private DataProtection key ring), an Azure Managed Redis instance, the
           Container Apps environment, fifteen Key Vault secrets, and all six container apps. All billable
-          resources receive the same tag set (<code>main.bicep:152-158</code>) so Azure Cost Analysis can attribute
+          resources receive the same tag set (<code>main.bicep:155-161</code>) so Azure Cost Analysis can attribute
           spend by application and environment.</p>
-          <h3 id="parameters-mainbicep1-135">Parameters (<code>main.bicep:1-135</code>)</h3>
+          <h3 id="parameters-mainbicep1-138">Parameters (<code>main.bicep:1-138</code>)</h3>
           <p>Parameters divide into five categories:</p>
           <p><strong>Infrastructure coordinates</strong> (supplied from Phase 1 foundation outputs):</p>
           <ul>
@@ -517,8 +526,8 @@ steps:
           all any more.</li>
           <li><code>githubOAuthClientSecret</code> (<code>main.bicep:51</code>), <code>googleOAuthClientSecret</code> (<code>main.bicep:58</code>),
           <code>appleOAuthPrivateKeyPem</code> (<code>main.bicep:71</code>), <code>anthropicApiKey</code> (<code>main.bicep:75</code>),
-          <code>smtpPassword</code> (<code>main.bicep:88</code>), optional integration secrets.</li>
-          <li><code>syntheticTrafficSecret</code> (<code>main.bicep:95</code>), the shared key that lets the monthly k6 capacity
+          <code>smtpPassword</code> (<code>main.bicep:91</code>), optional integration secrets.</li>
+          <li><code>syntheticTrafficSecret</code> (<code>main.bicep:98</code>), the shared key that lets the monthly k6 capacity
           proof bypass the gateway edge rate limiter
           (<a href="https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html" target="_blank" rel="noopener">ADR-088</a>
           amendment). Left empty the bypass is entirely off, which is the safe default: it exists so a
@@ -528,7 +537,7 @@ steps:
           <code>acrLoginServer/mmca-adc-gateway:&lt;commit-sha&gt;</code>):</p>
           <ul>
           <li><code>gatewayImage</code>, <code>uiImage</code>, <code>conferenceImage</code>, <code>identityImage</code>, <code>engagementImage</code>,
-          <code>notificationImage</code> (<code>main.bicep:97-113</code>).</li>
+          <code>notificationImage</code> (<code>main.bicep:100-116</code>).</li>
           </ul>
           <p><strong>Staged-hardening and feature switches</strong>:</p>
           <ul>
@@ -541,48 +550,55 @@ steps:
           not. <code>deployNotificationHub</code> gates only the <strong>wiring</strong> (the Key Vault connection-string secret
           and the Notification app&#39;s secret/env refs), because the namespace, hub and auth rule are
           declared <code>existing</code> and provisioned by runbook (see the Notification Hub section).</li>
-          <li><code>grantAvatarStorageRole</code> (<code>main.bicep:126</code>), default <code>false</code>, because the deploy identity
+          <li><code>grantAvatarStorageRole</code> (<code>main.bicep:129</code>), default <code>false</code>, because the deploy identity
           deliberately lacks <code>Microsoft.Authorization/roleAssignments/write</code>.</li>
           </ul>
           <p><strong>FinOps and alerting controls</strong>:</p>
           <ul>
-          <li><code>enableBudget</code> (<code>main.bicep:129</code>), <code>monthlyBudgetAmount</code> (<code>main.bicep:132</code>),
-          <code>budgetStartDate</code> (<code>main.bicep:135</code>), govern the cost budget resource (see below).</li>
-          <li><code>alertEmailAddress</code> (<code>main.bicep:117</code>) is <strong>required</strong>: it carries <code>@minLength(3)</code> and no default
-          (<code>main.bicep:115-117</code>), so a template that would provision alerts notifying nobody fails to deploy.
+          <li><code>enableBudget</code> (<code>main.bicep:132</code>), <code>monthlyBudgetAmount</code> (<code>main.bicep:135</code>),
+          <code>budgetStartDate</code> (<code>main.bicep:138</code>), govern the cost budget resource (see below).</li>
+          <li><code>aiScoringTokenCeiling</code> (<code>main.bicep:78</code>), an <code>int</code> defaulting to <code>2000000</code>, is the only
+          parameter that bounds a <strong>third-party</strong> meter rather than an Azure one: it is the Anthropic
+          input-plus-output token envelope of one full AI scoring pass over a conference&#39;s submissions,
+          times a safety factor, and it is the threshold of the conditional alert described below. Its
+          description states the non-obvious part (<code>main.bicep:77</code>): the number is a <strong>per-window</strong> ceiling
+          over any rolling two days, not a monthly one, because two days is the longest range a scheduled
+          query rule will evaluate.</li>
+          <li><code>alertEmailAddress</code> (<code>main.bicep:120</code>) is <strong>required</strong>: it carries <code>@minLength(3)</code> and no default
+          (<code>main.bicep:118-120</code>), so a template that would provision alerts notifying nobody fails to deploy.
           It is the receiver on both the action group and the budget notifications.</li>
           </ul>
-          <h3 id="computed-variables-mainbicep137-179">Computed variables (<code>main.bicep:137-179</code>)</h3>
+          <h3 id="computed-variables-mainbicep140-182">Computed variables (<code>main.bicep:140-182</code>)</h3>
           <p>Six boolean flags gate optional blocks throughout the template:</p>
           <ul>
-          <li><code>hasAnthropic</code> (<code>main.bicep:140</code>), gates the Anthropic API key secret and env var on Conference.</li>
-          <li><code>hasSmtpPassword</code> (<code>main.bicep:141</code>), gates the SMTP password <code>secretRef</code> on Identity and
+          <li><code>hasAnthropic</code> (<code>main.bicep:143</code>), gates the Anthropic API key secret and env var on Conference.</li>
+          <li><code>hasSmtpPassword</code> (<code>main.bicep:144</code>), gates the SMTP password <code>secretRef</code> on Identity and
           Notification.</li>
-          <li><code>hasSyntheticTrafficSecret</code> (<code>main.bicep:142</code>), gates the Gateway&#39;s only secret and the
+          <li><code>hasSyntheticTrafficSecret</code> (<code>main.bicep:145</code>), gates the Gateway&#39;s only secret and the
           rate-limiter bypass env var.</li>
-          <li><code>hasGitHubOAuth</code>, <code>hasGoogleOAuth</code>, <code>hasAppleOAuth</code> (<code>main.bicep:143-145</code>), each requires
+          <li><code>hasGitHubOAuth</code>, <code>hasGoogleOAuth</code>, <code>hasAppleOAuth</code> (<code>main.bicep:146-148</code>), each requires
           <strong>every</strong> piece of its provider&#39;s configuration to be present, so a half-configured provider is
           never wired: Apple needs all four (services id, team id, key id, private key PEM).</li>
-          <li><code>hasAnyOAuth</code> (<code>main.bicep:148</code>) is the provider-independent one: <code>OAuth__UIBaseUrl</code> is the
+          <li><code>hasAnyOAuth</code> (<code>main.bicep:151</code>) is the provider-independent one: <code>OAuth__UIBaseUrl</code> is the
           post-login redirect target, so it must be injected whenever <em>any</em> external provider is on rather
           than behind one of them.</li>
           </ul>
           <p>There is no <code>useRs256</code> flag any more. RS256 is unconditional because the RSA parameters are
           required, which is why Identity&#39;s <code>Jwt__SigningAlgorithm</code> is a literal <code>&#39;RS256&#39;</code>
-          (<code>main.bicep:1094</code>) rather than a ternary.</p>
-          <p>Per-service SQL connection strings (<code>main.bicep:171-174</code>) are composed from a shared base: the SQL
-          server FQDN plus one of two auth segments selected by <code>useManagedIdentitySql</code> (<code>main.bicep:167-169</code>).
+          (<code>main.bicep:1160</code>) rather than a ternary.</p>
+          <p>Per-service SQL connection strings (<code>main.bicep:174-177</code>) are composed from a shared base: the SQL
+          server FQDN plus one of two auth segments selected by <code>useManagedIdentitySql</code> (<code>main.bicep:170-172</code>).
           Each is a distinct string pointing at its own database (<code>ADC_Identity</code>, <code>ADC_Conference</code>,
           <code>ADC_Engagement</code>, <code>ADC_Notification</code>), making the database-per-service boundary explicit in the value
           that goes into Key Vault.</p>
-          <p>The Service Bus connection string (<code>main.bicep:179</code>) is resolved via <code>listKeys()</code> against the
+          <p>The Service Bus connection string (<code>main.bicep:182</code>) is resolved via <code>listKeys()</code> against the
           <code>app-clients</code> SAS authorization rule (not <code>RootManageSharedAccessKey</code>) so a future migration to
           managed identity can revoke only the app rule without touching the namespace root. The Redis
-          connection string (<code>main.bicep:886</code>) is assembled the same way, from the instance hostname plus a
+          connection string (<code>main.bicep:952</code>) is assembled the same way, from the instance hostname plus a
           <code>listKeys()</code> primary key.</p>
-          <h3 id="application-insights-mainbicep192-264">Application Insights (<code>main.bicep:192-264</code>)</h3>
+          <h3 id="application-insights-mainbicep195-267">Application Insights (<code>main.bicep:195-267</code>)</h3>
           <p>A workspace-based App Insights component backed by the foundation Log Analytics workspace
-          (<code>main.bicep:200-210</code>):</p>
+          (<code>main.bicep:203-213</code>):</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource appInsights &#39;Microsoft.Insights/components@2020-02-02&#39; = {
   kind: &#39;web&#39;
   properties: {
@@ -593,61 +609,61 @@ steps:
 }</code></pre>
           <p><code>IngestionMode: &#39;LogAnalytics&#39;</code> routes all telemetry into the workspace tables
           (<code>AppRequests</code>, <code>AppDependencies</code>, <code>AppTraces</code>, …) rather than the legacy Classic mode.
-          Every container app receives <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> (<code>main.bicep:215-218</code>) and a
+          Every container app receives <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> (<code>main.bicep:218-221</code>) and a
           per-service <code>OTEL_SERVICE_NAME</code> (e.g. <code>&#39;identity&#39;</code>, <code>&#39;conference&#39;</code>). The <code>OTEL_SERVICE_NAME</code> env
           var is what Azure Monitor maps to the Cloud Role Name, without it, all services appear as
           <code>&quot;unknown_service&quot;</code> in the Application Map.</p>
           <p><code>MMCA.Common.Aspire</code>&#39;s <code>AddOpenTelemetryExporters</code> calls <code>UseAzureMonitor()</code> whenever
-          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present (<code>main.bicep:195-199</code> comment), so the Common
+          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present (<code>main.bicep:198-202</code> comment), so the Common
           framework automatically routes OpenTelemetry spans, logs, and metrics to Azure Monitor in
           production with no service-level code change.</p>
           <p>Five more shared env entries ride along with the connection string on every app, and all of them
           are cost controls on a pay-per-GB workspace:</p>
           <ul>
-          <li><code>Telemetry__TracesSampleRatio: &#39;0.25&#39;</code> (<code>main.bicep:224-227</code>), head-based trace sampling that keeps
+          <li><code>Telemetry__TracesSampleRatio: &#39;0.25&#39;</code> (<code>main.bicep:227-230</code>), head-based trace sampling that keeps
           25% of traces. <code>ParentBased</code> sampling in <code>MMCA.Common.Aspire</code> keeps a sampled-in trace intact
           across service boundaries, so a kept trace is still end-to-end rather than a fragment.</li>
-          <li><code>Logging__OpenTelemetry__LogLevel__Default: &#39;Warning&#39;</code> (<code>main.bicep:235-238</code>), the floor for what the
+          <li><code>Logging__OpenTelemetry__LogLevel__Default: &#39;Warning&#39;</code> (<code>main.bicep:238-241</code>), the floor for what the
           OpenTelemetry logging provider ships to Azure Monitor. Serilog still writes Information to stdout
           (container logs), but only Warning and above bills against the workspace. The value is set
           explicitly because <code>OpenTelemetry</code> is the <code>ProviderAlias</code> of <code>OpenTelemetryLoggerProvider</code>, so the
           key gates that provider only, and because the service hosts register Serilog as one provider
           alongside OpenTelemetry instead of calling <code>UseSerilog()</code>, which would replace the
           <code>ILoggerFactory</code> and drop every application log line before it could reach App Insights.</li>
-          <li><code>Telemetry__DisableHttpClientMetrics: &#39;true&#39;</code> (<code>main.bicep:246-249</code>) and
-          <code>Telemetry__DisableRuntimeMetrics: &#39;true&#39;</code> (<code>main.bicep:250-253</code>), which drop the two
+          <li><code>Telemetry__DisableHttpClientMetrics: &#39;true&#39;</code> (<code>main.bicep:249-252</code>) and
+          <code>Telemetry__DisableRuntimeMetrics: &#39;true&#39;</code> (<code>main.bicep:253-256</code>), which drop the two
           highest-volume instrument groups from the <code>AppMetrics</code> stream. The comment records the
-          measurement that motivated them (<code>main.bicep:240-245</code>): the <code>http.client.*</code> connection gauges
+          measurement that motivated them (<code>main.bicep:243-248</code>): the <code>http.client.*</code> connection gauges
           plus the <code>dotnet.*</code> runtime instruments were about 65% of AppMetrics ingestion between
           2026-08-03 and 2026-08-09, roughly 290 MB/day of a roughly 500 MB/day stream, while
           <code>http.server.request.duration</code> and the MMCA.Common meters carry the operational signal. Both
           keys are read by <code>MMCA.Common.Aspire</code>&#39;s <code>ConfigureOpenTelemetry</code>, and the outbound-dependency
           latency the client metrics would have shown is still captured as (sampled) <code>AppDependencies</code>
           traces, so this trims volume rather than visibility.</li>
-          <li><code>OTEL_METRIC_EXPORT_INTERVAL: &#39;300000&#39;</code> (<code>main.bicep:261-264</code>) is the second stage of the same
+          <li><code>OTEL_METRIC_EXPORT_INTERVAL: &#39;300000&#39;</code> (<code>main.bicep:264-267</code>) is the second stage of the same
           cost control, and it works on cadence rather than on instrument selection. AppMetrics remained
           about 63% of workspace ingestion after the two instrument groups above were dropped (measured
-          2026-08-01 to 2026-08-22, <code>main.bicep:255-260</code>). The exporter ships <strong>cumulative</strong> aggregates, so
+          2026-08-01 to 2026-08-22, <code>main.bicep:258-263</code>). The exporter ships <strong>cumulative</strong> aggregates, so
           stretching the export interval from the SDK default of 60s to 300s drops roughly 80% of the
           remaining datapoints without losing the signal: every alert rule in this template evaluates over a
           15-minute window, so a 5-minute export cadence still lands datapoints in every window.
           This is the standard OpenTelemetry SDK env var, read by the periodic exporting metric reader
           rather than by any MMCA.Common code.</li>
           </ul>
-          <p>Every one of the six apps gets all five: Identity (<code>main.bicep:1062-1067</code>), Conference
-          (<code>:1271-1276</code>), Engagement (<code>:1394-1399</code>), Notification (<code>:1536-1541</code>), Gateway (<code>:1696-1701</code>),
-          UI (<code>:1809-1814</code>). They are declared once as Bicep variables and spliced into each <code>env</code> array by
+          <p>Every one of the six apps gets all five: Identity (<code>main.bicep:1128-1133</code>), Conference
+          (<code>:1337-1342</code>), Engagement (<code>:1460-1465</code>), Notification (<code>:1602-1607</code>), Gateway (<code>:1762-1767</code>),
+          UI (<code>:1875-1880</code>). They are declared once as Bicep variables and spliced into each <code>env</code> array by
           name, which is what keeps a cost decision from being applied to five apps and forgotten on the
           sixth.</p>
           <p>[Rubric §13, Observability &amp; Operability] assesses whether the system ships distributed traces,
           structured logs, and metrics to a queryable backend. The workspace-based App Insights with
           per-service Cloud Role Names gives full Application Map visibility, end-to-end distributed traces
           across all six services, and Kusto-queryable logs, covering this category end-to-end.</p>
-          <h3 id="slo-alerts-as-code-mainbicep266-381-adr-062">SLO alerts as code (<code>main.bicep:266-381</code>), <a href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html" target="_blank" rel="noopener">ADR-062</a></h3>
+          <h3 id="slo-alerts-as-code-mainbicep269-384-adr-062">SLO alerts as code (<code>main.bicep:269-384</code>), <a href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html" target="_blank" rel="noopener">ADR-062</a></h3>
           <p>The three SLOs are declared as <strong>data</strong>: an array of records named <code>sloAlertSpecs</code>
-          (<code>main.bicep:302-330</code>) carrying <code>key</code>, <code>description</code>, <code>query</code>, <code>timeAggregation</code>,
+          (<code>main.bicep:305-333</code>) carrying <code>key</code>, <code>description</code>, <code>query</code>, <code>timeAggregation</code>,
           <code>metricMeasureColumn</code>, <code>threshold</code> and <code>severity</code>. A Bicep <code>for</code> loop materializes one Log Analytics
-          <code>Microsoft.Insights/scheduledQueryRules</code> per spec (<code>main.bicep:332-378</code>):</p>
+          <code>Microsoft.Insights/scheduledQueryRules</code> per spec (<code>main.bicep:335-381</code>):</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -683,18 +699,18 @@ steps:
           <p><strong>The KQL predicate is the whole point of the migration.</strong> These rules replaced metric alerts on
           <code>requests/failed</code>, <code>requests/duration</code> and <code>dependencies/failed</code>, which paged on routine traffic
           because a metric alert cannot express a status-code or URL predicate. The template records the two
-          real incidents (<code>main.bicep:288-301</code>): one window held 8x401 plus 2x499 plus a single readiness 503
+          real incidents (<code>main.bicep:291-304</code>): one window held 8x401 plus 2x499 plus a single readiness 503
           and zero other failures, all from one browser session retrying with an expired token, and five
           long-lived SignalR hub connections averaging 11.3s dragged the fleet-wide average to 5539ms against
           a 3000ms threshold while every real request was fast. A hub connection reports its <strong>connection
           lifetime</strong> as request duration. The thresholds and severities are unchanged, so this is a precision
           fix, not a sensitivity cut: a genuine 400 or 500 burst still pages at the same numbers.</p>
-          <p>The <code>union(...)</code> in the criteria (<code>main.bicep:358-370</code>) supplies <code>metricMeasureColumn</code> only for the
+          <p>The <code>union(...)</code> in the criteria (<code>main.bicep:361-373</code>) supplies <code>metricMeasureColumn</code> only for the
           aggregate rule. Omitting it (the empty-string case) makes a rule count returned <strong>rows</strong>, which is
           what the two failure-count SLOs want.</p>
           <p><strong>Evaluation frequency now matches the window: <code>PT15M</code> over <code>PT15M</code> with <code>autoMitigate: true</code></strong>
-          (<code>main.bicep:350-352</code>). It used to re-evaluate every five minutes over the same 15-minute window,
-          and the template records why that changed (<code>main.bicep:345-349</code>): a scheduled-query rule is billed
+          (<code>main.bicep:353-355</code>). It used to re-evaluate every five minutes over the same 15-minute window,
+          and the template records why that changed (<code>main.bicep:348-352</code>): a scheduled-query rule is billed
           per evaluation, and the 5-minute tier costs $1.47/month per rule against about $0.50 at 15 minutes,
           across three rules. Because <code>windowSize</code> was already <code>PT15M</code>, each evaluation still looks at exactly
           the same 15 minutes of data, no threshold moves, and no rule is renamed; what disappears is the
@@ -707,12 +723,12 @@ steps:
           They have since been retired in Azure and dropped from the source; what remains is a comment
           recording that the scheduled-query rules are now the SLO alerts and that the severity-1
           availability metric alert stays because availability has no status-code confound
-          (<code>main.bicep:380-381</code>). The <code>-v2</code> suffix on the replacement names is still load-bearing, and the
-          template says why (<code>main.bicep:334-335</code>): the suffix is part of a rule&#39;s identity in Azure, so
+          (<code>main.bicep:383-384</code>). The <code>-v2</code> suffix on the replacement names is still load-bearing, and the
+          template says why (<code>main.bicep:337-338</code>): the suffix is part of a rule&#39;s identity in Azure, so
           renaming it would create a second rule alongside the live one rather than update it.</p>
-          <p>The action group (<code>main.bicep:272-286</code>) has an <strong>unconditional</strong> email receiver, which is the direct
+          <p>The action group (<code>main.bicep:275-289</code>) has an <strong>unconditional</strong> email receiver, which is the direct
           consequence of <code>alertEmailAddress</code> being a required parameter. Every scheduled query rule routes to
-          it (<code>main.bicep:374</code>, <code>:451</code>) and so does the cost budget (<code>main.bicep:579</code>, <code>:587</code>). One group, one
+          it (<code>main.bicep:377</code>, <code>:454</code>) and so does the cost budget (<code>main.bicep:645</code>, <code>:653</code>). One group, one
           receiver, no severity routing: severity is triage metadata, not a delivery decision.</p>
           <p>Each SLO alert is paired with a same-severity triage section in <code>MMCA.ADC/infra/OPERATIONS.md</code>
           (<code>OPERATIONS.md:15</code>, <code>:29</code>, <code>:42</code>), and that pairing is enforced by a framework fitness test rather
@@ -725,24 +741,24 @@ steps:
           (<code>OPERATIONS.md:57-63</code>): only alerts inside that parse window are gated, so the operational rules
           and the availability alert below are provisioned but ungated, and their triage deliberately sits
           under <code>####</code> headings so the parser does not read them as SLO runbook sections.</p>
-          <h3 id="operational-and-availability-alerts-mainbicep383-532">Operational and availability alerts (<code>main.bicep:383-532</code>)</h3>
+          <h3 id="operational-and-availability-alerts-mainbicep386-598">Operational and availability alerts (<code>main.bicep:386-598</code>)</h3>
           <p>Beyond the three SLOs, <code>main.bicep</code> provisions <strong>three</strong> more scheduled query rules from
-          <code>scheduledQueryAlertSpecs</code> (<code>main.bicep:402-421</code>, materialized at <code>:423-455</code>), all severity 2 on a
+          <code>scheduledQueryAlertSpecs</code> (<code>main.bicep:405-424</code>, materialized at <code>:426-458</code>), all severity 2 on a
           15-minute evaluation over a 15-minute window:</p>
           <ul>
-          <li><code>outbox-dead-letter</code> (<code>main.bicep:403-408</code>) fires on <strong>any</strong> hit (<code>threshold: 0</code>) of an <code>AppTraces</code>
+          <li><code>outbox-dead-letter</code> (<code>main.bicep:406-411</code>) fires on <strong>any</strong> hit (<code>threshold: 0</code>) of an <code>AppTraces</code>
           row at Error or above whose message contains <code>dead-lettered</code>. An outbox message that exhausted its
           retries means an integration event was permanently lost. The row-age signal is DB-side and not
           queryable from Log Analytics, so this Error line <em>is</em> the backlog alarm.</li>
-          <li><code>sql-dependency-failures</code> (<code>main.bicep:409-414</code>) fires above 10 failed SQL dependency calls. Every
+          <li><code>sql-dependency-failures</code> (<code>main.bicep:412-417</code>) fires above 10 failed SQL dependency calls. Every
           service owns exactly one database, so a burst here means a service cannot reach its own DB, which
           also stalls its outbox drain.</li>
-          <li><code>revision-activation-failed</code> (<code>main.bicep:415-420</code>) is the newest of the three and the most
+          <li><code>revision-activation-failed</code> (<code>main.bicep:418-423</code>) is the newest of the three and the most
           instructive, because it exists to catch a failure the rest of the alerting stack is blind to. It
           queries <code>ContainerAppSystemLogs_CL</code> for <code>Reason_s startswith &quot;Deployment Progress Deadline Exceeded&quot;</code> and fires on any hit. When a revision&#39;s readiness probe never goes green, Container
           Apps keeps the <strong>previous</strong> revision serving: nothing outside-in degrades, every SLO stays quiet,
           and the deploy looks fine while the newly built code never takes traffic. The comment names the
-          incident that motivated it (<code>main.bicep:396-401</code>): the 2026-08-29 Redis readiness regression,
+          incident that motivated it (<code>main.bicep:399-404</code>): the 2026-08-29 Redis readiness regression,
           where an untagged infrastructure health check failed <code>/health/ready</code> on every backend and the
           older revision kept 100% of the traffic for days. The rule works at all only because the
           environment&#39;s <code>appLogsConfiguration</code> sends platform system logs to the same workspace.</li>
@@ -750,20 +766,20 @@ steps:
           <p>The two older rules each have a <code>####</code> triage section in the runbook (<code>OPERATIONS.md:65</code>, <code>:100</code>);
           <code>revision-activation-failed</code> does not have one, which the ungated coverage boundary above allows,
           and the runbook still describes this block as carrying two scheduled query rules
-          (<code>OPERATIONS.md:57-58</code>). Its <code>description</code> field (<code>main.bicep:417</code>) carries the first-response
+          (<code>OPERATIONS.md:57-58</code>). Its <code>description</code> field (<code>main.bicep:420</code>) carries the first-response
           instructions instead.</p>
           <p>An outside-in availability signal sits alongside them: a standard URL-ping web test
-          (<code>main.bicep:470-501</code>) probes the public Gateway <code>/health</code> every <strong>900 seconds</strong> from three Azure
+          (<code>main.bicep:536-567</code>) probes the public Gateway <code>/health</code> every <strong>900 seconds</strong> from three Azure
           locations (East US, North Central US, South Central US), bound to the App Insights component via a
           <code>hidden-link</code> tag. The cadence was 300 seconds until 2026-09-02, and the template records the
-          trade (<code>main.bicep:464-469</code>): standard web tests bill per location-execution, three locations every
+          trade (<code>main.bicep:530-535</code>): standard web tests bill per location-execution, three locations every
           five minutes came to $13.39/month on this subscription, and the <strong>locations are unchanged</strong>, so the
           2-of-3 confirmation that keeps a single-location blip from paging is intact and only detection
           latency moves, from about 5 minutes to about 15.</p>
-          <p>Its severity <strong>1</strong> alert (<code>main.bicep:503-532</code>) fires on a <code>failedLocationCount</code> of 2, and its
+          <p>Its severity <strong>1</strong> alert (<code>main.bicep:569-598</code>) fires on a <code>failedLocationCount</code> of 2, and its
           window had to move with the probe: <code>evaluationFrequency: &#39;PT15M&#39;</code> over <code>windowSize: &#39;PT15M&#39;</code>
-          (<code>main.bicep:517-518</code>). The reason is worth reading, because it is the failure mode a naive cadence
-          change would have introduced (<code>main.bicep:512-516</code>): at <code>Frequency: 900</code> each location reports once
+          (<code>main.bicep:583-584</code>). The reason is worth reading, because it is the failure mode a naive cadence
+          change would have introduced (<code>main.bicep:578-582</code>): at <code>Frequency: 900</code> each location reports once
           per 15 minutes, so a <code>PT5M</code> window would usually be <strong>empty</strong> and the rule would evaluate nothing.
           <code>PT15M</code> restores exactly one result per location per window, which is what <code>failedLocationCount</code>
           counts, so the 2-of-3 threshold keeps its meaning without being renumbered. The runbook explains the
@@ -778,13 +794,65 @@ steps:
           loss, database reachability, a silently failed rollout, and total entry-point outage. The 2026-09-02
           cadence changes are the honest counterweight: this stack now trades roughly ten minutes of detection
           latency for a materially smaller monitoring bill, and the deploy-time gates carry the fast path.</p>
-          <h3 id="slo-workbook-mainbicep534-554">SLO workbook (<code>main.bicep:534-554</code>)</h3>
+          <h3 id="ai-scoring-token-ceiling-alert-mainbicep460-522">AI-scoring token-ceiling alert (<code>main.bicep:460-522</code>)</h3>
+          <p>The newest rule in the template is the only one that watches a <strong>third-party</strong> meter, and it is the
+          only alert here that is conditional. <code>aiScoringSpendAlert</code> (<code>main.bicep:475</code>) is declared
+          <code>if (hasAnthropic)</code>, fires at severity <strong>3</strong>, and compares a two-day token total against the
+          <code>aiScoringTokenCeiling</code> parameter (<code>main.bicep:510</code>):</p>
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">query: &#39;AppMetrics | where Name in (&quot;scoring.tokens.input&quot;, &quot;scoring.tokens.output&quot;) | summarize AggregatedValue = sum(Sum)&#39;
+timeAggregation: &#39;Total&#39;
+metricMeasureColumn: &#39;AggregatedValue&#39;
+operator: &#39;GreaterThan&#39;
+threshold: aiScoringTokenCeiling</code></pre>
+          <p>Four decisions in it are worth reading, because each one is a constraint rather than a preference:</p>
+          <ul>
+          <li><strong>Why the rule exists at all</strong> (<code>main.bicep:466-469</code>). Every scored submission is a paid Anthropic
+          call, and an organizer can trigger a full pass over an entire event&#39;s submissions. Nothing in the
+          Azure budget resource sees that spend: it lands on an Anthropic invoice, not on the subscription.
+          The cost risk is therefore a repeated or runaway pass, and this rule is the only signal that
+          notices one.</li>
+          <li><strong>Why it queries <code>AppMetrics</code></strong> (<code>main.bicep:461-465</code>). The Conference scoring pipeline emits two
+          counters, <code>scoring.tokens.input</code> and <code>scoring.tokens.output</code>, from the
+          <code>MMCA.ADC.Conference.Scoring</code> meter. In a workspace-based component the classic <code>customMetrics</code>
+          table surfaces under its workspace-schema name <code>AppMetrics</code>, the same schema family the SLO rules
+          above query, with <code>Name</code> / <code>Sum</code> / <code>ItemCount</code> as its measure columns. The comment also closes the
+          obvious worry (<code>main.bicep:472-474</code>): the two metric-group disables described in the App Insights
+          section drop only the http-client and runtime instrument <strong>groups</strong>, so an application meter like
+          this one keeps exporting.</li>
+          <li><strong>Why <code>windowSize: &#39;P2D&#39;</code> and not thirty days</strong> (<code>main.bicep:487-494</code>). Two days is the longest
+          data range a scheduled query rule will evaluate. The first cut of this rule asked for a 30-day
+          lookback through <code>overrideQueryTimeRange</code> and ARM rejected the <strong>whole deployment</strong>
+          (<code>InvalidRequestContent</code>, &quot;OverrideQueryTimeRange of 43200 minutes is not supported ... 2880&quot;,
+          deploy run 33972401924, 2026-09-05), which is the failure mode worth remembering: an unsupported
+          alert property does not degrade the alert, it fails the infrastructure deploy that carried it. A
+          two-day rolling total against a single-pass envelope is the honest runaway signal anyway, since one
+          legitimate pass fits inside it and a repeated one does not. <code>evaluationFrequency: &#39;P1D&#39;</code> keeps the
+          per-evaluation billing near zero, and <code>autoMitigate: true</code> (<code>main.bicep:502</code>) exists because
+          consecutive daily evaluations overlap the same window: the alert resolves itself once the window
+          rolls past the spike.</li>
+          <li><strong>Why severity 3 and why <code>hasAnthropic</code></strong> (<code>main.bicep:470-471</code>, <code>:482-484</code>). Nothing is down when
+          a budget ceiling is crossed, so it must not page the way the sev-1 availability and sev-2 failure
+          rules do. And with no API key deployed the feature is inert and emits nothing, so an unconditional
+          rule could only ever evaluate zero while still billing per evaluation.</li>
+          </ul>
+          <p>It routes to the same action group as everything else (<code>main.bicep:518-520</code>). Like the three
+          operational rules, it sits <strong>outside</strong> the <code>var sloAlertSpecs</code> / <code>resource sloAlerts</code> parse window,
+          so <code>ObservabilityConventionTestsBase</code> does not require a runbook section for it and
+          <code>OPERATIONS.md</code> has none; its <code>description</code> field (<code>main.bicep:481</code>) carries the first response
+          instead, which is to look for a repeated or runaway full-event scoring pass before raising the
+          ceiling.</p>
+          <p>[Rubric §31, Cost Efficiency / FinOps] assesses whether cost is actively monitored, bounded and
+          governed. This rule extends that discipline past the Azure bill: the budget resource below bounds
+          subscription spend, <code>cost-guard.yml</code> bounds a surge left un-reverted, and this bounds the one meter
+          that neither of them can see, with the envelope itself expressed as a reviewable Bicep parameter
+          rather than as an assumption inside the scoring code.</p>
+          <h3 id="slo-workbook-mainbicep600-620">SLO workbook (<code>main.bicep:600-620</code>)</h3>
           <p>A saved Azure Monitor workbook renders the same three SLO signals plus exceptions, grouped per
           service by <code>AppRoleName</code> (which is the <code>OTEL_SERVICE_NAME</code> value). It is bound to the Log Analytics
           workspace and embeds <code>workbooks/adc-slo-workbook.json</code> at <strong>compile time</strong> via <code>loadTextContent</code>
-          (<code>main.bicep:551</code>), so the visualization cannot diverge from the alerts by being maintained
+          (<code>main.bicep:617</code>), so the visualization cannot diverge from the alerts by being maintained
           somewhere else, and the JSON stays independently validatable as a file.</p>
-          <h3 id="cost-budget-mainbicep556-591">Cost budget (<code>main.bicep:556-591</code>)</h3>
+          <h3 id="cost-budget-mainbicep622-657">Cost budget (<code>main.bicep:622-657</code>)</h3>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource costBudget &#39;Microsoft.Consumption/budgets@2023-11-01&#39; = if (enableBudget) {
   properties: {
     amount: monthlyBudgetAmount      // default: $200 USD
@@ -797,50 +865,51 @@ steps:
 }</code></pre>
           <p>The budget is scoped to the entire resource group (no tag filter) and covers the whole ADC
           footprint. It fires at 80% of actual spend and 100% of forecasted spend, notifying both the email
-          address and the SLO action group (<code>main.bicep:578-579</code>, <code>:586-587</code>). The primary guard this budget
+          address and the SLO action group (<code>main.bicep:644-645</code>, <code>:652-653</code>). The primary guard this budget
           provides is against an un-reverted conference-day surge: the surge is a manual scale-up of the SQL
           tier and the Container App replica caps, and left running for weeks it would push the monthly bill
           well past $200 and trigger both thresholds long before the billing cycle closes. The
           <code>cost-guard.yml</code> workflow is the same guard from the other direction: it is one of <code>deploy</code>&#39;s
-          required gates (<code>deploy.yml:1054</code>, job at <code>:665</code>) and fails the deploy outright when a database is
+          required gates (<code>deploy.yml:1237</code>, job at <code>:749</code>) and fails the deploy outright when a database is
           off the Basic tier or an app&#39;s <code>maxReplicas</code> exceeds the <code>BASELINE_MAX_REPLICAS</code> of 2
           (<code>cost-guard.yml:25</code>, <code>:61</code>, <code>:76</code>).</p>
-          <p><code>enableBudget: bool</code> (<code>main.bicep:129</code>) allows disabling the resource when the deploy identity
+          <p><code>enableBudget: bool</code> (<code>main.bicep:132</code>) allows disabling the resource when the deploy identity
           lacks <code>Microsoft.Consumption/budgets/write</code> (as is the case in some sponsor subscriptions).
-          <code>budgetStartDate</code> (<code>main.bicep:135</code>) is pinned at creation and must not change on an existing
-          budget, ARM rejects start-date changes on update. The comment in <code>main.bicep:134</code> records this
+          <code>budgetStartDate</code> (<code>main.bicep:138</code>) is pinned at creation and must not change on an existing
+          budget, ARM rejects start-date changes on update. The comment in <code>main.bicep:137</code> records this
           constraint directly so future operators don&#39;t hit the ARM error.</p>
           <p>[Rubric §31, Cost Efficiency / FinOps] assesses whether infrastructure cost is actively
           monitored, bounded, and governed. The budget resource, the <code>enableBudget</code> escape hatch, the
           workspace daily ingestion cap, the 25% trace sampling, the Warning log floor, the two
           metric-group disables, the 300-second metric export interval, the 30-second readiness probes, the
-          15-minute alert and web-test cadences, the uniform 0.25 vCPU container sizing, the two-step daily
-          ACR purge task, and the <code>commonTags</code> applied to every billable resource (<code>main.bicep:152-158</code>)
+          15-minute alert and web-test cadences, the AI-scoring token ceiling on the one meter Azure cannot
+          see, the uniform 0.25 vCPU container sizing, the two-step daily
+          ACR purge task, and the <code>commonTags</code> applied to every billable resource (<code>main.bicep:155-161</code>)
           together satisfy this category: tags enable cost attribution; the caps bound runaway spend at the
           telemetry, storage, monitoring and compute ends; and the budget threshold notifications make the cap
           actionable. The August 2026 bill of $256 is what motivated the 2026-09-02 pass, and every reduction
           in it carries its measurement in the comment beside it.</p>
-          <h3 id="sql-server-and-databases-mainbicep593-697">SQL Server and databases (<code>main.bicep:593-697</code>)</h3>
-          <p><strong>SQL Server</strong> (<code>main.bicep:596-607</code>):</p>
+          <h3 id="sql-server-and-databases-mainbicep659-763">SQL Server and databases (<code>main.bicep:659-763</code>)</h3>
+          <p><strong>SQL Server</strong> (<code>main.bicep:662-673</code>):</p>
           <pre class="doc-pre"><code class="">name: &#39;${prefix}-sql-${resourceToken}&#39;
 version: &#39;12.0&#39;
 minimalTlsVersion: &#39;1.2&#39;
 publicNetworkAccess: &#39;Enabled&#39;</code></pre>
-          <p><code>publicNetworkAccess: &#39;Enabled&#39;</code> (<code>main.bicep:605</code>) combined with the firewall rule
-          <code>AllowAzureServices</code> (<code>main.bicep:609-616</code>, startIpAddress/endIpAddress both <code>0.0.0.0</code>) is the
+          <p><code>publicNetworkAccess: &#39;Enabled&#39;</code> (<code>main.bicep:671</code>) combined with the firewall rule
+          <code>AllowAzureServices</code> (<code>main.bicep:675-682</code>, startIpAddress/endIpAddress both <code>0.0.0.0</code>) is the
           Azure-standard pattern for allowing Container Apps to reach SQL without a VNet/private endpoint.
           The <code>0.0.0.0-0.0.0.0</code> rule does not allow traffic from arbitrary internet IPs; it enables the
-          special &quot;allow Azure services&quot; flag. <code>minimalTlsVersion: &#39;1.2&#39;</code> (<code>main.bicep:604</code>) ensures all
+          special &quot;allow Azure services&quot; flag. <code>minimalTlsVersion: &#39;1.2&#39;</code> (<code>main.bicep:670</code>) ensures all
           connections are encrypted at TLS 1.2 minimum.</p>
-          <p><strong>Entra (Azure AD) admin</strong> (<code>main.bicep:624-633</code>), provisioned only when <code>sqlAadAdminObjectId</code> is
+          <p><strong>Entra (Azure AD) admin</strong> (<code>main.bicep:690-699</code>), provisioned only when <code>sqlAadAdminObjectId</code> is
           supplied. It is deliberately <strong>additive</strong>: it enables Entra auth alongside the SQL admin login and
           does <strong>not</strong> set <code>azureADOnlyAuthentication</code>, so password auth keeps working throughout the
-          transition (<code>main.bicep:618-623</code>). Its purpose is to let an operator run the per-database
+          transition (<code>main.bicep:684-689</code>). Its purpose is to let an operator run the per-database
           <code>CREATE USER [adc-prod-apps-identity] FROM EXTERNAL PROVIDER</code> grants that managed-identity app auth
           depends on. Full sequencing lives in <code>infra/SQL-MANAGED-IDENTITY.md</code>; the staged model is described
           in the Key Vault section below.</p>
           <p><strong>The legacy <code>AtlDevCon</code> database is gone, and its absence is documented in place</strong>
-          (<code>main.bicep:635-647</code>). After the database-per-service cutover it served no application, its data
+          (<code>main.bicep:701-713</code>). After the database-per-service cutover it served no application, its data
           had already been copied into the four <code>ADC_*</code> databases, and it then sat at 32 MB and 0 DTU for a
           whole summer while still billing as a Basic database. On 2026-09-02 it was exported to the bacpac
           blob <code>sql-archive/AtlDevCon-20260902.bacpac</code> in storage account <code>adcprodstpys4way4uzb3g</code> and
@@ -855,10 +924,10 @@ publicNetworkAccess: &#39;Enabled&#39;</code></pre>
           boundary from the recovery side: the archive is deliberately outside PITR and LTR.</li>
           </ul>
           <p>The comment also flags a trap for anyone scripting against this resource group
-          (<code>main.bicep:645-647</code>): a SQL server literally named <code>atldevcon</code> (westus2) also lives in <code>acc-rg</code>,
+          (<code>main.bicep:711-713</code>): a SQL server literally named <code>atldevcon</code> (westus2) also lives in <code>acc-rg</code>,
           predates MMCA entirely, and must never be referenced, scaled or deleted as if it belonged to this
           deployment.</p>
-          <p><strong>Per-service databases</strong> (<code>main.bicep:656-679</code>), <code>[Rubric §8, Data Architecture]</code>:</p>
+          <p><strong>Per-service databases</strong> (<code>main.bicep:722-745</code>), <code>[Rubric §8, Data Architecture]</code>:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">var serviceDatabaseNames = [
   &#39;ADC_Identity&#39;
   &#39;ADC_Conference&#39;
@@ -873,7 +942,7 @@ resource serviceDatabases &#39;…/databases@…&#39; = [
   }
 ]</code></pre>
           <p>Since the archive was dropped, these four <strong>are</strong> the entire application data estate
-          (<code>main.bicep:650-655</code>). [Rubric §8, Data Architecture] assesses deliberate persistence strategy
+          (<code>main.bicep:716-721</code>). [Rubric §8, Data Architecture] assesses deliberate persistence strategy
           including transactions, isolation, migrations, and bounded ownership. The four separate databases
           implement <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>: each
           service owns exactly its data; no cross-database foreign keys exist; each service&#39;s outbox
@@ -885,7 +954,7 @@ resource serviceDatabases &#39;…/databases@…&#39; = [
           cheapest expression of full data autonomy: each service has an independent schema, independent
           migrations, independent outbox, and can be moved to its own server later without application
           changes.</p>
-          <p><strong>Long-term backup retention (LTR)</strong> (<code>main.bicep:686-697</code>):</p>
+          <p><strong>Long-term backup retention (LTR)</strong> (<code>main.bicep:752-763</code>):</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource serviceDatabaseLtr &#39;…/backupLongTermRetentionPolicies@…&#39; = [
   for (dbName, i) in serviceDatabaseNames: {
     properties: {
@@ -897,7 +966,7 @@ resource serviceDatabases &#39;…/databases@…&#39; = [
   }
 ]</code></pre>
           <p>Basic tier already provides 7-day PITR (point-in-time recovery) with geo-redundant backups; LTR
-          adds weekly (4-week), monthly (12-month), and yearly (1-year) archival on top (<code>main.bicep:681-685</code>).
+          adds weekly (4-week), monthly (12-month), and yearly (1-year) archival on top (<code>main.bicep:747-751</code>).
           The practical value: a corrupted migration or a data-loss bug discovered three weeks after the fact
           is still recoverable. The loop covers every database on the server, because after the archive drop
           every database on the server is live.</p>
@@ -908,23 +977,23 @@ resource serviceDatabases &#39;…/databases@…&#39; = [
           drilled restore procedure (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>),
           and <code>OPERATIONS.md:155-157</code> records the measured drill result (about 2.6 minutes against a 2 hour
           RTO target) plus the <code>dr-freshness</code> gate that keeps the proof current.</p>
-          <h3 id="azure-service-bus-mainbicep699-741">Azure Service Bus (<code>main.bicep:699-741</code>)</h3>
+          <h3 id="azure-service-bus-mainbicep765-807">Azure Service Bus (<code>main.bicep:765-807</code>)</h3>
           <pre class="doc-pre"><code class="">sku: Standard   // Basic rejected: MassTransit requires topics, Basic supports queues only
 minimumTlsVersion: &#39;1.2&#39;</code></pre>
-          <p>The Standard tier comment at <code>main.bicep:707-711</code> is the explanation of a constraint that has
+          <p>The Standard tier comment at <code>main.bicep:773-777</code> is the explanation of a constraint that has
           bitten the project before: MassTransit&#39;s <code>UsingAzureServiceBus</code> auto-provisions
           one topic per message type and one subscription per consumer, Basic tier has no topics, only
           queues, so it silently fails at MassTransit startup. Standard tier costs a flat ~$10/month base for
           the namespace plus per-million-operations, and the link/unlink flows are far below 1k messages a
           month even at conference scale.</p>
-          <p>The <code>app-clients</code> authorization rule (<code>main.bicep:731-741</code>) grants <code>Send + Listen + Manage</code> rights.
+          <p>The <code>app-clients</code> authorization rule (<code>main.bicep:797-807</code>) grants <code>Send + Listen + Manage</code> rights.
           The <code>Manage</code> right is required so MassTransit can <code>ConfigureEndpoints</code>, auto-provision topics
           and subscriptions at startup, and without it the first publish fails with an Unauthorized topology
-          error (<code>main.bicep:725-730</code>). The alternative (declaring every topic in Bicep) would be brittle
+          error (<code>main.bicep:791-796</code>). The alternative (declaring every topic in Bicep) would be brittle
           as new integration events are added, because it would require a Bicep change for every new event
           type. The runbook restates the same constraint as a triage step (<code>OPERATIONS.md:86-88</code>): a tier
           downgrade or a rights reduction looks like a publish failure on every service at once.</p>
-          <p>Current integration event flows wired over Service Bus (documented at <code>main.bicep:702-705</code>):</p>
+          <p>Current integration event flows wired over Service Bus (documented at <code>main.bicep:768-771</code>):</p>
           <ul>
           <li>Identity publishes <code>UserRegistered</code> → Conference <code>UserRegisteredHandler</code> auto-links a speaker
           by email match (BR-207).</li>
@@ -935,55 +1004,55 @@ minimumTlsVersion: &#39;1.2&#39;</code></pre>
           namespace is the transport that carries them in production (RabbitMQ fills the same role locally).
           All four services receive <code>MessageBus__Provider</code> and <code>MessageBus__ConnectionString</code>, but only
           Identity and Conference call <code>AddBrokerMessaging</code> today: the Engagement and Notification entries are
-          pre-provisioned forward-compatible wiring, and the template says so (<code>main.bicep:1431-1435</code>,
-          <code>:1571-1574</code>), so adding a consumer later is a <code>Program.cs</code> change with no infra redeploy.</p>
-          <h3 id="azure-notification-hub-mainbicep743-769-referenced-never-deployed">Azure Notification Hub (<code>main.bicep:743-769</code>), referenced, never deployed</h3>
+          pre-provisioned forward-compatible wiring, and the template says so (<code>main.bicep:1497-1501</code>,
+          <code>:1637-1640</code>), so adding a consumer later is a <code>Program.cs</code> change with no infra redeploy.</p>
+          <h3 id="azure-notification-hub-mainbicep809-835-referenced-never-deployed">Azure Notification Hub (<code>main.bicep:809-835</code>), referenced, never deployed</h3>
           <p>The <a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a> native-push fan-out
           (FCM v1 and APNs) has a topology that is real in Azure but is <strong>not created by this template</strong>. The
           namespace, the <code>adc-push</code> hub, and its <code>app-backend</code> authorization rule are all declared with the
-          <code>existing</code> keyword (<code>main.bicep:754</code>, <code>:758</code>, <code>:766</code>), and the comment above them records why
-          (<code>main.bicep:746-753</code>): ARM PUTs on this namespace never reach a terminal state. It reports status
+          <code>existing</code> keyword (<code>main.bicep:820</code>, <code>:824</code>, <code>:832</code>), and the comment above them records why
+          (<code>main.bicep:812-819</code>): ARM PUTs on this namespace never reach a terminal state. It reports status
           <code>Created</code> rather than <code>Active</code>, so a template deployment polls until the deploy job times out, hit
           twice on 2026-08-24 across two API versions. The resources are therefore provisioned by hand
           (<code>az rest</code>, runbook section 5) and merely referenced here.</p>
           <p>That changes what the two parameters mean, and it is the single most misreadable part of this
-          template. <code>deployNotificationHub</code> (<code>main.bicep:123</code>) defaults to <strong>true</strong> and gates only the
-          <em>wiring</em>: the Key Vault connection-string secret (<code>main.bicep:960-964</code>), the Notification app&#39;s
-          <code>secretRef</code> entry (<code>:1523</code>), and its three <code>NativePush__*</code> env vars (<code>:1591-1595</code>). When it is true
+          template. <code>deployNotificationHub</code> (<code>main.bicep:126</code>) defaults to <strong>true</strong> and gates only the
+          <em>wiring</em>: the Key Vault connection-string secret (<code>main.bicep:1026-1030</code>), the Notification app&#39;s
+          <code>secretRef</code> entry (<code>:1589</code>), and its three <code>NativePush__*</code> env vars (<code>:1657-1661</code>). When it is true
           the hub resources must already exist, or the <code>listKeys()</code> call against the auth rule fails.
-          <code>nativePushEnabled</code> (<code>main.bicep:120</code>, also default true) is the second switch and only decides
-          the value of <code>NativePush__Enabled</code> (<code>:1592</code>). With the vars absent entirely, the service&#39;s own
+          <code>nativePushEnabled</code> (<code>main.bicep:123</code>, also default true) is the second switch and only decides
+          the value of <code>NativePush__Enabled</code> (<code>:1658</code>). With the vars absent entirely, the service&#39;s own
           <code>appsettings</code> default of <code>NativePush:Enabled=false</code> keeps the channel inert. The hub&#39;s Free tier
           covers 500 devices and 1M pushes per month, far above conference volumes.</p>
-          <h3 id="blob-storage-avatars-and-the-dataprotection-key-ring-mainbicep771-839-adr-045">Blob storage: avatars and the DataProtection key ring (<code>main.bicep:771-839</code>), <a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a></h3>
-          <p>One <code>Standard_LRS</code> StorageV2 account (<code>main.bicep:779-792</code>) carries two declared containers on the
+          <h3 id="blob-storage-avatars-and-the-dataprotection-key-ring-mainbicep837-905-adr-045">Blob storage: avatars and the DataProtection key ring (<code>main.bicep:837-905</code>), <a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a></h3>
+          <p>One <code>Standard_LRS</code> StorageV2 account (<code>main.bicep:845-858</code>) carries two declared containers on the
           same <code>default</code> blob service. The first is the public-read <code>avatars</code> container
-          (<code>main.bicep:799-805</code>). Public read is deliberate: avatar URLs render in <code>&lt;img&gt;</code> tags on
+          (<code>main.bicep:865-871</code>). Public read is deliberate: avatar URLs render in <code>&lt;img&gt;</code> tags on
           anonymous-visible surfaces with no SAS plumbing, and blob names carry a random suffix so they are
           not enumerable. The account sets <code>minimumTlsVersion: &#39;TLS1_2&#39;</code> and <code>supportsHttpsTrafficOnly: true</code>.</p>
-          <p>The second is <code>dataProtectionKeysContainer</code> (<code>main.bicep:812-818</code>), named <code>dataprotection-keys</code> and
+          <p>The second is <code>dataProtectionKeysContainer</code> (<code>main.bicep:878-884</code>), named <code>dataprotection-keys</code> and
           explicitly <code>publicAccess: &#39;None&#39;</code>. It holds the shared ASP.NET Core DataProtection key ring for the
           two apps that mint cookies (Identity and UI), and its privacy is the whole point of declaring it
           separately rather than reusing <code>avatars</code>: a key ring readable anonymously would hand out the keys
           that protect every auth cookie and antiforgery token in the system. The comment above it
-          (<code>main.bicep:807-811</code>) states the failure it prevents: both apps run at <code>maxReplicas: 2</code>, and the
+          (<code>main.bicep:873-877</code>) states the failure it prevents: both apps run at <code>maxReplicas: 2</code>, and the
           default in-memory key ring is per replica, so a token minted by one replica is undecryptable by the
           other. The per-app wiring is in the Identity and UI subsections below.</p>
           <p>This same account also holds a third, <strong>undeclared</strong> container: <code>sql-archive</code>, where the
-          <code>AtlDevCon-20260902.bacpac</code> archive lives (<code>main.bicep:639</code>). It was created out of band by the
+          <code>AtlDevCon-20260902.bacpac</code> archive lives (<code>main.bicep:705</code>). It was created out of band by the
           export command and the template does not manage it, which is worth knowing before assuming the two
           declared containers are the whole account.</p>
           <p>The Identity service authenticates to it with <code>DefaultAzureCredential</code> resolving the shared apps
           identity, so there is no connection-string secret. Control-plane ownership of the account does not
           grant blob writes, though: the <code>Storage Blob Data Contributor</code> data-plane assignment
-          (<code>main.bicep:831-839</code>) is what does, and it is guarded by <code>grantAvatarStorageRole</code>, default <code>false</code>,
+          (<code>main.bicep:897-905</code>) is what does, and it is guarded by <code>grantAvatarStorageRole</code>, default <code>false</code>,
           for exactly the same reason as the Key Vault grants. Until an operator applies it once by hand,
           avatar uploads fail cleanly with <code>FileStorage.UploadFailed</code> and everything else deploys. That one
           assignment is scoped to the storage <strong>account</strong>, not to a container, so it also covers the key-ring
           container: the shared key ring needs no second role assignment, and the template says so
-          (<code>main.bicep:825-826</code>).</p>
+          (<code>main.bicep:891-892</code>).</p>
           <p>[Rubric §11, Security] assesses credential and key handling. One follow-up is recorded in the
-          template as <strong>not implemented</strong> (<code>main.bicep:827-830</code>): encrypting the key ring at rest with a Key
+          template as <strong>not implemented</strong> (<code>main.bicep:893-896</code>): encrypting the key ring at rest with a Key
           Vault key (<code>DataProtection__KeyVaultKeyUri</code>) would need a separate Key Vault Crypto User grant on
           the apps identity, and neither the env var nor the grant exists today. The comment states the
           reason blob persistence deliberately works without it: a missing or delayed crypto grant would
@@ -992,14 +1061,14 @@ minimumTlsVersion: &#39;1.2&#39;</code></pre>
           step behind its own gate on <code>DataProtection:KeyVaultKeyUri</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/DataProtection/DataProtectionExtensions.cs:74-85</code>),
           so the infrastructure gap and the code path agree.</p>
-          <h3 id="azure-managed-redis-mainbicep841-886">Azure Managed Redis (<code>main.bicep:841-886</code>)</h3>
+          <h3 id="azure-managed-redis-mainbicep907-952">Azure Managed Redis (<code>main.bicep:907-952</code>)</h3>
           <p>One shared <code>Microsoft.Cache/redisEnterprise</code> instance at the <code>Balanced_B0</code> SKU (1 GB, HA disabled,
           around $13/month) with a single <code>default</code> database on port 10000, encrypted client protocol,
           <code>OSSCluster</code> clustering, <code>VolatileLRU</code> eviction and both persistence modes off
-          (<code>main.bicep:855-883</code>). Volatile-only eviction is deliberate: cache entries and idempotency records
-          carry TTLs, and a key without a TTL must never be silently evicted (<code>main.bicep:875-876</code>).</p>
+          (<code>main.bicep:921-949</code>). Volatile-only eviction is deliberate: cache entries and idempotency records
+          carry TTLs, and a key without a TTL must never be silently evicted (<code>main.bicep:941-942</code>).</p>
           <p>Every service gets <code>ConnectionStrings__redis</code> from the vault, and three consumers activate on that
-          key alone with no application change (<code>main.bicep:844-852</code>):</p>
+          key alone with no application change (<code>main.bicep:910-918</code>):</p>
           <ol>
           <li><code>ICacheService</code> upgrades from a per-replica <code>MemoryCache</code> to <code>DistributedCacheService</code>, which
           makes the <code>IdempotencyFilter</code>&#39;s 24h replay records cross-replica (with <code>maxReplicas: 2</code> a
@@ -1011,8 +1080,8 @@ minimumTlsVersion: &#39;1.2&#39;</code></pre>
           </ol>
           <p>The <code>OSSCluster</code> clustering policy is worth noting alongside the <code>revision-activation-failed</code> alert
           above: this is the resource whose readiness interaction silently pinned production to an old
-          revision for four days in 2026-08 (<code>deploy.yml:1326-1330</code>).</p>
-          <h3 id="container-apps-environment-mainbicep888-904">Container Apps environment (<code>main.bicep:888-904</code>)</h3>
+          revision for four days in 2026-08 (<code>deploy.yml:1517-1521</code>).</p>
+          <h3 id="container-apps-environment-mainbicep954-970">Container Apps environment (<code>main.bicep:954-970</code>)</h3>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource containerAppEnv &#39;…/managedEnvironments@2024-03-01&#39; = {
   properties: {
     appLogsConfiguration: {
@@ -1029,7 +1098,7 @@ minimumTlsVersion: &#39;1.2&#39;</code></pre>
           logs, and the same internal DNS resolution. An app can reach another by its Container App name (e.g.
           <code>http://adc-prod-identity</code>) because the ACA environment&#39;s internal DNS resolves Container App
           names as hostnames within the environment.</p>
-          <h3 id="uami-and-acr-credential-model-mainbicep906-919">UAMI and ACR credential model (<code>main.bicep:906-919</code>)</h3>
+          <h3 id="uami-and-acr-credential-model-mainbicep972-985">UAMI and ACR credential model (<code>main.bicep:972-985</code>)</h3>
           <p>[Rubric §11, Security] assesses credential handling as one of its primary axes.</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource appsIdentity &#39;Microsoft.ManagedIdentity/userAssignedIdentities@…&#39; existing = {
   name: &#39;adc-prod-apps-identity&#39;
@@ -1041,9 +1110,9 @@ var acrRegistry = {
 }</code></pre>
           <p><code>appsIdentity</code> is a User-Assigned Managed Identity (UAMI) bootstrapped out-of-band (one-time admin
           operation) with <code>AcrPull</code> on the registry and <code>Key Vault Secrets User</code> on the vault. The Bicep
-          template only <em>references</em> it (<code>existing</code> keyword, <code>main.bicep:911-913</code>), not creates it, because
+          template only <em>references</em> it (<code>existing</code> keyword, <code>main.bicep:977-979</code>), not creates it, because
           the deploy identity (also a UAMI, used by GitHub Actions via OIDC) has <code>Contributor</code> but not
-          <code>Microsoft.Authorization/roleAssignments/write</code> (<code>main.bicep:906-910</code>), creating role assignments
+          <code>Microsoft.Authorization/roleAssignments/write</code> (<code>main.bicep:972-976</code>), creating role assignments
           requires elevated permissions deliberately withheld from the CI identity.</p>
           <p>Every container app resource declares the same identity:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">identity: {
@@ -1055,8 +1124,8 @@ var acrRegistry = {
           no long-lived secrets in the container environment. Image pull from ACR works the same way: the
           ACA environment presents the UAMI&#39;s credentials to ACR when pulling, replacing what would
           otherwise be an admin-user password stored in a Container App secret.</p>
-          <p>The GitHub Actions deploy identity authenticates to Azure via <strong>OIDC</strong> (<code>deploy.yml:1098-1103</code>, and
-          the same block in the <code>foundation</code> and <code>build-images</code> jobs at <code>deploy.yml:925-930</code>, <code>:992-997</code>):</p>
+          <p>The GitHub Actions deploy identity authenticates to Azure via <strong>OIDC</strong> (<code>deploy.yml:1289-1294</code>, and
+          the same block in the <code>foundation</code> and <code>build-images</code> jobs at <code>deploy.yml:1108-1113</code>, <code>:1175-1180</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Log</span> <span class="hljs-string">in</span> <span class="hljs-string">to</span> <span class="hljs-string">Azure</span>
   <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/login@v3</span>
   <span class="hljs-attr">with:</span>
@@ -1071,17 +1140,17 @@ var acrRegistry = {
           itself</strong>, not just for approval gates. The federated identity credential&#39;s subject is
           <code>repo:ivanball/ADC:environment:production</code>, so a job without it presents
           <code>repo:ivanball/ADC:ref:refs/heads/main</code> instead and <code>azure/login</code> fails with AADSTS700213
-          (<code>deploy.yml:911-916</code>, which also names the MMCA.Store run that proved it). Every job that runs
+          (<code>deploy.yml:1094-1099</code>, which also names the MMCA.Store run that proved it). Every job that runs
           <code>azure/login</code> therefore declares it, including <code>cost-guard.yml</code>&#39;s read-only surge check
           (<code>cost-guard.yml:31-32</code>).</p>
-          <h3 id="key-vault-and-runtime-secrets-mainbicep921-1011-adr-061">Key Vault and runtime secrets (<code>main.bicep:921-1011</code>), <a href="https://ivanball.github.io/docs/adr/061-runtime-secret-management.html" target="_blank" rel="noopener">ADR-061</a></h3>
+          <h3 id="key-vault-and-runtime-secrets-mainbicep987-1077-adr-061">Key Vault and runtime secrets (<code>main.bicep:987-1077</code>), <a href="https://ivanball.github.io/docs/adr/061-runtime-secret-management.html" target="_blank" rel="noopener">ADR-061</a></h3>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource keyVault &#39;…/vaults@…&#39; existing = {
   name: &#39;adckv${resourceToken}&#39;
 }</code></pre>
           <p><strong>Every production secret lives in Key Vault and reaches a Container App as a reference, never as a
           value.</strong> Key Vault is bootstrapped out-of-band like the identity: the template declares it <code>existing</code>
-          (<code>main.bicep:931-933</code>) and then writes fifteen secret child resources into it
-          (<code>main.bicep:935-1011</code>). Each Container App references them by Key Vault URI through the shared UAMI:</p>
+          (<code>main.bicep:997-999</code>) and then writes fifteen secret child resources into it
+          (<code>main.bicep:1001-1077</code>). Each Container App references them by Key Vault URI through the shared UAMI:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">secrets: [
   {
     name: &#39;sql-connection-string&#39;
@@ -1093,23 +1162,23 @@ var acrRegistry = {
           <p>This is the <code>keyVaultUrl</code> + <code>identity</code> pattern in ACA (Container Apps Secrets backed by Key Vault):
           the secret value never appears in the Container App definition, the ARM deployment history, or
           deployment logs. Not one <code>secrets</code> entry in this template carries an inline <code>value</code>. Containers then
-          consume them only through <code>secretRef</code> (for example <code>main.bicep:1076</code>, <code>:1092</code>, <code>:1149</code>, <code>:1281</code>,
-          <code>:1552</code>). At runtime ACA fetches the current secret version via the UAMI&#39;s Key Vault Secrets User
+          consume them only through <code>secretRef</code> (for example <code>main.bicep:1142</code>, <code>:1158</code>, <code>:1215</code>, <code>:1347</code>,
+          <code>:1618</code>). At runtime ACA fetches the current secret version via the UAMI&#39;s Key Vault Secrets User
           role, meaning a secret rotation only requires updating the Key Vault secret, no Bicep re-deployment,
           no app restart.</p>
-          <p>Secrets stored in Key Vault (<code>main.bicep:935-1011</code>), fourteen unconditional plus one gated:</p>
+          <p>Secrets stored in Key Vault (<code>main.bicep:1001-1077</code>), fourteen unconditional plus one gated:</p>
           <ul>
           <li>Per-service SQL connection strings (4): <code>identity-sql-connection-string</code>,
           <code>conference-sql-connection-string</code>, <code>engagement-sql-connection-string</code>,
-          <code>notification-sql-connection-string</code> (<code>main.bicep:935-954</code>)</li>
-          <li><code>service-bus-connection-string</code> (<code>:955</code>), <code>redis-connection-string</code> (<code>:965</code>)</li>
+          <code>notification-sql-connection-string</code> (<code>main.bicep:1001-1020</code>)</li>
+          <li><code>service-bus-connection-string</code> (<code>:1021</code>), <code>redis-connection-string</code> (<code>:1031</code>)</li>
           <li><code>notification-hub-connection-string</code>, the one conditional secret, written only when
-          <code>deployNotificationHub</code> is true (<code>main.bicep:960-964</code>)</li>
-          <li><code>rsa-private-key-pem</code>, <code>rsa-public-key-pem</code> (<code>:970</code>, <code>:975</code>), both always real values because the
+          <code>deployNotificationHub</code> is true (<code>main.bicep:1026-1030</code>)</li>
+          <li><code>rsa-private-key-pem</code>, <code>rsa-public-key-pem</code> (<code>:1036</code>, <code>:1041</code>), both always real values because the
           parameters are required</li>
-          <li><code>smtp-password</code> (<code>:980</code>), <code>synthetic-traffic-secret</code> (<code>:987</code>), <code>github-oauth-client-secret</code>
-          (<code>:992</code>), <code>google-oauth-client-secret</code> (<code>:997</code>), <code>apple-oauth-private-key</code> (<code>:1002</code>),
-          <code>anthropic-api-key</code> (<code>:1007</code>)</li>
+          <li><code>smtp-password</code> (<code>:1046</code>), <code>synthetic-traffic-secret</code> (<code>:1053</code>), <code>github-oauth-client-secret</code>
+          (<code>:1058</code>), <code>google-oauth-client-secret</code> (<code>:1063</code>), <code>apple-oauth-private-key</code> (<code>:1068</code>),
+          <code>anthropic-api-key</code> (<code>:1073</code>)</li>
           </ul>
           <p>The composite strings (Redis, Service Bus, and the four SQL connection strings) are assembled at
           deploy time from <code>listKeys()</code> results and the SQL server FQDN, and written straight into the vault,
@@ -1122,52 +1191,52 @@ var acrRegistry = {
           inventory: an <code>unused</code> secret is indistinguishable from a configured one, and only an app&#39;s
           <code>secrets</code> list says which credentials are actually live.</p>
           <p><strong>The two front-door apps hold almost nothing, and say so explicitly.</strong> The UI declares
-          <code>secrets: []</code> (<code>main.bicep:1798</code>) rather than omitting the property: a Blazor host that talks only
+          <code>secrets: []</code> (<code>main.bicep:1864</code>) rather than omitting the property: a Blazor host that talks only
           to the Gateway holds nothing worth stealing, and stating it makes that a reviewable fact rather
           than an omission. The Gateway carries exactly one secret and only conditionally
-          (<code>main.bicep:1676-1678</code>): the synthetic-traffic bypass key, resolved through the same shared
+          (<code>main.bicep:1742-1744</code>): the synthetic-traffic bypass key, resolved through the same shared
           identity, present only when <code>hasSyntheticTrafficSecret</code>. A pure YARP proxy needs no credential to
           forward a request; it needs one only to recognise the monthly capacity proof&#39;s bypass header.</p>
           <p><strong>Both role assignments are bootstrapped out of band, deliberately.</strong> The deploy identity holds Key
           Vault Secrets Officer to write the values; the apps hold Key Vault Secrets User to read them; the
           vault and both grants are created outside the template because the deploy principal has Contributor
-          without <code>Microsoft.Authorization/roleAssignments/write</code> (<code>main.bicep:924-927</code>). A template that
+          without <code>Microsoft.Authorization/roleAssignments/write</code> (<code>main.bicep:990-993</code>). A template that
           created its own role assignments would need exactly the permission the deployment deliberately does
           not have. The trade-off is stated in the ADR: one shared identity means any app carrying it can read
           <strong>every</strong> secret in the vault, not only the ones its own <code>secrets</code> list names, and the template
           cannot report that a grant is missing.</p>
           <p><strong>The same grant also backs a second, different consumption path.</strong> Alongside the platform-resolved
           <code>keyVaultUrl</code> secret references above, five of the six apps receive <code>KeyVault__Uri</code>
-          (<code>main.bicep:1137</code> Identity, <code>:1313</code> Conference, <code>:1442</code> Engagement, <code>:1586</code> Notification, <code>:1830</code>
+          (<code>main.bicep:1203</code> Identity, <code>:1379</code> Conference, <code>:1508</code> Engagement, <code>:1652</code> Notification, <code>:1896</code>
           UI), which turns the vault into an ASP.NET Core <strong>configuration source</strong>: <code>MMCA.Common</code>&#39;s
           <code>AddCommonKeyVaultConfiguration</code> is a no-op without the key, and with it the host reads the vault
           synchronously at startup through <code>DefaultAzureCredential</code>. The Gateway is deliberately not in that
-          list (<code>main.bicep:928-930</code>): it holds no vault-backed configuration to read. The two paths differ in
+          list (<code>main.bicep:994-996</code>): it holds no vault-backed configuration to read. The two paths differ in
           who resolves the value: the platform does it for <code>secretRef</code> entries, the host process does it for
           the configuration source, and both authenticate as the same <code>appsIdentity</code> that already holds Key
           Vault Secrets User. Secret names use a double dash for the configuration separator, so the existing
           single-dash secrets arrive as flat keys and shadow nothing the container already sets
-          (<code>main.bicep:1130-1136</code>).</p>
+          (<code>main.bicep:1196-1202</code>).</p>
           <p>That startup read is why <code>AZURE_CLIENT_ID</code> is on Conference, Engagement, Notification and the
-          UI (<code>main.bicep:1312</code>, <code>:1441</code>, <code>:1585</code>, <code>:1827</code>) and not only on Identity, where it was
-          introduced for avatar blob access (<code>:1129</code>). Each app carries only the user-assigned identity, and
+          UI (<code>main.bicep:1378</code>, <code>:1507</code>, <code>:1651</code>, <code>:1893</code>) and not only on Identity, where it was
+          introduced for avatar blob access (<code>:1195</code>). Each app carries only the user-assigned identity, and
           the ACA identity endpoint needs that identity <strong>named</strong>, so without the pin <code>DefaultAzureCredential</code>
           fails the startup vault read rather than falling back.</p>
           <p><strong>The staged SQL auth completed its migration, but only the staging is visible in source.</strong>
           <code>useManagedIdentitySql</code> (<code>main.bicep:36</code>) defaults to <code>false</code> and selects one of two auth segments
-          for the shared connection string base (<code>main.bicep:167-169</code>): either
+          for the shared connection string base (<code>main.bicep:170-172</code>): either
           <code>Authentication=Active Directory Managed Identity;User Id=&lt;apps identity client id&gt;</code> with no
           password at all, or <code>User ID=...;Password=...</code>. Reading the template alone suggests every
-          app-to-database string still carries a login and password (<code>main.bicep:169</code>), and that is what a
+          app-to-database string still carries a login and password (<code>main.bicep:172</code>), and that is what a
           fresh environment gets. It is not what ADC production runs. The deployed value comes from a
-          repository variable: <code>deploy.yml:1133</code> reads <code>vars.USE_MANAGED_IDENTITY_SQL</code>, and
-          <code>deploy.yml:1293-1296</code> rewrites the parameter to <code>true</code> when it is set. The runbook states the
+          repository variable: <code>deploy.yml:1324</code> reads <code>vars.USE_MANAGED_IDENTITY_SQL</code>, and
+          <code>deploy.yml:1484-1487</code> rewrites the parameter to <code>true</code> when it is set. The runbook states the
           result as an operational fact in two separate triage paths (<code>OPERATIONS.md:76-77</code>, <code>:113-116</code>):
           production SQL is passwordless managed identity, so an operator connects as an identity the server
           knows, and a single service failing SQL is a missing database user before it is anything else. The
           migration runs in three stages, all driven by repository variables that are absent by default:
-          supply the Entra admin (<code>deploy.yml:1282-1289</code>), run the per-database external-provider grants by
-          hand, then set <code>USE_MANAGED_IDENTITY_SQL=true</code> (<code>deploy.yml:1293-1296</code>). Because the Entra admin is
+          supply the Entra admin (<code>deploy.yml:1473-1480</code>), run the per-database external-provider grants by
+          hand, then set <code>USE_MANAGED_IDENTITY_SQL=true</code> (<code>deploy.yml:1484-1487</code>). Because the Entra admin is
           additive and the flag defaults off, stage 1 changes nothing observable and a bad flip rolls back by
           the same one parameter. Whether a given deployment has already set that variable is not determinable
           from source.</p>
@@ -1175,9 +1244,16 @@ var acrRegistry = {
           identity (<code>mmca-prod-apps-identity</code>, <code>MMCA.Store/infra/main.bicep:787</code>) and eleven vault secrets.
           MMCA.Common ships the shape as a compile-only reference sample under <code>samples/deployment/</code>, not a
           deployment: it creates an RBAC-authorized vault (<code>MMCA.Common/samples/deployment/main.bicep:67</code>,
-          <code>:74</code>) and attaches the identity for both ACR pull and secret reads, but declares no <code>secrets</code> entry
-          for the <code>secretRef</code> it uses (<code>:143</code>) and writes no secret into the vault it creates, and CI only
-          type-checks it. MMCA.Helpdesk has no <code>infra/</code> directory and no deploy workflow at all (its
+          <code>:74</code>), attaches the identity for both ACR pull and secret reads, composes the SQL connection string
+          from the server, database and admin login it just declared (<code>:103</code>), writes it into that vault as the
+          <code>sql-conn</code> secret (<code>:105-109</code>), declares it on the Container App as a <code>keyVaultUrl</code> + UAMI reference
+          (<code>:150</code>) and consumes it through <code>secretRef</code> (<code>:162</code>), which is the same end-to-end shape ADC runs.
+          Its own header note records the two out-of-band grants that make it work: Key Vault Secrets Officer
+          for the deploy principal to write the secret, Key Vault Secrets User for the app UAMI to read it
+          (<code>:98-102</code>). Worth knowing before trusting the sample as a template, though: CI only runs
+          <code>az bicep build</code> over it, and a <code>secretRef</code> naming a secret that no <code>secrets</code> array declares
+          type-checks clean and fails only at ARM submit time, which is exactly the defect this file carried
+          until 2026-09-05. MMCA.Helpdesk has no <code>infra/</code> directory and no deploy workflow at all (its
           <code>.github/workflows/</code> holds <code>ci.yml</code>, <code>release-templates.yml</code>, and the two Claude workflows), so
           there is nothing there to adopt.</p>
           <h3 id="container-apps-the-six-deployables">Container Apps, the six deployables</h3>
@@ -1185,27 +1261,27 @@ var acrRegistry = {
           patterns but differ in ingress transport, probe port, and environment variables. As of 2026-09-02
           they no longer differ in size: <strong>all six run at 0.25 vCPU / 0.5 Gi</strong>.</p>
           <h4 id="common-structural-patterns">Common structural patterns</h4>
-          <p>All six apps (<code>main.bicep:1013-1888</code>) share:</p>
+          <p>All six apps (<code>main.bicep:1079-1954</code>) share:</p>
           <ul>
           <li><code>identity: { type: &#39;UserAssigned&#39;, userAssignedIdentities: { &#39;${appsIdentity.id}&#39;: {} } }</code>, the
-          same shared UAMI on every app (<code>main.bicep:1020-1025</code>, <code>:1227-1232</code>, <code>:1361-1366</code>, <code>:1488-1493</code>,
-          <code>:1657-1662</code>, <code>:1778-1783</code>).</li>
-          <li><code>activeRevisionsMode: &#39;Single&#39;</code> (<code>main.bicep:1029</code>, <code>:1236</code>, <code>:1370</code>, <code>:1497</code>, <code>:1666</code>, <code>:1787</code>),
+          same shared UAMI on every app (<code>main.bicep:1086-1091</code>, <code>:1293-1298</code>, <code>:1427-1432</code>, <code>:1554-1559</code>,
+          <code>:1723-1728</code>, <code>:1844-1849</code>).</li>
+          <li><code>activeRevisionsMode: &#39;Single&#39;</code> (<code>main.bicep:1095</code>, <code>:1302</code>, <code>:1436</code>, <code>:1563</code>, <code>:1732</code>, <code>:1853</code>),
           one active revision at a time; new deploys create a new revision and traffic flips atomically
           rather than gradually. This is exactly what the post-deploy revision-activation gate asserts:
           the newest revision must be Healthy, Running and holding <code>trafficWeight</code> 100
-          (<code>deploy.yml:1377-1382</code>).</li>
-          <li><code>resources: { cpu: json(&#39;0.25&#39;), memory: &#39;0.5Gi&#39; }</code> on <strong>all six</strong> (<code>main.bicep:1058</code>, <code>:1267</code>,
-          <code>:1391</code>, <code>:1532</code>, <code>:1692</code>, <code>:1805</code>), the smallest Container Apps allocation. Conference and the
+          (<code>deploy.yml:1568-1573</code>).</li>
+          <li><code>resources: { cpu: json(&#39;0.25&#39;), memory: &#39;0.5Gi&#39; }</code> on <strong>all six</strong> (<code>main.bicep:1124</code>, <code>:1333</code>,
+          <code>:1457</code>, <code>:1598</code>, <code>:1758</code>, <code>:1871</code>), the smallest Container Apps allocation. Conference and the
           Gateway were the last two at 0.5 vCPU / 1 Gi and were right-sized on 2026-09-02 from measured
           production utilization; the two comments carry the measurements and the revert instruction
-          (<code>main.bicep:1260-1266</code>, <code>:1685-1691</code>).</li>
+          (<code>main.bicep:1326-1332</code>, <code>:1751-1757</code>).</li>
           <li><code>scale: { minReplicas: 1, maxReplicas: 2, rules: [{ name: &#39;http-scale&#39;, http: { metadata: { concurrentRequests: &#39;50&#39; } } }] }</code>
-          on <strong>all six</strong> apps (<code>main.bicep:1215</code>, <code>:1349</code>, <code>:1476</code>, <code>:1641</code>, <code>:1750-1763</code>, <code>:1872-1885</code>).
+          on <strong>all six</strong> apps (<code>main.bicep:1281</code>, <code>:1415</code>, <code>:1542</code>, <code>:1707</code>, <code>:1816-1829</code>, <code>:1938-1951</code>).
           <code>minReplicas: 1</code> prevents scale-to-zero (which would destroy Blazor Server circuits and outbox
           in-flight messages); HTTP scale-out at 50 concurrent requests gives the headroom needed for a
           conference-day load (historically ~67 peak concurrent). Notification used to be capped at 1 and
-          no longer is: the comment above its scale block (<code>main.bicep:1631-1640</code>) records why the cap was
+          no longer is: the comment above its scale block (<code>main.bicep:1697-1706</code>) records why the cap was
           lifted on 2026-08-31, and the condition attached to it. <code>TwoReplicaHubFanOutTests</code> in
           <code>Tests/Integration/MMCA.ADC.CrossService.IntegrationTests</code> boots two Notification replicas
           against one Redis container nightly and asserts a push issued on one replica reaches a SignalR
@@ -1216,14 +1292,14 @@ var acrRegistry = {
           which among other things disables the OpenAPI endpoint (it is only mapped outside Production per
           the ADC CLAUDE.md).</li>
           <li><code>ApplicationSettings__DatabaseInitStrategy: &#39;Migrate&#39;</code> on the four database-owning services
-          (<code>main.bicep:1099</code>, <code>:1299</code>, <code>:1421</code>, <code>:1567</code>), each service auto-applies its own database&#39;s
+          (<code>main.bicep:1165</code>, <code>:1365</code>, <code>:1487</code>, <code>:1633</code>), each service auto-applies its own database&#39;s
           pending migrations at startup as the <strong>sole migrator</strong>. <code>deploy.yml</code> deliberately has <em>no</em>
           separate <code>sqlcmd</code> migration step (a backstop would race the container&#39;s startup <code>Migrate()</code>,
           which is exactly what wedged MMCA.Store&#39;s first per-service deploy); with <code>minReplicas: 1</code>
-          exactly one replica migrates before the revision serves (<code>deploy.yml:1306-1316</code>). The build-time
-          EF model-drift gate (<code>deploy.yml:359-373</code>) still guarantees a migration exists for every model
+          exactly one replica migrates before the revision serves (<code>deploy.yml:1497-1507</code>). The build-time
+          EF model-drift gate (<code>deploy.yml:375-389</code>) still guarantees a migration exists for every model
           change, across all four migrations projects.</li>
-          <li><code>Outbox__PollingIntervalSeconds: &#39;300&#39;</code> (<code>main.bicep:1083</code>, <code>:1286</code>, <code>:1409</code>, <code>:1557</code>), the outbox
+          <li><code>Outbox__PollingIntervalSeconds: &#39;300&#39;</code> (<code>main.bicep:1149</code>, <code>:1352</code>, <code>:1475</code>, <code>:1623</code>), the outbox
           signal + smart wait in MMCA.Common ≥ 1.50.0 delivers real messages in ~5 seconds regardless of the
           poll interval; the 300-second poll only governs idle polling. This cuts App Insights SQL dependency
           telemetry that would otherwise flood the workspace around the clock (the
@@ -1231,8 +1307,8 @@ var acrRegistry = {
           <code>project_outbox_cost_optimization.md</code>). The runbook turns the same number into a triage
           instruction: allow five minutes before concluding a manual outbox reset did not take
           (<code>OPERATIONS.md:94-97</code>).</li>
-          <li><code>Outbox__DeadLetterRetentionDays: &#39;30&#39;</code> on the four database-owning services (<code>main.bicep:1079</code>,
-          <code>:1284</code>, <code>:1407</code>, <code>:1555</code>; Gateway and UI own no database and therefore no outbox). A
+          <li><code>Outbox__DeadLetterRetentionDays: &#39;30&#39;</code> on the four database-owning services (<code>main.bicep:1145</code>,
+          <code>:1350</code>, <code>:1473</code>, <code>:1621</code>; Gateway and UI own no database and therefore no outbox). A
           dead-lettered row (retries exhausted, never delivered) keeps <code>ProcessedOn</code> null forever, so the
           processed-row sweep never reaches it and it stays in the pending index that every poll re-scans.
           <code>OutboxCleanupService</code> purges those rows on their own window, falling back to <code>RetentionDays</code>
@@ -1242,7 +1318,7 @@ var acrRegistry = {
           payload longer than a delivered one: four weeks to diagnose or replay it by hand before the row
           is abandoned.</li>
           <li><code>Scheduler__PollingIntervalSeconds: &#39;300&#39;</code> on Identity, Conference and Engagement only
-          (<code>main.bicep:1088</code>, <code>:1288</code>, <code>:1411</code>), the same reasoning as the outbox interval applied to the
+          (<code>main.bicep:1154</code>, <code>:1354</code>, <code>:1477</code>), the same reasoning as the outbox interval applied to the
           scheduled-job runner: it smart-waits until the earliest due job, so the interval only bounds an
           idle sleep, and the 30-second default woke every runner twice a minute per database for nothing.
           Notification does not get the key because it runs no scheduler: <code>Scheduler:Enabled</code> is <code>true</code> in
@@ -1251,10 +1327,10 @@ var acrRegistry = {
           <code>MMCA.ADC.Conference.Service/appsettings.json:33-34</code>,
           <code>MMCA.ADC.Engagement.Service/appsettings.json:54-55</code>), and the Notification service declares no
           <code>Scheduler</code> section at all. The template&#39;s own note says the same
-          (<code>main.bicep:1084-1087</code>): the audit-trail cleanup job runs daily, which is what the interval
+          (<code>main.bicep:1150-1153</code>): the audit-trail cleanup job runs daily, which is what the interval
           paces.</li>
-          <li><code>ConnectionStrings__redis</code> from Key Vault on all four services (<code>main.bicep:1092</code>, <code>:1292</code>,
-          <code>:1415</code>, <code>:1561</code>), which is the single key that turns on the distributed cache, cross-replica
+          <li><code>ConnectionStrings__redis</code> from Key Vault on all four services (<code>main.bicep:1158</code>, <code>:1358</code>,
+          <code>:1481</code>, <code>:1627</code>), which is the single key that turns on the distributed cache, cross-replica
           idempotency, and the SignalR backplane.</li>
           <li><code>MessageBus__Provider: &#39;AzureServiceBus&#39;</code> + <code>MessageBus__ConnectionString</code> from Key Vault,
           selects MassTransit&#39;s Azure Service Bus transport at startup (locally the AppHost injects
@@ -1263,10 +1339,10 @@ var acrRegistry = {
           the target of all three probes on the four services (see below).</li>
           </ul>
           <p>Three of the four services also carry
-          <code>Authentication__JwtBearer__RequireHttpsMetadata: &#39;false&#39;</code> (<code>main.bicep:1298</code> Conference, <code>:1420</code>
-          Engagement, <code>:1566</code> Notification), and the template explains why in the comment directly above each
-          one (<code>main.bicep:1295-1297</code>, <code>:1417-1419</code>, <code>:1563-1565</code>). Their JWKS <code>Authority</code> is the ACA
-          <strong>internal-ingress h2c URL</strong> for Identity, <code>http://adc-prod-identity</code> (<code>:1294</code>, <code>:1416</code>, <code>:1562</code>):
+          <code>Authentication__JwtBearer__RequireHttpsMetadata: &#39;false&#39;</code> (<code>main.bicep:1364</code> Conference, <code>:1486</code>
+          Engagement, <code>:1632</code> Notification), and the template explains why in the comment directly above each
+          one (<code>main.bicep:1361-1363</code>, <code>:1483-1485</code>, <code>:1629-1631</code>). Their JWKS <code>Authority</code> is the ACA
+          <strong>internal-ingress h2c URL</strong> for Identity, <code>http://adc-prod-identity</code> (<code>:1360</code>, <code>:1482</code>, <code>:1628</code>):
           TLS terminates at the platform edge, so traffic inside the environment is cleartext, and the
           framework&#39;s secure-by-default HTTPS metadata requirement would otherwise reject that discovery
           fetch outright. Identity itself does not carry the key because it issues the tokens rather than
@@ -1278,7 +1354,7 @@ var acrRegistry = {
           <h4 id="ingress-transport-choices">Ingress transport choices</h4>
           <p>Two distinct transport configurations appear across the six apps:</p>
           <p><strong>HTTP/2 cleartext (<code>transport: &#39;http2&#39;</code>, <code>allowInsecure: true</code>)</strong>: used by Identity, Conference,
-          and Engagement (<code>main.bicep:1030-1037</code>, <code>:1237-1244</code>, <code>:1371-1378</code>). These three
+          and Engagement (<code>main.bicep:1096-1103</code>, <code>:1303-1310</code>, <code>:1437-1444</code>). These three
           services run Kestrel in <code>Http2</code>-only on cleartext (h2c prior knowledge), which is required for
           cross-service gRPC: Kestrel cannot negotiate HTTP/2 via ALPN without TLS, and internal ACA
           service-to-service traffic does not pass through the TLS terminator. <code>allowInsecure: true</code> is
@@ -1288,11 +1364,11 @@ var acrRegistry = {
           <code>--http2-prior-knowledge</code>, because a default HTTP/1.1 <code>curl</code> reports a failure that is not there.</p>
           <p><strong>HTTP/1.1 (<code>transport: &#39;http&#39;</code>)</strong>: used by Notification, Gateway, and UI. Notification runs
           Kestrel in <code>Http1AndHttp2</code> because SignalR&#39;s WebSocket transport begins with an HTTP/1.1 Upgrade
-          handshake (<code>main.bicep:1501</code> comment). Gateway and UI use HTTP/1.1 because they are the external
-          entry points (<code>main.bicep:1667-1672</code>, <code>:1788-1796</code>; Blazor Server also uses WebSocket upgrade from
-          HTTP/1.1, <code>main.bicep:1842-1843</code> comment).</p>
+          handshake (<code>main.bicep:1567</code> comment). Gateway and UI use HTTP/1.1 because they are the external
+          entry points (<code>main.bicep:1733-1738</code>, <code>:1854-1862</code>; Blazor Server also uses WebSocket upgrade from
+          HTTP/1.1, <code>main.bicep:1908-1909</code> comment).</p>
           <p>Notification carries a third shape on top: <code>additionalPortMappings</code> exposes an internal-only TCP
-          port 8081 (<code>main.bicep:1508-1514</code>) for the cleartext h2c gRPC ingress (<code>LiveChannelPush</code>). TCP
+          port 8081 (<code>main.bicep:1574-1580</code>) for the cleartext h2c gRPC ingress (<code>LiveChannelPush</code>). TCP
           passthrough is what sidesteps the envoy HTTP/1.1-versus-HTTP/2 conflict, because the main ingress
           must stay <code>http</code> for WebSockets while gRPC needs end-to-end HTTP/2 (the
           <a href="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html" target="_blank" rel="noopener">ADR-012</a> mixed-transport
@@ -1302,11 +1378,11 @@ var acrRegistry = {
           <code>GOAWAY HTTP_1_1_REQUIRED</code>, which would fail the liveness check and cause a reboot loop. Rather than
           degrading the three h2c services to port-only <code>tcpSocket</code> probes, each service opens a
           <strong>dedicated HTTP/1.1 probe listener</strong> that is not exposed via ingress: <code>HealthProbe__Port: &#39;8081&#39;</code>
-          on Identity, Conference and Engagement (<code>main.bicep:1072</code>, <code>:1279</code>, <code>:1402</code>) and <code>&#39;8082&#39;</code> on
-          Notification (<code>main.bicep:1548</code>, because 8080 and 8081 are already the ADR-012 pair). ACA probes may
+          on Identity, Conference and Engagement (<code>main.bicep:1138</code>, <code>:1345</code>, <code>:1468</code>) and <code>&#39;8082&#39;</code> on
+          Notification (<code>main.bicep:1614</code>, because 8080 and 8081 are already the ADR-012 pair). ACA probes may
           target a port that ingress does not publish, so all six apps use <code>httpGet</code> probes and all six carry
-          the same three (<code>main.bicep:1187-1212</code> Identity, <code>:1321-1346</code> Conference, <code>:1448-1473</code> Engagement,
-          <code>:1603-1628</code> Notification, <code>:1722-1747</code> Gateway, <code>:1844-1869</code> UI):</p>
+          the same three (<code>main.bicep:1253-1278</code> Identity, <code>:1387-1412</code> Conference, <code>:1514-1539</code> Engagement,
+          <code>:1669-1694</code> Notification, <code>:1788-1813</code> Gateway, <code>:1910-1935</code> UI):</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -1335,14 +1411,14 @@ var acrRegistry = {
           <td>warmup gate plus the DB-aware <code>AddSqlServer</code> check</td>
           </tr>
           </tbody></table></div>
-          <p>The liveness/readiness split is the load-bearing part (<code>main.bicep:1174-1180</code>): <code>/alive</code> checks the
+          <p>The liveness/readiness split is the load-bearing part (<code>main.bicep:1240-1246</code>): <code>/alive</code> checks the
           process only, so a database outage does not trigger a restart loop, while <code>/health/ready</code> fails when
           a replica cannot reach its database, pulling it out of rotation instead of letting it serve 500s.
           Readiness is also gated on <code>WarmupHostedService</code> completing (OIDC discovery fetched), so ACA holds
-          back user traffic until the replica is warm. Gateway and UI probe their own 8080 (<code>main.bicep:1722-1747</code>,
-          <code>:1844-1869</code>) because their Kestrel accepts HTTP/1.1 directly.</p>
+          back user traffic until the replica is warm. Gateway and UI probe their own 8080 (<code>main.bicep:1788-1813</code>,
+          <code>:1910-1935</code>) because their Kestrel accepts HTTP/1.1 directly.</p>
           <p><strong>Readiness runs every 30 seconds, not every 10, and that is a telemetry-cost decision</strong>
-          (<code>main.bicep:1181-1186</code>). The DB-aware readiness check issues a SQL <code>SELECT 1</code> per probe, and
+          (<code>main.bicep:1247-1252</code>). The DB-aware readiness check issues a SQL <code>SELECT 1</code> per probe, and
           neither the probe request nor its dependency row is sampled, so a 10-second period cost 360 request
           rows plus 360 dependency rows per app per hour of App Insights ingestion, on six apps, forever.
           <code>failureThreshold</code> stays at 3, so the honest trade is stated in the comment: an unhealthy replica
@@ -1354,34 +1430,34 @@ var acrRegistry = {
           alert encodes: an over-broad readiness check does not take the fleet down, it silently prevents new
           code from ever taking traffic. The runbook&#39;s guidance on that alert is to look at <code>/health/ready</code>
           on the named app first, since an untagged infrastructure health check gating readiness is the usual
-          cause (<code>main.bicep:417</code>).</p>
+          cause (<code>main.bicep:420</code>).</p>
           <h4 id="service-discovery-services__name__http__0">Service Discovery (<code>services__&lt;name&gt;__http__0</code>)</h4>
           <p>Aspire&#39;s service discovery convention uses env vars of the form <code>services__&lt;service-name&gt;__http__0</code>
           to resolve service endpoints. In production these point at internal ACA hostnames:</p>
           <ul>
-          <li>Gateway → all four services: <code>conference</code> (<code>main.bicep:1709</code>), <code>identity</code> (<code>:1710</code>),
-          <code>engagement</code> (<code>:1711</code>), <code>notification</code> (<code>:1712</code>), each as <code>http://${&lt;app&gt;.name}</code></li>
-          <li>Conference → <code>services__engagement__http__0 = http://${prefix}-engagement</code> (<code>main.bicep:1303</code>)
+          <li>Gateway → all four services: <code>conference</code> (<code>main.bicep:1775</code>), <code>identity</code> (<code>:1776</code>),
+          <code>engagement</code> (<code>:1777</code>), <code>notification</code> (<code>:1778</code>), each as <code>http://${&lt;app&gt;.name}</code></li>
+          <li>Conference → <code>services__engagement__http__0 = http://${prefix}-engagement</code> (<code>main.bicep:1369</code>)
           (using the literal <code>${prefix}-engagement</code> rather than <code>${engagementApp.name}</code> to avoid a
           Bicep symbolic cycle, Conference and Engagement both reference each other)</li>
-          <li>Engagement → <code>services__conference__http__0 = http://${prefix}-conference</code> (<code>main.bicep:1425</code>)</li>
-          <li>Notification → <code>services__identity__http__0 = http://${identityApp.name}</code> (<code>main.bicep:1570</code>),
+          <li>Engagement → <code>services__conference__http__0 = http://${prefix}-conference</code> (<code>main.bicep:1491</code>)</li>
+          <li>Notification → <code>services__identity__http__0 = http://${identityApp.name}</code> (<code>main.bicep:1636</code>),
           for the <code>IAttendeeQueryService</code> email-recipient lookup</li>
-          <li>Identity → <code>services__engagement__http__0</code> (<code>main.bicep:1106</code>), for the PRIVACY.md data-subject
+          <li>Identity → <code>services__engagement__http__0</code> (<code>main.bicep:1172</code>), for the PRIVACY.md data-subject
           export&#39;s Engagement section</li>
           </ul>
           <p>Two edges use a <strong>named</strong> endpoint rather than the default <code>http</code> one, because they target
           Notification&#39;s dedicated h2c gRPC port: <code>services__notification__grpc__0 = http://${prefix}-notification:8081</code>
-          from Identity (<code>main.bicep:1113</code>, the Notifications section of the same data-subject export) and
-          from Engagement (<code>main.bicep:1430</code>, the best-effort live-channel push). Both use the literal
+          from Identity (<code>main.bicep:1179</code>, the Notifications section of the same data-subject export) and
+          from Engagement (<code>main.bicep:1496</code>, the best-effort live-channel push). Both use the literal
           <code>${prefix}-notification</code> name so deployment ordering stays unconstrained, since Notification itself
           references <code>identityApp</code> for its JWKS authority.</p>
           <p>The same service names work locally because the AppHost&#39;s <code>WithReference</code> injects them as
           <code>services__engagement__http__0 = http://localhost:&lt;assigned-port&gt;</code>. The application code calls
           <code>AddHttpForwarderWithServiceDiscovery()</code> or <code>AddTypedGrpcClient&lt;T&gt;(serviceName)</code> in both
           environments and resolves the endpoint from that env var key.</p>
-          <h4 id="identity-service-specifics-mainbicep1013-1218">Identity Service specifics (<code>main.bicep:1013-1218</code>)</h4>
-          <p>Identity is the JWT issuer and JWKS endpoint. Its JWT configuration (<code>main.bicep:1094-1098</code>):</p>
+          <h4 id="identity-service-specifics-mainbicep1079-1284">Identity Service specifics (<code>main.bicep:1079-1284</code>)</h4>
+          <p>Identity is the JWT issuer and JWKS endpoint. Its JWT configuration (<code>main.bicep:1160-1164</code>):</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">{ name: &#39;Jwt__SigningAlgorithm&#39;,   value: &#39;RS256&#39; }
 { name: &#39;Jwt__Issuer&#39;,            value: &#39;https://${prefix}-gateway.${...defaultDomain}&#39; }
 { name: &#39;Jwt__Audience&#39;,          value: &#39;AtlDevConapi&#39; }
@@ -1389,29 +1465,29 @@ var acrRegistry = {
 { name: &#39;Jwt__RefreshTokenExpirationDays&#39;,   value: &#39;7&#39; }</code></pre>
           <p><code>Jwt__SigningAlgorithm</code> is the literal <code>&#39;RS256&#39;</code>, not a ternary, because the RSA key parameters are
           required and the HS256 fallback path no longer exists in this template (the comment at
-          <code>main.bicep:1093</code> says exactly that). The RSA private key from Key Vault signs tokens and the
+          <code>main.bicep:1159</code> says exactly that). The RSA private key from Key Vault signs tokens and the
           public key is published at <code>/.well-known/jwks.json</code>, wired by five unconditional env entries:
           <code>Jwt__RsaPrivateKeyPem</code>, <code>Jwt__RsaPublicKeyPem</code>, <code>Jwks__Enabled: &#39;true&#39;</code>,
-          <code>Jwks__KeyId: &#39;mmca-adc-2026&#39;</code> and <code>Jwks__RsaPublicKeyPem</code> (<code>main.bicep:1149-1153</code>). Other services
+          <code>Jwks__KeyId: &#39;mmca-adc-2026&#39;</code> and <code>Jwks__RsaPublicKeyPem</code> (<code>main.bicep:1215-1219</code>). Other services
           fetch the JWKS document
           through the internal authority (<code>Authentication__JwtBearer__Authority = &#39;http://${identityApp.name}&#39;</code>)
           to validate tokens without a shared secret
           (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>
           &quot;authentication dual-fetch&quot;). The 15-minute access token lifetime limits the blast radius of a
           leaked token.</p>
-          <p>Identity is also the app that carries the avatar-storage wiring (<code>main.bicep:1122-1123</code>):
+          <p>Identity is also the app that carries the avatar-storage wiring (<code>main.bicep:1188-1189</code>):
           <code>FileStorage__ServiceUri</code> and <code>FileStorage__ContainerName</code>, pointed at the storage account&#39;s blob
-          endpoint and the <code>avatars</code> container. <code>AZURE_CLIENT_ID</code> (<code>main.bicep:1129</code>) sits beside them and
+          endpoint and the <code>avatars</code> container. <code>AZURE_CLIENT_ID</code> (<code>main.bicep:1195</code>) sits beside them and
           pins the apps identity&#39;s client id so <code>DefaultAzureCredential</code> resolves the intended identity
           explicitly rather than relying on discovery order. That pin started here for blob access, but it is
           no longer avatar-specific: four other apps carry it for the Key Vault configuration source (see
           the Key Vault section).</p>
           <p>Identity is one of the two apps that persist the <strong>DataProtection key ring</strong>
-          (<code>main.bicep:1127-1128</code>): <code>DataProtection__BlobStorageUri</code> points at
+          (<code>main.bicep:1193-1194</code>): <code>DataProtection__BlobStorageUri</code> points at
           <code>&lt;blob endpoint&gt;dataprotection-keys/keys.xml</code> in the private container described above, and
           <code>DataProtection__ApplicationName: &#39;MMCA.ADC&#39;</code> is the isolation name the ring is scoped by (the same
           value on the UI, which is what makes the two apps share one ring rather than two). The comment
-          above them (<code>main.bicep:1124-1126</code>) states the failure mode: Identity does OAuth cookie
+          above them (<code>main.bicep:1190-1192</code>) states the failure mode: Identity does OAuth cookie
           cryptography at <code>maxReplicas: 2</code> with no session affinity, so with the default per-replica
           in-memory ring a login started on one replica fails on the other. <code>MMCA.Common</code>&#39;s
           <code>AddCommonDataProtection</code> reads both keys, and <code>DataProtection:BlobStorageUri</code> is the gate: absent,
@@ -1419,37 +1495,37 @@ var acrRegistry = {
           and the tests want
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/DataProtection/DataProtectionExtensions.cs:54-62</code>).</p>
           <p>Identity is also the app that sends the account emails, so it receives the SMTP block
-          (<code>main.bicep:1138-1142</code>: <code>Smtp__Host</code>, <code>Smtp__Port</code>, <code>Smtp__Username</code>, <code>Smtp__EnableSsl: &#39;true&#39;</code>,
+          (<code>main.bicep:1204-1208</code>: <code>Smtp__Host</code>, <code>Smtp__Port</code>, <code>Smtp__Username</code>, <code>Smtp__EnableSsl: &#39;true&#39;</code>,
           <code>Smtp__From</code>) with the password arriving separately as a <code>secretRef</code> only when one is configured
-          (<code>main.bicep:1155</code>, gated on <code>hasSmtpPassword</code>). Sitting with them is
-          <code>PasswordReset__ResetUrl</code> (<code>main.bicep:1147</code>), the absolute URL of the UI reset page the
+          (<code>main.bicep:1221</code>, gated on <code>hasSmtpPassword</code>). Sitting with them is
+          <code>PasswordReset__ResetUrl</code> (<code>main.bicep:1213</code>), the absolute URL of the UI reset page the
           forgot-password email links to
           (<a href="https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html" target="_blank" rel="noopener">ADR-091</a>). It points at
           the same UI origin <code>OAuth__UIBaseUrl</code> uses but is injected <strong>unconditionally</strong>, and the comment
-          above it says why (<code>main.bicep:1143-1146</code>): password recovery is a local-credential feature and has
+          above it says why (<code>main.bicep:1209-1212</code>): password recovery is a local-credential feature and has
           to work whether or not an external OAuth provider is configured, so gating it behind <code>hasAnyOAuth</code>
           would silently degrade the reset mail to a token-only message on any deployment without social
           login.</p>
           <p>Identity is the one app that can carry all three external OAuth providers, and each block is
-          all-or-nothing (<code>main.bicep:1156-1169</code>): GitHub and Google contribute a client id plus a
+          all-or-nothing (<code>main.bicep:1222-1235</code>): GitHub and Google contribute a client id plus a
           <code>secretRef</code>, while Apple contributes four entries (services id, team id, key id, and the <code>.p8</code>
-          private key as a <code>secretRef</code>). <code>OAuth__UIBaseUrl</code> follows at <code>:1171</code> under <code>hasAnyOAuth</code>, because
+          private key as a <code>secretRef</code>). <code>OAuth__UIBaseUrl</code> follows at <code>:1237</code> under <code>hasAnyOAuth</code>, because
           the post-login redirect target is provider-independent.</p>
-          <p>Identity is sized at 0.25 CPU / 0.5 Gi (<code>main.bicep:1058</code>). JWT operations are CPU-cheap once the
+          <p>Identity is sized at 0.25 CPU / 0.5 Gi (<code>main.bicep:1124</code>). JWT operations are CPU-cheap once the
           key is loaded; the bottleneck is typically network I/O to SQL.</p>
-          <h4 id="conference-service-specifics-mainbicep1220-1352">Conference Service specifics (<code>main.bicep:1220-1352</code>)</h4>
+          <h4 id="conference-service-specifics-mainbicep1286-1418">Conference Service specifics (<code>main.bicep:1286-1418</code>)</h4>
           <p>Conference carries the heaviest surface of the four services: seventeen API controllers
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/</code>), an AI scoring path
           (Anthropic API), and the role of read-heavy entry point for the event/session catalog. It ran at
           0.5 CPU / 1 Gi until 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi like every peer
-          (<code>main.bicep:1267</code>). The comment above that line is the model for how a right-sizing decision should
-          be recorded (<code>main.bicep:1260-1266</code>): CPU averaged 0.012 to 0.017 cores with p95 under 0.03 against
+          (<code>main.bicep:1333</code>). The comment above that line is the model for how a right-sizing decision should
+          be recorded (<code>main.bicep:1326-1332</code>): CPU averaged 0.012 to 0.017 cores with p95 under 0.03 against
           the half-core it held, and the working set ran 320 to 380 MB. It also names itself as <strong>the app to
           watch</strong>, because a p95 working set of 376 MB is 73% of the new 512 MiB limit, and states the revert
           as one line and one deploy. The second-order effect is called out too: a smaller CPU quota throttles
           the startup spike, so cold start roughly doubles, which traffic never sees because ACA keeps the
           previous revision serving until readiness goes green.</p>
-          <p>The Anthropic API key is injected only when <code>hasAnthropic = true</code> (<code>main.bicep:1246-1253</code>, <code>:1315</code>):</p>
+          <p>The Anthropic API key is injected only when <code>hasAnthropic = true</code> (<code>main.bicep:1312-1319</code>, <code>:1381</code>):</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">secrets: union(
   [ ... sql, redis and service bus ... ],
   hasAnthropic ? [{ name: &#39;anthropic-api-key&#39;, keyVaultUrl: ..., identity: appsIdentity.id }] : []
@@ -1457,108 +1533,108 @@ var acrRegistry = {
           <p>This is the <code>union()</code> + conditional array pattern used throughout <code>main.bicep</code> to keep optional
           secrets and env vars out of the resource definition when not configured, rather than passing empty
           strings to the container.</p>
-          <h4 id="notification-service-specifics-mainbicep1481-1644">Notification Service specifics (<code>main.bicep:1481-1644</code>)</h4>
+          <h4 id="notification-service-specifics-mainbicep1547-1710">Notification Service specifics (<code>main.bicep:1547-1710</code>)</h4>
           <p>Notification differs from the other three back-end services in four ways:</p>
           <ol>
           <li><code>transport: &#39;http&#39;</code> instead of <code>&#39;http2&#39;</code>, SignalR WebSocket requires an HTTP/1.1 Upgrade
-          handshake (<code>main.bicep:1501</code>), plus the extra internal-only h2c port 8081 for gRPC
-          (<code>main.bicep:1508-1514</code>).</li>
-          <li>Its probe listener is on <strong>8082</strong> (<code>main.bicep:1548</code>), because the ADR-012 mixed profile already
-          owns 8080 and 8081 and those two endpoints are load-bearing (<code>main.bicep:1543-1547</code>).</li>
+          handshake (<code>main.bicep:1567</code>), plus the extra internal-only h2c port 8081 for gRPC
+          (<code>main.bicep:1574-1580</code>).</li>
+          <li>Its probe listener is on <strong>8082</strong> (<code>main.bicep:1614</code>), because the ADR-012 mixed profile already
+          owns 8080 and 8081 and those two endpoints are load-bearing (<code>main.bicep:1609-1613</code>).</li>
           <li>It is the only app that can receive the native-push env block, and only when the hub wiring is
-          on (<code>main.bicep:1591-1595</code>).</li>
-          <li>It is the second app with an SMTP block (<code>main.bicep:1577-1581</code> plus the conditional
-          <code>Smtp__Password</code> <code>secretRef</code> at <code>:1596</code> and its vault-backed secret entry at <code>:1524</code>), because
+          on (<code>main.bicep:1657-1661</code>).</li>
+          <li>It is the second app with an SMTP block (<code>main.bicep:1643-1647</code> plus the conditional
+          <code>Smtp__Password</code> <code>secretRef</code> at <code>:1662</code> and its vault-backed secret entry at <code>:1590</code>), because
           the notification service is the one that fans a notification out to email as well as to the hub.</li>
           </ol>
           <p>It runs no scheduler, so unlike the other three it gets no <code>Scheduler__PollingIntervalSeconds</code>.
-          Its readiness probe (<code>main.bicep:1619-1627</code>) is what holds ACA ingress until the
-          <code>WarmupHostedService</code> has fetched the JWKS document from Identity (<code>main.bicep:1598-1602</code>). Without
+          Its readiness probe (<code>main.bicep:1685-1693</code>) is what holds ACA ingress until the
+          <code>WarmupHostedService</code> has fetched the JWKS document from Identity (<code>main.bicep:1664-1668</code>). Without
           it, SignalR connections made during warmup would fail because the JWT validator is not yet
           initialized. Its replica cap is no longer the outlier it once was: see the shared scale discussion
           above.</p>
-          <h4 id="gateway-specifics-mainbicep1646-1766">Gateway specifics (<code>main.bicep:1646-1766</code>)</h4>
+          <h4 id="gateway-specifics-mainbicep1712-1832">Gateway specifics (<code>main.bicep:1712-1832</code>)</h4>
           <p>Gateway is the sole externally-reachable back-end entry point (<code>external: true</code>,
-          <code>allowInsecure: false</code>, <code>main.bicep:1667-1672</code>). It is a pure YARP reverse proxy: no DbContext, no
+          <code>allowInsecure: false</code>, <code>main.bicep:1733-1738</code>). It is a pure YARP reverse proxy: no DbContext, no
           JWT issuing, no module. Its env configuration is service-discovery entries, CORS, and one optional
           rate-limiter key:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">{ name: &#39;Cors__AllowedOrigins__0&#39;, value: &#39;https://${prefix}-ui.${...defaultDomain}&#39; }</code></pre>
-          <p>CORS is scoped to exactly the UI&#39;s FQDN (<code>main.bicep:1703</code>), not a wildcard. Gateway was right-sized
-          alongside Conference on 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi (<code>main.bicep:1692</code>); its
-          comment records the easier half of that decision (<code>main.bicep:1685-1691</code>), a 190 to 235 MB working
+          <p>CORS is scoped to exactly the UI&#39;s FQDN (<code>main.bicep:1769</code>), not a wildcard. Gateway was right-sized
+          alongside Conference on 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi (<code>main.bicep:1758</code>); its
+          comment records the easier half of that decision (<code>main.bicep:1751-1757</code>), a 190 to 235 MB working
           set comfortably inside the new limit because pure YARP forwarding holds no DbContext. It uses the
-          readiness gate at <code>main.bicep:1739-1746</code> because its warmup involves establishing connections to all
+          readiness gate at <code>main.bicep:1805-1812</code> because its warmup involves establishing connections to all
           back-end services. It is also the target of the availability web test described above, and the only
           app with no <code>KeyVault__Uri</code>.</p>
           <p>Its one conditional secret is the ADR-088 synthetic-traffic bypass. When
           <code>hasSyntheticTrafficSecret</code> is true the app declares a <code>synthetic-traffic-secret</code> Key Vault
-          reference (<code>main.bicep:1676-1678</code>) and receives
-          <code>GatewayRateLimiting__SyntheticTrafficSecret</code> as a <code>secretRef</code> (<code>main.bicep:1718</code>). A request
+          reference (<code>main.bicep:1742-1744</code>) and receives
+          <code>GatewayRateLimiting__SyntheticTrafficSecret</code> as a <code>secretRef</code> (<code>main.bicep:1784</code>). A request
           presenting that value in the <code>X-Synthetic-Traffic-Key</code> header skips both chained edge limiters, so
           the monthly k6 run measures backend capacity instead of the per-IP window. Absent, the bypass is
           off and every request stays rate limited, which is the correct default for a public entry point.</p>
-          <p>The template also records the transport contract the Gateway holds up (<code>main.bicep:1704-1707</code>):
+          <p>The template also records the transport contract the Gateway holds up (<code>main.bicep:1770-1773</code>):
           <code>ForwardHttp2</code> defaults to true in the gateway code and YARP uses <code>VersionPolicy=RequestVersionExact</code>,
           so it sends the HTTP/2 preface to the three h2c-prior-knowledge backends whose ACA ingress is
           <code>transport: http2</code>. That pairing is why the ingress choice on those three services and the forwarder
           policy here cannot be changed independently.</p>
-          <h4 id="ui-specifics-mainbicep1768-1888">UI specifics (<code>main.bicep:1768-1888</code>)</h4>
-          <p>UI is the other externally-reachable app (<code>external: true</code>, <code>main.bicep:1789</code>), the one app with
-          <code>secrets: []</code> (<code>main.bicep:1798</code>) and sized at 0.25 CPU / 0.5 Gi (<code>main.bicep:1805</code>). Three
+          <h4 id="ui-specifics-mainbicep1834-1954">UI specifics (<code>main.bicep:1834-1954</code>)</h4>
+          <p>UI is the other externally-reachable app (<code>external: true</code>, <code>main.bicep:1855</code>), the one app with
+          <code>secrets: []</code> (<code>main.bicep:1864</code>) and sized at 0.25 CPU / 0.5 Gi (<code>main.bicep:1871</code>). Three
           non-obvious configuration points:</p>
-          <p><strong>Sticky sessions</strong> (<code>main.bicep:1793-1795</code>):</p>
+          <p><strong>Sticky sessions</strong> (<code>main.bicep:1859-1861</code>):</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">stickySessions: { affinity: &#39;sticky&#39; }</code></pre>
           <p>Blazor Server runs the component model as a stateful SignalR circuit on the server. If a request
           from a browser is load-balanced to a different replica than the one holding the circuit, the
           circuit drops. Sticky session affinity pins each browser session to one replica. The header comment
-          on the resource (<code>main.bicep:1771-1773</code>) states both Blazor Server requirements together: sticky
+          on the resource (<code>main.bicep:1837-1839</code>) states both Blazor Server requirements together: sticky
           sessions and <code>minReplicas &gt;= 1</code>.</p>
-          <p><strong>Dual API endpoints</strong> (<code>main.bicep:1817</code>, <code>:1819</code>):</p>
+          <p><strong>Dual API endpoints</strong> (<code>main.bicep:1883</code>, <code>:1885</code>):</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">{ name: &#39;Api__ApiEndpoint&#39;,     value: &#39;http://${gatewayApp.name}&#39; }
 { name: &#39;Api__WasmApiEndpoint&#39;, value: &#39;https://${gatewayApp.properties.configuration.ingress.fqdn}&#39; }</code></pre>
           <p>Server-side Blazor rendering uses the internal Gateway URL (skipping public DNS, TLS termination,
           and the Envoy round-trip). WebAssembly code running in the browser must use the external FQDN,
           it has no access to the internal ACA DNS. The UI serves the WASM endpoint URL via a <code>/client-config</code>
           endpoint so the WASM app can discover the gateway without the URL being baked into the WASM build.</p>
-          <p><strong>Shared DataProtection key ring</strong> (<code>main.bicep:1825-1826</code>): the UI carries the same
+          <p><strong>Shared DataProtection key ring</strong> (<code>main.bicep:1891-1892</code>): the UI carries the same
           <code>DataProtection__BlobStorageUri</code> and <code>DataProtection__ApplicationName: &#39;MMCA.ADC&#39;</code> pair as Identity,
           pointed at the same <code>dataprotection-keys/keys.xml</code> blob. The reason is the one above with the
           consequence reversed: sticky sessions pin a <strong>circuit</strong> to a replica, but the UI also mints the SSR
           session cookie and antiforgery tokens, and those travel with the browser rather than with the
           circuit, so at <code>maxReplicas: 2</code> a per-replica in-memory ring makes them undecryptable on the other
-          replica (<code>main.bicep:1820-1824</code>). <code>AZURE_CLIENT_ID</code> (<code>main.bicep:1827</code>) pins the identity that
+          replica (<code>main.bicep:1886-1890</code>). <code>AZURE_CLIENT_ID</code> (<code>main.bicep:1893</code>) pins the identity that
           <code>DefaultAzureCredential</code> uses for both the blob write and the vault read.</p>
           <p>The UI receives only the OAuth <strong>client ids</strong> when a provider is configured, one per provider
-          including Apple (<code>main.bicep:1832-1840</code>); every client secret stays on Identity, which is the app
+          including Apple (<code>main.bicep:1898-1906</code>); every client secret stays on Identity, which is the app
           that completes the exchange.</p>
-          <h3 id="outputs-mainbicep1890-1898">Outputs (<code>main.bicep:1890-1898</code>)</h3>
+          <h3 id="outputs-mainbicep1956-1964">Outputs (<code>main.bicep:1956-1964</code>)</h3>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">output acrLoginServer     string = acr.properties.loginServer
 output gatewayFqdn        string = gatewayApp.properties.configuration.ingress.fqdn
 output uiFqdn             string = uiApp.properties.configuration.ingress.fqdn
 output sqlServerFqdn      string = sqlServer.properties.fullyQualifiedDomainName
 output serviceBusEndpoint string = serviceBus.properties.serviceBusEndpoint
 output appInsightsName    string = appInsights.name</code></pre>
-          <p><code>gatewayFqdn</code> and <code>uiFqdn</code> are consumed by the Phase 5 gate (<code>deploy.yml:1318-1479</code>), which is
+          <p><code>gatewayFqdn</code> and <code>uiFqdn</code> are consumed by the Phase 5 gate (<code>deploy.yml:1509-1670</code>), which is
           <strong>two</strong> gates in a deliberate order, and the comment above them explains why the order matters
-          (<code>deploy.yml:1319-1339</code>).</p>
+          (<code>deploy.yml:1510-1530</code>).</p>
           <p><strong>5a, activation.</strong> For every app, the newest revision (by <code>createdTime</code>) must report <code>healthState</code>
           Healthy, <code>runningState</code> Running or RunningAtMaxScale, and <code>trafficWeight</code> 100
-          (<code>deploy.yml:1377-1382</code>), polled up to ten minutes per app (<code>deploy.yml:1384-1396</code>). This gate
+          (<code>deploy.yml:1568-1573</code>), polled up to ten minutes per app (<code>deploy.yml:1575-1587</code>). This gate
           proves the code just built is the code now serving. The HTTP probes alone cannot prove that: they
           all enter through the Gateway, and a healthy Gateway keeps serving from the <strong>previous</strong> backend
           revision when the new one never goes ready, so every probe answers from old code and the run goes
           green. That is exactly how the Redis readiness regression hid for four days between 2026-08-29 and
-          2026-09-02 (<code>deploy.yml:1326-1330</code>).</p>
+          2026-09-02 (<code>deploy.yml:1517-1521</code>).</p>
           <p><strong>5b, reachability.</strong> The smoke step then probes every service through the Gateway
-          (<code>deploy.yml:1407-1418</code>): Gateway <code>/health</code>, Identity via <code>/.well-known/jwks.json</code>, Conference via
+          (<code>deploy.yml:1598-1609</code>): Gateway <code>/health</code>, Identity via <code>/.well-known/jwks.json</code>, Conference via
           anonymous <code>GET /Events</code>, plus the UI root. For the two auth-gated endpoints, <code>/Bookmarks</code> and
           <code>/Notifications/inbox</code>, the asserted status is exactly <strong>401</strong>, not 2xx: an anonymous request must
           be rejected <em>by the service</em>, which only happens when the service is up and serving
-          (<code>deploy.yml:1350-1352</code>, <code>:1413-1416</code>). A security-headers check rides along but is explicitly
-          informational (<code>deploy.yml:1420-1427</code>): a missing hardening header is not a &quot;revision not serving&quot;
+          (<code>deploy.yml:1541-1543</code>, <code>:1604-1607</code>). A security-headers check rides along but is explicitly
+          informational (<code>deploy.yml:1611-1618</code>): a missing hardening header is not a &quot;revision not serving&quot;
           failure and must not trip the fleet-wide rollback.</p>
           <p>On failure the step rolls every app back and still fails the job, with two guards that are worth
-          reading (<code>deploy.yml:1434-1479</code>). Guard 1 re-checks each app&#39;s newest revision and skips the
+          reading (<code>deploy.yml:1625-1670</code>). Guard 1 re-checks each app&#39;s newest revision and skips the
           rollback when it is already serving, so a smoke failure originating elsewhere never takes a healthy
           app down. Guard 2 selects the rollback target by <code>provisioningState == &#39;Provisioned&#39;</code> <strong>and</strong>
           <code>healthState == &#39;Healthy&#39;</code> <strong>and</strong> <code>active == true</code>, excluding the newest by name: a revision that
@@ -1566,7 +1642,7 @@ output appInsightsName    string = appInsights.name</code></pre>
           It also reports separately when a rollback itself failed, so a partially rolled-back fleet never
           looks like a clean auto-revert.</p>
           <p>Only after both gates does the job run its one piece of housekeeping, the <code>buildcache</code> purge
-          described in the foundation section (<code>deploy.yml:1492-1499</code>). The ordering is the point: a
+          described in the foundation section (<code>deploy.yml:1683-1690</code>). The ordering is the point: a
           continue-on-error step placed before the gates would be noise inside the decision; placed after
           them, it can only reclaim storage from a deploy that already shipped.</p>
           <p><code>sqlServerFqdn</code> is an output of <code>main.bicep</code> (each service connects to its own
@@ -1592,7 +1668,7 @@ output appInsightsName    string = appInsights.name</code></pre>
           <p>One honest caveat, recorded in
           <a href="https://ivanball.github.io/docs/adr/061-runtime-secret-management.html" target="_blank" rel="noopener">ADR-061</a>: the pipeline is
           still a plaintext path. Values arrive as <code>@secure()</code> Bicep parameters written from GitHub secrets
-          into <code>/tmp/deploy-params.json</code> at deploy time (<code>deploy.yml:1108-1133</code>). The vault removes the
+          into <code>/tmp/deploy-params.json</code> at deploy time (<code>deploy.yml:1299-1324</code>). The vault removes the
           app-configuration copy of a secret, not the CI copy; rotating one still means rotating a GitHub
           secret and redeploying.</p>
           <hr>
@@ -1618,7 +1694,7 @@ output appInsightsName    string = appInsights.name</code></pre>
           </tr>
           <tr>
           <td>§13 Observability</td>
-          <td>Workspace-based App Insights; per-service <code>OTEL_SERVICE_NAME</code>; Application Map coverage; three SLO scheduled query rules + workbook (<a href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html" target="_blank" rel="noopener">ADR-062</a>); outbox dead-letter, SQL dependency and revision-activation alerts over the same workspace; the 15-minute evaluation cadence and its stated detection-latency trade</td>
+          <td>Workspace-based App Insights; per-service <code>OTEL_SERVICE_NAME</code>; Application Map coverage; three SLO scheduled query rules + workbook (<a href="https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html" target="_blank" rel="noopener">ADR-062</a>); outbox dead-letter, SQL dependency and revision-activation alerts over the same workspace; the <code>hasAnthropic</code>-gated AI-scoring token-ceiling rule over <code>AppMetrics</code>; the 15-minute evaluation cadence and its stated detection-latency trade</td>
           </tr>
           <tr>
           <td>§17 DevOps &amp; Deployment</td>
@@ -1630,25 +1706,25 @@ output appInsightsName    string = appInsights.name</code></pre>
           </tr>
           <tr>
           <td>§31 Cost Efficiency / FinOps</td>
-          <td><code>commonTags</code> on every resource; monthly budget with 80%/100% thresholds; <code>cost-guard.yml</code> surge-drift gate against a uniform <code>maxReplicas</code> 2 baseline; workspace <code>dailyQuotaGb: 1</code>; 25% trace sampling; Warning OTel log floor; Basic-tier DB sizing plus the archived-and-dropped AtlDevCon database; 300s outbox and scheduler polls; the two disabled metric groups plus the 300s metric export interval; 30-second readiness probes; 15-minute SLO-rule and web-test cadences; uniform 0.25 vCPU / 0.5 Gi container sizing; the daily two-step ACR purge task plus its post-deploy re-run</td>
+          <td><code>commonTags</code> on every resource; monthly budget with 80%/100% thresholds; <code>cost-guard.yml</code> surge-drift gate against a uniform <code>maxReplicas</code> 2 baseline; workspace <code>dailyQuotaGb: 1</code>; 25% trace sampling; Warning OTel log floor; Basic-tier DB sizing plus the archived-and-dropped AtlDevCon database; 300s outbox and scheduler polls; the two disabled metric groups plus the 300s metric export interval; 30-second readiness probes; 15-minute SLO-rule and web-test cadences; the <code>aiScoringTokenCeiling</code> two-day Anthropic token alert; uniform 0.25 vCPU / 0.5 Gi container sizing; the daily two-step ACR purge task plus its post-deploy re-run</td>
           </tr>
           </tbody></table></div>
           <hr>
           <h2 id="not-determinable-from-source">Not determinable from source</h2>
           <ul>
           <li>The exact <code>AcrPull</code> and <code>Key Vault Secrets User</code> role-assignment commands used in the out-of-
-          band bootstrap are referenced in comments (<code>main.bicep:906-910</code>, <code>main.bicep:924-927</code>) but the
+          band bootstrap are referenced in comments (<code>main.bicep:972-976</code>, <code>main.bicep:990-993</code>) but the
           commands themselves live in <code>infra/DISASTER-RECOVERY.md</code>, which is private to the ADC repo and out
           of scope for this chapter. A distilled version is published in the framework&#39;s reference runbook,
           <code>MMCA.Common/samples/deployment/DEPLOYMENT.md</code>.</li>
           <li>Whether the Notification Hubs namespace, the <code>adc-push</code> hub and its <code>app-backend</code> rule actually
           exist in a given subscription is not visible here: the template only references them as
-          <code>existing</code> (<code>main.bicep:754-769</code>), and the manual <code>az rest</code> provisioning lives in
+          <code>existing</code> (<code>main.bicep:820-835</code>), and the manual <code>az rest</code> provisioning lives in
           <code>Docs/MobileReleaseRunbook.md</code> section 5, which is private to the ADC repo. With
           <code>deployNotificationHub</code> defaulting to true, a deploy into an environment where they do not exist
           fails at the <code>listKeys()</code> call rather than skipping the wiring.</li>
           <li>Whether the <code>AtlDevCon</code> drop and the bacpac export actually completed in a given subscription is
-          likewise outside the template: <code>main.bicep:635-647</code> records the intent and the restore path, and
+          likewise outside the template: <code>main.bicep:701-713</code> records the intent and the restore path, and
           <code>infra/POST-CUTOVER-atldevcon-downgrade.md</code> records the commands, but the resource group is the
           only place that says what exists now.</li>
           <li>The <code>USE_MANAGED_IDENTITY_SQL</code>, <code>SQL_AAD_ADMIN_LOGIN</code> and <code>SQL_AAD_ADMIN_OID</code> repository variables
@@ -1658,12 +1734,17 @@ output appInsightsName    string = appInsights.name</code></pre>
           that flag set, so treat the template as the shape and the repository variables as the state;
           neither alone tells you what production is doing. The same split applies to
           <code>AZURE_RESOURCE_GROUP</code> and <code>AZURE_SQL_LOCATION</code>, whose fallbacks (<code>acc-rg</code>, <code>westus2</code>) appear only
-          in workflow comments and defaults, and to the whole <code>SMTP_*</code> set (<code>deploy.yml:1123-1127</code>), which
+          in workflow comments and defaults, and to the whole <code>SMTP_*</code> set (<code>deploy.yml:1314-1318</code>), which
           decides whether the SMTP env block on Identity and Notification carries a real relay or empty
-          strings. <code>SYNTHETIC_TRAFFIC_SECRET</code> (<code>deploy.yml:1128</code>) is the same case for the Gateway&#39;s one
+          strings. <code>SYNTHETIC_TRAFFIC_SECRET</code> (<code>deploy.yml:1319</code>) is the same case for the Gateway&#39;s one
           secret.</li>
+          <li>Whether the AI-scoring token-ceiling alert exists in a given environment is not determinable from
+          the template either: it is declared <code>if (hasAnthropic)</code> (<code>main.bicep:475</code>), and <code>hasAnthropic</code>
+          (<code>main.bicep:143</code>) is derived from the <code>ANTHROPIC_API_KEY</code> GitHub secret appended to the parameters
+          file only when it is non-empty (<code>deploy.yml:1428-1430</code>). An environment without that secret
+          deploys the scoring feature inert and the rule not at all.</li>
           <li>The <code>azure/arm-deploy@v2</code> action&#39;s <code>deploymentMode</code> is not set explicitly in <code>deploy.yml</code>
-          (<code>deploy.yml:932-938</code> for foundation, <code>deploy.yml:1298-1304</code> for main), the action defaults to
+          (<code>deploy.yml:1115-1121</code> for foundation, <code>deploy.yml:1489-1495</code> for main), the action defaults to
           Incremental, but this is not stated in the workflow file; it is inferred from the Incremental intent
           documented in the <code>main.bicep</code> comments and the ADC CLAUDE.md.</li>
           </ul>

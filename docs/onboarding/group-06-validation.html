@@ -178,33 +178,33 @@
           chain runs FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; <strong>Validating</strong> -&gt; Timeout -&gt;
           Transactional -&gt; handler, and the query chain is the same minus the transaction. Two decorators feed
           on this chapter&#39;s types: <a href="group-05-cqrs-pipeline.html#validatingcommanddecoratortcommand-tresult"><code>ValidatingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:30</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:31</code>)
           and <a href="group-05-cqrs-pipeline.html#validatingquerydecoratortquery-tresult"><code>ValidatingQueryDecorator&lt;TQuery, TResult&gt;</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingQueryDecorator.cs:34</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingQueryDecorator.cs:35</code>),
           the second added by the ADR&#39;s 2026-08-26 revision so that a query carrying paging or filter input is
           gated the same way a command is. Placement is the point: the Validating stage sits <em>before</em>
           <a href="group-05-cqrs-pipeline.html#transactionalcommanddecoratortcommand-tresult"><code>TransactionalCommandDecorator&lt;TCommand, TResult&gt;</code></a>,
           so an invalid command short-circuits before a database transaction is ever opened
-          (<code>ValidatingCommandDecorator.cs:23-26</code>). <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether reads
+          (<code>ValidatingCommandDecorator.cs:24-27</code>). <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether reads
           and writes are separated and whether cross-cutting behavior lives in the pipeline rather than inside
           use cases: validation here is one decorator, not an <code>if (!valid) return</code> prologue copied into every
           handler. <code>[Rubric §10, Cross-Cutting Concerns]</code> and <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code>
           apply for the same reason: one gate, uniform for REST, gRPC, and event-consumer entry points alike.</p>
           <p><strong>Every registered validator runs, and they run sequentially.</strong> Both decorators materialize their
           injected <code>IEnumerable&lt;IValidator&lt;T&gt;&gt;</code> into an array once
-          (<code>ValidatingCommandDecorator.cs:36</code>, <code>ValidatingQueryDecorator.cs:39</code>) and, when that array is empty,
-          call the inner handler untouched (<code>ValidatingCommandDecorator.cs:64</code>, <code>ValidatingQueryDecorator.cs:68</code>),
+          (<code>ValidatingCommandDecorator.cs:37</code>, <code>ValidatingQueryDecorator.cs:40</code>) and, when that array is empty,
+          call the inner handler untouched (<code>ValidatingCommandDecorator.cs:65</code>, <code>ValidatingQueryDecorator.cs:69</code>),
           so a use case with no validator costs nothing. When validators exist, the decorator loops over <strong>all</strong>
-          of them and unions their failures (<code>ValidatingCommandDecorator.cs:73-83</code>,
-          <code>ValidatingQueryDecorator.cs:76-85</code>) rather than honoring only the first registration. That semantic
+          of them and unions their failures (<code>ValidatingCommandDecorator.cs:74-84</code>,
+          <code>ValidatingQueryDecorator.cs:77-86</code>) rather than honoring only the first registration. That semantic
           is deliberate and is recorded as the 2026-08-31 correction on ADR-014: a use case commonly carries a
           module-authored validator beside a framework-supplied one, and stopping at the first registration
           would turn the others into silently unenforced dead code
-          (<code>ValidatingCommandDecorator.cs:17-21</code>). The loop is sequential on purpose, not a <code>Task.WhenAll</code>: a
+          (<code>ValidatingCommandDecorator.cs:18-22</code>). The loop is sequential on purpose, not a <code>Task.WhenAll</code>: a
           validator is free to reach the database through a scoped repository and a <code>DbContext</code> is not
-          thread-safe (<code>ValidatingCommandDecorator.cs:69-71</code>). Only when at least one failure is collected does
+          thread-safe (<code>ValidatingCommandDecorator.cs:70-72</code>). Only when at least one failure is collected does
           the decorator build a typed failure and return it without calling the handler
-          (<code>ValidatingCommandDecorator.cs:85-93</code>).</p>
+          (<code>ValidatingCommandDecorator.cs:86-94</code>).</p>
           <p><strong>The failure-mapping boundary.</strong> FluentValidation speaks <code>ValidationResult</code> and <code>ValidationFailure</code>;
           the rest of the codebase speaks the <a href="group-01-result-error-handling.html#result">Result pattern</a>
           (<a href="https://ivanball.github.io/docs/adr/013-result-pattern.html" target="_blank" rel="noopener">ADR-013</a>).
@@ -216,8 +216,8 @@
           (<code>ValidationFailureExtensions.cs:19-21</code>), which stamps
           <a href="group-01-result-error-handling.html#errortype"><code>ErrorType.Validation</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:37-38</code>). Each decorator passes the
-          use-case type name as the <code>source</code> (<code>ValidatingCommandDecorator.cs:82</code>,
-          <code>ValidatingQueryDecorator.cs:85</code>), so a downstream consumer can see which command or query produced
+          use-case type name as the <code>source</code> (<code>ValidatingCommandDecorator.cs:83</code>,
+          <code>ValidatingQueryDecorator.cs:86</code>), so a downstream consumer can see which command or query produced
           the failures, and the failing property name travels as the error&#39;s <code>target</code>. <code>ErrorType.Validation</code>
           is what the edge maps to HTTP 400: the client-side reader carries the inverse mapping explicitly
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:105</code>), and the
@@ -311,7 +311,7 @@
           rule sets instead (<code>AddressValidationRules.cs:9-11</code>).</p>
           <p><strong>Convention over configuration: the request-to-command bridge.</strong> Most commands wrap a request record
           and implement <a href="group-05-cqrs-pipeline.html#icommandwithrequestout-trequest"><code>ICommandWithRequest&lt;out TRequest&gt;</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/ICommandWithRequest.cs:14</code>). Rather than
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Contracts/ICommandWithRequest.cs:14</code>). Rather than
           make module authors write a validator for both the request and the command,
           <a href="#commandrequestvalidatortcommand-trequest"><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommandRequestValidator.cs:30</code>) takes
@@ -319,17 +319,17 @@
           an assembly scanned twice does not report each failure twice, and attaches each one with
           <code>RuleFor(c =&gt; c.Request).SetValidator(validator)</code> (<code>CommandRequestValidator.cs:33-41</code>). The wiring is
           reflective and lives in the module scan: <code>ScanModuleApplicationServices</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:179</code>) first calls
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:181</code>) first calls
           FluentValidation&#39;s <code>AddValidatorsFromAssembly</code> to pick up every hand-written validator by convention
-          (<code>DependencyInjection.cs:250</code>), then walks the assembly for types implementing
+          (<code>DependencyInjection.cs:252</code>), then walks the assembly for types implementing
           <code>ICommandWithRequest&lt;&gt;</code>, constructs the closed <code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code>, and
           registers it as <code>IValidator&lt;TCommand&gt;</code> with <strong><code>TryAddTransient</code></strong>, so an explicitly authored command
-          validator always wins (<code>DependencyInjection.cs:252-268</code>). Common&#39;s own validators are registered
+          validator always wins (<code>DependencyInjection.cs:254-270</code>). Common&#39;s own validators are registered
           separately in <code>AddApplication</code> via <code>AddValidatorsFromAssemblyContaining&lt;ClassReference&gt;()</code>, because
-          the per-module scan only sees the module&#39;s own assembly (<code>DependencyInjection.cs:46-49</code>); that call
+          the per-module scan only sees the module&#39;s own assembly (<code>DependencyInjection.cs:48-51</code>); that call
           is what puts <a href="#addressvalidator"><code>AddressValidator</code></a> in the container. For a command the reflective
           scan cannot see, for example a closed generic constructed at registration time,
-          <code>AddCommandRequestValidator&lt;TCommand, TRequest&gt;()</code> (<code>DependencyInjection.cs:475-478</code>) is the explicit
+          <code>AddCommandRequestValidator&lt;TCommand, TRequest&gt;()</code> (<code>DependencyInjection.cs:477-480</code>) is the explicit
           form of the same registration, with the same <code>TryAdd</code> precedence. <code>[Rubric §2, Design Patterns]</code>
           (convention over configuration, plus the Decorator pattern the gate itself rides on) and
           <code>[Rubric §16, Maintainability]</code> (a new command inherits validation without a registration line) both
@@ -345,13 +345,13 @@
           <code>&quot;Access denied.&quot;</code> message (<code>CurrentUserServiceExtensions.cs:12</code>, <code>:35-46</code>). The error <em>code</em> stays a
           parameter because it names the module, which the framework cannot know. ADC&#39;s Engagement handlers use
           it as their first statement (<code>&quot;CheckIns.Forbidden&quot;</code> in the five check-in handlers, for example
-          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/CheckIns/UseCases/CheckInAttendee/CheckInAttendeeHandler.cs:33</code>,
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/CheckIns/UseCases/CheckInAttendee/CheckInAttendeeHandler.cs:35</code>,
           and <code>&quot;Points.Forbidden&quot;</code> in the two points handlers, for example
-          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/UseCases/GetMyPoints/GetMyPointsHandler.cs:40</code>).
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/UseCases/GetMyPoints/GetMyPointsHandler.cs:41</code>).
           Adopting it moved those codes out of the modules and into framework arguments, which is visible in
           governance: ADC&#39;s error-catalog fitness test lowered its scanned-code floor to 57 to account for
           codes the scanner can no longer see as module literals
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/ErrorCatalogTests.cs:88-106</code>). That is
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:88-106</code>). That is
           <code>[Rubric §34, Architecture Governance and Documentation]</code> at work: a shared abstraction is not
           adopted until the tests that measure the codebase are updated to match.</p>
           <p><strong>End to end, concretely.</strong> A request arrives at a controller or endpoint, is mapped to a command, and
@@ -365,7 +365,7 @@
           <code>:24-25</code>). If every validator passes, the Timeout and Transactional
           decorators run and the handler executes inside a transaction. If any fails, <code>ToErrors</code> converts the
           union of failures into <code>ErrorType.Validation</code> errors, the decorator logs a debug line naming the
-          command and the error count (<code>ValidatingCommandDecorator.cs:96-106</code>) and returns a failed <code>Result</code>
+          command and the error count (<code>ValidatingCommandDecorator.cs:97-107</code>) and returns a failed <code>Result</code>
           <strong>without touching the database</strong>; the edge maps it to a 400 with per-property messages. All of it
           lives in <code>MMCA.Common.Application</code> so ADC, Store, and Helpdesk inherit the same email, password,
           address, id, and URL rules and the same auto-validation convention. Module validators express only
@@ -605,7 +605,7 @@
           </li>
           <li><p><strong>Depends on</strong>: <a href="group-05-cqrs-pipeline.html#icommandwithrequestout-trequest"><code>ICommandWithRequest&lt;out TRequest&gt;</code></a>
           (Level 0; its <code>Request</code> property is the bridge, declared at
-          <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/ICommandWithRequest.cs:17</code>) and
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Contracts/ICommandWithRequest.cs:17</code>) and
           FluentValidation&#39;s <code>AbstractValidator&lt;T&gt;</code> / <code>IValidator&lt;T&gt;</code> / <code>SetValidator</code>. Registered by the
           Application-layer <a href="group-14-module-system-composition.html#dependencyinjection"><code>DependencyInjection</code></a>
           scan.</p>
@@ -635,7 +635,7 @@
           twice (a module assembly scanned twice, say) reports each failure once rather than in duplicate.</li>
           <li>An <strong>empty</strong> collection is not an error: the loop simply adds no rule, and the bridge is a no-op for
           a request with no rules (the same point is made at
-          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:475-476</code>).</li>
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:477-478</code>).</li>
           </ul>
           </li>
           <li><p><strong>Why it&#39;s built this way</strong>: it removes the most common piece of validation boilerplate (restating
@@ -643,17 +643,17 @@
           convention never blocks a bespoke case. Two registration paths exist, both using <code>TryAddTransient</code>:
           the reflection scan in <code>ScanModuleApplicationServices</code> walks the module assembly for commands
           implementing <code>ICommandWithRequest&lt;&gt;</code>, builds the closed generic and registers it
-          (<code>DependencyInjection.cs:252-268</code>, <code>TryAddTransient</code> at <code>:267</code>) after
+          (<code>DependencyInjection.cs:254-270</code>, <code>TryAddTransient</code> at <code>:267</code>) after
           <code>services.AddValidatorsFromAssembly(moduleAssembly)</code> has already picked up every hand-written
           validator (<code>:250</code>); and the explicit helper <code>AddCommandRequestValidator&lt;TCommand, TRequest&gt;()</code>
-          (<code>DependencyInjection.cs:475-479</code>) does the same thing for one pair, which is how the generic
+          (<code>DependencyInjection.cs:477-481</code>) does the same thing for one pair, which is how the generic
           create/update/delete registration helpers wire their commands (<code>:349</code>, <code>:405</code>, <code>:454</code>). Because the
           explicit <code>IValidator&lt;TCommand&gt;</code> is registered first, it always wins.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: the closed generic is registered per command during module scanning. At runtime
           <a href="group-05-cqrs-pipeline.html#validatingcommanddecoratortcommand-tresult"><code>ValidatingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
           injects <code>IEnumerable&lt;IValidator&lt;TCommand&gt;&gt;</code> and materializes it into an array
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:33</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:34</code>,
           <code>:36</code>), skips validation entirely when the array is empty (<code>:64</code>), and otherwise runs every validator
           in turn (<code>:73</code>), accumulating failures through
           <a href="#validationfailureextensions"><code>ValidationFailureExtensions.ToErrors</code></a> (<code>:82</code>). Covered by
@@ -707,7 +707,7 @@
           </tr>
           </tbody></table></div>
           <p>The limits are <code>public static readonly int</code> fields on <code>AddressInvariants</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:12</code>, <code>:15</code>, <code>:18</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:12</code>, <code>:15</code>, <code>:18</code>,
           <code>:27</code>), the same constants the EF entity configurations use, so the column width and the validator
           cannot drift apart.</p>
           </li>
@@ -735,7 +735,7 @@
           <code>AddressLine1Rules&lt;T&gt;</code> (<code>:34-37</code>) is the only one of the six with <code>NotEmpty()</code>, matching the domain
           invariant <code>AddressInvariants.EnsureAddressLine1IsValid</code>, which is likewise the only field check
           <code>EnsureAddressIsValid</code> performs
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:34-40</code>). Its selector
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:34-40</code>). Its selector
           is a non-nullable <code>Expression&lt;Func&lt;T, string&gt;&gt;</code>. The other three take a nullable
           <code>Expression&lt;Func&lt;T, string?&gt;&gt;</code> (<code>:45</code>, <code>:55</code>, <code>:85</code>) and enforce <code>MaximumLength</code> only, matching the
           fact that line 2, city and country are optional on the value object. Every <code>WithMessage</code> interpolates
@@ -796,14 +796,14 @@
           <code>RuleFor(selector).MaximumLength(AddressInvariants.StateMaxLength)</code>. The selector is <strong>nullable</strong>
           (<code>string?</code>), which encodes the fact that state is optional on
           <a href="group-02-domain-building-blocks.html#address"><code>Address</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Address.cs:32</code> declares <code>State</code> as
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Address.cs:32</code> declares <code>State</code> as
           <code>string?</code>): there is no <code>NotEmpty()</code> in the chain, so <code>null</code> and <code>&quot;&quot;</code> both pass and only an
           over-length value fails. The message is built with
           <code>string.Create(CultureInfo.InvariantCulture, $&quot;State cannot be longer than {AddressInvariants.StateMaxLength} characters&quot;)</code>
           (<code>:67</code>), so the number a user sees is the same constant the rule enforces, and the interpolation is
           culture-invariant rather than dependent on the ambient culture of the validating thread. The current
           value of that constant is <code>100</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:21</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:21</code>).</li>
           <li><strong>Why it&#39;s built this way</strong>: <code>AddressInvariants</code> is described in its own doc comment as the single
           place the max lengths are shared with &quot;EF entity configurations and FluentValidation validators&quot;
           (<code>AddressInvariants.cs:5-7</code>). Binding the fragment to the constant rather than to a literal is what
@@ -833,9 +833,9 @@
           <code>RuleFor(selector).MaximumLength(AddressInvariants.ZipCodeMaxLength)</code> with the message
           &quot;Zip Code cannot be longer than {n} characters&quot;, again built through
           <code>string.Create(CultureInfo.InvariantCulture, ...)</code>. <code>ZipCodeMaxLength</code> is <code>20</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:24</code>), the tightest of
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:24</code>), the tightest of
           the six address constants, and the field is nullable on the value object
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Address.cs:36</code>), so an absent postal code
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/Address.cs:36</code>), so an absent postal code
           is valid.</li>
           <li><strong>Why it&#39;s built this way</strong>: postal-code formats differ by country, so the framework-level rule
           deliberately bounds length only and leaves any national format rule to the module that knows the
@@ -891,7 +891,7 @@
           construct one per use.</li>
           <li><strong>Why it&#39;s built this way</strong>: the same invariants are also enforced inside the domain by
           <code>AddressInvariants.EnsureAddressIsValid</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:35</code>), which the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Contact/AddressInvariants.cs:35</code>), which the
           <code>Address</code> factory calls. The validator exists so a bad address is rejected at the application
           boundary with a per-field, user-facing message instead of surfacing as a single factory failure after
           the command has already entered the pipeline; both paths read the same constants, so they cannot
@@ -1065,18 +1065,18 @@
           <a href="group-05-cqrs-pipeline.html#validatingcommanddecoratortcommand-tresult"><code>ValidatingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
           loops over every registered <code>IValidator&lt;TCommand&gt;</code> and, for each result that is not valid, does
           <code>errors.AddRange(validationResult.ToErrors(typeof(TCommand).Name))</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:82</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:83</code>,
           accumulating into the <code>List&lt;Error&gt;? errors</code> declared at <code>:72</code> and lazily allocated at <code>:81</code>).
           <a href="group-05-cqrs-pipeline.html#validatingquerydecoratortquery-tresult"><code>ValidatingQueryDecorator&lt;TQuery, TResult&gt;</code></a>
           does the identical thing with <code>typeof(TQuery).Name</code>
-          (<code>MMCA.Common.Application/UseCases/Decorators/ValidatingQueryDecorator.cs:85</code>). Note that the
+          (<code>MMCA.Common.Application/UseCases/Decorators/ValidatingQueryDecorator.cs:86</code>). Note that the
           accumulate-across-all-validators shape is deliberate: the decorator&#39;s own doc comment
-          (<code>ValidatingCommandDecorator.cs:17-22</code>) records that running only the first registered validator would
+          (<code>ValidatingCommandDecorator.cs:18-23</code>) records that running only the first registered validator would
           turn the rest into silently unenforced dead code, and that collecting all of them lets the caller see
           every broken rule in one response instead of one per round trip. The remaining three call sites are in
           <a href="group-08-auth.html#authenticationservicebasetuser"><code>AuthenticationServiceBase&lt;TUser&gt;</code></a>, which validates
           its request before touching the user store and passes the method name as <code>source</code>:
-          <code>nameof(LoginAsync)</code> (<code>MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:127</code>),
+          <code>nameof(LoginAsync)</code> (<code>MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:130</code>),
           <code>nameof(RegisterAsync)</code> (<code>:193</code>), and <code>nameof(RefreshTokenAsync)</code> (<code>:273</code>), each wrapping the result in
           <code>Result.Failure&lt;AuthenticationResponse&gt;(...)</code>. Covered by
           <a href="group-27-testing-infrastructure.html#validationfailureextensionstests"><code>ValidationFailureExtensionsTests</code></a>.</p>
@@ -1140,7 +1140,7 @@
           <code>Result.Failure&lt;UserIdentifierType&gt;(new Error(code, message, errorType, source))</code>. The <code>is { }</code> property
           pattern is the null test and the unwrap in one step: <code>UserId</code> is declared <code>UserIdentifierType?</code> on
           <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:15</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:15</code>),
           and <code>userId</code> is the non-nullable <code>int</code> behind it. Note the failure path constructs the
           <a href="group-01-result-error-handling.html#error"><code>Error</code></a> record directly rather than through a factory, because
           the classification is a caller-supplied parameter here and the factories
@@ -1156,13 +1156,13 @@
           <code>&quot;Points.Forbidden&quot;</code> out of module-side <code>Error</code> factory calls and into arguments of this framework
           member made them invisible to the IL literal scan that counts ADC&#39;s error codes, which is part of why
           <code>ErrorCatalogTests.MinimumErrorCodes</code> sits at 57
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/ErrorCatalogTests.cs:95-106</code>). The codes ship
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:95-106</code>). The codes ship
           unchanged; only the scanner&#39;s visibility of them changed.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: six ADC Engagement handlers call it as their first statement after the null guard,
           then branch on <code>caller.IsFailure</code> and propagate <code>caller.Errors</code>:
           <a href="group-22-engagement-module.html#recordsponsorvisithandler"><code>RecordSponsorVisitHandler</code></a>
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/CheckIns/UseCases/RecordSponsorVisit/RecordSponsorVisitHandler.cs:48</code>),
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/CheckIns/UseCases/RecordSponsorVisit/RecordSponsorVisitHandler.cs:50</code>),
           <a href="group-22-engagement-module.html#recordroomcheckinhandler"><code>RecordRoomCheckInHandler</code></a>
           (<code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:41</code>),
           <a href="group-22-engagement-module.html#manualcheckinhandler"><code>ManualCheckInHandler</code></a>

@@ -893,6 +893,31 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>Extension members as the public DI surface: the framework&#39;s entire <code>Add*</code> registration surface is written as C# <code>extension(T)</code> blocks inside static classes under <code>LangVersion preview</code> in all four repos (82 blocks in 65 files, 23 of them <code>extension(IServiceCollection services)</code>, measured 2026-09-01); the call site is indistinguishable from a classic extension method and the compiler-emitted classic static method keeps the choice reversible, with the public-API baselines recording both shapes</td>
           <td><a href="group-14-module-system-composition.html">g14</a></td>
           </tr>
+          <tr>
+          <td>107</td>
+          <td><code>ExecuteInTransactionAsync</code> is a re-entrant, retriable, commit-once unit: an inner call joins the ambient transaction instead of nesting, the whole delegate retries under EF&#39;s execution strategy with a change-tracker reset per attempt, a failed <code>Result</code> rolls back exactly like a throw, and a commit whose outcome cannot be known surfaces as <code>TransactionCommitAmbiguousException</code> naming what each physical source did</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-05-cqrs-pipeline.html">g05</a></td>
+          </tr>
+          <tr>
+          <td>108</td>
+          <td>One cross-replica mutual-exclusion primitive, <code>IDistributedLock</code> (<code>TryAcquireAsync(key, ttl, wait)</code>): non-reentrant, TTL-bounded, explicitly best-effort, owner-scoped idempotent release; Redis-backed where a connection exists, a warn-once process-local fallback where not; it collapses duplicate work and is never the only guard on an invariant persistence can enforce</td>
+          <td><a href="group-05-cqrs-pipeline.html">g05</a>/<a href="group-14-module-system-composition.html">g14</a></td>
+          </tr>
+          <tr>
+          <td>109</td>
+          <td>Feature-by-folder as an enforced convention: the aggregate names the first folder level in Domain/Application/Shared, a technical root then the aggregate in UI/API/Infrastructure, at most twelve direct code files per folder, namespaces follow folders, and a layout change ships as a breaking release with a migration map (<code>FolderWidthTestsBase</code> enforces the cap in every repo)</td>
+          <td><a href="group-27-testing-infrastructure.html">g27</a></td>
+          </tr>
+          <tr>
+          <td>110</td>
+          <td>Rubric v2 keeps 34 categories with stable numbering, replacing the two overlap-heavy ones in place: section 10 becomes Messaging &amp; Integration Architecture and section 16 becomes AI-Native Application Architecture (N/A until a product feature calls a model), with criteria added to eleven others</td>
+          <td>gap: the chapter rubric tags still use the pre-v2 numbering (section 16 read as Maintainability); see the 2026-09-05 note in <a href="99-coverage-audit.html">99-coverage-audit</a></td>
+          </tr>
+          <tr>
+          <td>111</td>
+          <td>AI session scoring governed as a production dependency: the model call sits behind <code>IAiScoringService</code> (declared in Application, carrying <code>ModelId</code> + <code>PromptVersion</code>, both persisted with every score), a golden-replay + prompt-contract evaluation suite is a deploy precondition, the untrusted half of the prompt is delimited, escaped and redacted, the response is schema-constrained, and token spend is metered and alerted against a budgeted ceiling</td>
+          <td><a href="group-18-conference-application.html">g18</a>/<a href="group-19-conference-infrastructure.html">g19</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>
           <hr>
