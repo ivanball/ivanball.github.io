@@ -687,21 +687,26 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p>The primary CI/CD pipeline for the Atlanta Developers Conference application. It runs on every push to
           <code>main</code>, on every pull request targeting <code>main</code>, and on manual <code>workflow_dispatch</code>. On a push to <code>main</code> (or
           dispatch) it deploys to Azure; on a pull request it runs the validation jobs only, as a merge gate.</p>
-          <p>It is <strong>fourteen jobs</strong>, and the shape of the split is the interesting fact. A <code>changes</code> classifier
+          <p>It is <strong>sixteen jobs</strong>, and the shape of the split is the interesting fact. A <code>changes</code> classifier
           (<code>deploy.yml:62</code>) that everything keys off; three pull-request-only validation jobs, <code>build-and-test</code>
-          (<code>:189</code>), <code>integration-tests</code> (<code>:528</code>) and <code>coverage</code> (<code>:616</code>); a <code>supply-chain</code> job (<code>:428</code>) that runs on
-          both events and gates the deploy; six proof gates that run only on the deploy path, <code>backend-test-gate</code>
-          (<code>:394</code>), <code>cost-guard</code> (<code>:665</code>), <code>e2e-gate</code> (<code>:677</code>), <code>dr-freshness</code> (<code>:699</code>), <code>load-freshness</code> (<code>:756</code>)
-          and <code>cross-service-freshness</code> (<code>:815</code>); and three deploy-path jobs, <code>foundation</code> (<code>:906</code>), <code>build-images</code>
-          (<code>:960</code>) and <code>deploy</code> (<code>:1051</code>).</p>
+          (<code>:205</code>), <code>integration-tests</code> (<code>:612</code>) and <code>coverage</code> (<code>:700</code>); a <code>supply-chain</code> job (<code>:512</code>) that runs on
+          both events and gates the deploy; eight proof gates that run only on the deploy path,
+          <code>backend-test-gate</code> (<code>:410</code>), <code>ai-eval-gate</code> (<code>:461</code>), <code>cost-guard</code> (<code>:749</code>), <code>e2e-gate</code> (<code>:761</code>),
+          <code>dr-freshness</code> (<code>:783</code>), <code>load-freshness</code> (<code>:840</code>), <code>cross-service-freshness</code> (<code>:899</code>) and
+          <code>cross-browser-freshness</code> (<code>:1004</code>); and three deploy-path jobs, <code>foundation</code> (<code>:1089</code>), <code>build-images</code>
+          (<code>:1143</code>) and <code>deploy</code> (<code>:1234</code>).</p>
           <p>Three structural decisions explain most of that. Validation is PR-only because <code>main</code> requires branches to
           be up to date, so the PR already tested the exact tree that merges. The old sequential Phase 1 and
           Phase 2 (foundation Bicep, then six <code>docker build</code> steps) were lifted out of <code>deploy</code> into their own jobs
           so they run <strong>concurrently with</strong> the roughly 20-minute <code>e2e-gate</code> instead of behind it
-          (<code>deploy.yml:898-905</code>, <code>:940-948</code>); <code>deploy</code> itself is now Phase 3 onward and consumes the prebuilt image
-          tags (<code>:1065-1067</code>). And because PR-only validation composed with a <code>ui</code>-scoped <code>e2e-gate</code> left a
+          (<code>deploy.yml:1081-1088</code>, <code>:1123-1131</code>); <code>deploy</code> itself is now Phase 3 onward and consumes the prebuilt image
+          tags (<code>:1252-1254</code>). And because PR-only validation composed with a <code>ui</code>-scoped <code>e2e-gate</code> left a
           backend-only push to <code>main</code> deploying with <strong>no test execution at all</strong>, <code>backend-test-gate</code> was added as
-          the exact complement of <code>e2e-gate</code> (<code>:375-393</code>), so exactly one of the two runs on every code deploy.</p>
+          the exact complement of <code>e2e-gate</code> (<code>:391-409</code>), so exactly one of the two runs on every code deploy.
+          Two later gates extend the same instinct to what the test jobs cannot see: <code>ai-eval-gate</code> covers the one
+          component whose behavior can change with no code change at all (<code>:440-460</code>), and
+          <code>cross-browser-freshness</code> keeps firefox and webkit coverage mandatory without putting either engine back
+          on the per-deploy critical path (<code>:1004-1079</code>).</p>
           <h3 id="triggers-and-concurrency">Triggers and concurrency</h3>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:3-8</span>
 <span class="hljs-attr">on:</span>
@@ -745,17 +750,19 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           it. A <code>permissions:</code> block is a ceiling for every workflow it calls, not just for its own steps.</p>
           <p>[Rubric §11, Security] is embodied: OIDC federated identity eliminates the secret-rotation burden and
           the credential-leak surface area of a static client secret. The federated credential is scoped to the
-          <code>production</code> environment (<code>deploy.yml:911-916</code>), so only jobs that declare <code>environment: production</code> can
+          <code>production</code> environment (<code>deploy.yml:1094-1099</code>), so only jobs that declare <code>environment: production</code> can
           obtain the Azure token.</p>
           <h3 id="job-changes-the-docs-only-short-circuit-and-the-per-image-dirty-map">Job: <code>changes</code>, the docs-only short-circuit and the per-image dirty map</h3>
-          <p>The first job (<code>deploy.yml:62-187</code>) classifies the diff and exposes <strong>eight</strong> outputs
-          (<code>deploy.yml:65-73</code>), which is where it differs from Common&#39;s single-flag version:</p>
+          <p>The first job (<code>deploy.yml:62-203</code>) classifies the diff and exposes <strong>nine</strong> outputs
+          (<code>deploy.yml:65-74</code>), which is where it differs from Common&#39;s single-flag version:</p>
           <ul>
-          <li><code>code</code>: false only when every changed path ends in <code>.md</code> (<code>deploy.yml:123-126</code>).</li>
+          <li><code>code</code>: false only when every changed path ends in <code>.md</code> (<code>deploy.yml:127-130</code>).</li>
           <li><code>ui</code>: true only when the diff can change what a browser sees, that is the UI hosts, the Gateway, the
           AppHost, the E2E project, a module-owned Blazor UI project, a workflow file, or a build-wide file such
-          as <code>Directory.Packages.props</code> or a <code>.slnx</code>/<code>.slnf</code> (<code>deploy.yml:129-142</code>).</li>
-          <li>six <code>img_*</code> flags, one per container image (<code>deploy.yml:146-176</code>), the per-leg dirty map the
+          as <code>Directory.Packages.props</code> or a <code>.slnx</code>/<code>.slnf</code> (<code>deploy.yml:133-146</code>).</li>
+          <li><code>scoring</code>: true only for the three trees that own the AI session scorer, its use case and its
+          evaluation suite (<code>deploy.yml:152-157</code>), the flag that selects the paid half of <code>ai-eval-gate</code>.</li>
+          <li>six <code>img_*</code> flags, one per container image (<code>deploy.yml:161-191</code>), the per-leg dirty map the
           <code>build-images</code> matrix consumes.</li>
           </ul>
           <p>The flags are consumed differently, and the difference is the point. <code>code</code> guards the <strong>heavy steps</strong>
@@ -766,35 +773,40 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           run (<code>deploy.yml:53-55</code>), and (since TD-20) it equally selects <code>backend-test-gate</code> for exactly the
           deploys <code>e2e-gate</code> skips. The <code>img_*</code> flags let a build leg whose image is clean skip the build and push
           entirely.</p>
-          <p>All eight outputs are fail-safe in both directions. An unknown push range (a new branch or a forced ref,
-          where <code>github.event.before</code> is empty or all zeros) sets <code>code</code>, <code>ui</code> and every image to true rather than
-          guessing from a single commit (<code>deploy.yml:87-97</code>), and a failed <code>git diff</code> does the same
-          (<code>deploy.yml:100-111</code>). Inside the classifier loop the default arm of each <code>case</code> is also <code>true</code>
-          (<code>deploy.yml:125</code>, <code>:141</code>, <code>:173-175</code>), so an unrecognized path counts as code, as UI-affecting, and as
-          dirtying every image. Over-running CI wastes runner minutes; under-running it ships an unverified change.</p>
+          <p>All nine outputs are fail-safe in both directions, with one deliberate exception noted below. An unknown push range (a new branch or a forced ref,
+          where <code>github.event.before</code> is empty or all zeros) sets <code>code</code>, <code>ui</code>, <code>scoring</code> and every image to true
+          rather than
+          guessing from a single commit (<code>deploy.yml:88-99</code>), and a failed <code>git diff</code> does the same
+          (<code>deploy.yml:102-114</code>). Inside the classifier loop the default arm of each <code>case</code> is also <code>true</code>
+          (<code>deploy.yml:129</code>, <code>:145</code>, <code>:188-190</code>), so an unrecognized path counts as code, as UI-affecting, and as
+          dirtying every image. Over-running CI wastes runner minutes; under-running it ships an unverified change.
+          The exception is <code>scoring</code>, whose per-path default arm is empty rather than <code>true</code> (<code>deploy.yml:156</code>):
+          its only consumer is the paid live-judge step of <code>ai-eval-gate</code>, so a false positive there spends money
+          on every unrelated deploy, while the two key-free tiers of that gate already run unconditionally
+          (<code>deploy.yml:147-151</code>).</p>
           <p>The <code>ui</code> classifier carries a scar worth reading: <code>Source/Modules/*.UI/*</code> and <code>Source/Modules/*.UI.*/*</code>
-          are listed explicitly ahead of the general <code>Source/Modules/*</code> arm (<code>deploy.yml:139-140</code>), because
+          are listed explicitly ahead of the general <code>Source/Modules/*</code> arm (<code>deploy.yml:143-144</code>), because
           module-owned Blazor UI ships to the browser and the earlier ordering had swallowed it into the
           backend-only bucket.</p>
           <p><strong>The <code>img_*</code> map is a fan-in graph, not a path-to-image mapping</strong>, and that is the part worth
           internalizing. First match wins, so the shared trees are listed before the per-image ones
-          (<code>deploy.yml:144-145</code>). Build-wide inputs (version pins, MSBuild props, the SDK band, the feed config,
+          (<code>deploy.yml:159-160</code>). Build-wide inputs (version pins, MSBuild props, the SDK band, the feed config,
           the solution files, any lock file, this workflow, the Aspire AppHost and migrations tree) dirty <strong>every</strong>
-          image (<code>deploy.yml:151-153</code>). A module&#39;s <code>.Shared</code> project carries the DTOs and identifier aliases that
+          image (<code>deploy.yml:166-168</code>). A module&#39;s <code>.Shared</code> project carries the DTOs and identifier aliases that
           every service host <em>and</em> the Blazor UI compile against, so one <code>.Shared</code> edit dirties everything that
           ships module code, and only the Gateway (pure YARP over packages, referencing no module) escapes
-          (<code>deploy.yml:154-159</code>). A <code>.proto</code> or adapter change in any <code>.Contracts</code> project dirties all four service
-          images, because every service is both a gRPC server and a client of its peers (<code>deploy.yml:160-163</code>).
-          Only after those does a per-service or per-host path map to its single image (<code>deploy.yml:164-170</code>).</p>
+          (<code>deploy.yml:169-174</code>). A <code>.proto</code> or adapter change in any <code>.Contracts</code> project dirties all four service
+          images, because every service is both a gRPC server and a client of its peers (<code>deploy.yml:175-178</code>).
+          Only after those does a per-service or per-host path map to its single image (<code>deploy.yml:179-185</code>).</p>
           <p>[Rubric §31, Cost Efficiency / FinOps] is served here in a form that costs nothing at runtime: the
           classifier is one <code>git diff</code> and a <code>case</code> loop, and it removes both the browser leg and up to six image
           builds from deploys that cannot need them.</p>
           <h3 id="job-build-and-test-1">Job: <code>build-and-test</code></h3>
-          <p><strong>Pull-request-only</strong> (<code>deploy.yml:190,194</code>): <code>needs: changes</code> plus <code>if: github.event_name == &#39;pull_request&#39;</code>. The comment gives the rationale (<code>deploy.yml:191-193</code>): under strict
+          <p><strong>Pull-request-only</strong> (<code>deploy.yml:206,194</code>): <code>needs: changes</code> plus <code>if: github.event_name == &#39;pull_request&#39;</code>. The comment gives the rationale (<code>deploy.yml:207-209</code>): under strict
           require-branches-up-to-date protection the PR validates the exact tree that merges, so re-running the full
           CI on the post-merge push is redundant. Every heavy step below additionally carries <code>if: needs.changes.outputs.code == &#39;true&#39;</code>, so a docs-only PR still posts this job&#39;s required status green.
           (The deploy-path complement of this decision is <code>backend-test-gate</code>, covered after this job.)</p>
-          <p><strong>Step 1, Setup and restore</strong> (<code>deploy.yml:251-266</code>):</p>
+          <p><strong>Step 1, Setup and restore</strong> (<code>deploy.yml:267-282</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Restore</span> <span class="hljs-string">dependencies</span>
   <span class="hljs-attr">run:</span> <span class="hljs-string">dotnet</span> <span class="hljs-string">restore</span> <span class="hljs-string">MMCA.ADC.CI.slnf</span> <span class="hljs-string">--locked-mode</span>
   <span class="hljs-attr">env:</span>
@@ -805,51 +817,51 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           requiring workloads beyond the standard .NET SDK. <code>GITHUB_TOKEN</code> is passed as an env var so the NuGet
           credential provider can authenticate to GitHub Packages and pull the MMCA.Common packages.</p>
           <p><code>--locked-mode</code> is what makes the NuGet cache above it trustworthy. The setup step keys
-          <code>~/.nuget/packages</code> on <code>**/packages.lock.json</code> (<code>deploy.yml:259-260</code>), and the comment records the
-          reasoning (<code>deploy.yml:256-258</code>): the committed lock files make the key exact, and locked mode means a
+          <code>~/.nuget/packages</code> on <code>**/packages.lock.json</code> (<code>deploy.yml:275-276</code>), and the comment records the
+          reasoning (<code>deploy.yml:272-274</code>): the committed lock files make the key exact, and locked mode means a
           cache hit is authoritative because the restore cannot resolve anything the key did not account for.</p>
-          <p><strong>Step 2, Build</strong> (<code>deploy.yml:268-270</code>): <code>dotnet build MMCA.ADC.CI.slnf --no-restore -c Release</code>, same
+          <p><strong>Step 2, Build</strong> (<code>deploy.yml:284-286</code>): <code>dotnet build MMCA.ADC.CI.slnf --no-restore -c Release</code>, same
           TreatWarningsAsErrors + five-analyzer enforcement as Common.</p>
-          <p><strong>Step 3, Unit and architecture tests with coverage</strong> (<code>deploy.yml:276-284</code>):</p>
+          <p><strong>Step 3, Unit and architecture tests with coverage</strong> (<code>deploy.yml:292-300</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet tool install --global dotnet-coverage
 dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
   <span class="hljs-string">&quot;dotnet test --solution MMCA.ADC.CI.slnf --no-build -c Release --minimum-expected-tests 1&quot;</span></code></pre>
           <p>As in Common&#39;s CI, the run is wrapped in <code>dotnet-coverage collect</code> (it returns the inner exit code so a
-          failure still gates) and uploaded as the <code>coverage-unit</code> artifact (<code>deploy.yml:286-294</code>, retention trimmed
+          failure still gates) and uploaded as the <code>coverage-unit</code> artifact (<code>deploy.yml:302-310</code>, retention trimmed
           to 14 days) for the report-only <code>coverage</code> job. Same <code>--minimum-expected-tests 1</code> guard. Covers unit tests
           for all module layers plus <code>Architecture.Tests</code> (NetArchTest fitness functions, layer flow, domain purity,
           module isolation).</p>
           <p>[Rubric §14, Testability &amp; Test Strategy] is served: architecture tests enforce that the modular
           structure is not accidentally violated by a new project reference (e.g. <code>Domain</code> referencing
           <code>Infrastructure</code>).</p>
-          <p><strong>Step 4, Unit-tier coverage floor</strong> (<code>deploy.yml:296-321</code>). Unlike Common, ADC enforces its floor <strong>here</strong>
-          rather than in the <code>coverage</code> job, and the comment says why (<code>deploy.yml:298-299</code>): <code>build-and-test</code> is a
+          <p><strong>Step 4, Unit-tier coverage floor</strong> (<code>deploy.yml:312-337</code>). Unlike Common, ADC enforces its floor <strong>here</strong>
+          rather than in the <code>coverage</code> job, and the comment says why (<code>deploy.yml:314-315</code>): <code>build-and-test</code> is a
           required PR check, while <code>coverage</code> is report-only and absent from <code>deploy</code>&#39;s <code>needs</code>, so a floor living
-          there would gate nothing. The floor is <strong>55.5%</strong> line coverage (<code>deploy.yml:319</code>), measured with
-          ReportGenerator over <code>+MMCA.ADC.*;-*.Tests;-MMCA.ADC.*.Service;-MMCA.ADC.*.Contracts</code> (<code>deploy.yml:317</code>).</p>
+          there would gate nothing. The floor is <strong>55.5%</strong> line coverage (<code>deploy.yml:335</code>), measured with
+          ReportGenerator over <code>+MMCA.ADC.*;-*.Tests;-MMCA.ADC.*.Service;-MMCA.ADC.*.Contracts</code> (<code>deploy.yml:333</code>).</p>
           <p>Every term in that filter is a correction of a measurement that lied. <code>+MMCA.ADC.*</code> excludes the consumed
           MMCA.Common assemblies, which are tested in their own repo and instrument at near zero here, deflating the
           figure to about 26.8%. The <code>*.Service</code> and <code>*.Contracts</code> exclusions were added on 2026-08-01 when
           <code>MMCA.ADC.Services.Tests</code> first pulled the service hosts and the gRPC contracts into the unit cobertura:
           hosts are integration-tier subjects (<code>Program.cs</code>, Kestrel config, warm-up) and contracts are dominated by
           protobuf-generated plumbing, so both deflate the unit number without measuring unit code, 52.8% raw versus
-          62.5% filtered on the same run (<code>deploy.yml:305-310</code>). A coverage floor is only a regression backstop if
+          62.5% filtered on the same run (<code>deploy.yml:321-326</code>). A coverage floor is only a regression backstop if
           the number it watches moves for the reason you think it does.</p>
-          <p><strong>Step 5, Application-layer branch coverage floor</strong> (<code>deploy.yml:323-353</code>). A second, narrower gate reads
+          <p><strong>Step 5, Application-layer branch coverage floor</strong> (<code>deploy.yml:339-369</code>). A second, narrower gate reads
           the same cobertura file, and the reason it exists is the sharpest coverage argument in the repository
-          (<code>deploy.yml:325-336</code>). The repo-wide floor above is a blunt average dominated by UI, Infrastructure and
+          (<code>deploy.yml:341-352</code>). The repo-wide floor above is a blunt average dominated by UI, Infrastructure and
           generated code, so a command handler can lose every branch it had and the global number barely moves. The
           Application layer is where the business decisions live (guards, authorization short-circuits, retry and
           conflict paths), and those are <strong>branches</strong>, not lines: a handler can be fully line-covered by one happy
           path while every failure branch goes unexercised. So this gate measures branch coverage
-          (<code>deploy.yml:349</code>) over the four <code>Source/Modules/*/*.Application</code> assemblies only
-          (<code>-assemblyfilters:&#39;+MMCA.ADC.*.Application;-*.Tests&#39;</code>, <code>deploy.yml:341-342</code>), with a floor of <strong>77.5%</strong>
-          (<code>deploy.yml:351</code>), about two points under the 79.7% measured on 2026-08-26 across the full unit tier.</p>
-          <p>The step&#39;s most transferable line is the guard <em>before</em> the measurement (<code>deploy.yml:344-348</code>): if the
+          (<code>deploy.yml:365</code>) over the four <code>Source/Modules/*/*.Application</code> assemblies only
+          (<code>-assemblyfilters:&#39;+MMCA.ADC.*.Application;-*.Tests&#39;</code>, <code>deploy.yml:357-358</code>), with a floor of <strong>77.5%</strong>
+          (<code>deploy.yml:367</code>), about two points under the 79.7% measured on 2026-08-26 across the full unit tier.</p>
+          <p>The step&#39;s most transferable line is the guard <em>before</em> the measurement (<code>deploy.yml:360-364</code>): if the
           report covers fewer than four assemblies it fails outright, because a filter that matched nothing would
           otherwise let the floor pass vacuously. That is the same instinct as the <code>--minimum-expected-tests</code> floors
           throughout this chapter: a gate whose input went missing must be indistinguishable from a gate that failed.</p>
-          <p><strong>Step 6, EF migrations model-drift gate</strong> (<code>deploy.yml:359-373</code>):</p>
+          <p><strong>Step 6, EF migrations model-drift gate</strong> (<code>deploy.yml:375-389</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-keyword">for</span> module <span class="hljs-keyword">in</span> Identity Conference Engagement Notification; <span class="hljs-keyword">do</span>
   project=<span class="hljs-string">&quot;Source/Hosting/MMCA.ADC.Migrations.SqlServer.<span class="hljs-variable">$module</span>&quot;</span>
   dotnet ef migrations has-pending-model-changes \
@@ -859,7 +871,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p><code>dotnet ef migrations has-pending-model-changes</code> compares the EF design-time model to the committed
           migration snapshot <strong>without connecting to a database</strong>. If a developer changes an entity configuration
           (adds a column, renames a property) but forgets to author a new migration, this step fails the build. The
-          comment on <code>deploy.yml:361-364</code> states the rationale: &quot;a drift here means the deploy&#39;s idempotent
+          comment on <code>deploy.yml:377-380</code> states the rationale: &quot;a drift here means the deploy&#39;s idempotent
           migration script would not capture the schema change.&quot;</p>
           <p>This is one of the most important gates in the pipeline. An entity model that diverges from the migration
           history means the production schema diverges from the application&#39;s EF model, a runtime crash on first
@@ -867,14 +879,14 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           is doubly important now that <code>deploy.yml</code> has <em>no</em> sqlcmd migration step: this build-time gate is the
           guarantee that the services&#39; startup <code>Migrate()</code> always has a migration to apply for every model change.</p>
           <p>The <code>--no-build</code> flag reuses the Release build from Step 2, so there is no rebuild overhead. <code>dotnet-ef</code>
-          is installed globally (version <code>10.0.8</code>) in the step before this one (<code>deploy.yml:355-357</code>), the same pin
+          is installed globally (version <code>10.0.8</code>) in the step before this one (<code>deploy.yml:371-373</code>), the same pin
           MMCA.Common&#39;s Helpdesk canary uses so the two exercise the same tool.</p>
           <p>[Rubric §8, Data Architecture] (assesses whether schema management is automated, versioned, and safe)
           is directly served. [Rubric §17, DevOps &amp; Deployment] is served: the migration gate is the CI
           enforcement of the &quot;migrations-before-code&quot; discipline.</p>
-          <p><strong>The expand/contract migration guard</strong> (<code>deploy.yml:203-249</code>) is the job&#39;s <em>first</em> step, ahead of even
+          <p><strong>The expand/contract migration guard</strong> (<code>deploy.yml:219-265</code>) is the job&#39;s <em>first</em> step, ahead of even
           the .NET SDK setup, because it needs nothing but <code>git</code>, <code>awk</code> and <code>grep</code>:</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:203-204</span>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:219-220</span>
 <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Expand/contract</span> <span class="hljs-string">migration</span> <span class="hljs-string">guard</span> <span class="hljs-string">(schema</span> <span class="hljs-string">rollback</span> <span class="hljs-string">safety)</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span></code></pre>
           <p>It is the other half of the schema-safety story the model-drift gate starts. The drift gate proves a
@@ -883,31 +895,31 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           revision rollback does <strong>not</strong> revert schema: each service self-applies its migrations at startup, so the
           previous release comes back up against the <em>new</em> schema. A <code>DropColumn</code>, <code>DropTable</code> or <code>DropIndex</code> in
           the migration that just shipped therefore breaks one-release-back compatibility, and the rollback that
-          was supposed to rescue the deploy fails on the way back down. The step comment (<code>deploy.yml:205-216</code>)
+          was supposed to rescue the deploy fails on the way back down. The step comment (<code>deploy.yml:221-232</code>)
           states exactly that chain.</p>
           <p>The rule: for every migration file <strong>added</strong> by the pull request, if the <code>Up()</code> body contains
           <code>DropColumn</code>, <code>DropTable</code> or <code>DropIndex</code> and does not contain <code>EXPAND-CONTRACT-OVERRIDE</code>, fail
-          (<code>deploy.yml:241-244</code>). Three scoping decisions carry the design:</p>
+          (<code>deploy.yml:257-260</code>). Three scoping decisions carry the design:</p>
           <ul>
-          <li>The file set is <code>git diff --diff-filter=A --name-only &quot;origin/&lt;base&gt;...HEAD&quot;</code> (<code>deploy.yml:225-226</code>),
+          <li>The file set is <code>git diff --diff-filter=A --name-only &quot;origin/&lt;base&gt;...HEAD&quot;</code> (<code>deploy.yml:241-242</code>),
           path-scoped to <code>Source/Hosting/MMCA.ADC.Migrations.SqlServer.*/Migrations/*.cs</code>. Only <em>added</em> files
           count, so the four per-service migrations projects are covered and nothing else in the tree is.</li>
-          <li><code>.Designer.cs</code> files are skipped (<code>deploy.yml:237-239</code>), they carry the model snapshot, not operations.</li>
+          <li><code>.Designer.cs</code> files are skipped (<code>deploy.yml:253-255</code>), they carry the model snapshot, not operations.</li>
           <li>Only the <code>Up()</code> body is scanned, extracted with <code>awk</code> between the <code>Up(</code> and <code>Down(</code> signatures
-          (<code>deploy.yml:240</code>). Every additive migration&#39;s <code>Down()</code> legitimately drops what <code>Up()</code> added, and
+          (<code>deploy.yml:256</code>). Every additive migration&#39;s <code>Down()</code> legitimately drops what <code>Up()</code> added, and
           <code>Down()</code> never runs at startup (down-migration is explicit tooling only), so scanning the whole file
           would fail every ordinary migration.</li>
           </ul>
           <p>The escape hatch exists because the <em>contract</em> half of an expand/contract sequence genuinely is a drop,
           and it is correct once the expand half has been in production for a release. It is documented as
-          <code>// EXPAND-CONTRACT-OVERRIDE: &lt;reason&gt;</code> but enforced as a bare substring match (<code>deploy.yml:242</code>), so the
+          <code>// EXPAND-CONTRACT-OVERRIDE: &lt;reason&gt;</code> but enforced as a bare substring match (<code>deploy.yml:258</code>), so the
           comment form is convention, not syntax, and one occurrence anywhere in the <code>Up()</code> body exempts <strong>every</strong>
           destructive operation in that migration. The marker is a prompt for the reviewer to ask &quot;has the expand
           half already shipped?&quot;, not a machine-checked proof that it has.</p>
           <p>The checkout immediately above sets <code>fetch-depth: 0</code> for this step alone, and says so
-          (<code>deploy.yml:200-201</code>): without full history the base diff cannot resolve. That coupling produces the
+          (<code>deploy.yml:216-217</code>): without full history the base diff cannot resolve. That coupling produces the
           most transferable lesson in the whole job. There is deliberately no <code>|| true</code> on the diff: when it fails,
-          the step prints an error naming <code>fetch-depth</code> and exits 1 (<code>deploy.yml:220-229</code>). A gate that cannot
+          the step prints an error naming <code>fetch-depth</code> and exits 1 (<code>deploy.yml:236-245</code>). A gate that cannot
           evaluate must fail closed, because the alternative is a required check that reports green while checking
           nothing, and the comment records the incident that settled the point: swallowing that error is exactly
           what made this check silently pass on every run in MMCA.Store between 2026-07-25 and 2026-07-28. It is
@@ -924,69 +936,109 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           [Rubric §29, Resilience, Reliability &amp; Business Continuity] is served because it is what keeps the
           automatic rollback in Phase 5 an actual recovery path rather than a hopeful one.</p>
           <h3 id="job-backend-test-gate-closing-the-deploy-with-zero-tests-hole">Job: <code>backend-test-gate</code>, closing the &quot;deploy with zero tests&quot; hole</h3>
-          <p>This job (<code>deploy.yml:394-422</code>) is the newest piece of the pipeline, and it exists because three
+          <p>This job (<code>deploy.yml:410-438</code>) is the newest piece of the pipeline, and it exists because three
           individually-sound decisions composed into a hole. <code>build-and-test</code> and <code>integration-tests</code> are both
           pull-request-only (strict branch protection means the PR validated the exact merge tree), and <code>e2e-gate</code>
           is scoped to <code>ui == &#39;true&#39;</code> for minute savings. Put together, a <strong>backend-only push to <code>main</code> ran no
           tests at all before rolling out</strong>, with the post-deploy smoke gate as the only backstop, which is
           detection after the rollout rather than prevention. The comment states that chain in full
-          (<code>deploy.yml:375-393</code>).</p>
+          (<code>deploy.yml:391-409</code>).</p>
           <p>The fix is a complement, not a new unconditional gate:</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:396</span>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:412</span>
 <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;pull_request&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">needs.changes.outputs.ui</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;true&#x27;</span></code></pre>
-          <p>Compare it against <code>e2e-gate</code>&#39;s condition (<code>deploy.yml:688</code>): the two are exact complements over a code
+          <p>Compare it against <code>e2e-gate</code>&#39;s condition (<code>deploy.yml:772</code>): the two are exact complements over a code
           deploy, so <strong>exactly one of them runs</strong> on any given code deploy. The invariant &quot;no production deploy
           without test execution&quot; therefore holds at zero added minutes on a UI deploy (where the roughly
           20-minute <code>e2e-gate</code> already runs) and at the cost of one <code>MMCA.ADC.CI.slnf</code> test pass on a backend-only
           deploy.</p>
-          <p>Its scope is deliberately narrow (<code>deploy.yml:390-393</code>): the same <code>MMCA.ADC.CI.slnf</code> restore, build and
-          test as <code>build-and-test</code> (<code>deploy.yml:411-422</code>), so unit, architecture and bUnit tiers with no Docker
+          <p>Its scope is deliberately narrow (<code>deploy.yml:406-409</code>): the same <code>MMCA.ADC.CI.slnf</code> restore, build and
+          test as <code>build-and-test</code> (<code>deploy.yml:427-438</code>), so unit, architecture and bUnit tiers with no Docker
           daemon and no Playwright browsers. Coverage collection and both coverage floors stay in the PR-only job,
           because they are a review-time regression signal rather than a rollout gate, and collecting them here
-          would only slow the deploy. The test step keeps <code>--minimum-expected-tests 1</code> (<code>deploy.yml:419-422</code>) for
+          would only slow the deploy. The test step keeps <code>--minimum-expected-tests 1</code> (<code>deploy.yml:435-438</code>) for
           the reason its own comment gives: a filter or discovery breakage that runs zero tests must fail the gate
           rather than report a vacuous pass.</p>
           <p>[Rubric §14, Testability &amp; Test Strategy] is served in its most operational form: the <em>deploy</em> path, not
           just the review path, is required to have executed tests. [Rubric §17, DevOps &amp; Deployment] is served by
           the way it is expressed: an invariant restored by making two conditional gates partition the space,
           rather than by making one of them unconditional and paying for it on every deploy.</p>
+          <h3 id="job-ai-eval-gate-the-behavior-that-changes-without-a-code-change">Job: <code>ai-eval-gate</code>, the behavior that changes without a code change</h3>
+          <p><code>ai-eval-gate</code> (<code>deploy.yml:461-506</code>) exists for the one component in this repository whose behavior can
+          move while every unit test stays green: the AI session scorer that ranks submitted talks for organizers.
+          The comment states the case (<code>deploy.yml:440-444</code>): a prompt edit, a model deprecation, or a
+          provider-side contract change each moves the numbers an organizer uses to accept or decline a talk, and
+          none of the three is visible to <code>MMCA.ADC.CI.slnf</code>.</p>
+          <p>It runs on the same condition as the other deploy-path test gates, <code>github.event_name != &#39;pull_request&#39; &amp;&amp; needs.changes.outputs.code == &#39;true&#39;</code> (<code>deploy.yml:463</code>), rather than on the <code>ui</code>/backend split that
+          separates <code>e2e-gate</code> from <code>backend-test-gate</code>. The comment gives the reason (<code>deploy.yml:457-460</code>): its
+          cheap tier is cheap enough to run on every code deploy, and its whole point is catching what the other
+          two gates cannot see. It restores and builds one project by path,
+          <code>Tests/Modules/Conference/MMCA.ADC.Conference.Scoring.Evaluation.Tests</code>, with <code>--locked-mode</code>
+          (<code>deploy.yml:478-484</code>), so it never pays for the full solution.</p>
+          <p><strong>The two tiers are split by cost, and that split is the design</strong> (<code>deploy.yml:446-455</code>):</p>
+          <ol>
+          <li><strong>Golden replay plus prompt contract</strong>, always (<code>deploy.yml:486-493</code>). No API key and no network:
+          recorded proposals are replayed through the real scoring service, and the rendered prompt is hashed
+          against the hash recorded for the current <code>PromptVersion</code>. This is the tier that catches a prompt edit
+          that forgot to bump the version, a delimiter that stopped being emitted, and a change to the weighting
+          math. It carries <code>--filter-not-trait &quot;Category=AiEval.Live&quot; --minimum-expected-tests 1</code>, the same
+          discovery floor every other gate step uses, because a filter breakage that runs zero tests must red the
+          gate rather than report a vacuous pass (<code>deploy.yml:487-488</code>).</li>
+          <li><strong>Live judge</strong>, only when <code>needs.changes.outputs.scoring == &#39;true&#39;</code> (<code>deploy.yml:495-506</code>, gated at
+          <code>:496</code>). Real paid calls to the Anthropic API for each golden proposal, asserting the overall score
+          lands in the case&#39;s band. It is scoped to a diff that touches the scoring code precisely because it
+          costs money, and the bands are deliberately wide: a judge model is not deterministic, and a flaky gate
+          gets ignored.</li>
+          </ol>
+          <p>Two details in the second tier are worth reading. It sets <strong>no</strong> <code>--minimum-expected-tests</code> floor, and
+          the comment says why (<code>deploy.yml:497-499</code>): without <code>ANTHROPIC_API_KEY</code> every case skips itself
+          dynamically, reported as skipped and never as passed, so a zero-run must not red the deploy on a
+          repository whose secret is absent. And the key arrives as a job-scoped <code>env</code> from
+          <code>secrets.ANTHROPIC_API_KEY</code> (<code>deploy.yml:505-506</code>), never as a build argument or a workflow input.</p>
+          <p>This is also why <code>scoring</code> is the one classifier output that does <strong>not</strong> fail safe to <code>true</code>
+          (<code>deploy.yml:147-151</code>): a false positive here spends money on every unrelated deploy, while the two
+          key-free tiers already run unconditionally, so the narrow set costs nothing in coverage.</p>
+          <p>[Rubric §14, Testability &amp; Test Strategy] assesses whether the system&#39;s behavior is actually verified
+          rather than merely compiled. The golden replay is the honest answer for a non-deterministic component:
+          the deterministic parts (prompt rendering, version pinning, weighting math) are asserted exactly, and the
+          non-deterministic part is asserted as a band. [Rubric §31, Cost Efficiency / FinOps] is served by the
+          tier split itself: the gate that costs money runs only for the diffs that can change what it measures.</p>
           <h3 id="job-supply-chain">Job: <code>supply-chain</code></h3>
-          <p>This job (<code>deploy.yml:428</code>) runs in parallel with <code>build-and-test</code> on every push and PR, and unlike the
-          other validation jobs it is <strong>not</strong> PR-only: it is in <code>deploy</code>&#39;s <code>needs</code> list (<code>deploy.yml:1054</code>) and its
-          result must be <code>success</code> for the deploy to proceed (<code>deploy.yml:1085</code>). Two of its steps are gates and two
-          are reports, and the comment above the job draws that line explicitly (<code>deploy.yml:424-427</code>).</p>
+          <p>This job (<code>deploy.yml:512</code>) runs in parallel with <code>build-and-test</code> on every push and PR, and unlike the
+          other validation jobs it is <strong>not</strong> PR-only: it is in <code>deploy</code>&#39;s <code>needs</code> list (<code>deploy.yml:1237</code>) and its
+          result must be <code>success</code> for the deploy to proceed (<code>deploy.yml:1274</code>). Two of its steps are gates and two
+          are reports, and the comment above the job draws that line explicitly (<code>deploy.yml:508-511</code>).</p>
           <p><strong>The two gates:</strong></p>
           <ul>
-          <li><strong>Vulnerability audit</strong> (<code>deploy.yml:456-476</code>) fails on any vulnerable-package row except advisories
+          <li><strong>Vulnerability audit</strong> (<code>deploy.yml:540-560</code>) fails on any vulnerable-package row except advisories
           accepted via <code>NuGetAuditSuppress</code> in <code>Directory.Build.props</code>. This mirrors Common&#39;s <code>ci.yml</code> step and
           exists for the same reason: <code>dotnet list --vulnerable</code> ignores <code>NuGetAuditSuppress</code>, so the accepted
-          advisory list has to be re-applied by hand (<code>deploy.yml:467-472</code>). NuGetAudit at restore already gates
+          advisory list has to be re-applied by hand (<code>deploy.yml:551-556</code>). NuGetAudit at restore already gates
           the build; this makes the check deploy-gating as well, belt and suspenders. One detail differs from
           Common&#39;s copy and is worth knowing before you edit either file: ADC scrapes every <code>GHSA-</code> id out of
-          the whole of <code>Directory.Build.props</code> (<code>deploy.yml:467</code>), while Common narrows the same scrape to
+          the whole of <code>Directory.Build.props</code> (<code>deploy.yml:551</code>), while Common narrows the same scrape to
           actual <code>&lt;NuGetAuditSuppress</code> lines (<code>MMCA.Common/.github/workflows/ci.yml:120</code>). Common&#39;s is the
           stricter reading, since under ADC&#39;s a GHSA id merely mentioned in a comment would suppress that
           advisory here.</li>
-          <li><strong>CycloneDX SBOM</strong> (<code>deploy.yml:490-503</code>) must exist <strong>and contain components</strong>. The comment records
-          the near-miss (<code>deploy.yml:492-494</code>): the previous <code>test -s</code> check only proved the file was non-empty,
+          <li><strong>CycloneDX SBOM</strong> (<code>deploy.yml:574-587</code>) must exist <strong>and contain components</strong>. The comment records
+          the near-miss (<code>deploy.yml:576-578</code>): the previous <code>test -s</code> check only proved the file was non-empty,
           which a zero-component skeleton passes, which is exactly how an empty SBOM went unnoticed. The step now
-          asserts <code>jq &#39;.components | length&#39; &gt; 0</code> (<code>deploy.yml:501-503</code>).</li>
+          asserts <code>jq &#39;.components | length&#39; &gt; 0</code> (<code>deploy.yml:585-587</code>).</li>
           </ul>
           <p><strong>The two non-gating reports</strong> (<code>continue-on-error: true</code>) are <code>supply-chain/deprecated.txt</code>, packages the
-          publisher has flagged as obsolete or replaced (<code>deploy.yml:449-454</code>), and <code>supply-chain/licenses.json</code>,
-          license metadata for every transitive package via <code>nuget-license</code> (<code>deploy.yml:505-515</code>). All four
-          outputs upload as the <code>supply-chain-reports</code> artifact with a 14-day retention (<code>deploy.yml:517-526</code>).</p>
+          publisher has flagged as obsolete or replaced (<code>deploy.yml:533-538</code>), and <code>supply-chain/licenses.json</code>,
+          license metadata for every transitive package via <code>nuget-license</code> (<code>deploy.yml:589-599</code>). All four
+          outputs upload as the <code>supply-chain-reports</code> artifact with a 14-day retention (<code>deploy.yml:601-610</code>).</p>
           <p>Between the audit and the SBOM sits the step that makes both honest on Linux, <strong>Normalize the solution
-          filter</strong> (<code>deploy.yml:478-488</code>). A <code>.slnf</code> records Windows-style project paths, and on the Linux runner a
+          filter</strong> (<code>deploy.yml:562-572</code>). A <code>.slnf</code> records Windows-style project paths, and on the Linux runner a
           backslash is an ordinary filename character, so a tool that opens those paths directly resolves <strong>zero</strong>
           projects. <code>dotnet list</code> is unaffected because MSBuild normalizes separators, but CycloneDX silently
           emitted an empty SBOM this way. The step writes a forward-slash copy (<code>ci-linux.slnf</code>) next to the
           original so the relative project paths still resolve, and feeds the tools below from it. Two follow-on
           details come straight out of that: <code>--set-name MMCA.ADC.CI</code> pins the BOM metadata component, which would
-          otherwise take the input filename and become &quot;ci-linux&quot; (<code>deploy.yml:497-499</code>); and <code>nuget-license</code> cannot
+          otherwise take the input filename and become &quot;ci-linux&quot; (<code>deploy.yml:581-583</code>); and <code>nuget-license</code> cannot
           take a <code>.slnf</code> at all, because it hands its <code>--input</code> straight to MSBuild, which parses the JSON as XML
           and throws, so the report is fed the extracted project list via <code>--json-input</code> instead
-          (<code>deploy.yml:508-514</code>).</p>
+          (<code>deploy.yml:592-598</code>).</p>
           <p>One scope limit is worth naming here, because a separate workflow exists to cover it: this job audits
           <code>MMCA.ADC.CI.slnf</code>, which deliberately excludes the MAUI head, so the largest dependency graph in the
           repo is invisible to it. That gap is closed weekly by <code>maui-audit.yml</code>, covered in the repository
@@ -998,7 +1050,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           Privacy &amp; Data Governance] is touched: the license report is the mechanism for discovering GPL or AGPL
           dependencies that would create licensing obligations.</p>
           <h3 id="job-integration-tests">Job: <code>integration-tests</code></h3>
-          <p>This job is <strong>pull-request-only</strong> (<code>deploy.yml:529,535</code>), and <code>deploy</code> does not list it:</p>
+          <p>This job is <strong>pull-request-only</strong> (<code>deploy.yml:613,535</code>), and <code>deploy</code> does not list it:</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">needs:</span> <span class="hljs-string">changes</span>
 <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;pull_request&#x27;</span></code></pre>
           <p>It runs the per-service <code>WebApplicationFactory</code> integration tests against a real SQL Server, covering
@@ -1006,13 +1058,13 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           Conference, Engagement and Notification (<code>MMCA.ADC.Integration.slnf:5-8</code>).</p>
           <p>How it protects production is worth being precise about, because the mechanism is not the one you
           would guess. This job never runs on the push to <code>main</code>, and it is absent from <code>deploy</code>&#39;s <code>needs</code>
-          list (<code>deploy.yml:1054</code>); the only job that consumes it is <code>coverage</code> (<code>:617</code>). The protection comes
+          list (<code>deploy.yml:1237</code>); the only job that consumes it is <code>coverage</code> (<code>:701</code>). The protection comes
           from branch protection instead: <code>main</code> requires branches to be up to date, so the PR check runs
           against the exact merge tree that will land, which the job&#39;s own comment gives as the rationale for
-          being PR-only (<code>:530-534</code>). The practical consequence is that a <code>workflow_dispatch</code> run of
+          being PR-only (<code>:614-618</code>). The practical consequence is that a <code>workflow_dispatch</code> run of
           <code>deploy.yml</code> does not re-run the integration tier at all, and that the deploy-path test coverage comes
           from <code>e2e-gate</code> or <code>backend-test-gate</code> instead.</p>
-          <p><strong>SQL Server as a guarded step, not a <code>services:</code> block</strong> (<code>deploy.yml:543-551</code>):</p>
+          <p><strong>SQL Server as a guarded step, not a <code>services:</code> block</strong> (<code>deploy.yml:627-635</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Start</span> <span class="hljs-string">SQL</span> <span class="hljs-string">Server</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span>
   <span class="hljs-attr">run:</span> <span class="hljs-string">|
@@ -1026,61 +1078,61 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           placement is the design detail: a job-level <code>services:</code> block starts before the first step and cannot be
           conditioned, so a docs-only PR would pay to pull and boot SQL Server for nothing. As a guarded step it is
           skipped with everything else while the job still runs and posts its required status green
-          (<code>deploy.yml:530-534</code>). MMCA.Common&#39;s Helpdesk canary now uses the identical pattern for its migration
+          (<code>deploy.yml:614-618</code>). MMCA.Common&#39;s Helpdesk canary now uses the identical pattern for its migration
           apply (<code>MMCA.Common/.github/workflows/ci.yml:510-513</code>).</p>
-          <p>The password lives in the job&#39;s <code>env:</code> (<code>deploy.yml:538-539</code>) because it is a throwaway SA credential for
+          <p>The password lives in the job&#39;s <code>env:</code> (<code>deploy.yml:622-623</code>) because it is a throwaway SA credential for
           an ephemeral container, not a production secret, and not stored in GitHub Secrets. The comment states it
-          explicitly (<code>deploy.yml:533-534</code>): &quot;Throwaway SA password, not a secret.&quot;</p>
-          <p><strong>Wait-for-SQL-Server gate</strong> (<code>deploy.yml:567-579</code>): a 30-iteration poll loop (5-second sleep each) using
-          <code>sqlcmd</code> (installed by the step at <code>deploy.yml:561-565</code>) to execute <code>SELECT 1</code>. SQL Server takes 10 to 20
+          explicitly (<code>deploy.yml:617-618</code>): &quot;Throwaway SA password, not a secret.&quot;</p>
+          <p><strong>Wait-for-SQL-Server gate</strong> (<code>deploy.yml:651-663</code>): a 30-iteration poll loop (5-second sleep each) using
+          <code>sqlcmd</code> (installed by the step at <code>deploy.yml:645-649</code>) to execute <code>SELECT 1</code>. SQL Server takes 10 to 20
           seconds to initialize in a fresh container; proceeding immediately would fail the restore or build with a
           connection error. The loop exits early on success rather than running the full 150-second maximum, and
           exits 1 if the server never answers, so a container that failed to boot is a job failure rather than a
           confusing downstream test error.</p>
-          <p><strong>Integration test run</strong> (<code>deploy.yml:595-602</code>): like the unit tier, the test command is wrapped in
+          <p><strong>Integration test run</strong> (<code>deploy.yml:679-686</code>): like the unit tier, the test command is wrapped in
           <code>dotnet-coverage collect</code> (emitting the <code>coverage.integration.cobertura.xml</code> artifact at
-          <code>deploy.yml:604-612</code>):</p>
+          <code>deploy.yml:688-696</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
   <span class="hljs-attr">ADC_TEST_SQL_BASE:</span> <span class="hljs-string">&quot;Server=localhost,1433;User Id=sa;Password=$<span class="hljs-template-variable">{{ env.MSSQL_SA_PASSWORD }}</span>;TrustServerCertificate=True;Encrypt=False;&quot;</span>
 <span class="hljs-attr">run:</span> <span class="hljs-string">dotnet</span> <span class="hljs-string">test</span> <span class="hljs-string">--solution</span> <span class="hljs-string">MMCA.ADC.Integration.slnf</span> <span class="hljs-string">--no-build</span> <span class="hljs-string">-c</span> <span class="hljs-string">Release</span> <span class="hljs-string">--minimum-expected-tests</span> <span class="hljs-number">1</span></code></pre>
           <p>The <code>ADC_TEST_SQL_BASE</code> connection string is consumed by <code>IntegrationTestBase</code> to provision per-test
           databases (each test gets a fresh database, reset between tests). <code>MMCA.ADC.Integration.slnf</code> is a
           separate solution filter that includes only the four integration test projects; the restore and build
-          steps immediately before (<code>deploy.yml:581-589</code>) target the same filter, restore in <code>--locked-mode</code> like
+          steps immediately before (<code>deploy.yml:665-673</code>) target the same filter, restore in <code>--locked-mode</code> like
           <code>build-and-test</code>.</p>
           <p>[Rubric §14, Testability &amp; Test Strategy] is served at a higher tier than the unit tests: these tests
           exercise real EF migrations, real HTTP middleware, real domain logic through a real SQL Server engine. A
           bug that only manifests under an actual database connection (e.g. a LINQ translation error, a migration
           column type mismatch) is caught here before it reaches production.</p>
           <h3 id="job-coverage-report-only-by-design">Job: <code>coverage</code>, report-only by design</h3>
-          <p>This job (<code>deploy.yml:616-660</code>) downloads both <code>coverage-*</code> artifacts, merges the unit/architecture/bUnit
+          <p>This job (<code>deploy.yml:700-744</code>) downloads both <code>coverage-*</code> artifacts, merges the unit/architecture/bUnit
           and integration cobertura tiers with ReportGenerator over <code>+MMCA.*;-*.Tests</code>, writes the summary to the
-          run&#39;s Step Summary, and uploads the HTML report (<code>deploy.yml:638-660</code>).</p>
-          <p>Two conditions are worth reading together. <code>needs: [changes, build-and-test, integration-tests]</code> with <code>if: always() &amp;&amp; github.event_name == &#39;pull_request&#39;</code> (<code>deploy.yml:617-618</code>) means it runs after both test
+          run&#39;s Step Summary, and uploads the HTML report (<code>deploy.yml:722-744</code>).</p>
+          <p>Two conditions are worth reading together. <code>needs: [changes, build-and-test, integration-tests]</code> with <code>if: always() &amp;&amp; github.event_name == &#39;pull_request&#39;</code> (<code>deploy.yml:701-702</code>) means it runs after both test
           jobs regardless of their outcome, so a failing run still yields its partial coverage picture. And it is
-          <strong>not</strong> in <code>deploy</code>&#39;s <code>needs</code> (<code>deploy.yml:1054</code>), which is the deliberate part: this job never blocks
+          <strong>not</strong> in <code>deploy</code>&#39;s <code>needs</code> (<code>deploy.yml:1237</code>), which is the deliberate part: this job never blocks
           anything. That is precisely why ADC&#39;s coverage <strong>floors</strong> live in <code>build-and-test</code> instead
-          (<code>deploy.yml:296-353</code>, above). Splitting them this way keeps the enforcement on a required check and the
+          (<code>deploy.yml:312-369</code>, above). Splitting them this way keeps the enforcement on a required check and the
           merged report where it is useful, on the pull request.</p>
           <p>[Rubric §14, Testability &amp; Test Strategy] is served in two tiers here: the floors are the gate, the merged
           report is the visibility.</p>
           <h3 id="job-cost-guard-a-scheduled-check-promoted-to-a-deploy-gate">Job: <code>cost-guard</code>, a scheduled check promoted to a deploy gate</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:665-668</span>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:749-752</span>
 <span class="hljs-attr">cost-guard:</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;pull_request&#x27;</span>
   <span class="hljs-attr">uses:</span> <span class="hljs-string">./.github/workflows/cost-guard.yml</span>
   <span class="hljs-attr">secrets:</span> <span class="hljs-string">inherit</span></code></pre>
           <p>The FinOps surge-drift check gets its own section further down as a standalone workflow. What matters
           here is the four-line job that makes it a gate: <code>deploy.yml</code> calls <code>cost-guard.yml</code> as a <strong>reusable
-          workflow</strong> and lists it in <code>deploy</code>&#39;s <code>needs</code> (<code>deploy.yml:1054</code>, required <code>success</code> at <code>:1086</code>), so a
-          production deploy cannot proceed while a conference-day scale-up is still un-reverted (<code>deploy.yml:662-664</code>).</p>
+          workflow</strong> and lists it in <code>deploy</code>&#39;s <code>needs</code> (<code>deploy.yml:1237</code>, required <code>success</code> at <code>:1274</code>), so a
+          production deploy cannot proceed while a conference-day scale-up is still un-reverted (<code>deploy.yml:746-748</code>).</p>
           <p>It is skipped on pull requests because there is no production OIDC there, and <code>deploy</code> is PR-skipped
           anyway. The cost of the gate is under a minute of read-only <code>az</code> queries, which is what makes reusing the
           weekly cron&#39;s own workflow the cheap option rather than a duplicated inline check.</p>
           <p>[Rubric §31, Cost Efficiency / FinOps] is served in the strongest available form: an un-reverted surge
           does not merely raise an alert, it stops the next deploy until someone reverts it.</p>
           <h3 id="job-e2e-gate-one-chromium-leg-against-the-full-aspire-stack">Job: <code>e2e-gate</code>, one chromium leg against the full Aspire stack</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:677-692</span>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:761-776</span>
 <span class="hljs-attr">e2e-gate:</span>
   <span class="hljs-attr">needs:</span> <span class="hljs-string">changes</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;pull_request&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">needs.changes.outputs.ui</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span>
@@ -1089,7 +1141,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
     <span class="hljs-attr">browsers:</span> <span class="hljs-string">&#x27;[&quot;chromium&quot;]&#x27;</span>
   <span class="hljs-attr">secrets:</span> <span class="hljs-string">inherit</span></code></pre>
           <p>The same reusable-workflow shape as <code>cost-guard</code>, pointed at <code>e2e.yml</code>. This is the §28 merge-gate
-          promotion of 2026-07-02 (<code>deploy.yml:670-676</code>): the Playwright suite runs against the full Aspire stack
+          promotion of 2026-07-02 (<code>deploy.yml:754-760</code>): the Playwright suite runs against the full Aspire stack
           (SQL Server, Redis, RabbitMQ, four services, Gateway, UI) before a deploy is allowed to roll.</p>
           <p>Three scoping decisions carry it, and each is a cost or a correctness trade made explicit:</p>
           <ul>
@@ -1097,24 +1149,24 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           cross-browser coverage stays on <code>e2e.yml</code>&#39;s own schedule. One engine still catches the regression class
           that matters on the deploy path; three paid triple for information that changes on the scale of a
           release.</li>
-          <li><strong>Gated on <code>ui</code>, not <code>code</code></strong> (<code>deploy.yml:679-681</code>). At roughly 20 minutes this is the most expensive
+          <li><strong>Gated on <code>ui</code>, not <code>code</code></strong> (<code>deploy.yml:763-765</code>). At roughly 20 minutes this is the most expensive
           gate in the pipeline, and an infra-only, script-only or backend-only deploy cannot change what the
-          browser sees. The comment names the two backstops that make the omission safe (<code>deploy.yml:683-687</code>):
+          browser sees. The comment names the two backstops that make the omission safe (<code>deploy.yml:767-771</code>):
           <code>backend-test-gate</code> carries the exact complementary condition and runs the CI.slnf tier instead, so the
           skipped deploy is not untested; and the post-deploy smoke gate probes Conference, Engagement and
           Notification through the Gateway and auto-rolls-back behind both. It also names the revert, change <code>ui</code>
           back to <code>code</code>, which is the right thing for a cost optimization to document.</li>
           <li><strong><code>success</code> or <code>skipped</code>.</strong> In <code>deploy</code>&#39;s condition the unconditional gates must all be <code>success</code>, but
-          <code>e2e-gate</code> may also be <code>skipped</code> (<code>deploy.yml:1092</code>), as may its complement <code>backend-test-gate</code>
-          (<code>:1093</code>). That exception is the whole reason <code>deploy</code> uses <code>always()</code> plus explicit per-need results
+          <code>e2e-gate</code> may also be <code>skipped</code> (<code>deploy.yml:1282</code>), as may its complement <code>backend-test-gate</code>
+          (<code>:1283</code>). That exception is the whole reason <code>deploy</code> uses <code>always()</code> plus explicit per-need results
           instead of default <code>success()</code> semantics, covered under the <code>deploy</code> job below.</li>
           </ul>
-          <p>The advice in the comment is worth keeping (<code>deploy.yml:675-676</code>): if a genuine contention flake blocks a
+          <p>The advice in the comment is worth keeping (<code>deploy.yml:759-760</code>): if a genuine contention flake blocks a
           deploy, re-run the job and read its trace artifact before demoting the gate over a single red.</p>
           <p>[Rubric §28, Front-End Testing &amp; Quality] is served: a browser-level regression in a UI-affecting change
           cannot reach production.</p>
-          <h3 id="jobs-dr-freshness-load-freshness-cross-service-freshness">Jobs: <code>dr-freshness</code>, <code>load-freshness</code>, <code>cross-service-freshness</code></h3>
-          <p>Three near-identical jobs, one idea: <strong>a deploy blocks on the age of out-of-band verification, not only
+          <h3 id="jobs-dr-freshness-load-freshness-cross-service-freshness-cross-browser-freshness">Jobs: <code>dr-freshness</code>, <code>load-freshness</code>, <code>cross-service-freshness</code>, <code>cross-browser-freshness</code></h3>
+          <p>Four near-identical jobs, one idea: <strong>a deploy blocks on the age of out-of-band verification, not only
           on the tests that are green in this run</strong>. Each one asks the Actions API for the newest successful run of
           one scheduled workflow and fails the deploy when that proof is older than its window, or when there is no
           qualifying run at all.</p>
@@ -1128,49 +1180,80 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           </tr>
           </thead>
           <tbody><tr>
-          <td><code>dr-freshness</code> (<code>deploy.yml:699</code>)</td>
+          <td><code>dr-freshness</code> (<code>deploy.yml:783</code>)</td>
           <td>a real PITR restore drill with its RTO timing</td>
           <td><code>dr-drill.yml</code></td>
-          <td>8 days (<code>deploy.yml:707</code>)</td>
+          <td>8 days (<code>deploy.yml:791</code>)</td>
           </tr>
           <tr>
-          <td><code>load-freshness</code> (<code>deploy.yml:756</code>)</td>
+          <td><code>load-freshness</code> (<code>deploy.yml:840</code>)</td>
           <td>the k6 capacity run at the observed peak</td>
           <td><code>load-test.yml</code></td>
-          <td>35 days (<code>deploy.yml:764</code>)</td>
+          <td>35 days (<code>deploy.yml:848</code>)</td>
           </tr>
           <tr>
-          <td><code>cross-service-freshness</code> (<code>deploy.yml:815</code>)</td>
+          <td><code>cross-service-freshness</code> (<code>deploy.yml:899</code>)</td>
           <td>the Testcontainers outbox to broker to consumer round-trip <strong>and</strong> the Service Bus emulator parity smoke</td>
           <td><code>cross-service-tests.yml</code></td>
-          <td>5 days (<code>deploy.yml:825</code>)</td>
+          <td>5 days (<code>deploy.yml:909</code>)</td>
+          </tr>
+          <tr>
+          <td><code>cross-browser-freshness</code> (<code>deploy.yml:1004</code>)</td>
+          <td>a successful firefox <strong>and</strong> webkit leg of the Playwright suite</td>
+          <td><code>e2e.yml</code></td>
+          <td>10 days (<code>deploy.yml:1013</code>)</td>
           </tr>
           </tbody></table></div>
-          <p>All three carry <code>if: github.event_name != &#39;pull_request&#39;</code> (<code>deploy.yml:702</code>, <code>deploy.yml:759</code>,
-          <code>deploy.yml:818</code>) and only two read privileges, <code>permissions: actions: read</code> plus <code>contents: read</code>
-          (<code>deploy.yml:703-705</code>, <code>deploy.yml:760-762</code>, <code>deploy.yml:819-821</code>): nothing is writable, they read run
+          <p>All four carry <code>if: github.event_name != &#39;pull_request&#39;</code> (<code>deploy.yml:786</code>, <code>deploy.yml:843</code>,
+          <code>deploy.yml:902</code>, <code>deploy.yml:1007</code>) and only two read privileges, <code>permissions: actions: read</code> plus
+          <code>contents: read</code> (<code>deploy.yml:787-789</code>, <code>deploy.yml:844-846</code>, <code>deploy.yml:903-905</code>,
+          <code>deploy.yml:1008-1010</code>): nothing is writable, they read run
           history and run nothing. Each has a
           five-minute timeout and costs an Actions API read or two, no restore, no k6, no Docker daemon. And all
-          three sit in <code>deploy</code>&#39;s <code>needs</code> list (<code>deploy.yml:1054</code>), which is the entire point: a stale proof blocks
+          four sit in <code>deploy</code>&#39;s <code>needs</code> list (<code>deploy.yml:1237</code>), which is the entire point: a stale proof blocks
           the production deploy.</p>
           <p>That <code>needs</code> edge is what separates a gate from a report. A scheduled workflow nobody watches can sit
           unrun or red for weeks while deploys ship daily, and the recovery-objective evidence still technically
           &quot;exists&quot;. Making recency a dependency prices the verification correctly too: the expensive run stays on
           its cron, the deploy pays for a lookup. Each window is the producing cadence plus slack (weekly drill and
-          an 8-day window, monthly k6 and a 35-day window), so an on-schedule producer never trips the gate.</p>
+          an 8-day window, monthly k6 and a 35-day window, alternating weekly browser crons and a 10-day window),
+          so an on-schedule producer never trips the gate.</p>
+          <p><code>cross-browser-freshness</code> is the newest of the four, and it closes a hole the cost reduction opened. The
+          deploy-gating <code>e2e-gate</code> runs <strong>chromium only</strong>, so firefox and webkit coverage lives on <code>e2e.yml</code>&#39;s
+          alternating weekly crons; this gate makes that coverage mandatory again without putting either engine
+          back on the roughly 20-minute per-deploy critical path, which is exactly how <code>deploy</code>&#39;s own comment
+          states it (<code>deploy.yml:1242-1246</code>).</p>
+          <p>Like <code>cross-service-freshness</code>, it refuses to trust a run&#39;s conclusion, and here it resolves each engine
+          <strong>separately</strong>: for <code>firefox</code> and then <code>webkit</code> it walks the last 40 completed <code>e2e.yml</code> runs newest
+          first and takes the first one in which the job named <code>E2E (&lt;engine&gt;)</code> itself concluded <code>success</code>
+          (<code>deploy.yml:1049-1062</code>), so the two proofs normally come from two different runs and the <strong>older</strong> of
+          the two decides the gate (<code>deploy.yml:1045-1046</code>). The comment gives both reasons the run conclusion is
+          a lying proxy, and they fail in opposite directions (<code>deploy.yml:1038-1044</code>): the matrix is <code>fail-fast: false</code> with the non-chromium legs <code>continue-on-error</code> on the schedule, so one engine&#39;s red need not red
+          the run while another job&#39;s red can red a run in which this engine passed; and <code>e2e.yml</code>&#39;s own
+          should-run guard can make a run conclude <code>success</code> with every leg <strong>skipped</strong>. Asking the jobs API which
+          leg passed is the only question whose answer means what the gate needs it to mean.</p>
+          <p>The 10-day window is the per-engine weekly cadence (Monday firefox, Thursday webkit) plus slack for a
+          skipped or re-run night (<code>deploy.yml:1012-1013</code>), and the break-glass is the same shape as the other
+          three: <code>skip_freshness_gates</code> without a <code>skip_justification</code> fails the step, and a justified skip is
+          written prominently to the step summary and exits <code>success</code>, so the deploy condition can still demand
+          <code>success</code> from every unconditional gate (<code>deploy.yml:1021-1037</code>).</p>
+          <p>[Rubric §28, Front-End Testing &amp; Quality] assesses whether browser-level tests catch rendering and
+          functional regressions. This gate is how cross-engine coverage (which the workflow labels rubric §22)
+          stays enforceable while only one engine runs per deploy: the proof still has to exist and still has to
+          be recent, it just does not have to be produced by this run.</p>
           <p><code>cross-service-freshness</code> is the one worth reading closely, because it does <strong>not</strong> trust the run&#39;s
           conclusion, and because what it demands was widened on 2026-08-31 (TD-17). It enumerates the last 25
           <em>completed</em> runs of <code>cross-service-tests.yml</code> (any conclusion) and, for each, asks the jobs API whether
           <strong>both</strong> the <code>cross-service</code> job (the Testcontainers RabbitMQ outbox to broker to consumer round-trip)
           and the <code>servicebus-emulator-smoke</code> job (Azure Service Bus emulator topology plus AMQP round-trip)
-          concluded <code>success</code> in that same run, taking the first run where both did (<code>deploy.yml:870-883</code>). The
+          concluded <code>success</code> in that same run, taking the first run where both did (<code>deploy.yml:954-967</code>). The
           <code>jq</code> filter makes the requirement literal: it collects the matching job names, uniques them, and demands
-          a length of exactly 2 (<code>deploy.yml:873-875</code>).</p>
+          a length of exactly 2 (<code>deploy.yml:957-959</code>).</p>
           <p>That second job used to be advisory (<code>continue-on-error</code>), which meant broker parity against the
           transport production actually runs was measured nightly and then thrown away, since a red there blocked
           nothing (<code>cross-service-tests.yml:126-133</code>). Making it authoritative is what turns &quot;the outbox reaches
           <em>a</em> broker&quot; into &quot;the outbox reaches <em>both</em> the test broker and the production transport&#39;s emulator&quot;.</p>
-          <p>The comment (<code>deploy.yml:850-869</code>) gives both reasons the run conclusion remains a lying proxy, and they
+          <p>The comment (<code>deploy.yml:934-953</code>) gives both reasons the run conclusion remains a lying proxy, and they
           fail in opposite directions:</p>
           <ol>
           <li>The run still carries an advisory job, <code>apphost-smoke</code>, which is <code>continue-on-error</code> per
@@ -1187,19 +1270,19 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           states the counterpart rule for whoever finds this red (<code>cross-service-tests.yml:135-137</code>): fix it or
           dispatch a green run, do not re-add <code>continue-on-error</code> to unblock a deploy. The sanctioned escape hatch
           is the break-glass below, which forces a written justification into the run summary.</p>
-          <p>Its window was widened from 3 to 5 days on 2026-07-18 (<code>deploy.yml:823-825</code>) when <code>cross-service-tests.yml</code>
+          <p>Its window was widened from 3 to 5 days on 2026-07-18 (<code>deploy.yml:907-909</code>) when <code>cross-service-tests.yml</code>
           moved to weekdays plus the skip-if-unchanged guard: the last successful nightly can legitimately be about
           four days old across a weekend or a holiday. A window narrower than the producing cadence is a gate that
           fails for calendar reasons, and a gate that fails for calendar reasons trains people to reach for the
           break-glass.</p>
           <p><strong>Break-glass</strong> is two <code>workflow_dispatch</code> inputs, <code>skip_freshness_gates</code> and <code>skip_justification</code>, read
           by all three jobs. Setting the flag with an empty justification is itself an error and the job exits 1
-          (<code>deploy.yml:717-721</code>); with a justification, the job writes a step-summary block naming the skipped gate
-          and the reason plus a run annotation, then exits 0 (<code>deploy.yml:722-730</code>). Three properties make it a
+          (<code>deploy.yml:801-805</code>); with a justification, the job writes a step-summary block naming the skipped gate
+          and the reason plus a run annotation, then exits 0 (<code>deploy.yml:806-814</code>). Three properties make it a
           sound escape hatch rather than a hole: it is unreachable on a push (the inputs exist only on a dispatch),
           one flag covers all three gates so an operator in a hurry does not disable them one at a time, and its
           cost is a permanent attributable record in the run summary instead of a quiet edit to a <code>needs:</code> list.
-          Note the interaction with <code>deploy</code>&#39;s condition (<code>deploy.yml:1071-1072</code>, <code>deploy.yml:1087-1089</code>): a
+          Note the interaction with <code>deploy</code>&#39;s condition (<code>deploy.yml:1258-1259</code>, <code>deploy.yml:1276-1278</code>): a
           broken-glass gate still reports <code>success</code>, which is what lets the deploy condition demand <code>success</code> from
           all three without special-casing.</p>
           <p>MMCA.Store runs all three in near-identical form
@@ -1216,7 +1299,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           the event pipeline still works end to end, now across both the RabbitMQ round-trip and the Service Bus
           emulator that mirrors the production transport.</p>
           <h3 id="job-foundation-phase-1">Job: <code>foundation</code>, Phase 1</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:906-921</span>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:1089-1104</span>
 <span class="hljs-attr">foundation:</span>
   <span class="hljs-attr">needs:</span> <span class="hljs-string">changes</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;pull_request&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span>
@@ -1225,13 +1308,13 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
     <span class="hljs-attr">acrName:</span> <span class="hljs-string">${{</span> <span class="hljs-string">steps.foundation.outputs.acrName</span> <span class="hljs-string">}}</span>
     <span class="hljs-attr">acrLoginServer:</span> <span class="hljs-string">${{</span> <span class="hljs-string">steps.foundation.outputs.acrLoginServer</span> <span class="hljs-string">}}</span>
     <span class="hljs-attr">logAnalyticsName:</span> <span class="hljs-string">${{</span> <span class="hljs-string">steps.foundation.outputs.logAnalyticsName</span> <span class="hljs-string">}}</span></code></pre>
-          <p><code>infra/foundation.bicep</code> (<code>deploy.yml:932-938</code>) provisions the durable resources that must exist
+          <p><code>infra/foundation.bicep</code> (<code>deploy.yml:1115-1121</code>) provisions the durable resources that must exist
           before a container image can be pushed at all: the Log Analytics workspace
           (<code>infra/foundation.bicep:28-29</code>) and the Basic-tier Azure Container Registry
           (<code>infra/foundation.bicep:50-56</code>), whose admin user is disabled because both the apps (AcrPull) and the
           deploy (AcrPush) authenticate as managed identities (<code>infra/foundation.bicep:58-60</code>). It was split out
           of <code>deploy</code> on 2026-07-21 so image builds can run <strong>concurrently with</strong> the roughly 20-minute
-          <code>e2e-gate</code> instead of serially after it (<code>deploy.yml:898-905</code>).</p>
+          <code>e2e-gate</code> instead of serially after it (<code>deploy.yml:1081-1088</code>).</p>
           <p>A third resource rides along, and it is the reason the registry does not grow without bound: a
           scheduled ACR task named <code>purge-old-images</code> (<code>infra/foundation.bicep:99-101</code>) that runs daily at
           05:00 UTC (<code>infra/foundation.bicep:115-121</code>). Basic-tier ACR has no retention-policy feature, that is
@@ -1254,31 +1337,31 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           resource, so applying it early cannot affect the live app, and it is an idempotent incremental deploy that
           is a no-op on every run after the first. &quot;Runs before the gates&quot; is only acceptable because &quot;cannot
           change what users see&quot; is a property of the template, not a hope.</p>
-          <p>Its three outputs are promoted to <strong>job</strong> outputs (<code>deploy.yml:917-921</code>) for a concrete reason: <code>acrName</code>
+          <p>Its three outputs are promoted to <strong>job</strong> outputs (<code>deploy.yml:1100-1104</code>) for a concrete reason: <code>acrName</code>
           is derived inside Bicep from <code>uniqueString(resourceGroup().id, environmentName)</code> and therefore cannot be
           recomputed by a later job. A downstream job either receives it or guesses wrong.</p>
-          <p><strong><code>environment: production</code> is load-bearing here, and not for approvals</strong> (<code>deploy.yml:911-916</code>). The
+          <p><strong><code>environment: production</code> is load-bearing here, and not for approvals</strong> (<code>deploy.yml:1094-1099</code>). The
           federated identity credential&#39;s subject is <code>repo:ivanball/ADC:environment:production</code>. A job without an
           <code>environment:</code> presents <code>repo:ivanball/ADC:ref:refs/heads/main</code> instead, and <code>azure/login</code> fails with
           AADSTS700213, &quot;No matching federated identity record&quot;. Every job that runs <code>azure/login</code> needs the
           declaration. The comment even cites the run that proved it on MMCA.Store. This is the single most
           transferable OIDC gotcha in the repository.</p>
           <h3 id="job-build-images-phase-2">Job: <code>build-images</code>, Phase 2</h3>
-          <p>Six images are built and pushed, one per matrix leg (<code>deploy.yml:967-988</code>): <code>mmca-adc-gateway</code>,
+          <p>Six images are built and pushed, one per matrix leg (<code>deploy.yml:1150-1171</code>): <code>mmca-adc-gateway</code>,
           <code>mmca-adc-ui</code>, <code>mmca-adc-conference</code>, <code>mmca-adc-identity</code>, <code>mmca-adc-engagement</code>,
           <code>mmca-adc-notification</code>. The Gateway and UI Dockerfiles live under <code>Source/Hosts/</code>
-          (<code>Source/Hosts/MMCA.ADC.Gateway/Dockerfile</code> at <code>deploy.yml:972</code>,
-          <code>Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile</code> at <code>:975</code>); the four back-end services live under
-          <code>Source/Services/</code> (<code>:977-988</code>). <code>fail-fast: false</code> (<code>deploy.yml:968</code>) so one image&#39;s failure does not
+          (<code>Source/Hosts/MMCA.ADC.Gateway/Dockerfile</code> at <code>deploy.yml:1155</code>,
+          <code>Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile</code> at <code>:1158</code>); the four back-end services live under
+          <code>Source/Services/</code> (<code>:1160-1171</code>). <code>fail-fast: false</code> (<code>deploy.yml:1151</code>) so one image&#39;s failure does not
           cancel the other five.</p>
           <p>These were previously six sequential <code>docker build</code> steps inside <code>deploy</code>, measured at 928 seconds on one
-          run (<code>deploy.yml:941-942</code>). One matrix leg per image makes the phase cost roughly the <strong>slowest</strong> image
+          run (<code>deploy.yml:1124-1125</code>). One matrix leg per image makes the phase cost roughly the <strong>slowest</strong> image
           (about 4 minutes) rather than their sum, and because the job no longer sits behind <code>e2e-gate</code> the whole
           phase hides underneath that gate and leaves the critical path entirely.</p>
           <p><strong>Each leg is now individually gated on whether its image is dirty.</strong> The matrix carries a <code>changed</code>
-          column fed from the <code>changes</code> job&#39;s <code>img_*</code> map (<code>deploy.yml:971-988</code>), and the build-and-push step only
-          runs when it is <code>&#39;true&#39;</code> (<code>deploy.yml:1008-1009</code>). A clean leg takes the other branch and re-tags instead
-          (<code>deploy.yml:1042-1049</code>):</p>
+          column fed from the <code>changes</code> job&#39;s <code>img_*</code> map (<code>deploy.yml:1154-1171</code>), and the build-and-push step only
+          runs when it is <code>&#39;true&#39;</code> (<code>deploy.yml:1191-1192</code>). A clean leg takes the other branch and re-tags instead
+          (<code>deploy.yml:1225-1232</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-string">az</span> <span class="hljs-string">acr</span> <span class="hljs-string">import</span> <span class="hljs-string">\</span>
   <span class="hljs-string">--name</span> <span class="hljs-string">${{</span> <span class="hljs-string">needs.foundation.outputs.acrName</span> <span class="hljs-string">}}</span> <span class="hljs-string">\</span>
   <span class="hljs-string">--source</span> <span class="hljs-string">${{</span> <span class="hljs-string">needs.foundation.outputs.acrLoginServer</span> <span class="hljs-string">}}/${{</span> <span class="hljs-string">matrix.image</span> <span class="hljs-string">}}:latest</span> <span class="hljs-string">\</span>
@@ -1289,69 +1372,73 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           registry-side manifest copy, so no layer is pulled or pushed, and <code>--force</code> makes a re-run of the same
           sha idempotent. And the leg <strong>still concludes <code>success</code></strong> rather than skipping, which is the load-bearing
           part: <code>deploy</code> gates on the job-level equality <code>needs.build-images.result == &#39;success&#39;</code>
-          (<code>deploy.yml:1091</code>), so gating with a job-level <code>if</code> (or letting a leg skip) would turn the whole job
-          <code>skipped</code> and silently cancel the deploy (<code>deploy.yml:955-959</code>).</p>
-          <p>Nothing is rolled out here (<code>deploy.yml:945-948</code>). Images are tagged with both <code>${{ github.sha }}</code> (the
-          exact commit, immutable and traceable) and <code>latest</code>, and pushed to ACR (<code>deploy.yml:1016-1018</code>), but
+          (<code>deploy.yml:1281</code>), so gating with a job-level <code>if</code> (or letting a leg skip) would turn the whole job
+          <code>skipped</code> and silently cancel the deploy (<code>deploy.yml:1138-1142</code>).</p>
+          <p>Nothing is rolled out here (<code>deploy.yml:1128-1131</code>). Images are tagged with both <code>${{ github.sha }}</code> (the
+          exact commit, immutable and traceable) and <code>latest</code>, and pushed to ACR (<code>deploy.yml:1199-1201</code>), but
           <code>deploy</code> still waits on every gate before <code>main.bicep</code> points any container app at them. A red gate
           therefore leaves an unreferenced image in ACR, which the scheduled purge task in <code>foundation.bicep</code>
           reaps. Building speculatively is only safe when publishing and <em>referencing</em> are separate acts.</p>
-          <p><strong>The token is a BuildKit secret, not a build arg</strong> (<code>deploy.yml:1024-1025</code>, comment <code>:950-953</code>):</p>
+          <p><strong>The token is a BuildKit secret, not a build arg</strong> (<code>deploy.yml:1207-1208</code>, comment <code>:1133-1136</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">secrets:</span> <span class="hljs-string">|</span>
   <span class="hljs-string">github_token=${{</span> <span class="hljs-string">secrets.GITHUB_TOKEN</span> <span class="hljs-string">}}</span></code></pre>
           <p><code>--build-arg</code> bakes a value into the image layer where <code>docker history</code> can read it back; a BuildKit
           secret is mounted only for the <code>RUN</code> steps that need it (restore and publish) and never enters a layer.
           <code>DOCKER_BUILDKIT=1</code> is set explicitly so the requirement fails loudly rather than silently degrading. The
-          comment adds a detail worth keeping (<code>deploy.yml:1019-1023</code>): secret <em>content</em> is not part of the cache
+          comment adds a detail worth keeping (<code>deploy.yml:1202-1206</code>): secret <em>content</em> is not part of the cache
           key (only the instruction text is), so rotating the token does not needlessly bust the restore layer,
           which is safe because the package set is pinned by the committed lock files and a
           <code>Directory.Packages.props</code> change lands in the same <code>COPY</code> layer and busts it anyway.</p>
-          <p><strong>The layer cache is in ACR, not <code>type=gha</code></strong> (<code>deploy.yml:1032-1033</code>), and the comment
-          (<code>deploy.yml:1026-1031</code>) is a small masterclass in cache sizing. The GitHub Actions cache has a hard 10 GB
+          <p><strong>The layer cache is in ACR, not <code>type=gha</code></strong> (<code>deploy.yml:1215-1216</code>), and the comment
+          (<code>deploy.yml:1209-1214</code>) is a small masterclass in cache sizing. The GitHub Actions cache has a hard 10 GB
           per-repo quota with LRU eviction; six images exporting <code>mode=max</code> multi-stage SDK layers plus a large
           NuGet layer each would thrash it into a near-zero hit rate while still paying the export cost. The
           registry the job already authenticates to has no quota and costs pennies. <code>mode=max</code> rather than <code>min</code> is
           required because <code>min</code> caches only the final stage, which is exactly the one that is cheap: the expensive
           layers are restore and publish, inside the build stage. Buildx with the <code>docker-container</code> driver
-          (<code>deploy.yml:1002-1006</code>) is what makes an external cache possible at all, since the default driver cannot
+          (<code>deploy.yml:1185-1189</code>) is what makes an external cache possible at all, since the default driver cannot
           import or export one.</p>
           <p>[Rubric §17, DevOps &amp; Deployment] is served: each image is uniquely identified by the commit SHA,
           making every deployment fully traceable to its source code. [Rubric §11, Security] is served by the
           BuildKit-secret handling: no credential is recoverable from a published layer.</p>
           <h3 id="job-deploy">Job: <code>deploy</code></h3>
           <p>Runs only on push to <code>main</code> or <code>workflow_dispatch</code>, never on pull requests, and only when every gate
-          above has reported. Its <code>needs</code> list is the pipeline in one line (<code>deploy.yml:1054</code>):</p>
+          above has reported. Its <code>needs</code> list is the pipeline in one line (<code>deploy.yml:1237</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">needs:</span> [<span class="hljs-string">changes</span>, <span class="hljs-string">supply-chain</span>, <span class="hljs-string">cost-guard</span>, <span class="hljs-string">dr-freshness</span>, <span class="hljs-string">load-freshness</span>,
-        <span class="hljs-string">cross-service-freshness</span>, <span class="hljs-string">e2e-gate</span>, <span class="hljs-string">backend-test-gate</span>, <span class="hljs-string">foundation</span>, <span class="hljs-string">build-images</span>]</code></pre>
+        <span class="hljs-string">cross-service-freshness</span>, <span class="hljs-string">cross-browser-freshness</span>, <span class="hljs-string">e2e-gate</span>, <span class="hljs-string">backend-test-gate</span>,
+        <span class="hljs-string">ai-eval-gate</span>, <span class="hljs-string">foundation</span>, <span class="hljs-string">build-images</span>]</code></pre>
           <p>Note what is <em>not</em> there: <code>build-and-test</code>, <code>integration-tests</code> and <code>coverage</code>. Those are the required PR
           checks, and with strict branch protection the PR validated the exact merge tree, so they are not re-run on
-          the push (<code>deploy.yml:1055-1063</code>).</p>
-          <p>The condition itself (<code>deploy.yml:1080-1093</code>) is <code>always()</code> plus an explicit result check per dependency
+          the push (<code>deploy.yml:1238-1250</code>).</p>
+          <p>The condition itself (<code>deploy.yml:1269-1284</code>) is <code>always()</code> plus an explicit result check per dependency
           rather than the default <code>success()</code> semantics, and the comment records the incident that forced it
-          (<code>deploy.yml:1069-1072</code>). Because <code>e2e-gate</code> is <code>ui</code>-scoped, it legitimately <strong>skips</strong> on a backend-only
+          (<code>deploy.yml:1256-1259</code>). Because <code>e2e-gate</code> is <code>ui</code>-scoped, it legitimately <strong>skips</strong> on a backend-only
           merge, and under <code>success()</code> a skipped dependency cascades into a skipped <code>deploy</code>: a run went fully green
           and shipped nothing. So every unconditional gate must be <code>success</code> (none of them ever skip on a push,
-          since the freshness break-glass exits success inside the step), while the <strong>two conditional</strong> gates may be
-          <code>success</code> <strong>or</strong> <code>skipped</code>: <code>e2e-gate</code> (<code>deploy.yml:1092</code>) and <code>backend-test-gate</code> (<code>deploy.yml:1093</code>).</p>
-          <p>The comment spells out why allowing two skippable gates does not reopen the hole (<code>deploy.yml:1074-1079</code>):
+          since the freshness break-glass exits success inside the step), while the <strong>three conditional</strong> gates may
+          be <code>success</code> <strong>or</strong> <code>skipped</code>: <code>e2e-gate</code> (<code>deploy.yml:1282</code>), <code>backend-test-gate</code> (<code>deploy.yml:1283</code>)
+          and <code>ai-eval-gate</code> (<code>deploy.yml:1284</code>). The third is conditional only in form: it runs on any code diff,
+          so on a code deploy it never actually skips, and its skipped arm covers only the docs-only path where
+          this job does not run at all (<code>deploy.yml:1261-1264</code>).</p>
+          <p>The comment spells out why allowing two skippable gates does not reopen the hole (<code>deploy.yml:1261-1268</code>):
           their conditions are exact complements over a code deploy, so exactly one of them runs every time, and the
           invariant &quot;no production deploy without test execution&quot; holds without either gate being made
           unconditional. The post-deploy smoke gate is a second line of defence rather than the only backend
           backstop.</p>
           <p>That is the general lesson: <code>needs</code> expresses ordering, but &quot;did this dependency actually pass&quot; and &quot;did
           this dependency run&quot; are different questions, and default <code>success()</code> semantics answer them together.</p>
-          <p>The job declares <code>environment: production</code> (<code>deploy.yml:1094</code>) and opens with a checkout and its own
-          <code>azure/login@v3</code> (<code>deploy.yml:1096-1103</code>), for the federated-credential reason described under
+          <p>The job declares <code>environment: production</code> (<code>deploy.yml:1285</code>) and opens with a checkout and its own
+          <code>azure/login@v3</code> (<code>deploy.yml:1287-1294</code>), for the federated-credential reason described under
           <code>foundation</code>. Everything below is Phase 3 onward.</p>
-          <p><strong>Phase 3, Deployment parameters file</strong> (<code>deploy.yml:1108-1296</code>):</p>
+          <p><strong>Phase 3, Deployment parameters file</strong> (<code>deploy.yml:1299-1487</code>):</p>
           <p>Rather than passing <code>key=value</code> pairs inline to <code>arm-deploy</code>, the step builds a JSON parameters file
           from scratch using <code>jq</code> (there is no committed parameters template, see the IaC chapter&#39;s note that
           <code>infra/main.parameters.json</code> does not exist). The <code>jq --arg</code> flag properly JSON-escapes multiline values (critical for the RSA PEM keys,
-          which contain newlines). The base parameter set is always present (<code>deploy.yml:1161-1189</code>), including the
+          which contain newlines). The base parameter set is always present (<code>deploy.yml:1352-1380</code>), including the
           six SHA-tagged image references read from <code>needs.foundation.outputs.acrLoginServer</code>. Optional parameters
           (OAuth credentials, Anthropic API key, SMTP config, the synthetic-traffic key, managed-identity SQL
           settings) are conditionally appended only if their env vars are non-empty:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1199-1202</span>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1390-1393</span>
 <span class="hljs-keyword">if</span> [ -n <span class="hljs-string">&quot;<span class="hljs-variable">$OAUTH_GITHUB_CLIENT_ID</span>&quot;</span> ]; <span class="hljs-keyword">then</span>
   jq --arg k <span class="hljs-string">&quot;<span class="hljs-variable">$OAUTH_GITHUB_CLIENT_ID</span>&quot;</span> <span class="hljs-string">&#x27;.parameters.githubOAuthClientId = {&quot;value&quot;: $k}&#x27;</span> ...
 <span class="hljs-keyword">fi</span></code></pre>
@@ -1359,37 +1446,37 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           simply omits that parameter, and the Bicep template&#39;s <code>@secure()</code> <code>param</code> falls back to its default
           (typically an empty string, which disables the feature). Sign in with Apple is the clearest example: all
           four pieces (<code>client id</code>, <code>team id</code>, <code>key id</code>, private key PEM) are appended independently
-          (<code>deploy.yml:1218-1234</code>), and the provider only activates when the template receives the full set.</p>
+          (<code>deploy.yml:1409-1425</code>), and the provider only activates when the template receives the full set.</p>
           <p><strong>Two parameters are deliberately not optional, and both are fail-fast.</strong> The step&#39;s first action is a
-          check on an unset <code>ALERT_EMAIL</code> repo variable (<code>deploy.yml:1135-1141</code>), whose error message states the
+          check on an unset <code>ALERT_EMAIL</code> repo variable (<code>deploy.yml:1326-1332</code>), whose error message states the
           reasoning: alerts that notify nobody are silent failures, so <code>infra/main.bicep</code> <em>requires</em>
           <code>alertEmailAddress</code> and the deploy refuses to proceed rather than shipping SLO, outbox and availability
-          alerts into the void. The second is the RSA key pair (<code>deploy.yml:1143-1149</code>): Identity signs RS256 and
+          alerts into the void. The second is the RSA key pair (<code>deploy.yml:1334-1340</code>): Identity signs RS256 and
           publishes <code>/.well-known/jwks.json</code> from those keys, there is no other signing path, and <code>main.bicep</code>
           declares both parameters without a default, so an unset <code>JWT_RSA_PRIVATE_KEY_PEM</code> or
           <code>JWT_RSA_PUBLIC_KEY_PEM</code> fails here rather than producing an Identity service that cannot mint a token.
-          The keys are then appended unconditionally (<code>deploy.yml:1191-1196</code>). Catching both here turns an opaque
+          The keys are then appended unconditionally (<code>deploy.yml:1382-1387</code>). Catching both here turns an opaque
           Bicep validation error into an actionable one naming the variable or secret to set.</p>
-          <p>The <strong>synthetic-traffic key</strong> (<code>deploy.yml:1264-1270</code>) is a small but instructive optional parameter. It
+          <p>The <strong>synthetic-traffic key</strong> (<code>deploy.yml:1455-1461</code>) is a small but instructive optional parameter. It
           carries the shared secret the Gateway&#39;s edge rate limiter accepts as a bypass, and <code>load-test.yml</code> sends
           the same value as an <code>X-Synthetic-Traffic-Key</code> header, so the monthly k6 capacity proof measures backend
           capacity rather than the per-IP rate-limit window
           (<a href="https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html" target="_blank" rel="noopener">ADR-088</a> amendment). Unset
           leaves the bypass off, which is the correct default: a rate-limit bypass that exists by default is not a
           rate limiter.</p>
-          <p>The managed-identity SQL parameters (<code>deploy.yml:1278-1296</code>) are the opposite case, optional and
+          <p>The managed-identity SQL parameters (<code>deploy.yml:1469-1487</code>) are the opposite case, optional and
           default-off by design: without the <code>SQL_AAD_ADMIN_LOGIN</code>, <code>SQL_AAD_ADMIN_OID</code> and
           <code>USE_MANAGED_IDENTITY_SQL</code> repo variables, <code>main.bicep</code> keeps its defaults (no Entra admin, password
           auth) and the deploy is unchanged. The comment stages the rollout and warns that flipping
           <code>USE_MANAGED_IDENTITY_SQL=true</code> before the per-database grants exist costs the apps their SQL
-          connectivity (<code>deploy.yml:1290-1292</code>).</p>
-          <p>There is an important SQL location note in the Bicep parameters step (<code>deploy.yml:1153-1158</code>): Azure SQL
+          connectivity (<code>deploy.yml:1481-1483</code>).</p>
+          <p>There is an important SQL location note in the Bicep parameters step (<code>deploy.yml:1344-1349</code>): Azure SQL
           is region-gated on the QiMata Sponsorship subscription, <code>eastus2</code> (where <code>acc-rg</code> lives) does not
           allow <code>Microsoft.Sql</code>, so SQL Server and databases are deployed to <code>westus2</code> while Container Apps remain
-          in the RG&#39;s location. The <code>SQL_LOCATION=&quot;${SQL_LOCATION_OVERRIDE:-westus2}&quot;</code> line (<code>deploy.yml:1158</code>)
+          in the RG&#39;s location. The <code>SQL_LOCATION=&quot;${SQL_LOCATION_OVERRIDE:-westus2}&quot;</code> line (<code>deploy.yml:1349</code>)
           defaults to <code>westus2</code> but honors the <code>AZURE_SQL_LOCATION</code> repo variable (passed in as
-          <code>SQL_LOCATION_OVERRIDE</code> at <code>deploy.yml:1111</code>) so a different subscription or region can override it.</p>
-          <p><strong>Phase 3 (continued), Application infrastructure</strong> (<code>deploy.yml:1298-1304</code>):</p>
+          <code>SQL_LOCATION_OVERRIDE</code> at <code>deploy.yml:1302</code>) so a different subscription or region can override it.</p>
+          <p><strong>Phase 3 (continued), Application infrastructure</strong> (<code>deploy.yml:1489-1495</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Deploy</span> <span class="hljs-string">application</span> <span class="hljs-string">infrastructure</span>
   <span class="hljs-attr">id:</span> <span class="hljs-string">deploy</span>
   <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/arm-deploy@v2</span>
@@ -1401,11 +1488,11 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           and four per-service databases, App Insights, SLO alerts, and the monthly cost budget. (See the IaC
           chapter for the full resource inventory, note Redis is <em>not</em> provisioned by <code>main.bicep</code>.) The
           <code>environmentName=prod</code> parameter selects the environment-specific naming convention.</p>
-          <p><strong>Phase 4, Database migrations: there is no sqlcmd backstop</strong> (<code>deploy.yml:1306-1316</code>):</p>
+          <p><strong>Phase 4, Database migrations: there is no sqlcmd backstop</strong> (<code>deploy.yml:1497-1507</code>):</p>
           <p>Phase 4 is a comment block, not a step. The deploy <strong>deliberately does not run an external <code>sqlcmd</code>
           migration step</strong>. Each service self-applies its own migrations at startup
           (<code>ApplicationSettings__DatabaseInitStrategy=Migrate</code>) as the <strong>sole migrator</strong>, and <code>minReplicas: 1</code>
-          guarantees exactly one replica migrates before the revision serves. The comment (<code>deploy.yml:1307-1316</code>)
+          guarantees exactly one replica migrates before the revision serves. The comment (<code>deploy.yml:1498-1507</code>)
           records <em>why</em> the previous backstop was removed: a <code>sqlcmd</code> step here would race the container&#39;s startup
           <code>Migrate()</code> on a fresh per-service DB, both applying the same <code>InitialCreate</code> concurrently and
           non-atomically, leaving a table created <strong>without</strong> its <code>__EFMigrationsHistory</code> row (Msg 2714 &quot;object
@@ -1416,15 +1503,15 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           single-applier, idempotent-by-construction migration is the data-architecture discipline made operational
           without a racing dual-applier.</p>
           <p><strong>Phase 5, Revision-activation gate plus post-deploy smoke gate with automatic rollback</strong>
-          (<code>deploy.yml:1318-1479</code>):</p>
+          (<code>deploy.yml:1509-1670</code>):</p>
           <p>Phase 5 is <strong>two gates in one step</strong>, in a deliberate order, because they answer different questions
-          (<code>deploy.yml:1318-1339</code>).</p>
-          <p><strong>5a, the revision-activation gate</strong> (<code>deploy.yml:1364-1405</code>) is the newer half, and it exists because of
+          (<code>deploy.yml:1509-1530</code>).</p>
+          <p><strong>5a, the revision-activation gate</strong> (<code>deploy.yml:1555-1596</code>) is the newer half, and it exists because of
           a four-day production incident. For every app, the <strong>newest</strong> revision by <code>createdTime</code> must report
           <code>healthState</code> <code>Healthy</code>, <code>runningState</code> <code>Running</code> or <code>RunningAtMaxScale</code>, and <code>trafficWeight</code> 100. The
-          predicate is factored into its own helper so the rollback below can reuse it (<code>deploy.yml:1378-1382</code>),
-          and the poll is thirty attempts at twenty seconds, ten minutes per app (<code>deploy.yml:1385-1396</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1369-1375</span>
+          predicate is factored into its own helper so the rollback below can reuse it (<code>deploy.yml:1569-1573</code>),
+          and the poll is thirty attempts at twenty seconds, ten minutes per app (<code>deploy.yml:1576-1587</code>):</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1560-1566</span>
 <span class="hljs-function"><span class="hljs-title">revision_status</span></span>() {
   <span class="hljs-built_in">local</span> app=<span class="hljs-string">&quot;<span class="hljs-variable">$1</span>&quot;</span> json
   json=$(az containerapp revision list -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> \
@@ -1433,21 +1520,21 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
   <span class="hljs-built_in">printf</span> <span class="hljs-string">&#x27;%s&#x27;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$json</span>&quot;</span> | jq -r <span class="hljs-string">&#x27;if type == &quot;array&quot; then map(if . == null then &quot;&quot; else . end) | @tsv else &quot;&quot; end&#x27;</span> 2&gt;/dev/null || <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;&quot;</span>
 }</code></pre>
           <p>That proves the code just built is the code now serving, and the HTTP probes below <strong>cannot</strong> prove it.
-          The comment names the incident that made the gap concrete (<code>deploy.yml:1321-1330</code>): every probe enters
+          The comment names the incident that made the gap concrete (<code>deploy.yml:1512-1521</code>): every probe enters
           through the Gateway, and a healthy Gateway keeps serving from the <em>previous</em> backend revision when the new
           one never goes ready. So an untagged Aspire Redis health check running <code>CLUSTER INFO</code> against Azure
           Managed Redis made <code>/health/ready</code> throw on every probe, every backend revision reported
           <code>ActivationFailed</code>, the older revision kept 100% of the traffic, every probe answered 200 or 401 from the
           old code, and this step reported success on each deploy for four days (2026-08-29 to 2026-09-02).</p>
           <p>The <code>-o json</code> plus <code>jq</code> shape is itself a fix, and the comment states the trap plainly
-          (<code>deploy.yml:1364-1368</code>): a <strong>top-level</strong> JMESPath multiselect list rendered with <code>-o tsv</code> prints one
+          (<code>deploy.yml:1555-1559</code>): a <strong>top-level</strong> JMESPath multiselect list rendered with <code>-o tsv</code> prints one
           element <strong>per line</strong>, not one tab-separated row. The positional <code>read</code> therefore captured the revision
           name and left health, running state and traffic weight empty, and the gate failed every app on a
           perfectly healthy fleet. Fetching JSON and letting <code>jq</code> join it (with nulls mapped to empty strings so
           the field count never collapses) is what makes the positional read honest. The transferable lesson is
           the one the outage taught: a smoke test that reaches your system through a load balancer verifies
           <em>something is serving</em>, not <em>your new code is serving</em>, and only the control plane can tell you which.</p>
-          <p><strong>5b, the reachability probes</strong> (<code>deploy.yml:1407-1418</code>) are the older half, six endpoints covering every
+          <p><strong>5b, the reachability probes</strong> (<code>deploy.yml:1598-1609</code>) are the older half, six endpoints covering every
           deployable:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/health&quot;</span>
 probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/.well-known/jwks.json&quot;</span>
@@ -1455,26 +1542,26 @@ probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATE
 probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/Bookmarks&quot;</span> 401
 probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/Notifications/inbox&quot;</span> 401
 probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${UI_FQDN}</span>/&quot;</span></code></pre>
-          <p>Each probe polls up to 12 times (10-second intervals, 15-second curl timeout, <code>deploy.yml:1353-1362</code>),
+          <p>Each probe polls up to 12 times (10-second intervals, 15-second curl timeout, <code>deploy.yml:1544-1553</code>),
           two minutes total per endpoint. Together they exercise Container Apps routing (Gateway <code>/health</code>),
           Identity (JWKS, which must have reached its database and loaded its RSA keys), Conference (anonymous
           <code>GET /Events</code>), Engagement (<code>/Bookmarks</code>), Notification (<code>/Notifications/inbox</code>), and the Blazor UI host.
-          The comment (<code>deploy.yml:1332-1336</code>) notes the probe set mirrors <code>e2e.yml</code>&#39;s warm-up URLs, which is what
+          The comment (<code>deploy.yml:1523-1527</code>) notes the probe set mirrors <code>e2e.yml</code>&#39;s warm-up URLs, which is what
           makes it a backend backstop behind both <code>e2e-gate</code> and <code>backend-test-gate</code>.</p>
           <p><strong>The two <code>401</code> expectations are the interesting part.</strong> <code>probe</code> takes an expected status defaulting to
           200, and for the auth-gated Engagement and Notification endpoints the asserted status is <em>exactly</em> 401
-          (<code>deploy.yml:1350-1352</code>, <code>:1413-1416</code>). A 401 from the service is the healthy signal: it proves the
+          (<code>deploy.yml:1541-1543</code>, <code>:1604-1607</code>). A 401 from the service is the healthy signal: it proves the
           request traversed Gateway to service to auth pipeline. A 5xx, a 404, or a <code>000</code> connection failure does
           not. Accepting &quot;any non-2xx&quot; would have made those two probes unfalsifiable, which is the failure mode a
           smoke test can least afford.</p>
-          <p>If <strong>either</strong> gate fails, the rollback path (<code>deploy.yml:1434-1479</code>) activates, and it now carries two
+          <p>If <strong>either</strong> gate fails, the rollback path (<code>deploy.yml:1625-1670</code>) activates, and it now carries two
           guards that the original loop did not.</p>
-          <p><strong>Guard 1 re-reads the app before rolling it back</strong> (<code>deploy.yml:1440-1447</code>). The rollback loop runs
+          <p><strong>Guard 1 re-reads the app before rolling it back</strong> (<code>deploy.yml:1631-1638</code>). The rollback loop runs
           once for the whole fleet, but the smoke gate can fail for a reason that has nothing to do with a given
           app, so each iteration re-checks that app&#39;s newest revision through the same <code>revision_serving</code>
           predicate and skips it when it is already healthy, running and taking 100% of the traffic. Without that
           check, one failed probe would take five healthy apps down with it.</p>
-          <p><strong>Guard 2 is in the query that picks the target revision</strong> (<code>deploy.yml:1448-1459</code>):</p>
+          <p><strong>Guard 2 is in the query that picks the target revision</strong> (<code>deploy.yml:1639-1650</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">prev=$(az containerapp revision list -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> \
   --query <span class="hljs-string">&quot;reverse(sort_by([?properties.provisioningState==&#x27;Provisioned&#x27; &amp;&amp; properties.healthState==&#x27;Healthy&#x27; &amp;&amp; properties.active==\`true\`], &amp;properties.createdTime))[?name!=&#x27;<span class="hljs-variable">${newest}</span>&#x27;] | [0].name&quot;</span> ...)
 az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> --from-revision <span class="hljs-string">&quot;<span class="hljs-variable">$prev</span>&quot;</span> -o none</code></pre>
@@ -1487,12 +1574,12 @@ az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hl
           being copied back; the incident this gate was written for had the old revision still active and healthy
           alongside the failed new one, which is why the earlier query looked correct.</p>
           <p>The loop attempts every app before reporting, so one app&#39;s rollback failure does not abandon the other
-          five (<code>deploy.yml:1435-1437</code>), but a partial rollback is then reported loudly: the names of the apps that
+          five (<code>deploy.yml:1626-1628</code>), but a partial rollback is then reported loudly: the names of the apps that
           failed to roll back are written to the Step Summary under &quot;Smoke gate failed AND rollback incomplete&quot;
-          (<code>deploy.yml:1470-1475</code>). The comment states the principle directly, a fleet split across revisions needs
+          (<code>deploy.yml:1661-1666</code>). The comment states the principle directly, a fleet split across revisions needs
           immediate manual attention and must never look like a clean auto-revert. Either way the job exits 1
-          (<code>deploy.yml:1479</code>).</p>
-          <p>There is also an informational security-headers check (<code>deploy.yml:1420-1427</code>, labeled TD-09) that
+          (<code>deploy.yml:1670</code>).</p>
+          <p>There is also an informational security-headers check (<code>deploy.yml:1611-1618</code>, labeled TD-09) that
           confirms the Gateway emits <code>X-Content-Type-Options: nosniff</code>. This check is explicitly non-gating (it
           cannot trip the rollback) because a missing header is a hardening gap, not a &quot;revision not serving&quot;
           condition.</p>
@@ -1500,23 +1587,23 @@ az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hl
           gates with automatic rollback mean a broken deploy is both detected and partially self-corrected within
           minutes. [Rubric §13, Observability &amp; Operability] (assesses whether failures surface actionable signals)
           is served: the activation loop prints each app&#39;s newest revision with its health, running state and
-          traffic weight on every attempt (<code>deploy.yml:1389</code>), the workflow fails loudly with the specific failing
+          traffic weight on every attempt (<code>deploy.yml:1580</code>), the workflow fails loudly with the specific failing
           endpoint printed, and the rollback log names each app and its rollback revision.</p>
-          <p><strong>Post-deploy, reclaiming BuildKit cache storage</strong> (<code>deploy.yml:1481-1499</code>):</p>
+          <p><strong>Post-deploy, reclaiming BuildKit cache storage</strong> (<code>deploy.yml:1672-1690</code>):</p>
           <p>The last step in the job is housekeeping, not a gate:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">az acr run \
   --registry <span class="hljs-variable">${{ needs.foundation.outputs.acrName }</span>} \
   --cmd <span class="hljs-string">&quot;acr purge --filter &#x27;buildcache:.*&#x27; --ago 1h --keep 10 --untagged&quot;</span> \
   /dev/null</code></pre>
           <p>It runs the same <code>buildcache</code> purge the scheduled ACR task in <code>foundation.bicep</code> runs daily, but right
-          after the deploy that created the garbage. The comment gives the reason (<code>deploy.yml:1481-1486</code>): every
+          after the deploy that created the garbage. The comment gives the reason (<code>deploy.yml:1672-1677</code>): every
           <code>cache-to=...,mode=max</code> push orphans the previous deploy&#39;s untagged cache manifests, and reclaiming them
           within minutes rather than within a day is what keeps a Basic-tier registry under its 10 GB included
           storage instead of paying overage on a day&#39;s worth of them.</p>
-          <p>Two details are deliberate. It is <code>continue-on-error: true</code> (<code>deploy.yml:1493</code>) because it runs <em>after</em>
+          <p>Two details are deliberate. It is <code>continue-on-error: true</code> (<code>deploy.yml:1684</code>) because it runs <em>after</em>
           the rollout and the smoke gate, so a throttled ACR task or a transient auth failure must never fail a
           deploy that has already shipped successfully. And the <code>/dev/null</code> argument is the build context, which
-          <code>az acr run</code> requires positionally and this command does not use (<code>deploy.yml:1490-1491</code>).</p>
+          <code>az acr run</code> requires positionally and this command does not use (<code>deploy.yml:1681-1682</code>).</p>
           <p>[Rubric §31, Cost Efficiency / FinOps] is served by the pairing rather than by either half: the
           scheduled task is the floor that catches everything, and this step is the fast path for the garbage the
           deploy just produced.</p>
@@ -1797,7 +1884,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           reason is a measurement problem, not a policy one: a k6 run sends every request from one runner, so one
           IP, and without the bypass the number the test reports is the per-IP rate-limit window rather than
           backend capacity. The same secret is passed into <code>main.bicep</code> by <code>deploy.yml</code>
-          (<code>deploy.yml:1264-1270</code>), so the bypass exists in production only when it has been configured
+          (<code>deploy.yml:1455-1461</code>), so the bypass exists in production only when it has been configured
           deliberately. The bypass changes nothing else: the test stays read-only and never mutates.</p>
           <h3 id="why-only-the-conference-read-endpoints">Why only the Conference read endpoints?</h3>
           <p>The Conference module&#39;s read endpoints (events, sessions, speakers, rooms, categories) are output-cached
@@ -2002,7 +2089,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           <tr>
           <td><code>MMCA.ADC/e2e.yml</code></td>
           <td>Mon + Thu 07:00 UTC / dispatch / <code>workflow_call</code> from <code>deploy.yml</code></td>
-          <td>Yes, directly, as the chromium <code>e2e-gate</code></td>
+          <td>Yes, twice: directly as the chromium <code>e2e-gate</code>, and indirectly via the <code>cross-browser-freshness</code> recency gate</td>
           <td>No</td>
           </tr>
           <tr>
@@ -2088,9 +2175,10 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           branch on the four Application-layer assemblies, both enforced in <code>build-and-test</code>.</p>
           <p>The &quot;Gates production&quot; column splits three ways, and the distinction is the most portable idea in
           this chapter. Two workflows gate <strong>directly</strong>, by being called as reusable workflows from <code>deploy.yml</code>
-          itself (<code>e2e.yml</code>, <code>cost-guard.yml</code>). Three gate <strong>indirectly</strong>: <code>dr-drill.yml</code>, <code>load-test.yml</code> and
-          <code>cross-service-tests.yml</code> never touch the deploy path, but the <strong>age</strong> of their latest successful run is a
-          <code>deploy</code> precondition through <code>dr-freshness</code>, <code>load-freshness</code> and <code>cross-service-freshness</code>
+          itself (<code>e2e.yml</code>, <code>cost-guard.yml</code>). Four gate <strong>indirectly</strong>: <code>dr-drill.yml</code>, <code>load-test.yml</code>,
+          <code>cross-service-tests.yml</code> and the firefox/webkit legs of the scheduled <code>e2e.yml</code> matrix never touch the
+          deploy path, but the <strong>age</strong> of their latest successful run is a <code>deploy</code> precondition through
+          <code>dr-freshness</code>, <code>load-freshness</code>, <code>cross-service-freshness</code> and <code>cross-browser-freshness</code>
           (<a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a>). And three gate nothing at
           all by design: <code>maui-audit.yml</code> and the two Claude workflows notify rather than block, because a weekly
           advisory sweep and an advisory review are useful precisely when they are not on the critical path. A
@@ -2123,11 +2211,11 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           </tr>
           <tr>
           <td>§14 Testability &amp; Test Strategy</td>
-          <td><code>--minimum-expected-tests</code> floors in all test steps (2000 for MMCA.Common&#39;s suite, 40 for the Helpdesk canary, 1 for ADC&#39;s); the 68.3% unit coverage floor in <code>ci.yml</code> <code>coverage</code>, ADC&#39;s 55.5% line floor and 77.5% Application-layer branch floor in <code>deploy.yml</code> <code>build-and-test</code>; <code>backend-test-gate</code> as the deploy-path complement of <code>e2e-gate</code>, so no code deploy ships without test execution; architecture fitness functions in <code>build-and-test</code></td>
+          <td><code>--minimum-expected-tests</code> floors in all test steps (2000 for MMCA.Common&#39;s suite, 40 for the Helpdesk canary, 1 for ADC&#39;s); the 68.3% unit coverage floor in <code>ci.yml</code> <code>coverage</code>, ADC&#39;s 55.5% line floor and 77.5% Application-layer branch floor in <code>deploy.yml</code> <code>build-and-test</code>; <code>backend-test-gate</code> as the deploy-path complement of <code>e2e-gate</code>, so no code deploy ships without test execution; the golden replay and prompt-contract tiers of <code>ai-eval-gate</code> for the AI session scorer, whose behavior can move with no code change; architecture fitness functions in <code>build-and-test</code></td>
           </tr>
           <tr>
           <td>§17 DevOps &amp; Deployment</td>
-          <td>The full workflow set collectively; SHA-tagged images with per-image dirty gating and registry-side re-tagging; the <code>foundation</code>/<code>build-images</code>/<code>deploy</code> phase split that hides image builds under the e2e gate; revision-activation gate plus smoke and rollback; the three proof-of-recency gates in <code>deploy.needs</code> and their justification-required break-glass (<a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a>)</td>
+          <td>The full workflow set collectively; SHA-tagged images with per-image dirty gating and registry-side re-tagging; the <code>foundation</code>/<code>build-images</code>/<code>deploy</code> phase split that hides image builds under the e2e gate; revision-activation gate plus smoke and rollback; the four proof-of-recency gates in <code>deploy.needs</code> and their justification-required break-glass (<a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a>)</td>
           </tr>
           <tr>
           <td>§21 Accessibility</td>
@@ -2135,7 +2223,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           </tr>
           <tr>
           <td>§28 Front-End Testing &amp; Quality</td>
-          <td><code>ci.yml</code> <code>ui-e2e</code> render smoke; <code>e2e.yml</code> full Playwright suite, deploy-gating on chromium via <code>deploy.yml</code>&#39;s <code>e2e-gate</code> and advisory across firefox/webkit on the alternating nightly</td>
+          <td><code>ci.yml</code> <code>ui-e2e</code> render smoke; <code>e2e.yml</code> full Playwright suite, deploy-gating on chromium via <code>deploy.yml</code>&#39;s <code>e2e-gate</code>, with the firefox/webkit legs of the alternating weekly matrix made mandatory by the <code>cross-browser-freshness</code> recency gate</td>
           </tr>
           <tr>
           <td>§29 Resilience &amp; Business Continuity</td>

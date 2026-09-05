@@ -167,7 +167,7 @@
           entity declares <em>what relationships it has</em> with <strong>zero EF dependency</strong> (<code>[Rubric §3, Clean Architecture]</code>, the inward dependency rule, so the domain stays persistence-ignorant). At runtime the
           framework needs a richer, classified view of those navigations, which it carries in three
           Application-layer types declared in one file: the <a href="#navigationtype"><code>NavigationType</code></a> enum
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationMetadata.cs:6</code>, values
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Navigation/INavigationMetadata.cs:6</code>, values
           <code>ForeignKey</code> and <code>ChildCollection</code>), the <a href="#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a> record
           (<code>INavigationMetadata.cs:23</code>, one navigation&#39;s property name, kind, declaring type, and unwrapped
           target type), and the <a href="#inavigationmetadata"><code>INavigationMetadata</code></a> contract
@@ -176,7 +176,7 @@
           <code>INavigationMetadata.cs:37</code>) and <strong><code>UnsupportedIncludes</code></strong> (navigations that need manual loading,
           because the ends are split, <code>INavigationMetadata.cs:40</code>). Its mutable builder implementation is
           <a href="#navigationmetadata"><code>NavigationMetadata</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/NavigationMetadata.cs:9</code>), which backs
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Navigation/NavigationMetadata.cs:9</code>), which backs
           each list with a <code>List&lt;NavigationPropertyInfo&gt;</code> and exposes only <code>internal</code> <code>AddSupported</code> /
           <code>AddUnsupported</code> / <code>AddSupportedRange</code> / <code>AddUnsupportedRange</code> mutators
           (<code>NavigationMetadata.cs:22-34</code>), so nothing outside the framework assembly can rewrite a
@@ -228,7 +228,7 @@
           <code>Func&lt;IReadOnlyCollection&lt;TEntity&gt;, NavigationMetadata, bool, bool, CancellationToken, Task&gt;</code>
           (<code>EntityQueryPipeline.cs:43</code>), is exactly the shape of
           <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationPopulator.cs:9</code>), the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Navigation/INavigationPopulator.cs:9</code>), the
           per-entity port a module implements to load its own cross-source navigations
           (<code>INavigationPopulator.cs:20-25</code>). The <code>in</code> variance makes it contravariant on the entity type; the
           boolean pair mirrors the metadata provider&#39;s so a populator only loads what the caller asked for.
@@ -240,9 +240,9 @@
           branches on null (<code>[Rubric §2, Design Patterns]</code>). It is registered exactly that way for entities
           with nothing to hand-load, for example
           <code>services.TryAddScoped&lt;INavigationPopulator&lt;Question&gt;, NullNavigationPopulator&lt;Question&gt;&gt;()</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:82</code>) and
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:85</code>) and
           the framework&#39;s own push-notification entity
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:38</code>).</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:39</code>).</p>
           <p>The actual batch loading is done by <a href="#navigationloader"><code>NavigationLoader</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/NavigationLoader.cs:21</code>), a static helper
           that exists to kill the N+1 problem. It exposes two methods: <code>LoadFKPropertyAsync</code>
@@ -299,16 +299,16 @@
           <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>
           to run; the service calls <code>NavigationMetadataProvider.BuildIncludes&lt;TEntity&gt;</code> to get the
           supported/unsupported split
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:282</code>); it hands that
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:283</code>); it hands that
           split plus its module&#39;s injected <code>INavigationPopulator&lt;TEntity&gt;</code> (as the method-group delegate
           <code>NavigationPopulator.PopulateAsync</code>) to <code>EntityQueryPipeline.ExecuteAsync</code>
-          (<code>EntityQueryService.cs:316-321</code>); the pipeline JOINs the supported navigations and, if any are
+          (<code>EntityQueryService.cs:317-322</code>); the pipeline JOINs the supported navigations and, if any are
           unsupported, materializes the page and calls the populator; the populator (almost always a
           <code>DeclarativeNavigationPopulator</code> built from descriptors) iterates its descriptors and calls
           <code>NavigationLoader</code> once per cross-source navigation. The same metadata also gates the service&#39;s keyed
           by-id fast path: requested includes alone do not disqualify a keyed read, but a single unsupported
           include does, because only the pipeline&#39;s populator can batch-load across physical sources
-          (<code>EntityQueryService.cs:183-187</code>). The concrete consumers live in ADC&#39;s Conference module. For example
+          (<code>EntityQueryService.cs:184-188</code>). The concrete consumers live in ADC&#39;s Conference module. For example
           <a href="group-18-conference-application.html#eventnavigationpopulator"><code>EventNavigationPopulator</code></a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/EventNavigationPopulator.cs:11</code>)
           is <em>just</em> a subclass of <code>DeclarativeNavigationPopulator&lt;Event&gt;</code> constructed with three
@@ -318,8 +318,8 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/SessionNavigationPopulator.cs:13</code>)
           mixes two <code>FKNavigationDescriptor</code>s (<code>Event</code>, <code>Room</code>) with three <code>ChildNavigationDescriptor</code>s. Each is
           registered per entity as a scoped service
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:65</code>,
-          <code>DependencyInjection.cs:69</code>), and those module-level populators are taught in
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:68</code>,
+          <code>DependencyInjection.cs:72</code>), and those module-level populators are taught in
           <a href="group-18-conference-application.html">Group 18</a>.</p>
           <p>Two architectural threads are worth holding onto as you read the per-type sections. First, this
           subsystem is <em>why</em> the database-per-service split is feasible without rewriting query code
@@ -389,7 +389,7 @@
           </ul>
           <h3 id="navigationtype">NavigationType</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationMetadata.cs:6</code> · Level 0 · enum</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces.Navigation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Navigation/INavigationMetadata.cs:6</code> · Level 0 · enum</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a two-value enum classifying navigation properties. <code>ForeignKey</code> is a
@@ -417,7 +417,7 @@
           </ul>
           <h3 id="navigationpropertyinfo">NavigationPropertyInfo</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationMetadata.cs:23</code> · Level 1 · record class (sealed, positional)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces.Navigation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Navigation/INavigationMetadata.cs:23</code> · Level 1 · record class (sealed, positional)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the metadata unit for a single navigation property: its CLR name, its kind, the
@@ -446,7 +446,7 @@
           </ul>
           <h3 id="inavigationmetadata">INavigationMetadata</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationMetadata.cs:34</code> · Level 2 · interface</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces.Navigation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Navigation/INavigationMetadata.cs:34</code> · Level 2 · interface</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the read-only view that splits an entity&#39;s navigations into two buckets, those EF
@@ -471,7 +471,7 @@
           </ul>
           <h3 id="navigationmetadata">NavigationMetadata</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/NavigationMetadata.cs:9</code> · Level 3 · class (sealed)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces.Navigation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Navigation/NavigationMetadata.cs:9</code> · Level 3 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the concrete mutable builder behind <a href="#inavigationmetadata"><code>INavigationMetadata</code></a>.
@@ -511,13 +511,13 @@
           <a href="#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>&#39;s <code>PopulateAsync</code>.</li>
           <li><strong>Caveats</strong>: the populator contract takes the <strong>concrete</strong> <code>NavigationMetadata</code>, not
           <a href="#inavigationmetadata"><code>INavigationMetadata</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationPopulator.cs:22</code>). The
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Navigation/INavigationPopulator.cs:22</code>). The
           interface therefore documents the shape but is not the type most consumers actually program
           against.</li>
           </ul>
           <h3 id="inavigationpopulatorin-tentity">INavigationPopulator&lt;in TEntity&gt;</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/INavigationPopulator.cs:9</code> · Level 4 · interface</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces.Navigation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Navigation/INavigationPopulator.cs:9</code> · Level 4 · interface</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the manual-loading port for navigations EF <code>Include</code> cannot serve. An
@@ -543,7 +543,7 @@
           <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>.</li>
           <li><strong>Where it&#39;s used</strong>: injected into
           <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:36</code>, exposed as the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:37</code>, exposed as the
           <code>NavigationPopulator</code> property at line 93 with a null guard). The service does not call it directly:
           it passes the <strong>method group</strong> <code>NavigationPopulator.PopulateAsync</code> into the pipeline (lines 320 and
           534), which declares the parameter as a plain delegate
@@ -565,7 +565,7 @@
           pattern use). Because
           <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>
           hard-requires a populator (it throws <code>ArgumentNullException</code> when the constructor argument is null,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:93</code>), every entity
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:94</code>), every entity
           must have one registered. A null-object implementation lets the pipeline keep one uniform call site
           with no null checks and no conditional branch: branchless polymorphism.</li>
           <li><strong>Walkthrough</strong>: a single expression-bodied method whose entire body is <code>=&gt; Task.CompletedTask;</code>
@@ -576,7 +576,7 @@
           nothing on a hot query route (<code>[Rubric §12, Performance &amp; Scalability]</code>).</li>
           <li><strong>Where it&#39;s used</strong>: registered explicitly per closed entity type with <code>TryAddScoped</code> in module
           composition, for example
-          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:38</code> for
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:39</code> for
           <code>PushNotification</code>,
           <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:47</code> for
           <code>Customer</code>, and

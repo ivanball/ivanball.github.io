@@ -35,9 +35,9 @@ from
 [`AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
 and inherit the full read + create + delete surface, overriding actions only to add
 `[AllowAnonymous]`, an `[OutputCache]` policy, or a business rule
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:56`,
-`SpeakersController.cs:61`, `EventsController.cs:59`, `QuestionsController.cs:41`,
-`ConferenceCategoriesController.cs:42`, `SponsorsController.cs:48`, `ActivitiesController.cs:48`).
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:57`,
+`SpeakersController.cs:62`, `EventsController.cs:60`, `QuestionsController.cs:42`,
+`ConferenceCategoriesController.cs:43`, `SponsorsController.cs:49`, `ActivitiesController.cs:49`).
 **Child-and-join controllers** (eight: [`RoomsController`](#roomscontroller),
 [`CategoryItemsController`](#categoryitemscontroller),
 [`EventSpeakersController`](#eventspeakerscontroller),
@@ -74,7 +74,7 @@ controller's constructor injects the
 for reads plus the specific
 [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
 and [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)
-instances for its writes and bespoke reads (`SessionsController.cs:44-57`), then folds any
+instances for its writes and bespoke reads (`SessionsController.cs:45-58`), then folds any
 `Result.Failure` back through the inherited `HandleFailure`. That is the `[Rubric §1, SOLID]` and
 `[Rubric §16, Maintainability]` payoff the generic base exists for (the generic-controller and
 dynamic-query contract of
@@ -92,33 +92,33 @@ every read action (both list overloads, the lookup, the by-id read and the CSV e
 `GetExportSpecification` (`EntityControllerBase.cs:626`), itself `null`, so a controller that
 overrides neither reads unscoped. Twelve of the seventeen Conference controllers override one of the
 two. Nine override the asynchronous hook because their rule is resolved through a query handler:
-[`SessionsController`](#sessionscontroller) (`SessionsController.cs:76`),
-[`SpeakersController`](#speakerscontroller) (`SpeakersController.cs:104`),
+[`SessionsController`](#sessionscontroller) (`SessionsController.cs:77`),
+[`SpeakersController`](#speakerscontroller) (`SpeakersController.cs:105`),
 [`RoomsController`](#roomscontroller) (`RoomsController.cs:120`),
-[`SponsorsController`](#sponsorscontroller) (`SponsorsController.cs:68`),
-[`ActivitiesController`](#activitiescontroller) (`ActivitiesController.cs:68`) and the four join
+[`SponsorsController`](#sponsorscontroller) (`SponsorsController.cs:69`),
+[`ActivitiesController`](#activitiescontroller) (`ActivitiesController.cs:69`) and the four join
 controllers ([`EventSpeakersController`](#eventspeakerscontroller) `:72`,
 [`SessionSpeakersController`](#sessionspeakerscontroller) `:73`,
 [`SessionCategoryItemsController`](#sessioncategoryitemscontroller) `:73`,
 [`SpeakerCategoryItemsController`](#speakercategoryitemscontroller) `:73`). Three override the
 synchronous one because their rule needs nothing awaited: [`EventsController`](#eventscontroller)
 returns a plain [`PublishedEventSpecification`](group-18-conference-application.md#publishedeventspecification)
-or `null` (`EventsController.cs:74-75`), and the two feedback-answer controllers return an
+or `null` (`EventsController.cs:75-76`), and the two feedback-answer controllers return an
 [`OwnedByUserSpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#ownedbyuserspecificationtentity-tidentifiertype)
 built from the caller's user id, or `null` for an Organizer (`EventQuestionAnswersController.cs:74-75`,
 `SessionQuestionAnswersController.cs:96-97`). Consequences worth memorizing: a row the specification
 excludes is a **404, not a 403** (a "forbidden" answer would confirm the id exists), the lookup
 endpoint receives the same scope as the specification's `Criteria` predicate, and most of the read
 actions in these files are now attribute-only passthroughs whose bodies just call `base` (for example
-`EventQuestionAnswersController.cs:77-110`, `SessionsController.cs:212-229`), kept only because the
+`EventQuestionAnswersController.cs:77-110`, `SessionsController.cs:213-230`), kept only because the
 route attributes must sit on the derived action. `[Rubric §11, Security]` is the lens, and
 [ADR-078](https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html) is the record: the hook
 exists so an export can no longer drift wider than the list it mirrors.
 
 The CSV export keeps a second, blunter guard on top of the hook. Eleven controllers override
 `ExportAsync` and return `Forbid()` outright for a caller who is not a privileged reader, rather than
-serving a scoped file: `SessionsController.cs:240-250`, `SpeakersController.cs:290-300`,
-`EventsController.cs:133-143`, `SponsorsController.cs:144-154`, `ActivitiesController.cs:144-154`,
+serving a scoped file: `SessionsController.cs:241-251`, `SpeakersController.cs:291-301`,
+`EventsController.cs:134-144`, `SponsorsController.cs:145-155`, `ActivitiesController.cs:145-155`,
 the four join controllers (`EventSpeakersController.cs:139-149`,
 `SessionSpeakersController.cs:140-150`, `SessionCategoryItemsController.cs:140-150`,
 `SpeakerCategoryItemsController.cs:140-150`) and the two answer controllers against the Organizer role
@@ -135,30 +135,30 @@ interesting part. Most write-bearing controllers carry a class-level
 [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute) gate naming one
 [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions) capability rather than
 a role policy: `SessionsManage` on [`SessionsController`](#sessionscontroller)
-(`SessionsController.cs:43`) and on the two session-join controllers
+(`SessionsController.cs:44`) and on the two session-join controllers
 (`SessionSpeakersController.cs:47`, `SessionCategoryItemsController.cs:47`), `EventsManage`
-(`EventsController.cs:45`, `EventSpeakersController.cs:46`), `RoomsManage` (`RoomsController.cs:91`),
-`CategoriesManage` (`ConferenceCategoriesController.cs:34`, `CategoryItemsController.cs:62`),
-`QuestionsManage` (`QuestionsController.cs:33`), `SpeakersManage`
+(`EventsController.cs:46`, `EventSpeakersController.cs:46`), `RoomsManage` (`RoomsController.cs:91`),
+`CategoriesManage` (`ConferenceCategoriesController.cs:35`, `CategoryItemsController.cs:62`),
+`QuestionsManage` (`QuestionsController.cs:34`), `SpeakersManage`
 (`SpeakerCategoryItemsController.cs:47`) and `SessionSelectionManage`
 (`SessionSelectionController.cs:29`). Reads are then re-opened action by action with
-`[AllowAnonymous]` (BR-43 public browse, for example `SessionsController.cs:136`,
+`[AllowAnonymous]` (BR-43 public browse, for example `SessionsController.cs:137`,
 `RoomsController.cs:137`). Nine capability constants exist in total, declared once in
 `ConferencePermissions.All`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:39-50`).
 
 Three shapes break that pattern, and knowing why saves you from "fixing" them.
 [`SpeakersController`](#speakerscontroller) carries only a plain `[Authorize]` at class level
-(`SpeakersController.cs:45`) and pushes `[HasPermission(ConferencePermissions.SpeakersManage)]` down
-onto the individual organizer write actions (`SpeakersController.cs:289,308,363,375,394`), because one
+(`SpeakersController.cs:46`) and pushes `[HasPermission(ConferencePermissions.SpeakersManage)]` down
+onto the individual organizer write actions (`SpeakersController.cs:290,309,364,376,395`), because one
 of its writes is an authenticated self-service surface: the BR-214 profile update re-declares plain
-`[Authorize]` (`SpeakersController.cs:332`) and decides inside the action whether the caller is an
+`[Authorize]` (`SpeakersController.cs:333`) and decides inside the action whether the caller is an
 organizer or the speaker themselves, comparing the `speaker_id` JWT claim to the route id
-(`SpeakersController.cs:343-346`) and passing the answer down as `CallerIsOrganizer` so the handler
-can refuse a self-edit of the organizer-only `IsTopSpeaker` field (`SpeakersController.cs:351`).
+(`SpeakersController.cs:344-347`) and passing the answer down as `CallerIsOrganizer` so the handler
+can refuse a self-edit of the organizer-only `IsTopSpeaker` field (`SpeakersController.cs:352`).
 [`SponsorsController`](#sponsorscontroller) and [`ActivitiesController`](#activitiescontroller) copy
-the class-level-`[Authorize]`-plus-per-action-capability shape (`SponsorsController.cs:38` with
-`SponsorsManage` at `:143,162,181,206`; `ActivitiesController.cs:38` with `ActivitiesManage` at
+the class-level-`[Authorize]`-plus-per-action-capability shape (`SponsorsController.cs:39` with
+`SponsorsManage` at `:143,162,181,206`; `ActivitiesController.cs:39` with `ActivitiesManage` at
 `:143,162,181,206`). And [`EventQuestionAnswersController`](#eventquestionanswerscontroller) and
 [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller) carry a bare `[Authorize]`
 (`EventQuestionAnswersController.cs:54`, `SessionQuestionAnswersController.cs:75`), because *any*
@@ -172,9 +172,9 @@ Orthogonal to all three shapes is the **read audience**, which no attribute can 
 changes the *rows* rather than the verdict. Ten controllers ask
 [`CurrentUserServiceExtensions`](#currentuserserviceextensions)`.IsPrivilegedConferenceReader()`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:24-25`)
-and turn the answer into a specification or `null`: `SessionsController.cs:60`,
-`SpeakersController.cs:65`, `EventsController.cs:75`, `SponsorsController.cs:52`,
-`ActivitiesController.cs:52`, `RoomsController.cs:104`, `EventSpeakersController.cs:58`,
+and turn the answer into a specification or `null`: `SessionsController.cs:61`,
+`SpeakersController.cs:66`, `EventsController.cs:76`, `SponsorsController.cs:53`,
+`ActivitiesController.cs:53`, `RoomsController.cs:104`, `EventSpeakersController.cs:58`,
 `SessionSpeakersController.cs:59`, `SessionCategoryItemsController.cs:59` and
 `SpeakerCategoryItemsController.cs:59`. The helper is one line over `ICurrentUserService` answering
 against the [`ConferenceReadAudience`](group-17-conference-domain.md#conferencereadaudience)`.PrivilegedRoles`
@@ -187,7 +187,7 @@ substitute for a `[HasPermission(...)]` gate (`CurrentUserServiceExtensions.cs:2
 
 Several controllers declare small `record class` request types alongside themselves, co-located in the
 same file: [`AddRoomRequest`](#addroomrequest) and [`UpdateRoomRequest`](#updateroomrequest)
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/RoomsController.cs:30,58`),
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/RoomsController.cs:30,58`),
 [`AddCategoryItemRequest`](#addcategoryitemrequest) and
 [`UpdateCategoryItemRequest`](#updatecategoryitemrequest) (`CategoryItemsController.cs:26,42`),
 [`AddEventSpeakerRequest`](#addeventspeakerrequest) (`EventSpeakersController.cs:29`),
@@ -210,7 +210,7 @@ deliberately separate from the application-layer command types and from the outb
 command's parameter list. The aggregate-root controllers, by contrast, bind the application layer's
 create request directly as their `TCreateRequest` (for example
 [`SessionCreateRequest`](group-18-conference-application.md#sessioncreaterequest) at
-`SessionsController.cs:56`), so they need no per-controller record.
+`SessionsController.cs:57`), so they need no per-controller record.
 
 The session-feedback family has four records instead of two, and the extra pair is the interesting
 one. Alongside [`AddSessionQuestionAnswerRequest`](#addsessionquestionanswerrequest) and
@@ -231,63 +231,63 @@ response rather than re-applying the form
 
 [`SessionsController`](#sessionscontroller) shows best *how* a controller earns its overrides. Every
 read action is `[AllowAnonymous]` and `[OutputCache(PolicyName = "SessionsCache")]`
-(`SessionsController.cs:136-137,162-163,211-212,223-224,261-262`). Its read hook dispatches
+(`SessionsController.cs:137-138,163-164,212-213,224-225,262-263`). Its read hook dispatches
 [`GetPublicSessionFilterQuery`](group-18-conference-application.md#getpublicsessionfilterquery) so a
 non-organizer never sees declined sessions (BR-132/BR-49), and because `Session` and `Event` can live
 in different data sources the published-event check is resolved by that handler through the
-framework's cross-source specification helper rather than by a join (`SessionsController.cs:63-83`;
+framework's cross-source specification helper rather than by a join (`SessionsController.cs:64-84`;
 [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)). The paged read adds a
-second layer in `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:106`): `Session` has no
+second layer in `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:107`): `Session` has no
 `SpeakerId` column, so that filter key is intercepted and `Remove`d before the generic filter pipeline
 can reject it, resolved to an id list through
 [`GetSessionsBySpeakerFilterQuery`](group-18-conference-application.md#getsessionsbyspeakerfilterquery),
-and **ANDed** with the public filter rather than substituted for it (`SessionsController.cs:110-131`),
+and **ANDed** with the public filter rather than substituted for it (`SessionsController.cs:111-132`),
 because substituting would leak non-accepted sessions to anonymous callers; an unparseable value
 simply ignores the key (`:115-119`). The same controller adds three things the base has no notion of:
 a `GET /{id}/ics` action that streams one public session as `text/calendar` for the add-to-calendar
 affordance via
 [`ExportSessionCalendarQuery`](group-18-conference-application.md#exportsessioncalendarquery)
-(`SessionsController.cs:261-271`), a BR-86 `X-Warning` header raised on create by comparing the
+(`SessionsController.cs:262-272`), a BR-86 `X-Warning` header raised on create by comparing the
 request times against the event's `StartDate`/`EndDate` and on update from the handler's
 `HasDateRangeWarning` flag (`:296-303`, `:338-341`), and an explicit
 [`Idempotent`](group-12-api-hosting-mapping.md#idempotentattribute) declaration on the create override
 so the contract is visible at the ADC endpoint rather than only inherited (`:279`). Every mutating
 action ends by evicting the `conference:sessions` and `conference` output-cache tags
-(`SessionsController.cs:306,343,354`), the write-side half of the caching contract.
+(`SessionsController.cs:307,344,355`), the write-side half of the caching contract.
 
 Conditional writes are now uniform: an update states its precondition in the HTTP `If-Match` header
 and nowhere else. [`SupportsIfMatch`](group-12-api-hosting-mapping.md#supportsifmatchattribute) sits
-on the session update (`SessionsController.cs:319`), the event update, publish and unpublish
-(`EventsController.cs:220,264,297`), the speaker update (`SpeakersController.cs:333`), the category
-update (`ConferenceCategoriesController.cs:114`), the question update (`QuestionsController.cs:113`)
-and the sponsor and activity updates (`SponsorsController.cs:182`, `ActivitiesController.cs:182`), and
+on the session update (`SessionsController.cs:320`), the event update, publish and unpublish
+(`EventsController.cs:221,265,298`), the speaker update (`SpeakersController.cs:334`), the category
+update (`ConferenceCategoriesController.cs:115`), the question update (`QuestionsController.cs:114`)
+and the sponsor and activity updates (`SponsorsController.cs:183`, `ActivitiesController.cs:183`), and
 each action pulls the token with `SupportsIfMatchAttribute.RequiredToken(HttpContext)`
-(`SessionsController.cs:328`, `EventsController.cs:229,272,305`, `SpeakersController.cs:348`,
-`SponsorsController.cs:191`): a request with no header answers **428 Precondition Required** and a
+(`SessionsController.cs:329`, `EventsController.cs:230,273,306`, `SpeakersController.cs:349`,
+`SponsorsController.cs:192`): a request with no header answers **428 Precondition Required** and a
 stale token answers **412 Precondition Failed**
 ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)). Sponsors and
 activities take that one step further and dispatch the framework's generic
 [`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`](group-05-cqrs-pipeline.md#updateentitycommandtentity-tupdaterequest-tidentifiertype)
-rather than a bespoke command (`SponsorsController.cs:194`, `ActivitiesController.cs:194`), so their
+rather than a bespoke command (`SponsorsController.cs:195`, `ActivitiesController.cs:195`), so their
 update path is generic end to end.
 
 Three more read-path carve-outs are worth internalizing before you touch these files. First,
 [`SpeakersController`](#speakerscontroller)`.GetAllForLookupAsync` constrains the *label* as well as
 the rows: only `FirstName` and `LastName` may be requested by a non-privileged caller
-(`SpeakersController.cs:68,218-228`), because `nameProperty=Email` would project the speaker email
+(`SpeakersController.cs:69,219-229`), because `nameProperty=Email` would project the speaker email
 straight into the lookup label and go around the DTO mapper that redacts it (BR-66). Second, that
 controller's `GetByIdAsync` drops the public specification when the caller's `speaker_id` claim equals
 the route id (the self-edit form cannot load without reading the profile it edits), and because the
 output-cache key does not vary by caller it turns storage off for that response through
 `IOutputCacheFeature` so a private profile can never land in the shared entry
-(`SpeakersController.cs:256-266`). Its per-session feedback read is gated self-or-organizer in code and
+(`SpeakersController.cs:257-267`). Its per-session feedback read is gated self-or-organizer in code and
 deliberately left uncached, since every response is authorization-dependent
-(`SpeakersController.cs:416-427`), while the two bookmark-count reads are anonymous under the
+(`SpeakersController.cs:417-428`), while the two bookmark-count reads are anonymous under the
 short-TTL `BookmarkCountsCache` policy (`:439-441`, `:459-461`). Third,
 [`EventsController`](#eventscontroller) carries the transitions that have no generic equivalent:
-publish, unpublish and a Sessionize refresh (`EventsController.cs:262,295,326`), the last mapping two
+publish, unpublish and a Sessionize refresh (`EventsController.cs:263,296,327`), the last mapping two
 domain error codes onto HTTP `429` with a `Retry-After: 300` and onto `502`
-(`EventsController.cs:341-347`). It also adds its own `GET /{id}/ics` (`:153-163`) and per-event and
+(`EventsController.cs:342-348`). It also adds its own `GET /{id}/ics` (`:153-163`) and per-event and
 global `now-next` snapshot actions under the short-lived `NowNextCache` policy (`:170-192`), both
 dispatching [`GetNowNextQuery`](group-18-conference-application.md#getnownextquery) and returning a
 [`NowNextDTO`](group-17-conference-domain.md#nownextdto); the id-less form exists because the
@@ -416,20 +416,20 @@ client
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/SessionBookmarkValidationServiceGrpcAdapter.cs:27-29`),
 and [`EventLiveValidationServiceGrpcAdapter`](#eventlivevalidationservicegrpcadapter) does the same
 for all four `IEventLiveValidationService` methods
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/EventLiveValidationServiceGrpcAdapter.cs:26-28,36,65,98,127`),
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/EventLiveValidationServiceGrpcAdapter.cs:27-29,37,66,99,128`),
 converting the Unix-second live-window fields back into UTC `DateTime`s. Both pin a **5-second
 per-call deadline** on every RPC (`SessionBookmarkValidationServiceGrpcAdapter.cs:35`,
-`EventLiveValidationServiceGrpcAdapter.cs:33`), much tighter than the shared resilience pipeline's 30s
+`EventLiveValidationServiceGrpcAdapter.cs:34`), much tighter than the shared resilience pipeline's 30s
 attempt and 90s total budget, precisely because these calls sit inline in user request paths (bookmark
 create and list, live-layer poll and question commands) and a *hung* (as opposed to refused)
 Conference peer must fail fast rather than hold the caller hostage
-(`EventLiveValidationServiceGrpcAdapter.cs:30-32`). Both catch `RpcException` and reverse the mapping
+(`EventLiveValidationServiceGrpcAdapter.cs:31-33`). Both catch `RpcException` and reverse the mapping
 with the framework's own `RpcException.ToResult` decoder
 (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:210,234`), which reads the
 trailers back into [`Error`](group-01-result-error-handling.md#error) instances and degrades a pure
 transport fault (connection reset, deadline exceeded) to a single `Grpc.{StatusCode}` failure sourced
 with the calling method's name (`SessionBookmarkValidationServiceGrpcAdapter.cs:58,85`,
-`EventLiveValidationServiceGrpcAdapter.cs:59`). Because both the in-process implementation and each
+`EventLiveValidationServiceGrpcAdapter.cs:60`). Because both the in-process implementation and each
 adapter satisfy the same interface, swapping a co-located module for a remote service is a
 registration change, not a rewrite
 ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html); `[Rubric §7, Microservices
@@ -451,7 +451,7 @@ in-process or stub registration is already present for `Replace` to find (`:36-3
 also consumes Engagement's
 [`IBookmarkCountService`](group-22-engagement-module.md#ibookmarkcountservice), so the Conference host
 registers `AddEngagementBookmarkCountClient()`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:349`) and the AppHost deliberately
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350`) and the AppHost deliberately
 gives only the Engagement-to-Conference edge a startup `WaitFor`, leaving the reverse edge a plain
 `WithReference` so the pair cannot deadlock; transient "peer not ready" errors self-heal through the
 resilience pipeline (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:270,273`;
@@ -463,17 +463,17 @@ Resilience]`).
 The `MMCA.ADC.Conference.Service` `Program.cs` boots only the Conference module. Kestrel is configured
 before anything else, and the whole of it is one line:
 `builder.ConfigureEndpointsWithHealthProbe(HttpProtocols.Http2)`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:84`), the shared extension from
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:85`), the shared extension from
 Common's [`KestrelEndpointExtensions`](group-16-aspire-orchestration.md#kestrelendpointextensions)
 ([G16](group-16-aspire-orchestration.md)). Passing `HttpProtocols.Http2` sets every endpoint default to
 HTTP/2-only on cleartext (h2c prior knowledge), so cross-service gRPC clients negotiate HTTP/2 without
 TLS or ALPN; on a cleartext endpoint `Http1AndHttp2` would effectively disable HTTP/2 and Kestrel would
-reject gRPC frames with `GOAWAY HTTP_1_1_REQUIRED` (`Program.cs:74-82`). That transport choice is
+reject gRPC frames with `GOAWAY HTTP_1_1_REQUIRED` (`Program.cs:75-83`). That transport choice is
 [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html). The same helper adds a
 dedicated HTTP/1.1-only listener for the ACA `httpGet` probes when `HealthProbe:Port` is configured,
 because the h2c-only endpoint rejects the platform's HTTP/1.1 probe requests. The rest of the host is
 the standard ADC REST composition: Serilog registered as one provider rather than through
-`UseSerilog()` so the OpenTelemetry-to-Azure-Monitor provider survives (`Program.cs:99-100`), an
+`UseSerilog()` so the OpenTelemetry-to-Azure-Monitor provider survives (`Program.cs:100-101`), an
 optional Key Vault configuration source layered in before anything binds settings (`:109`), the
 Conference-owned `MMCA.ADC.Conference.Scoring` meter (`:119`), health checks with a relational database
 required (`:163`), CORS, API versioning and rate limiting (`:166-168`), response compression (`:259`),
@@ -484,7 +484,7 @@ shared middleware pipeline (`:376`;
 [ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html),
 [ADR-079](https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html)).
 
-Output caching is where this host carries the most bespoke configuration (`Program.cs:175-245`). The
+Output caching is where this host carries the most bespoke configuration (`Program.cs:176-246`). The
 base policy is deny-by-default `NoCache` (`:177`), so only explicitly decorated endpoints cache at all.
 `ConferenceCache` stays on the built-in default semantics because the permission-gated
 [`SessionSelectionController`](#sessionselectioncontroller) references it, and
@@ -510,7 +510,7 @@ real traffic.
 
 Two mechanisms close the distance that TTLs alone cannot. First, at two replicas the store itself must
 be shared: when a Redis connection string is present the host backs the **output** cache with Redis as
-well as the distributed cache (`Program.cs:130,140`), because the default per-replica memory store
+well as the distributed cache (`Program.cs:131,141`), because the default per-replica memory store
 meant an eviction reached only the replica that served the mutation while the other kept serving the
 pre-edit payload for the full TTL; the same branch adds a two-level cache, an in-process L1 over the
 Redis L2 under a disjoint keyspace, so a repeat read inside one replica never leaves the process while
@@ -528,7 +528,7 @@ module's error-code translations to the edge localizer with
 ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
 
 One more startup extension point matters: [`SelfHttpOutputCacheWarmupTask`](#selfhttpoutputcachewarmuptask),
-registered via `AddWarmupTask<T>()` (`Program.cs:256`) as an
+registered via `AddWarmupTask<T>()` (`Program.cs:257`) as an
 [ADR-025](https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html)
 [`IWarmupTask`](group-16-aspire-orchestration.md#iwarmuptask). The task itself is almost empty: it
 derives from [`SelfHttpWarmupTaskBase`](group-16-aspire-orchestration.md#selfhttpwarmuptaskbase)
@@ -546,7 +546,7 @@ nothing.
 
 ## The runtime picture, one host, two transports
 
-After module discovery (`Program.cs:308-312`) the host wires the Engagement gRPC client (`:349`), the
+After module discovery (`Program.cs:309-313`) the host wires the Engagement gRPC client (`:349`), the
 broker (`AddBrokerMessaging` registering the `UserRegistered` integration-event consumer that drives
 the BR-207 email-match speaker auto-link through
 [`UserRegisteredHandler`](group-18-conference-application.md#userregisteredhandler), `:350-352`), the
@@ -615,6 +615,253 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Walkthrough**: no members. The declaration is the whole type (`AssemblyReference.cs:11`).
 - **Where it's used**: same reflective/scan entry-point role as its static sibling; consumed
   wherever a generic-argument assembly anchor is required in the Conference service composition.
+
+### AddCategoryItemRequest
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Categories/CategoryItemsController.cs:26` · Level 0 · record class
+
+- **What it is**: the JSON body POSTed to `/CategoryItems` to add an item to a category. It carries the
+  owning `CategoryId`, an *optional* client-supplied `CategoryItemId`, a display `Name`, and a `Sort`
+  order (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Categories/CategoryItemsController.cs:26-39`).
+  A [`CategoryItem`](group-17-conference-domain.md#categoryitem) is a child of a
+  [`Category`](group-17-conference-domain.md#category), so every write carries the parent id alongside
+  the item's own fields.
+- **Depends on**: nothing first-party at the type level; its property types are the
+  `ConferenceCategoryIdentifierType` and `CategoryItemIdentifierType` global aliases (see
+  [identifier aliases](00-primer.md#2-architectural-styles-this-codebase-commits-to)) plus BCL `string`/`int`.
+  Consumed by [`CategoryItemsController`](#categoryitemscontroller), which forwards it to
+  [`AddCategoryItemCommand`](group-18-conference-application.md#addcategoryitemcommand).
+- **Concept introduced, the API request record vs. the application command.** `[Rubric §9, API &
+  Contract Design]` assesses DTOs decoupled from domain entities and stable, intentional wire contracts.
+  The codebase keeps **three** distinct shapes in every write path: the *request record* (what the HTTP
+  client sends), the *command* (the application-layer message), and the *entity* (the domain object). The
+  controller's `CreateAsync` does the manual hop
+  (`CategoryItemsController.cs:134-139`): it reads request fields and constructs the command positionally.
+  That is the manual-mapping policy of
+  [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) applied at the *inbound* edge,
+  no reflective mapper between the wire and the application. `[Rubric §1, SOLID]` (interface segregation):
+  each record exposes exactly the fields its one endpoint needs, so add and update never share an
+  over-broad type. The `required` modifier on every non-optional property pushes "you must supply this"
+  into model binding, so a missing field is a 400 before any handler runs.
+- **Walkthrough**: a `record class` (not `sealed`) whose members are all `required … { get; init; }`,
+  settable only at construction and immutable after (a recurring choice across these contracts).
+  `CategoryItemId` is the single *nullable* member (`CategoryItemsController.cs:32`), letting an
+  importer or seed flow pin an explicit id while a normal create leaves it null and lets the domain mint
+  one.
+- **Why it's built this way**: a dedicated record per endpoint keeps the OpenAPI schema and binding
+  errors named after real domain terms; separating add from update (rather than one
+  nullable-everything record) keeps each contract honest about what is mutable.
+- **Where it's used**: bound by [`CategoryItemsController`](#categoryitemscontroller)'s `[FromBody]`
+  create parameter only (`CategoryItemsController.cs:130-131`). That action is marked
+  [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute)
+  (`CategoryItemsController.cs:129`), so a retried POST carrying the same `Idempotency-Key` replays the
+  first response instead of adding a second row: `[Rubric §10, Cross-Cutting]`, the replay contract is
+  declared on the action because this create is hand-written rather than inherited from the CRUD base
+  (`CategoryItemsController.cs:121-127`).
+
+---
+
+### UpdateCategoryItemRequest
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Categories/CategoryItemsController.cs:42` · Level 0 · record class
+
+- **What it is**: the PUT body for editing an existing category item. It is
+  [`AddCategoryItemRequest`](#addcategoryitemrequest) minus `CategoryItemId`: the owning `CategoryId`,
+  the new `Name`, and the new `Sort`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Categories/CategoryItemsController.cs:42-52`).
+- **Depends on**: the same id aliases plus BCL `string`/`int`. Consumed by
+  [`CategoryItemsController`](#categoryitemscontroller), which forwards it to
+  [`UpdateCategoryItemCommand`](group-18-conference-application.md#updatecategoryitemcommand).
+- **Concept**: the update half of the request-vs-command shape (see
+  [`AddCategoryItemRequest`](#addcategoryitemrequest)). The item id to update is not in the body, it is the
+  route's `{id}`; `UpdateAsync` threads the route id into the command
+  (`new UpdateCategoryItemCommand(request.CategoryId, id, request.Name, request.Sort)`,
+  `CategoryItemsController.cs:161-166`). Unlike the create, this action carries **no**
+  `[Idempotent]` attribute (`CategoryItemsController.cs:154-156`): a PUT that sets an item to a stated
+  name and sort is naturally repeatable, so there is nothing to replay-protect.
+- **Walkthrough**: three `required { get; init; }` properties. `CategoryId` is carried on update so the
+  handler can re-check ownership of the parent before mutating.
+- **Where it's used**: `[FromBody]` on [`CategoryItemsController`](#categoryitemscontroller)'s
+  `UpdateAsync` (`CategoryItemsController.cs:156-158`); on success the action evicts
+  `conference:categories` and `conference` and returns `NoContent()`
+  (`CategoryItemsController.cs:174-175`).
+
+---
+
+### CategoryItemsController
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Categories/CategoryItemsController.cs:63` · Level 8 · class (sealed)
+
+- **What it is**: the REST controller for conference category items. Reads are public (anonymous per
+  BR-43); writes (add, update, remove) require the categories capability, gated class-level by
+  `[HasPermission(ConferencePermissions.CategoriesManage)]`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Categories/CategoryItemsController.cs:62`).
+  A [`CategoryItem`](group-17-conference-domain.md#categoryitem) is a child of a
+  [`Category`](group-17-conference-domain.md#category), exposed at a top-level route for convenient
+  querying (`CategoryItemsController.cs:54-58`).
+- **Depends on**:
+  [`EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#entitycontrollerbasetentity-tentitydto-tidentifiertype)
+  closed over `CategoryItem`, [`CategoryItemDTO`](group-17-conference-domain.md#categoryitemdto) and
+  `CategoryItemIdentifierType` (the read-only Common base it extends, `CategoryItemsController.cs:70`); the
+  [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
+  for reads (`:64`); three
+  [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
+  injections for [`AddCategoryItemCommand`](group-18-conference-application.md#addcategoryitemcommand),
+  [`UpdateCategoryItemCommand`](group-18-conference-application.md#updatecategoryitemcommand) and
+  [`RemoveCategoryItemCommand`](group-18-conference-application.md#removecategoryitemcommand) (`:65-67`);
+  ASP.NET Core's `IOutputCacheStore` (`:68`); the
+  [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute) plus
+  [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions); the
+  [`IdempotentAttribute`](group-12-api-hosting-mapping.md#idempotentattribute) on its create; its two
+  request records [`AddCategoryItemRequest`](#addcategoryitemrequest) and
+  [`UpdateCategoryItemRequest`](#updatecategoryitemrequest); the read result types
+  [`CollectionResult<T>`](group-01-result-error-handling.md#collectionresultt),
+  [`PagedCollectionResult<T>`](group-01-result-error-handling.md#pagedcollectionresultt) and
+  [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype); the
+  [`QueryFilterModelBinder`](group-12-api-hosting-mapping.md#queryfiltermodelbinder); BCL `ILogger`.
+- **Concept introduced, the child-entity controller over the read-only base.** `[Rubric §9, API &
+  Contract Design]` assesses whether a resource surface is uniform and honest about what it owns;
+  `[Rubric §5, Vertical Slice]` and `[Rubric §6, CQRS & Event-Driven]` assess whether one HTTP action maps
+  to one use case. A *child* of an aggregate cannot use the generic aggregate-root create and delete
+  (neither can supply the child's parent id), so this class derives from the **read-only**
+  [`EntityControllerBase`](group-12-api-hosting-mapping.md#entitycontrollerbasetentity-tentitydto-tidentifiertype),
+  which already supplies `GET`, `GET /paged`, `GET /lookup`, `GET /{id}` and `GET /export`, then
+  hand-writes its own `POST`, `PUT` and `DELETE` whose commands carry the owning `CategoryId`. Each read is
+  `override`n only to re-decorate the action with `[AllowAnonymous]` and a cache policy before delegating
+  straight back (`=> base.GetAllAsync(...)`, `:80`): the attributes have to sit on the derived method for
+  MVC to see them, which is the whole reason these bodies exist. Each write maps its request record onto
+  exactly one command and folds any failure through the inherited `HandleFailure`, the one-handler-per-action
+  shape of CQRS at the edge. `[Rubric §1, SOLID]` and `[Rubric §16, Maintainability]`: because the read
+  machinery is written once in Common, the concrete controller is small and has almost no reason to change.
+- **Walkthrough**
+  - Primary-constructor injection (`CategoryItemsController.cs:63-69`): the query service, the three
+    command handlers (`AddCategoryItemCommand -> Result<CategoryItemDTO>`, `UpdateCategoryItemCommand ->
+    Result`, `RemoveCategoryItemCommand -> Result`), the output-cache store and the logger; the base call
+    passes the query service and logger to `EntityControllerBase` (`:70`).
+  - The four read overrides (`:72-119`) each add `[AllowAnonymous]` (re-opening the class-level capability
+    gate for reads) and `[OutputCache(PolicyName = "CategoriesCache")]`, then forward to the base:
+    `GetAllAsync` (`:75-80`), the paged `GetAllAsync` with the
+    `[ModelBinder(typeof(QueryFilterModelBinder))]` filter dictionary (`:85-95`), `GetAllForLookupAsync`
+    (`:100-103`) and `GetByIdAsync` under the named route `"GetCategoryItemById"` (`:105-119`).
+  - `CreateAsync` (`:130`): `[HttpPost]` (`:128`) and `[Idempotent]` (`:129`), binds
+    `[FromBody] AddCategoryItemRequest`, dispatches
+    `new AddCategoryItemCommand(request.CategoryId, request.CategoryItemId, request.Name, request.Sort)`
+    (`:135-139`); on failure `HandleFailure` (`:142-145`), otherwise it evicts and returns
+    `CreatedAtRoute("GetCategoryItemById", new { id = result.Value!.Id }, result.Value)` (`:148-151`). The
+    doc comment records why the replay contract is declared here rather than inherited: this create is
+    hand-written, not the base action (`:121-127`).
+  - `UpdateAsync` (`:156`): `[HttpPut("{id}")]` (`:155`), binds the route `id` and
+    `[FromBody] UpdateCategoryItemRequest`, dispatches
+    `new UpdateCategoryItemCommand(request.CategoryId, id, request.Name, request.Sort)` (`:162-166`),
+    evicts (`:174`), then `NoContent()` (`:175`).
+  - `DeleteAsync` (`:180`): `[HttpDelete("{id}")]` (`:179`), binds the route `id` and
+    `[FromQuery] ConferenceCategoryIdentifierType categoryId` (`:182`), dispatches
+    `new RemoveCategoryItemCommand(categoryId, id)` (`:186`), evicts (`:194`), then `NoContent()`. The
+    parent id travels on the query string because a child delete needs its parent for ownership
+    re-validation in the handler.
+  - All three mutations end with `outputCacheStore.EvictTagsAsync(cancellationToken,
+    "conference:categories", "conference")` (`:147, 174, 194`), and all three return `HandleFailure`
+    *before* the eviction, so a rejected command never disturbs the cache. `[Rubric §12, Performance &
+    Scalability]`: without that call the cached reads would serve the pre-edit item list for the full
+    5-minute policy TTL (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:226`), so an
+    organizer renaming a track would not see it on the public session pages until the entry expired.
+- **Why it's built this way**: the split between an aggregate-root base (create and delete built in) and
+  this read-only base (writes hand-written) is exactly the "child commands carry a parent id the generic
+  base cannot model" distinction the group overview draws. Reads are anonymous because the taxonomy is
+  public (BR-43); writes are capability-gated (BR-41) at the class level, and `CategoriesManage` is one of
+  the five permissions in the `ContentManagement` curation subset
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:57-64`),
+  so a content editor can edit the taxonomy without holding event, room or question rights.
+- **Where it's used**: mounted by the Conference service host and reached through the YARP Gateway route
+  `/CategoryItems/{**catch-all}` (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:98`); the
+  organizer category-management UI under
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/ConferenceCategory/` is the client. It
+  is the archetype for the group's other child and junction controllers
+  ([`RoomsController`](#roomscontroller), [`EventSpeakersController`](#eventspeakerscontroller),
+  [`SessionSpeakersController`](#sessionspeakerscontroller),
+  [`SessionCategoryItemsController`](#sessioncategoryitemscontroller),
+  [`SpeakerCategoryItemsController`](#speakercategoryitemscontroller)), which repeat this shape with
+  different entities, cache tags and permissions.
+- **Caveats / not-in-source**: this controller applies no row scoping, so it overrides neither of the
+  framework read hooks and does not override the inherited `/export`. That export therefore streams the
+  whole item table, protected only by the class-level `CategoriesManage` capability, since the inherited
+  action carries no `[AllowAnonymous]` of its own
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:206-211`).
+
+---
+
+### ConferenceCategoriesController
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Categories/ConferenceCategoriesController.cs:36` · Level 8 · class (sealed)
+
+- **What it is**: the REST controller for the [`Category`](group-17-conference-domain.md#category)
+  aggregate root, served at the custom route `conferencecategories`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Categories/ConferenceCategoriesController.cs:33`)
+  so it cannot collide with another module's `categories` route. Anonymous reads, capability-gated create,
+  update and delete (`[HasPermission(ConferencePermissions.CategoriesManage)]`, `:34`). This is the first
+  *aggregate-root* controller in the group, so it establishes the shape the other full-CRUD controllers
+  reuse.
+- **Depends on**:
+  [`AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
+  (the CRUD base, `ConferenceCategoriesController.cs:43-44`); the
+  [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
+  (`:36`); a create handler keyed on
+  [`ConferenceCategoryCreateRequest`](group-18-conference-application.md#conferencecategorycreaterequest)
+  (`:37`); an update handler keyed on the framework's
+  [`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`](group-05-cqrs-pipeline.md#updateentitycommandtentity-tupdaterequest-tidentifiertype)
+  (`:38`); a delete handler keyed on
+  [`DeleteEntityCommand<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
+  (`:39`); `IOutputCacheStore` (`:40`); the
+  [`ConferenceCategoryDTO`](group-17-conference-domain.md#conferencecategorydto); the PUT body
+  [`ConferenceCategoryUpdateRequest`](group-18-conference-application.md#conferencecategoryupdaterequest)
+  (`:120`); and the [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute).
+- **Concept introduced, the aggregate-root controller.** `[Rubric §9, API & Contract Design]` assesses
+  consistent resource CRUD: an aggregate root gets a full, uniform REST surface, and
+  [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
+  supplies `GetAll`, `GetById`, `GetAllForLookup`, `Export`, `Create` and `Delete` from its constructor
+  slots (query service, create handler, delete handler, logger, `:42-43`). The subclass then writes only
+  policy, cache eviction, and the one action the base does not supply. Note that the create request type
+  *is* the handler's command: `ConferenceCategoryCreateRequest` is passed straight into the create
+  handler's [`ICommandHandler`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult) slot (`:37`),
+  the create-from-request shape used across every Conference aggregate root.
+- **Concept introduced, the required conditional write.** `[Rubric §9, API & Contract Design]` also
+  assesses whether a contract expresses concurrency honestly. The base has no update action, so
+  `UpdateAsync` is hand-rolled, and it carries [`SupportsIfMatch`](group-12-api-hosting-mapping.md#supportsifmatchattribute)
+  (`:114`) with `[ProducesResponseType]` for 409, 412 and 428 (`:115-117`). The token is read with
+  `SupportsIfMatchAttribute.RequiredToken(HttpContext)` (`:123`, declared at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:68`), and the
+  attribute's own doc comment states the contract: a request with no `If-Match` header answers **428
+  Precondition Required** and a stale token answers **412 Precondition Failed**
+  ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html), doc at `:105-112`). The
+  update itself is the framework's generic
+  [`UpdateEntityCommand`](group-05-cqrs-pipeline.md#updateentitycommandtentity-tupdaterequest-tidentifiertype)
+  closed over `Category`, the update request and the identifier type (`:126`), so a category edit needs no
+  bespoke command type at all.
+- **Walkthrough**
+  - The four reads (`:45-92`) are `override`s that attach `[AllowAnonymous]` plus
+    `[OutputCache(PolicyName = "CategoriesCache")]` and forward to the base, including the paged overload
+    with the [`QueryFilterModelBinder`](group-12-api-hosting-mapping.md#queryfiltermodelbinder) filter
+    dictionary (`:66`) and `GetByIdAsync` under the named route `"GetCategoryById"` (`:78`).
+  - `CreateAsync` (`:96-103`) and `DeleteAsync` (`:138-145`) are thin `override`s that call
+    `base.CreateAsync` / `base.DeleteAsync` and then evict, so the base does the CQRS dispatch and the
+    override adds only the cache concern. Because the base returns an `ActionResult` rather than a
+    [`Result`](group-01-result-error-handling.md#result), these two evict unconditionally, including after
+    a rejected command: a cheap over-eviction, and the one place the failure-before-evict ordering used
+    elsewhere in this unit cannot be applied.
+  - `UpdateAsync` (`:118-134`) reads the required row version (`:123`), dispatches the generic update
+    command (`:125-127`), folds a failure through `HandleFailure` (`:129-130`), evicts (`:132`) and returns
+    `Ok(result.Value)` (`:133`).
+  - All three mutations evict only the `conference:categories` tag (`:101, 132, 143`), unlike the child
+    [`CategoryItemsController`](#categoryitemscontroller), which also drops the broad `conference` tag.
+- **Why it's built this way**: the base carries the boilerplate CRUD so a controller author writes only
+  what is specific: the route override, the update action and cache eviction. The custom route string is
+  the deliberate escape hatch from ASP.NET Core's `[controller]` convention, for the case where two modules
+  would otherwise claim the same path.
+- **Where it's used**: mounted by the Conference service host behind the Gateway route
+  `/ConferenceCategories/{**catch-all}` (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:94`);
+  consumed by the category-management UI under
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/ConferenceCategory/` and by every screen
+  that offers a category picker. Its child items are managed through the sibling
+  [`CategoryItemsController`](#categoryitemscontroller), which shares the same `CategoriesManage`
+  permission and the same `conference:categories` cache tag.
+
+---
 
 ### DependencyInjection
 > MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:14` · Level 2 · class (static)
@@ -759,56 +1006,12 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Caveats / not-in-source**: the exact hosts that set `Seeding:IncludeSampleConferenceData=true`
   (local AppHost, E2E CI) are asserted in the source comment, not verifiable from this file itself.
 
-### AddCategoryItemRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:26` · Level 0 · record class
-
-- **What it is**: the JSON body POSTed to `/CategoryItems` to add an item to a category. It carries the
-  owning `CategoryId`, an *optional* client-supplied `CategoryItemId`, a display `Name`, and a `Sort`
-  order (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:26-39`).
-  A [`CategoryItem`](group-17-conference-domain.md#categoryitem) is a child of a
-  [`Category`](group-17-conference-domain.md#category), so every write carries the parent id alongside
-  the item's own fields.
-- **Depends on**: nothing first-party at the type level; its property types are the
-  `ConferenceCategoryIdentifierType` and `CategoryItemIdentifierType` global aliases (see
-  [identifier aliases](00-primer.md#2-architectural-styles-this-codebase-commits-to)) plus BCL `string`/`int`.
-  Consumed by [`CategoryItemsController`](#categoryitemscontroller), which forwards it to
-  [`AddCategoryItemCommand`](group-18-conference-application.md#addcategoryitemcommand).
-- **Concept introduced, the API request record vs. the application command.** `[Rubric §9, API &
-  Contract Design]` assesses DTOs decoupled from domain entities and stable, intentional wire contracts.
-  The codebase keeps **three** distinct shapes in every write path: the *request record* (what the HTTP
-  client sends), the *command* (the application-layer message), and the *entity* (the domain object). The
-  controller's `CreateAsync` does the manual hop
-  (`CategoryItemsController.cs:134-139`): it reads request fields and constructs the command positionally.
-  That is the manual-mapping policy of
-  [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) applied at the *inbound* edge,
-  no reflective mapper between the wire and the application. `[Rubric §1, SOLID]` (interface segregation):
-  each record exposes exactly the fields its one endpoint needs, so add and update never share an
-  over-broad type. The `required` modifier on every non-optional property pushes "you must supply this"
-  into model binding, so a missing field is a 400 before any handler runs.
-- **Walkthrough**: a `record class` (not `sealed`) whose members are all `required … { get; init; }`,
-  settable only at construction and immutable after (a recurring choice across these contracts).
-  `CategoryItemId` is the single *nullable* member (`CategoryItemsController.cs:32`), letting an
-  importer or seed flow pin an explicit id while a normal create leaves it null and lets the domain mint
-  one.
-- **Why it's built this way**: a dedicated record per endpoint keeps the OpenAPI schema and binding
-  errors named after real domain terms; separating add from update (rather than one
-  nullable-everything record) keeps each contract honest about what is mutable.
-- **Where it's used**: bound by [`CategoryItemsController`](#categoryitemscontroller)'s `[FromBody]`
-  create parameter only (`CategoryItemsController.cs:130-131`). That action is marked
-  [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute)
-  (`CategoryItemsController.cs:129`), so a retried POST carrying the same `Idempotency-Key` replays the
-  first response instead of adding a second row: `[Rubric §10, Cross-Cutting]`, the replay contract is
-  declared on the action because this create is hand-written rather than inherited from the CRUD base
-  (`CategoryItemsController.cs:121-127`).
-
----
-
 ### AddEventQuestionAnswerRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:25` · Level 0 · record class
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:25` · Level 0 · record class
 
 - **What it is**: the POST body for answering a feedback question against an event. It names the
   `EventId`, the `QuestionId` being answered, and the `AnswerValue` text
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:25-35`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:25-35`).
 - **Depends on**: id-alias property types (`EventIdentifierType`, `QuestionIdentifierType`) plus BCL
   `string`. Consumed by [`EventQuestionAnswersController`](#eventquestionanswerscontroller), which
   forwards it to
@@ -839,11 +1042,11 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ---
 
 ### AddEventSpeakerRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:29` · Level 0 · record class
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventSpeakersController.cs:29` · Level 0 · record class
 
 - **What it is**: the POST body that links a speaker to an event. It carries exactly two ids, `EventId`
   and `SpeakerId`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:29-36`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventSpeakersController.cs:29-36`).
 - **Depends on**: the `EventIdentifierType` / `SpeakerIdentifierType` aliases only. Consumed by
   [`EventSpeakersController`](#eventspeakerscontroller), which forwards it to
   [`AddEventSpeakerCommand`](group-18-conference-application.md#addeventspeakercommand).
@@ -873,13 +1076,13 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ---
 
 ### AddRoomRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/RoomsController.cs:30` · Level 0 · record class
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/RoomsController.cs:30` · Level 0 · record class
 
 - **What it is**: the richest write record in the group. A [`Room`](group-17-conference-domain.md#room)
   is a child of an [`Event`](group-17-conference-domain.md#event), so the body carries the owning
   `EventId`, an optional explicit `RoomId`, the required `Name` and `Sort`, and four optional physical
   attributes: `Capacity`, `Floor`, `Location`, `AccessibilityInfo`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/RoomsController.cs:30-55`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/RoomsController.cs:30-55`).
 - **Depends on**: the `EventIdentifierType` / `RoomIdentifierType` aliases plus BCL `string?`, `int`,
   `int?`. Consumed by [`RoomsController`](#roomscontroller), which forwards it to
   [`AddRoomCommand`](group-18-conference-application.md#addroomcommand).
@@ -902,172 +1105,12 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 
 ---
 
-### AddSessionCategoryItemRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:29` · Level 0 · record class
-
-- **What it is**: the POST body that tags a session with a category item: two ids, `SessionId` and
-  `CategoryItemId`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:29-36`).
-- **Depends on**: the `SessionIdentifierType` / `CategoryItemIdentifierType` aliases. Consumed by
-  [`SessionCategoryItemsController`](#sessioncategoryitemscontroller), which forwards it to
-  [`AddSessionCategoryItemCommand`](group-18-conference-application.md#addsessioncategoryitemcommand).
-- **Concept**: a join-entity write contract, identical in shape to
-  [`AddEventSpeakerRequest`](#addeventspeakerrequest) (`[Rubric §4, DDD]`, cross-aggregate references by
-  id); add plus delete only, no update. The controller passes `null` for the
-  [`SessionCategoryItem`](group-17-conference-domain.md#sessioncategoryitem) id
-  (`new AddSessionCategoryItemCommand(request.SessionId, null, request.CategoryItemId)`,
-  `SessionCategoryItemsController.cs:170`). `[Rubric §12, Performance & Scalability]`: because a tag change
-  moves both the session and the category read models, a successful write evicts three output-cache tags,
-  `conference:sessions`, `conference:categories`, and `conference`
-  (`SessionCategoryItemsController.cs:178`).
-- **Walkthrough**: two `required { get; init; }` id properties, no methods.
-- **Where it's used**: `[FromBody]` on [`SessionCategoryItemsController`](#sessioncategoryitemscontroller)'s
-  `CreateAsync` (`SessionCategoryItemsController.cs:165-166`), behind
-  `[HasPermission(ConferencePermissions.SessionsManage)]` (`SessionCategoryItemsController.cs:47`) and
-  marked [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute) (`:164`).
-
----
-
-### AddSessionQuestionAnswerRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:26` · Level 0 · record class
-
-- **What it is**: the session-scoped twin of [`AddEventQuestionAnswerRequest`](#addeventquestionanswerrequest),
-  the POST body for answering a feedback question against a session: `SessionId`, `QuestionId`,
-  `AnswerValue`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:26-36`).
-- **Depends on**: the `SessionIdentifierType` / `QuestionIdentifierType` aliases plus BCL `string`.
-  Consumed by [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller), which forwards it to
-  [`AddSessionQuestionAnswerCommand`](group-18-conference-application.md#addsessionquestionanswercommand).
-- **Concept**: user-owned write data behind authorization, exactly as in
-  [`AddEventQuestionAnswerRequest`](#addeventquestionanswerrequest) (`[Rubric §11, Security]`); the record
-  carries no `UserId`, the controller is gated by a plain `[Authorize]`
-  (`SessionQuestionAnswersController.cs:75`), and reads are scoped per user by BR-9 through the
-  `GetExportSpecification` override (`SessionQuestionAnswersController.cs:96-97`). On add the controller
-  passes `null` for the
-  [`SessionQuestionAnswer`](group-17-conference-domain.md#sessionquestionanswer) id
-  (`SessionQuestionAnswersController.cs:172`).
-- **Walkthrough**: three `required { get; init; }` properties, no methods. This is the *single-answer*
-  path; the whole-form path uses
-  [`BatchAddSessionQuestionAnswersRequest`](#batchaddsessionquestionanswersrequest) instead.
-- **Where it's used**: `[FromBody]` on [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller)'s
-  `CreateAsync` (`SessionQuestionAnswersController.cs:167-168`), marked
-  [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute) (`:166`).
-
----
-
-### AddSessionSpeakerRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSpeakersController.cs:29` · Level 0 · record class
-
-- **What it is**: the POST body that links a speaker to a session: `SessionId` plus `SpeakerId`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSpeakersController.cs:29-36`).
-- **Depends on**: the `SessionIdentifierType` / `SpeakerIdentifierType` aliases. Consumed by
-  [`SessionSpeakersController`](#sessionspeakerscontroller), which forwards it to
-  [`AddSessionSpeakerCommand`](group-18-conference-application.md#addsessionspeakercommand).
-- **Concept**: a join-entity write contract like [`AddEventSpeakerRequest`](#addeventspeakerrequest)
-  (`[Rubric §4, DDD]`); add plus delete only. The controller passes `null` for the
-  [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker) id
-  (`new AddSessionSpeakerCommand(request.SessionId, null, request.SpeakerId)`,
-  `SessionSpeakersController.cs:170`). `[Rubric §12, Performance & Scalability]`: a successful add evicts
-  the `conference:sessions` and `conference` output-cache tags
-  (`SessionSpeakersController.cs:180`), and the code comment above that call states why: speaker
-  assignment changes the cached session detail and list reads the speaker dashboard relies on
-  (`SessionSpeakersController.cs:178-179`).
-- **Walkthrough**: two `required { get; init; }` id properties, no methods.
-- **Where it's used**: `[FromBody]` on [`SessionSpeakersController`](#sessionspeakerscontroller)'s
-  `CreateAsync` (`SessionSpeakersController.cs:165-166`), behind
-  `[HasPermission(ConferencePermissions.SessionsManage)]` (`SessionSpeakersController.cs:47`) and marked
-  [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute) (`:164`).
-
----
-
-### AddSpeakerCategoryItemRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:29` · Level 0 · record class
-
-- **What it is**: the POST body that tags a speaker with a category item: `SpeakerId` plus
-  `CategoryItemId`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:29-36`).
-- **Depends on**: the `SpeakerIdentifierType` / `CategoryItemIdentifierType` aliases. Consumed by
-  [`SpeakerCategoryItemsController`](#speakercategoryitemscontroller), which forwards it to
-  [`AddSpeakerCategoryItemCommand`](group-18-conference-application.md#addspeakercategoryitemcommand).
-- **Concept**: a join-entity write contract like [`AddEventSpeakerRequest`](#addeventspeakerrequest)
-  (`[Rubric §4, DDD]`); add plus delete only. Notable domain modeling: ADC represents speaker traits such
-  as locality as a [`SpeakerCategoryItem`](group-17-conference-domain.md#speakercategoryitem) tag rather
-  than as a field on [`Speaker`](group-17-conference-domain.md#speaker), so a request like this is how
-  that attribute is attached. The controller passes `null` for the join id
-  (`new AddSpeakerCategoryItemCommand(request.SpeakerId, null, request.CategoryItemId)`,
-  `SpeakerCategoryItemsController.cs:170`) and then evicts `conference:speakers`,
-  `conference:categories`, and `conference` (`SpeakerCategoryItemsController.cs:178`).
-- **Walkthrough**: two `required { get; init; }` id properties, no methods.
-- **Where it's used**: `[FromBody]` on [`SpeakerCategoryItemsController`](#speakercategoryitemscontroller)'s
-  `CreateAsync` (`SpeakerCategoryItemsController.cs:165-166`), behind
-  `[HasPermission(ConferencePermissions.SpeakersManage)]` (`SpeakerCategoryItemsController.cs:47`) and
-  marked [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute) (`:164`).
-
----
-
-### BatchSessionQuestionAnswerItemRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:39` · Level 0 · record class
-
-- **What it is**: one line item inside a batch feedback submit: the `QuestionId` being answered and the
-  `AnswerValue` text
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:39-46`).
-  It is [`AddSessionQuestionAnswerRequest`](#addsessionquestionanswerrequest) minus `SessionId`, because
-  the session is named once on the envelope rather than repeated on every answer.
-- **Depends on**: the `QuestionIdentifierType` alias plus BCL `string`. It is nested inside
-  [`BatchAddSessionQuestionAnswersRequest`](#batchaddsessionquestionanswersrequest)`.Answers` and is
-  projected onto its application-layer counterpart
-  [`BatchSessionQuestionAnswerItem`](group-18-conference-application.md#batchsessionquestionansweritem).
-- **Concept**: the *element* half of an envelope-plus-items contract. `[Rubric §9, API & Contract
-  Design]` assesses whether a bulk operation is modeled as one intentional resource action rather than as
-  a client-side loop. Hoisting `SessionId` out of the element and onto the envelope is what makes the
-  batch a single-session operation by construction: the wire shape cannot express a form that spans two
-  sessions, so the handler never has to reject one.
-- **Walkthrough**: two `required { get; init; }` properties, no methods. The controller flattens the list
-  with a collection expression and a `Select`,
-  `[.. request.Answers.Select(a => new BatchSessionQuestionAnswerItem(a.QuestionId, a.AnswerValue))]`
-  (`SessionQuestionAnswersController.cs:202`), the same one-line manual hop from wire type to application
-  type that the single-answer path performs field by field.
-- **Why it's built this way**: the API keeps its own element record rather than binding directly to the
-  application-layer `BatchSessionQuestionAnswerItem`, so the HTTP contract and the command stay
-  independently versionable, the ADR-001 manual-mapping stance applied to a nested type.
-- **Where it's used**: only as the element type of
-  [`BatchAddSessionQuestionAnswersRequest`](#batchaddsessionquestionanswersrequest)`.Answers`
-  (`SessionQuestionAnswersController.cs:55`).
-
----
-
-### UpdateCategoryItemRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:42` · Level 0 · record class
-
-- **What it is**: the PUT body for editing an existing category item. It is
-  [`AddCategoryItemRequest`](#addcategoryitemrequest) minus `CategoryItemId`: the owning `CategoryId`,
-  the new `Name`, and the new `Sort`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:42-52`).
-- **Depends on**: the same id aliases plus BCL `string`/`int`. Consumed by
-  [`CategoryItemsController`](#categoryitemscontroller), which forwards it to
-  [`UpdateCategoryItemCommand`](group-18-conference-application.md#updatecategoryitemcommand).
-- **Concept**: the update half of the request-vs-command shape (see
-  [`AddCategoryItemRequest`](#addcategoryitemrequest)). The item id to update is not in the body, it is the
-  route's `{id}`; `UpdateAsync` threads the route id into the command
-  (`new UpdateCategoryItemCommand(request.CategoryId, id, request.Name, request.Sort)`,
-  `CategoryItemsController.cs:161-166`). Unlike the create, this action carries **no**
-  `[Idempotent]` attribute (`CategoryItemsController.cs:154-156`): a PUT that sets an item to a stated
-  name and sort is naturally repeatable, so there is nothing to replay-protect.
-- **Walkthrough**: three `required { get; init; }` properties. `CategoryId` is carried on update so the
-  handler can re-check ownership of the parent before mutating.
-- **Where it's used**: `[FromBody]` on [`CategoryItemsController`](#categoryitemscontroller)'s
-  `UpdateAsync` (`CategoryItemsController.cs:156-158`); on success the action evicts
-  `conference:categories` and `conference` and returns `NoContent()`
-  (`CategoryItemsController.cs:174-175`).
-
----
-
 ### UpdateEventQuestionAnswerRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:38` · Level 0 · record class
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:38` · Level 0 · record class
 
 - **What it is**: the PUT body for editing an event answer. It carries the owning `EventId` and the new
   `AnswerValue`, and deliberately drops `QuestionId`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:38-45`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:38-45`).
 - **Depends on**: the `EventIdentifierType` alias plus BCL `string`. Consumed by
   [`EventQuestionAnswersController`](#eventquestionanswerscontroller), which forwards it to
   [`UpdateEventQuestionAnswerCommand`](group-18-conference-application.md#updateeventquestionanswercommand).
@@ -1085,12 +1128,12 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ---
 
 ### UpdateRoomRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/RoomsController.cs:58` · Level 0 · record class
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/RoomsController.cs:58` · Level 0 · record class
 
 - **What it is**: the PUT body for editing a room. It is [`AddRoomRequest`](#addroomrequest) minus the
   explicit `RoomId`: the owning `EventId`, required `Name` and `Sort`, and the four optional physical
   attributes
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/RoomsController.cs:58-80`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/RoomsController.cs:58-80`).
 - **Depends on**: the `EventIdentifierType` alias plus BCL `string?`, `int`, `int?`. Consumed by
   [`RoomsController`](#roomscontroller), which forwards it to
   [`UpdateRoomCommand`](group-18-conference-application.md#updateroomcommand).
@@ -1106,405 +1149,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 
 ---
 
-### UpdateSessionQuestionAnswerRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:59` · Level 0 · record class
-
-- **What it is**: the session-scoped twin of
-  [`UpdateEventQuestionAnswerRequest`](#updateeventquestionanswerrequest): the PUT body carrying the
-  owning `SessionId` and the new `AnswerValue`, dropping `QuestionId`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:59-66`).
-- **Depends on**: the `SessionIdentifierType` alias plus BCL `string`. Consumed by
-  [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller), which forwards it to
-  [`UpdateSessionQuestionAnswerCommand`](group-18-conference-application.md#updatesessionquestionanswercommand).
-- **Concept**: identical to [`UpdateEventQuestionAnswerRequest`](#updateeventquestionanswerrequest); the
-  answer id is the route `{id}`
-  (`new UpdateSessionQuestionAnswerCommand(request.SessionId, id, request.AnswerValue)`,
-  `SessionQuestionAnswersController.cs:219`).
-- **Walkthrough**: two `required { get; init; }` properties, no methods.
-- **Where it's used**: `[FromBody]` on [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller)'s
-  `UpdateAsync` (`SessionQuestionAnswersController.cs:213-215`).
-
----
-
-### BatchAddSessionQuestionAnswersRequest
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:49` · Level 1 · record class
-
-- **What it is**: the POST body for `/SessionQuestionAnswers/batch`, the endpoint that submits a whole
-  session feedback form in one call. It is an envelope: the `SessionId` being answered plus an
-  `IReadOnlyList<BatchSessionQuestionAnswerItemRequest> Answers`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:49-56`).
-- **Depends on**: [`BatchSessionQuestionAnswerItemRequest`](#batchsessionquestionansweritemrequest) as its
-  element type (`:55`), the `SessionIdentifierType` alias, and BCL `IReadOnlyList<T>`. Consumed by
-  [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller), which projects it onto
-  [`BatchAddSessionQuestionAnswersCommand`](group-18-conference-application.md#batchaddsessionquestionanswerscommand).
-  This is the one Level 1 record in the group: it is the only request type here that composes another
-  first-party request type.
-- **Concept introduced, the atomic bulk write at the HTTP edge.** `[Rubric §9, API & Contract Design]`
-  and `[Rubric §8, Data Architecture]` (transactional boundaries that match what the client is allowed to
-  observe). A feedback form is many answers that the user perceives as one submit, so the API models it as
-  one request rather than N. The atomicity is not enforced in the controller: the command it maps to is
-  marked `ITransactional`, so the CQRS pipeline's transactional decorator wraps the whole handler and a
-  refusal leaves nothing written
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/BatchAddSessionQuestionAnswers/BatchAddSessionQuestionAnswersCommand.cs:22-24`).
-  The same command is `ICacheInvalidating` with a `Session`-scoped `CachePrefix` (`:27`), so cache
-  invalidation is declarative here rather than a hand-written `EvictTagsAsync` call as in the room and
-  join controllers. `[Rubric §6, CQRS & Event-Driven]`: the controller does no looping and no
-  orchestration, it constructs one command and dispatches it once
-  (`SessionQuestionAnswersController.cs:200-204`).
-- **Walkthrough**
-  - Two `required { get; init; }` members: `SessionId` (`:52`) and `Answers` (`:55`), whose doc comment
-    states the shape rule directly, "at most one per question".
-  - `CreateBatchAsync` (`SessionQuestionAnswersController.cs:194`) is `[HttpPost("batch")]` (`:192`) and
-    [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute) (`:193`), so a retried form
-    submit replays the first response rather than re-applying the form. It guards with
-    `ArgumentNullException.ThrowIfNull(request)` (`:198`), flattens the items (`:200-202`), dispatches
-    (`:204`), and returns `Ok(result.Value)` with the list of created DTOs, or `HandleFailure`
-    (`:206-208`). Note the create returns `200 Ok` with the collection rather than a `201 CreatedAtRoute`:
-    a batch has no single resource URI to point at.
-  - The shape rules the doc comment promises are enforced one layer down by
-    `BatchAddSessionQuestionAnswersCommandValidator`: at least one answer, one answer per question so the
-    upsert "cannot fight itself", and a non-empty `AnswerValue` for each item
-    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/BatchAddSessionQuestionAnswers/BatchAddSessionQuestionAnswersCommandValidator.cs:14-26`).
-    `[Rubric §24, Forms/Validation/UX Safety]`: the duplicate-question rule is a *request-level* rule that
-    no per-item validator could express, which is why it lives on the collection property.
-- **Why it's built this way**: the controller's own doc comment is the design record: the form is applied
-  atomically under one transaction "so a refusal leaves nothing written and the client has no partially
-  saved state to reconcile" (`SessionQuestionAnswersController.cs:183-186`). The alternative, letting the
-  UI POST each answer separately, would leave a half-saved form behind on any mid-flight failure and would
-  cost one round trip per question.
-- **Where it's used**: `[FromBody]` on `CreateBatchAsync` only
-  (`SessionQuestionAnswersController.cs:195`); consumed by the attendee session-feedback form.
-- **Caveats / not-in-source**: this controller has no `IOutputCacheStore` injection and no
-  `EvictTagsAsync` call anywhere, so whether the batch invalidates the ASP.NET Core *output* cache (as
-  opposed to the application cache reached through `ICacheInvalidating`) is not determinable from this
-  file.
-
----
-
-### ServiceInfoController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/ServiceInfoController.cs:20` · Level 2 · class (sealed)
-
-- **What it is**: an anonymous, read-only service and version discovery controller whose single
-  `/ServiceInfo` route is served by **two** API versions, selected via the `api-version` header. The ADC
-  file is almost empty: it is a thin sealed subclass of the shared
-  [`ServiceInfoControllerBase`](group-12-api-hosting-mapping.md#serviceinfocontrollerbase) that overrides
-  exactly one member, `ServiceName => "Conference"`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/ServiceInfoController.cs:23`).
-  All of the version-discovery behavior lives in the base. The whole file is 24 lines.
-- **Depends on**: [`ServiceInfoControllerBase`](group-12-api-hosting-mapping.md#serviceinfocontrollerbase)
-  (MMCA.Common.API); `Asp.Versioning` (`[ApiVersion]`); `Microsoft.AspNetCore.Authorization`
-  (`[AllowAnonymous]`). It does **not** declare the two discovery actions (`GetV1`/`GetV2`) or the two
-  response payloads (`ServiceInfoResponse` / `ServiceInfoV2Response`): those are inherited from the base
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:39-58`) and
-  taught in [G12](group-12-api-hosting-mapping.md).
-- **Concept introduced, multi-version routing declared on the leaf subclass.** `[Rubric §9, API &
-  Contract Design]` assesses a real versioning strategy rather than a single frozen version. Two
-  `[ApiVersion]` attributes on this class declare the route's versions, `1.0` with `Deprecated = true`
-  and `2.0` (`ServiceInfoController.cs:18-19`); the base's `[MapToApiVersion]`-tagged `GetV1()`/`GetV2()`
-  actions then serve the minimal versus evolved shape for each
-  (`ServiceInfoControllerBase.cs:39-48`). This is the only Conference controller that serves more than one
-  version: every other one carries a single `[ApiVersion("1.0")]`. `[Rubric §1, SOLID]` and
-  `[Rubric §16, Maintainability]`: the discovery *behavior* is written once in the Common base, and each
-  service's subclass supplies only its name plus the class-level attributes, which the base's own remarks
-  note are not reliably inherited and so must be repeated on the leaf
-  (`ServiceInfoControllerBase.cs:15-29`, whose `<code>` block quotes this exact Conference subclass as the
-  worked example).
-- **Walkthrough**
-  - The five class-level attributes at `ServiceInfoController.cs:15-19` (`[ApiController]`,
-    `[Route("[controller]")]`, `[AllowAnonymous]`, `[ApiVersion("1.0", Deprecated = true)]`,
-    `[ApiVersion("2.0")]`) supply routing, anonymity, and versioning to the leaf, because attribute
-    inheritance is not reliable here.
-  - The entire body is one expression-bodied override: `protected override string ServiceName =>
-    "Conference"` (`ServiceInfoController.cs:23`). The advertised supported and deprecated version lists
-    (`["1.0", "2.0"]` and `["1.0"]`) live on the base as `private static readonly string[]` fields
-    (`ServiceInfoControllerBase.cs:32-33`), so this class never restates them.
-- **Why it's built this way**: hoisting the discovery actions and payloads into a shared base and giving
-  each service a one-line subclass keeps every service's `/ServiceInfo` identical and keeps the versioning
-  feature exercised and testable: a contract-snapshot test against `/openapi/v1.json` can confirm both
-  versions are present, so the capability cannot silently rot. It stays anonymous and side-effect free.
-- **Where it's used**: mounted by the Conference service's controller registration; reached directly on
-  the service host, not through the YARP Gateway (the base's own summary records that gateways do not
-  route this path, `ServiceInfoControllerBase.cs:13`). Primarily a target for the integration-tier
-  versioning and contract tests rather than for the UI.
-- **Caveats / not-in-source**: the `ReportApiVersions = true` behavior that adds the
-  `api-supported-versions` / `api-deprecated-versions` response headers is configured in
-  `AddCommonApiVersioning` (MMCA.Common.API, a different group), not here
-  (`ServiceInfoControllerBase.cs:10-12` documents the dependency); this controller only declares the two
-  versions and its service name.
-
----
-
-### SessionSelectionController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSelectionController.cs:30` · Level 5 · class (sealed partial)
-
-- **What it is**: a **decision-support** controller for choosing which submitted sessions to accept,
-  gated class-level by
-  [`[HasPermission(ConferencePermissions.SessionSelectionManage)]`](group-08-auth.md#haspermissionattribute)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSelectionController.cs:29`),
-  a capability the content-curation subset deliberately excludes (`SessionSelectionManage` is in
-  [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions)`.All` but absent from its
-  `ContentManagement` subset, so a content-editor role granted `ContentManagement` cannot reach it:
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:30, 39-50, 57-64`;
-  the concrete role-to-permission grants live in the module's registration, not in this file). It exposes
-  four read endpoints (composite dashboard, category distribution, speaker overlap, content similarity)
-  plus one endpoint that **queues** AI scoring of an event's sessions for a hosted background worker.
-- **Depends on**: [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) (for the
-  `HandleFailure` Result-to-Problem-Details mapping, `SessionSelectionController.cs:37`); the
-  [`HasPermission`](group-08-auth.md#haspermissionattribute) attribute plus the
-  [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions) catalog; four
-  [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)
-  injections (`SessionSelectionController.cs:31-34`);
-  [`ISessionScoringQueue`](group-18-conference-application.md#isessionscoringqueue) (`:35`);
-  [`Result`](group-01-result-error-handling.md#result) and
-  [`Error`](group-01-result-error-handling.md#error); the decision-support DTOs
-  ([`SessionSelectionDashboardDTO`](group-17-conference-domain.md#sessionselectiondashboarddto),
-  [`CategoryDistributionDTO`](group-17-conference-domain.md#categorydistributiondto),
-  [`SpeakerSessionOverlapDTO`](group-17-conference-domain.md#speakersessionoverlapdto),
-  [`ContentSimilarityDTO`](group-17-conference-domain.md#contentsimilaritydto)); the
-  [`NonIdempotentAttribute`](group-12-api-hosting-mapping.md#nonidempotentattribute); BCL `ILogger` and
-  ASP.NET Core `[OutputCache]`.
-- **Concept introduced, handing long work to a queue instead of the request thread.** `[Rubric §9, API &
-  Contract Design]` (a focused, capability-scoped surface that answers with honest status codes) and
-  `[Rubric §29, Resilience & Business Continuity]`. `ScoreSessions`
-  (`SessionSelectionController.cs:110`) is **synchronous and non-async**: it calls
-  `sessionScoringQueue.TryEnqueue(eventId)` and switches on the returned
-  [`SessionScoringEnqueueResult`](group-18-conference-application.md#sessionscoringenqueueresult)
-  (`:112-130`). `Queued` logs and returns `Accepted()` (202); `AlreadyPending` and `QueueFull` each build
-  an `Error.Conflict(...)` and hand it to `HandleFailure`, which maps `ErrorType.Conflict` to **409**
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:25`) inside an RFC 9457
-  Problem Details body
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35-55`). Both outcomes
-  are declared to OpenAPI with `[ProducesResponseType]` (`:108-109`).
-  `[Rubric §31, Cost/FinOps]` assesses whether spend is bounded by design rather than by hope: the
-  controller's own remarks record that each pass issues one paid Anthropic call per session, so a second
-  concurrent pass would double the spend while racing the first one's writes (`:101-105`). The queue
-  enforces that: it deduplicates by event and keeps the entry until the run *finishes*, so the dedup window
-  covers execution, not just the wait
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringQueue.cs:51-55, 66-69`),
-  and it is a bounded channel of capacity 16 with `SingleReader` so runs execute one at a time
-  (`SessionScoringQueue.cs:38, 43-49`). `[Rubric §13, Observability & Operability]` (structured,
-  source-generated logging): the class is `partial` and declares one `[LoggerMessage]` method,
-  `LogScoringQueued` (`SessionSelectionController.cs:133-134`), a compile-time generated,
-  allocation-light log call. `[Rubric §12, Performance & Scalability]`: all four read endpoints carry
-  `[OutputCache(PolicyName = "ConferenceCache")]` (`:41, 55, 69, 83`).
-- **Concept, opting *out* of idempotency with a written reason.** `[Rubric §10, Cross-Cutting]`. Every
-  other hand-written POST in this group is marked `[Idempotent]`; `ScoreSessions` is marked
-  [`[NonIdempotent]`](group-12-api-hosting-mapping.md#nonidempotentattribute) instead, and the attribute
-  takes a mandatory justification string that is spelled out inline
-  (`SessionSelectionController.cs:107`): the enqueue is already deduplicated by the queue's own pending
-  set, so replaying a cached 202 would report acceptance for a request the queue never saw, hiding both
-  the already-running refusal and a queue-full rejection the caller has to act on. The opt-out is a
-  declared, reviewable decision in the source rather than a silently missing attribute.
-- **Walkthrough**
-  - Primary-constructor injection of the four query handlers, the scoring queue, and the logger
-    (`SessionSelectionController.cs:30-36`); the base is
-    [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) (`:37`).
-  - Each read action follows the same shape: dispatch the query, then
-    `result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value)`. `GetDashboardAsync` (`:42`),
-    `GetCategoryDistributionAsync` (`:56`), `GetSpeakerOverlapAsync` (`:70`), and
-    `GetContentSimilarityAsync` (`:84`, which takes a `minimumSimilarity = 0.3` threshold query
-    parameter, `:86`).
-  - `ScoreSessions` (`:110`) is the only write. It returns `ActionResult`, not `Task<ActionResult>`:
-    enqueueing is a synchronous in-memory operation, so there is nothing to await at the edge.
-- **Why it's built this way**: an earlier revision started the scoring run as a fire-and-forget task from
-  the controller. The queue interface's own doc comments are the design record for why that was replaced
-  (`ISessionScoringQueue.cs:19-24`): nothing tracked the task, so a deploy or scale-in killed it mid-run
-  with no record; nothing deduplicated it, so two clicks meant two concurrent passes; and it ignored the
-  host lifetime, so shutdown could neither wait for it nor cancel it. Refusing a duplicate with 409 rather
-  than silently coalescing it means the caller learns the run is already in flight
-  (`ISessionScoringQueue.cs:26-29`).
-- **Where it's used**: mounted by the Conference service's controller registration and consumed by the
-  organizer session-selection UI page. The queued work is drained by the hosted worker that reads
-  `SessionScoringQueue.Reader` (`SessionScoringQueue.cs:57-58`) and executes
-  [`ScoreEventSessionsCommand`](group-18-conference-application.md#scoreeventsessionscommand)
-  (Conference Application group).
-- **Caveats / not-in-source**: the queue is explicitly in-process and best-effort. Its own remarks state
-  that a crash between a failure and the requeue loses the retry, and that this is the intended floor
-  because an organizer can trigger the run again
-  (`SessionScoringQueue.cs:9-14`). Durability of a queued run across a host restart is therefore not
-  provided (it is not an outbox-backed job). This controller does no output-cache eviction of its own, so
-  when a scoring pass finishes, whether the `ConferenceCache` entries above are refreshed is not
-  determinable from this file.
-
-### CategoryItemsController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:63` · Level 8 · class (sealed)
-
-- **What it is**: the REST controller for conference category items. Reads are public (anonymous per
-  BR-43); writes (add, update, remove) require the categories capability, gated class-level by
-  `[HasPermission(ConferencePermissions.CategoriesManage)]`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:62`).
-  A [`CategoryItem`](group-17-conference-domain.md#categoryitem) is a child of a
-  [`Category`](group-17-conference-domain.md#category), exposed at a top-level route for convenient
-  querying (`CategoryItemsController.cs:54-58`).
-- **Depends on**:
-  [`EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#entitycontrollerbasetentity-tentitydto-tidentifiertype)
-  closed over `CategoryItem`, [`CategoryItemDTO`](group-17-conference-domain.md#categoryitemdto) and
-  `CategoryItemIdentifierType` (the read-only Common base it extends, `CategoryItemsController.cs:70`); the
-  [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
-  for reads (`:64`); three
-  [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
-  injections for [`AddCategoryItemCommand`](group-18-conference-application.md#addcategoryitemcommand),
-  [`UpdateCategoryItemCommand`](group-18-conference-application.md#updatecategoryitemcommand) and
-  [`RemoveCategoryItemCommand`](group-18-conference-application.md#removecategoryitemcommand) (`:65-67`);
-  ASP.NET Core's `IOutputCacheStore` (`:68`); the
-  [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute) plus
-  [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions); the
-  [`IdempotentAttribute`](group-12-api-hosting-mapping.md#idempotentattribute) on its create; its two
-  request records [`AddCategoryItemRequest`](#addcategoryitemrequest) and
-  [`UpdateCategoryItemRequest`](#updatecategoryitemrequest); the read result types
-  [`CollectionResult<T>`](group-01-result-error-handling.md#collectionresultt),
-  [`PagedCollectionResult<T>`](group-01-result-error-handling.md#pagedcollectionresultt) and
-  [`BaseLookup<TIdentifierType>`](group-12-api-hosting-mapping.md#baselookuptidentifiertype); the
-  [`QueryFilterModelBinder`](group-12-api-hosting-mapping.md#queryfiltermodelbinder); BCL `ILogger`.
-- **Concept introduced, the child-entity controller over the read-only base.** `[Rubric §9, API &
-  Contract Design]` assesses whether a resource surface is uniform and honest about what it owns;
-  `[Rubric §5, Vertical Slice]` and `[Rubric §6, CQRS & Event-Driven]` assess whether one HTTP action maps
-  to one use case. A *child* of an aggregate cannot use the generic aggregate-root create and delete
-  (neither can supply the child's parent id), so this class derives from the **read-only**
-  [`EntityControllerBase`](group-12-api-hosting-mapping.md#entitycontrollerbasetentity-tentitydto-tidentifiertype),
-  which already supplies `GET`, `GET /paged`, `GET /lookup`, `GET /{id}` and `GET /export`, then
-  hand-writes its own `POST`, `PUT` and `DELETE` whose commands carry the owning `CategoryId`. Each read is
-  `override`n only to re-decorate the action with `[AllowAnonymous]` and a cache policy before delegating
-  straight back (`=> base.GetAllAsync(...)`, `:80`): the attributes have to sit on the derived method for
-  MVC to see them, which is the whole reason these bodies exist. Each write maps its request record onto
-  exactly one command and folds any failure through the inherited `HandleFailure`, the one-handler-per-action
-  shape of CQRS at the edge. `[Rubric §1, SOLID]` and `[Rubric §16, Maintainability]`: because the read
-  machinery is written once in Common, the concrete controller is small and has almost no reason to change.
-- **Walkthrough**
-  - Primary-constructor injection (`CategoryItemsController.cs:63-69`): the query service, the three
-    command handlers (`AddCategoryItemCommand -> Result<CategoryItemDTO>`, `UpdateCategoryItemCommand ->
-    Result`, `RemoveCategoryItemCommand -> Result`), the output-cache store and the logger; the base call
-    passes the query service and logger to `EntityControllerBase` (`:70`).
-  - The four read overrides (`:72-119`) each add `[AllowAnonymous]` (re-opening the class-level capability
-    gate for reads) and `[OutputCache(PolicyName = "CategoriesCache")]`, then forward to the base:
-    `GetAllAsync` (`:75-80`), the paged `GetAllAsync` with the
-    `[ModelBinder(typeof(QueryFilterModelBinder))]` filter dictionary (`:85-95`), `GetAllForLookupAsync`
-    (`:100-103`) and `GetByIdAsync` under the named route `"GetCategoryItemById"` (`:105-119`).
-  - `CreateAsync` (`:130`): `[HttpPost]` (`:128`) and `[Idempotent]` (`:129`), binds
-    `[FromBody] AddCategoryItemRequest`, dispatches
-    `new AddCategoryItemCommand(request.CategoryId, request.CategoryItemId, request.Name, request.Sort)`
-    (`:135-139`); on failure `HandleFailure` (`:142-145`), otherwise it evicts and returns
-    `CreatedAtRoute("GetCategoryItemById", new { id = result.Value!.Id }, result.Value)` (`:148-151`). The
-    doc comment records why the replay contract is declared here rather than inherited: this create is
-    hand-written, not the base action (`:121-127`).
-  - `UpdateAsync` (`:156`): `[HttpPut("{id}")]` (`:155`), binds the route `id` and
-    `[FromBody] UpdateCategoryItemRequest`, dispatches
-    `new UpdateCategoryItemCommand(request.CategoryId, id, request.Name, request.Sort)` (`:162-166`),
-    evicts (`:174`), then `NoContent()` (`:175`).
-  - `DeleteAsync` (`:180`): `[HttpDelete("{id}")]` (`:179`), binds the route `id` and
-    `[FromQuery] ConferenceCategoryIdentifierType categoryId` (`:182`), dispatches
-    `new RemoveCategoryItemCommand(categoryId, id)` (`:186`), evicts (`:194`), then `NoContent()`. The
-    parent id travels on the query string because a child delete needs its parent for ownership
-    re-validation in the handler.
-  - All three mutations end with `outputCacheStore.EvictTagsAsync(cancellationToken,
-    "conference:categories", "conference")` (`:147, 174, 194`), and all three return `HandleFailure`
-    *before* the eviction, so a rejected command never disturbs the cache. `[Rubric §12, Performance &
-    Scalability]`: without that call the cached reads would serve the pre-edit item list for the full
-    5-minute policy TTL (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:225`), so an
-    organizer renaming a track would not see it on the public session pages until the entry expired.
-- **Why it's built this way**: the split between an aggregate-root base (create and delete built in) and
-  this read-only base (writes hand-written) is exactly the "child commands carry a parent id the generic
-  base cannot model" distinction the group overview draws. Reads are anonymous because the taxonomy is
-  public (BR-43); writes are capability-gated (BR-41) at the class level, and `CategoriesManage` is one of
-  the five permissions in the `ContentManagement` curation subset
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:57-64`),
-  so a content editor can edit the taxonomy without holding event, room or question rights.
-- **Where it's used**: mounted by the Conference service host and reached through the YARP Gateway route
-  `/CategoryItems/{**catch-all}` (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:98`); the
-  organizer category-management UI under
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/ConferenceCategory/` is the client. It
-  is the archetype for the group's other child and junction controllers
-  ([`RoomsController`](#roomscontroller), [`EventSpeakersController`](#eventspeakerscontroller),
-  [`SessionSpeakersController`](#sessionspeakerscontroller),
-  [`SessionCategoryItemsController`](#sessioncategoryitemscontroller),
-  [`SpeakerCategoryItemsController`](#speakercategoryitemscontroller)), which repeat this shape with
-  different entities, cache tags and permissions.
-- **Caveats / not-in-source**: this controller applies no row scoping, so it overrides neither of the
-  framework read hooks and does not override the inherited `/export`. That export therefore streams the
-  whole item table, protected only by the class-level `CategoriesManage` capability, since the inherited
-  action carries no `[AllowAnonymous]` of its own
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:206-211`).
-
----
-
-### ConferenceCategoriesController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/ConferenceCategoriesController.cs:35` · Level 8 · class (sealed)
-
-- **What it is**: the REST controller for the [`Category`](group-17-conference-domain.md#category)
-  aggregate root, served at the custom route `conferencecategories`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/ConferenceCategoriesController.cs:32`)
-  so it cannot collide with another module's `categories` route. Anonymous reads, capability-gated create,
-  update and delete (`[HasPermission(ConferencePermissions.CategoriesManage)]`, `:34`). This is the first
-  *aggregate-root* controller in the group, so it establishes the shape the other full-CRUD controllers
-  reuse.
-- **Depends on**:
-  [`AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
-  (the CRUD base, `ConferenceCategoriesController.cs:42-43`); the
-  [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
-  (`:36`); a create handler keyed on
-  [`ConferenceCategoryCreateRequest`](group-18-conference-application.md#conferencecategorycreaterequest)
-  (`:37`); an update handler keyed on the framework's
-  [`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`](group-05-cqrs-pipeline.md#updateentitycommandtentity-tupdaterequest-tidentifiertype)
-  (`:38`); a delete handler keyed on
-  [`DeleteEntityCommand<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
-  (`:39`); `IOutputCacheStore` (`:40`); the
-  [`ConferenceCategoryDTO`](group-17-conference-domain.md#conferencecategorydto); the PUT body
-  [`ConferenceCategoryUpdateRequest`](group-18-conference-application.md#conferencecategoryupdaterequest)
-  (`:120`); and the [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute).
-- **Concept introduced, the aggregate-root controller.** `[Rubric §9, API & Contract Design]` assesses
-  consistent resource CRUD: an aggregate root gets a full, uniform REST surface, and
-  [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
-  supplies `GetAll`, `GetById`, `GetAllForLookup`, `Export`, `Create` and `Delete` from its constructor
-  slots (query service, create handler, delete handler, logger, `:42-43`). The subclass then writes only
-  policy, cache eviction, and the one action the base does not supply. Note that the create request type
-  *is* the handler's command: `ConferenceCategoryCreateRequest` is passed straight into the create
-  handler's [`ICommandHandler`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult) slot (`:37`),
-  the create-from-request shape used across every Conference aggregate root.
-- **Concept introduced, the required conditional write.** `[Rubric §9, API & Contract Design]` also
-  assesses whether a contract expresses concurrency honestly. The base has no update action, so
-  `UpdateAsync` is hand-rolled, and it carries [`SupportsIfMatch`](group-12-api-hosting-mapping.md#supportsifmatchattribute)
-  (`:114`) with `[ProducesResponseType]` for 409, 412 and 428 (`:115-117`). The token is read with
-  `SupportsIfMatchAttribute.RequiredToken(HttpContext)` (`:123`, declared at
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:68`), and the
-  attribute's own doc comment states the contract: a request with no `If-Match` header answers **428
-  Precondition Required** and a stale token answers **412 Precondition Failed**
-  ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html), doc at `:105-112`). The
-  update itself is the framework's generic
-  [`UpdateEntityCommand`](group-05-cqrs-pipeline.md#updateentitycommandtentity-tupdaterequest-tidentifiertype)
-  closed over `Category`, the update request and the identifier type (`:126`), so a category edit needs no
-  bespoke command type at all.
-- **Walkthrough**
-  - The four reads (`:45-92`) are `override`s that attach `[AllowAnonymous]` plus
-    `[OutputCache(PolicyName = "CategoriesCache")]` and forward to the base, including the paged overload
-    with the [`QueryFilterModelBinder`](group-12-api-hosting-mapping.md#queryfiltermodelbinder) filter
-    dictionary (`:66`) and `GetByIdAsync` under the named route `"GetCategoryById"` (`:78`).
-  - `CreateAsync` (`:96-103`) and `DeleteAsync` (`:138-145`) are thin `override`s that call
-    `base.CreateAsync` / `base.DeleteAsync` and then evict, so the base does the CQRS dispatch and the
-    override adds only the cache concern. Because the base returns an `ActionResult` rather than a
-    [`Result`](group-01-result-error-handling.md#result), these two evict unconditionally, including after
-    a rejected command: a cheap over-eviction, and the one place the failure-before-evict ordering used
-    elsewhere in this unit cannot be applied.
-  - `UpdateAsync` (`:118-134`) reads the required row version (`:123`), dispatches the generic update
-    command (`:125-127`), folds a failure through `HandleFailure` (`:129-130`), evicts (`:132`) and returns
-    `Ok(result.Value)` (`:133`).
-  - All three mutations evict only the `conference:categories` tag (`:101, 132, 143`), unlike the child
-    [`CategoryItemsController`](#categoryitemscontroller), which also drops the broad `conference` tag.
-- **Why it's built this way**: the base carries the boilerplate CRUD so a controller author writes only
-  what is specific: the route override, the update action and cache eviction. The custom route string is
-  the deliberate escape hatch from ASP.NET Core's `[controller]` convention, for the case where two modules
-  would otherwise claim the same path.
-- **Where it's used**: mounted by the Conference service host behind the Gateway route
-  `/ConferenceCategories/{**catch-all}` (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:94`);
-  consumed by the category-management UI under
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/ConferenceCategory/` and by every screen
-  that offers a category picker. Its child items are managed through the sibling
-  [`CategoryItemsController`](#categoryitemscontroller), which shares the same `CategoriesManage`
-  permission and the same `conference:categories` cache tag.
-
----
-
 ### EventQuestionAnswersController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:55` · Level 9 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:55` · Level 9 · class (sealed)
 
 - **What it is**: the REST controller for event feedback answers (`/EventQuestionAnswers`). Unlike the
   public-catalog controllers in this group, **every** endpoint requires authentication (`[Authorize]`,
@@ -1611,7 +1257,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ---
 
 ### EventSpeakersController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:47` · Level 9 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventSpeakersController.cs:47` · Level 9 · class (sealed)
 
 - **What it is**: the REST controller for the many-to-many link between an event and a speaker
   (`/EventSpeakers`). It exposes anonymous read endpoints and capability-gated add/remove endpoints.
@@ -1654,12 +1300,12 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   the case the base's remarks describe (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:571-579`).
   `[Rubric §12, Performance & Scalability]`: the reads are cached under the `EventsCache` policy (5-minute
   TTL, tags `conference` and `conference:events`,
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:216`), which is exactly why the writes
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:217`), which is exactly why the writes
   must evict. That policy is a
   [`PublicEndpointOutputCachePolicy`](group-12-api-hosting-mapping.md#publicendpointoutputcachepolicy)
   registration and it bypasses the cache entirely for the privileged read audience
   ([ADR-040](https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html),
-  `Program.cs:187-214`), which is what keeps an organizer's everything-inclusive payload out of the shared
+  `Program.cs:188-215`), which is what keeps an organizer's everything-inclusive payload out of the shared
   public entry.
 - **Walkthrough**
   - `GetReadSpecificationAsync` (`EventSpeakersController.cs:72-82`) is the one place the rule lives; the
@@ -1700,72 +1346,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 
 ---
 
-### QuestionsController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/QuestionsController.cs:34` · Level 9 · class (sealed)
-
-- **What it is**: the REST controller for the [`Question`](group-17-conference-domain.md#question)
-  aggregate root (`/Questions`), the feedback-question definitions attendees answer. It is the plainest
-  aggregate-root controller in the group: inherited CRUD, one hand-rolled conditional update, and cache
-  eviction, with no visibility scoping at all.
-- **Depends on**:
-  [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
-  (`QuestionsController.cs:41-42`); the
-  [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
-  (`:35`); a create handler keyed on
-  [`QuestionCreateRequest`](group-18-conference-application.md#questioncreaterequest) (`:36`); an update
-  handler for [`UpdateQuestionCommand`](group-18-conference-application.md#updatequestioncommand) (`:37`);
-  a delete handler keyed on
-  [`DeleteEntityCommand<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
-  (`:38`); `IOutputCacheStore` (`:39`); the [`QuestionDTO`](group-17-conference-domain.md#questiondto);
-  [`QuestionUpdateRequest`](group-18-conference-application.md#questionupdaterequest) as the PUT body
-  (`:119`); and the [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute).
-- **Concept introduced**: none new. This is the aggregate-root shape taught at
-  [`ConferenceCategoriesController`](#conferencecategoriescontroller), minus even the route override.
-  `[Rubric §9, API & Contract Design]`: every read is a pure `override` that re-decorates the base action
-  and delegates (`QuestionsController.cs:44-91`), which is what a controller looks like when it has no
-  per-caller rule to apply; contrast [`EventSpeakersController`](#eventspeakerscontroller), which overrides
-  the read hook so the base can scope those same actions. It is also why this class does **not** override
-  `ExportAsync`: with no row scoping on the reads there is no scoping for an export to bypass, and because
-  the inherited `/export` action carries no `[AllowAnonymous]` of its own it stays behind the class-level
-  capability gate (the symmetry the base documents at
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:205-211`).
-  The one bespoke command here, `UpdateQuestionCommand`, exists because a question update is not a plain
-  property patch; the conditional-write contract is the same one taught at
-  [`ConferenceCategoriesController`](#conferencecategoriescontroller).
-- **Walkthrough**
-  - The class is gated by `[HasPermission(ConferencePermissions.QuestionsManage)]`
-    (`QuestionsController.cs:33`), a capability granted to Organizer and Admin only
-    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43-44`); it is
-    absent from the ContentEditor subset
-    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:57-64`),
-    so a content editor curates sessions and speakers but cannot rewrite the feedback form.
-  - All four reads (`:44-91`) re-open with `[AllowAnonymous]` and attach
-    `[OutputCache(PolicyName = "QuestionsCache")]` (5-minute TTL, tags `conference` and
-    `conference:questions`, `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:226`), then
-    delegate; `GetByIdAsync` carries the named route `"GetQuestionById"` (`:77`).
-  - `CreateAsync` (`:95-102`) and `DeleteAsync` (`:137-144`) are thin overrides: call the base, then
-    `EvictTagsAsync(cancellationToken, "conference:questions")` (`:100, 142`), then return the base's
-    result.
-  - `UpdateAsync` (`:117-133`) is the hand-rolled action: `[SupportsIfMatch]` (`:113`) with the 409/412/428
-    `[ProducesResponseType]` triple (`:114-116`), `SupportsIfMatchAttribute.RequiredToken(HttpContext)`
-    (`:122`), `new UpdateQuestionCommand(id, request, rowVersion)` (`:125`), `HandleFailure` on failure
-    (`:128-129`), evict (`:131`), `Ok(result.Value)` (`:132`).
-  - Every eviction here clears the single `conference:questions` tag; unlike the sessions and speakers
-    controllers it does not also clear the broad `conference` tag, because no cross-entity read projects a
-    question.
-- **Why it's built this way**: questions carry no per-role visibility rule, so the controller carries
-  none. It is the reference case for how little an aggregate-root controller must write when the base does
-  the work: policy, one update action, and eviction.
-- **Where it's used**: the Conference service host behind the Gateway route `/Questions/{**catch-all}`
-  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:130`); the feedback-form builder UI under
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Question/` is the main client, and the
-  answers flow through [`EventQuestionAnswersController`](#eventquestionanswerscontroller) and
-  [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller).
-
----
-
 ### RoomsController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/RoomsController.cs:92` · Level 9 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/RoomsController.cs:92` · Level 9 · class (sealed)
 
 - **What it is**: the REST controller for conference [`Room`](group-17-conference-domain.md#room)s
   (`/Rooms`). Rooms are child entities of an [`Event`](group-17-conference-domain.md#event) but are exposed
@@ -1802,9 +1384,9 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   the paged action must intercept the key by hand.
 - **Concept introduced, output-cache eviction on mutation.** `[Rubric §12, Performance & Scalability]`
   assesses caching strategy: every read here is decorated `[OutputCache(PolicyName = "RoomsCache")]`
-  (`RoomsController.cs:138, 154, 175, 188`), so anonymous room reads are served from a 5-minute entry
+  (`RoomsController.cs:138,154,175,188`), so anonymous room reads are served from a 5-minute entry
   tagged `conference` and `conference:rooms`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:224`). The correctness half is
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:225`). The correctness half is
   eviction: each mutation ends by calling
   `outputCacheStore.EvictTagsAsync(cancellationToken, "conference:rooms")` (`:225, 254, 272`),
   invalidating exactly the room reads and nothing else. `[Rubric §3, Clean Architecture]`: the eviction
@@ -1845,8 +1427,513 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 
 ---
 
+### EventsController
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:47` · Level 10 · class (sealed)
+
+- **What it is**: the REST controller for the [`Event`](group-17-conference-domain.md#event) aggregate
+  root (`/Events`), and the richest controller in the group. On top of the standard aggregate-root CRUD it
+  adds visibility scoping, a gated CSV export, publish and unpublish with conditional writes, a Sessionize
+  refresh with bespoke error mapping, iCalendar export, and the "happening now / up next" snapshot.
+- **Depends on**:
+  [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
+  (`EventsController.cs:60-61`); the
+  [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
+  (`:47`); six [`ICommandHandler`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)s for
+  [`EventCreateRequest`](group-18-conference-application.md#eventcreaterequest),
+  [`UpdateEventCommand`](group-18-conference-application.md#updateeventcommand),
+  [`PublishEventCommand`](group-18-conference-application.md#publisheventcommand),
+  [`UnpublishEventCommand`](group-18-conference-application.md#unpublisheventcommand),
+  [`DeleteEntityCommand`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype) and
+  [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand)
+  (`:48-53`); two [`IQueryHandler`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)s for
+  [`ExportEventCalendarQuery`](group-18-conference-application.md#exporteventcalendarquery) and
+  [`GetNowNextQuery`](group-18-conference-application.md#getnownextquery) (`:54-55`);
+  [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) with the
+  [`CurrentUserServiceExtensions`](#currentuserserviceextensions) helper (`:56`); `IOutputCacheStore`
+  (`:57`); the [`PublishedEventSpecification`](group-18-conference-application.md#publishedeventspecification);
+  the [`EventDTO`](group-17-conference-domain.md#eventdto),
+  [`UpdateEventResult`](group-18-conference-application.md#updateeventresult),
+  [`EventUpdateRequest`](group-18-conference-application.md#eventupdaterequest),
+  [`NowNextDTO`](group-17-conference-domain.md#nownextdto) and
+  [`RefreshFromSessionizeResultDTO`](group-17-conference-domain.md#refreshfromsessionizeresultdto); the
+  [`IdempotentAttribute`](group-12-api-hosting-mapping.md#idempotentattribute); and the
+  [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute).
+- **Concept introduced, business-rule visibility as a plain specification.** `[Rubric §11, Security]` and
+  `[Rubric §3, Clean Architecture]`: BR-108 says non-privileged readers see only published events. The rule
+  needs nothing awaited, so this controller overrides the *synchronous* hook:
+  `GetExportSpecification()` returns `null` for a privileged reader
+  (`currentUserService.IsPrivilegedConferenceReader()`, so a ContentEditor who reads every session can also
+  read the events those sessions belong to) and a `new PublishedEventSpecification()` for everyone else
+  (`EventsController.cs:75-76`, doc `:62-73`). The base then applies it to all five read actions, so the
+  authorization predicate is a data specification the query service composes into SQL, not imperative
+  post-filtering. The lookup doc comment (`:102-106`) names the side channel that closes: a draft event
+  listed by name. `ExportAsync` (`:133-147`) adds the imperative privileged-reader `Forbid()` on top
+  (`:141-144`).
+- **Concept introduced, conditional writes on a state transition.** `[Rubric §9, API & Contract Design]`
+  assesses whether a contract expresses concurrency honestly. `PublishAsync` and `UnpublishAsync` take no
+  body at all: they read the client's last-seen row version from the `If-Match` header through
+  `SupportsIfMatchAttribute.RequiredToken(HttpContext)` (`:272, 305`), so a request with no header answers
+  **428 Precondition Required** and never runs, and a stale token answers **412 Precondition Failed**
+  ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html); both carry
+  `[SupportsIfMatch]` at `:264, 297` and declare 409/412/428 as `[ProducesResponseType]` at `:265-267,
+  298-300`). Both are also `[Idempotent]` (`:263, 296`), because publishing is a state assertion and
+  replaying the stored response for a retried key is exactly what the caller meant (doc `:257-260`).
+  `[Rubric §29, Resilience & Business Continuity]`: `RefreshAsync` (`:328-362`) maps upstream trouble to
+  retryable HTTP, an `Event.Sessionize.Throttled` error becoming `429` with a `Retry-After: 300` header
+  (`:339-343`, BR-63) and `Event.Sessionize.Unavailable` becoming `502` (`:346-347`), so an upstream
+  throttle reaches the client as a signal rather than a 500.
+- **Walkthrough**
+  - The reads (`:77-124`) attach `[AllowAnonymous]` + `[OutputCache(PolicyName = "EventsCache")]` and
+    delegate to the base, which threads the published-event specification; `GetByIdAsync` carries the named
+    route `"GetEventById"` (`:115`).
+  - `ExportCalendarAsync` (`:156-164`) streams an `.ics` document via `File(...)` with the `text/calendar`
+    content type and an `event-{id}.ics` file name (`:163`).
+  - `GetNowNextAsync` (`:173-179`) and `GetCurrentNowNextAsync` (`:188-193`) serve the now/next snapshot for
+    a given event or, with `new GetNowNextQuery(EventId: null)` (`:191`), for the current one; both use the
+    short-TTL `NowNextCache` policy (60 seconds,
+    `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:232`) because the payload changes with
+    the clock. That policy is registered without the privileged-reader bypass, because the snapshot is
+    identical for every role (`Program.cs:230-232`).
+  - `CreateAsync` (`:202-209`) is an override marked `[Idempotent]` (`:201`), so a retried POST carrying
+    the same `Idempotency-Key` is deduplicated; it calls `base.CreateAsync` then evicts. The attribute is
+    single-use, so declaring it here coincides with the inherited one instead of duplicating it (doc
+    `:195-199`).
+  - `UpdateAsync` (`:224-248`) reads the required token (`:229`), dispatches
+    `new UpdateEventCommand(id, request, rowVersion)` (`:232`), appends a non-fatal `X-Warning` header when
+    a timezone change leaves existing sessions semantically stale (BR-131, `:238-244`), evicts (`:246`) and
+    returns `Ok(result.Value.Event)` (`:247`).
+  - `PublishAsync` (`:268-283`) and `UnpublishAsync` (`:301-316`) dispatch their transition commands with
+    the row version (`:275, 308`), evict (`:281, 314`) and return `NoContent()`.
+  - `RefreshAsync` triggers a Sessionize import and, because that import touches six entity types, evicts
+    six tags: events, sessions, speakers, categories, rooms and questions (`:353-360`).
+  - `DeleteAsync` (`:368-376`) additionally evicts `conference:sessions` and `conference:rooms` because
+    soft-deleting an event cascades to its children (`:373-374`). Every other mutation evicts the single
+    `conference:events` tag (`:207, 246, 281, 314`).
+- **Why it's built this way**: the base still owns the plain CRUD, so all the event-specific behavior
+  (scoping, export gating, publish lifecycle, external refresh, calendar and now-next projections) reads as
+  a flat list of extra actions. Mapping Sessionize failures to distinct status codes here keeps that
+  operational nuance at the boundary while the handler stays a pure
+  [`Result`](group-01-result-error-handling.md#result) producer, and the fan-out of eviction tags is
+  written where the knowledge of "what this operation touched" actually lives.
+- **Where it's used**: the Conference service host behind the Gateway route `/Events/{**catch-all}`
+  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:78`); the home-screen widget calls
+  `now-next`, the public schedule UI
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicEventList.razor`) calls the
+  reads and the `.ics` export, and organizer tooling under
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Event/` drives publish, unpublish and
+  refresh.
+
+---
+
+### AddSessionCategoryItemRequest
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionCategoryItemsController.cs:29` · Level 0 · record class
+
+- **What it is**: the POST body that tags a session with a category item: two ids, `SessionId` and
+  `CategoryItemId`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionCategoryItemsController.cs:29-36`).
+- **Depends on**: the `SessionIdentifierType` / `CategoryItemIdentifierType` aliases. Consumed by
+  [`SessionCategoryItemsController`](#sessioncategoryitemscontroller), which forwards it to
+  [`AddSessionCategoryItemCommand`](group-18-conference-application.md#addsessioncategoryitemcommand).
+- **Concept**: a join-entity write contract, identical in shape to
+  [`AddEventSpeakerRequest`](#addeventspeakerrequest) (`[Rubric §4, DDD]`, cross-aggregate references by
+  id); add plus delete only, no update. The controller passes `null` for the
+  [`SessionCategoryItem`](group-17-conference-domain.md#sessioncategoryitem) id
+  (`new AddSessionCategoryItemCommand(request.SessionId, null, request.CategoryItemId)`,
+  `SessionCategoryItemsController.cs:170`). `[Rubric §12, Performance & Scalability]`: because a tag change
+  moves both the session and the category read models, a successful write evicts three output-cache tags,
+  `conference:sessions`, `conference:categories`, and `conference`
+  (`SessionCategoryItemsController.cs:178`).
+- **Walkthrough**: two `required { get; init; }` id properties, no methods.
+- **Where it's used**: `[FromBody]` on [`SessionCategoryItemsController`](#sessioncategoryitemscontroller)'s
+  `CreateAsync` (`SessionCategoryItemsController.cs:165-166`), behind
+  `[HasPermission(ConferencePermissions.SessionsManage)]` (`SessionCategoryItemsController.cs:47`) and
+  marked [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute) (`:164`).
+
+---
+
+### AddSessionQuestionAnswerRequest
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:26` · Level 0 · record class
+
+- **What it is**: the session-scoped twin of [`AddEventQuestionAnswerRequest`](#addeventquestionanswerrequest),
+  the POST body for answering a feedback question against a session: `SessionId`, `QuestionId`,
+  `AnswerValue`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:26-36`).
+- **Depends on**: the `SessionIdentifierType` / `QuestionIdentifierType` aliases plus BCL `string`.
+  Consumed by [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller), which forwards it to
+  [`AddSessionQuestionAnswerCommand`](group-18-conference-application.md#addsessionquestionanswercommand).
+- **Concept**: user-owned write data behind authorization, exactly as in
+  [`AddEventQuestionAnswerRequest`](#addeventquestionanswerrequest) (`[Rubric §11, Security]`); the record
+  carries no `UserId`, the controller is gated by a plain `[Authorize]`
+  (`SessionQuestionAnswersController.cs:75`), and reads are scoped per user by BR-9 through the
+  `GetExportSpecification` override (`SessionQuestionAnswersController.cs:96-97`). On add the controller
+  passes `null` for the
+  [`SessionQuestionAnswer`](group-17-conference-domain.md#sessionquestionanswer) id
+  (`SessionQuestionAnswersController.cs:172`).
+- **Walkthrough**: three `required { get; init; }` properties, no methods. This is the *single-answer*
+  path; the whole-form path uses
+  [`BatchAddSessionQuestionAnswersRequest`](#batchaddsessionquestionanswersrequest) instead.
+- **Where it's used**: `[FromBody]` on [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller)'s
+  `CreateAsync` (`SessionQuestionAnswersController.cs:167-168`), marked
+  [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute) (`:166`).
+
+---
+
+### AddSessionSpeakerRequest
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSpeakersController.cs:29` · Level 0 · record class
+
+- **What it is**: the POST body that links a speaker to a session: `SessionId` plus `SpeakerId`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSpeakersController.cs:29-36`).
+- **Depends on**: the `SessionIdentifierType` / `SpeakerIdentifierType` aliases. Consumed by
+  [`SessionSpeakersController`](#sessionspeakerscontroller), which forwards it to
+  [`AddSessionSpeakerCommand`](group-18-conference-application.md#addsessionspeakercommand).
+- **Concept**: a join-entity write contract like [`AddEventSpeakerRequest`](#addeventspeakerrequest)
+  (`[Rubric §4, DDD]`); add plus delete only. The controller passes `null` for the
+  [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker) id
+  (`new AddSessionSpeakerCommand(request.SessionId, null, request.SpeakerId)`,
+  `SessionSpeakersController.cs:170`). `[Rubric §12, Performance & Scalability]`: a successful add evicts
+  the `conference:sessions` and `conference` output-cache tags
+  (`SessionSpeakersController.cs:180`), and the code comment above that call states why: speaker
+  assignment changes the cached session detail and list reads the speaker dashboard relies on
+  (`SessionSpeakersController.cs:178-179`).
+- **Walkthrough**: two `required { get; init; }` id properties, no methods.
+- **Where it's used**: `[FromBody]` on [`SessionSpeakersController`](#sessionspeakerscontroller)'s
+  `CreateAsync` (`SessionSpeakersController.cs:165-166`), behind
+  `[HasPermission(ConferencePermissions.SessionsManage)]` (`SessionSpeakersController.cs:47`) and marked
+  [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute) (`:164`).
+
+---
+
+### AddSpeakerCategoryItemRequest
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakerCategoryItemsController.cs:29` · Level 0 · record class
+
+- **What it is**: the POST body that tags a speaker with a category item: `SpeakerId` plus
+  `CategoryItemId`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakerCategoryItemsController.cs:29-36`).
+- **Depends on**: the `SpeakerIdentifierType` / `CategoryItemIdentifierType` aliases. Consumed by
+  [`SpeakerCategoryItemsController`](#speakercategoryitemscontroller), which forwards it to
+  [`AddSpeakerCategoryItemCommand`](group-18-conference-application.md#addspeakercategoryitemcommand).
+- **Concept**: a join-entity write contract like [`AddEventSpeakerRequest`](#addeventspeakerrequest)
+  (`[Rubric §4, DDD]`); add plus delete only. Notable domain modeling: ADC represents speaker traits such
+  as locality as a [`SpeakerCategoryItem`](group-17-conference-domain.md#speakercategoryitem) tag rather
+  than as a field on [`Speaker`](group-17-conference-domain.md#speaker), so a request like this is how
+  that attribute is attached. The controller passes `null` for the join id
+  (`new AddSpeakerCategoryItemCommand(request.SpeakerId, null, request.CategoryItemId)`,
+  `SpeakerCategoryItemsController.cs:170`) and then evicts `conference:speakers`,
+  `conference:categories`, and `conference` (`SpeakerCategoryItemsController.cs:178`).
+- **Walkthrough**: two `required { get; init; }` id properties, no methods.
+- **Where it's used**: `[FromBody]` on [`SpeakerCategoryItemsController`](#speakercategoryitemscontroller)'s
+  `CreateAsync` (`SpeakerCategoryItemsController.cs:165-166`), behind
+  `[HasPermission(ConferencePermissions.SpeakersManage)]` (`SpeakerCategoryItemsController.cs:47`) and
+  marked [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute) (`:164`).
+
+---
+
+### BatchSessionQuestionAnswerItemRequest
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:39` · Level 0 · record class
+
+- **What it is**: one line item inside a batch feedback submit: the `QuestionId` being answered and the
+  `AnswerValue` text
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:39-46`).
+  It is [`AddSessionQuestionAnswerRequest`](#addsessionquestionanswerrequest) minus `SessionId`, because
+  the session is named once on the envelope rather than repeated on every answer.
+- **Depends on**: the `QuestionIdentifierType` alias plus BCL `string`. It is nested inside
+  [`BatchAddSessionQuestionAnswersRequest`](#batchaddsessionquestionanswersrequest)`.Answers` and is
+  projected onto its application-layer counterpart
+  [`BatchSessionQuestionAnswerItem`](group-18-conference-application.md#batchsessionquestionansweritem).
+- **Concept**: the *element* half of an envelope-plus-items contract. `[Rubric §9, API & Contract
+  Design]` assesses whether a bulk operation is modeled as one intentional resource action rather than as
+  a client-side loop. Hoisting `SessionId` out of the element and onto the envelope is what makes the
+  batch a single-session operation by construction: the wire shape cannot express a form that spans two
+  sessions, so the handler never has to reject one.
+- **Walkthrough**: two `required { get; init; }` properties, no methods. The controller flattens the list
+  with a collection expression and a `Select`,
+  `[.. request.Answers.Select(a => new BatchSessionQuestionAnswerItem(a.QuestionId, a.AnswerValue))]`
+  (`SessionQuestionAnswersController.cs:202`), the same one-line manual hop from wire type to application
+  type that the single-answer path performs field by field.
+- **Why it's built this way**: the API keeps its own element record rather than binding directly to the
+  application-layer `BatchSessionQuestionAnswerItem`, so the HTTP contract and the command stay
+  independently versionable, the ADR-001 manual-mapping stance applied to a nested type.
+- **Where it's used**: only as the element type of
+  [`BatchAddSessionQuestionAnswersRequest`](#batchaddsessionquestionanswersrequest)`.Answers`
+  (`SessionQuestionAnswersController.cs:55`).
+
+---
+
+### UpdateSessionQuestionAnswerRequest
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:59` · Level 0 · record class
+
+- **What it is**: the session-scoped twin of
+  [`UpdateEventQuestionAnswerRequest`](#updateeventquestionanswerrequest): the PUT body carrying the
+  owning `SessionId` and the new `AnswerValue`, dropping `QuestionId`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:59-66`).
+- **Depends on**: the `SessionIdentifierType` alias plus BCL `string`. Consumed by
+  [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller), which forwards it to
+  [`UpdateSessionQuestionAnswerCommand`](group-18-conference-application.md#updatesessionquestionanswercommand).
+- **Concept**: identical to [`UpdateEventQuestionAnswerRequest`](#updateeventquestionanswerrequest); the
+  answer id is the route `{id}`
+  (`new UpdateSessionQuestionAnswerCommand(request.SessionId, id, request.AnswerValue)`,
+  `SessionQuestionAnswersController.cs:219`).
+- **Walkthrough**: two `required { get; init; }` properties, no methods.
+- **Where it's used**: `[FromBody]` on [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller)'s
+  `UpdateAsync` (`SessionQuestionAnswersController.cs:213-215`).
+
+---
+
+### ConferenceErrorResources
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Resources` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Resources/ConferenceErrorResources.cs:11` · Level 0 · class (sealed)
+
+- **What it is**: an empty class that exists purely to be a *type handle* for a pair of `.resx` files. The
+  whole declaration is three lines with no members at all
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Resources/ConferenceErrorResources.cs:11-13`).
+  Its two siblings in the same folder, `ConferenceErrorResources.resx` and
+  `ConferenceErrorResources.es.resx`, each carry 63 `<data name="...">` entries keyed by domain error
+  `Code` (`Answer.Rating.Invalid`, `Category.Title.Empty`, `CategoryItem.Name.TooLong`,
+  `Event.AlreadyPublished`, `Event.Name.Empty`, and so on).
+- **Depends on**: nothing at compile time (no base type, no fields, no methods). At runtime it is consumed
+  by the shared edge localizer, [IErrorLocalizer](group-12-api-hosting-mapping.md#ierrorlocalizer) and its
+  [ErrorLocalizer](group-12-api-hosting-mapping.md#errorlocalizer) implementation, and the codes it
+  translates are the `Code` values on [Error](group-01-result-error-handling.md#error) instances produced by
+  the Conference domain. Externals: the .NET resource pipeline (`.resx` compiled into satellite assemblies)
+  and `Microsoft.Extensions.Localization` underneath the localizer.
+- **Concept introduced, the resource-anchor type.** .NET resource lookup is keyed by a **CLR type**, not by
+  a file path: a `.resx` compiled next to `Foo.cs` becomes the resource set for `Foo`, and the satellite
+  assembly for culture `es` becomes the `es` overlay for that same type. A module that wants to contribute
+  translations therefore needs some type to name, and that type needs no behavior whatsoever. This class is
+  exactly that anchor. The host registers it once
+  (`services.AddErrorResources<ConferenceErrorResources>()`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:316`) and every Conference error code
+  becomes translatable from then on, with no per-error registration and no `switch` anywhere.
+  `[Rubric §27, i18n]` assesses whether localization is a structural property of the system rather than a
+  per-screen retrofit: because errors travel as stable machine-readable **codes** through
+  [Result](group-01-result-error-handling.md#result) and are turned into human text only at the edge, the
+  whole Conference module is localizable without a single domain-layer change.
+  `[Rubric §9, API & Contract Design]` assesses whether error payloads are contractual: the code is the
+  contract, the message is presentation, and this file is where that split pays off.
+- **Walkthrough**: there is no member walkthrough to do. The teaching content is the shape of the contract
+  around the empty class.
+  - The class is `sealed` and public (`ConferenceErrorResources.cs:11`). Public because the composition root
+    in another assembly (`MMCA.ADC.Conference.Service`) must name it as a generic argument; sealed because
+    nothing should ever derive from an anchor.
+  - Resolution is by code with an English fallback. The module's own test drives the localizer directly:
+    under the `es` UI culture, `localizer.Localize("Event.Name.Empty", "Event name cannot be empty.")`
+    returns the Spanish string
+    (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Localization/ConferenceErrorResourcesTests.cs:40-47`),
+    while an unknown code returns the caller-supplied English message unchanged (`:50-57`). That fallback is
+    what makes contributing a partial resource set safe.
+  - **Deliberately incomplete by design.** The class doc records that runtime-variable messages (those
+    interpolating a user-supplied value) are omitted on purpose, so they degrade to their English message
+    with the value intact rather than to a mangled translation (`ConferenceErrorResources.cs:8-9`). A
+    missing key is a supported state here, not a gap.
+- **Why it's built this way**: ADR-027 (`Website/docs-src/adr/027-multi-locale-i18n.md`) puts translation at
+  the edge and keys it by error code. Anchoring per module (rather than one application-wide resx) keeps a
+  module's translations inside the module's own assembly, which is what lets the Conference module boot in
+  its own service host and still carry its language support with it.
+- **Where it's used**: registered in the extracted Conference host
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:316`) and in the localization test's
+  service collection (`ConferenceErrorResourcesTests.cs:22`). No other code names it.
+
+### BatchAddSessionQuestionAnswersRequest
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:49` · Level 1 · record class
+
+- **What it is**: the POST body for `/SessionQuestionAnswers/batch`, the endpoint that submits a whole
+  session feedback form in one call. It is an envelope: the `SessionId` being answered plus an
+  `IReadOnlyList<BatchSessionQuestionAnswerItemRequest> Answers`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:49-56`).
+- **Depends on**: [`BatchSessionQuestionAnswerItemRequest`](#batchsessionquestionansweritemrequest) as its
+  element type (`:55`), the `SessionIdentifierType` alias, and BCL `IReadOnlyList<T>`. Consumed by
+  [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller), which projects it onto
+  [`BatchAddSessionQuestionAnswersCommand`](group-18-conference-application.md#batchaddsessionquestionanswerscommand).
+  This is the one Level 1 record in the group: it is the only request type here that composes another
+  first-party request type.
+- **Concept introduced, the atomic bulk write at the HTTP edge.** `[Rubric §9, API & Contract Design]`
+  and `[Rubric §8, Data Architecture]` (transactional boundaries that match what the client is allowed to
+  observe). A feedback form is many answers that the user perceives as one submit, so the API models it as
+  one request rather than N. The atomicity is not enforced in the controller: the command it maps to is
+  marked `ITransactional`, so the CQRS pipeline's transactional decorator wraps the whole handler and a
+  refusal leaves nothing written
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/BatchAddSessionQuestionAnswers/BatchAddSessionQuestionAnswersCommand.cs:22-24`).
+  The same command is `ICacheInvalidating` with a `Session`-scoped `CachePrefix` (`:27`), so cache
+  invalidation is declarative here rather than a hand-written `EvictTagsAsync` call as in the room and
+  join controllers. `[Rubric §6, CQRS & Event-Driven]`: the controller does no looping and no
+  orchestration, it constructs one command and dispatches it once
+  (`SessionQuestionAnswersController.cs:200-204`).
+- **Walkthrough**
+  - Two `required { get; init; }` members: `SessionId` (`:52`) and `Answers` (`:55`), whose doc comment
+    states the shape rule directly, "at most one per question".
+  - `CreateBatchAsync` (`SessionQuestionAnswersController.cs:194`) is `[HttpPost("batch")]` (`:192`) and
+    [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute) (`:193`), so a retried form
+    submit replays the first response rather than re-applying the form. It guards with
+    `ArgumentNullException.ThrowIfNull(request)` (`:198`), flattens the items (`:200-202`), dispatches
+    (`:204`), and returns `Ok(result.Value)` with the list of created DTOs, or `HandleFailure`
+    (`:206-208`). Note the create returns `200 Ok` with the collection rather than a `201 CreatedAtRoute`:
+    a batch has no single resource URI to point at.
+  - The shape rules the doc comment promises are enforced one layer down by
+    `BatchAddSessionQuestionAnswersCommandValidator`: at least one answer, one answer per question so the
+    upsert "cannot fight itself", and a non-empty `AnswerValue` for each item
+    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/BatchAddSessionQuestionAnswers/BatchAddSessionQuestionAnswersCommandValidator.cs:14-26`).
+    `[Rubric §24, Forms/Validation/UX Safety]`: the duplicate-question rule is a *request-level* rule that
+    no per-item validator could express, which is why it lives on the collection property.
+- **Why it's built this way**: the controller's own doc comment is the design record: the form is applied
+  atomically under one transaction "so a refusal leaves nothing written and the client has no partially
+  saved state to reconcile" (`SessionQuestionAnswersController.cs:183-186`). The alternative, letting the
+  UI POST each answer separately, would leave a half-saved form behind on any mid-flight failure and would
+  cost one round trip per question.
+- **Where it's used**: `[FromBody]` on `CreateBatchAsync` only
+  (`SessionQuestionAnswersController.cs:195`); consumed by the attendee session-feedback form.
+- **Caveats / not-in-source**: this controller has no `IOutputCacheStore` injection and no
+  `EvictTagsAsync` call anywhere, so whether the batch invalidates the ASP.NET Core *output* cache (as
+  opposed to the application cache reached through `ICacheInvalidating`) is not determinable from this
+  file.
+
+---
+
+### ServiceInfoController
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/ServiceInfoController.cs:20` · Level 2 · class (sealed)
+
+- **What it is**: an anonymous, read-only service and version discovery controller whose single
+  `/ServiceInfo` route is served by **two** API versions, selected via the `api-version` header. The ADC
+  file is almost empty: it is a thin sealed subclass of the shared
+  [`ServiceInfoControllerBase`](group-12-api-hosting-mapping.md#serviceinfocontrollerbase) that overrides
+  exactly one member, `ServiceName => "Conference"`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/ServiceInfoController.cs:23`).
+  All of the version-discovery behavior lives in the base. The whole file is 24 lines.
+- **Depends on**: [`ServiceInfoControllerBase`](group-12-api-hosting-mapping.md#serviceinfocontrollerbase)
+  (MMCA.Common.API); `Asp.Versioning` (`[ApiVersion]`); `Microsoft.AspNetCore.Authorization`
+  (`[AllowAnonymous]`). It does **not** declare the two discovery actions (`GetV1`/`GetV2`) or the two
+  response payloads (`ServiceInfoResponse` / `ServiceInfoV2Response`): those are inherited from the base
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:39-58`) and
+  taught in [G12](group-12-api-hosting-mapping.md).
+- **Concept introduced, multi-version routing declared on the leaf subclass.** `[Rubric §9, API &
+  Contract Design]` assesses a real versioning strategy rather than a single frozen version. Two
+  `[ApiVersion]` attributes on this class declare the route's versions, `1.0` with `Deprecated = true`
+  and `2.0` (`ServiceInfoController.cs:18-19`); the base's `[MapToApiVersion]`-tagged `GetV1()`/`GetV2()`
+  actions then serve the minimal versus evolved shape for each
+  (`ServiceInfoControllerBase.cs:39-48`). This is the only Conference controller that serves more than one
+  version: every other one carries a single `[ApiVersion("1.0")]`. `[Rubric §1, SOLID]` and
+  `[Rubric §16, Maintainability]`: the discovery *behavior* is written once in the Common base, and each
+  service's subclass supplies only its name plus the class-level attributes, which the base's own remarks
+  note are not reliably inherited and so must be repeated on the leaf
+  (`ServiceInfoControllerBase.cs:15-29`, whose `<code>` block quotes this exact Conference subclass as the
+  worked example).
+- **Walkthrough**
+  - The five class-level attributes at `ServiceInfoController.cs:15-19` (`[ApiController]`,
+    `[Route("[controller]")]`, `[AllowAnonymous]`, `[ApiVersion("1.0", Deprecated = true)]`,
+    `[ApiVersion("2.0")]`) supply routing, anonymity, and versioning to the leaf, because attribute
+    inheritance is not reliable here.
+  - The entire body is one expression-bodied override: `protected override string ServiceName =>
+    "Conference"` (`ServiceInfoController.cs:23`). The advertised supported and deprecated version lists
+    (`["1.0", "2.0"]` and `["1.0"]`) live on the base as `private static readonly string[]` fields
+    (`ServiceInfoControllerBase.cs:32-33`), so this class never restates them.
+- **Why it's built this way**: hoisting the discovery actions and payloads into a shared base and giving
+  each service a one-line subclass keeps every service's `/ServiceInfo` identical and keeps the versioning
+  feature exercised and testable: a contract-snapshot test against `/openapi/v1.json` can confirm both
+  versions are present, so the capability cannot silently rot. It stays anonymous and side-effect free.
+- **Where it's used**: mounted by the Conference service's controller registration; reached directly on
+  the service host, not through the YARP Gateway (the base's own summary records that gateways do not
+  route this path, `ServiceInfoControllerBase.cs:13`). Primarily a target for the integration-tier
+  versioning and contract tests rather than for the UI.
+- **Caveats / not-in-source**: the `ReportApiVersions = true` behavior that adds the
+  `api-supported-versions` / `api-deprecated-versions` response headers is configured in
+  `AddCommonApiVersioning` (MMCA.Common.API, a different group), not here
+  (`ServiceInfoControllerBase.cs:10-12` documents the dependency); this controller only declares the two
+  versions and its service name.
+
+---
+
+### SessionSelectionController
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:30` · Level 5 · class (sealed partial)
+
+- **What it is**: a **decision-support** controller for choosing which submitted sessions to accept,
+  gated class-level by
+  [`[HasPermission(ConferencePermissions.SessionSelectionManage)]`](group-08-auth.md#haspermissionattribute)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:29`),
+  a capability the content-curation subset deliberately excludes (`SessionSelectionManage` is in
+  [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions)`.All` but absent from its
+  `ContentManagement` subset, so a content-editor role granted `ContentManagement` cannot reach it:
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:30, 39-50, 57-64`;
+  the concrete role-to-permission grants live in the module's registration, not in this file). It exposes
+  four read endpoints (composite dashboard, category distribution, speaker overlap, content similarity)
+  plus one endpoint that **queues** AI scoring of an event's sessions for a hosted background worker.
+- **Depends on**: [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) (for the
+  `HandleFailure` Result-to-Problem-Details mapping, `SessionSelectionController.cs:37`); the
+  [`HasPermission`](group-08-auth.md#haspermissionattribute) attribute plus the
+  [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions) catalog; four
+  [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)
+  injections (`SessionSelectionController.cs:31-34`);
+  [`ISessionScoringQueue`](group-18-conference-application.md#isessionscoringqueue) (`:35`);
+  [`Result`](group-01-result-error-handling.md#result) and
+  [`Error`](group-01-result-error-handling.md#error); the decision-support DTOs
+  ([`SessionSelectionDashboardDTO`](group-17-conference-domain.md#sessionselectiondashboarddto),
+  [`CategoryDistributionDTO`](group-17-conference-domain.md#categorydistributiondto),
+  [`SpeakerSessionOverlapDTO`](group-17-conference-domain.md#speakersessionoverlapdto),
+  [`ContentSimilarityDTO`](group-17-conference-domain.md#contentsimilaritydto)); the
+  [`NonIdempotentAttribute`](group-12-api-hosting-mapping.md#nonidempotentattribute); BCL `ILogger` and
+  ASP.NET Core `[OutputCache]`.
+- **Concept introduced, handing long work to a queue instead of the request thread.** `[Rubric §9, API &
+  Contract Design]` (a focused, capability-scoped surface that answers with honest status codes) and
+  `[Rubric §29, Resilience & Business Continuity]`. `ScoreSessions`
+  (`SessionSelectionController.cs:110`) is **synchronous and non-async**: it calls
+  `sessionScoringQueue.TryEnqueue(eventId)` and switches on the returned
+  [`SessionScoringEnqueueResult`](group-18-conference-application.md#sessionscoringenqueueresult)
+  (`:112-130`). `Queued` logs and returns `Accepted()` (202); `AlreadyPending` and `QueueFull` each build
+  an `Error.Conflict(...)` and hand it to `HandleFailure`, which maps `ErrorType.Conflict` to **409**
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:25`) inside an RFC 9457
+  Problem Details body
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:35-55`). Both outcomes
+  are declared to OpenAPI with `[ProducesResponseType]` (`:108-109`).
+  `[Rubric §31, Cost/FinOps]` assesses whether spend is bounded by design rather than by hope: the
+  controller's own remarks record that each pass issues one paid Anthropic call per session, so a second
+  concurrent pass would double the spend while racing the first one's writes (`:101-105`). The queue
+  enforces that: it deduplicates by event and keeps the entry until the run *finishes*, so the dedup window
+  covers execution, not just the wait
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringQueue.cs:51-55, 66-69`),
+  and it is a bounded channel of capacity 16 with `SingleReader` so runs execute one at a time
+  (`SessionScoringQueue.cs:38, 43-49`). `[Rubric §13, Observability & Operability]` (structured,
+  source-generated logging): the class is `partial` and declares one `[LoggerMessage]` method,
+  `LogScoringQueued` (`SessionSelectionController.cs:133-134`), a compile-time generated,
+  allocation-light log call. `[Rubric §12, Performance & Scalability]`: all four read endpoints carry
+  `[OutputCache(PolicyName = "ConferenceCache")]` (`:41, 55, 69, 83`).
+- **Concept, opting *out* of idempotency with a written reason.** `[Rubric §10, Cross-Cutting]`. Every
+  other hand-written POST in this group is marked `[Idempotent]`; `ScoreSessions` is marked
+  [`[NonIdempotent]`](group-12-api-hosting-mapping.md#nonidempotentattribute) instead, and the attribute
+  takes a mandatory justification string that is spelled out inline
+  (`SessionSelectionController.cs:107`): the enqueue is already deduplicated by the queue's own pending
+  set, so replaying a cached 202 would report acceptance for a request the queue never saw, hiding both
+  the already-running refusal and a queue-full rejection the caller has to act on. The opt-out is a
+  declared, reviewable decision in the source rather than a silently missing attribute.
+- **Walkthrough**
+  - Primary-constructor injection of the four query handlers, the scoring queue, and the logger
+    (`SessionSelectionController.cs:30-36`); the base is
+    [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) (`:37`).
+  - Each read action follows the same shape: dispatch the query, then
+    `result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value)`. `GetDashboardAsync` (`:42`),
+    `GetCategoryDistributionAsync` (`:56`), `GetSpeakerOverlapAsync` (`:70`), and
+    `GetContentSimilarityAsync` (`:84`, which takes a `minimumSimilarity = 0.3` threshold query
+    parameter, `:86`).
+  - `ScoreSessions` (`:110`) is the only write. It returns `ActionResult`, not `Task<ActionResult>`:
+    enqueueing is a synchronous in-memory operation, so there is nothing to await at the edge.
+- **Why it's built this way**: an earlier revision started the scoring run as a fire-and-forget task from
+  the controller. The queue interface's own doc comments are the design record for why that was replaced
+  (`ISessionScoringQueue.cs:19-24`): nothing tracked the task, so a deploy or scale-in killed it mid-run
+  with no record; nothing deduplicated it, so two clicks meant two concurrent passes; and it ignored the
+  host lifetime, so shutdown could neither wait for it nor cancel it. Refusing a duplicate with 409 rather
+  than silently coalescing it means the caller learns the run is already in flight
+  (`ISessionScoringQueue.cs:26-29`).
+- **Where it's used**: mounted by the Conference service's controller registration and consumed by the
+  organizer session-selection UI page. The queued work is drained by the hosted worker that reads
+  `SessionScoringQueue.Reader` (`SessionScoringQueue.cs:57-58`) and executes
+  [`ScoreEventSessionsCommand`](group-18-conference-application.md#scoreeventsessionscommand)
+  (Conference Application group).
+- **Caveats / not-in-source**: the queue is explicitly in-process and best-effort. Its own remarks state
+  that a crash between a failure and the requeue loses the retry, and that this is the intended floor
+  because an organizer can trigger the run again
+  (`SessionScoringQueue.cs:9-14`). Durability of a queued run across a host restart is therefore not
+  provided (it is not an outbox-backed job). This controller does no output-cache eviction of its own, so
+  when a scoring pass finishes, whether the `ConferenceCache` entries above are refreshed is not
+  determinable from this file.
+
 ### SpeakerCategoryItemsController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:48` · Level 9 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakerCategoryItemsController.cs:48` · Level 9 · class (sealed)
 
 - **What it is**: the REST controller for the link between a
   [`Speaker`](group-17-conference-domain.md#speaker) and a
@@ -1880,9 +1967,9 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `IsPrivileged` (`:59`) short-circuiting for Organizer and ContentEditor.
 - **Walkthrough**: shape-for-shape the same as [`EventSpeakersController`](#eventspeakerscontroller), with
   the `SpeakersCache` policy instead of `EventsCache`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:223`). The four reads are
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:224`). The four reads are
   `[AllowAnonymous]` + `[OutputCache(PolicyName = "SpeakersCache")]` passthroughs
-  (`SpeakerCategoryItemsController.cs:85, 95, 114, 122`, the last carrying the named route
+  (`SpeakerCategoryItemsController.cs:85,95,114,122`, the last carrying the named route
   `"GetSpeakerCategoryItemById"`), all scoped by the hook. `ExportAsync` (`[HttpGet("export")]` at `:139`)
   repeats the privileged-reader gate with `Forbid()` at `:150`. `CreateAsync` (`[HttpPost]` at `:163`,
   `[Idempotent]` at `:164`) dispatches
@@ -1905,7 +1992,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ---
 
 ### SpeakersController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakersController.cs:46` · Level 9 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakersController.cs:47` · Level 9 · class (sealed)
 
 - **What it is**: the REST controller for the [`Speaker`](group-17-conference-domain.md#speaker) aggregate
   root (`/Speakers`), and the most authorization-dense controller in the group. On top of aggregate-root
@@ -1914,7 +2001,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   user linking and unlinking (BR-209), and three cross-entity read projections (BR-210).
 - **Depends on**:
   [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
-  (`SpeakersController.cs:61-62`); the
+  (`SpeakersController.cs:62-63`); the
   [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
   (`:47`); five [`ICommandHandler`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)s for
   [`SpeakerCreateRequest`](group-18-conference-application.md#speakercreaterequest),
@@ -1944,7 +2031,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Concept introduced, per-action authorization plus row-level ownership checks.** `[Rubric §11,
   Security]`: unlike the other aggregate-root controllers (which gate the whole class with one
   `[HasPermission(...)]`), `SpeakersController` carries a bare class-level `[Authorize]`
-  (`SpeakersController.cs:45`) and then varies authorization per action. The catalog reads are
+  (`SpeakersController.cs:46`) and then varies authorization per action. The catalog reads are
   `[AllowAnonymous]`; export, create, delete, link and unlink each re-assert
   `[HasPermission(ConferencePermissions.SpeakersManage)]` (`:289, 308, 363, 375, 394`); and `UpdateAsync`
   performs a *resource-ownership* check in code, comparing the caller's `speaker_id` JWT claim with the
@@ -1964,7 +2051,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   instead of failing the request. The remarks at `:126-132` add the reason the two are not redundant: the
   event filter answers "linked to this event", the public filter answers "accepted for this event".
 - **Walkthrough**
-  - `IsPrivileged` (`SpeakersController.cs:65`) is the shared read-audience check;
+  - `IsPrivileged` (`SpeakersController.cs:66`) is the shared read-audience check;
     `BuildPublicSpeakerSpecificationAsync` (`:84-95`, doc `:70-83`) is the BR-239 projection, parameterized
     by an optional `eventId` because a speaker accepted for one event is not thereby public on another.
     Privileged readers get `null`.
@@ -2012,11 +2099,11 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     count endpoints stay `[AllowAnonymous]`: `GetSessionBookmarkCountAsync` (`:442-454`) and the batched
     `GetSessionBookmarkCountsAsync` (`:462-474`) run under `BookmarkCountsCache`, a 60-second policy tagged
     `conference` and `conference:sessions`
-    (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:243`). `[Rubric §7, Microservices
+    (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:244`). `[Rubric §7, Microservices
     Readiness]`: bookmark counts are owned by the Engagement service, in another process, whose writes have
     no handle on this host's cache store, so Engagement's bookmark handler publishes an eviction request
     over the broker that this host turns into a tag drop, and the short TTL stays as the backstop for a
-    message that never lands (`Program.cs:233-243`).
+    message that never lands (`Program.cs:234-244`).
   - Every mutation ends at
     `EvictTagsAsync(cancellationToken, "conference:speakers", "conference")` (`:314, 357, 369, 388, 406`).
 - **Why it's built this way**: speaker profiles are edited both by organizers and by the speakers
@@ -2033,187 +2120,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 
 ---
 
-### ActivitiesController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/ActivitiesController.cs:39` · Level 10 · class (sealed)
-
-- **What it is**: the REST controller for the [`Activity`](group-17-conference-domain.md#activity)
-  aggregate root (`/Activities`), the conference's social and networking programme (parties, meetups,
-  sponsor receptions). Anonymous reads scoped to published events, and create / update / delete / export
-  behind the activities-manage capability (`ActivitiesController.cs:29-33`).
-- **Depends on**:
-  [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
-  (`ActivitiesController.cs:48-49`); the
-  [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
-  (`:40`); three [`ICommandHandler`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)s for
-  [`ActivityCreateRequest`](group-18-conference-application.md#activitycreaterequest), the framework's
-  [`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`](group-05-cqrs-pipeline.md#updateentitycommandtentity-tupdaterequest-tidentifiertype)
-  and
-  [`DeleteEntityCommand<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
-  (`:41-43`); an [`IQueryHandler`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) for
-  [`GetPublicActivityFilterQuery`](group-18-conference-application.md#getpublicactivityfilterquery)
-  (`:44`); [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) plus the
-  [`CurrentUserServiceExtensions`](#currentuserserviceextensions) read-audience helper (`:45, 52`);
-  `IOutputCacheStore` (`:46`); the [`ActivityDTO`](group-17-conference-domain.md#activitydto);
-  [`ActivityUpdateRequest`](group-18-conference-application.md#activityupdaterequest) as the PUT body
-  (`:188`); the [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute) with the
-  [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions) catalog; the
-  [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute); and the
-  [`QueryFilterModelBinder`](group-12-api-hosting-mapping.md#queryfiltermodelbinder).
-- **Concept introduced**: none new. This controller is the exact structural twin of
-  [`SponsorsController`](#sponsorscontroller): the same bare `[Authorize]` class gate with a per-mutation
-  capability, the same real-`EventId`-column scoping (no filter interception), the same
-  attribute-plus-imperative export gate, at the same line numbers in both files. What differs is the
-  vocabulary. `[Rubric §11, Security]`: the class carries `[Authorize]` (`ActivitiesController.cs:38`) and
-  each mutation re-asserts `[HasPermission(ConferencePermissions.ActivitiesManage)]` (`:143, 162, 181,
-  206`), the capability declared at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:36`
-  and included in the `ContentManagement` curation subset (`ConferencePermissions.cs:57-64`), so a content
-  editor can run the social programme without holding event, room or question rights.
-  `[Rubric §12, Performance & Scalability]`: reads run under the `ActivitiesCache` policy (5-minute TTL,
-  tags `conference` and `conference:activities`,
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:228`) and every mutation evicts both
-  tags.
-- **Walkthrough**
-  - `IsPrivileged` (`ActivitiesController.cs:52`) is the shared
-    `currentUserService.IsPrivilegedConferenceReader()` read-audience check;
-    `GetReadSpecificationAsync` (`:68-78`) returns `null` for a privileged reader and otherwise the
-    [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype)
-    the `GetPublicActivityFilterQuery` handler resolves (`:74-77`); a failed handler result degrades to
-    `null` rather than failing the read.
-  - `GetAllAsync` (`:83-88`), the paged overload (`:99-109`), `GetAllForLookupAsync` (`:114-117`) and
-    `GetByIdAsync` under the named route `"GetActivityById"` (`:123-132`) are `[AllowAnonymous]` +
-    `[OutputCache(PolicyName = "ActivitiesCache")]` passthroughs, all scoped from the one hook. The paged
-    action's doc comment states the composition contract explicitly: `EventId` is a real column, so the
-    caller's event filter travels through the generic pipeline and the published-event rule is ANDed on top
-    of it rather than substituted (`:90-95`). The by-id doc comment states that an activity of an
-    unpublished event is a 404, "not a redacted record, so a guessed id cannot confirm that a party has
-    been scheduled" (`:119-122`).
-  - `ExportAsync` (`:144-158`) pairs the declarative
-    `[HasPermission(ConferencePermissions.ActivitiesManage)]` (`:143`) with the imperative
-    `if (!IsPrivileged) return Forbid();` (`:152-155`), then delegates to the base (`:157`). The doc
-    comment names the leak an unscoped CSV would be, a social programme that has not been announced, and
-    notes that the attribute is needed because the class carries only a bare `[Authorize]` (`:134-141`).
-  - `CreateAsync` (`:163-170`) and `DeleteAsync` (`:207-214`) are thin overrides that call the base and
-    then evict; `UpdateAsync` (`:186-202`) is the hand-rolled action the base does not supply, reading the
-    required `If-Match` token (`:191`), dispatching
-    `new UpdateEntityCommand<Activity, ActivityUpdateRequest, ActivityIdentifierType>(id, request,
-    rowVersion)` (`:194`), folding a failure through `HandleFailure` (`:197-198`), evicting (`:200`) and
-    returning `Ok(result.Value)` (`:201`).
-  - Every eviction clears `conference:activities` and the broad `conference` tag (`:168, 200, 212`), the
-    latter because the activity strip renders alongside other conference reads.
-- **Why it's built this way**: the social programme has the same publish-gated lifecycle as the rest of
-  the catalog, so it reuses the specification hook rather than inventing an activity-specific visibility
-  flag, and because `Activity` owns a real `EventId` none of that scoping needs a virtual key. Repeating
-  the sponsor controller's shape verbatim is `[Rubric §16, Maintainability]` in practice: two aggregates
-  with identical rules get identical code, so the reader who has learned one has learned both.
-- **Where it's used**: the Conference service host behind the Gateway route `/Activities/{**catch-all}`
-  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:138`). Clients are the public activity page
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicActivityList.razor`) and
-  the organizer list, create and detail pages under
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activity/`.
-
----
-
-### EventsController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventsController.cs:46` · Level 10 · class (sealed)
-
-- **What it is**: the REST controller for the [`Event`](group-17-conference-domain.md#event) aggregate
-  root (`/Events`), and the richest controller in the group. On top of the standard aggregate-root CRUD it
-  adds visibility scoping, a gated CSV export, publish and unpublish with conditional writes, a Sessionize
-  refresh with bespoke error mapping, iCalendar export, and the "happening now / up next" snapshot.
-- **Depends on**:
-  [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
-  (`EventsController.cs:59-60`); the
-  [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
-  (`:47`); six [`ICommandHandler`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)s for
-  [`EventCreateRequest`](group-18-conference-application.md#eventcreaterequest),
-  [`UpdateEventCommand`](group-18-conference-application.md#updateeventcommand),
-  [`PublishEventCommand`](group-18-conference-application.md#publisheventcommand),
-  [`UnpublishEventCommand`](group-18-conference-application.md#unpublisheventcommand),
-  [`DeleteEntityCommand`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype) and
-  [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand)
-  (`:48-53`); two [`IQueryHandler`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)s for
-  [`ExportEventCalendarQuery`](group-18-conference-application.md#exporteventcalendarquery) and
-  [`GetNowNextQuery`](group-18-conference-application.md#getnownextquery) (`:54-55`);
-  [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) with the
-  [`CurrentUserServiceExtensions`](#currentuserserviceextensions) helper (`:56`); `IOutputCacheStore`
-  (`:57`); the [`PublishedEventSpecification`](group-18-conference-application.md#publishedeventspecification);
-  the [`EventDTO`](group-17-conference-domain.md#eventdto),
-  [`UpdateEventResult`](group-18-conference-application.md#updateeventresult),
-  [`EventUpdateRequest`](group-18-conference-application.md#eventupdaterequest),
-  [`NowNextDTO`](group-17-conference-domain.md#nownextdto) and
-  [`RefreshFromSessionizeResultDTO`](group-17-conference-domain.md#refreshfromsessionizeresultdto); the
-  [`IdempotentAttribute`](group-12-api-hosting-mapping.md#idempotentattribute); and the
-  [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute).
-- **Concept introduced, business-rule visibility as a plain specification.** `[Rubric §11, Security]` and
-  `[Rubric §3, Clean Architecture]`: BR-108 says non-privileged readers see only published events. The rule
-  needs nothing awaited, so this controller overrides the *synchronous* hook:
-  `GetExportSpecification()` returns `null` for a privileged reader
-  (`currentUserService.IsPrivilegedConferenceReader()`, so a ContentEditor who reads every session can also
-  read the events those sessions belong to) and a `new PublishedEventSpecification()` for everyone else
-  (`EventsController.cs:74-75`, doc `:62-73`). The base then applies it to all five read actions, so the
-  authorization predicate is a data specification the query service composes into SQL, not imperative
-  post-filtering. The lookup doc comment (`:102-106`) names the side channel that closes: a draft event
-  listed by name. `ExportAsync` (`:133-147`) adds the imperative privileged-reader `Forbid()` on top
-  (`:141-144`).
-- **Concept introduced, conditional writes on a state transition.** `[Rubric §9, API & Contract Design]`
-  assesses whether a contract expresses concurrency honestly. `PublishAsync` and `UnpublishAsync` take no
-  body at all: they read the client's last-seen row version from the `If-Match` header through
-  `SupportsIfMatchAttribute.RequiredToken(HttpContext)` (`:272, 305`), so a request with no header answers
-  **428 Precondition Required** and never runs, and a stale token answers **412 Precondition Failed**
-  ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html); both carry
-  `[SupportsIfMatch]` at `:264, 297` and declare 409/412/428 as `[ProducesResponseType]` at `:265-267,
-  298-300`). Both are also `[Idempotent]` (`:263, 296`), because publishing is a state assertion and
-  replaying the stored response for a retried key is exactly what the caller meant (doc `:257-260`).
-  `[Rubric §29, Resilience & Business Continuity]`: `RefreshAsync` (`:328-362`) maps upstream trouble to
-  retryable HTTP, an `Event.Sessionize.Throttled` error becoming `429` with a `Retry-After: 300` header
-  (`:339-343`, BR-63) and `Event.Sessionize.Unavailable` becoming `502` (`:346-347`), so an upstream
-  throttle reaches the client as a signal rather than a 500.
-- **Walkthrough**
-  - The reads (`:77-124`) attach `[AllowAnonymous]` + `[OutputCache(PolicyName = "EventsCache")]` and
-    delegate to the base, which threads the published-event specification; `GetByIdAsync` carries the named
-    route `"GetEventById"` (`:115`).
-  - `ExportCalendarAsync` (`:156-164`) streams an `.ics` document via `File(...)` with the `text/calendar`
-    content type and an `event-{id}.ics` file name (`:163`).
-  - `GetNowNextAsync` (`:173-179`) and `GetCurrentNowNextAsync` (`:188-193`) serve the now/next snapshot for
-    a given event or, with `new GetNowNextQuery(EventId: null)` (`:191`), for the current one; both use the
-    short-TTL `NowNextCache` policy (60 seconds,
-    `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:231`) because the payload changes with
-    the clock. That policy is registered without the privileged-reader bypass, because the snapshot is
-    identical for every role (`Program.cs:229-231`).
-  - `CreateAsync` (`:202-209`) is an override marked `[Idempotent]` (`:201`), so a retried POST carrying
-    the same `Idempotency-Key` is deduplicated; it calls `base.CreateAsync` then evicts. The attribute is
-    single-use, so declaring it here coincides with the inherited one instead of duplicating it (doc
-    `:195-199`).
-  - `UpdateAsync` (`:224-248`) reads the required token (`:229`), dispatches
-    `new UpdateEventCommand(id, request, rowVersion)` (`:232`), appends a non-fatal `X-Warning` header when
-    a timezone change leaves existing sessions semantically stale (BR-131, `:238-244`), evicts (`:246`) and
-    returns `Ok(result.Value.Event)` (`:247`).
-  - `PublishAsync` (`:268-283`) and `UnpublishAsync` (`:301-316`) dispatch their transition commands with
-    the row version (`:275, 308`), evict (`:281, 314`) and return `NoContent()`.
-  - `RefreshAsync` triggers a Sessionize import and, because that import touches six entity types, evicts
-    six tags: events, sessions, speakers, categories, rooms and questions (`:353-360`).
-  - `DeleteAsync` (`:368-376`) additionally evicts `conference:sessions` and `conference:rooms` because
-    soft-deleting an event cascades to its children (`:373-374`). Every other mutation evicts the single
-    `conference:events` tag (`:207, 246, 281, 314`).
-- **Why it's built this way**: the base still owns the plain CRUD, so all the event-specific behavior
-  (scoping, export gating, publish lifecycle, external refresh, calendar and now-next projections) reads as
-  a flat list of extra actions. Mapping Sessionize failures to distinct status codes here keeps that
-  operational nuance at the boundary while the handler stays a pure
-  [`Result`](group-01-result-error-handling.md#result) producer, and the fan-out of eviction tags is
-  written where the knowledge of "what this operation touched" actually lives.
-- **Where it's used**: the Conference service host behind the Gateway route `/Events/{**catch-all}`
-  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:78`); the home-screen widget calls
-  `now-next`, the public schedule UI
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicEventList.razor`) calls the
-  reads and the `.ics` export, and organizer tooling under
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Event/` drives publish, unpublish and
-  refresh.
-
----
-
 ### SessionCategoryItemsController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:48` · Level 10 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionCategoryItemsController.cs:48` · Level 10 · class (sealed)
 
 - **What it is**: the REST controller for the link between a
   [`Session`](group-17-conference-domain.md#session) and a
@@ -2246,7 +2154,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   filter follows the parent's visibility, and the CSV export repeats the privileged-reader gate so the
   scoping cannot be bypassed by asking for the file instead of the page.
 - **Walkthrough**: four `[AllowAnonymous]` + `[OutputCache(PolicyName = "SessionsCache")]` read
-  passthroughs (`SessionCategoryItemsController.cs:85, 95, 114, 122`, the last carrying the named route
+  passthroughs (`SessionCategoryItemsController.cs:85,95,114,122`, the last carrying the named route
   `"GetSessionCategoryItemById"`), all scoped by the hook. `ExportAsync` (`[HttpGet("export")]` at `:139`)
   returns `Forbid()` for a non-privileged caller (`:150`) and otherwise delegates to the base.
   `CreateAsync` (`[HttpPost]` at `:163`, `[Idempotent]` at `:164`) dispatches
@@ -2268,7 +2176,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ---
 
 ### SessionQuestionAnswersController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionQuestionAnswersController.cs:76` · Level 10 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:76` · Level 10 · class (sealed)
 
 - **What it is**: the REST controller for a session's answered feedback questions
   (`/SessionQuestionAnswers`). It is the session-scoped sibling of
@@ -2340,7 +2248,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ---
 
 ### SessionsController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:44` · Level 10 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:45` · Level 10 · class (sealed)
 
 - **What it is**: the REST controller for the [`Session`](group-17-conference-domain.md#session) aggregate
   root (`/Sessions`). Aggregate-root CRUD plus a cross-source visibility filter (BR-132 / BR-49), a virtual
@@ -2348,7 +2256,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   conditional update and an iCalendar export.
 - **Depends on**:
   [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
-  (`SessionsController.cs:56-57`); **two**
+  (`SessionsController.cs:57-58`); **two**
   [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)s
   (one for `Session`, one for `Event` so create can re-read the parent, `:45, 49`); the
   [`SessionCreateRequest`](group-18-conference-application.md#sessioncreaterequest) create handler, the
@@ -2373,7 +2281,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Concept introduced, a cross-source visibility specification.** `[Rubric §8, Data Architecture]` and
   `[Rubric §7, Microservices Readiness]`: BR-132 / BR-49 hides non-accepted sessions and the sessions of
   unpublished events from non-privileged readers, but a `Session` can live in one data source while its
-  parent `Event`'s published flag lives in another (the doc comment at `SessionsController.cs:62-67` names
+  parent `Event`'s published flag lives in another (the doc comment at `SessionsController.cs:63-68` names
   Session in Cosmos and Event in SQL Server, the polyglot option of
   [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)). Rather than a
   cross-database join, `GetReadSpecificationAsync` (`:76-86`) delegates to the `GetPublicSessionFilterQuery`
@@ -2381,13 +2289,13 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype)
   the query service can apply; privileged readers get `null`.
   `[Rubric §12, Performance & Scalability]`: reads are `[OutputCache(PolicyName = "SessionsCache")]`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:222`) and the default sort is the
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:223`) and the default sort is the
   `"StartsAt,RoomId"` constant (`:133`), which sorts the schedule chronologically then by room. The comment
   above it (`:131-132`) records the mechanism: the "ascending" suffix `QueryFieldService.ApplySorting`
   appends binds only to the last column in Dynamic LINQ, and the leading column defaults to ascending, so
   one string sorts both columns ascending.
 - **Walkthrough**
-  - `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:106-129`, doc and remarks `:88-105`) is
+  - `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:107-130`, doc and remarks `:88-105`) is
     the paged read's specification builder: it starts from the hook (`:110`), then intercepts and removes
     the virtual `SpeakerId` filter key (`Session` has no such column, `:112-117`), resolves it through
     `GetSessionsBySpeakerFilterQuery` (`:119-121`) and **ANDs** the two with
@@ -2438,7 +2346,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 ---
 
 ### SessionSpeakersController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSpeakersController.cs:48` · Level 10 · class (sealed)
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSpeakersController.cs:48` · Level 10 · class (sealed)
 
 - **What it is**: the REST controller for the link between a
   [`Session`](group-17-conference-domain.md#session) and its
@@ -2470,7 +2378,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   assignment changes is the cached session reads (detail and list, which the speaker dashboard relies on),
   so the sessions tag is the one that must go.
 - **Walkthrough**: four `[AllowAnonymous]` + `[OutputCache(PolicyName = "SessionsCache")]` read
-  passthroughs (`SessionSpeakersController.cs:85, 95, 114, 122`, the last carrying the named route
+  passthroughs (`SessionSpeakersController.cs:85,95,114,122`, the last carrying the named route
   `"GetSessionSpeakerById"`), all scoped by the hook. `CreateAsync` (`[HttpPost]` at `:163`,
   `[Idempotent]` at `:164`) dispatches
   `AddSessionSpeakerCommand(request.SessionId, null, request.SpeakerId)` (`:170`), returns `HandleFailure`
@@ -2488,134 +2396,6 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Session/` and the speaker dashboard.
 
 ---
-
-### SponsorsController
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SponsorsController.cs:39` · Level 10 · class (sealed)
-
-- **What it is**: the REST controller for the [`Sponsor`](group-17-conference-domain.md#sponsor) aggregate
-  root (`/Sponsors`), the conference's sponsors and exhibitors. Anonymous reads scoped to published events,
-  and create / update / delete / export behind the sponsors-manage capability
-  (`SponsorsController.cs:29-33`).
-- **Depends on**:
-  [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
-  (`SponsorsController.cs:48-49`); the
-  [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
-  (`:40`); three [`ICommandHandler`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)s for
-  [`SponsorCreateRequest`](group-18-conference-application.md#sponsorcreaterequest), the framework's
-  [`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`](group-05-cqrs-pipeline.md#updateentitycommandtentity-tupdaterequest-tidentifiertype)
-  and
-  [`DeleteEntityCommand<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
-  (`:41-43`); an [`IQueryHandler`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) for
-  [`GetPublicSponsorFilterQuery`](group-18-conference-application.md#getpublicsponsorfilterquery) (`:44`);
-  [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) plus the
-  [`CurrentUserServiceExtensions`](#currentuserserviceextensions) read-audience helper (`:45, 52`);
-  `IOutputCacheStore` (`:46`); the [`SponsorDTO`](group-17-conference-domain.md#sponsordto);
-  [`SponsorUpdateRequest`](group-18-conference-application.md#sponsorupdaterequest) as the PUT body
-  (`:188`); the [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute) with the
-  [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions) catalog; the
-  [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute); and the
-  [`QueryFilterModelBinder`](group-12-api-hosting-mapping.md#queryfiltermodelbinder).
-- **Concept introduced, a real parent column instead of a virtual filter key.** `[Rubric §9, API &
-  Contract Design]` assesses whether a contract expresses scoping honestly rather than through special
-  cases. Compare this controller with [`SpeakersController`](#speakerscontroller): there, `EventId` is
-  *not* a column on the aggregate, so the paged action must intercept the key, remove it from the filter
-  dictionary and translate it into a specification. Here the doc comments record the opposite situation,
-  that `Sponsor` carries a real `EventId` column, so an event-scoped request travels through the generic
-  filter pipeline unchanged and the hook only adds the published-event rule on top of it (`:54-67, 90-95`).
-  The published rule and the caller's filter are composed by the query service rather than substituted, so
-  scoping to an unpublished event returns an empty page to a non-privileged caller instead of leaking the
-  roster. That is why this controller, like its [`ActivitiesController`](#activitiescontroller) twin and
-  unlike the speaker and session roots, has no filter-interception block at all.
-  `[Rubric §11, Security]`: the class carries a bare `[Authorize]` (`:38`) and each mutation re-asserts
-  `[HasPermission(ConferencePermissions.SponsorsManage)]` (`:143, 162, 181, 206`), the capability declared
-  at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:33`
-  and included in the `ContentManagement` curation subset (`ConferencePermissions.cs:57-64`), so a content
-  editor can manage the sponsor roster without holding event, room or question rights. `[Rubric §12,
-  Performance & Scalability]`: reads run under the `SponsorsCache` policy (5-minute TTL, tags `conference`
-  and `conference:sponsors`, `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:227`) and
-  every mutation evicts both tags (`:168, 200, 212`).
-- **Walkthrough**: the file is line-for-line the structural twin of
-  [`ActivitiesController`](#activitiescontroller), so every member sits at the same line number in both.
-  `IsPrivileged` (`SponsorsController.cs:52`) is the shared read-audience check; `GetReadSpecificationAsync`
-  (`:68-78`) returns `null` for a privileged reader and otherwise the specification the
-  `GetPublicSponsorFilterQuery` handler resolves (`:74-77`), degrading to `null` on a failed result. The
-  four reads (`:83, 99, 114, 126`, the last under the named route `"GetSponsorById"` at `:123`) are
-  `[AllowAnonymous]` + `[OutputCache(PolicyName = "SponsorsCache")]` passthroughs; the by-id doc comment
-  states that a sponsor of an unpublished event is a 404, "not a redacted record, so a guessed id cannot
-  confirm that a sponsorship was sold" (`:119-122`). `ExportAsync` (`:144-158`) is the strongest export
-  gate in this unit alongside [`SpeakersController`](#speakerscontroller)'s: the declarative
-  `[HasPermission(ConferencePermissions.SponsorsManage)]` (`:143`) plus the imperative
-  `if (!IsPrivileged) return Forbid();` (`:152-155`), with the doc comment naming the commercial hazard an
-  unscoped CSV would create, confirming sponsorships that have not been announced (`:134-141`).
-  `CreateAsync` (`:163-170`) and `DeleteAsync` (`:207-214`) call the base and evict; `UpdateAsync`
-  (`:186-202`) reads the required `If-Match` token (`:191`), dispatches the generic
-  `UpdateEntityCommand<Sponsor, SponsorUpdateRequest, SponsorIdentifierType>` (`:194`), folds a failure
-  through `HandleFailure` (`:197-198`), evicts (`:200`) and returns `Ok(result.Value)` (`:201`).
-- **Why it's built this way**: sponsors are commercially sensitive before an event is announced but fully
-  public afterwards, which is the same published-event rule the rest of the catalog follows, so the
-  controller reuses the specification hook rather than inventing a sponsor-specific visibility flag.
-  Because the aggregate owns a real `EventId`, none of that scoping needs a virtual key, which keeps this
-  the simplest of the scope-carrying aggregate-root controllers.
-- **Where it's used**: hosted by `MMCA.ADC.Conference.Service` and reached through the YARP Gateway, which
-  forwards `/Sponsors/{**catch-all}` to the Conference service
-  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:134`). Clients are the public sponsor page
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSponsorList.razor`) and
-  the organizer sponsor list, create and detail pages under
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsor/`.
-
-### ConferenceErrorResources
-> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Resources` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Resources/ConferenceErrorResources.cs:11` · Level 0 · class (sealed)
-
-- **What it is**: an empty class that exists purely to be a *type handle* for a pair of `.resx` files. The
-  whole declaration is three lines with no members at all
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Resources/ConferenceErrorResources.cs:11-13`).
-  Its two siblings in the same folder, `ConferenceErrorResources.resx` and
-  `ConferenceErrorResources.es.resx`, each carry 63 `<data name="...">` entries keyed by domain error
-  `Code` (`Answer.Rating.Invalid`, `Category.Title.Empty`, `CategoryItem.Name.TooLong`,
-  `Event.AlreadyPublished`, `Event.Name.Empty`, and so on).
-- **Depends on**: nothing at compile time (no base type, no fields, no methods). At runtime it is consumed
-  by the shared edge localizer, [IErrorLocalizer](group-12-api-hosting-mapping.md#ierrorlocalizer) and its
-  [ErrorLocalizer](group-12-api-hosting-mapping.md#errorlocalizer) implementation, and the codes it
-  translates are the `Code` values on [Error](group-01-result-error-handling.md#error) instances produced by
-  the Conference domain. Externals: the .NET resource pipeline (`.resx` compiled into satellite assemblies)
-  and `Microsoft.Extensions.Localization` underneath the localizer.
-- **Concept introduced, the resource-anchor type.** .NET resource lookup is keyed by a **CLR type**, not by
-  a file path: a `.resx` compiled next to `Foo.cs` becomes the resource set for `Foo`, and the satellite
-  assembly for culture `es` becomes the `es` overlay for that same type. A module that wants to contribute
-  translations therefore needs some type to name, and that type needs no behavior whatsoever. This class is
-  exactly that anchor. The host registers it once
-  (`services.AddErrorResources<ConferenceErrorResources>()`,
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:315`) and every Conference error code
-  becomes translatable from then on, with no per-error registration and no `switch` anywhere.
-  `[Rubric §27, i18n]` assesses whether localization is a structural property of the system rather than a
-  per-screen retrofit: because errors travel as stable machine-readable **codes** through
-  [Result](group-01-result-error-handling.md#result) and are turned into human text only at the edge, the
-  whole Conference module is localizable without a single domain-layer change.
-  `[Rubric §9, API & Contract Design]` assesses whether error payloads are contractual: the code is the
-  contract, the message is presentation, and this file is where that split pays off.
-- **Walkthrough**: there is no member walkthrough to do. The teaching content is the shape of the contract
-  around the empty class.
-  - The class is `sealed` and public (`ConferenceErrorResources.cs:11`). Public because the composition root
-    in another assembly (`MMCA.ADC.Conference.Service`) must name it as a generic argument; sealed because
-    nothing should ever derive from an anchor.
-  - Resolution is by code with an English fallback. The module's own test drives the localizer directly:
-    under the `es` UI culture, `localizer.Localize("Event.Name.Empty", "Event name cannot be empty.")`
-    returns the Spanish string
-    (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Localization/ConferenceErrorResourcesTests.cs:40-47`),
-    while an unknown code returns the caller-supplied English message unchanged (`:50-57`). That fallback is
-    what makes contributing a partial resource set safe.
-  - **Deliberately incomplete by design.** The class doc records that runtime-variable messages (those
-    interpolating a user-supplied value) are omitted on purpose, so they degrade to their English message
-    with the value intact rather than to a mangled translation (`ConferenceErrorResources.cs:8-9`). A
-    missing key is a supported state here, not a gap.
-- **Why it's built this way**: ADR-027 (`Website/docs-src/adr/027-multi-locale-i18n.md`) puts translation at
-  the edge and keys it by error code. Anchoring per module (rather than one application-wide resx) keeps a
-  module's translations inside the module's own assembly, which is what lets the Conference module boot in
-  its own service host and still carry its language support with it.
-- **Where it's used**: registered in the extracted Conference host
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:315`) and in the localization test's
-  service collection (`ConferenceErrorResourcesTests.cs:22`). No other code names it.
 
 ### SelfHttpOutputCacheWarmupTask
 > MMCA.ADC.Conference.Service · `MMCA.ADC.Conference.Service` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22` · Level 2 · class (internal, sealed)
@@ -2687,7 +2467,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   startup would turn a transient dependency blip into a failed deployment, so it is explicitly allowed to
   fail.
 - **Where it's used**: registered as `services.AddWarmupTask<SelfHttpOutputCacheWarmupTask>()` in the
-  Conference host (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:256`) and executed by
+  Conference host (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:257`) and executed by
   the warm-up runner that `AddServiceDefaults()` installs. Three sibling copies of the same pattern live in
   the Store services; each differs only in its `Paths` list.
 - **Caveats / not-in-source**: whether a given warmed URL still matches its caller byte for byte is not
@@ -2723,8 +2503,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Concept introduced, the shared-list invariant between visibility and cache keys.** The same
   `ConferenceReadAudience.PrivilegedRoles` list is spread into the output-cache bypass roles in the host
   (`string[] adminBypassRoles = [.. ConferenceReadAudience.PrivilegedRoles];`,
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:214`), and the comment right above it
-  names this helper as the other half of the pair (`Program.cs:212-214`). The reason is a real correctness
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:215`), and the comment right above it
+  names this helper as the other half of the pair (`Program.cs:213-215`). The reason is a real correctness
   hazard, not tidiness: if the visibility check and the cache-bypass list ever named different roles, a
   privileged reader's unfiltered payload would be written into a shared cache entry and then served to the
   public. Declaring the roles once makes that class of bug impossible rather than merely unlikely
@@ -2747,20 +2527,84 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   controllers. Putting the *helper* in the API layer and the *data* in Shared is what makes both consumers
   possible.
 - **Where it's used**: nine Conference controllers expose it as a private `IsPrivileged` property, including
-  [ActivitiesController](#activitiescontroller) (`ActivitiesController.cs:52`),
+  [ActivitiesController](#activitiescontroller) (`ActivitiesController.cs:53`),
   [RoomsController](#roomscontroller) (`RoomsController.cs:104`),
-  [SessionsController](#sessionscontroller) (`SessionsController.cs:60`),
+  [SessionsController](#sessionscontroller) (`SessionsController.cs:61`),
   [SessionCategoryItemsController](#sessioncategoryitemscontroller) (`SessionCategoryItemsController.cs:59`),
   [SessionSpeakersController](#sessionspeakerscontroller) (`SessionSpeakersController.cs:59`),
   [SpeakerCategoryItemsController](#speakercategoryitemscontroller) (`SpeakerCategoryItemsController.cs:59`),
-  [SpeakersController](#speakerscontroller) (`SpeakersController.cs:65`),
-  [SponsorsController](#sponsorscontroller) (`SponsorsController.cs:52`) and
+  [SpeakersController](#speakerscontroller) (`SpeakersController.cs:66`),
+  [SponsorsController](#sponsorscontroller) (`SponsorsController.cs:53`) and
   [EventSpeakersController](#eventspeakerscontroller) (`EventSpeakersController.cs:58`), all under
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/`.
   [EventsController](#eventscontroller) calls it inline in two places: to choose whether to apply
   [PublishedEventSpecification](group-18-conference-application.md#publishedeventspecification)
-  (`EventsController.cs:75`) and to gate a second code path (`EventsController.cs:141`). The host reads the
+  (`EventsController.cs:76`) and to gate a second code path (`EventsController.cs:142`). The host reads the
   underlying list for its cache policies (`Conference.Service/Program.cs:214`).
+
+### QuestionsController
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Questions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Questions/QuestionsController.cs:35` · Level 9 · class (sealed)
+
+- **What it is**: the REST controller for the [`Question`](group-17-conference-domain.md#question)
+  aggregate root (`/Questions`), the feedback-question definitions attendees answer. It is the plainest
+  aggregate-root controller in the group: inherited CRUD, one hand-rolled conditional update, and cache
+  eviction, with no visibility scoping at all.
+- **Depends on**:
+  [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
+  (`QuestionsController.cs:42-43`); the
+  [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
+  (`:35`); a create handler keyed on
+  [`QuestionCreateRequest`](group-18-conference-application.md#questioncreaterequest) (`:36`); an update
+  handler for [`UpdateQuestionCommand`](group-18-conference-application.md#updatequestioncommand) (`:37`);
+  a delete handler keyed on
+  [`DeleteEntityCommand<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
+  (`:38`); `IOutputCacheStore` (`:39`); the [`QuestionDTO`](group-17-conference-domain.md#questiondto);
+  [`QuestionUpdateRequest`](group-18-conference-application.md#questionupdaterequest) as the PUT body
+  (`:119`); and the [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute).
+- **Concept introduced**: none new. This is the aggregate-root shape taught at
+  [`ConferenceCategoriesController`](#conferencecategoriescontroller), minus even the route override.
+  `[Rubric §9, API & Contract Design]`: every read is a pure `override` that re-decorates the base action
+  and delegates (`QuestionsController.cs:45-92`), which is what a controller looks like when it has no
+  per-caller rule to apply; contrast [`EventSpeakersController`](#eventspeakerscontroller), which overrides
+  the read hook so the base can scope those same actions. It is also why this class does **not** override
+  `ExportAsync`: with no row scoping on the reads there is no scoping for an export to bypass, and because
+  the inherited `/export` action carries no `[AllowAnonymous]` of its own it stays behind the class-level
+  capability gate (the symmetry the base documents at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:205-211`).
+  The one bespoke command here, `UpdateQuestionCommand`, exists because a question update is not a plain
+  property patch; the conditional-write contract is the same one taught at
+  [`ConferenceCategoriesController`](#conferencecategoriescontroller).
+- **Walkthrough**
+  - The class is gated by `[HasPermission(ConferencePermissions.QuestionsManage)]`
+    (`QuestionsController.cs:34`), a capability granted to Organizer and Admin only
+    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43-44`); it is
+    absent from the ContentEditor subset
+    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:57-64`),
+    so a content editor curates sessions and speakers but cannot rewrite the feedback form.
+  - All four reads (`:44-91`) re-open with `[AllowAnonymous]` and attach
+    `[OutputCache(PolicyName = "QuestionsCache")]` (5-minute TTL, tags `conference` and
+    `conference:questions`, `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:227`), then
+    delegate; `GetByIdAsync` carries the named route `"GetQuestionById"` (`:77`).
+  - `CreateAsync` (`:95-102`) and `DeleteAsync` (`:137-144`) are thin overrides: call the base, then
+    `EvictTagsAsync(cancellationToken, "conference:questions")` (`:100, 142`), then return the base's
+    result.
+  - `UpdateAsync` (`:117-133`) is the hand-rolled action: `[SupportsIfMatch]` (`:113`) with the 409/412/428
+    `[ProducesResponseType]` triple (`:114-116`), `SupportsIfMatchAttribute.RequiredToken(HttpContext)`
+    (`:122`), `new UpdateQuestionCommand(id, request, rowVersion)` (`:125`), `HandleFailure` on failure
+    (`:128-129`), evict (`:131`), `Ok(result.Value)` (`:132`).
+  - Every eviction here clears the single `conference:questions` tag; unlike the sessions and speakers
+    controllers it does not also clear the broad `conference` tag, because no cross-entity read projects a
+    question.
+- **Why it's built this way**: questions carry no per-role visibility rule, so the controller carries
+  none. It is the reference case for how little an aggregate-root controller must write when the base does
+  the work: policy, one update action, and eviction.
+- **Where it's used**: the Conference service host behind the Gateway route `/Questions/{**catch-all}`
+  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:130`); the feedback-form builder UI under
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Question/` is the main client, and the
+  answers flow through [`EventQuestionAnswersController`](#eventquestionanswerscontroller) and
+  [`SessionQuestionAnswersController`](#sessionquestionanswerscontroller).
+
+---
 
 ### SessionBookmarksGrpcService
 > MMCA.ADC.Conference.Service · `MMCA.ADC.Conference.Service.Grpc` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/SessionBookmarksGrpcService.cs:23` · Level 10 · class (sealed)
@@ -2824,8 +2668,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   glance.
 - **Where it's used**: mapped in the Conference host as
   `app.MapGrpcService<SessionBookmarksGrpcService>().RequireAuthorization()`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:396`). The `RequireAuthorization()` is
-  deliberate and explained inline (`Program.cs:389-395`): these RPCs answer conference-state questions
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:397`). The `RequireAuthorization()` is
+  deliberate and explained inline (`Program.cs:390-396`): these RPCs answer conference-state questions
   raised on behalf of a specific end user, so internal-only ingress is not considered sufficient. Every
   caller is an Engagement handler sitting behind an authenticated controller, so an inbound bearer token is
   always present for
@@ -2894,11 +2738,167 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `Conference.Shared`'s interface and not the other way round.
 - **Where it's used**: registered by `AddConferenceSessionValidationClient()` (see
   [DependencyInjection](#dependencyinjection)), which the Engagement host calls
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:280`). Its eventual consumers are
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:281`). Its eventual consumers are
   [CreateBookmarkHandler](group-22-engagement-module.md#createbookmarkhandler) and
   [GetUserBookmarksHandler](group-22-engagement-module.md#getuserbookmarkshandler) behind
   [BookmarksController](group-22-engagement-module.md#bookmarkscontroller)
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:229-235`).
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:230-236`).
+
+### ActivitiesController
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Activities` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Activities/ActivitiesController.cs:40` · Level 10 · class (sealed)
+
+- **What it is**: the REST controller for the [`Activity`](group-17-conference-domain.md#activity)
+  aggregate root (`/Activities`), the conference's social and networking programme (parties, meetups,
+  sponsor receptions). Anonymous reads scoped to published events, and create / update / delete / export
+  behind the activities-manage capability (`ActivitiesController.cs:30-34`).
+- **Depends on**:
+  [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
+  (`ActivitiesController.cs:49-50`); the
+  [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
+  (`:40`); three [`ICommandHandler`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)s for
+  [`ActivityCreateRequest`](group-18-conference-application.md#activitycreaterequest), the framework's
+  [`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`](group-05-cqrs-pipeline.md#updateentitycommandtentity-tupdaterequest-tidentifiertype)
+  and
+  [`DeleteEntityCommand<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
+  (`:41-43`); an [`IQueryHandler`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) for
+  [`GetPublicActivityFilterQuery`](group-18-conference-application.md#getpublicactivityfilterquery)
+  (`:44`); [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) plus the
+  [`CurrentUserServiceExtensions`](#currentuserserviceextensions) read-audience helper (`:45, 52`);
+  `IOutputCacheStore` (`:46`); the [`ActivityDTO`](group-17-conference-domain.md#activitydto);
+  [`ActivityUpdateRequest`](group-18-conference-application.md#activityupdaterequest) as the PUT body
+  (`:188`); the [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute) with the
+  [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions) catalog; the
+  [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute); and the
+  [`QueryFilterModelBinder`](group-12-api-hosting-mapping.md#queryfiltermodelbinder).
+- **Concept introduced**: none new. This controller is the exact structural twin of
+  [`SponsorsController`](#sponsorscontroller): the same bare `[Authorize]` class gate with a per-mutation
+  capability, the same real-`EventId`-column scoping (no filter interception), the same
+  attribute-plus-imperative export gate, at the same line numbers in both files. What differs is the
+  vocabulary. `[Rubric §11, Security]`: the class carries `[Authorize]` (`ActivitiesController.cs:39`) and
+  each mutation re-asserts `[HasPermission(ConferencePermissions.ActivitiesManage)]` (`:143, 162, 181,
+  206`), the capability declared at
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:36`
+  and included in the `ContentManagement` curation subset (`ConferencePermissions.cs:57-64`), so a content
+  editor can run the social programme without holding event, room or question rights.
+  `[Rubric §12, Performance & Scalability]`: reads run under the `ActivitiesCache` policy (5-minute TTL,
+  tags `conference` and `conference:activities`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:229`) and every mutation evicts both
+  tags.
+- **Walkthrough**
+  - `IsPrivileged` (`ActivitiesController.cs:53`) is the shared
+    `currentUserService.IsPrivilegedConferenceReader()` read-audience check;
+    `GetReadSpecificationAsync` (`:68-78`) returns `null` for a privileged reader and otherwise the
+    [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype)
+    the `GetPublicActivityFilterQuery` handler resolves (`:74-77`); a failed handler result degrades to
+    `null` rather than failing the read.
+  - `GetAllAsync` (`:83-88`), the paged overload (`:99-109`), `GetAllForLookupAsync` (`:114-117`) and
+    `GetByIdAsync` under the named route `"GetActivityById"` (`:123-132`) are `[AllowAnonymous]` +
+    `[OutputCache(PolicyName = "ActivitiesCache")]` passthroughs, all scoped from the one hook. The paged
+    action's doc comment states the composition contract explicitly: `EventId` is a real column, so the
+    caller's event filter travels through the generic pipeline and the published-event rule is ANDed on top
+    of it rather than substituted (`:90-95`). The by-id doc comment states that an activity of an
+    unpublished event is a 404, "not a redacted record, so a guessed id cannot confirm that a party has
+    been scheduled" (`:119-122`).
+  - `ExportAsync` (`:144-158`) pairs the declarative
+    `[HasPermission(ConferencePermissions.ActivitiesManage)]` (`:143`) with the imperative
+    `if (!IsPrivileged) return Forbid();` (`:152-155`), then delegates to the base (`:157`). The doc
+    comment names the leak an unscoped CSV would be, a social programme that has not been announced, and
+    notes that the attribute is needed because the class carries only a bare `[Authorize]` (`:134-141`).
+  - `CreateAsync` (`:163-170`) and `DeleteAsync` (`:207-214`) are thin overrides that call the base and
+    then evict; `UpdateAsync` (`:186-202`) is the hand-rolled action the base does not supply, reading the
+    required `If-Match` token (`:191`), dispatching
+    `new UpdateEntityCommand<Activity, ActivityUpdateRequest, ActivityIdentifierType>(id, request,
+    rowVersion)` (`:194`), folding a failure through `HandleFailure` (`:197-198`), evicting (`:200`) and
+    returning `Ok(result.Value)` (`:201`).
+  - Every eviction clears `conference:activities` and the broad `conference` tag (`:168, 200, 212`), the
+    latter because the activity strip renders alongside other conference reads.
+- **Why it's built this way**: the social programme has the same publish-gated lifecycle as the rest of
+  the catalog, so it reuses the specification hook rather than inventing an activity-specific visibility
+  flag, and because `Activity` owns a real `EventId` none of that scoping needs a virtual key. Repeating
+  the sponsor controller's shape verbatim is `[Rubric §16, Maintainability]` in practice: two aggregates
+  with identical rules get identical code, so the reader who has learned one has learned both.
+- **Where it's used**: the Conference service host behind the Gateway route `/Activities/{**catch-all}`
+  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:138`). Clients are the public activity page
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicActivityList.razor`) and
+  the organizer list, create and detail pages under
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activity/`.
+
+---
+
+### SponsorsController
+> MMCA.ADC.Conference.API · `MMCA.ADC.Conference.API.Controllers.Sponsors` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sponsors/SponsorsController.cs:40` · Level 10 · class (sealed)
+
+- **What it is**: the REST controller for the [`Sponsor`](group-17-conference-domain.md#sponsor) aggregate
+  root (`/Sponsors`), the conference's sponsors and exhibitors. Anonymous reads scoped to published events,
+  and create / update / delete / export behind the sponsors-manage capability
+  (`SponsorsController.cs:30-34`).
+- **Depends on**:
+  [`AggregateRootEntityControllerBase`](group-12-api-hosting-mapping.md#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
+  (`SponsorsController.cs:49-50`); the
+  [`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
+  (`:40`); three [`ICommandHandler`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)s for
+  [`SponsorCreateRequest`](group-18-conference-application.md#sponsorcreaterequest), the framework's
+  [`UpdateEntityCommand<TEntity, TUpdateRequest, TIdentifierType>`](group-05-cqrs-pipeline.md#updateentitycommandtentity-tupdaterequest-tidentifiertype)
+  and
+  [`DeleteEntityCommand<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
+  (`:41-43`); an [`IQueryHandler`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) for
+  [`GetPublicSponsorFilterQuery`](group-18-conference-application.md#getpublicsponsorfilterquery) (`:44`);
+  [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) plus the
+  [`CurrentUserServiceExtensions`](#currentuserserviceextensions) read-audience helper (`:45, 52`);
+  `IOutputCacheStore` (`:46`); the [`SponsorDTO`](group-17-conference-domain.md#sponsordto);
+  [`SponsorUpdateRequest`](group-18-conference-application.md#sponsorupdaterequest) as the PUT body
+  (`:188`); the [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute) with the
+  [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions) catalog; the
+  [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute); and the
+  [`QueryFilterModelBinder`](group-12-api-hosting-mapping.md#queryfiltermodelbinder).
+- **Concept introduced, a real parent column instead of a virtual filter key.** `[Rubric §9, API &
+  Contract Design]` assesses whether a contract expresses scoping honestly rather than through special
+  cases. Compare this controller with [`SpeakersController`](#speakerscontroller): there, `EventId` is
+  *not* a column on the aggregate, so the paged action must intercept the key, remove it from the filter
+  dictionary and translate it into a specification. Here the doc comments record the opposite situation,
+  that `Sponsor` carries a real `EventId` column, so an event-scoped request travels through the generic
+  filter pipeline unchanged and the hook only adds the published-event rule on top of it (`:54-67, 90-95`).
+  The published rule and the caller's filter are composed by the query service rather than substituted, so
+  scoping to an unpublished event returns an empty page to a non-privileged caller instead of leaking the
+  roster. That is why this controller, like its [`ActivitiesController`](#activitiescontroller) twin and
+  unlike the speaker and session roots, has no filter-interception block at all.
+  `[Rubric §11, Security]`: the class carries a bare `[Authorize]` (`:38`) and each mutation re-asserts
+  `[HasPermission(ConferencePermissions.SponsorsManage)]` (`:143, 162, 181, 206`), the capability declared
+  at
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:33`
+  and included in the `ContentManagement` curation subset (`ConferencePermissions.cs:57-64`), so a content
+  editor can manage the sponsor roster without holding event, room or question rights. `[Rubric §12,
+  Performance & Scalability]`: reads run under the `SponsorsCache` policy (5-minute TTL, tags `conference`
+  and `conference:sponsors`, `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:228`) and
+  every mutation evicts both tags (`:168, 200, 212`).
+- **Walkthrough**: the file is line-for-line the structural twin of
+  [`ActivitiesController`](#activitiescontroller), so every member sits at the same line number in both.
+  `IsPrivileged` (`SponsorsController.cs:53`) is the shared read-audience check; `GetReadSpecificationAsync`
+  (`:68-78`) returns `null` for a privileged reader and otherwise the specification the
+  `GetPublicSponsorFilterQuery` handler resolves (`:74-77`), degrading to `null` on a failed result. The
+  four reads (`:83, 99, 114, 126`, the last under the named route `"GetSponsorById"` at `:123`) are
+  `[AllowAnonymous]` + `[OutputCache(PolicyName = "SponsorsCache")]` passthroughs; the by-id doc comment
+  states that a sponsor of an unpublished event is a 404, "not a redacted record, so a guessed id cannot
+  confirm that a sponsorship was sold" (`:119-122`). `ExportAsync` (`:144-158`) is the strongest export
+  gate in this unit alongside [`SpeakersController`](#speakerscontroller)'s: the declarative
+  `[HasPermission(ConferencePermissions.SponsorsManage)]` (`:143`) plus the imperative
+  `if (!IsPrivileged) return Forbid();` (`:152-155`), with the doc comment naming the commercial hazard an
+  unscoped CSV would create, confirming sponsorships that have not been announced (`:134-141`).
+  `CreateAsync` (`:163-170`) and `DeleteAsync` (`:207-214`) call the base and evict; `UpdateAsync`
+  (`:186-202`) reads the required `If-Match` token (`:191`), dispatches the generic
+  `UpdateEntityCommand<Sponsor, SponsorUpdateRequest, SponsorIdentifierType>` (`:194`), folds a failure
+  through `HandleFailure` (`:197-198`), evicts (`:200`) and returns `Ok(result.Value)` (`:201`).
+- **Why it's built this way**: sponsors are commercially sensitive before an event is announced but fully
+  public afterwards, which is the same published-event rule the rest of the catalog follows, so the
+  controller reuses the specification hook rather than inventing a sponsor-specific visibility flag.
+  Because the aggregate owns a real `EventId`, none of that scoping needs a virtual key, which keeps this
+  the simplest of the scope-carrying aggregate-root controllers.
+- **Where it's used**: hosted by `MMCA.ADC.Conference.Service` and reached through the YARP Gateway, which
+  forwards `/Sponsors/{**catch-all}` to the Conference service
+  (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:134`). Clients are the public sponsor page
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSponsorList.razor`) and
+  the organizer sponsor list, create and detail pages under
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsor/`.
 
 ### EventLiveValidationGrpcService
 > MMCA.ADC.Conference.Service · `MMCA.ADC.Conference.Service.Grpc` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Grpc/EventLiveValidationGrpcService.cs:22` · Level 11 · class (sealed)
@@ -2959,19 +2959,19 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   services goes over gRPC rather than through the YARP Gateway. Projecting into flat proto messages inside
   the transport class keeps the domain read models free of any serialization concern.
 - **Where it's used**: mapped as `app.MapGrpcService<EventLiveValidationGrpcService>().RequireAuthorization()`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:397`). The named callers are
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:398`). The named callers are
   Engagement's [LivePollsController](group-23-engagement-live-layer.md#livepollscontroller) and
   [SessionQuestionsController](group-23-engagement-live-layer.md#sessionquestionscontroller) handlers
-  (`Program.cs:392-394`).
+  (`Program.cs:393-395`).
 
 ### EventLiveValidationServiceGrpcAdapter
-> MMCA.ADC.Conference.Contracts · `MMCA.ADC.Conference.Contracts` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/EventLiveValidationServiceGrpcAdapter.cs:26` · Level 11 · class (internal, sealed)
+> MMCA.ADC.Conference.Contracts · `MMCA.ADC.Conference.Contracts` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/EventLiveValidationServiceGrpcAdapter.cs:27` · Level 11 · class (internal, sealed)
 
 - **What it is**: the client half of the live-layer boundary. It implements
   [IEventLiveValidationService](group-17-conference-domain.md#ieventlivevalidationservice) over the
   generated gRPC client and reconstructs the domain read models from the proto responses.
 - **Depends on**: the generated `EventLiveValidationService.EventLiveValidationServiceClient`
-  (`EventLiveValidationServiceGrpcAdapter.cs:26-27`); the interface it implements (`:28`); the read models
+  (`EventLiveValidationServiceGrpcAdapter.cs:27-28`); the interface it implements (`:28`); the read models
   [EventLiveInfo](group-17-conference-domain.md#eventliveinfo),
   [SessionLiveInfo](group-17-conference-domain.md#sessionliveinfo),
   [SponsorLiveInfo](group-17-conference-domain.md#sponsorliveinfo),
@@ -2983,7 +2983,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `System.Guid`.
 - **Concept introduced**: none new. This is the mirror image of
   [SessionBookmarkValidationServiceGrpcAdapter](#sessionbookmarkvalidationservicegrpcadapter): the same
-  5 second `CallDeadline` (`EventLiveValidationServiceGrpcAdapter.cs:33`, justified at `:30-32` because
+  5 second `CallDeadline` (`EventLiveValidationServiceGrpcAdapter.cs:34`, justified at `:30-32` because
   these lookups gate live-layer commands such as opening a poll or submitting a question), the same
   `try` / `catch (RpcException ex)` around every call, and the same `ex.ToResult<T>()` decode of the
   `error-{i}-*` trailers. What repays close reading here is the **decoding** side of the wire
@@ -3016,15 +3016,15 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     Conference outage is uniformly a `Result` failure across all four lookups rather than an exception on
     some paths and a failure on others.
 - **Why it's built this way**: ADR-007. The class doc notes the specific consequence for this pair
-  (`EventLiveValidationServiceGrpcAdapter.cs:12-15`): the in-process implementation **or** the disabled stub
+  (`EventLiveValidationServiceGrpcAdapter.cs:13-16`): the in-process implementation **or** the disabled stub
   is replaced with this adapter at the composition root, since Conference runs as its own microservice, and
   Engagement's live handlers never learn which one they got. `[Rubric §14, Testability]`: because the
   interface is the only thing consumers see, an Engagement test substitutes a fake with no gRPC server in
   sight.
 - **Where it's used**: registered by `AddConferenceEventLiveValidationClient()` (see
   [DependencyInjection](#dependencyinjection)), called from the Engagement host
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:281`). Consumers are Engagement's
-  live-poll and session-question handlers (`Program.cs:236-237`).
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:282`). Consumers are Engagement's
+  live-poll and session-question handlers (`Program.cs:237-238`).
 
 ### DependencyInjection
 > MMCA.ADC.Conference.Contracts · `MMCA.ADC.Conference.Contracts` · `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/DependencyInjection.cs:15` · Level 12 · class (static)
@@ -3042,7 +3042,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   [IEventLiveValidationService](group-17-conference-domain.md#ieventlivevalidationservice) (the service keys
   it replaces); the generated client types; and `AddTypedGrpcClient<TClient>` from MMCA.Common.Grpc's own
   [DependencyInjection](group-13-grpc-contracts.md#dependencyinjection)
-  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:66`). Externals:
+  (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:87`). Externals:
   `Microsoft.Extensions.DependencyInjection` and its `ServiceCollectionDescriptorExtensions.Replace`.
 - **Concept introduced, `Replace` rather than `TryAdd`, and why the call order is load-bearing.** Most
   registration helpers in this codebase use `TryAdd` so a host can pre-empt a default. These two do the
@@ -3079,13 +3079,13 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     the live-validation client and adapter (`:75`, `:79`).
   - The `serviceName` default is `"conference"`, chosen to match the AppHost resource name (`:41-42`,
     `:71-72`). `AddTypedGrpcClient` turns that name into the address `http://{serviceName}`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:75-76`), which Aspire service
+    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:96-97`), which Aspire service
     discovery resolves. A typo in the name is a runtime resolution failure, not a compile error, which is
     why the default exists at all.
   - Everything else the client needs comes from `AddTypedGrpcClient`, not from here: the
     [JwtForwardingClientInterceptor](group-13-grpc-contracts.md#jwtforwardingclientinterceptor) that
     forwards the caller's bearer token
-    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:72`, `:77`), an explicit
+    (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:93`, `:77`), an explicit
     `SocketsHttpHandler` that opts into HTTP/2 with the connection-hygiene values from
     [HttpResilienceDefaults](group-16-aspire-orchestration.md#httpresiliencedefaults) (`:89-98`), and a
     standard resilience handler configured from
@@ -3102,8 +3102,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   whole answer in one 84-line file.
 - **Where it's used**: the Engagement service host calls both inside its application-pipeline registration,
   in the documented order after `moduleHost.RegisterModules`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:279-281`), with the rationale for each
-  written out immediately above (`Program.cs:229-237`). The AppHost declares the matching Engagement to
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:280-282`), with the rationale for each
+  written out immediately above (`Program.cs:230-238`). The AppHost declares the matching Engagement to
   Conference reference (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:269`).
 - **Caveats / not-in-source**: the "call this after `DiscoverAndRegister`" requirement is carried by
   convention and by the doc comments only. Nothing in this file detects a too-early call.
