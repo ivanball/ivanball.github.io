@@ -203,7 +203,7 @@ compiled once through a source-generated `[GeneratedRegex]` with a one-second ma
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:29`), which
 is what [`NotificationHub`](#notificationhub) enforces before a client may join a group. Producer and
 guard therefore cannot drift apart: keeping the format and its pattern in one type is the whole point
-of the class ([Rubric §16, Maintainability]).
+of the class ([Rubric §15, Best Practices & Code Quality]).
 
 On the send side the key is optional and opaque. It arrives as an `init` property on
 [`SendPushNotificationRequest`](#sendpushnotificationrequest) rather than a positional parameter, so
@@ -360,7 +360,7 @@ framework's own registration
 the API-layer registration
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:19-23`) adds
 the Common controllers as an MVC application part, because they ship in a NuGet assembly that
-ASP.NET does not scan by default ([Rubric §16, Maintainability]).
+ASP.NET does not scan by default ([Rubric §15, Best Practices & Code Quality]).
 
 Native-device management is the third channel's control plane.
 [`DevicesController`](#devicescontroller) ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)) lets an authenticated user upsert
@@ -656,7 +656,7 @@ without any of the four ever taking the others down, and without a retried reque
   `title`, `body`, and an optional `Dictionary<string, string>? metadata` (lines 16, 25, 33). That
   dictionary carries typed extras (a deep-link URL, a notification type, per the XML doc on line 13)
   without a bespoke strongly-typed payload per notification kind, so a new notification variety needs no
-  interface change. `[Rubric §10, Cross-Cutting Concerns]` assesses whether a capability like push is
+  interface change. `[Rubric §6, CQRS & Event-Driven Design]` assesses whether a capability like push is
   factored once and reused broadly, and this single port serves every push-emitting feature. This is the
   *durable* counterpart to [ILiveChannelPublisher](#ilivechannelpublisher)'s ephemeral fan-out
   ([ADR-024](https://ivanball.github.io/docs/adr/024-push-notifications.html)).
@@ -1099,7 +1099,7 @@ without any of the four ever taking the others down, and without a retried reque
 - **What it is**: the feature-flag key constants for the Notification module. It holds exactly one:
   `PushNotifications = "Notification.PushNotifications"` (`NotificationFeatures.cs:9`).
 - **Depends on**: nothing first-party.
-- **Concept, feature flags as named constants.** `[Rubric §10, Cross-Cutting Concerns]` assesses
+- **Concept, feature flags as named constants.** `[Rubric §6, CQRS & Event-Driven Design]` assesses
   whether cross-cutting configuration lives in one place rather than as copy-pasted string literals.
   Defining the flag key once as a `const string` keeps every gate that references it typo-free; the
   value is resolved at runtime by the feature-management layer that the feature-gate decorators and
@@ -1132,7 +1132,7 @@ without any of the four ever taking the others down, and without a retried reque
   rather than a role name, moving the capability from one role to another is a single line in the host's
   DI. The permission machinery itself ([HasPermissionAttribute](group-08-auth.md#haspermissionattribute),
   [PermissionRegistry](group-08-auth.md#permissionregistry)) is taught in
-  [Group 08](group-08-auth.md). `[Rubric §16, Maintainability]`: a `const string` means the grant site
+  [Group 08](group-08-auth.md). `[Rubric §15, Best Practices & Code Quality]`: a `const string` means the grant site
   and the check site cannot drift apart by a typo.
 - **Walkthrough**: one `public const string` on a `static` class (`NotificationPermissions.cs:7-11`).
 - **Where it's used**: granted to [RoleNames](group-08-auth.md#rolenames)`.Organizer` and to no other
@@ -1298,7 +1298,7 @@ without any of the four ever taking the others down, and without a retried reque
   decision has exactly one place to change, and the Identity module stays the owner of the attendee
   roster.
 - **Where it's used**: registered as the scoped `INotificationRecipientProvider` in the Notification
-  module's application-layer [DependencyInjection](#dependencyinjection)
+  module's application-layer [DependencyInjection](#dependencyinjection-1)
   (`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Application/DependencyInjection.cs:24`);
   consumed by [SendPushNotificationHandler](#sendpushnotificationhandler) when it fans a broadcast out
   to per-user rows.
@@ -1392,7 +1392,7 @@ without any of the four ever taking the others down, and without a retried reque
   recipient provider needs the attendee roster. `[Rubric §7, Microservices Readiness]` assesses whether
   a module's boundary is explicit enough to extract: `Dependencies => ["Identity"]` (line 21) is that
   boundary stated as data, which is also what lets ADC run Notification as its own service host.
-  `[Rubric §16, Maintainability]`: `RegisterDisabledStubs` (lines 34-35) means a host that turns the
+  `[Rubric §15, Best Practices & Code Quality]`: `RegisterDisabledStubs` (lines 34-35) means a host that turns the
   module off still resolves every cross-module contract the module publishes, so Identity's export
   aggregation keeps compiling and running instead of failing at container build.
 - **Walkthrough**: `Name => "Notification"` (line 18) is the key
@@ -1539,7 +1539,7 @@ without any of the four ever taking the others down, and without a retried reque
   page.
 - **Where it's used**: registered as the scoped
   [IUserNotificationExportService](#iusernotificationexportservice) by the module's application-layer
-  [DependencyInjection](#dependencyinjection)
+  [DependencyInjection](#dependencyinjection-1)
   (`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Application/DependencyInjection.cs:28`);
   consumed by Identity's export aggregation over the cross-module interface (in-process when co-hosted,
   cross-process via the Notification service's gRPC ingress when extracted). When the module is
@@ -1576,7 +1576,7 @@ without any of the four ever taking the others down, and without a retried reque
   `IUserNotificationExportService` for the privacy export (line 28), calls the framework's
   `AddNotificationApplicationServices()` (line 31), and returns the collection for chaining (line 33).
 - **Where it's used**: called first thing by the API-layer
-  [DependencyInjection](#dependencyinjection)`.AddNotificationModule`
+  [DependencyInjection](#dependencyinjection-1)`.AddNotificationModule`
   (`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:30`), which is
   itself driven by [NotificationModule](#notificationmodule)`.Register`.
 
@@ -1672,7 +1672,7 @@ without any of the four ever taking the others down, and without a retried reque
   deliberately the opposite: there, transport failures **do** propagate, because the caller needs to know
   the export section is unavailable.
 - **Where it's used**: registered by the Notification.Contracts
-  [DependencyInjection](#dependencyinjection)'s `AddNotificationLiveChannelClient`, which uses
+  [DependencyInjection](#dependencyinjection-2)'s `AddNotificationLiveChannelClient`, which uses
   `services.Replace(...)` so the adapter overwrites the framework's
   [NullLiveChannelPublisher](#nulllivechannelpublisher) default
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:48`). The one caller
@@ -1812,7 +1812,7 @@ without any of the four ever taking the others down, and without a retried reque
 - **Concept introduced, the options-bound infrastructure adapter.** `[Rubric §3, Clean Architecture]`
   assesses whether transport detail stays at the edge: the port `IEmailSender` lives in Application, and
   this SMTP concretion lives in Infrastructure, so nothing above it knows what "email" is made of.
-  `[Rubric §10, Cross-Cutting Concerns]`: host, port, credentials, and the default from/to addresses come
+  `[Rubric §17, DevOps & Deployment]`: host, port, credentials, and the default from/to addresses come
   from configuration bound at startup by `AddInfrastructure`
   (`services.AddOptions<SmtpSettings>().Bind(configuration.GetSection(SmtpSettings.SectionName))`,
   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:99-100`), never hard-coded,
@@ -2110,8 +2110,8 @@ without any of the four ever taking the others down, and without a retried reque
   [PushNotification](#pushnotification) (for `ScopeKeyMaxLength`), and
   `FluentValidation.AbstractValidator<T>` (NuGet base class).
 - **Concept**: request validation as a pipeline concern, not handler code. `[Rubric §24, Forms,
-  Validation & UX Safety]` (server-side validation with actionable messages) and `[Rubric §16,
-  Maintainability]`. Reusing the *same* constants here and in the
+  Validation & UX Safety]` (server-side validation with actionable messages) and `[Rubric §15,
+  Best Practices & Code Quality]`. Reusing the *same* constants here and in the
   [PushNotification](#pushnotification) domain factory keeps the API limit and the entity limit from
   drifting apart.
 - **Walkthrough**: the constructor
@@ -2237,8 +2237,8 @@ without any of the four ever taking the others down, and without a retried reque
     native-failed (Warning), dedup hit (Information), and dedup race requery (Information).
     `[Rubric §13, Observability]`.
 - **Why it's built this way**: shipping the whole feature in the *framework* means both ADC and Store get
-  push for free, with the audience and both transports as injected abstractions (`[Rubric §10,
-  Cross-Cutting Concerns]`). Treating each delivery failure as a recorded status or a logged warning
+  push for free, with the audience and both transports as injected abstractions (`[Rubric §29,
+  Resilience, Reliability & Business Continuity]`). Treating each delivery failure as a recorded status or a logged warning
   rather than an exception keeps the audit trail honest while the audit and inbox writes stay durable
   even when a live push does not land. The dedup key plus the filtered unique index gives the retry
   safety a broadcast needs: the index is declared with `IsUnique()` and a soft-delete-aware
@@ -2379,7 +2379,7 @@ without any of the four ever taking the others down, and without a retried reque
   let Identity and Notification deploy independently, which is the point of
   [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)'s topology.
 - **Where it's used**: registered by the Notification.Contracts
-  [DependencyInjection](#dependencyinjection)'s `AddNotificationUserExportClient` via
+  [DependencyInjection](#dependencyinjection-2)'s `AddNotificationUserExportClient` via
   `services.Replace(...)`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:84`); the one caller
   today is the Identity service's composition root
@@ -2562,7 +2562,7 @@ heading.)*
   per-property override where a straight copy would be wrong (the enum-to-string case). Rendering the
   status as its name rather than its ordinal means adding an enum member cannot renumber an existing
   contract value.
-- **Where it's used**: registered twice by the Application-layer [DependencyInjection](#dependencyinjection)
+- **Where it's used**: registered twice by the Application-layer [DependencyInjection](#dependencyinjection-4)
   below (as itself and as the `IEntityDTOMapper<...>` interface,
   `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:44-46`), and
   consumed through it by [SendPushNotificationHandler](#sendpushnotificationhandler) and
@@ -2686,7 +2686,7 @@ heading.)*
   of any push-provider detail, which is what lets the default implementation stay a no-op until a
   notification hub is configured
   ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)).
-- **Where it's used**: made routable by the API-layer [DependencyInjection](#dependencyinjection) helper
+- **Where it's used**: made routable by the API-layer [DependencyInjection](#dependencyinjection-3) helper
   below (`AddNotificationControllers`); called by a native client's login and logout flows. Covered by
   `DevicesControllerTests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Controllers/Notifications/DevicesControllerTests.cs:18`).
@@ -2768,7 +2768,7 @@ heading.)*
   makes the whole inbox surface disappear when the flag is off, so a host that has not opted into
   notifications does not advertise endpoints it cannot serve.
 - **Where it's used**: registered into MVC application parts by `AddNotificationControllers`
-  ([DependencyInjection](#dependencyinjection), API layer, below); consumed by the in-app inbox UI (the
+  ([DependencyInjection](#dependencyinjection-3), API layer, below); consumed by the in-app inbox UI (the
   unread badge plus the notification list). Covered by `NotificationInboxControllerTests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Controllers/Notifications/NotificationInboxControllerTests.cs:17`).
 
@@ -2846,7 +2846,7 @@ heading.)*
   send gate by accident. Both stay behind
   `[FeatureGate(NotificationFeatures.PushNotifications)]` (line 28).
 - **Where it's used**: registered via `AddNotificationControllers`
-  ([DependencyInjection](#dependencyinjection), API layer, below); consumed by the organizer
+  ([DependencyInjection](#dependencyinjection-3), API layer, below); consumed by the organizer
   push-notification UI. Covered by `NotificationsControllerTests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Controllers/Notifications/NotificationsControllerTests.cs:16`).
 
@@ -2874,7 +2874,7 @@ heading.)*
   second constructor rather than an optional parameter, since
   `Microsoft.Extensions.DependencyInjection` has no notion of an optional dependency
   (`EntityQueryService.cs:52-62`). So registering **this** class in
-  [DependencyInjection](#dependencyinjection) below is the entire opt-in gesture: no query handler
+  [DependencyInjection](#dependencyinjection-4) below is the entire opt-in gesture: no query handler
   changes.
   The projection path is not taken unconditionally. The decision is taken per read at
   `EntityQueryService.cs:304`, and `CanProject` requires three things
@@ -2902,7 +2902,7 @@ heading.)*
   [ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html), which
   also records the trade-off: nothing tells a caller which path ran, so a projector that stops being
   registered loses the optimization with no signal beyond query latency.
-- **Where it's used**: registered twice by the Application-layer [DependencyInjection](#dependencyinjection)
+- **Where it's used**: registered twice by the Application-layer [DependencyInjection](#dependencyinjection-4)
   below (as itself and as the interface, lines 50-52), then resolved by
   [`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype)
   closed over the notification triple, which serves

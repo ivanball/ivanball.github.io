@@ -117,7 +117,7 @@ sync binders (`ResultExtensions.cs:20`, `ResultExtensions.cs:39`), `MapAsync`
 (`ResultExtensions.cs:58`), `TapAsync` (`ResultExtensions.cs:77`), and `MatchAsync`
 (`ResultExtensions.cs:102`). Each awaits the incoming task exactly once and then delegates to the
 instance combinator, so the short-circuit behavior is identical by construction rather than by
-duplication, which is the [Rubric §16, Maintainability] argument for the helper existing at all.
+duplication, which is the [Rubric §15, Best Practices & Code Quality] argument for the helper existing at all.
 
 ## Construction discipline, and the invariant it buys
 

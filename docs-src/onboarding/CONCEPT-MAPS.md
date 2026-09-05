@@ -848,13 +848,13 @@ mindmap
       7 Microservices Readiness
       8 Data Architecture
       9 API and Contract Design
-      10 Cross-Cutting Concerns
+      10 Messaging and Integration
       11 Security
       12 Performance and Scalability
       13 Observability
       14 Testability
       15 Code Quality
-      16 Maintainability
+      16 AI-Native Architecture
       17 DevOps and Deployment
     Part B Front-End and UI 18-28
       18 UI Architecture

@@ -250,7 +250,7 @@
           (<code>ResultExtensions.cs:58</code>), <code>TapAsync</code> (<code>ResultExtensions.cs:77</code>), and <code>MatchAsync</code>
           (<code>ResultExtensions.cs:102</code>). Each awaits the incoming task exactly once and then delegates to the
           instance combinator, so the short-circuit behavior is identical by construction rather than by
-          duplication, which is the [Rubric §16, Maintainability] argument for the helper existing at all.</p>
+          duplication, which is the [Rubric §15, Best Practices &amp; Code Quality] argument for the helper existing at all.</p>
           <h2 id="construction-discipline-and-the-invariant-it-buys">Construction discipline, and the invariant it buys</h2>
           <p>You cannot <code>new</code> a <code>Result&lt;T&gt;</code> directly: its constructors are <code>internal</code> (<code>Result.cs:211</code>,
           <code>Result.cs:217</code>), so the only way to produce one is through the static factory methods on the base

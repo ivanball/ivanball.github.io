@@ -261,7 +261,7 @@
           <code>return ex.ToResult();</code>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/SessionBookmarkValidationServiceGrpcAdapter.cs:58</code>).
           That symmetry, one error model over two transports, is the <code>[Rubric §9, API &amp; Contract Design]</code> and
-          <code>[Rubric §10, Cross-Cutting Concerns]</code> story: error translation is a pipeline concern, written once in
+          <code>[Rubric §29, Resilience, Reliability &amp; Business Continuity]</code> story: error translation is a pipeline concern, written once in
           the interceptor and its extension pair, not repeated in every method. One sharp edge is documented in
           the interceptor itself (<code>GrpcResultExceptionInterceptor.cs:103-138</code>): a <code>ResultFailureException</code> built
           from a message-only constructor carries <em>no</em> errors, so the shared encoder would answer the
@@ -564,7 +564,7 @@
           line 19).</li>
           <li><strong>Concept reinforced, error translation as a cross-cutting concern, symmetric with the HTTP layer.</strong>
           <code>[Rubric §7, Microservices Readiness]</code> (assesses that error handling is symmetric across HTTP and gRPC)
-          and <code>[Rubric §10, Cross-Cutting Concerns]</code> (error translation lives in one interceptor, not re-coded in
+          and <code>[Rubric §9, API &amp; Contract Design]</code> (error translation lives in one interceptor, not re-coded in
           every service method). The doc comment (lines 11-13) names the parallel explicitly: this &quot;mirrors the
           behavior of <code>ApiControllerBase.HandleFailure</code> for HTTP responses&quot;. <code>[Rubric §13, Observability &amp; Operability]</code> also applies: every caught failure is logged with the gRPC method name before it is
           translated, so a failing east-west call is visible on the producing side even though the caller only
@@ -593,7 +593,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: covering all four handler shapes means every gRPC operation, including the
-          streaming ones, gets uniform <code>Result</code>-failure surfacing. Keeping it in an interceptor is the §10 point:
+          streaming ones, gets uniform <code>Result</code>-failure surfacing. Keeping it in an interceptor is the §9 point:
           the translation lives in one place, so a change to the error wire shape (see
           <a href="#resultgrpcextensions"><code>ResultGrpcExtensions</code></a>) is made once. Logging at <code>Information</code> rather than
           <code>Error</code> is deliberate for a <em>domain</em> failure: a rejected command is an expected outcome, not a fault.</li>
@@ -634,7 +634,7 @@
           right tool: built once at static init, then read-only and lookup-optimized. The genuinely new idea in
           this type is that the encoding is <strong>round-trippable</strong>: the failure is written into trailers in a shape
           the decoder can reverse, so a caller ends up holding the same <code>Result</code> it would have held in-process.
-          <code>[Rubric §10, Cross-Cutting Concerns]</code> follows from that: both halves of the codec live here, so the
+          <code>[Rubric §29, Resilience, Reliability &amp; Business Continuity]</code> follows from that: both halves of the codec live here, so the
           wire shape has exactly one definition.</li>
           <li><strong>Walkthrough</strong>: the class is a set of C# <code>extension(T)</code> blocks (see
           <a href="00-primer.html#4-c-build-and-code-style-conventions">primer §4</a>), which is why it carries a file-level

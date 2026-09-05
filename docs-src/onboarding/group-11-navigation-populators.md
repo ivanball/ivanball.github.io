@@ -158,7 +158,7 @@ includes (`DeclarativeNavigationPopulator.cs:27-28`), builds an ordinal `HashSet
 unsupported property names (`DeclarativeNavigationPopulator.cs:30-32`), and for each descriptor loads
 it only when the requested kind matches `RequiresChildren` **and** the property is actually in the
 unsupported set (`DeclarativeNavigationPopulator.cs:34-41`). Adding a new cross-source navigation
-becomes "add one descriptor", not "write a new class" (`[Rubric §16, Maintainability]`). It is the
+becomes "add one descriptor", not "write a new class" (`[Rubric §15, Best Practices & Code Quality]`). It is the
 only concrete class in this group left open for inheritance, because module populators subclass it.
 
 End to end, the runtime flow for a list query is: a module query handler asks the
@@ -608,7 +608,7 @@ no-ops.
   [`NavigationMetadata`](#navigationmetadata) (Level 3).
 - **Concept introduced, declaration over implementation.** `[Rubric §2, Design Patterns]` (the
   descriptor list is a tiny declarative program that this class interprets by iteration) and
-  `[Rubric §16, Maintainability]` (adding a cross-source navigation means adding one object literal
+  `[Rubric §15, Best Practices & Code Quality]` (adding a cross-source navigation means adding one object literal
   to a collection expression, not writing a class). A module's populator is therefore a subclass with
   an empty body whose entire content is its base-constructor argument, as at
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerNavigationPopulator.cs:13-31`.

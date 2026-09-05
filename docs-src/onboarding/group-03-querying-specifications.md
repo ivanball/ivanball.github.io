@@ -506,7 +506,7 @@ The fourth co-located type is [`EventUpcasterRegistry`](#eventupcasterregistry) 
   (Open/Closed: extend by subclassing and overriding, not by editing), `[Rubric §9, API & Contract
   Design]` (one filter/sort/page/fields convention across every read endpoint), `[Rubric §12,
   Performance & Scalability]` (all shaping is pushed down to the database through the pipeline), and
-  `[Rubric §16, Maintainability]` (a new entity inherits the full read surface with no new code). The
+  `[Rubric §15, Best Practices & Code Quality]` (a new entity inherits the full read surface with no new code). The
   list path, the wide `GetAllAsync` overload (`:248-345`), is four steps:
   1. **Validate before touching the database** (`:262-267`): `Result.Combine` of
      [`QueryFieldService.Validate`](#queryfieldservice) for `fields`
@@ -1022,7 +1022,7 @@ The fourth co-located type is [`EventUpcasterRegistry`](#eventupcasterregistry) 
   startup [`QueryFilterService`](#queryfilterservice)`.RegisterStrategy` call." Earlier editions of
   the framework had no built-in `long` strategy, so a `bigint`-keyed entity had to call
   `RegisterStrategy` at composition time; making it a default entry closes that gap
-  (`[Rubric §16, Maintainability]`, which assesses whether a common case works with zero
+  (`[Rubric §15, Best Practices & Code Quality]`, which assesses whether a common case works with zero
   configuration).
 - **Walkthrough**: `SupportedOperators` (`:16-21`) holds the ten operators. `CanParseValue` (`:24-25`)
   delegates to [`FilterValueParser.CanParse`](#filtervalueparser) with `ParseLong`. `Apply<T>`
@@ -1280,7 +1280,7 @@ The fourth co-located type is [`EventUpcasterRegistry`](#eventupcasterregistry) 
   alike.
 - **Concept introduced, arithmetic overflow as a production bug class.** `[Rubric §12, Performance &
   Scalability]` assesses whether reads are bounded and paginate correctly at the edges of their input
-  range; `[Rubric §16, Maintainability]` assesses whether a subtle rule is expressed once rather than
+  range; `[Rubric §15, Best Practices & Code Quality]` assesses whether a subtle rule is expressed once rather than
   re-derived per call site. Both apply literally here. The naive expression `(pageNumber - 1) * pageSize`
   is a 32-bit multiply: for page numbers near `int.MaxValue` it overflows and wraps **negative**, and a
   negative `Skip` is not a benign no-op, because SQL Server rejects a negative `OFFSET` outright, so the
@@ -1736,8 +1736,8 @@ The fourth co-located type is [`EventUpcasterRegistry`](#eventupcasterregistry) 
   (its arguments), [`ParameterReplacer`](#parameterreplacer) (the rebind),
   [`IBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#ibaseentitytidentifiertype)
   (the `TEntity` constraint); `System.Linq.Expressions` (BCL).
-- **Concept introduced, one composition algorithm instead of three copies.** `[Rubric §16,
-  Maintainability]` assesses whether a rule with a subtle correctness argument is written once. And,
+- **Concept introduced, one composition algorithm instead of three copies.** `[Rubric §15,
+  Best Practices & Code Quality]` assesses whether a rule with a subtle correctness argument is written once. And,
   Or and Not differ by exactly one expression node, so a per-combinator copy of the parameter-rebinding
   logic would be three places the `Expression.Invoke` mistake could come back. Collapsing them into
   `Combine` (parameterized by the binary-operator factory) and `Negate` leaves one implementation to
@@ -2070,7 +2070,7 @@ The fourth co-located type is [`EventUpcasterRegistry`](#eventupcasterregistry) 
   workspace uses throughout (see the primer's `extension(T)` note): the receiver is named once on the
   block rather than repeated as a `this` parameter on every method, and the constraints are stated
   once. `[Rubric §15, Best Practices & Code Quality]` (assesses idiomatic use of current language
-  features) and `[Rubric §16, Maintainability]`.
+  features) and `[Rubric §15, Best Practices & Code Quality]`.
 - **Walkthrough**: three members, each a thin factory that null-guards both the receiver and the
   argument before constructing the corresponding combinator.
   - `And(ISpecification<TEntity, TIdentifierType> other)` returning

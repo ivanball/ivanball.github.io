@@ -94,7 +94,7 @@ so it inherits soft-delete, audit stamping, and the buffered `DomainEvents` coll
   answers). Its `Id` is database-generated (marked `[IdValueGenerated]`, `Event.cs:23`), and it also
   carries the per-event live-layer moderation default (`Event.cs:80`), the published flag
   (`Event.cs:74`), the organizer contact email, sponsorship packet URL, and ticketing URL that drive
-  the public pages (`Event.cs:56,62,68`, each of which the pages hide entirely when absent), and the
+  the public pages (`Event.cs:59,65,71`, each of which the pages hide entirely when absent), and the
   Sessionize refresh stamp written by `RecordSessionizeRefresh` (`Event.cs:83,86,343`).
 - [`Session`](#session)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:22`) owns
@@ -451,7 +451,7 @@ score, `ContentSimilarityDTO.cs:34-41`) are *not* members of the composite recor
 their own endpoint on the same controller
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:82`).
 The AI scores are produced by an Anthropic-backed scoring service in `Conference.Infrastructure`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:16`,
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:19`,
 outside this chapter) and persisted as the [`SessionAiScore`](#sessionaiscore) aggregate;
 [`ScoreEventSessionsResultDTO`](#scoreeventsessionsresultdto) reports a batch run's scored and failed
 counts
@@ -467,7 +467,7 @@ the Sessionize external sync that seeds the raw session data this dashboard then
 `RefreshFromSessionizeCommand` implements [`IFeatureGated`](group-05-cqrs-pipeline.md#ifeaturegated)
 and returns the flag name from its `FeatureName` property
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeCommand.cs:13,19`),
-so the decorator pipeline short-circuits it when the flag is off (`[Rubric §10, Cross-Cutting
+so the decorator pipeline short-circuits it when the flag is off (`[Rubric §12, Performance & Scalability
 Concerns]`, [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html)). The
 scoring and dashboard handlers are not flag-gated.
 
@@ -659,7 +659,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 
 - **What it is**: the feature-flag name catalog for the Conference module. It holds exactly one constant today: `SessionizeIntegration = "Conference.SessionizeIntegration"` (`ConferenceFeatures.cs:15`), which gates the Sessionize external-data sync capability.
 - **Depends on**: nothing first-party.
-- **Concept introduced, feature flags as named constants.** `[Rubric §10, Cross-Cutting Concerns]` (assesses whether cross-cutting behavior such as flags and configuration is centralized rather than scattered). The constant's value matches a key under the `"FeatureManagement"` configuration section, and per the class doc comment (`ConferenceFeatures.cs:3-7`) it is consumed with `[FeatureGate]` attributes and the [`IFeatureGated`](group-05-cqrs-pipeline.md#ifeaturegated) marker interface. Centralizing the *string* here means the flag name is written once: a typo cannot silently split one flag into two, one of which is never configured and therefore always off. The `"{Module}.{Feature}"` naming convention keeps flags from different modules unambiguous inside one configuration file. The mechanism itself is [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html).
+- **Concept introduced, feature flags as named constants.** `[Rubric §6, CQRS & Event-Driven Design]` (assesses whether cross-cutting behavior such as flags and configuration is centralized rather than scattered). The constant's value matches a key under the `"FeatureManagement"` configuration section, and per the class doc comment (`ConferenceFeatures.cs:3-7`) it is consumed with `[FeatureGate]` attributes and the [`IFeatureGated`](group-05-cqrs-pipeline.md#ifeaturegated) marker interface. Centralizing the *string* here means the flag name is written once: a typo cannot silently split one flag into two, one of which is never configured and therefore always off. The `"{Module}.{Feature}"` naming convention keeps flags from different modules unambiguous inside one configuration file. The mechanism itself is [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html).
 - **Walkthrough**: a single `public const string` (`ConferenceFeatures.cs:15`). The member doc comment (`ConferenceFeatures.cs:10-14`) records the runtime contract: when the flag is disabled, `RefreshFromSessionizeCommand` short-circuits with a failure result and organizers manage event data manually instead of syncing.
 - **Why it's built this way**: putting the Sessionize sync behind a flag lets organizers turn the integration off (for example during a Sessionize API maintenance window) through configuration, with no redeploy.
 - **Where it's used**: [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) implements `IFeatureGated` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeCommand.cs:13`) and returns this constant from its `FeatureName` property (`RefreshFromSessionizeCommand.cs:19`), so the pipeline decorator (G05), not the handler body, does the gating.
@@ -742,6 +742,8 @@ are the primary references; the business rules themselves are catalogued in ADC'
 
 ---
 
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+
 ### SessionInvariants
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:13` · Level 6 · class (static)
 
@@ -749,7 +751,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (`SessionInvariants.cs:2`), [`Result`](group-01-result-error-handling.md#result) / [`Error`](group-01-result-error-handling.md#error) (`:3`), [`SessionStatuses`](#sessionstatuses) (same namespace), and [`SessionDTO`](#sessiondto) from `MMCA.ADC.Conference.Shared.Sessions` (`:1`).
 - **Concept**: the static-invariant-class pattern (methods returning [`Result`](group-01-result-error-handling.md#result), composed with `Result.Combine`) was introduced for the framework in [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants). `[Rubric §4, Domain-Driven Design]`: the rules live in the domain, not in handlers, validators, or the database.
 
-  **The interesting detail here is which direction the constants flow.** `[Rubric §16, Maintainability]` (assesses whether a single change stays a single edit). Every length constant on this class is an alias for the matching constant on [`SessionDTO`](#sessiondto): `public const int TitleMaxLength = SessionDTO.TitleMaxLength;` (`SessionInvariants.cs:16`). The class doc comment (`:7-12`) explains the direction: the numbers live on the DTO, "the lowest layer the UI can also reach, so markup and domain validation cannot drift apart". A Blazor `MaxLength` attribute, an EF `HasMaxLength(...)` call, and a domain length check therefore all resolve to one literal. Domain does not depend on Application here; `Conference.Shared` sits beneath both, so `[Rubric §3, Clean Architecture]` is preserved rather than bent.
+  **The interesting detail here is which direction the constants flow.** `[Rubric §15, Best Practices & Code Quality]` (assesses whether a single change stays a single edit). Every length constant on this class is an alias for the matching constant on [`SessionDTO`](#sessiondto): `public const int TitleMaxLength = SessionDTO.TitleMaxLength;` (`SessionInvariants.cs:16`). The class doc comment (`:7-12`) explains the direction: the numbers live on the DTO, "the lowest layer the UI can also reach, so markup and domain validation cannot drift apart". A Blazor `MaxLength` attribute, an EF `HasMaxLength(...)` call, and a domain length check therefore all resolve to one literal. Domain does not depend on Application here; `Conference.Shared` sits beneath both, so `[Rubric §3, Clean Architecture]` is preserved rather than bent.
 - **Walkthrough**
   - **Length constants** (`SessionInvariants.cs:16-37`): `TitleMaxLength` (`:16`), `DescriptionMaxLength` (`:19`), `StatusMaxLength` (`:22`), `AccessibilityInfoMaxLength` (`:25`), `ResourceLinksMaxLength` (`:28`), `LiveUrlMaxLength` (`:31`), and `RecordingUrlMaxLength` (`:34`) all forward to their `SessionDTO` counterparts, whose literals are 500, 4000, 100, 500, 2000, 2000, and 2000 respectively (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/SessionDTO.cs:18-36`). `AnswerValueMaxLength` is the one literal declared here, 4000 (`SessionInvariants.cs:37`), because the answer value is a child-entity field with no DTO-level counterpart on `SessionDTO`.
   - **Reserved id range** (`SessionInvariants.cs:44,47`): `ManualIdRangeStart` = `999_999_000` and `ManualIdRangeEnd` = `999_999_999`, both `static readonly SessionIdentifierType`. The doc comment (`:39-43`) encodes the design decision behind them: session ids are app-assigned because the int PK *is* the Sessionize id, so ids for sessions never imported from Sessionize (organizer-created and seeded samples) sit above any real Sessionize id and never collide. It mirrors [`QuestionInvariants`](#questioninvariants).
@@ -779,7 +781,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 
   **A second concept lands here too: the change trail.** The class is marked [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity) (`Session.cs:22`), and the class doc comment (`Session.cs:16-20`) gives the reason in business terms: sessions are written by organizers *and* overwritten by the Sessionize sync, so "what changed this title, room, or time slot, and was it a person or the importer" is a question that actually gets asked, and only a change history answers it. `[Rubric §13, Observability & Operability]`: audit stamps say who touched the row last, the trail says what the sequence was.
 
-  **A third: the framework owns the child-collection mechanics.** `[Rubric §1, SOLID]` and `[Rubric §16, Maintainability]`. Delete, restore, and remove-by-id are not hand-rolled loops here; they call four `protected static` helpers on the base class, `DeleteChildren`, `RestoreChild`, `RemoveChildOrNotFound`, and `GetChildOrNotFound` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:273`, `:212`, `:156`, `:103`). The split is deliberate and documented at the helper: the helper owns the mechanics, and the aggregate method owns the meaning, so the caller still decides which domain event to raise and what it carries (`AuditableAggregateRootEntity.cs:129-145`).
+  **A third: the framework owns the child-collection mechanics.** `[Rubric §1, SOLID]` and `[Rubric §15, Best Practices & Code Quality]`. Delete, restore, and remove-by-id are not hand-rolled loops here; they call four `protected static` helpers on the base class, `DeleteChildren`, `RestoreChild`, `RemoveChildOrNotFound`, and `GetChildOrNotFound` (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:273`, `:212`, `:156`, `:103`). The split is deliberate and documented at the helper: the helper owns the mechanics, and the aggregate method owns the meaning, so the caller still decides which domain event to raise and what it carries (`AuditableAggregateRootEntity.cs:129-145`).
 - **Walkthrough**
   - **Scalar properties** (`Session.cs:25-67`): fifteen `private set` fields. `Title` is the only non-nullable text (`:25`); `Status` is free text imported from Sessionize (`:37`); the booleans `IsInformed` / `IsConfirmed` (`:40,43`) track the speaker-communication workflow, and `IsServiceSession` / `IsPlenumSession` (`:46,49`) classify the slot. `LiveUrl` and `RecordingUrl` (`:52,55`) are `string?`, not `Uri`, for Sessionize compatibility. `EventId` (`:64`) and `RoomId` (`:67`) are scalar FKs, the latter nullable because a session may not have a room yet.
   - **Reference navigations** (`Session.cs:70-75`): `Event?` and `Room?` are `[Navigation]`-tagged with a `private set`, mutated only through the public `SetEvent` (`:301`) and `SetRoom` (`:305`) methods the navigation populator calls (G11). The `Event` doc comment notes it exists for query filtering (BR-132). Keeping the setter private and exposing a named method means an accidental assignment from a handler cannot happen by property syntax alone.
@@ -917,7 +919,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 
 - **What it is**: the richest of the event child DTOs, a conference room within an event's venue, with display and accessibility metadata. It also declares the four room field-length caps that the rest of the stack reads.
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) (`RoomDTO.cs:1,13`) closed over `RoomIdentifierType`; the foreign key uses `EventIdentifierType`.
-- **Concept introduced, the DTO as the lowest common home for a shared constant.** The child-DTO shape itself is the one [`EventQuestionAnswerDTO`](#eventquestionanswerdto) introduces; what is new here is that the DTO owns the length constants. `[Rubric §16, Maintainability]` (assesses whether a fact is written once): the domain invariants sit in Conference.Domain, the EF configuration in Conference.Infrastructure, and the form model in Conference.UI, and none of those three can reference the other two. The `*.Shared` project is the only assembly all of them already depend on, so the caps live on the DTO and everyone re-exports rather than re-types them (doc comment, `RoomDTO.cs:6-11`). `[Rubric §21, Accessibility]` is worth naming too, because accessibility data is modelled as first-class room data (`AccessibilityInfo`, `RoomDTO.cs:46`) rather than being buried in a free-text description.
+- **Concept introduced, the DTO as the lowest common home for a shared constant.** The child-DTO shape itself is the one [`EventQuestionAnswerDTO`](#eventquestionanswerdto) introduces; what is new here is that the DTO owns the length constants. `[Rubric §15, Best Practices & Code Quality]` (assesses whether a fact is written once): the domain invariants sit in Conference.Domain, the EF configuration in Conference.Infrastructure, and the form model in Conference.UI, and none of those three can reference the other two. The `*.Shared` project is the only assembly all of them already depend on, so the caps live on the DTO and everyone re-exports rather than re-types them (doc comment, `RoomDTO.cs:6-11`). `[Rubric §21, Accessibility]` is worth naming too, because accessibility data is modelled as first-class room data (`AccessibilityInfo`, `RoomDTO.cs:46`) rather than being buried in a free-text description.
 - **Walkthrough**
   - Length constants (`RoomDTO.cs:16-25`): `NameMaxLength = 255` (line 16), `FloorMaxLength = 100` (line 19), `LocationMaxLength = 255` (line 22), `AccessibilityInfoMaxLength = 500` (line 25).
   - Three `required` members, `Id` (`RoomDTO.cs:28`), `Name` (`RoomDTO.cs:31`), and `EventId` (`RoomDTO.cs:49`, the parent foreign key, declared last in the file).
@@ -961,7 +963,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events.Live` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/IEventLiveValidationService.cs:13` · Level 3 · interface
 
 - **What it is**: the cross-module service contract the Engagement live and check-in layers call to validate an event's, a session's, a sponsor's, or a room's live-layer facts, returning small snapshot records without the caller ever referencing a Conference domain entity.
-- **Depends on**: [`Result`](group-01-result-error-handling.md#result) and [`ServiceContractAttribute`](group-13-grpc-contracts.md#servicecontractattribute) (both via `MMCA.Common.Shared.Abstractions`, `IEventLiveValidationService.cs:1`); [`EventLiveInfo`](#eventliveinfo), [`SessionLiveInfo`](#sessionliveinfo), [`SponsorLiveInfo`](#sponsorliveinfo), and [`RoomSessionInfo`](#roomsessioninfo); the `EventIdentifierType`, `SessionIdentifierType`, `SponsorIdentifierType`, and `RoomIdentifierType` aliases.
+- **Depends on**: [`Result`](group-01-result-error-handling.md#result) and [`ServiceContractAttribute`](group-13-grpc-contracts.md#servicecontractattribute) (both via `MMCA.Common.Shared.Abstractions`, `IEventLiveValidationService.cs:2`); [`EventLiveInfo`](#eventliveinfo), [`SessionLiveInfo`](#sessionliveinfo), [`SponsorLiveInfo`](#sponsorliveinfo), and [`RoomSessionInfo`](#roomsessioninfo); the `EventIdentifierType`, `SessionIdentifierType`, `SponsorIdentifierType`, and `RoomIdentifierType` aliases.
 - **Concept introduced, the owned-interface cross-module boundary.** `[Rubric §7, Microservices Readiness]` (assesses boundaries that survive extraction into separate processes) and `[Rubric §3, Clean Architecture]` (a module depends on an interface it can consume, not on another module's internals): the interface lives in Conference's `*.Shared` project, so the module that **owns** the data publishes the contract, and it is defined in terms of ids and small DTOs only. When both modules run in one host, the real Conference.Application implementation is injected directly; after extraction, the same interface is satisfied by a gRPC adapter. Engagement's code does not change either way. This is the same pattern the module uses for [`ISessionBookmarkValidationService`](#isessionbookmarkvalidationservice). The `[ServiceContract]` marker on `IEventLiveValidationService.cs:12` opts the type into the architecture-fitness rules that guard the contract surface (ADR-015).
 - **Walkthrough**: four methods, all returning `Task<Result<...>>` with a trailing `CancellationToken`.
   - `GetEventLiveInfoAsync` (`IEventLiveValidationService.cs:23`): returns the event's published flag and live window, or a `NotFound` failure when the event does not exist. Consumers layer their own rules on top (draft creation requires published; opening a poll requires now to be inside the window), as stated in the doc comment (`IEventLiveValidationService.cs:15-19`).
@@ -995,7 +997,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 
 - **What it is**: a static, generic helper that picks which event a landing surface should feature (live now, else the next upcoming, else the most recently ended) using the same live-window math the backend enforces. It also exposes the window computation and the DST-safe local-to-UTC conversion as public methods.
 - **Depends on**: nothing first-party (BCL `TimeZoneInfo`, `DateOnly`/`DateTime`, LINQ). It is generic over the caller's event model via accessor delegates.
-- **Concept introduced, the shared selection algorithm parameterized by accessors.** `[Rubric §16, Maintainability]` and `[Rubric §1, SOLID]` (one algorithm serving many callers without a shared base type): several surfaces need "which event is current", the ADC home page, the Engagement live-event service, the Conference list pages, and two server-side handlers, and they do not all hold the same event model (the home page deserializes its own anonymous-endpoint shape). Rather than duplicate the classify-and-rank logic, `SelectCurrentOrNext<TEvent>` takes `Func<TEvent, ...>` accessors for start date, end date, and time-zone id, so it works over any shape without coupling to a concrete type. `[Rubric §27, Internationalization]` also applies: the window math is computed per the event's IANA time zone, never per server local time.
+- **Concept introduced, the shared selection algorithm parameterized by accessors.** `[Rubric §34, Architecture Governance & Documentation]` and `[Rubric §1, SOLID]` (one algorithm serving many callers without a shared base type): several surfaces need "which event is current", the ADC home page, the Engagement live-event service, the Conference list pages, and two server-side handlers, and they do not all hold the same event model (the home page deserializes its own anonymous-endpoint shape). Rather than duplicate the classify-and-rank logic, `SelectCurrentOrNext<TEvent>` takes `Func<TEvent, ...>` accessors for start date, end date, and time-zone id, so it works over any shape without coupling to a concrete type. `[Rubric §27, Internationalization]` also applies: the window math is computed per the event's IANA time zone, never per server local time.
 - **Walkthrough**
   - `SelectCurrentOrNext<TEvent>(events, startDate, endDate, timeZoneId, utcNow)` (`CurrentEventSelector.cs:24-55`, constrained `where TEvent : class`): projects each event to its `(StartUtc, EndUtc)` window via `GetLiveWindowUtc` (`CurrentEventSelector.cs:32-38`), then applies the preference order. **Live** events (`StartUtc <= utcNow && utcNow < EndUtc`) ordered by soonest to end (`CurrentEventSelector.cs:40-44`), else **upcoming** events (`StartUtc > utcNow`) ordered by soonest to start (`CurrentEventSelector.cs:46-50`), else the most recently ended event (`OrderByDescending(EndUtc)`, `CurrentEventSelector.cs:54`). Returns `null` when `events` is empty. Ties resolve by input order because LINQ's `OrderBy` is a stable sort (doc comment, `CurrentEventSelector.cs:10`).
   - `GetLiveWindowUtc(startDate, endDate, timeZoneId)` (`CurrentEventSelector.cs:66-76`): computes `startLocal` as `StartDate` at 00:00 (`CurrentEventSelector.cs:71`) and `endLocal` as `EndDate + 1 day` at 00:00 (`CurrentEventSelector.cs:72`), resolves the zone with `TimeZoneInfo.FindSystemTimeZoneById` (`CurrentEventSelector.cs:74`) and converts both through `ToUtc` (`CurrentEventSelector.cs:75`). There is **no** catch around the zone lookup: the doc comment states the id always resolves because [`EventInvariants`](#eventinvariants)`.EnsureTimeZoneIsValid` guards every write path (`CurrentEventSelector.cs:59-60`, and the guard itself at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:82-98`), so an unresolvable id is a data defect that must surface rather than be silently absorbed. The returned tuple names its second element `EndExclusiveUtc` (`CurrentEventSelector.cs:66`), a reminder that the end bound is exclusive.
@@ -1010,7 +1012,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 
 - **What it is**: a thin convenience wrapper over [`CurrentEventSelector`](#currenteventselector) specialized to the [`EventDTO`](#eventdto) shape, so the pages and services that already work with `EventDTO` do not repeat the same accessor lambdas.
 - **Depends on**: [`CurrentEventSelector`](#currenteventselector), [`EventDTO`](#eventdto).
-- **Concept, the type-specialized wrapper (DRY over the generic helper).** `[Rubric §16, Maintainability]`: the generic [`CurrentEventSelector.SelectCurrentOrNext<TEvent>`](#currenteventselector) needs three accessor delegates on every call. Since many callers pass `EventDTO`, this wrapper binds those lambdas once, so a call site shrinks to `SelectCurrentOrNext(events, utcNow)`.
+- **Concept, the type-specialized wrapper (DRY over the generic helper).** `[Rubric §15, Best Practices & Code Quality]`: the generic [`CurrentEventSelector.SelectCurrentOrNext<TEvent>`](#currenteventselector) needs three accessor delegates on every call. Since many callers pass `EventDTO`, this wrapper binds those lambdas once, so a call site shrinks to `SelectCurrentOrNext(events, utcNow)`.
 - **Walkthrough**: one method, `SelectCurrentOrNext(IEnumerable<EventDTO> events, DateTime utcNow)` (`CurrentEventDefaults.cs:17`), which forwards to [`CurrentEventSelector.SelectCurrentOrNext`](#currenteventselector) with the three `EventDTO` accessors `e => e.StartDate`, `e => e.EndDate`, `e => e.TimeZone` (`CurrentEventDefaults.cs:18-23`) and returns the selected `EventDTO?` (null when the input is empty). No other logic: all the ranking lives in the generic helper. The doc comment notes that callers pass the role-appropriate candidate set (`CurrentEventDefaults.cs:14`), so filtering to published events stays the caller's job.
 - **Why it's built this way**: keeping the `EventDTO` accessors in one place means renaming an `EventDTO` date or time-zone property is a single edit here, not a change scattered across every page that defaults an event filter.
 - **Where it's used**: the Conference [`SessionList`](group-21-conference-ui.md#sessionlist) page (`SessionList.razor.cs:119`), the [`PublicSessionList`](group-21-conference-ui.md#publicsessionlist) page (`PublicSessionList.razor.cs:170`), each setting its default selected event id, and [`PublicSpeakerDetail`](group-21-conference-ui.md#publicspeakerdetail) (`PublicSpeakerDetail.razor.cs:214`). Callers passing a non-`EventDTO` model call the generic [`CurrentEventSelector`](#currenteventselector) directly.
@@ -1202,8 +1204,8 @@ are the primary references; the business rules themselves are catalogued in ADC'
   [SessionQuestionAnswerDTO](#sessionquestionanswerdto) and
   [SessionCategoryItemDTO](#sessioncategoryitemdto); the `SessionIdentifierType`,
   `EventIdentifierType` and `RoomIdentifierType` aliases.
-- **Concept introduced, the DTO as the single source of the field caps.** `[Rubric §16,
-  Maintainability]` (assesses whether one fact lives in one place). The seven `const int` caps at the
+- **Concept introduced, the DTO as the single source of the field caps.** `[Rubric §15,
+  Best Practices & Code Quality]` (assesses whether one fact lives in one place). The seven `const int` caps at the
   top of this type (`SessionDTO.cs:18-36`) are the only declaration of the session field lengths in the
   system: `TitleMaxLength` 500, `DescriptionMaxLength` 4000, `StatusMaxLength` 100,
   `AccessibilityInfoMaxLength` 500, `ResourceLinksMaxLength` 2000, `LiveUrlMaxLength` 2000,
@@ -1396,6 +1398,8 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **Why it's built this way**: separating scored from failed lets the organizer UI show "48 scored, 2 failed" and offer a retry, rather than hiding partial progress behind a single flag.
 - **Where it's used**: returned by `ScoreEventSessionsHandler` in [Conference.Application](group-18-conference-application.md); the individual scores it writes are read back as [`SessionAiScoreDTO`](#sessionaiscoredto) rows.
 
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+
 ### SessionAiScoreDTO
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Sessions.DecisionSupport` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DecisionSupport/SessionAiScoreDTO.cs:6` · Level 0 · record (sealed)
 
@@ -1406,6 +1410,8 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **Why it's built this way**: embedding display context in the score DTO avoids per-row lookups on a dashboard that shows every session in an event at once, and recording the model id, the prompt contract version, and the timestamp keeps an AI-produced number honest and re-scorable. Two scores are only comparable when both the model and the prompt behind them match, so surfacing `PromptVersion` next to `ModelUsed` is what lets a reader tell a genuine ranking change from a change of reviewer brief.
 - **Where it's used**: nested as the `AiScores` collection on [`SessionSelectionDashboardDTO`](#sessionselectiondashboarddto); projected from the [`SessionAiScore`](#sessionaiscore) entity by `GetSessionSelectionDashboardHandler` (`GetSessionSelectionDashboardHandler.cs:386` carries `PromptVersion` across), written by `ScoreEventSessionsHandler` (which stamps `aiScoringService.ModelId` and `aiScoringService.PromptVersion`, `ScoreEventSessionsHandler.cs:83`, and returns a [`ScoreEventSessionsResultDTO`](#scoreeventsessionsresultdto) summary), and read back through [`SessionSelectionController`](group-20-conference-api-grpc.md#sessionselectioncontroller).
 - **Caveats / not-in-source**: the 1.0 to 10.0 range and the status vocabulary are documented in the property comments and enforced by the scoring handler and the external model prompt, not by this record. The `legacy` sentinel is likewise a convention, not a constant on this type: rows predating the column were backfilled with it by the `AddSessionAiScorePromptVersion` migration (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Sessions/SessionAiScoreConfiguration.cs:59-61`).
+
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
 
 ### SimilarSessionPair
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Sessions.DecisionSupport` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DecisionSupport/ContentSimilarityDTO.cs:14` · Level 0 · record (sealed)
@@ -1577,8 +1583,8 @@ are the primary references; the business rules themselves are catalogued in ADC'
   public sponsor strip.
 - **Depends on**: nothing. Four named `int` members, no attributes, no BCL types beyond the enum itself.
 - **Concept introduced, the ordinal-as-ordering enum.** `[Rubric §9, API & Contract Design]` (assesses
-  whether a contract's vocabulary is closed and explicit rather than a loose string) and `[Rubric §16,
-  Maintainability]`. Two conventions are visible in the declaration and both are load-bearing:
+  whether a contract's vocabulary is closed and explicit rather than a loose string) and `[Rubric §15,
+  Best Practices & Code Quality]`. Two conventions are visible in the declaration and both are load-bearing:
   1. **The numeric values are the display order**, stated in the type's own doc comment
      (`SponsorTier.cs:4-6`): `Platinum = 0`, `Gold = 1`, `Silver = 2`, `Community = 3`
      (`SponsorTier.cs:15-24`). A plain ascending sort therefore renders the largest package first with no
@@ -1649,7 +1655,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   `MMCA.Common.Shared.DTOs`, `ActivityDTO.cs:1,15`); the aliases `ActivityIdentifierType` and
   `EventIdentifierType` (both `int`,
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5,8`).
-- **Concept introduced, the DTO as the single source of field lengths.** `[Rubric §16, Maintainability]`
+- **Concept introduced, the DTO as the single source of field lengths.** `[Rubric §15, Best Practices & Code Quality]`
   (assesses whether a rule is declared once and consumed everywhere, or copied) and `[Rubric §24,
   Forms/Validation/UX Safety]`. Five `const int` caps sit at the top of this record
   (`ActivityDTO.cs:17-30`), and the type's own doc comment states why they live *here* rather than in the
@@ -2141,7 +2147,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   (Level 2), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (Level 0); the
   alias `ConferenceCategoryIdentifierType`.
 - **Concept introduced, the aggregate-root lifecycle event.** `[Rubric §6, CQRS & Event-Driven]` and
-  `[Rubric §16, Maintainability]` (one event type per aggregate instead of a separate
+  `[Rubric §15, Best Practices & Code Quality]` (one event type per aggregate instead of a separate
   `Created`/`Updated`/`Deleted` trio). Where the Level-2 events above derive from
   [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) directly, the root-level events derive
   from `EntityChangedEvent<TIdentifierType>`, which consolidates the CRUD-lifecycle pattern: it holds
@@ -2416,7 +2422,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   base record), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); alias
   `ActivityIdentifierType`.
 - **Concept**: the aggregate-root lifecycle event, taught in detail under [`EventChanged`](#eventchanged)
-  below. `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §16, Maintainability]` (assesses whether a recurring
+  below. `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §15, Best Practices & Code Quality]` (assesses whether a recurring
   shape is factored once instead of copied). The instructive detail is a *contrast*: [`Activity`](#activity)
   owns an `EventId` property
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Activities/Activity.cs:54`), yet
@@ -2445,7 +2451,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   base record), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); alias
   `EventIdentifierType`.
 - **Concept introduced, the aggregate-root lifecycle event.** `[Rubric §6, CQRS & Event-Driven]` (assesses
-  whether the write model announces its transitions as consumable events) and `[Rubric §16, Maintainability]`
+  whether the write model announces its transitions as consumable events) and `[Rubric §15, Best Practices & Code Quality]`
   (assesses whether a recurring shape is factored once instead of copied: one event type per aggregate rather
   than a separate `Created` / `Updated` / `Deleted` trio). Where the Level-2 events above derive from
   [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) directly, the root-level events derive from
@@ -2681,7 +2687,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype),
   [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate); alias `SponsorIdentifierType`.
 - **Concept**: the aggregate-root lifecycle event ([`EventChanged`](#eventchanged)).
-  `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §16, Maintainability]`. Sponsors are among the newest
+  `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §15, Best Practices & Code Quality]`. Sponsors are among the newest
   aggregates in this bounded context, and the fact that its event is a five-line record derived from the same
   base is the payoff of the shared shape: a new aggregate gets the full lifecycle-event story without
   inventing anything.
@@ -3493,7 +3499,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   external venue, so the venue is carried on the activity itself instead of being inherited from the
   event. `[Rubric §4, Domain-Driven Design]`: rather than overload `Session` with nullable
   room/speaker/venue fields and a "kind" discriminator, the ubiquitous language gets a second, smaller
-  aggregate whose invariants are genuinely different. `[Rubric §16, Maintainability]`: the cost of that
+  aggregate whose invariants are genuinely different. `[Rubric §15, Best Practices & Code Quality]`: the cost of that
   choice is a parallel command, query, and UI slice, and the benefit is that neither type carries the
   other's optionality.
 - **Walkthrough**
@@ -3667,7 +3673,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   `:25`, `:32`, `:36`, `:44`, `:48`, `:52`, `:56`, `:60`), and so does every FluentValidation rule in
   `SpeakerValidationRules`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:16`,
-  `:27`, `:46`, `:65`). `[Rubric §16, Maintainability]`: one edit in the Shared DTO moves the Razor
+  `:27`, `:46`, `:65`). `[Rubric §15, Best Practices & Code Quality]`: one edit in the Shared DTO moves the Razor
   `maxlength`, the validator message, the domain guard, and the column width together, because there is
   exactly one definition point.
 - **Walkthrough**

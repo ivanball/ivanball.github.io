@@ -502,6 +502,8 @@ type list, the same extension point every module assembly provides.
 
 ---
 
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+
 ### AnthropicContentBlock
 
 > MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:497` · Level 0 · record (private sealed)
@@ -515,13 +517,15 @@ type list, the same extension point every module assembly provides.
 
 ---
 
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+
 ### AnthropicJsonSchemaFormat
 
 > MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:458` · Level 0 · record (private sealed)
 
 - **What it is**: the request fragment that names the output format as `json_schema` and carries the JSON Schema the model's answer must satisfy.
 - **Depends on**: no first-party types. External: `System.Text.Json.Serialization`, `System.Text.Json.JsonElement`.
-- **Concept introduced, constraining a model instead of parsing after it.** The alternative to a schema is asking politely in the prompt and then defending the parse: slice from the first `{` to the last `}`, strip code fences, hope the model did not add a preamble. Sending a schema moves the guarantee to the provider, which is why `ParseSingleScore` can now deserialize the whole text block directly and treat anything else as a failed call (`:118-119`). `[Rubric §16, AI-Native Engineering]` assesses whether model output is constrained and validated rather than trusted: this record is the constraint half, and [AiScoreResponse](#aiscoreresponse)'s all-or-nothing pattern match is the validation half that still runs anyway.
+- **Concept introduced, constraining a model instead of parsing after it.** The alternative to a schema is asking politely in the prompt and then defending the parse: slice from the first `{` to the last `}`, strip code fences, hope the model did not add a preamble. Sending a schema moves the guarantee to the provider, which is why `ParseSingleScore` can now deserialize the whole text block directly and treat anything else as a failed call (`:118-119`). `[Rubric §16, AI-Native Application Architecture]` assesses whether model output is constrained and validated rather than trusted: this record is the constraint half, and [AiScoreResponse](#aiscoreresponse)'s all-or-nothing pattern match is the validation half that still runs anyway.
 - **Walkthrough**: two properties. `Type` (`:461`) is a plain `string` **defaulted** to `"json_schema"` rather than `required`, because there is exactly one legal value and forcing every construction site to repeat it would add a way to get it wrong. `Schema` (`:464`) is a `required JsonElement`, bound at the single call site to the static `ScoreSchema` (`:63`), which `BuildScoreSchema` (`:394-425`) serializes once into a `JsonElement` held in a `static readonly` field (`:392`) so the schema is built one time per process, not per call.
 - **Why it's built this way**: `BuildScoreSchema` derives the schema from the same six criterion names the weighting uses, sets `additionalProperties = false`, marks all eight fields `required`, and pins `penalty` to the enum `0`, `0.5`, `1` (`:412-421`), so the score band and the penalty ladder are enforced by the provider rather than discovered during parsing.
 - **Where it's used**: the `Format` property of [AnthropicOutputConfig](#anthropicoutputconfig) (`:455`), constructed inline in `ScoreSessionAsync` (`:63`).
@@ -541,6 +545,8 @@ type list, the same extension point every module assembly provides.
 
 ---
 
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+
 ### AnthropicUsage
 
 > MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:488` · Level 0 · record (private sealed)
@@ -553,6 +559,8 @@ type list, the same extension point every module assembly provides.
 - **Where it's used**: the `Usage` property of [AnthropicResponse](#anthropicresponse) (`:485`); consumed in `InterpretResponse` (`:90`), which logs the pair (`:94`) and forwards it to [ScoringInstruments](#scoringinstruments)`.RecordUsage` (`:95`).
 
 ---
+
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
 
 ### SessionScoreStamp
 
@@ -580,6 +588,8 @@ type list, the same extension point every module assembly provides.
 
 ---
 
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+
 ### AnthropicOutputConfig
 
 > MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:452` · Level 1 · record (private sealed)
@@ -592,6 +602,8 @@ type list, the same extension point every module assembly provides.
 - **Where it's used**: the `OutputConfig` property of [AnthropicRequest](#anthropicrequest) (`:449`), constructed inline in `ScoreSessionAsync` (`:61-64`).
 
 ---
+
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
 
 ### AnthropicResponse
 
@@ -606,6 +618,8 @@ type list, the same extension point every module assembly provides.
 
 ---
 
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+
 ### AnthropicRequest
 
 > MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:434` · Level 2 · record (private sealed)
@@ -618,6 +632,8 @@ type list, the same extension point every module assembly provides.
 - **Where it's used**: [AnthropicScoringService](#anthropicscoringservice)`.ScoreSessionAsync` (`:55-65`), handed to `JsonContent.Create` (`:69`).
 
 ---
+
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
 
 ### SessionScoringProcessor
 
@@ -642,6 +658,8 @@ type list, the same extension point every module assembly provides.
 
 ---
 
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+
 ### ScoringInstruments
 
 > MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:326` · Level 4 · class (private sealed)
@@ -658,6 +676,8 @@ type list, the same extension point every module assembly provides.
 - **Where it's used**: instantiated by [AnthropicScoringService](#anthropicscoringservice) into its `_instruments` field (`:387`) and called from `InterpretResponse` when the response carries an [AnthropicUsage](#anthropicusage) block (`:95`).
 
 ---
+
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
 
 ### SessionizeService
 
@@ -679,7 +699,7 @@ type list, the same extension point every module assembly provides.
 
 - **What it is**: the adapter that implements [IAiScoringService](group-18-conference-application.md#iaiscoringservice) by calling the Anthropic Claude Messages API (model `claude-haiku-4-5`, `:26`) to score one session proposal against a Program Committee rubric. Its XML doc states the contract plainly (`:14-18`): it never throws for scoring failures, but `OperationCanceledException` propagates. The governance around it (prompt versioning, the golden evaluation suite, the injection posture) is recorded in [ADR-111](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html).
 - **Depends on**: first-party: [IAiScoringService](group-18-conference-application.md#iaiscoringservice) (implements), [SessionScoringInput](group-18-conference-application.md#sessionscoringinput), [SessionScoringResult](group-18-conference-application.md#sessionscoringresult), [SpeakerInfo](group-18-conference-application.md#speakerinfo), [SessionScoringProcessor](#sessionscoringprocessor) (for the shared meter name), and its own private types [AnthropicRequest](#anthropicrequest), [AnthropicOutputConfig](#anthropicoutputconfig), [AnthropicJsonSchemaFormat](#anthropicjsonschemaformat), [AnthropicMessage](#anthropicmessage), [AnthropicResponse](#anthropicresponse), [AnthropicContentBlock](#anthropiccontentblock), [AnthropicUsage](#anthropicusage), [AiScoreResponse](#aiscoreresponse), [ScoringInstruments](#scoringinstruments). External: `HttpClient`, `IConfiguration`, `IMeterFactory`, `ILogger<T>`, `System.Text.Json`, `System.Text.RegularExpressions`, `System.Globalization`.
-- **Concept introduced, the adapter that keeps an HTTP/LLM vendor at the edge.** `[Rubric §3, Clean Architecture]` and `[Rubric §1, SOLID]` (dependency inversion) assess whether inner layers depend on abstractions rather than vendors: every byte of Anthropic-specific HTTP and JSON lives in this one Infrastructure file, behind an Application-owned port. `[Rubric §11, Security]` assesses secret handling and untrusted input: the key is read from configuration (`Anthropic:ApiKey`, `:44`) and passed as the `x-api-key` header (`:68`), never hard-coded, and the failure log for a missing key names the configuration path, not a value (`:47`); speaker-submitted text is escaped, delimited and redacted before it leaves the process (below). `[Rubric §16, AI-Native Engineering]` assesses whether model interaction is versioned, constrained and evaluable: `PromptVersion` (`:37`), the structured-output schema (`:392-425`) and the prompt-injection brief (`:204-217`) are the three pieces. `[Rubric §13, Observability & Operability]` assesses structured, allocation-cheap logging: both log paths are source-generated `[LoggerMessage]` methods (`:427-431`), which is also why the class is `partial`, and token usage additionally lands on counters through [ScoringInstruments](#scoringinstruments). `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation: six distinct failure paths (missing key `:45-49`, non-2xx `:72-77`, model refusal `:98-102`, empty or absent text block `:108-111`, unparseable or partial JSON `:126-128` and `:134-146`, any other exception `:83-87`) all converge on `FailedResult`, so one bad proposal cannot abort a batch. `[Rubric §27, i18n]` assesses culture-correctness: `CultureInfo.InvariantCulture` is used for every interpolated string that reaches the prompt or the log (`:75`, `:235-236`, `:257-261`), so output never varies with server locale.
+- **Concept introduced, the adapter that keeps an HTTP/LLM vendor at the edge.** `[Rubric §3, Clean Architecture]` and `[Rubric §1, SOLID]` (dependency inversion) assess whether inner layers depend on abstractions rather than vendors: every byte of Anthropic-specific HTTP and JSON lives in this one Infrastructure file, behind an Application-owned port. `[Rubric §11, Security]` assesses secret handling and untrusted input: the key is read from configuration (`Anthropic:ApiKey`, `:44`) and passed as the `x-api-key` header (`:68`), never hard-coded, and the failure log for a missing key names the configuration path, not a value (`:47`); speaker-submitted text is escaped, delimited and redacted before it leaves the process (below). `[Rubric §16, AI-Native Application Architecture]` assesses whether model interaction is versioned, constrained and evaluable: `PromptVersion` (`:37`), the structured-output schema (`:392-425`) and the prompt-injection brief (`:204-217`) are the three pieces. `[Rubric §13, Observability & Operability]` assesses structured, allocation-cheap logging: both log paths are source-generated `[LoggerMessage]` methods (`:427-431`), which is also why the class is `partial`, and token usage additionally lands on counters through [ScoringInstruments](#scoringinstruments). `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation: six distinct failure paths (missing key `:45-49`, non-2xx `:72-77`, model refusal `:98-102`, empty or absent text block `:108-111`, unparseable or partial JSON `:126-128` and `:134-146`, any other exception `:83-87`) all converge on `FailedResult`, so one bad proposal cannot abort a batch. `[Rubric §27, i18n]` assesses culture-correctness: `CultureInfo.InvariantCulture` is used for every interpolated string that reaches the prompt or the log (`:75`, `:235-236`, `:257-261`), so output never varies with server locale.
 - **Walkthrough**
   - A **primary constructor** injects `HttpClient`, `IConfiguration`, `IMeterFactory` and `ILogger<AnthropicScoringService>` (`:19-23`). The base address, the `anthropic-version` header and the resilience pipeline are not set here: they are configured once on the typed client in [DependencyInjection](#dependencyinjection) (`DependencyInjection.cs:33-45`), which is why the request below uses a *relative* URI.
   - `ModelId` (`:26`) is a fixed string exposed through the port so callers can record which model produced a score. `PromptVersion` (`:37`) is the second half of that provenance, a `yyyy-MM-dd.N` stamp persisted on every score. Its remark (`:28-36`) is a maintenance contract: bump it on **any** change to the system prompt, the user-prompt builder, the speaker formatter, the redaction rules or the schema, because the golden evaluation suite pins the rendered prompt by hash per version, so an unversioned edit fails a test instead of quietly re-basing every score already on the dashboard.
@@ -719,6 +739,8 @@ type list, the same extension point every module assembly provides.
 
 ---
 
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+
 ### CategoryItemConfiguration
 
 > MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Categories/CategoryItemConfiguration.cs:10` · Level 8 · class
@@ -734,7 +756,7 @@ type list, the same extension point every module assembly provides.
   Because the engine is pinned entirely by the base type, re-pointing a Conference entity at SQLite or Cosmos is a base-class swap with no edit to the body of `Configure`: the domain entity, the handlers and everything above stay untouched. All seventeen Conference configurations use the SQL Server base, since ADC runs SQL Server only.
 
   `[Rubric §8, Data Architecture]` assesses whether persistence is designed deliberately (typed lengths, correct nullability, FK relationships, purposeful indexes) rather than left to convention defaults: this family is where all of that lives for the Conference database. `[Rubric §3, Clean Architecture]` assesses dependency direction: EF mapping is confined to Infrastructure, and the domain entities carry zero EF attributes, so the domain layer stays framework-free.
-- **Concept introduced, length constants sourced from the domain invariants.** Nearly every `HasMaxLength` call in this folder reads a constant from the entity's `…Invariants` class instead of a literal. Here it is `CategoryInvariants.CategoryItemNameMaxLength` (`:19`). The same constant is what the Application layer's FluentValidation rules use, so the column width and the request validator are a **single source of truth**: change the constant once and both move. `[Rubric §16, Maintainability]` assesses exactly this kind of single-definition-point discipline.
+- **Concept introduced, length constants sourced from the domain invariants.** Nearly every `HasMaxLength` call in this folder reads a constant from the entity's `…Invariants` class instead of a literal. Here it is `CategoryInvariants.CategoryItemNameMaxLength` (`:19`). The same constant is what the Application layer's FluentValidation rules use, so the column width and the request validator are a **single source of truth**: change the constant once and both move. `[Rubric §15, Best Practices & Code Quality]` assesses exactly this kind of single-definition-point discipline.
 - **Walkthrough**
   - **Class declaration** (`:10-11`): `internal sealed class CategoryItemConfiguration : EntityTypeConfigurationSQLServer<CategoryItem, CategoryItemIdentifierType>`. `internal` because nothing outside this assembly configures the model; the second type argument is the module's identifier alias, not a raw CLR type.
   - **`base.Configure(builder)`** (`:16`): table `CategoryItem`, schema `Conference`, key on `Id`, value generation per the entity.
@@ -862,6 +884,8 @@ type list, the same extension point every module assembly provides.
 
 ---
 
+`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+
 ### SpeakerCategoryItemConfiguration
 
 > MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Speakers/SpeakerCategoryItemConfiguration.cs:11` · Level 8 · class
@@ -884,7 +908,7 @@ type list, the same extension point every module assembly provides.
   - **Why `HasConversion` and not `OwnsOne`**: the backing column stays a plain string, so adopting the value object on a property that used to be a `string` is not a schema change (`EmailValueConverter.cs:8-10`).
   - **Facets stay at the call site**: the converter deliberately owns no length or requiredness, which is why `HasMaxLength(SpeakerInvariants.EmailMaxLength)` and `IsRequired(false)` are chained here (`:44-45`). Those differ per entity and are not the converter's business (`EmailValueConverter.cs:20-22`).
 
-  `[Rubric §4, DDD]` assesses whether value objects survive the trip to storage instead of being flattened into primitives at the boundary. `[Rubric §16, Maintainability]` applies too: the conversion logic lives once in MMCA.Common, so every entity with an email gets identical semantics.
+  `[Rubric §4, DDD]` assesses whether value objects survive the trip to storage instead of being flattened into primitives at the boundary. `[Rubric §15, Best Practices & Code Quality]` applies too: the conversion logic lives once in MMCA.Common, so every entity with an email gets identical semantics.
 - **Concept reinforced, the partially filtered unique index.** `HasIndex(p => p.LinkedUserId).IsUnique().HasFilter("[LinkedUserId] IS NOT NULL")` (`:63-65`) enforces the one-to-one User to Speaker link **only among speakers that have one**. Without the predicate, SQL Server would treat multiple `NULL`s as duplicates and allow at most one unlinked speaker, which would be nonsense. Note this one is a hand-written literal rather than `HasSoftDeleteFilter()`, because the predicate is about `LinkedUserId`, not about soft delete; the soft-delete clause is not added on top, because `SoftDeleteUniqueIndexConvention` skips any index that already declares a filter (`SoftDeleteUniqueIndexConvention.cs:53`). A soft-deleted linked speaker therefore keeps holding its `LinkedUserId` slot.
 - **Walkthrough**
   - **Required identity** (`:20-26`, `:39-40`): `FirstName`, `LastName`, `IsTopSpeaker`.
@@ -1003,7 +1027,7 @@ type list, the same extension point every module assembly provides.
 - **What it is**: the persistence map for [`Activity`](group-17-conference-domain.md#activity), a social or networking item attached to an event (a pre-conference party, a coffee connect, an after-party) that is deliberately not a session: no room, no speakers, and often an external venue carried on the row itself.
 - **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`Activity`](group-17-conference-domain.md#activity), [`ActivityInvariants`](group-17-conference-domain.md#activityinvariants), [`Event`](group-17-conference-domain.md#event), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
 - **Concept introduced, indexing for the sort, not just for the filter.** The second index (`:63-64`) is `HasIndex(p => new { p.EventId, p.StartTime, p.SortOrder }).HasSoftDeleteFilter()`: non-unique, filtered, and composed in exactly the order the public agenda page consumes. The comment (`:61-62`) states the intent: the page filters by one event and orders by start time then sort order, so the composite serves the browse query directly instead of the database pulling the event slice and sorting it afterwards. This is the one place in the folder where an index's **column order is chosen for an ORDER BY** rather than for a lookup predicate, and it is worth reading alongside the narrower lookup index above it (`:58-59`, plain `EventId` with the same soft-delete filter). Contrast [`RoomConfiguration`](#roomconfiguration), whose paired indexes exist because the composite is filtered and the FK lookup wanted an unfiltered one; here both carry the filter, because every read of this table goes through the global query filter. `[Rubric §12, Performance and Scalability]` assesses whether index shape follows the queries that actually run.
-- **Concept reinforced, event-local wall-clock time.** `StartTime` and `EndTime` are required plain date-times with no offset column (`:29-33`), and the comment (`:27-28`) is explicit that this mirrors `Session.StartsAt`/`EndsAt`: the IANA zone lives once on the owning [`Event`](group-17-conference-domain.md#event) (see [`EventConfiguration`](#eventconfiguration)) and is never repeated per row. The domain entity says the same thing at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Activities/Activity.cs:28-33`. Storing one zone for the whole programme is what keeps a schedule internally consistent when an activity is moved. `[Rubric §16, Maintainability]` assesses single-definition-point discipline, and this is the time-zone instance of it.
+- **Concept reinforced, event-local wall-clock time.** `StartTime` and `EndTime` are required plain date-times with no offset column (`:29-33`), and the comment (`:27-28`) is explicit that this mirrors `Session.StartsAt`/`EndsAt`: the IANA zone lives once on the owning [`Event`](group-17-conference-domain.md#event) (see [`EventConfiguration`](#eventconfiguration)) and is never repeated per row. The domain entity says the same thing at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Activities/Activity.cs:28-33`. Storing one zone for the whole programme is what keeps a schedule internally consistent when an activity is moved. `[Rubric §15, Best Practices & Code Quality]` assesses single-definition-point discipline, and this is the time-zone instance of it.
 - **Walkthrough**
   - **Required** (`:19-21`, `:29-33`, `:47-51`): `Name` at `ActivityInvariants.NameMaxLength` (200, `ActivityInvariants.cs:13`), `StartTime`, `EndTime`, `SortOrder`, and the `EventId` scalar.
   - **Optional** (`:23-25`, `:35-45`): `Description` (`ActivityInvariants.DescriptionMaxLength`), `VenueName`, `VenueAddress` and `VenueUrl`, each `IsRequired(false)` with its own invariant-sourced max length. An absent `VenueName` is a meaningful value rather than missing data: the domain invariant says so (`ActivityInvariants.cs:38-40`), and the public page falls back to the event venue.
@@ -1032,7 +1056,7 @@ type list, the same extension point every module assembly provides.
   - **Event relationship** (`:62-65`): the one-way required `HasOne`/`WithMany()` pair described above. The shipped foreign key is `FK_Sponsor_Event_EventId` with `ReferentialAction.Cascade` (`20260812202047_AddSponsors.cs:42-48`).
   - **Lookup index** (`:67-68`): `builder.HasIndex(p => p.EventId).HasSoftDeleteFilter()`. It is **not** unique, so [`SoftDeleteUniqueIndexConvention`](group-07-persistence-ef-core.md#softdeleteuniqueindexconvention) would never have touched it and the explicit call is the only way the predicate gets applied; the migration confirms the shipped shape, `IX_Sponsor_EventId` with `filter: "[IsDeleted] = 0"` (`20260812202047_AddSponsors.cs:51-56`). It is aimed at exactly one query: the public sponsor strip fetches a page with `filters["EventId"] = ("equals", ...)` and `sortColumn: "Sort"` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sponsors/PublicSponsorList.razor.cs:65-75`), an equality predicate on `EventId` intersected with the global soft-delete filter, and the filtered index covers both halves. `[Rubric §12, Performance and Scalability]` assesses whether index shape follows the queries that actually run.
   - **What is absent from this file** and still ends up in the table: `IsDeleted`, `CreatedOn`/`CreatedBy`, `LastModifiedOn`/`LastModifiedBy` and the `rowversion` concurrency token are all in the shipped table (`20260812202047_AddSponsors.cs:32-37`) without appearing anywhere in `Configure`. They come from [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) and the entity base, which makes this the cleanest single illustration in the chapter of the division of labour taught under [`CategoryItemConfiguration`](#categoryitemconfiguration): a configuration class owns only *this entity's* columns, relationships and indexes.
-- **Why it's built this way**: sponsors are per-event data with a public, ordered presentation, so the mapping optimizes for the two things the public page does, filter by event and sort within a tier, and for schema stability as sponsorship packages change. Keeping every width on `SponsorInvariants` means the column, the domain guard (`EnsureNameIsValid` at `SponsorInvariants.cs:39`, `EnsureLogoUrlIsValid` at `:51`, `EnsureBoothNumberIsValid` at `:63`) and the Application-layer request validators cannot drift apart, which is what `[Rubric §16, Maintainability]` looks for. Confining all of it to one Infrastructure class keeps the `Sponsor` entity free of EF attributes, the Clean Architecture dependency rule this whole folder exists to serve.
+- **Why it's built this way**: sponsors are per-event data with a public, ordered presentation, so the mapping optimizes for the two things the public page does, filter by event and sort within a tier, and for schema stability as sponsorship packages change. Keeping every width on `SponsorInvariants` means the column, the domain guard (`EnsureNameIsValid` at `SponsorInvariants.cs:39`, `EnsureLogoUrlIsValid` at `:51`, `EnsureBoothNumberIsValid` at `:63`) and the Application-layer request validators cannot drift apart, which is what `[Rubric §15, Best Practices & Code Quality]` looks for. Confining all of it to one Infrastructure class keeps the `Sponsor` entity free of EF attributes, the Clean Architecture dependency rule this whole folder exists to serve.
 - **Where it's used**: applied when the concrete [`SQLServerDbContext`](group-07-persistence-ef-core.md#sqlserverdbcontext) for the `ADC_Conference` database builds its model by scanning the module assembly, exactly like its sixteen siblings; snapshotted by the Conference migrations project (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference`, table created by `20260812202047_AddSponsors.cs`). Rows are written by [`ConferenceModuleDbSeeder`](#conferencemoduledbseeder)'s sample-data path and by the sponsor command handlers, and read by [`SponsorService`](group-21-conference-ui.md#sponsorservice) for [`PublicSponsorList`](group-21-conference-ui.md#publicsponsorlist). [`ModuleApplicationDbContext`](#moduleapplicationdbcontext) does declare a `Sponsors` `DbSet`, but as that section explains, the `DbSet` list is an index, not the source of the model.
 - **Caveats / not-in-source**: (1) There is **no unique index on `(EventId, Name)`**, or on `Name` at all. The seeder's idempotency check probes `s => s.Name == name` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:364-366`), so uniqueness of sponsor names is an application-level convention with no database backstop, unlike the room-name and session-speaker cases elsewhere in this folder. (2) The `Tier` column carries no check constraint, so a value outside `0..3` would be storable by anything that bypasses the domain factory; the enum is enforced in the CLR type, not in SQL. (3) `BoothNumber` is nullable and independent of `IsExhibitor`: the domain deliberately accepts a booth number on a non-exhibitor (`SponsorInvariants.cs:57-58`, "the flag drives display, it does not reject stored data"), and the mapping adds no constraint tying the two together. (4) The `Cascade` delete on the event foreign key is not overridden here; because the codebase soft-deletes rather than hard-deletes, whether that cascade ever executes in a deployed database is not determinable from source. (5) The grouping by tier that the public page renders happens **in memory** after the fetch (`PublicSponsorList.razor.cs:82-86`), not as a SQL `ORDER BY Tier`, so the int conversion enables a cheap column sort that today's read path does not yet ask the database to perform.
 

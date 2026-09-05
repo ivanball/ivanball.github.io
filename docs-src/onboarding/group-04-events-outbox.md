@@ -553,7 +553,7 @@ edge) are the primary references.
   becomes impossible.
 - **Concept introduced, default interface implementations as a compatibility layer.**
   `[Rubric §1, SOLID]` (interface segregation and open/closed extension) and
-  `[Rubric §16, Maintainability]`. Three of the five members ship **bodies on the interface itself**:
+  `[Rubric §15, Best Practices & Code Quality]`. Three of the five members ship **bodies on the interface itself**:
   `TryBeginAsync` (`IInboxStore.cs:38-39`) is defined as `!await AlreadyProcessedAsync(...)`,
   `CompleteAsync` (`IInboxStore.cs:48-49`) forwards to `MarkProcessedAsync`, and `Abandon`
   (`IInboxStore.cs:63`) returns `true`. The `<remarks>` says why (`IInboxStore.cs:33-37`): an
@@ -577,7 +577,7 @@ edge) are the primary references.
     already committed the row, so the redelivery is treated as a duplicate and the remaining handlers
     will not run again.
 - **Why it's built this way**: the port lets the no-op and EF-backed implementations be swapped by
-  configuration without touching consumer code, a §6/§10 dependency-inversion win, and putting the
+  configuration without touching consumer code, a §1/§6 dependency-inversion win, and putting the
   protocol (not just the two data operations) on the interface keeps the ordering rules in one place
   instead of in every consumer. **[ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)** records this inbox as the broker-consume sibling of
   [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)'s outbox (producer side) and [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html)'s HTTP-edge idempotency, deduping broker
@@ -595,6 +595,8 @@ edge) are the primary references.
   host that never calls it has no `IInboxStore` in the container at all. That is consistent (nothing
   consumes the port without a broker consumer) but it does mean the inbox posture is a *broker-mode*
   decision, not a container-wide one.
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### InboxDisabledWarningService
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Inbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/InboxDisabledWarningService.cs:20` · Level 0 · class (internal sealed partial, `IHostedService`)
@@ -641,6 +643,8 @@ edge) are the primary references.
   returns early for the in-process provider (`DependencyInjection.cs:755-758`), a monolith host never
   sees this warning. That is correct (in-process dispatch does not redeliver) but it does mean the
   absence of the line is not by itself evidence that dedup is on.
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### InboxMessage
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Inbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/InboxMessage.cs:8` · Level 0 · class (public sealed)
@@ -689,6 +693,8 @@ edge) are the primary references.
   (`ApplicationDbContext.cs:566-568`). There is also no tenant column: a tenant with its own database
   gets its own `InboxMessages` table instead (see [`OutboxCleanupService`](#outboxcleanupservice)).
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### OutboxDisabledNoticeService
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox.Administration` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxDisabledNoticeService.cs:22` · Level 0 · class (internal sealed partial, `IHostedService`)
 
@@ -727,6 +733,8 @@ edge) are the primary references.
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:209-212`), so a host
   either gets the two outbox background services or gets this notice, never both and never neither.
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### IIntegrationEvent
 > MMCA.Common.Domain · `MMCA.Common.Domain.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IIntegrationEvent.cs:15` · Level 1 · interface
 
@@ -759,6 +767,8 @@ edge) are the primary references.
   [`IntegrationEventConsumer<TEvent>`](#integrationeventconsumertevent), whose type parameter is
   constrained to `class, IIntegrationEvent` (`IntegrationEventConsumer.cs:31`).
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### NoOpInboxStore
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Inbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/NoOpInboxStore.cs:7` · Level 1 · class (internal sealed)
 
@@ -767,7 +777,7 @@ edge) are the primary references.
   inbox at all.
 - **Depends on**: [`IInboxStore`](#iinboxstore) (the port it implements); BCL `Task`/`Guid` only.
 - **Concept reinforced, the Null Object pattern.** `[Rubric §2, Design Patterns]` (assesses idiomatic
-  use of patterns) and `[Rubric §10, Cross-Cutting Concerns]`. `AlreadyProcessedAsync` always returns
+  use of patterns) and `[Rubric §17, DevOps & Deployment]`. `AlreadyProcessedAsync` always returns
   `Task.FromResult(false)` (`NoOpInboxStore.cs:9-10`) and `MarkProcessedAsync` returns
   `Task.CompletedTask` (`NoOpInboxStore.cs:12-13`). The consumer pipeline is written against
   [`IInboxStore`](#iinboxstore) and runs identically whether or not dedup is enabled: the Null Object
@@ -791,6 +801,8 @@ edge) are the primary references.
   `else` branch of `settings.IsInboxEnabled`, that is when `MessageBus:EnableInbox=false` is set
   explicitly (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:798-809`);
   consumed by [`IntegrationEventConsumer<TEvent>`](#integrationeventconsumertevent).
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### OutboxSettings
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox.Administration` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:10` · Level 2 · class (public sealed)
@@ -889,6 +901,8 @@ edge) are the primary references.
   Cosmos fails on first publish rather than at bind time; the `[Range]` attributes cannot express
   "relational engines only".
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### EfInboxStore
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Inbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:38` · Level 13 · class (public sealed partial)
 
@@ -986,6 +1000,8 @@ edge) are the primary references.
   given handler's `SaveChangesAsync` actually lands on the same physical source as the resolved outbox
   data source is a per-host configuration question that is not determinable from this file alone.
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### OutboxAdministration
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox.Administration` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxAdministration.cs:36` · Level 13 · class (public sealed partial)
 
@@ -1071,6 +1087,8 @@ edge) are the primary references.
   and holds no state of its own. The framework ships no endpoint for it; a host exposes it from an admin
   endpoint, a support command or a scheduled job (`IOutboxAdministration.cs:10-14`).
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### OutboxCleanupService
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox.Administration` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:47` · Level 13 · class (public sealed partial, `BackgroundService`)
 
@@ -1151,6 +1169,8 @@ edge) are the primary references.
   (`OutboxCleanupService.cs:127`), not a separate inbox window, so shortening outbox retention shortens
   the dedup memory with it.
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### IOutboxSignal
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/IOutboxSignal.cs:8` · Level 0 · interface
 
@@ -1180,7 +1200,7 @@ edge) are the primary references.
   injection point, and it keeps the `SemaphoreSlim` detail (including its one-permit cap) out of every
   call site.
 - **Where it's used**: registered as a singleton by `AddInfrastructure`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:178`). `Signal()` is
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:192`). `Signal()` is
   called by
   [`DomainEventSaveChangesInterceptor`](group-07-persistence-ef-core.md#domaineventsavechangesinterceptor)
   on all three of its paths
@@ -1192,6 +1212,8 @@ edge) are the primary references.
   `WaitAsync` is awaited by the [`OutboxProcessor`](#outboxprocessor) loop
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:146`),
   with the duration computed from [`OutboxCycleResult`](#outboxcycleresult).
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### OutboxCycleResult
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxCycleResult.cs:19` · Level 0 · record struct (internal readonly)
@@ -1223,6 +1245,8 @@ edge) are the primary references.
   produced per source by `ProcessSourceAsync` (`OutboxProcessor.cs:299,308,339-343`), and consumed by
   `ExecuteAsync` to either continue immediately (`OutboxProcessor.cs:132-136`) or wait for the
   duration `ComputeWaitTime` derives from it (`OutboxProcessor.cs:141-146`).
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### OutboxMetrics
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxMetrics.cs:16` · Level 0 · class (internal static)
@@ -1294,6 +1318,8 @@ edge) are the primary references.
   [`BrokerMetrics.CircuitOpenCounter`](group-14-module-system-composition.md#brokermetrics), not on
   `OutboxMetrics` (`OutboxProcessor.cs:658-660`).
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### EventNameResolver
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/EventNameResolver.cs:19` · Level 1 · class (internal static)
 
@@ -1307,7 +1333,7 @@ edge) are the primary references.
   [`UpcastingIntegrationEventConsumer<TEvent>`](group-14-module-system-composition.md#upcastingintegrationeventconsumertevent).
 - **Concept introduced, a serialization identity that outlives the CLR type name.**
   `[Rubric §9, API & Contract Design]` assesses whether a stored or on-the-wire contract can evolve
-  without breaking what is already in flight, and `[Rubric §16, Maintainability]` assesses whether an
+  without breaking what is already in flight, and `[Rubric §15, Best Practices & Code Quality]` assesses whether an
   ordinary refactoring (rename, namespace move, project split) is safe. The problem: an outbox row
   records the event's assembly-qualified CLR name, so renaming the class or moving it to another
   assembly orphans every row already written under the old name, and the processor eventually
@@ -1443,9 +1469,11 @@ edge) are the primary references.
   overflow makes signalling idempotent against bursts, which is the same "at-least-once is fine,
   duplicates are absorbed" instinct that runs through this whole group.
 - **Where it's used**: registered as the singleton `IOutboxSignal` by `AddInfrastructure`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:178`). Its callers are
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:192`). Its callers are
   listed under [`IOutboxSignal`](#ioutboxsignal). Note the registration is unconditional, above the
   outbox gate, so the producers can signal without checking whether a processor exists.
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### BaseDomainEvent
 > MMCA.Common.Domain · `MMCA.Common.Domain.DomainEvents` · `MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:26` · Level 1 · record class (abstract)
@@ -1522,6 +1550,8 @@ edge) are the primary references.
   [`OutboxProcessor`](#outboxprocessor) drains through: `IEventBus` is the *producer's* API and writes
   the outbox row, `IMessageBus` is the *transport's* API and moves the row's payload onward.
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### IIntegrationEventHandler<in TIntegrationEvent>
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Events` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Events/IIntegrationEventHandler.cs:15` · Level 2 · interface
 
@@ -1546,6 +1576,8 @@ edge) are the primary references.
   [`DomainEventDispatcher`](#domaineventdispatcher) (Level 3) and, on the extracted-service path, by
   [`IntegrationEventConsumer<TEvent>`](#integrationeventconsumertevent), which resolves every
   registered handler for the delivered event and invokes them in order.
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### BaseIntegrationEvent
 > MMCA.Common.Domain · `MMCA.Common.Domain.DomainEvents` · `MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:11` · Level 2 · record class (abstract)
@@ -1584,7 +1616,7 @@ edge) are the primary references.
   contract only. The framework preserves `MessageId` and `DateOccurred` across every hop, so inbox
   deduplication is unaffected by an upcast, and a fitness function requires the upcast *target* to
   declare a strictly higher `SchemaVersion` than its source. That last rule is what keeps the version
-  number from being decorative. `[Rubric §16, Maintainability]`: the handler set never has to grow a
+  number from being decorative. `[Rubric §15, Best Practices & Code Quality]`: the handler set never has to grow a
   branch per historical contract shape.
 - **Why it's built this way**: declaring `SchemaVersion` **virtual with a default** keeps *adding* the
   member a non-breaking change, so every pre-existing event implicitly stays v1 with no edits
@@ -1598,6 +1630,8 @@ edge) are the primary references.
   [`OutputCacheEvictionRequested`](#outputcacheevictionrequested) and of every cross-module event in
   the apps (for example ADC's `SpeakerLinkedToUser`, `SpeakerUnlinkedFromUser`, `UserRegistered`, and
   Store's `ProductVariantChanged`).
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### EntityChangedEvent<TIdentifierType>
 > MMCA.Common.Domain · `MMCA.Common.Domain.DomainEvents` · `MMCA.Common.Domain/DomainEvents/EntityChangedEvent.cs:24` · Level 2 · record (abstract)
@@ -1616,7 +1650,7 @@ edge) are the primary references.
   and `DomainEntityState.Deleted` from `Delete()`; reserve a *named* event (for example `OrderPaid`,
   `ShoppingCartCheckedOut`), inheriting [`BaseDomainEvent`](#basedomainevent) directly, for business
   state-machine transitions with unique payloads (`EntityChangedEvent.cs:15-19`).
-  `[Rubric §16, Maintainability]` assesses change-amplification cost: collapsing three CRUD events into
+  `[Rubric §15, Best Practices & Code Quality]` assesses change-amplification cost: collapsing three CRUD events into
   one keeps the event surface small, so adding an entity adds one record rather than three.
 - **Walkthrough**: a primary-constructor record (`EntityChangedEvent.cs:24`) with two positional
   parameters, `State` of type `DomainEntityState` (`EntityChangedEvent.cs:25`) and `EntityId` of type
@@ -1735,7 +1769,7 @@ edge) are the primary references.
   (`ScopedIntegrationEventHandlerBase.cs:39-41`), constrained
   `where TIntegrationEvent : IIntegrationEvent` (`ScopedIntegrationEventHandlerBase.cs:42`).
 - **Concept introduced, why a singleton handler has to open its own scope.**
-  `[Rubric §10, Cross-Cutting Concerns]` assesses whether repeated infrastructure ceremony is factored
+  `[Rubric §29, Resilience, Reliability & Business Continuity]` assesses whether repeated infrastructure ceremony is factored
   out of business code, and `[Rubric §1, SOLID]` covers the template-method shape that does it. The
   class doc states the constraint (`ScopedIntegrationEventHandlerBase.cs:12-19`):
   `IIntegrationEventHandler<T>` implementations are registered as **singletons** by the module scan,
@@ -1814,6 +1848,8 @@ edge) are the primary references.
   documented in the remarks (`ScopedIntegrationEventHandlerBase.cs:33`,
   `ScopedIntegrationEventHandlerBase.cs:82-83`).
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### OutboxFinalizer
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxFinalizer.cs:12` · Level 11 · class (internal static)
 
@@ -1858,6 +1894,8 @@ edge) are the primary references.
   right after the local dispatch (`DomainEventSaveChangesInterceptor.cs:334`) and by
   [`InProcessEventBus`](#inprocesseventbus) after writing and dispatching an integration-event batch
   (`InProcessEventBus.cs:98`).
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### OutboxProcessor
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56` · Level 13 · class (public sealed partial, `BackgroundService`)
@@ -2092,6 +2130,8 @@ edge) are the primary references.
   [`OutboxMetrics`](#outboxmetrics)); the lease makes multiple replicas *correct*, but the gauge still
   must not be summed across them.
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### IMessageBus
 > MMCA.Common.Application · `MMCA.Common.Application.Messaging` · `MMCA.Common.Application/Messaging/IMessageBus.cs:28` · Level 2 · interface
 
@@ -2135,6 +2175,8 @@ edge) are the primary references.
   the background [`OutboxProcessor`](#outboxprocessor)
   (`MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:272`) and invoked for every
   integration-event row it drains (`OutboxProcessor.cs:590-600`).
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### BrokerMessageBus
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Messaging` · `MMCA.Common.Infrastructure/Messaging/BrokerMessageBus.cs:24` · Level 3 · class (public sealed)
@@ -2190,6 +2232,8 @@ edge) are the primary references.
   (`MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:272`) and calls it inside a
   resilience pipeline that wraps only the broker hop
   (`OutboxProcessor.cs:590-600`).
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### DomainEventDispatcher
 > MMCA.Common.Application · `MMCA.Common.Application.Services` · `MMCA.Common.Application/Services/DomainEventDispatcher.cs:23` · Level 3 · class (public sealed)
@@ -2317,6 +2361,8 @@ edge) are the primary references.
   [`BrokerMessageBus`](#brokermessagebus) in broker-mode service hosts
   (`MMCA.Common.Infrastructure/DependencyInjection.cs:785`).
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### IntegrationEventConsumer<TEvent>
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Messaging.Consumers` · `MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:27` · Level 3 · class (public sealed partial)
 
@@ -2418,6 +2464,8 @@ edge) are the primary references.
   the no-handler comment says "log a warning" (`IntegrationEventConsumer.cs:87`) but the
   `[LoggerMessage]` attribute declares `Level = LogLevel.Information`
   (`IntegrationEventConsumer.cs:101`); the attribute is what runs.
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### OutputCacheEvictionRequested
 > MMCA.Common.Domain · `MMCA.Common.Domain.IntegrationEvents` · `MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:29` · Level 3 · record class (public sealed)
@@ -2559,6 +2607,8 @@ edge) are the primary references.
   (`MMCA.Common.Infrastructure/DependencyInjection.cs:779`) in each broker-mode service's
   `Program.cs`, for example `x.RegisterIntegrationEventConsumer<SpeakerLinkedToUser>()`.
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### OutboxMessage
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15` · Level 9 · class (public sealed)
 
@@ -2656,6 +2706,8 @@ edge) are the primary references.
   already written, the null caches, and the row dead-letters with reason `type_unresolvable` after the
   processor's one retry.
 
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
+
 ### BrokerEventBus
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Messaging` · `MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:31` · Level 13 · class (public sealed)
 
@@ -2720,6 +2772,8 @@ edge) are the primary references.
   (`MMCA.Common.Infrastructure/DependencyInjection.cs:791`, with the explanatory comment at
   `DependencyInjection.cs:773-776`). Every `IEventBus` injection in application code resolves this
   implementation in broker mode.
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 ### InProcessEventBus
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Messaging` · `MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:33` · Level 13 · class (public sealed)
@@ -2789,6 +2843,8 @@ edge) are the primary references.
   (`MMCA.Common.Infrastructure/DependencyInjection.cs:564`), superseded by
   [`BrokerEventBus`](#brokereventbus) once `AddBrokerMessaging` is called
   (`MMCA.Common.Infrastructure/DependencyInjection.cs:791`).
+
+`[Rubric §10, Messaging & Integration Architecture]` applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.
 
 
 ---

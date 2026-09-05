@@ -293,7 +293,7 @@
           unsupported property names (<code>DeclarativeNavigationPopulator.cs:30-32</code>), and for each descriptor loads
           it only when the requested kind matches <code>RequiresChildren</code> <strong>and</strong> the property is actually in the
           unsupported set (<code>DeclarativeNavigationPopulator.cs:34-41</code>). Adding a new cross-source navigation
-          becomes &quot;add one descriptor&quot;, not &quot;write a new class&quot; (<code>[Rubric §16, Maintainability]</code>). It is the
+          becomes &quot;add one descriptor&quot;, not &quot;write a new class&quot; (<code>[Rubric §15, Best Practices &amp; Code Quality]</code>). It is the
           only concrete class in this group left open for inheritance, because module populators subclass it.</p>
           <p>End to end, the runtime flow for a list query is: a module query handler asks the
           <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>
@@ -767,7 +767,7 @@
           <a href="#navigationmetadata"><code>NavigationMetadata</code></a> (Level 3).</li>
           <li><strong>Concept introduced, declaration over implementation.</strong> <code>[Rubric §2, Design Patterns]</code> (the
           descriptor list is a tiny declarative program that this class interprets by iteration) and
-          <code>[Rubric §16, Maintainability]</code> (adding a cross-source navigation means adding one object literal
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (adding a cross-source navigation means adding one object literal
           to a collection expression, not writing a class). A module&#39;s populator is therefore a subclass with
           an empty body whose entire content is its base-constructor argument, as at
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerNavigationPopulator.cs:13-31</code>.</li>

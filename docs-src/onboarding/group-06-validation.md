@@ -45,7 +45,7 @@ so an invalid command short-circuits before a database transaction is ever opene
 (`ValidatingCommandDecorator.cs:24-27`). `[Rubric §6, CQRS & Event-Driven]` assesses whether reads
 and writes are separated and whether cross-cutting behavior lives in the pipeline rather than inside
 use cases: validation here is one decorator, not an `if (!valid) return` prologue copied into every
-handler. `[Rubric §10, Cross-Cutting Concerns]` and `[Rubric §24, Forms, Validation & UX Safety]`
+handler. `[Rubric §12, Performance & Scalability]` and `[Rubric §24, Forms, Validation & UX Safety]`
 apply for the same reason: one gate, uniform for REST, gRPC, and event-consumer entry points alike.
 
 **Every registered validator runs, and they run sequentially.** Both decorators materialize their
@@ -196,7 +196,7 @@ scan cannot see, for example a closed generic constructed at registration time,
 `AddCommandRequestValidator<TCommand, TRequest>()` (`DependencyInjection.cs:477-480`) is the explicit
 form of the same registration, with the same `TryAdd` precedence. `[Rubric §2, Design Patterns]`
 (convention over configuration, plus the Decorator pattern the gate itself rides on) and
-`[Rubric §16, Maintainability]` (a new command inherits validation without a registration line) both
+`[Rubric §15, Best Practices & Code Quality]` (a new command inherits validation without a registration line) both
 land here.
 
 **The caller guard that travels with this group.**
@@ -266,7 +266,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   compose with. `[Rubric §9, API & Contract Design]` assesses whether the contract a client codes
   against is stable and uniform; a caller-supplied code such as `"Sponsor.EventId.Required"` is part of
   that contract, where the FluentValidation default is an implementation detail that would change if
-  the rule were re-expressed. `[Rubric §16, Maintainability]`: because the code rides in as one optional
+  the rule were re-expressed. `[Rubric §15, Best Practices & Code Quality]`: because the code rides in as one optional
   constructor argument, adding a coded rule never forks the shared fragment into a bespoke copy.
   One deliberate consequence, spelled out in the same remarks: the code is applied to **every** rule the
   fragment declares for that field, so one field answers under one code, and a field whose bounds must
@@ -497,7 +497,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   cannot drift apart.
 
 - **Depends on**: [`AddressInvariants`](group-02-domain-building-blocks.md#addressinvariants) from
-  `MMCA.Common.Shared.ValueObjects` (imported at `AddressValidationRules.cs:4`), FluentValidation, and
+  `MMCA.Common.Shared.ValueObjects.Contact` (imported at `AddressValidationRules.cs:4`), FluentValidation, and
   `System.Globalization` / `System.Linq.Expressions` from the BCL (`:1-2`). They share the *shape* of
   the Level 0 fragments in
   [CommonValidationRules](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest)
@@ -882,7 +882,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   dependency is `ArgumentNullException.ThrowIfNull`.
 
 - **Concept: pushing a repeated guard into the framework rather than a base class.**
-  `[Rubric §16, Maintainability]` (assesses whether duplicated logic is consolidated where it can only be
+  `[Rubric §15, Best Practices & Code Quality]` (assesses whether duplicated logic is consolidated where it can only be
   written once): the guard being replaced is the three-line
   read-`UserId`, null-check, build-a-forbidden-`Error`, return-a-failure block that every handler and
   controller protecting a per-user operation would otherwise repeat, which the type's own doc comment

@@ -340,7 +340,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheSettings.cs:32</code>), so a host that
           configures nothing behaves exactly as it did before that section existed. The short default is a
           staleness guard: caching is opt-in and conservative, and a read earns a longer life only by asking for
-          one. One policy object with many call sites is the [Rubric §10, Cross-Cutting] habit this framework
+          one. One policy object with many call sites is the [Rubric §12, Performance &amp; Scalability] habit this framework
           applies everywhere.</p>
           <p><strong>How it fires at runtime.</strong> Nothing above runs unless a use case opts in, via two marker interfaces
           consumed by the CQRS decorator pipeline (<code>FeatureGate</code> then <code>Logging</code> then <code>Caching</code> then <code>Validating</code>
@@ -540,7 +540,7 @@
           default (<code>CacheOptions.cs:23</code>) is the conservative knob: a cached read is served for at most 30
           seconds before falling through to the source, so a query that never declares its own duration cannot
           serve dangerously stale data. Callers that can tolerate more staleness widen the window per query.
-          <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses whether concerns like caching, logging and validation
+          <code>[Rubric §12, Performance &amp; Scalability]</code> assesses whether concerns like caching, logging and validation
           live in one place instead of being re-decided per handler; TTL policy here is one property in one
           file rather than a <code>TimeSpan.FromSeconds(30)</code> scattered through call sites.</li>
           <li><strong>Walkthrough</strong><ul>
@@ -741,7 +741,7 @@
           and still answers correctly (<code>CacheSettings.cs:10-15</code>). <code>[Rubric §12, Performance &amp; Scalability]</code>:
           the populate lock is stampede protection, and giving it a finite timeout trades that protection for
           a latency bound, which is exactly the tradeoff the remarks spell out (<code>:50-56</code>).</p>
-          <p><code>[Rubric §16, Maintainability]</code>: the defaults are not re-typed literals. <code>DefaultDuration</code>
+          <p><code>[Rubric §15, Best Practices &amp; Code Quality]</code>: the defaults are not re-typed literals. <code>DefaultDuration</code>
           initializes from <a href="#cacheoptions">CacheOptions</a><code>.DefaultDuration</code> (<code>CacheSettings.cs:32</code>, defined as
           30 seconds at <code>CacheOptions.cs:23</code>), so the configured path and the hard-coded path cannot drift
           apart, and a host that configures nothing behaves as it did before the section existed
@@ -818,7 +818,7 @@
           The Application layer <em>defines</em> this contract; the Infrastructure layer <em>implements</em> it. Handlers,
           decorators and the auth services never see <code>StackExchange.Redis</code> or <code>Microsoft.Extensions.Caching</code>;
           they program against this interface and the container decides which adapter they get. <strong>Second
-          concept, the default interface member as a non-breaking extension point.</strong> <code>[Rubric §16, Maintainability]</code> assesses whether the codebase can absorb change without a ripple. Two members here
+          concept, the default interface member as a non-breaking extension point.</strong> <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether the codebase can absorb change without a ripple. Two members here
           ship with bodies, <code>IncrementAsync</code> (<code>ICacheService.cs:59</code>) and <code>GetOrCreateAsync</code>
           (<code>ICacheService.cs:99</code>). Every existing implementer keeps compiling and inherits working behavior,
           while a store with a better primitive overrides. That is how the
@@ -1040,7 +1040,7 @@
           <a href="#redisprefixscanner">RedisPrefixScanner</a> (prefix eviction). Externals: <code>HybridCache</code> /
           <code>HybridCacheEntryOptions</code> / <code>HybridCacheEntryFlags</code> (NuGet), <code>ILogger&lt;T&gt;</code> and
           <code>StackExchange.Redis.IConnectionMultiplexer</code> (optional).</li>
-          <li><strong>Concept introduced, two serialization formats must never share one keyspace.</strong> <code>[Rubric §8, Data Architecture]</code> assesses whether stored data has one owner and one shape; <code>[Rubric §16, Maintainability]</code> assesses whether a change can be rolled out without a coordinated flag day. Every
+          <li><strong>Concept introduced, two serialization formats must never share one keyspace.</strong> <code>[Rubric §8, Data Architecture]</code> assesses whether stored data has one owner and one shape; <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether a change can be rolled out without a coordinated flag day. Every
           key this service writes carries a <code>hc:</code> segment inside the configured prefix, <code>{prefix}hc:{key}</code>
           (<code>HybridCacheService.cs:20</code>, <code>:48</code>, <code>:261</code>), which is the structural form of the <code>WRONGTYPE</code> lesson
           recorded on <a href="#distributedcacheservice">DistributedCacheService</a><code>.IncrementAsync</code>. <code>HybridCache</code>
@@ -1179,7 +1179,7 @@
           or for genuinely per-instance data and wrong for anything else. The teachable mechanic is the shadow
           index: <code>IMemoryCache</code> is a black box with no key listing, so the service mirrors every live key into
           <code>_keys</code> and keeps that mirror honest with a <strong>post-eviction callback</strong>, so an entry that expires or
-          is dropped under memory pressure prunes its own tracking record instead of leaking. <code>[Rubric §10, Cross-Cutting Concerns]</code>: it presents the identical <a href="#icacheservice">ICacheService</a> surface as the
+          is dropped under memory pressure prunes its own tracking record instead of leaking. <code>[Rubric §12, Performance &amp; Scalability]</code>: it presents the identical <a href="#icacheservice">ICacheService</a> surface as the
           distributed adapters, so swapping backends changes nothing for callers. <strong>Second concept, an
           invariant that write ordering cannot buy you.</strong> <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses
           everyday craftsmanship, including whether comments explain <em>why</em> rather than <em>what</em>. The <code>SetAsync</code>
