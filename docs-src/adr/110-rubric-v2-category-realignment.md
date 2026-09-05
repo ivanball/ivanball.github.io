@@ -1,7 +1,8 @@
 # ADR-110: Rubric Version 2, Category Realignment at 34
 
 ## Status
-Accepted (2026-09-04).
+Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category,
+recorded in [ADR-111](111-ai-session-scoring-governance.md)).
 
 ## Context
 The 34-category Architecture Evaluation Criteria
@@ -43,9 +44,12 @@ two overlap-heavy categories in place and adding criteria to eleven others.**
    calls a model.** Criteria: model calls behind a port; prompt and model versioning; an evaluation
    suite gating CI; guardrails and PII redaction at the boundary; least-privilege tool calling with a
    human in the loop for consequential actions; retrieval stores governed as data (§8, §30); LLM
-   observability and cost attribution. Developer-side AI tooling is scored in §33, not here. All
-   three repos mark it N/A today, which the rubric handles by dropping the weight from both
-   denominators and stating the scope-out in the scorecard's N/A note.
+   observability and cost attribution. Developer-side AI tooling is scored in §33, not here.
+   MMCA.Common and MMCA.Store mark it N/A, which the rubric handles by dropping the weight from both
+   denominators and stating the scope-out in the scorecard's N/A note. MMCA.ADC scores it: its AI
+   session-scoring feature calls the Anthropic Messages API in production, so the weight-2 category
+   is live in both of its denominators from the 2026-09-04 re-score
+   ([ADR-111](111-ai-session-scoring-governance.md)).
 
 3. **The unique content of the two retired categories moves, not vanishes.** Startup-validated
    options and the secrets-in-config red flag move to §17. The cache-without-invalidation red flag
@@ -67,7 +71,9 @@ two overlap-heavy categories in place and adding criteria to eleven others.**
    against.** Because the weight sum changes (81 to 80 for MMCA.Common, 80 to 79 for MMCA.ADC and
    MMCA.Store), the indices on either side of the version boundary are comparable only with that
    note. The rebase itself moves no score: §10 is carried at its prior scores under the merged-prior
-   rule, re-weighted to 3, until its first re-score against the new criteria; §16 is N/A.
+   rule, re-weighted to 3, until its first re-score against the new criteria; §16 is N/A for
+   MMCA.Common and MMCA.Store. For MMCA.ADC §16 is scored rather than scoped out, so its weight-2
+   row re-enters both denominators and its sum returns to 81.
 
 6. **Landing order.** The rubric, the three scorecards, the three backlogs, and this record land in
    one Website PR, because the workflow reads its category list from the scorecard rows and a rubric
@@ -82,9 +88,10 @@ scorecard history, the Part A/B/C dispatch split, and the literal 34 in the comm
 agent prompts. The two slots chosen were the two whose criteria were already scored elsewhere, so
 the information loss is limited to relocating a handful of lines. Messaging earns a weight-3 slot
 because a MassTransit plus Service Bus system with an outbox has its operational heart in exactly
-the concerns §6 conflated with in-process dispatch. AI-native earns a slot even while N/A because an
-explicit, criteria-backed scope-out is more honest than silence, and the category is scored the day a
-feature calls a model. Multi-tenancy stays as criteria because an all-N/A row would cost three
+the concerns §6 conflated with in-process dispatch. AI-native earns a slot because an explicit,
+criteria-backed scope-out is more honest than silence where the category does not apply, and the
+category is scored the day a feature calls a model, which for MMCA.ADC is the day the rubric shipped
+(ADR-111). Multi-tenancy stays as criteria because an all-N/A row would cost three
 scorecard rows for a decision three lines can record.
 
 ## Trade-offs

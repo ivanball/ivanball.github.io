@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-110: Rubric Version 2, Category Realignment at 34 · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-04).">
+  <meta name="description" content="Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category, recorded in ADR-111).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-110: Rubric Version 2, Category Realignment at 34">
-  <meta property="og:description" content="Accepted (2026-09-04).">
+  <meta property="og:description" content="Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category, recorded in ADR-111).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-110: Rubric Version 2, Category Realignment at 34">
-  <meta name="twitter:description" content="Accepted (2026-09-04).">
+  <meta name="twitter:description" content="Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category, recorded in ADR-111).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"110 · Rubric Version 2, Category Realignment at 34","item":"https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 110 ADRs</summary>
+        <summary>All 111 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -210,6 +210,7 @@
         <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
         <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
         <li><a href="110-rubric-v2-category-realignment.html" aria-current="page">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
           </ol>
         </nav>
       </details>
@@ -218,7 +219,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-110-rubric-version-2-category-realignment-at-34">ADR-110: Rubric Version 2, Category Realignment at 34</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-04).</p>
+          <p>Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category,
+          recorded in <a href="111-ai-session-scoring-governance.html">ADR-111</a>).</p>
           <h2 id="context">Context</h2>
           <p>The 34-category Architecture Evaluation Criteria
           (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md</code>) is the only basis on which the
@@ -256,9 +258,12 @@
           calls a model.</strong> Criteria: model calls behind a port; prompt and model versioning; an evaluation
           suite gating CI; guardrails and PII redaction at the boundary; least-privilege tool calling with a
           human in the loop for consequential actions; retrieval stores governed as data (§8, §30); LLM
-          observability and cost attribution. Developer-side AI tooling is scored in §33, not here. All
-          three repos mark it N/A today, which the rubric handles by dropping the weight from both
-          denominators and stating the scope-out in the scorecard&#39;s N/A note.</p>
+          observability and cost attribution. Developer-side AI tooling is scored in §33, not here.
+          MMCA.Common and MMCA.Store mark it N/A, which the rubric handles by dropping the weight from both
+          denominators and stating the scope-out in the scorecard&#39;s N/A note. MMCA.ADC scores it: its AI
+          session-scoring feature calls the Anthropic Messages API in production, so the weight-2 category
+          is live in both of its denominators from the 2026-09-04 re-score
+          (<a href="111-ai-session-scoring-governance.html">ADR-111</a>).</p>
           </li>
           <li><p><strong>The unique content of the two retired categories moves, not vanishes.</strong> Startup-validated
           options and the secrets-in-config red flag move to §17. The cache-without-invalidation red flag
@@ -280,7 +285,9 @@
           against.</strong> Because the weight sum changes (81 to 80 for MMCA.Common, 80 to 79 for MMCA.ADC and
           MMCA.Store), the indices on either side of the version boundary are comparable only with that
           note. The rebase itself moves no score: §10 is carried at its prior scores under the merged-prior
-          rule, re-weighted to 3, until its first re-score against the new criteria; §16 is N/A.</p>
+          rule, re-weighted to 3, until its first re-score against the new criteria; §16 is N/A for
+          MMCA.Common and MMCA.Store. For MMCA.ADC §16 is scored rather than scoped out, so its weight-2
+          row re-enters both denominators and its sum returns to 81.</p>
           </li>
           <li><p><strong>Landing order.</strong> The rubric, the three scorecards, the three backlogs, and this record land in
           one Website PR, because the workflow reads its category list from the scorecard rows and a rubric
@@ -296,9 +303,10 @@
           agent prompts. The two slots chosen were the two whose criteria were already scored elsewhere, so
           the information loss is limited to relocating a handful of lines. Messaging earns a weight-3 slot
           because a MassTransit plus Service Bus system with an outbox has its operational heart in exactly
-          the concerns §6 conflated with in-process dispatch. AI-native earns a slot even while N/A because an
-          explicit, criteria-backed scope-out is more honest than silence, and the category is scored the day a
-          feature calls a model. Multi-tenancy stays as criteria because an all-N/A row would cost three
+          the concerns §6 conflated with in-process dispatch. AI-native earns a slot because an explicit,
+          criteria-backed scope-out is more honest than silence where the category does not apply, and the
+          category is scored the day a feature calls a model, which for MMCA.ADC is the day the rubric shipped
+          (ADR-111). Multi-tenancy stays as criteria because an all-N/A row would cost three
           scorecard rows for a decision three lines can record.</p>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
