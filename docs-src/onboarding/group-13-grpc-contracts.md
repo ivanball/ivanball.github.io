@@ -123,7 +123,7 @@ connection, an exceeded deadline) degrades to a single `ErrorType.Failure` error
 `return ex.ToResult();`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/SessionBookmarkValidationServiceGrpcAdapter.cs:58`).
 That symmetry, one error model over two transports, is the `[Rubric §9, API & Contract Design]` and
-`[Rubric §10, Cross-Cutting Concerns]` story: error translation is a pipeline concern, written once in
+`[Rubric §29, Resilience, Reliability & Business Continuity]` story: error translation is a pipeline concern, written once in
 the interceptor and its extension pair, not repeated in every method. One sharp edge is documented in
 the interceptor itself (`GrpcResultExceptionInterceptor.cs:103-138`): a `ResultFailureException` built
 from a message-only constructor carries *no* errors, so the shared encoder would answer the
@@ -430,7 +430,7 @@ virtue of their `.proto`.
   line 19).
 - **Concept reinforced, error translation as a cross-cutting concern, symmetric with the HTTP layer.**
   `[Rubric §7, Microservices Readiness]` (assesses that error handling is symmetric across HTTP and gRPC)
-  and `[Rubric §10, Cross-Cutting Concerns]` (error translation lives in one interceptor, not re-coded in
+  and `[Rubric §9, API & Contract Design]` (error translation lives in one interceptor, not re-coded in
   every service method). The doc comment (lines 11-13) names the parallel explicitly: this "mirrors the
   behavior of `ApiControllerBase.HandleFailure` for HTTP responses". `[Rubric §13, Observability &
   Operability]` also applies: every caught failure is logged with the gRPC method name before it is
@@ -458,7 +458,7 @@ virtue of their `.proto`.
     why the class is `partial`: the generator emits the body. It is the allocation-free, high-performance
     logging idiom (no boxing, no format-string parsing at the call site).
 - **Why it's built this way**: covering all four handler shapes means every gRPC operation, including the
-  streaming ones, gets uniform `Result`-failure surfacing. Keeping it in an interceptor is the §10 point:
+  streaming ones, gets uniform `Result`-failure surfacing. Keeping it in an interceptor is the §9 point:
   the translation lives in one place, so a change to the error wire shape (see
   [`ResultGrpcExtensions`](#resultgrpcextensions)) is made once. Logging at `Information` rather than
   `Error` is deliberate for a *domain* failure: a rejected command is an expected outcome, not a fault.
@@ -498,7 +498,7 @@ virtue of their `.proto`.
   right tool: built once at static init, then read-only and lookup-optimized. The genuinely new idea in
   this type is that the encoding is **round-trippable**: the failure is written into trailers in a shape
   the decoder can reverse, so a caller ends up holding the same `Result` it would have held in-process.
-  `[Rubric §10, Cross-Cutting Concerns]` follows from that: both halves of the codec live here, so the
+  `[Rubric §29, Resilience, Reliability & Business Continuity]` follows from that: both halves of the codec live here, so the
   wire shape has exactly one definition.
 - **Walkthrough**: the class is a set of C# `extension(T)` blocks (see
   [primer §4](00-primer.md#4-c-build-and-code-style-conventions)), which is why it carries a file-level

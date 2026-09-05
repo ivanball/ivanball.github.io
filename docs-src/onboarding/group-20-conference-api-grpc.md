@@ -76,7 +76,7 @@ for reads plus the specific
 and [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)
 instances for its writes and bespoke reads (`SessionsController.cs:45-58`), then folds any
 `Result.Failure` back through the inherited `HandleFailure`. That is the `[Rubric §1, SOLID]` and
-`[Rubric §16, Maintainability]` payoff the generic base exists for (the generic-controller and
+`[Rubric §15, Best Practices & Code Quality]` payoff the generic base exists for (the generic-controller and
 dynamic-query contract of
 [ADR-034](https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html)): the CRUD logic
 is written once in Common, and a per-entity controller has almost no reason to change.
@@ -654,7 +654,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   create parameter only (`CategoryItemsController.cs:130-131`). That action is marked
   [`[Idempotent]`](group-12-api-hosting-mapping.md#idempotentattribute)
   (`CategoryItemsController.cs:129`), so a retried POST carrying the same `Idempotency-Key` replays the
-  first response instead of adding a second row: `[Rubric §10, Cross-Cutting]`, the replay contract is
+  first response instead of adding a second row: `[Rubric §9, API & Contract Design]`, the replay contract is
   declared on the action because this create is hand-written rather than inherited from the CRUD base
   (`CategoryItemsController.cs:121-127`).
 
@@ -728,7 +728,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   straight back (`=> base.GetAllAsync(...)`, `:80`): the attributes have to sit on the derived method for
   MVC to see them, which is the whole reason these bodies exist. Each write maps its request record onto
   exactly one command and folds any failure through the inherited `HandleFailure`, the one-handler-per-action
-  shape of CQRS at the edge. `[Rubric §1, SOLID]` and `[Rubric §16, Maintainability]`: because the read
+  shape of CQRS at the edge. `[Rubric §1, SOLID]` and `[Rubric §15, Best Practices & Code Quality]`: because the read
   machinery is written once in Common, the concrete controller is small and has almost no reason to change.
 - **Walkthrough**
   - Primary-constructor injection (`CategoryItemsController.cs:63-69`): the query service, the three
@@ -1175,7 +1175,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   Core MVC (`[ApiController]`, `[HttpGet]`, `[FromQuery]`), `Asp.Versioning`, `ILogger`.
 - **Concept introduced, the framework read hook.** `[Rubric §11, Security]` assesses whether
   authorization is enforced server-side and whether results are scoped per caller rather than merely hidden
-  in the UI; `[Rubric §1, SOLID]` and `[Rubric §16, Maintainability]` assess whether a rule has one home.
+  in the UI; `[Rubric §1, SOLID]` and `[Rubric §15, Best Practices & Code Quality]` assess whether a rule has one home.
   The Common base exposes two hooks:
   `GetReadSpecificationAsync` (asynchronous, `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:597-599`)
   and its synchronous half `GetExportSpecification`
@@ -1810,7 +1810,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   actions then serve the minimal versus evolved shape for each
   (`ServiceInfoControllerBase.cs:39-48`). This is the only Conference controller that serves more than one
   version: every other one carries a single `[ApiVersion("1.0")]`. `[Rubric §1, SOLID]` and
-  `[Rubric §16, Maintainability]`: the discovery *behavior* is written once in the Common base, and each
+  `[Rubric §15, Best Practices & Code Quality]`: the discovery *behavior* is written once in the Common base, and each
   service's subclass supplies only its name plus the class-level attributes, which the base's own remarks
   note are not reliably inherited and so must be repeated on the leaf
   (`ServiceInfoControllerBase.cs:15-29`, whose `<code>` block quotes this exact Conference subclass as the
@@ -1893,7 +1893,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `LogScoringQueued` (`SessionSelectionController.cs:133-134`), a compile-time generated,
   allocation-light log call. `[Rubric §12, Performance & Scalability]`: all four read endpoints carry
   `[OutputCache(PolicyName = "ConferenceCache")]` (`:41, 55, 69, 83`).
-- **Concept, opting *out* of idempotency with a written reason.** `[Rubric §10, Cross-Cutting]`. Every
+- **Concept, opting *out* of idempotency with a written reason.** `[Rubric §9, API & Contract Design]`. Every
   other hand-written POST in this group is marked `[Idempotent]`; `ScoreSessions` is marked
   [`[NonIdempotent]`](group-12-api-hosting-mapping.md#nonidempotentattribute) instead, and the attribute
   takes a mandatory justification string that is spelled out inline
@@ -1982,7 +1982,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Why it's built this way**: it shares the exact shape of the other junction controllers because the
   underlying rules (mutate the child only through its parent aggregate; never let a junction row outlive
   its parent's visibility) are identical. Only the aggregate, the DTO, the permission and the pair of cache
-  tags change, which is `[Rubric §16, Maintainability]` in practice: one shape learned once, repeated
+  tags change, which is `[Rubric §15, Best Practices & Code Quality]` in practice: one shape learned once, repeated
   without variation.
 - **Where it's used**: the Conference service host behind the Gateway route
   `/SpeakerCategoryItems/{**catch-all}` (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:122`);
@@ -2508,7 +2508,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   hazard, not tidiness: if the visibility check and the cache-bypass list ever named different roles, a
   privileged reader's unfiltered payload would be written into a shared cache entry and then served to the
   public. Declaring the roles once makes that class of bug impossible rather than merely unlikely
-  (`ConferenceReadAudience.cs:12-15`). `[Rubric §11, Security]` again, and `[Rubric §16, Maintainability]`:
+  (`ConferenceReadAudience.cs:12-15`). `[Rubric §11, Security]` again, and `[Rubric §15, Best Practices & Code Quality]`:
   a future third, partially-privileged audience would need its own cache key, which is why the audience list
   is documented as deliberately two-valued (`ConferenceReadAudience.cs:17-21`).
 - **Walkthrough**
@@ -2663,7 +2663,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   consumer modules keep depending on a plain C# interface and that extraction stay a composition-root
   concern. That is only possible if the transport class is a thin translation with no logic of its own,
   which is why this one holds no branching, no mapping rules and no error handling beyond
-  `ThrowIfFailure()`. `[Rubric §16, Maintainability]`: adding a cross-service method means adding an RPC to
+  `ThrowIfFailure()`. `[Rubric §15, Best Practices & Code Quality]`: adding a cross-service method means adding an RPC to
   the proto and one near-identical override here and on the adapter, a pattern a reviewer can verify at a
   glance.
 - **Where it's used**: mapped in the Conference host as
@@ -2727,7 +2727,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     spread converts the Protobuf `RepeatedField` into the plain collection the interface contract promises,
     so no Protobuf type escapes the adapter.
   - The class is `internal` (`:27`): nothing outside this assembly should name it. It reaches the container
-    only through the public [DependencyInjection](#dependencyinjection) helper in the same assembly, which
+    only through the public [DependencyInjection](#dependencyinjection-1) helper in the same assembly, which
     is the intended (and only) way to install it.
 - **Why it's built this way**: ADR-007 again. The consumer's application code is written against the C#
   interface and never learns which implementation it got, so extraction is a DI edit rather than a code
@@ -2737,7 +2737,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `[Rubric §3, Clean Architecture]`: the dependency still points inward, since the adapter depends on
   `Conference.Shared`'s interface and not the other way round.
 - **Where it's used**: registered by `AddConferenceSessionValidationClient()` (see
-  [DependencyInjection](#dependencyinjection)), which the Engagement host calls
+  [DependencyInjection](#dependencyinjection-1)), which the Engagement host calls
   (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:281`). Its eventual consumers are
   [CreateBookmarkHandler](group-22-engagement-module.md#createbookmarkhandler) and
   [GetUserBookmarksHandler](group-22-engagement-module.md#getuserbookmarkshandler) behind
@@ -2815,7 +2815,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Why it's built this way**: the social programme has the same publish-gated lifecycle as the rest of
   the catalog, so it reuses the specification hook rather than inventing an activity-specific visibility
   flag, and because `Activity` owns a real `EventId` none of that scoping needs a virtual key. Repeating
-  the sponsor controller's shape verbatim is `[Rubric §16, Maintainability]` in practice: two aggregates
+  the sponsor controller's shape verbatim is `[Rubric §15, Best Practices & Code Quality]` in practice: two aggregates
   with identical rules get identical code, so the reader who has learned one has learned both.
 - **Where it's used**: the Conference service host behind the Gateway route `/Activities/{**catch-all}`
   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:138`). Clients are the public activity page
@@ -3022,7 +3022,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   interface is the only thing consumers see, an Engagement test substitutes a fake with no gRPC server in
   sight.
 - **Where it's used**: registered by `AddConferenceEventLiveValidationClient()` (see
-  [DependencyInjection](#dependencyinjection)), called from the Engagement host
+  [DependencyInjection](#dependencyinjection-1)), called from the Engagement host
   (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:282`). Consumers are Engagement's
   live-poll and session-question handlers (`Program.cs:237-238`).
 
@@ -3098,7 +3098,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   (`Website/docs-src/adr/008-service-extraction-topology.md`). Shipping the registration helpers in the same
   assembly as the `.proto` files and the adapters means a consumer takes one reference and gets the whole
   client story; the adapters can stay `internal` because this class is the sanctioned entry point.
-  `[Rubric §16, Maintainability]`: a reader who wants to know how Engagement reaches Conference finds the
+  `[Rubric §15, Best Practices & Code Quality]`: a reader who wants to know how Engagement reaches Conference finds the
   whole answer in one 84-line file.
 - **Where it's used**: the Engagement service host calls both inside its application-pipeline registration,
   in the documented order after `moduleHost.RegisterModules`

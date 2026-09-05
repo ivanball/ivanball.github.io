@@ -204,7 +204,7 @@ defaults `DefaultDuration` to `CacheOptions.DefaultDuration`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheSettings.cs:32`), so a host that
 configures nothing behaves exactly as it did before that section existed. The short default is a
 staleness guard: caching is opt-in and conservative, and a read earns a longer life only by asking for
-one. One policy object with many call sites is the [Rubric §10, Cross-Cutting] habit this framework
+one. One policy object with many call sites is the [Rubric §12, Performance & Scalability] habit this framework
 applies everywhere.
 
 **How it fires at runtime.** Nothing above runs unless a use case opts in, via two marker interfaces
@@ -405,7 +405,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-27-testin
   default (`CacheOptions.cs:23`) is the conservative knob: a cached read is served for at most 30
   seconds before falling through to the source, so a query that never declares its own duration cannot
   serve dangerously stale data. Callers that can tolerate more staleness widen the window per query.
-  `[Rubric §10, Cross-Cutting Concerns]` assesses whether concerns like caching, logging and validation
+  `[Rubric §12, Performance & Scalability]` assesses whether concerns like caching, logging and validation
   live in one place instead of being re-decided per handler; TTL policy here is one property in one
   file rather than a `TimeSpan.FromSeconds(30)` scattered through call sites.
 - **Walkthrough**
@@ -597,7 +597,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-27-testin
   the populate lock is stampede protection, and giving it a finite timeout trades that protection for
   a latency bound, which is exactly the tradeoff the remarks spell out (`:50-56`).
 
-  `[Rubric §16, Maintainability]`: the defaults are not re-typed literals. `DefaultDuration`
+  `[Rubric §15, Best Practices & Code Quality]`: the defaults are not re-typed literals. `DefaultDuration`
   initializes from [CacheOptions](#cacheoptions)`.DefaultDuration` (`CacheSettings.cs:32`, defined as
   30 seconds at `CacheOptions.cs:23`), so the configured path and the hard-coded path cannot drift
   apart, and a host that configures nothing behaves as it did before the section existed
@@ -665,8 +665,8 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-27-testin
   The Application layer *defines* this contract; the Infrastructure layer *implements* it. Handlers,
   decorators and the auth services never see `StackExchange.Redis` or `Microsoft.Extensions.Caching`;
   they program against this interface and the container decides which adapter they get. **Second
-  concept, the default interface member as a non-breaking extension point.** `[Rubric §16,
-  Maintainability]` assesses whether the codebase can absorb change without a ripple. Two members here
+  concept, the default interface member as a non-breaking extension point.** `[Rubric §15,
+  Best Practices & Code Quality]` assesses whether the codebase can absorb change without a ripple. Two members here
   ship with bodies, `IncrementAsync` (`ICacheService.cs:59`) and `GetOrCreateAsync`
   (`ICacheService.cs:99`). Every existing implementer keeps compiling and inherits working behavior,
   while a store with a better primitive overrides. That is how the
@@ -889,8 +889,8 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-27-testin
   `HybridCacheEntryOptions` / `HybridCacheEntryFlags` (NuGet), `ILogger<T>` and
   `StackExchange.Redis.IConnectionMultiplexer` (optional).
 - **Concept introduced, two serialization formats must never share one keyspace.** `[Rubric §8, Data
-  Architecture]` assesses whether stored data has one owner and one shape; `[Rubric §16,
-  Maintainability]` assesses whether a change can be rolled out without a coordinated flag day. Every
+  Architecture]` assesses whether stored data has one owner and one shape; `[Rubric §15,
+  Best Practices & Code Quality]` assesses whether a change can be rolled out without a coordinated flag day. Every
   key this service writes carries a `hc:` segment inside the configured prefix, `{prefix}hc:{key}`
   (`HybridCacheService.cs:20`, `:48`, `:261`), which is the structural form of the `WRONGTYPE` lesson
   recorded on [DistributedCacheService](#distributedcacheservice)`.IncrementAsync`. `HybridCache`
@@ -1026,8 +1026,8 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-27-testin
   or for genuinely per-instance data and wrong for anything else. The teachable mechanic is the shadow
   index: `IMemoryCache` is a black box with no key listing, so the service mirrors every live key into
   `_keys` and keeps that mirror honest with a **post-eviction callback**, so an entry that expires or
-  is dropped under memory pressure prunes its own tracking record instead of leaking. `[Rubric §10,
-  Cross-Cutting Concerns]`: it presents the identical [ICacheService](#icacheservice) surface as the
+  is dropped under memory pressure prunes its own tracking record instead of leaking. `[Rubric §12,
+  Performance & Scalability]`: it presents the identical [ICacheService](#icacheservice) surface as the
   distributed adapters, so swapping backends changes nothing for callers. **Second concept, an
   invariant that write ordering cannot buy you.** `[Rubric §15, Best Practices & Code Quality]` assesses
   everyday craftsmanship, including whether comments explain *why* rather than *what*. The `SetAsync`

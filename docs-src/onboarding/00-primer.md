@@ -335,7 +335,7 @@ the full set, for orientation:
 | 107 | `ExecuteInTransactionAsync` is a re-entrant, retriable, commit-once unit: an inner call joins the ambient transaction instead of nesting, the whole delegate retries under EF's execution strategy with a change-tracker reset per attempt, a failed `Result` rolls back exactly like a throw, and a commit whose outcome cannot be known surfaces as `TransactionCommitAmbiguousException` naming what each physical source did | [g07](group-07-persistence-ef-core.md)/[g05](group-05-cqrs-pipeline.md) |
 | 108 | One cross-replica mutual-exclusion primitive, `IDistributedLock` (`TryAcquireAsync(key, ttl, wait)`): non-reentrant, TTL-bounded, explicitly best-effort, owner-scoped idempotent release; Redis-backed where a connection exists, a warn-once process-local fallback where not; it collapses duplicate work and is never the only guard on an invariant persistence can enforce | [g05](group-05-cqrs-pipeline.md)/[g14](group-14-module-system-composition.md) |
 | 109 | Feature-by-folder as an enforced convention: the aggregate names the first folder level in Domain/Application/Shared, a technical root then the aggregate in UI/API/Infrastructure, at most twelve direct code files per folder, namespaces follow folders, and a layout change ships as a breaking release with a migration map (`FolderWidthTestsBase` enforces the cap in every repo) | [g27](group-27-testing-infrastructure.md) |
-| 110 | Rubric v2 keeps 34 categories with stable numbering, replacing the two overlap-heavy ones in place: section 10 becomes Messaging & Integration Architecture and section 16 becomes AI-Native Application Architecture (N/A until a product feature calls a model), with criteria added to eleven others | gap: the chapter rubric tags still use the pre-v2 numbering (section 16 read as Maintainability); see the 2026-09-05 note in [99-coverage-audit](99-coverage-audit.md) |
+| 110 | Rubric v2 keeps 34 categories with stable numbering, replacing the two overlap-heavy ones in place: section 10 becomes Messaging & Integration Architecture and section 16 becomes AI-Native Application Architecture (N/A until a product feature calls a model), with criteria added to eleven others | [99-coverage-audit](99-coverage-audit.md) (rubric matrix; every chapter tag carries the v2 names since the 2026-09-05 retag), [g04](group-04-events-outbox.md) (section 10), [g19](group-19-conference-infrastructure.md) (section 16) |
 | 111 | AI session scoring governed as a production dependency: the model call sits behind `IAiScoringService` (declared in Application, carrying `ModelId` + `PromptVersion`, both persisted with every score), a golden-replay + prompt-contract evaluation suite is a deploy precondition, the untrusted half of the prompt is delimited, escaped and redacted, the response is schema-constrained, and token spend is metered and alerted against a budgeted ceiling | [g18](group-18-conference-application.md)/[g19](group-19-conference-infrastructure.md)/[devops-cicd](devops-cicd.md) |
 
 The canonical index for the full set can be found at <https://ivanball.github.io/docs/adr/>.
@@ -541,9 +541,9 @@ score them**, the filled scorecards live beside the rubric as one repo-prefixed 
 
 **Part A, Application / Backend (§1 to §17):** §1 SOLID · §2 Design Patterns · §3 Clean Architecture ·
 §4 Domain-Driven Design · §5 Vertical Slice · §6 CQRS & Event-Driven · §7 Microservices Readiness ·
-§8 Data Architecture · §9 API & Contract Design · §10 Cross-Cutting Concerns · §11 Security ·
+§8 Data Architecture · §9 API & Contract Design · §10 Messaging & Integration Architecture · §11 Security ·
 §12 Performance & Scalability · §13 Observability & Operability · §14 Testability & Test Strategy ·
-§15 Best Practices & Code Quality · §16 Maintainability & Evolvability · §17 DevOps & Deployment.
+§15 Best Practices & Code Quality · §16 AI-Native Application Architecture · §17 DevOps & Deployment.
 
 **Part B, Front-End / UI (§18 to §28):** §18 UI Architecture & Component Design · §19 State Management &
 Data Flow · §20 Design System, Theming & UI Consistency · §21 Accessibility (a11y) · §22 Responsive

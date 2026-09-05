@@ -168,7 +168,7 @@ hard constraint). All six container apps ship their logs here via the Container 
 `appLogsConfiguration` (`main.bicep:962-968`), and `main.bicep`'s Application Insights component
 uses it as its workspace backing store, meaning traces and metrics land in the same workspace. The
 same destination is also what makes the platform's own `ContainerAppSystemLogs_CL` table queryable,
-which the revision-activation alert below depends on (`main.bicep:404`).
+which the revision-activation alert below depends on (`main.bicep:405`).
 
 `workspaceCapping.dailyQuotaGb: 1` (`foundation.bicep:41-43`) is a FinOps circuit breaker, not a
 sizing decision. Normal ingestion is around 0.4 GB/day, so the ceiling never bites in steady state;
@@ -388,7 +388,7 @@ them in deployment history):
   additive Entra admin on the SQL server.
 - `useManagedIdentitySql` (`main.bicep:36`), default `false`, swaps the app-to-database auth segment
   (see [ADR-061](https://ivanball.github.io/docs/adr/061-runtime-secret-management.html) below).
-- `deployNotificationHub` and `nativePushEnabled` (`main.bicep:120,123`) both default **true**.
+- `deployNotificationHub` and `nativePushEnabled` (`main.bicep:126,123`) both default **true**.
   Read the description carefully before assuming that means the template creates the hub: it does
   not. `deployNotificationHub` gates only the **wiring** (the Key Vault connection-string secret
   and the Notification app's secret/env refs), because the namespace, hub and auth rule are
@@ -427,7 +427,7 @@ Six boolean flags gate optional blocks throughout the template:
 
 There is no `useRs256` flag any more. RS256 is unconditional because the RSA parameters are
 required, which is why Identity's `Jwt__SigningAlgorithm` is a literal `'RS256'`
-(`main.bicep:1160`) rather than a ternary.
+(`main.bicep:1161`) rather than a ternary.
 
 Per-service SQL connection strings (`main.bicep:174-177`) are composed from a shared base: the SQL
 server FQDN plus one of two auth segments selected by `useManagedIdentitySql` (`main.bicep:170-172`).
@@ -438,7 +438,7 @@ that goes into Key Vault.
 The Service Bus connection string (`main.bicep:182`) is resolved via `listKeys()` against the
 `app-clients` SAS authorization rule (not `RootManageSharedAccessKey`) so a future migration to
 managed identity can revoke only the app rule without touching the namespace root. The Redis
-connection string (`main.bicep:952`) is assembled the same way, from the instance hostname plus a
+connection string (`main.bicep:953`) is assembled the same way, from the instance hostname plus a
 `listKeys()` primary key.
 
 ### Application Insights (`main.bicep:195-267`)
@@ -894,7 +894,7 @@ pre-provisioned forward-compatible wiring, and the template says so (`main.bicep
 The [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) native-push fan-out
 (FCM v1 and APNs) has a topology that is real in Azure but is **not created by this template**. The
 namespace, the `adc-push` hub, and its `app-backend` authorization rule are all declared with the
-`existing` keyword (`main.bicep:820`, `:824`, `:832`), and the comment above them records why
+`existing` keyword (`main.bicep:821`, `:825`, `:833`), and the comment above them records why
 (`main.bicep:812-819`): ARM PUTs on this namespace never reach a terminal state. It reports status
 `Created` rather than `Active`, so a template deployment polls until the deploy job times out, hit
 twice on 2026-08-24 across two API versions. The resources are therefore provisioned by hand
@@ -1086,8 +1086,8 @@ secrets: [
 This is the `keyVaultUrl` + `identity` pattern in ACA (Container Apps Secrets backed by Key Vault):
 the secret value never appears in the Container App definition, the ARM deployment history, or
 deployment logs. Not one `secrets` entry in this template carries an inline `value`. Containers then
-consume them only through `secretRef` (for example `main.bicep:1142`, `:1158`, `:1215`, `:1347`,
-`:1618`). At runtime ACA fetches the current secret version via the UAMI's Key Vault Secrets User
+consume them only through `secretRef` (for example `main.bicep:1143`, `:1159`, `:1216`, `:1348`,
+`:1619`). At runtime ACA fetches the current secret version via the UAMI's Key Vault Secrets User
 role, meaning a secret rotation only requires updating the Key Vault secret, no Bicep re-deployment,
 no app restart.
 
@@ -1100,7 +1100,7 @@ Secrets stored in Key Vault (`main.bicep:1001-1077`), fourteen unconditional plu
   `deployNotificationHub` is true (`main.bicep:1026-1030`)
 - `rsa-private-key-pem`, `rsa-public-key-pem` (`:1036`, `:1041`), both always real values because the
   parameters are required
-- `smtp-password` (`:1046`), `synthetic-traffic-secret` (`:1053`), `github-oauth-client-secret`
+- `smtp-password` (`:1046`), `synthetic-traffic-secret` (`:1054`), `github-oauth-client-secret`
   (`:1058`), `google-oauth-client-secret` (`:1063`), `apple-oauth-private-key` (`:1068`),
   `anthropic-api-key` (`:1073`)
 
@@ -1117,7 +1117,7 @@ inventory: an `unused` secret is indistinguishable from a configured one, and on
 `secrets` list says which credentials are actually live.
 
 **The two front-door apps hold almost nothing, and say so explicitly.** The UI declares
-`secrets: []` (`main.bicep:1864`) rather than omitting the property: a Blazor host that talks only
+`secrets: []` (`main.bicep:1865`) rather than omitting the property: a Blazor host that talks only
 to the Gateway holds nothing worth stealing, and stating it makes that a reviewable fact rather
 than an omission. The Gateway carries exactly one secret and only conditionally
 (`main.bicep:1742-1744`): the synthetic-traffic bypass key, resolved through the same shared
@@ -1135,7 +1135,7 @@ cannot report that a grant is missing.
 
 **The same grant also backs a second, different consumption path.** Alongside the platform-resolved
 `keyVaultUrl` secret references above, five of the six apps receive `KeyVault__Uri`
-(`main.bicep:1203` Identity, `:1379` Conference, `:1508` Engagement, `:1652` Notification, `:1896`
+(`main.bicep:1204` Identity, `:1379` Conference, `:1508` Engagement, `:1652` Notification, `:1897`
 UI), which turns the vault into an ASP.NET Core **configuration source**: `MMCA.Common`'s
 `AddCommonKeyVaultConfiguration` is a no-op without the key, and with it the host reads the vault
 synchronously at startup through `DefaultAzureCredential`. The Gateway is deliberately not in that
@@ -1147,7 +1147,7 @@ single-dash secrets arrive as flat keys and shadow nothing the container already
 (`main.bicep:1196-1202`).
 
 That startup read is why `AZURE_CLIENT_ID` is on Conference, Engagement, Notification and the
-UI (`main.bicep:1378`, `:1507`, `:1651`, `:1893`) and not only on Identity, where it was
+UI (`main.bicep:1379`, `:1508`, `:1652`, `:1893`) and not only on Identity, where it was
 introduced for avatar blob access (`:1195`). Each app carries only the user-assigned identity, and
 the ACA identity endpoint needs that identity **named**, so without the pin `DefaultAzureCredential`
 fails the startup vault read rather than falling back.
@@ -1178,7 +1178,7 @@ deployment: it creates an RBAC-authorized vault (`MMCA.Common/samples/deployment
 `:74`), attaches the identity for both ACR pull and secret reads, composes the SQL connection string
 from the server, database and admin login it just declared (`:103`), writes it into that vault as the
 `sql-conn` secret (`:105-109`), declares it on the Container App as a `keyVaultUrl` + UAMI reference
-(`:150`) and consumes it through `secretRef` (`:162`), which is the same end-to-end shape ADC runs.
+(`:151`) and consumes it through `secretRef` (`:162`), which is the same end-to-end shape ADC runs.
 Its own header note records the two out-of-band grants that make it work: Key Vault Secrets Officer
 for the deploy principal to write the secret, Key Vault Secrets User for the app UAMI to read it
 (`:98-102`). Worth knowing before trusting the sample as a template, though: CI only runs
@@ -1201,18 +1201,18 @@ All six apps (`main.bicep:1079-1954`) share:
 - `identity: { type: 'UserAssigned', userAssignedIdentities: { '${appsIdentity.id}': {} } }`, the
   same shared UAMI on every app (`main.bicep:1086-1091`, `:1293-1298`, `:1427-1432`, `:1554-1559`,
   `:1723-1728`, `:1844-1849`).
-- `activeRevisionsMode: 'Single'` (`main.bicep:1095`, `:1302`, `:1436`, `:1563`, `:1732`, `:1853`),
+- `activeRevisionsMode: 'Single'` (`main.bicep:1096`, `:1302`, `:1436`, `:1563`, `:1732`, `:1853`),
   one active revision at a time; new deploys create a new revision and traffic flips atomically
   rather than gradually. This is exactly what the post-deploy revision-activation gate asserts:
   the newest revision must be Healthy, Running and holding `trafficWeight` 100
   (`deploy.yml:1568-1573`).
-- `resources: { cpu: json('0.25'), memory: '0.5Gi' }` on **all six** (`main.bicep:1124`, `:1333`,
-  `:1457`, `:1598`, `:1758`, `:1871`), the smallest Container Apps allocation. Conference and the
+- `resources: { cpu: json('0.25'), memory: '0.5Gi' }` on **all six** (`main.bicep:1125`, `:1334`,
+  `:1458`, `:1599`, `:1759`, `:1872`), the smallest Container Apps allocation. Conference and the
   Gateway were the last two at 0.5 vCPU / 1 Gi and were right-sized on 2026-09-02 from measured
   production utilization; the two comments carry the measurements and the revert instruction
   (`main.bicep:1326-1332`, `:1751-1757`).
 - `scale: { minReplicas: 1, maxReplicas: 2, rules: [{ name: 'http-scale', http: { metadata: { concurrentRequests: '50' } } }] }`
-  on **all six** apps (`main.bicep:1281`, `:1415`, `:1542`, `:1707`, `:1816-1829`, `:1938-1951`).
+  on **all six** apps (`main.bicep:1281`, `:1415`, `:1542`, `:1708`, `:1816-1829`, `:1938-1951`).
   `minReplicas: 1` prevents scale-to-zero (which would destroy Blazor Server circuits and outbox
   in-flight messages); HTTP scale-out at 50 concurrent requests gives the headroom needed for a
   conference-day load (historically ~67 peak concurrent). Notification used to be capped at 1 and
@@ -1234,7 +1234,7 @@ All six apps (`main.bicep:1079-1954`) share:
   exactly one replica migrates before the revision serves (`deploy.yml:1497-1507`). The build-time
   EF model-drift gate (`deploy.yml:375-389`) still guarantees a migration exists for every model
   change, across all four migrations projects.
-- `Outbox__PollingIntervalSeconds: '300'` (`main.bicep:1149`, `:1352`, `:1475`, `:1623`), the outbox
+- `Outbox__PollingIntervalSeconds: '300'` (`main.bicep:1150`, `:1353`, `:1476`, `:1624`), the outbox
   signal + smart wait in MMCA.Common ≥ 1.50.0 delivers real messages in ~5 seconds regardless of the
   poll interval; the 300-second poll only governs idle polling. This cuts App Insights SQL dependency
   telemetry that would otherwise flood the workspace around the clock (the
@@ -1253,7 +1253,7 @@ All six apps (`main.bicep:1079-1954`) share:
   payload longer than a delivered one: four weeks to diagnose or replay it by hand before the row
   is abandoned.
 - `Scheduler__PollingIntervalSeconds: '300'` on Identity, Conference and Engagement only
-  (`main.bicep:1154`, `:1354`, `:1477`), the same reasoning as the outbox interval applied to the
+  (`main.bicep:1155`, `:1355`, `:1478`), the same reasoning as the outbox interval applied to the
   scheduled-job runner: it smart-waits until the earliest due job, so the interval only bounds an
   idle sleep, and the 30-second default woke every runner twice a minute per database for nothing.
   Notification does not get the key because it runs no scheduler: `Scheduler:Enabled` is `true` in
@@ -1264,8 +1264,8 @@ All six apps (`main.bicep:1079-1954`) share:
   `Scheduler` section at all. The template's own note says the same
   (`main.bicep:1150-1153`): the audit-trail cleanup job runs daily, which is what the interval
   paces.
-- `ConnectionStrings__redis` from Key Vault on all four services (`main.bicep:1158`, `:1358`,
-  `:1481`, `:1627`), which is the single key that turns on the distributed cache, cross-replica
+- `ConnectionStrings__redis` from Key Vault on all four services (`main.bicep:1159`, `:1359`,
+  `:1482`, `:1628`), which is the single key that turns on the distributed cache, cross-replica
   idempotency, and the SignalR backplane.
 - `MessageBus__Provider: 'AzureServiceBus'` + `MessageBus__ConnectionString` from Key Vault,
   selects MassTransit's Azure Service Bus transport at startup (locally the AppHost injects
@@ -1274,10 +1274,10 @@ All six apps (`main.bicep:1079-1954`) share:
   the target of all three probes on the four services (see below).
 
 Three of the four services also carry
-`Authentication__JwtBearer__RequireHttpsMetadata: 'false'` (`main.bicep:1364` Conference, `:1486`
-Engagement, `:1632` Notification), and the template explains why in the comment directly above each
+`Authentication__JwtBearer__RequireHttpsMetadata: 'false'` (`main.bicep:1365` Conference, `:1487`
+Engagement, `:1633` Notification), and the template explains why in the comment directly above each
 one (`main.bicep:1361-1363`, `:1483-1485`, `:1629-1631`). Their JWKS `Authority` is the ACA
-**internal-ingress h2c URL** for Identity, `http://adc-prod-identity` (`:1360`, `:1482`, `:1628`):
+**internal-ingress h2c URL** for Identity, `http://adc-prod-identity` (`:1361`, `:1482`, `:1628`):
 TLS terminates at the platform edge, so traffic inside the environment is cleartext, and the
 framework's secure-by-default HTTPS metadata requirement would otherwise reject that discovery
 fetch outright. Identity itself does not carry the key because it issues the tokens rather than
@@ -1322,8 +1322,8 @@ Kestrel in HTTP/2 prior-knowledge mode rejects the platform's HTTP/1.1 `httpGet`
 `GOAWAY HTTP_1_1_REQUIRED`, which would fail the liveness check and cause a reboot loop. Rather than
 degrading the three h2c services to port-only `tcpSocket` probes, each service opens a
 **dedicated HTTP/1.1 probe listener** that is not exposed via ingress: `HealthProbe__Port: '8081'`
-on Identity, Conference and Engagement (`main.bicep:1138`, `:1345`, `:1468`) and `'8082'` on
-Notification (`main.bicep:1614`, because 8080 and 8081 are already the ADR-012 pair). ACA probes may
+on Identity, Conference and Engagement (`main.bicep:1139`, `:1346`, `:1469`) and `'8082'` on
+Notification (`main.bicep:1615`, because 8080 and 8081 are already the ADR-012 pair). ACA probes may
 target a port that ingress does not publish, so all six apps use `httpGet` probes and all six carry
 the same three (`main.bicep:1253-1278` Identity, `:1387-1412` Conference, `:1514-1539` Engagement,
 `:1669-1694` Notification, `:1788-1813` Gateway, `:1910-1935` UI):
@@ -1362,21 +1362,21 @@ cause (`main.bicep:420`).
 Aspire's service discovery convention uses env vars of the form `services__<service-name>__http__0`
 to resolve service endpoints. In production these point at internal ACA hostnames:
 
-- Gateway → all four services: `conference` (`main.bicep:1775`), `identity` (`:1776`),
+- Gateway → all four services: `conference` (`main.bicep:1776`), `identity` (`:1776`),
   `engagement` (`:1777`), `notification` (`:1778`), each as `http://${<app>.name}`
-- Conference → `services__engagement__http__0 = http://${prefix}-engagement` (`main.bicep:1369`)
+- Conference → `services__engagement__http__0 = http://${prefix}-engagement` (`main.bicep:1370`)
   (using the literal `${prefix}-engagement` rather than `${engagementApp.name}` to avoid a
   Bicep symbolic cycle, Conference and Engagement both reference each other)
-- Engagement → `services__conference__http__0 = http://${prefix}-conference` (`main.bicep:1491`)
-- Notification → `services__identity__http__0 = http://${identityApp.name}` (`main.bicep:1636`),
+- Engagement → `services__conference__http__0 = http://${prefix}-conference` (`main.bicep:1492`)
+- Notification → `services__identity__http__0 = http://${identityApp.name}` (`main.bicep:1637`),
   for the `IAttendeeQueryService` email-recipient lookup
-- Identity → `services__engagement__http__0` (`main.bicep:1172`), for the PRIVACY.md data-subject
+- Identity → `services__engagement__http__0` (`main.bicep:1173`), for the PRIVACY.md data-subject
   export's Engagement section
 
 Two edges use a **named** endpoint rather than the default `http` one, because they target
 Notification's dedicated h2c gRPC port: `services__notification__grpc__0 = http://${prefix}-notification:8081`
-from Identity (`main.bicep:1179`, the Notifications section of the same data-subject export) and
-from Engagement (`main.bicep:1496`, the best-effort live-channel push). Both use the literal
+from Identity (`main.bicep:1180`, the Notifications section of the same data-subject export) and
+from Engagement (`main.bicep:1497`, the best-effort live-channel push). Both use the literal
 `${prefix}-notification` name so deployment ordering stays unconstrained, since Notification itself
 references `identityApp` for its JWKS authority.
 
@@ -1435,7 +1435,7 @@ Identity is also the app that sends the account emails, so it receives the SMTP 
 (`main.bicep:1204-1208`: `Smtp__Host`, `Smtp__Port`, `Smtp__Username`, `Smtp__EnableSsl: 'true'`,
 `Smtp__From`) with the password arriving separately as a `secretRef` only when one is configured
 (`main.bicep:1221`, gated on `hasSmtpPassword`). Sitting with them is
-`PasswordReset__ResetUrl` (`main.bicep:1213`), the absolute URL of the UI reset page the
+`PasswordReset__ResetUrl` (`main.bicep:1214`), the absolute URL of the UI reset page the
 forgot-password email links to
 ([ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html)). It points at
 the same UI origin `OAuth__UIBaseUrl` uses but is injected **unconditionally**, and the comment
@@ -1450,7 +1450,7 @@ all-or-nothing (`main.bicep:1222-1235`): GitHub and Google contribute a client i
 private key as a `secretRef`). `OAuth__UIBaseUrl` follows at `:1237` under `hasAnyOAuth`, because
 the post-login redirect target is provider-independent.
 
-Identity is sized at 0.25 CPU / 0.5 Gi (`main.bicep:1124`). JWT operations are CPU-cheap once the
+Identity is sized at 0.25 CPU / 0.5 Gi (`main.bicep:1125`). JWT operations are CPU-cheap once the
 key is loaded; the bottleneck is typically network I/O to SQL.
 
 #### Conference Service specifics (`main.bicep:1286-1418`)
@@ -1459,7 +1459,7 @@ Conference carries the heaviest surface of the four services: seventeen API cont
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/`), an AI scoring path
 (Anthropic API), and the role of read-heavy entry point for the event/session catalog. It ran at
 0.5 CPU / 1 Gi until 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi like every peer
-(`main.bicep:1333`). The comment above that line is the model for how a right-sizing decision should
+(`main.bicep:1334`). The comment above that line is the model for how a right-sizing decision should
 be recorded (`main.bicep:1326-1332`): CPU averaged 0.012 to 0.017 cores with p95 under 0.03 against
 the half-core it held, and the working set ran 320 to 380 MB. It also names itself as **the app to
 watch**, because a p95 working set of 376 MB is 73% of the new 512 MiB limit, and states the revert
@@ -1487,7 +1487,7 @@ Notification differs from the other three back-end services in four ways:
 1. `transport: 'http'` instead of `'http2'`, SignalR WebSocket requires an HTTP/1.1 Upgrade
    handshake (`main.bicep:1567`), plus the extra internal-only h2c port 8081 for gRPC
    (`main.bicep:1574-1580`).
-2. Its probe listener is on **8082** (`main.bicep:1614`), because the ADR-012 mixed profile already
+2. Its probe listener is on **8082** (`main.bicep:1615`), because the ADR-012 mixed profile already
    owns 8080 and 8081 and those two endpoints are load-bearing (`main.bicep:1609-1613`).
 3. It is the only app that can receive the native-push env block, and only when the hub wiring is
    on (`main.bicep:1657-1661`).
@@ -1513,8 +1513,8 @@ rate-limiter key:
 { name: 'Cors__AllowedOrigins__0', value: 'https://${prefix}-ui.${...defaultDomain}' }
 ```
 
-CORS is scoped to exactly the UI's FQDN (`main.bicep:1769`), not a wildcard. Gateway was right-sized
-alongside Conference on 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi (`main.bicep:1758`); its
+CORS is scoped to exactly the UI's FQDN (`main.bicep:1770`), not a wildcard. Gateway was right-sized
+alongside Conference on 2026-09-02 and now runs at 0.25 CPU / 0.5 Gi (`main.bicep:1759`); its
 comment records the easier half of that decision (`main.bicep:1751-1757`), a 190 to 235 MB working
 set comfortably inside the new limit because pure YARP forwarding holds no DbContext. It uses the
 readiness gate at `main.bicep:1805-1812` because its warmup involves establishing connections to all
@@ -1524,7 +1524,7 @@ app with no `KeyVault__Uri`.
 Its one conditional secret is the ADR-088 synthetic-traffic bypass. When
 `hasSyntheticTrafficSecret` is true the app declares a `synthetic-traffic-secret` Key Vault
 reference (`main.bicep:1742-1744`) and receives
-`GatewayRateLimiting__SyntheticTrafficSecret` as a `secretRef` (`main.bicep:1784`). A request
+`GatewayRateLimiting__SyntheticTrafficSecret` as a `secretRef` (`main.bicep:1785`). A request
 presenting that value in the `X-Synthetic-Traffic-Key` header skips both chained edge limiters, so
 the monthly k6 run measures backend capacity instead of the per-IP window. Absent, the bypass is
 off and every request stays rate limited, which is the correct default for a public entry point.
@@ -1538,7 +1538,7 @@ policy here cannot be changed independently.
 #### UI specifics (`main.bicep:1834-1954`)
 
 UI is the other externally-reachable app (`external: true`, `main.bicep:1855`), the one app with
-`secrets: []` (`main.bicep:1864`) and sized at 0.25 CPU / 0.5 Gi (`main.bicep:1871`). Three
+`secrets: []` (`main.bicep:1865`) and sized at 0.25 CPU / 0.5 Gi (`main.bicep:1872`). Three
 non-obvious configuration points:
 
 **Sticky sessions** (`main.bicep:1859-1861`):
@@ -1551,7 +1551,7 @@ circuit drops. Sticky session affinity pins each browser session to one replica.
 on the resource (`main.bicep:1837-1839`) states both Blazor Server requirements together: sticky
 sessions and `minReplicas >= 1`.
 
-**Dual API endpoints** (`main.bicep:1883`, `:1885`):
+**Dual API endpoints** (`main.bicep:1884`, `:1886`):
 ```bicep
 { name: 'Api__ApiEndpoint',     value: 'http://${gatewayApp.name}' }
 { name: 'Api__WasmApiEndpoint', value: 'https://${gatewayApp.properties.configuration.ingress.fqdn}' }

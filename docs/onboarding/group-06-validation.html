@@ -188,7 +188,7 @@
           (<code>ValidatingCommandDecorator.cs:24-27</code>). <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether reads
           and writes are separated and whether cross-cutting behavior lives in the pipeline rather than inside
           use cases: validation here is one decorator, not an <code>if (!valid) return</code> prologue copied into every
-          handler. <code>[Rubric §10, Cross-Cutting Concerns]</code> and <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code>
+          handler. <code>[Rubric §12, Performance &amp; Scalability]</code> and <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code>
           apply for the same reason: one gate, uniform for REST, gRPC, and event-consumer entry points alike.</p>
           <p><strong>Every registered validator runs, and they run sequentially.</strong> Both decorators materialize their
           injected <code>IEnumerable&lt;IValidator&lt;T&gt;&gt;</code> into an array once
@@ -332,7 +332,7 @@
           <code>AddCommandRequestValidator&lt;TCommand, TRequest&gt;()</code> (<code>DependencyInjection.cs:477-480</code>) is the explicit
           form of the same registration, with the same <code>TryAdd</code> precedence. <code>[Rubric §2, Design Patterns]</code>
           (convention over configuration, plus the Decorator pattern the gate itself rides on) and
-          <code>[Rubric §16, Maintainability]</code> (a new command inherits validation without a registration line) both
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (a new command inherits validation without a registration line) both
           land here.</p>
           <p><strong>The caller guard that travels with this group.</strong>
           <a href="#currentuserserviceextensions"><code>CurrentUserServiceExtensions</code></a>
@@ -400,7 +400,7 @@
           compose with. <code>[Rubric §9, API &amp; Contract Design]</code> assesses whether the contract a client codes
           against is stable and uniform; a caller-supplied code such as <code>&quot;Sponsor.EventId.Required&quot;</code> is part of
           that contract, where the FluentValidation default is an implementation detail that would change if
-          the rule were re-expressed. <code>[Rubric §16, Maintainability]</code>: because the code rides in as one optional
+          the rule were re-expressed. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: because the code rides in as one optional
           constructor argument, adding a coded rule never forks the shared fragment into a bespoke copy.
           One deliberate consequence, spelled out in the same remarks: the code is applied to <strong>every</strong> rule the
           fragment declares for that field, so one field answers under one code, and a field whose bounds must
@@ -712,7 +712,7 @@
           cannot drift apart.</p>
           </li>
           <li><p><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#addressinvariants"><code>AddressInvariants</code></a> from
-          <code>MMCA.Common.Shared.ValueObjects</code> (imported at <code>AddressValidationRules.cs:4</code>), FluentValidation, and
+          <code>MMCA.Common.Shared.ValueObjects.Contact</code> (imported at <code>AddressValidationRules.cs:4</code>), FluentValidation, and
           <code>System.Globalization</code> / <code>System.Linq.Expressions</code> from the BCL (<code>:1-2</code>). They share the <em>shape</em> of
           the Level 0 fragments in
           <a href="#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest">CommonValidationRules</a>
@@ -1111,7 +1111,7 @@
           dependency is <code>ArgumentNullException.ThrowIfNull</code>.</p>
           </li>
           <li><p><strong>Concept: pushing a repeated guard into the framework rather than a base class.</strong>
-          <code>[Rubric §16, Maintainability]</code> (assesses whether duplicated logic is consolidated where it can only be
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses whether duplicated logic is consolidated where it can only be
           written once): the guard being replaced is the three-line
           read-<code>UserId</code>, null-check, build-a-forbidden-<code>Error</code>, return-a-failure block that every handler and
           controller protecting a per-user operation would otherwise repeat, which the type&#39;s own doc comment

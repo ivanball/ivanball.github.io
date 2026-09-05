@@ -216,7 +216,7 @@
           and <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler&lt;in TQuery, TResult&gt;</code></a>
           instances for its writes and bespoke reads (<code>SessionsController.cs:45-58</code>), then folds any
           <code>Result.Failure</code> back through the inherited <code>HandleFailure</code>. That is the <code>[Rubric §1, SOLID]</code> and
-          <code>[Rubric §16, Maintainability]</code> payoff the generic base exists for (the generic-controller and
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code> payoff the generic base exists for (the generic-controller and
           dynamic-query contract of
           <a href="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html" target="_blank" rel="noopener">ADR-034</a>): the CRUD logic
           is written once in Common, and a per-entity controller has almost no reason to change.</p>
@@ -763,7 +763,7 @@
           create parameter only (<code>CategoryItemsController.cs:130-131</code>). That action is marked
           <a href="group-12-api-hosting-mapping.html#idempotentattribute"><code>[Idempotent]</code></a>
           (<code>CategoryItemsController.cs:129</code>), so a retried POST carrying the same <code>Idempotency-Key</code> replays the
-          first response instead of adding a second row: <code>[Rubric §10, Cross-Cutting]</code>, the replay contract is
+          first response instead of adding a second row: <code>[Rubric §9, API &amp; Contract Design]</code>, the replay contract is
           declared on the action because this create is hand-written rather than inherited from the CRUD base
           (<code>CategoryItemsController.cs:121-127</code>).</li>
           </ul>
@@ -838,7 +838,7 @@
           straight back (<code>=&gt; base.GetAllAsync(...)</code>, <code>:80</code>): the attributes have to sit on the derived method for
           MVC to see them, which is the whole reason these bodies exist. Each write maps its request record onto
           exactly one command and folds any failure through the inherited <code>HandleFailure</code>, the one-handler-per-action
-          shape of CQRS at the edge. <code>[Rubric §1, SOLID]</code> and <code>[Rubric §16, Maintainability]</code>: because the read
+          shape of CQRS at the edge. <code>[Rubric §1, SOLID]</code> and <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: because the read
           machinery is written once in Common, the concrete controller is small and has almost no reason to change.</li>
           <li><strong>Walkthrough</strong><ul>
           <li>Primary-constructor injection (<code>CategoryItemsController.cs:63-69</code>): the query service, the three
@@ -1303,7 +1303,7 @@
           Core MVC (<code>[ApiController]</code>, <code>[HttpGet]</code>, <code>[FromQuery]</code>), <code>Asp.Versioning</code>, <code>ILogger</code>.</li>
           <li><strong>Concept introduced, the framework read hook.</strong> <code>[Rubric §11, Security]</code> assesses whether
           authorization is enforced server-side and whether results are scoped per caller rather than merely hidden
-          in the UI; <code>[Rubric §1, SOLID]</code> and <code>[Rubric §16, Maintainability]</code> assess whether a rule has one home.
+          in the UI; <code>[Rubric §1, SOLID]</code> and <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assess whether a rule has one home.
           The Common base exposes two hooks:
           <code>GetReadSpecificationAsync</code> (asynchronous, <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:597-599</code>)
           and its synchronous half <code>GetExportSpecification</code>
@@ -1957,7 +1957,7 @@
           actions then serve the minimal versus evolved shape for each
           (<code>ServiceInfoControllerBase.cs:39-48</code>). This is the only Conference controller that serves more than one
           version: every other one carries a single <code>[ApiVersion(&quot;1.0&quot;)]</code>. <code>[Rubric §1, SOLID]</code> and
-          <code>[Rubric §16, Maintainability]</code>: the discovery <em>behavior</em> is written once in the Common base, and each
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: the discovery <em>behavior</em> is written once in the Common base, and each
           service&#39;s subclass supplies only its name plus the class-level attributes, which the base&#39;s own remarks
           note are not reliably inherited and so must be repeated on the leaf
           (<code>ServiceInfoControllerBase.cs:15-29</code>, whose <code>&lt;code&gt;</code> block quotes this exact Conference subclass as the
@@ -2041,7 +2041,7 @@
           <code>LogScoringQueued</code> (<code>SessionSelectionController.cs:133-134</code>), a compile-time generated,
           allocation-light log call. <code>[Rubric §12, Performance &amp; Scalability]</code>: all four read endpoints carry
           <code>[OutputCache(PolicyName = &quot;ConferenceCache&quot;)]</code> (<code>:41, 55, 69, 83</code>).</li>
-          <li><strong>Concept, opting <em>out</em> of idempotency with a written reason.</strong> <code>[Rubric §10, Cross-Cutting]</code>. Every
+          <li><strong>Concept, opting <em>out</em> of idempotency with a written reason.</strong> <code>[Rubric §9, API &amp; Contract Design]</code>. Every
           other hand-written POST in this group is marked <code>[Idempotent]</code>; <code>ScoreSessions</code> is marked
           <a href="group-12-api-hosting-mapping.html#nonidempotentattribute"><code>[NonIdempotent]</code></a> instead, and the attribute
           takes a mandatory justification string that is spelled out inline
@@ -2134,7 +2134,7 @@
           <li><strong>Why it&#39;s built this way</strong>: it shares the exact shape of the other junction controllers because the
           underlying rules (mutate the child only through its parent aggregate; never let a junction row outlive
           its parent&#39;s visibility) are identical. Only the aggregate, the DTO, the permission and the pair of cache
-          tags change, which is <code>[Rubric §16, Maintainability]</code> in practice: one shape learned once, repeated
+          tags change, which is <code>[Rubric §15, Best Practices &amp; Code Quality]</code> in practice: one shape learned once, repeated
           without variation.</li>
           <li><strong>Where it&#39;s used</strong>: the Conference service host behind the Gateway route
           <code>/SpeakerCategoryItems/{**catch-all}</code> (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:122</code>);
@@ -2681,7 +2681,7 @@
           hazard, not tidiness: if the visibility check and the cache-bypass list ever named different roles, a
           privileged reader&#39;s unfiltered payload would be written into a shared cache entry and then served to the
           public. Declaring the roles once makes that class of bug impossible rather than merely unlikely
-          (<code>ConferenceReadAudience.cs:12-15</code>). <code>[Rubric §11, Security]</code> again, and <code>[Rubric §16, Maintainability]</code>:
+          (<code>ConferenceReadAudience.cs:12-15</code>). <code>[Rubric §11, Security]</code> again, and <code>[Rubric §15, Best Practices &amp; Code Quality]</code>:
           a future third, partially-privileged audience would need its own cache key, which is why the audience list
           is documented as deliberately two-valued (<code>ConferenceReadAudience.cs:17-21</code>).</li>
           <li><strong>Walkthrough</strong><ul>
@@ -2850,7 +2850,7 @@
           consumer modules keep depending on a plain C# interface and that extraction stay a composition-root
           concern. That is only possible if the transport class is a thin translation with no logic of its own,
           which is why this one holds no branching, no mapping rules and no error handling beyond
-          <code>ThrowIfFailure()</code>. <code>[Rubric §16, Maintainability]</code>: adding a cross-service method means adding an RPC to
+          <code>ThrowIfFailure()</code>. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: adding a cross-service method means adding an RPC to
           the proto and one near-identical override here and on the adapter, a pattern a reviewer can verify at a
           glance.</p>
           </li>
@@ -2918,7 +2918,7 @@
           spread converts the Protobuf <code>RepeatedField</code> into the plain collection the interface contract promises,
           so no Protobuf type escapes the adapter.</li>
           <li>The class is <code>internal</code> (<code>:27</code>): nothing outside this assembly should name it. It reaches the container
-          only through the public <a href="#dependencyinjection">DependencyInjection</a> helper in the same assembly, which
+          only through the public <a href="#dependencyinjection-1">DependencyInjection</a> helper in the same assembly, which
           is the intended (and only) way to install it.</li>
           </ul>
           </li>
@@ -2930,7 +2930,7 @@
           <code>[Rubric §3, Clean Architecture]</code>: the dependency still points inward, since the adapter depends on
           <code>Conference.Shared</code>&#39;s interface and not the other way round.</li>
           <li><strong>Where it&#39;s used</strong>: registered by <code>AddConferenceSessionValidationClient()</code> (see
-          <a href="#dependencyinjection">DependencyInjection</a>), which the Engagement host calls
+          <a href="#dependencyinjection-1">DependencyInjection</a>), which the Engagement host calls
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:281</code>). Its eventual consumers are
           <a href="group-22-engagement-module.html#createbookmarkhandler">CreateBookmarkHandler</a> and
           <a href="group-22-engagement-module.html#getuserbookmarkshandler">GetUserBookmarksHandler</a> behind
@@ -3010,7 +3010,7 @@
           <li><strong>Why it&#39;s built this way</strong>: the social programme has the same publish-gated lifecycle as the rest of
           the catalog, so it reuses the specification hook rather than inventing an activity-specific visibility
           flag, and because <code>Activity</code> owns a real <code>EventId</code> none of that scoping needs a virtual key. Repeating
-          the sponsor controller&#39;s shape verbatim is <code>[Rubric §16, Maintainability]</code> in practice: two aggregates
+          the sponsor controller&#39;s shape verbatim is <code>[Rubric §15, Best Practices &amp; Code Quality]</code> in practice: two aggregates
           with identical rules get identical code, so the reader who has learned one has learned both.</li>
           <li><strong>Where it&#39;s used</strong>: the Conference service host behind the Gateway route <code>/Activities/{**catch-all}</code>
           (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:138</code>). Clients are the public activity page
@@ -3237,7 +3237,7 @@
           sight.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: registered by <code>AddConferenceEventLiveValidationClient()</code> (see
-          <a href="#dependencyinjection">DependencyInjection</a>), called from the Engagement host
+          <a href="#dependencyinjection-1">DependencyInjection</a>), called from the Engagement host
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:282</code>). Consumers are Engagement&#39;s
           live-poll and session-question handlers (<code>Program.cs:237-238</code>).</p>
           </li>
@@ -3318,7 +3318,7 @@
           (<code>Website/docs-src/adr/008-service-extraction-topology.md</code>). Shipping the registration helpers in the same
           assembly as the <code>.proto</code> files and the adapters means a consumer takes one reference and gets the whole
           client story; the adapters can stay <code>internal</code> because this class is the sanctioned entry point.
-          <code>[Rubric §16, Maintainability]</code>: a reader who wants to know how Engagement reaches Conference finds the
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: a reader who wants to know how Engagement reaches Conference finds the
           whole answer in one 84-line file.</li>
           <li><strong>Where it&#39;s used</strong>: the Engagement service host calls both inside its application-pipeline registration,
           in the documented order after <code>moduleHost.RegisterModules</code>

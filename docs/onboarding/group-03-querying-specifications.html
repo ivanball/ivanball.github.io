@@ -635,7 +635,7 @@
           <code>where TEntityDTO : IBaseDTO&lt;TIdentifierType&gt;</code>, <code>where TIdentifierType : notnull</code> (<code>:38-40</code>).</li>
           <li><strong>Concept introduced, one generic read pipeline for every entity.</strong> <code>[Rubric §1, SOLID]</code>
           (Open/Closed: extend by subclassing and overriding, not by editing), <code>[Rubric §9, API &amp; Contract Design]</code> (one filter/sort/page/fields convention across every read endpoint), <code>[Rubric §12, Performance &amp; Scalability]</code> (all shaping is pushed down to the database through the pipeline), and
-          <code>[Rubric §16, Maintainability]</code> (a new entity inherits the full read surface with no new code). The
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (a new entity inherits the full read surface with no new code). The
           list path, the wide <code>GetAllAsync</code> overload (<code>:248-345</code>), is four steps:<ol>
           <li><strong>Validate before touching the database</strong> (<code>:262-267</code>): <code>Result.Combine</code> of
           <a href="#queryfieldservice"><code>QueryFieldService.Validate</code></a> for <code>fields</code>
@@ -1197,7 +1197,7 @@
           startup <a href="#queryfilterservice"><code>QueryFilterService</code></a><code>.RegisterStrategy</code> call.&quot; Earlier editions of
           the framework had no built-in <code>long</code> strategy, so a <code>bigint</code>-keyed entity had to call
           <code>RegisterStrategy</code> at composition time; making it a default entry closes that gap
-          (<code>[Rubric §16, Maintainability]</code>, which assesses whether a common case works with zero
+          (<code>[Rubric §15, Best Practices &amp; Code Quality]</code>, which assesses whether a common case works with zero
           configuration).</li>
           <li><strong>Walkthrough</strong>: <code>SupportedOperators</code> (<code>:16-21</code>) holds the ten operators. <code>CanParseValue</code> (<code>:24-25</code>)
           delegates to <a href="#filtervalueparser"><code>FilterValueParser.CanParse</code></a> with <code>ParseLong</code>. <code>Apply&lt;T&gt;</code>
@@ -1460,7 +1460,7 @@
           type in its signature, which is why it can be shared by the pipeline and by hand-written handlers
           alike.</li>
           <li><strong>Concept introduced, arithmetic overflow as a production bug class.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> assesses whether reads are bounded and paginate correctly at the edges of their input
-          range; <code>[Rubric §16, Maintainability]</code> assesses whether a subtle rule is expressed once rather than
+          range; <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether a subtle rule is expressed once rather than
           re-derived per call site. Both apply literally here. The naive expression <code>(pageNumber - 1) * pageSize</code>
           is a 32-bit multiply: for page numbers near <code>int.MaxValue</code> it overflows and wraps <strong>negative</strong>, and a
           negative <code>Skip</code> is not a benign no-op, because SQL Server rejects a negative <code>OFFSET</code> outright, so the
@@ -1930,7 +1930,7 @@
           (its arguments), <a href="#parameterreplacer"><code>ParameterReplacer</code></a> (the rebind),
           <a href="group-02-domain-building-blocks.html#ibaseentitytidentifiertype"><code>IBaseEntity&lt;TIdentifierType&gt;</code></a>
           (the <code>TEntity</code> constraint); <code>System.Linq.Expressions</code> (BCL).</li>
-          <li><strong>Concept introduced, one composition algorithm instead of three copies.</strong> <code>[Rubric §16, Maintainability]</code> assesses whether a rule with a subtle correctness argument is written once. And,
+          <li><strong>Concept introduced, one composition algorithm instead of three copies.</strong> <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether a rule with a subtle correctness argument is written once. And,
           Or and Not differ by exactly one expression node, so a per-combinator copy of the parameter-rebinding
           logic would be three places the <code>Expression.Invoke</code> mistake could come back. Collapsing them into
           <code>Combine</code> (parameterized by the binary-operator factory) and <code>Negate</code> leaves one implementation to
@@ -2273,7 +2273,7 @@
           workspace uses throughout (see the primer&#39;s <code>extension(T)</code> note): the receiver is named once on the
           block rather than repeated as a <code>this</code> parameter on every method, and the constraints are stated
           once. <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses idiomatic use of current language
-          features) and <code>[Rubric §16, Maintainability]</code>.</li>
+          features) and <code>[Rubric §15, Best Practices &amp; Code Quality]</code>.</li>
           <li><strong>Walkthrough</strong>: three members, each a thin factory that null-guards both the receiver and the
           argument before constructing the corresponding combinator.<ul>
           <li><code>And(ISpecification&lt;TEntity, TIdentifierType&gt; other)</code> returning

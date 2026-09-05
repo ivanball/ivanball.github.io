@@ -1286,7 +1286,14 @@
           <li><strong>CONCEPT-MAPS.md:</strong> 289 mechanical checks, 0 mismatches; no relationship-level edit, because none of the 43 regrouped types is named in a diagram.</li>
           <li><strong>Verification:</strong> <code>verify.ps1</code>: <strong>0 missing</strong>, rubric <strong>34/34</strong>.</li>
           <li><strong>Governance events:</strong> no new group. Classifier change accepted by the user on 2026-09-05: 36 dead <code>O</code> overrides in <code>classify.ps1</code> (keyed on pre-split namespaces) were re-keyed to the post-split namespaces, which produced the 43 regroups above (G14 settings to G07/G08/G09/G04; G07 host-level services to G14; G26 live UI services to G22).</li>
-          <li><strong>Open (not fixed in this pass):</strong> the chapters still tag rubric sections with the pre-v2 numbering (section 16 read as Maintainability), while ADR-110 renumbers section 10 to Messaging &amp; Integration and section 16 to AI-Native; a corpus-wide retag is a separate pass. Same-name types in different namespaces (<code>DependencyInjection</code>, <code>DriftedTests</code>, <code>FolderWidthTests</code>, <code>FixtureAssemblyMap</code>, <code>UIArchitectureConventionTests</code>) still share one <code>###</code> heading text and so one anchor per chapter.</li>
+          <li><strong>Same-day follow-up pass (2026-09-05, second PR):</strong><ul>
+          <li><strong>Rubric v2 retag</strong> (<a href="https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html" target="_blank" rel="noopener">ADR-110</a>): the 297 section-16 Maintainability tags became section 15 Best Practices &amp; Code Quality (289) or section 34 Architecture Governance &amp; Documentation (8, where the sentence is about coupling, tech debt or shotgun surgery); the 137 section-10 Cross-Cutting tags moved to the category that absorbed their criterion, chosen by the tag&#39;s own sentence (12 Performance &amp; Scalability 49, 29 Resilience 27, 17 DevOps &amp; Deployment 20, 6 CQRS &amp; Event-Driven 19, 9 API &amp; Contract Design 12, 13 Observability 10); 35 outbox/bus/consumer sections in groups 04 and 14 gained <code>[Rubric §10, Messaging &amp; Integration Architecture]</code> and 25 AI session-scoring sections gained <code>[Rubric §16, AI-Native Application Architecture]</code>; the primer&#39;s Part A list, the concept-map rubric diagram, the matrix below and the authoring spec now carry the v2 names. <code>verify.ps1</code> still reports 34/34.</li>
+          <li><strong>devops-iac bicep cites:</strong> an evidence-verifier sample (44 of 221 <code>main.bicep</code> cites) found every single-line pinpoint cite in the six-app section landing one line early on the preceding comment; 61 cites were corrected (26 comment-landing singles, 27 shorthand <code>:N</code> numbers, 8 verifier-specific items incl. one wrong parameter mapping), all against the committed f2623329.</li>
+          <li><strong>Flagged citations:</strong> of the 209 flagged at the gate, 100 had already been fixed by the sweep&#39;s authors, 6 were resolved by the new <code>fixcites.ps1 -Residual</code> text-match pass, and the remaining 92 went to 36 per-part author agents (one part each, 15-call budget): about a third were genuinely stale and were corrected (line shifts after the namespace split, a file moved from <code>Services/</code> to <code>Sessions/Scoring/</code>, the soft-deleted-user marker write that moved from ADC&#39;s <code>DeleteUserHandler</code> into <code>DeleteUserHandlerBase.cs:142-144</code>), the rest were baseline-absent false positives confirmed correct against today&#39;s source; a handful of sentences also had their pre-split namespace text corrected.</li>
+          <li><strong>Same-name headings:</strong> the renderer already dedups repeated heading slugs (<code>dependencyinjection</code>, <code>dependencyinjection-1</code>, ...) in document order; the new <code>fixlinks.ps1</code> computes those effective anchors from the assembled part order, records them in <code>_typemap.tsv</code> (now one row per type instance with a <code>Namespace</code> column), and retargets cross-links by namespace proximity: 68 links rewritten, 33 typemap anchors suffixed, 76 confirmed already on the right instance, 58 left on the first instance (26 from overview parts, which carry no namespace, and 32 equidistant ties).</li>
+          <li><strong>Pipeline additions</strong> (all dry-run by default): <code>fixcites.ps1 -Residual</code>, <code>fixlinks.ps1</code>, <code>repack.ps1</code> stray-part deletion and orphan-narrative cleanup, <code>devops-staleness.ps1</code> test-count diff (<code>_testcounts.json</code>) feeding the devops-testing author, <code>plan.ps1</code> typemap <code>Namespace</code> column.</li>
+          </ul>
+          </li>
           </ul>
           </blockquote>
           <hr>
@@ -1433,8 +1440,8 @@
           </tr>
           <tr>
           <td>§10</td>
-          <td>Cross-Cutting Concerns</td>
-          <td><a href="group-02-domain-building-blocks.html">group-02</a> (developed in group-05)</td>
+          <td>Messaging &amp; Integration Architecture</td>
+          <td><a href="group-04-events-outbox.html">group-04</a> (developed in group-14)</td>
           </tr>
           <tr>
           <td>§11</td>
@@ -1463,8 +1470,8 @@
           </tr>
           <tr>
           <td>§16</td>
-          <td>Maintainability &amp; Evolvability</td>
-          <td><a href="group-02-domain-building-blocks.html">group-02</a></td>
+          <td>AI-Native Application Architecture</td>
+          <td><a href="group-17-conference-domain.html">group-17</a> (developed in groups 18-19, <a href="devops-cicd.html">devops-cicd</a>)</td>
           </tr>
           <tr>
           <td>§17</td>

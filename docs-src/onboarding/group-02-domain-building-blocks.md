@@ -101,7 +101,7 @@ child's identifier type
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11`, rationale in the type's
 own doc comment at `IRowVersioned.cs:3-10` and in
 [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)). This rung is where
-[Rubric §8, Data Architecture] (soft-delete, audit, concurrency) meets [Rubric §10, Cross-Cutting]:
+[Rubric §8, Data Architecture] (soft-delete, audit, concurrency) meets [Rubric §12, Performance & Scalability]:
 three concerns that would otherwise be copy-pasted into every entity are inherited once and enforced
 centrally ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) for
 soft-delete versus erasure).
@@ -564,7 +564,7 @@ in it.
   [`EventNameResolver`](group-04-events-outbox.md#eventnameresolver) in Infrastructure.
 - **Concept introduced, contract identity versus CLR identity.** `[Rubric §9, API & Contract Design]`
   (assesses whether a published contract has a name independent of its implementation) and
-  `[Rubric §16, Maintainability]` (assesses whether an ordinary refactoring can break persisted data).
+  `[Rubric §15, Best Practices & Code Quality]` (assesses whether an ordinary refactoring can break persisted data).
   The problem the attribute solves is stated in its own doc comment (`EventNameAttribute.cs:3-13`):
   without it, an outbox row records the event's CLR assembly-qualified name, so renaming the class,
   moving it to another namespace, or moving it to another assembly orphans every row already written
@@ -657,7 +657,7 @@ in it.
   it.
 - **Why it's built this way**: making audit a contract (not a base-class detail) lets the EF
   interceptor recognize "any `IAuditableEntity`" and stamp it uniformly; centralizing it is exactly the
-  cross-cutting discipline §8/§10 reward. The identifier alias keeps "who" strongly named.
+  centralizing discipline §8/§15 reward. The identifier alias keeps "who" strongly named.
 - **Where it's used**: implemented by [`AuditableBaseEntity<TIdentifierType>`](#auditablebaseentitytidentifiertype)
   (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13`, with private
   setters populated by EF, lines 20-45); recognized by the audit `SaveChanges` interceptor and the
@@ -1408,7 +1408,7 @@ in it.
   `EntityTypeExtensions.IsIdValueGenerated(typeof(Ticket))`. `[Rubric §8, Data Architecture]`
   (assesses whether key-generation strategy is a deliberate, declared decision rather than an
   accident of configuration): the strategy is declared once, as an attribute on the entity, and this
-  property is the single reader of that declaration. `[Rubric §16, Maintainability]`: the reflection
+  property is the single reader of that declaration. `[Rubric §15, Best Practices & Code Quality]`: the reflection
   call lives in exactly one place, so a change in how the strategy is declared is a one-file change.
 - **Walkthrough**: the whole implementation is one expression-bodied property
   (`EntityTypeExtensions.cs:19`): `entityType.GetCustomAttribute<IdValueGeneratedAttribute>() is not
@@ -1489,7 +1489,7 @@ in it.
 - **Depends on**: [`Address`](#address) (mutual cycle, same SCC),
   [`Error`](group-01-result-error-handling.md#error),
   [`Result`](group-01-result-error-handling.md#result).
-- **Concept introduced, the shared-constants invariant class.** `[Rubric §16, Maintainability &
+- **Concept introduced, the shared-constants invariant class.** `[Rubric §34, Architecture Governance & Documentation &
   Evolvability]` (assesses whether a constraint has exactly one place to change). Six
   `public static readonly int` constants are declared (`AddressInvariants.cs:12-27`):
   `AddressLine1MaxLength = 200`, `AddressLine2MaxLength = 200`, `CityMaxLength = 100`,
@@ -1745,7 +1745,7 @@ in it.
   the domain): the clock and the current user both live in infrastructure, so this class exposes the
   audit fields with `private set` and lets EF Core write them through
   `entry.Property(...).CurrentValue` during `SaveChangesAsync` (`AuditableBaseEntity.cs:8-10`,
-  `AuditableBaseEntity.cs:22-23`). `[Rubric §10, Cross-Cutting Concerns]` (assesses whether such
+  `AuditableBaseEntity.cs:22-23`). `[Rubric §9, API & Contract Design]` (assesses whether such
   concerns are centralized rather than repeated per handler): no command handler anywhere sets
   `CreatedBy` or `LastModifiedOn`, because
   [`AuditSaveChangesInterceptor`](group-07-persistence-ef-core.md#auditsavechangesinterceptor) does
@@ -2191,7 +2191,7 @@ in it.
   (assesses whether business rules live in the domain and are expressed in its language): the
   helpers standardize the **shape** of an invariant failure (`code`, `message`, `source`, `target`)
   while leaving the vocabulary to the caller, which is why every method takes those four strings and
-  invents none of them. `[Rubric §16, Maintainability]` (assesses whether a repeated rule has one
+  invents none of them. `[Rubric §15, Best Practices & Code Quality]` (assesses whether a repeated rule has one
   source of truth): without this class, every module would re-code
   `string.IsNullOrWhiteSpace` with slightly different codes and messages; with it, tightening a
   bound is a one-line change in one file. `[Rubric §1, SOLID]`: one place owns each kind of check,

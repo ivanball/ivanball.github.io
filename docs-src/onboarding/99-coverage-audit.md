@@ -1040,7 +1040,12 @@ double-counted (each type maps to exactly one group).
 > - **CONCEPT-MAPS.md:** 289 mechanical checks, 0 mismatches; no relationship-level edit, because none of the 43 regrouped types is named in a diagram.
 > - **Verification:** `verify.ps1`: **0 missing**, rubric **34/34**.
 > - **Governance events:** no new group. Classifier change accepted by the user on 2026-09-05: 36 dead `O` overrides in `classify.ps1` (keyed on pre-split namespaces) were re-keyed to the post-split namespaces, which produced the 43 regroups above (G14 settings to G07/G08/G09/G04; G07 host-level services to G14; G26 live UI services to G22).
-> - **Open (not fixed in this pass):** the chapters still tag rubric sections with the pre-v2 numbering (section 16 read as Maintainability), while ADR-110 renumbers section 10 to Messaging & Integration and section 16 to AI-Native; a corpus-wide retag is a separate pass. Same-name types in different namespaces (`DependencyInjection`, `DriftedTests`, `FolderWidthTests`, `FixtureAssemblyMap`, `UIArchitectureConventionTests`) still share one `###` heading text and so one anchor per chapter.
+> - **Same-day follow-up pass (2026-09-05, second PR):**
+>   - **Rubric v2 retag** ([ADR-110](https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html)): the 297 section-16 Maintainability tags became section 15 Best Practices & Code Quality (289) or section 34 Architecture Governance & Documentation (8, where the sentence is about coupling, tech debt or shotgun surgery); the 137 section-10 Cross-Cutting tags moved to the category that absorbed their criterion, chosen by the tag's own sentence (12 Performance & Scalability 49, 29 Resilience 27, 17 DevOps & Deployment 20, 6 CQRS & Event-Driven 19, 9 API & Contract Design 12, 13 Observability 10); 35 outbox/bus/consumer sections in groups 04 and 14 gained `[Rubric §10, Messaging & Integration Architecture]` and 25 AI session-scoring sections gained `[Rubric §16, AI-Native Application Architecture]`; the primer's Part A list, the concept-map rubric diagram, the matrix below and the authoring spec now carry the v2 names. `verify.ps1` still reports 34/34.
+>   - **devops-iac bicep cites:** an evidence-verifier sample (44 of 221 `main.bicep` cites) found every single-line pinpoint cite in the six-app section landing one line early on the preceding comment; 61 cites were corrected (26 comment-landing singles, 27 shorthand `:N` numbers, 8 verifier-specific items incl. one wrong parameter mapping), all against the committed f2623329.
+>   - **Flagged citations:** of the 209 flagged at the gate, 100 had already been fixed by the sweep's authors, 6 were resolved by the new `fixcites.ps1 -Residual` text-match pass, and the remaining 92 went to 36 per-part author agents (one part each, 15-call budget): about a third were genuinely stale and were corrected (line shifts after the namespace split, a file moved from `Services/` to `Sessions/Scoring/`, the soft-deleted-user marker write that moved from ADC's `DeleteUserHandler` into `DeleteUserHandlerBase.cs:142-144`), the rest were baseline-absent false positives confirmed correct against today's source; a handful of sentences also had their pre-split namespace text corrected.
+>   - **Same-name headings:** the renderer already dedups repeated heading slugs (`dependencyinjection`, `dependencyinjection-1`, ...) in document order; the new `fixlinks.ps1` computes those effective anchors from the assembled part order, records them in `_typemap.tsv` (now one row per type instance with a `Namespace` column), and retargets cross-links by namespace proximity: 68 links rewritten, 33 typemap anchors suffixed, 76 confirmed already on the right instance, 58 left on the first instance (26 from overview parts, which carry no namespace, and 32 equidistant ties).
+>   - **Pipeline additions** (all dry-run by default): `fixcites.ps1 -Residual`, `fixlinks.ps1`, `repack.ps1` stray-part deletion and orphan-narrative cleanup, `devops-staleness.ps1` test-count diff (`_testcounts.json`) feeding the devops-testing author, `plan.ps1` typemap `Namespace` column.
 
 ---
 
@@ -1148,13 +1153,13 @@ DevOps/test chapters (noted).
 | §7 | Microservices Readiness | [group-04](group-04-events-outbox.md) (developed in groups 13–14, [devops-iac](devops-iac.md)) |
 | §8 | Data Architecture | [group-02](group-02-domain-building-blocks.md) (developed in group-07) |
 | §9 | API & Contract Design | [group-01](group-01-result-error-handling.md) (developed in groups 12–13) |
-| §10 | Cross-Cutting Concerns | [group-02](group-02-domain-building-blocks.md) (developed in group-05) |
+| §10 | Messaging & Integration Architecture | [group-04](group-04-events-outbox.md) (developed in group-14) |
 | §11 | Security | [group-02](group-02-domain-building-blocks.md) (developed in group-08) |
 | §12 | Performance & Scalability | [group-01](group-01-result-error-handling.md) |
 | §13 | Observability & Operability | [group-02](group-02-domain-building-blocks.md) (developed in [devops-aspire](devops-aspire.md)) |
 | §14 | Testability & Test Strategy | [group-03](group-03-querying-specifications.md) (developed in group-26, [devops-testing](devops-testing.md)) |
 | §15 | Best Practices & Code Quality | [group-02](group-02-domain-building-blocks.md) (also [primer §4](00-primer.md#4-c-build-and-code-style-conventions)) |
-| §16 | Maintainability & Evolvability | [group-02](group-02-domain-building-blocks.md) |
+| §16 | AI-Native Application Architecture | [group-17](group-17-conference-domain.md) (developed in groups 18-19, [devops-cicd](devops-cicd.md)) |
 | §17 | DevOps & Deployment | [group-07](group-07-persistence-ef-core.md) (developed in [devops-cicd](devops-cicd.md)/[iac](devops-iac.md)) |
 | §18 | UI Architecture & Component Design | [group-08](group-08-auth.md) (developed in groups 15, 21) |
 | §19 | State Management & Data Flow | [group-08](group-08-auth.md) (developed in group-15) |

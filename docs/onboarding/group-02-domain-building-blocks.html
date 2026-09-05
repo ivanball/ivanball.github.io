@@ -242,7 +242,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11</code>, rationale in the type&#39;s
           own doc comment at <code>IRowVersioned.cs:3-10</code> and in
           <a href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html" target="_blank" rel="noopener">ADR-035</a>). This rung is where
-          [Rubric §8, Data Architecture] (soft-delete, audit, concurrency) meets [Rubric §10, Cross-Cutting]:
+          [Rubric §8, Data Architecture] (soft-delete, audit, concurrency) meets [Rubric §12, Performance &amp; Scalability]:
           three concerns that would otherwise be copy-pasted into every entity are inherited once and enforced
           centrally (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a> for
           soft-delete versus erasure).</p>
@@ -691,7 +691,7 @@
           <a href="group-04-events-outbox.html#eventnameresolver"><code>EventNameResolver</code></a> in Infrastructure.</li>
           <li><strong>Concept introduced, contract identity versus CLR identity.</strong> <code>[Rubric §9, API &amp; Contract Design]</code>
           (assesses whether a published contract has a name independent of its implementation) and
-          <code>[Rubric §16, Maintainability]</code> (assesses whether an ordinary refactoring can break persisted data).
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses whether an ordinary refactoring can break persisted data).
           The problem the attribute solves is stated in its own doc comment (<code>EventNameAttribute.cs:3-13</code>):
           without it, an outbox row records the event&#39;s CLR assembly-qualified name, so renaming the class,
           moving it to another namespace, or moving it to another assembly orphans every row already written
@@ -788,7 +788,7 @@
           it.</li>
           <li><strong>Why it&#39;s built this way</strong>: making audit a contract (not a base-class detail) lets the EF
           interceptor recognize &quot;any <code>IAuditableEntity</code>&quot; and stamp it uniformly; centralizing it is exactly the
-          cross-cutting discipline §8/§10 reward. The identifier alias keeps &quot;who&quot; strongly named.</li>
+          centralizing discipline §8/§15 reward. The identifier alias keeps &quot;who&quot; strongly named.</li>
           <li><strong>Where it&#39;s used</strong>: implemented by <a href="#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13</code>, with private
           setters populated by EF, lines 20-45); recognized by the audit <code>SaveChanges</code> interceptor and the
@@ -1571,7 +1571,7 @@
           <code>EntityTypeExtensions.IsIdValueGenerated(typeof(Ticket))</code>. <code>[Rubric §8, Data Architecture]</code>
           (assesses whether key-generation strategy is a deliberate, declared decision rather than an
           accident of configuration): the strategy is declared once, as an attribute on the entity, and this
-          property is the single reader of that declaration. <code>[Rubric §16, Maintainability]</code>: the reflection
+          property is the single reader of that declaration. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: the reflection
           call lives in exactly one place, so a change in how the strategy is declared is a one-file change.</li>
           <li><strong>Walkthrough</strong>: the whole implementation is one expression-bodied property
           (<code>EntityTypeExtensions.cs:19</code>): <code>entityType.GetCustomAttribute&lt;IdValueGeneratedAttribute&gt;() is not null</code>. There is no caching layer in this file; the doc comment (<code>EntityTypeExtensions.cs:13-18</code>)
@@ -1654,7 +1654,7 @@
           <li><strong>Depends on</strong>: <a href="#address"><code>Address</code></a> (mutual cycle, same SCC),
           <a href="group-01-result-error-handling.html#error"><code>Error</code></a>,
           <a href="group-01-result-error-handling.html#result"><code>Result</code></a>.</li>
-          <li><strong>Concept introduced, the shared-constants invariant class.</strong> <code>[Rubric §16, Maintainability &amp; Evolvability]</code> (assesses whether a constraint has exactly one place to change). Six
+          <li><strong>Concept introduced, the shared-constants invariant class.</strong> <code>[Rubric §34, Architecture Governance &amp; Documentation &amp; Evolvability]</code> (assesses whether a constraint has exactly one place to change). Six
           <code>public static readonly int</code> constants are declared (<code>AddressInvariants.cs:12-27</code>):
           <code>AddressLine1MaxLength = 200</code>, <code>AddressLine2MaxLength = 200</code>, <code>CityMaxLength = 100</code>,
           <code>StateMaxLength = 100</code>, <code>ZipCodeMaxLength = 20</code>, <code>CountryMaxLength = 100</code>. EF entity
@@ -1924,7 +1924,7 @@
           the domain): the clock and the current user both live in infrastructure, so this class exposes the
           audit fields with <code>private set</code> and lets EF Core write them through
           <code>entry.Property(...).CurrentValue</code> during <code>SaveChangesAsync</code> (<code>AuditableBaseEntity.cs:8-10</code>,
-          <code>AuditableBaseEntity.cs:22-23</code>). <code>[Rubric §10, Cross-Cutting Concerns]</code> (assesses whether such
+          <code>AuditableBaseEntity.cs:22-23</code>). <code>[Rubric §9, API &amp; Contract Design]</code> (assesses whether such
           concerns are centralized rather than repeated per handler): no command handler anywhere sets
           <code>CreatedBy</code> or <code>LastModifiedOn</code>, because
           <a href="group-07-persistence-ef-core.html#auditsavechangesinterceptor"><code>AuditSaveChangesInterceptor</code></a> does
@@ -2402,7 +2402,7 @@
           (assesses whether business rules live in the domain and are expressed in its language): the
           helpers standardize the <strong>shape</strong> of an invariant failure (<code>code</code>, <code>message</code>, <code>source</code>, <code>target</code>)
           while leaving the vocabulary to the caller, which is why every method takes those four strings and
-          invents none of them. <code>[Rubric §16, Maintainability]</code> (assesses whether a repeated rule has one
+          invents none of them. <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses whether a repeated rule has one
           source of truth): without this class, every module would re-code
           <code>string.IsNullOrWhiteSpace</code> with slightly different codes and messages; with it, tightening a
           bound is a one-line change in one file. <code>[Rubric §1, SOLID]</code>: one place owns each kind of check,

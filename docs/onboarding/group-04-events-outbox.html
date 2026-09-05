@@ -665,7 +665,7 @@
           becomes impossible.</li>
           <li><strong>Concept introduced, default interface implementations as a compatibility layer.</strong>
           <code>[Rubric §1, SOLID]</code> (interface segregation and open/closed extension) and
-          <code>[Rubric §16, Maintainability]</code>. Three of the five members ship <strong>bodies on the interface itself</strong>:
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code>. Three of the five members ship <strong>bodies on the interface itself</strong>:
           <code>TryBeginAsync</code> (<code>IInboxStore.cs:38-39</code>) is defined as <code>!await AlreadyProcessedAsync(...)</code>,
           <code>CompleteAsync</code> (<code>IInboxStore.cs:48-49</code>) forwards to <code>MarkProcessedAsync</code>, and <code>Abandon</code>
           (<code>IInboxStore.cs:63</code>) returns <code>true</code>. The <code>&lt;remarks&gt;</code> says why (<code>IInboxStore.cs:33-37</code>): an
@@ -691,7 +691,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: the port lets the no-op and EF-backed implementations be swapped by
-          configuration without touching consumer code, a §6/§10 dependency-inversion win, and putting the
+          configuration without touching consumer code, a §1/§6 dependency-inversion win, and putting the
           protocol (not just the two data operations) on the interface keeps the ordering rules in one place
           instead of in every consumer. <strong><a href="https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html" target="_blank" rel="noopener">ADR-021</a></strong> records this inbox as the broker-consume sibling of
           <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>&#39;s outbox (producer side) and <a href="https://ivanball.github.io/docs/adr/017-request-idempotency.html" target="_blank" rel="noopener">ADR-017</a>&#39;s HTTP-edge idempotency, deduping broker
@@ -710,6 +710,7 @@
           consumes the port without a broker consumer) but it does mean the inbox posture is a <em>broker-mode</em>
           decision, not a container-wide one.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="inboxdisabledwarningservice">InboxDisabledWarningService</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Inbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/InboxDisabledWarningService.cs:20</code> · Level 0 · class (internal sealed partial, <code>IHostedService</code>)</p>
@@ -757,6 +758,7 @@
           sees this warning. That is correct (in-process dispatch does not redeliver) but it does mean the
           absence of the line is not by itself evidence that dedup is on.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="inboxmessage">InboxMessage</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Inbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/InboxMessage.cs:8</code> · Level 0 · class (public sealed)</p>
@@ -806,6 +808,7 @@
           (<code>ApplicationDbContext.cs:566-568</code>). There is also no tenant column: a tenant with its own database
           gets its own <code>InboxMessages</code> table instead (see <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outboxdisablednoticeservice">OutboxDisabledNoticeService</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox.Administration</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxDisabledNoticeService.cs:22</code> · Level 0 · class (internal sealed partial, <code>IHostedService</code>)</p>
@@ -846,6 +849,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:209-212</code>), so a host
           either gets the two outbox background services or gets this notice, never both and never neither.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="iintegrationevent">IIntegrationEvent</h3>
           <blockquote>
           <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IIntegrationEvent.cs:15</code> · Level 1 · interface</p>
@@ -880,6 +884,7 @@
           <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>, whose type parameter is
           constrained to <code>class, IIntegrationEvent</code> (<code>IntegrationEventConsumer.cs:31</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="noopinboxstore">NoOpInboxStore</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Inbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/NoOpInboxStore.cs:7</code> · Level 1 · class (internal sealed)</p>
@@ -890,7 +895,7 @@
           inbox at all.</li>
           <li><strong>Depends on</strong>: <a href="#iinboxstore"><code>IInboxStore</code></a> (the port it implements); BCL <code>Task</code>/<code>Guid</code> only.</li>
           <li><strong>Concept reinforced, the Null Object pattern.</strong> <code>[Rubric §2, Design Patterns]</code> (assesses idiomatic
-          use of patterns) and <code>[Rubric §10, Cross-Cutting Concerns]</code>. <code>AlreadyProcessedAsync</code> always returns
+          use of patterns) and <code>[Rubric §17, DevOps &amp; Deployment]</code>. <code>AlreadyProcessedAsync</code> always returns
           <code>Task.FromResult(false)</code> (<code>NoOpInboxStore.cs:9-10</code>) and <code>MarkProcessedAsync</code> returns
           <code>Task.CompletedTask</code> (<code>NoOpInboxStore.cs:12-13</code>). The consumer pipeline is written against
           <a href="#iinboxstore"><code>IInboxStore</code></a> and runs identically whether or not dedup is enabled: the Null Object
@@ -915,6 +920,7 @@
           explicitly (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:798-809</code>);
           consumed by <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outboxsettings">OutboxSettings</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox.Administration</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:10</code> · Level 2 · class (public sealed)</p>
@@ -1019,6 +1025,7 @@
           &quot;relational engines only&quot;.</p>
           </li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="efinboxstore">EfInboxStore</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Inbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:38</code> · Level 13 · class (public sealed partial)</p>
@@ -1120,6 +1127,7 @@
           given handler&#39;s <code>SaveChangesAsync</code> actually lands on the same physical source as the resolved outbox
           data source is a per-host configuration question that is not determinable from this file alone.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outboxadministration">OutboxAdministration</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox.Administration</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxAdministration.cs:36</code> · Level 13 · class (public sealed partial)</p>
@@ -1209,6 +1217,7 @@
           and holds no state of its own. The framework ships no endpoint for it; a host exposes it from an admin
           endpoint, a support command or a scheduled job (<code>IOutboxAdministration.cs:10-14</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outboxcleanupservice">OutboxCleanupService</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox.Administration</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:47</code> · Level 13 · class (public sealed partial, <code>BackgroundService</code>)</p>
@@ -1293,6 +1302,7 @@
           (<code>OutboxCleanupService.cs:127</code>), not a separate inbox window, so shortening outbox retention shortens
           the dedup memory with it.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="ioutboxsignal">IOutboxSignal</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/IOutboxSignal.cs:8</code> · Level 0 · interface</p>
@@ -1323,7 +1333,7 @@
           injection point, and it keeps the <code>SemaphoreSlim</code> detail (including its one-permit cap) out of every
           call site.</li>
           <li><strong>Where it&#39;s used</strong>: registered as a singleton by <code>AddInfrastructure</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:178</code>). <code>Signal()</code> is
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:192</code>). <code>Signal()</code> is
           called by
           <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
           on all three of its paths
@@ -1336,6 +1346,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:146</code>),
           with the duration computed from <a href="#outboxcycleresult"><code>OutboxCycleResult</code></a>.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outboxcycleresult">OutboxCycleResult</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxCycleResult.cs:19</code> · Level 0 · record struct (internal readonly)</p>
@@ -1369,6 +1380,7 @@
           <code>ExecuteAsync</code> to either continue immediately (<code>OutboxProcessor.cs:132-136</code>) or wait for the
           duration <code>ComputeWaitTime</code> derives from it (<code>OutboxProcessor.cs:141-146</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outboxmetrics">OutboxMetrics</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxMetrics.cs:16</code> · Level 0 · class (internal static)</p>
@@ -1443,6 +1455,7 @@
           <a href="group-14-module-system-composition.html#brokermetrics"><code>BrokerMetrics.CircuitOpenCounter</code></a>, not on
           <code>OutboxMetrics</code> (<code>OutboxProcessor.cs:658-660</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="eventnameresolver">EventNameResolver</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/EventNameResolver.cs:19</code> · Level 1 · class (internal static)</p>
@@ -1458,7 +1471,7 @@
           <a href="group-14-module-system-composition.html#upcastingintegrationeventconsumertevent"><code>UpcastingIntegrationEventConsumer&lt;TEvent&gt;</code></a>.</li>
           <li><strong>Concept introduced, a serialization identity that outlives the CLR type name.</strong>
           <code>[Rubric §9, API &amp; Contract Design]</code> assesses whether a stored or on-the-wire contract can evolve
-          without breaking what is already in flight, and <code>[Rubric §16, Maintainability]</code> assesses whether an
+          without breaking what is already in flight, and <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether an
           ordinary refactoring (rename, namespace move, project split) is safe. The problem: an outbox row
           records the event&#39;s assembly-qualified CLR name, so renaming the class or moving it to another
           assembly orphans every row already written under the old name, and the processor eventually
@@ -1599,10 +1612,11 @@
           overflow makes signalling idempotent against bursts, which is the same &quot;at-least-once is fine,
           duplicates are absorbed&quot; instinct that runs through this whole group.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the singleton <code>IOutboxSignal</code> by <code>AddInfrastructure</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:178</code>). Its callers are
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:192</code>). Its callers are
           listed under <a href="#ioutboxsignal"><code>IOutboxSignal</code></a>. Note the registration is unconditional, above the
           outbox gate, so the producers can signal without checking whether a processor exists.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="basedomainevent">BaseDomainEvent</h3>
           <blockquote>
           <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.DomainEvents</code> · <code>MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:26</code> · Level 1 · record class (abstract)</p>
@@ -1682,6 +1696,7 @@
           <a href="#outboxprocessor"><code>OutboxProcessor</code></a> drains through: <code>IEventBus</code> is the <em>producer&#39;s</em> API and writes
           the outbox row, <code>IMessageBus</code> is the <em>transport&#39;s</em> API and moves the row&#39;s payload onward.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="iintegrationeventhandlerin-tintegrationevent">IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces.Events</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Events/IIntegrationEventHandler.cs:15</code> · Level 2 · interface</p>
@@ -1709,6 +1724,7 @@
           <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>, which resolves every
           registered handler for the delivered event and invokes them in order.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="baseintegrationevent">BaseIntegrationEvent</h3>
           <blockquote>
           <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.DomainEvents</code> · <code>MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:11</code> · Level 2 · record class (abstract)</p>
@@ -1748,7 +1764,7 @@
           contract only. The framework preserves <code>MessageId</code> and <code>DateOccurred</code> across every hop, so inbox
           deduplication is unaffected by an upcast, and a fitness function requires the upcast <em>target</em> to
           declare a strictly higher <code>SchemaVersion</code> than its source. That last rule is what keeps the version
-          number from being decorative. <code>[Rubric §16, Maintainability]</code>: the handler set never has to grow a
+          number from being decorative. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>: the handler set never has to grow a
           branch per historical contract shape.</li>
           <li><strong>Why it&#39;s built this way</strong>: declaring <code>SchemaVersion</code> <strong>virtual with a default</strong> keeps <em>adding</em> the
           member a non-breaking change, so every pre-existing event implicitly stays v1 with no edits
@@ -1763,6 +1779,7 @@
           the apps (for example ADC&#39;s <code>SpeakerLinkedToUser</code>, <code>SpeakerUnlinkedFromUser</code>, <code>UserRegistered</code>, and
           Store&#39;s <code>ProductVariantChanged</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="entitychangedeventtidentifiertype">EntityChangedEvent&lt;TIdentifierType&gt;</h3>
           <blockquote>
           <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.DomainEvents</code> · <code>MMCA.Common.Domain/DomainEvents/EntityChangedEvent.cs:24</code> · Level 2 · record (abstract)</p>
@@ -1782,7 +1799,7 @@
           and <code>DomainEntityState.Deleted</code> from <code>Delete()</code>; reserve a <em>named</em> event (for example <code>OrderPaid</code>,
           <code>ShoppingCartCheckedOut</code>), inheriting <a href="#basedomainevent"><code>BaseDomainEvent</code></a> directly, for business
           state-machine transitions with unique payloads (<code>EntityChangedEvent.cs:15-19</code>).
-          <code>[Rubric §16, Maintainability]</code> assesses change-amplification cost: collapsing three CRUD events into
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses change-amplification cost: collapsing three CRUD events into
           one keeps the event surface small, so adding an entity adds one record rather than three.</li>
           <li><strong>Walkthrough</strong>: a primary-constructor record (<code>EntityChangedEvent.cs:24</code>) with two positional
           parameters, <code>State</code> of type <code>DomainEntityState</code> (<code>EntityChangedEvent.cs:25</code>) and <code>EntityId</code> of type
@@ -1907,7 +1924,7 @@
           (<code>ScopedIntegrationEventHandlerBase.cs:39-41</code>), constrained
           <code>where TIntegrationEvent : IIntegrationEvent</code> (<code>ScopedIntegrationEventHandlerBase.cs:42</code>).</li>
           <li><strong>Concept introduced, why a singleton handler has to open its own scope.</strong>
-          <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses whether repeated infrastructure ceremony is factored
+          <code>[Rubric §29, Resilience, Reliability &amp; Business Continuity]</code> assesses whether repeated infrastructure ceremony is factored
           out of business code, and <code>[Rubric §1, SOLID]</code> covers the template-method shape that does it. The
           class doc states the constraint (<code>ScopedIntegrationEventHandlerBase.cs:12-19</code>):
           <code>IIntegrationEventHandler&lt;T&gt;</code> implementations are registered as <strong>singletons</strong> by the module scan,
@@ -1988,6 +2005,7 @@
           documented in the remarks (<code>ScopedIntegrationEventHandlerBase.cs:33</code>,
           <code>ScopedIntegrationEventHandlerBase.cs:82-83</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outboxfinalizer">OutboxFinalizer</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxFinalizer.cs:12</code> · Level 11 · class (internal static)</p>
@@ -2033,6 +2051,7 @@
           <a href="#inprocesseventbus"><code>InProcessEventBus</code></a> after writing and dispatching an integration-event batch
           (<code>InProcessEventBus.cs:98</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outboxprocessor">OutboxProcessor</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56</code> · Level 13 · class (public sealed partial, <code>BackgroundService</code>)</p>
@@ -2270,6 +2289,7 @@
           <a href="#outboxmetrics"><code>OutboxMetrics</code></a>); the lease makes multiple replicas <em>correct</em>, but the gauge still
           must not be summed across them.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="imessagebus">IMessageBus</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Messaging</code> · <code>MMCA.Common.Application/Messaging/IMessageBus.cs:28</code> · Level 2 · interface</p>
@@ -2316,6 +2336,7 @@
           (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:272</code>) and invoked for every
           integration-event row it drains (<code>OutboxProcessor.cs:590-600</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="brokermessagebus">BrokerMessageBus</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Messaging</code> · <code>MMCA.Common.Infrastructure/Messaging/BrokerMessageBus.cs:24</code> · Level 3 · class (public sealed)</p>
@@ -2375,6 +2396,7 @@
           resilience pipeline that wraps only the broker hop
           (<code>OutboxProcessor.cs:590-600</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="domaineventdispatcher">DomainEventDispatcher</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> · <code>MMCA.Common.Application/Services/DomainEventDispatcher.cs:23</code> · Level 3 · class (public sealed)</p>
@@ -2507,6 +2529,7 @@
           <a href="#brokermessagebus"><code>BrokerMessageBus</code></a> in broker-mode service hosts
           (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:785</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="integrationeventconsumertevent">IntegrationEventConsumer&lt;TEvent&gt;</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Messaging.Consumers</code> · <code>MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:27</code> · Level 3 · class (public sealed partial)</p>
@@ -2613,6 +2636,7 @@
           <code>[LoggerMessage]</code> attribute declares <code>Level = LogLevel.Information</code>
           (<code>IntegrationEventConsumer.cs:101</code>); the attribute is what runs.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outputcacheevictionrequested">OutputCacheEvictionRequested</h3>
           <blockquote>
           <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.IntegrationEvents</code> · <code>MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:29</code> · Level 3 · record class (public sealed)</p>
@@ -2759,6 +2783,7 @@
           (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:779</code>) in each broker-mode service&#39;s
           <code>Program.cs</code>, for example <code>x.RegisterIntegrationEventConsumer&lt;SpeakerLinkedToUser&gt;()</code>.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outboxmessage">OutboxMessage</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15</code> · Level 9 · class (public sealed)</p>
@@ -2860,6 +2885,7 @@
           already written, the null caches, and the row dead-letters with reason <code>type_unresolvable</code> after the
           processor&#39;s one retry.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="brokereventbus">BrokerEventBus</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Messaging</code> · <code>MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:31</code> · Level 13 · class (public sealed)</p>
@@ -2927,6 +2953,7 @@
           <code>DependencyInjection.cs:773-776</code>). Every <code>IEventBus</code> injection in application code resolves this
           implementation in broker mode.</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="inprocesseventbus">InProcessEventBus</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Messaging</code> · <code>MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:33</code> · Level 13 · class (public sealed)</p>
@@ -3000,6 +3027,7 @@
           <a href="#brokereventbus"><code>BrokerEventBus</code></a> once <code>AddBrokerMessaging</code> is called
           (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:791</code>).</li>
           </ul>
+          <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <hr>
           <p><a href="group-03-querying-specifications.html">⬅ Querying: Specifications, Filtering &amp; the Entity Query Service</a>  •  <a href="index.html">Index</a>  •  <a href="group-05-cqrs-pipeline.html">CQRS: Commands, Queries &amp; the Decorator Pipeline ➡</a></p>
           
