@@ -23,9 +23,11 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   That adapter is the module's **Anti-Corruption Layer**: it is the only place the peer's wire model
   (generated protobuf messages and client stubs) meets the module's own interface and `Result<T>`
   types, so a peer's contract never leaks into Domain or Application. The convention is documented on
-  the typed-client registration itself ("register a hand-written adapter that implements the C#
-  interface contract and delegates to this typed gRPC client",
-  `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:58-60`) and enforced by the
+  the typed-client registration itself ("register a hand-written adapter that implements the consuming
+  module's own C# interface contract ... and delegates to this typed gRPC client. That adapter IS the
+  consuming module's Anti-Corruption Layer",
+  `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:69-76`, with the package's
+  own class remarks naming both this pattern and the Strangler Fig route at `:15-24`) and enforced by the
   transport fitness rule below, which forbids gRPC and protobuf types outside the adapter's layer.
 - **Typed clients** via `AddTypedGrpcClient<T>(serviceName)` resolve `http://<service>` through
   Aspire service discovery, wrapped in the standard Polly resilience pipeline and a
