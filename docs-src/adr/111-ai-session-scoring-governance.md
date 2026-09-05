@@ -250,12 +250,13 @@ budgeted ceiling.**
   by design, so an international number, a spelled-out address or a social handle passes through
   unredacted, and the narrowness that protects the credibility evidence is the same narrowness that
   limits the coverage.
-- **The ceiling is a two-day rolling total with a daily evaluation, not a monthly budget.** Azure
-  scheduled query rules evaluate at most two days of data, so the guard is sized to one legitimate
-  pass rather than a month of spend: a repeated or runaway pass inside two days trips it, while slow
+- **The ceiling is a two-day rolling total evaluated every twelve hours, not a monthly budget.**
+  Azure scheduled query rules evaluate at most two days of data, and a self-resolving (stateful) rule
+  may not evaluate less often than every twelve hours, so the guard is sized to one legitimate pass
+  rather than a month of spend: a repeated or runaway pass inside two days trips it, while slow
   accumulation across a month does not. A single runaway pass can spend its whole way through the
-  envelope inside an hour, and the alert notices on the next daily evaluation. It is a budget guard,
-  not a circuit breaker: nothing stops the calls.
+  envelope inside an hour, and the alert notices on the next evaluation, at most twelve hours later.
+  It is a budget guard, not a circuit breaker: nothing stops the calls.
 - **Cost visibility depends on the metrics export staying on.** The counters ride the application
   meter, which the http-client and runtime instrument toggles do not touch (`infra/main.bicep:472-474`),
   but an export path that breaks makes the alert evaluate zero and look healthy.
