@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Phase 1b - Functional Group Taxonomy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="This is the primary axis of the guide. Every one of the 4,205 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="description" content="This is the primary axis of the guide. Every one of the 4,257 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 4,205 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 4,257 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta name="twitter:description" content="This is the primary axis of the guide. Every one of the 4,205 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="twitter:description" content="This is the primary axis of the guide. Every one of the 4,257 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Phase 1b - Functional Group Taxonomy","item":"https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -144,7 +144,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="phase-1b---functional-group-taxonomy">Phase 1b - Functional Group Taxonomy</h1>
-          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>4,205</strong> distinct first-party type
+          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>4,257</strong> distinct first-party type
           nodes from <a href="00-inventory.html"><code>00-inventory.md</code></a> is assigned to <strong>exactly one</strong> functional group -
           its primary <em>home</em>: the capability or cross-cutting concern it most exists to serve. A type used
           across many groups (e.g. <code>Result&lt;T&gt;</code>, the entity base) lives in the one foundational group that
@@ -225,7 +225,7 @@
           <tr>
           <td>G04</td>
           <td><strong>Domain &amp; Integration Events + Outbox Dual-Dispatch</strong><br/>group-04-events-outbox.md</td>
-          <td>36</td>
+          <td>37</td>
           <td>L0-L13</td>
           <td>Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.</td>
           </tr>
@@ -246,21 +246,21 @@
           <tr>
           <td>G07</td>
           <td><strong>Persistence &amp; EF Core</strong><br/>group-07-persistence-ef-core.md</td>
-          <td>124</td>
+          <td>122</td>
           <td>L0-L14</td>
           <td>The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</td>
           </tr>
           <tr>
           <td>G08</td>
           <td><strong>Authentication &amp; Authorization</strong><br/>group-08-auth.md</td>
-          <td>87</td>
+          <td>90</td>
           <td>L0-L10</td>
           <td>JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</td>
           </tr>
           <tr>
           <td>G09</td>
           <td><strong>Caching</strong><br/>group-09-caching.md</td>
-          <td>8</td>
+          <td>9</td>
           <td>L0-L4</td>
           <td>The cache abstraction and its decorator-driven, invalidation-aware integration into the query pipeline.</td>
           </tr>
@@ -295,7 +295,7 @@
           <tr>
           <td>G14</td>
           <td><strong>Module System, Composition &amp; Configuration</strong><br/>group-14-module-system-composition.md</td>
-          <td>72</td>
+          <td>69</td>
           <td>L0-L14</td>
           <td>IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.</td>
           </tr>
@@ -309,8 +309,8 @@
           <tr>
           <td>G16</td>
           <td><strong>Aspire Orchestration &amp; Service Defaults</strong><br/>group-16-aspire-orchestration.md</td>
-          <td>57</td>
-          <td>L0-L10</td>
+          <td>60</td>
+          <td>L0-L11</td>
           <td>The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.</td>
           </tr>
           <tr>
@@ -330,7 +330,7 @@
           <tr>
           <td>G19</td>
           <td><strong>ADC Conference - Infrastructure &amp; Persistence</strong><br/>group-19-conference-infrastructure.md</td>
-          <td>33</td>
+          <td>37</td>
           <td>L0-L12</td>
           <td>The Conference module DbContext registration, EF entity configurations, database seeding, and infrastructure services.</td>
           </tr>
@@ -351,14 +351,14 @@
           <tr>
           <td>G22</td>
           <td><strong>ADC Engagement Module (Session Bookmarks)</strong><br/>group-22-engagement-module.md</td>
-          <td>179</td>
+          <td>193</td>
           <td>L0-L13</td>
           <td>The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</td>
           </tr>
           <tr>
           <td>G26</td>
           <td><strong>ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</strong><br/>group-23-engagement-live-layer.md</td>
-          <td>99</td>
+          <td>85</td>
           <td>L0-L14</td>
           <td>Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&amp;A with upvoting, over the SignalR hub-channel transport (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>) and the cross-service gRPC live-channel adapter.</td>
           </tr>
@@ -386,12 +386,12 @@
           <tr>
           <td>G25</td>
           <td><strong>Testing &amp; Quality Infrastructure</strong><br/>group-27-testing-infrastructure.md</td>
-          <td>2270</td>
+          <td>2315</td>
           <td>L0-L19</td>
           <td>All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Reconciliation:</strong> 1935 production types across 26 groups + 2270 test/testing types in G25 = <strong>4205</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
+          <p><strong>Reconciliation:</strong> 1942 production types across 26 groups + 2315 test/testing types in G25 = <strong>4257</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
           <hr>
           <h2 id="group-membership">Group membership</h2>
           <h3 id="g01---result--error-handling">G01 - Result &amp; Error Handling</h3>
@@ -623,13 +623,13 @@
           <td>3</td>
           <td><code>Address</code></td>
           <td>record</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Contact</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>AddressInvariants</code></td>
           <td>class</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Contact</td>
           </tr>
           <tr>
           <td>3</td>
@@ -641,31 +641,31 @@
           <td>3</td>
           <td><code>Currency</code></td>
           <td>record</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Financial</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>CurrencyJsonConverter</code></td>
           <td>class</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Financial</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>DateRange</code></td>
           <td>record</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Time</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>DateTimeRange</code></td>
           <td>record</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Time</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>EmailInvariants</code></td>
           <td>class</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Contact</td>
           </tr>
           <tr>
           <td>3</td>
@@ -701,7 +701,7 @@
           <td>3</td>
           <td><code>PhoneNumberInvariants</code></td>
           <td>class</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Contact</td>
           </tr>
           <tr>
           <td>4</td>
@@ -713,19 +713,19 @@
           <td>4</td>
           <td><code>Email</code></td>
           <td>record</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Contact</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>Money</code></td>
           <td>record</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Financial</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>PhoneNumber</code></td>
           <td>record</td>
-          <td>MMCA.Common.Shared.ValueObjects</td>
+          <td>MMCA.Common.Shared.ValueObjects.Contact</td>
           </tr>
           <tr>
           <td>5</td>
@@ -955,7 +955,7 @@
           <td>5</td>
           <td><code>IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Mapping</td>
           </tr>
           <tr>
           <td>5</td>
@@ -978,7 +978,7 @@
           </tbody></table></div>
           <h3 id="g04---domain--integration-events--outbox-dual-dispatch">G04 - Domain &amp; Integration Events + Outbox Dual-Dispatch</h3>
           <blockquote>
-          <p><code>group-04-events-outbox.md</code> | 36 types | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.</p>
+          <p><code>group-04-events-outbox.md</code> | 37 types | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -1017,25 +1017,25 @@
           <td>0</td>
           <td><code>IOutboxSignal</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Outbox</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>OutboxCycleResult</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Outbox</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>OutboxDisabledNoticeService</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Outbox</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Administration</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>OutboxMetrics</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Outbox</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</td>
           </tr>
           <tr>
           <td>1</td>
@@ -1047,19 +1047,19 @@
           <td>1</td>
           <td><code>EventNameResolver</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Outbox</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>IDomainEventDispatcher</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Events</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>IDomainEventHandler&lt;in TDomainEvent&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Events</td>
           </tr>
           <tr>
           <td>1</td>
@@ -1077,7 +1077,7 @@
           <td>1</td>
           <td><code>OutboxSignal</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Outbox</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</td>
           </tr>
           <tr>
           <td>2</td>
@@ -1095,19 +1095,25 @@
           <td>2</td>
           <td><code>IEventBus</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Events</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Events</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>IMessageBus</code></td>
           <td>interface</td>
           <td>MMCA.Common.Application.Messaging</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>OutboxSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Administration</td>
           </tr>
           <tr>
           <td>2</td>
@@ -1119,7 +1125,7 @@
           <td>3</td>
           <td><code>BrokerMessageBus</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Messaging</td>
           </tr>
           <tr>
           <td>3</td>
@@ -1131,13 +1137,13 @@
           <td>3</td>
           <td><code>InProcessMessageBus</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Messaging</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IntegrationEventConsumer&lt;TEvent&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Consumers</td>
           </tr>
           <tr>
           <td>3</td>
@@ -1155,7 +1161,7 @@
           <td>4</td>
           <td><code>IntegrationEventConsumerExtensions</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Consumers</td>
           </tr>
           <tr>
           <td>9</td>
@@ -1167,13 +1173,13 @@
           <td>11</td>
           <td><code>OutboxFinalizer</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Outbox</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</td>
           </tr>
           <tr>
           <td>13</td>
           <td><code>BrokerEventBus</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Messaging</td>
           </tr>
           <tr>
           <td>13</td>
@@ -1185,25 +1191,25 @@
           <td>13</td>
           <td><code>InProcessEventBus</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Messaging</td>
           </tr>
           <tr>
           <td>13</td>
           <td><code>OutboxAdministration</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Outbox</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Administration</td>
           </tr>
           <tr>
           <td>13</td>
           <td><code>OutboxCleanupService</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Outbox</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Administration</td>
           </tr>
           <tr>
           <td>13</td>
           <td><code>OutboxProcessor</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Outbox</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Outbox.Processing</td>
           </tr>
           </tbody></table></div>
           <h3 id="g05---cqrs-commands-queries--the-decorator-pipeline">G05 - CQRS: Commands, Queries &amp; the Decorator Pipeline</h3>
@@ -1235,31 +1241,31 @@
           <td>0</td>
           <td><code>ICacheInvalidating</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Markers</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ICommand&lt;TResult&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Contracts</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Contracts</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ICommandWithRequest&lt;out TRequest&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Contracts</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ICreateRequest</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Mapping</td>
           </tr>
           <tr>
           <td>0</td>
@@ -1271,37 +1277,37 @@
           <td>0</td>
           <td><code>IFeatureGated</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Markers</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IHasTimeout</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Markers</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IQuery&lt;TResult&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Contracts</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IQueryCacheable</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Markers</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IQueryHandler&lt;in TQuery, TResult&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Contracts</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IRequiresPermission</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Markers</td>
           </tr>
           <tr>
           <td>0</td>
@@ -1319,13 +1325,13 @@
           <td>0</td>
           <td><code>ITransactional</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Markers</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>MutationContext</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>1</td>
@@ -1337,7 +1343,7 @@
           <td>1</td>
           <td><code>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>record</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>1</td>
@@ -1379,13 +1385,13 @@
           <td>2</td>
           <td><code>IEventUpcaster</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Events</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>IEventUpcasterRegistry</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Events</td>
           </tr>
           <tr>
           <td>2</td>
@@ -1439,13 +1445,13 @@
           <td>4</td>
           <td><code>IEntityDTOProjector&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Mapping</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>IEntityUpdateApplier&lt;TEntity, TUpdateRequest, TIdentifierType&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Mapping</td>
           </tr>
           <tr>
           <td>4</td>
@@ -1475,37 +1481,37 @@
           <td>5</td>
           <td><code>UpdateEntityCommand&lt;TEntity, TUpdateRequest, TIdentifierType&gt;</code></td>
           <td>record</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>6</td>
           <td><code>IEntityUpdateCommandApplier&lt;TEntity, TUpdateRequest, TIdentifierType, in TCommand&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>AddChildEntityHandlerBase&lt;TCommand, TParent, TIdentifierType, TChild, TChildDTO&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>CreateEntityHandlerBase&lt;TCreateRequest, TEntity, TIdentifierType, TEntityDTO&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>DeleteEntityHandler&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>MutateEntityHandlerCore&lt;TCommand, TEntity, TIdentifierType&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>8</td>
@@ -1529,37 +1535,37 @@
           <td>9</td>
           <td><code>CreateEntityHandler&lt;TCreateRequest, TEntity, TIdentifierType, TEntityDTO&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>MutateEntityHandlerBase&lt;TCommand, TEntity, TIdentifierType&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>RemoveChildEntityHandlerBase&lt;TCommand, TParent, TIdentifierType&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>UpdateEntityCommandHandler&lt;TCommand, TEntity, TEntityDTO, TIdentifierType, TUpdateRequest&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>UpdateEntityHandler&lt;TEntity, TEntityDTO, TIdentifierType, TUpdateRequest&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           <tr>
           <td>14</td>
           <td><code>MutateEntityPayloadHandlerBase&lt;TCommand, TEntity, TIdentifierType, TResultPayload&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.UseCases</td>
+          <td>MMCA.Common.Application.UseCases.Crud</td>
           </tr>
           </tbody></table></div>
           <h3 id="g06---validation">G06 - Validation</h3>
@@ -1710,7 +1716,7 @@
           </tbody></table></div>
           <h3 id="g07---persistence--ef-core">G07 - Persistence &amp; EF Core</h3>
           <blockquote>
-          <p><code>group-07-persistence-ef-core.md</code> | 124 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</p>
+          <p><code>group-07-persistence-ef-core.md</code> | 122 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -1735,6 +1741,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>ConnectionStringSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>CosmosIntIdValueGenerator</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.ValueGenerators</td>
@@ -1749,7 +1761,13 @@
           <td>0</td>
           <td><code>DataSource</code></td>
           <td>enum</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>DataSourceEntrySettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
           <td>0</td>
@@ -1803,37 +1821,37 @@
           <td>0</td>
           <td><code>IEntityConfigurationAssemblyProvider</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ImageContentSniffer</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Storage</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>INativePushSender</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Notifications</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IQueryableExecutor</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IUniqueConstraintViolationDetector</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IUpdatePropertySetter&lt;TEntity&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>0</td>
@@ -1843,21 +1861,15 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>NativePushPayloads</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
-          </tr>
-          <tr>
-          <td>0</td>
           <td><code>OutboxDeadLetter</code></td>
           <td>record</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>0</td>
-          <td><code>PeriodicBackgroundService</code></td>
+          <td><code>PersistenceSettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>0</td>
@@ -1873,6 +1885,18 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>TenantDataSourceOverrideSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Tenancy</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>TenantResolutionStrategy</code></td>
+          <td>enum</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Tenancy</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>TransactionCommitAmbiguousException</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Factory</td>
@@ -1885,15 +1909,21 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>AzureNotificationHubNativePushSender</code></td>
+          <td><code>AuditTrailSettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Persistence.AuditTrail</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>DataSourceKey</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>DataSourcesSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
           <td>1</td>
@@ -1933,12 +1963,6 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>NullNativePushSender</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>PendingEntityKey</code></td>
           <td>record</td>
           <td>MMCA.Common.Infrastructure.Persistence.AuditTrail</td>
@@ -1957,9 +1981,9 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>TenantContext</code></td>
+          <td><code>TenantEntrySettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Tenancy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -1975,15 +1999,15 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>FaultIntegrationEventConsumer&lt;TEvent&gt;</code></td>
+          <td><code>ConnectionStringSettingsValidator</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>IDataSourceService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>2</td>
@@ -2023,6 +2047,12 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>TenancySettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Tenancy</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>TenantDataSourceTarget</code></td>
           <td>record struct</td>
           <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
@@ -2037,13 +2067,7 @@
           <td>3</td>
           <td><code>DataSourceService</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>EventUpcasterStartupValidator</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
           </tr>
           <tr>
           <td>3</td>
@@ -2055,43 +2079,25 @@
           <td>3</td>
           <td><code>IFileStorageService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Storage</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IImageProcessor</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Storage</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IOutboxAdministration</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IPushDeviceRegistrar</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>UpcastingIntegrationEventConsumer&lt;TEvent&gt;</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>AzureBlobFileStorageService</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>AzureNotificationHubDeviceRegistrar</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Notifications</td>
           </tr>
           <tr>
           <td>4</td>
@@ -2109,13 +2115,13 @@
           <td>4</td>
           <td><code>IEntityQuerier&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>IEntityReader&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>4</td>
@@ -2125,27 +2131,9 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>ImageSharpImageProcessor</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>NullableEnumerationValueConverter&lt;TEnumeration&gt;</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Conversions</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>NullFileStorageService</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>NullPushDeviceRegistrar</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
           </tr>
           <tr>
           <td>4</td>
@@ -2158,6 +2146,12 @@
           <td><code>SpecificationEvaluator</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>TenancySettingsValidator</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Tenancy</td>
           </tr>
           <tr>
           <td>5</td>
@@ -2205,13 +2199,13 @@
           <td>5</td>
           <td><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>IWriteRepository&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>5</td>
@@ -2265,7 +2259,7 @@
           <td>6</td>
           <td><code>IRepository&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>6</td>
@@ -2307,7 +2301,7 @@
           <td>7</td>
           <td><code>IUnitOfWork</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Persistence</td>
           </tr>
           <tr>
           <td>8</td>
@@ -2468,7 +2462,7 @@
           </tbody></table></div>
           <h3 id="g08---authentication--authorization">G08 - Authentication &amp; Authorization</h3>
           <blockquote>
-          <p><code>group-08-auth.md</code> | 87 types | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</p>
+          <p><code>group-08-auth.md</code> | 90 types | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -2501,19 +2495,19 @@
           <td>0</td>
           <td><code>AuthenticationResponse</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Responses</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ChangePasswordRequest</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Requests</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ChangePreferencesRequest</code></td>
           <td>record</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Requests</td>
           </tr>
           <tr>
           <td>0</td>
@@ -2525,7 +2519,7 @@
           <td>0</td>
           <td><code>ForgotPasswordRequest</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Requests</td>
           </tr>
           <tr>
           <td>0</td>
@@ -2555,19 +2549,19 @@
           <td>0</td>
           <td><code>IPasswordHasher</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Auth</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IPermissionRegistry</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Permissions</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ISoftDeletedUserValidator</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Auth</td>
           </tr>
           <tr>
           <td>0</td>
@@ -2579,7 +2573,19 @@
           <td>0</td>
           <td><code>ITokenService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Auth</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>JwksSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Auth</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>JwtSigningAlgorithm</code></td>
+          <td>enum</td>
+          <td>MMCA.Common.Infrastructure.Auth</td>
           </tr>
           <tr>
           <td>0</td>
@@ -2591,7 +2597,7 @@
           <td>0</td>
           <td><code>LoginRequest</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Requests</td>
           </tr>
           <tr>
           <td>0</td>
@@ -2603,7 +2609,7 @@
           <td>0</td>
           <td><code>OAuthCodeExchangeRequest</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Requests</td>
           </tr>
           <tr>
           <td>0</td>
@@ -2651,13 +2657,13 @@
           <td>0</td>
           <td><code>RefreshSessionSummaryResponse</code></td>
           <td>record</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Responses</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>RefreshTokenRequest</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Requests</td>
           </tr>
           <tr>
           <td>0</td>
@@ -2669,7 +2675,7 @@
           <td>0</td>
           <td><code>ResetPasswordRequest</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Requests</td>
           </tr>
           <tr>
           <td>0</td>
@@ -2705,7 +2711,7 @@
           <td>0</td>
           <td><code>UserPreferencesResponse</code></td>
           <td>record</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Responses</td>
           </tr>
           <tr>
           <td>1</td>
@@ -2739,6 +2745,12 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>JwtSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Auth</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>KeyedSemaphoreStripe</code></td>
           <td>class</td>
           <td>MMCA.Common.Shared.Concurrency</td>
@@ -2753,7 +2765,7 @@
           <td>1</td>
           <td><code>PasswordHasher</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Auth</td>
           </tr>
           <tr>
           <td>1</td>
@@ -2771,7 +2783,7 @@
           <td>1</td>
           <td><code>PermissionRegistry</code></td>
           <td>class</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Permissions</td>
           </tr>
           <tr>
           <td>1</td>
@@ -2819,7 +2831,7 @@
           <td>2</td>
           <td><code>PermissionRegistryBuilder</code></td>
           <td>class</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Permissions</td>
           </tr>
           <tr>
           <td>2</td>
@@ -2837,7 +2849,7 @@
           <td>2</td>
           <td><code>TokenService</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Auth</td>
           </tr>
           <tr>
           <td>3</td>
@@ -2921,7 +2933,7 @@
           <td>4</td>
           <td><code>RegisterRequest</code></td>
           <td>record struct</td>
-          <td>MMCA.Common.Shared.Auth</td>
+          <td>MMCA.Common.Shared.Auth.Requests</td>
           </tr>
           <tr>
           <td>4</td>
@@ -2975,19 +2987,19 @@
           <td>8</td>
           <td><code>ClaimBasedUserIdProvider</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Context</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>ICurrentUserService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Auth</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>CurrentUserService</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Context</td>
           </tr>
           <tr>
           <td>9</td>
@@ -3004,7 +3016,7 @@
           </tbody></table></div>
           <h3 id="g09---caching">G09 - Caching</h3>
           <blockquote>
-          <p><code>group-09-caching.md</code> | 8 types | The cache abstraction and its decorator-driven, invalidation-aware integration into the query pipeline.</p>
+          <p><code>group-09-caching.md</code> | 9 types | The cache abstraction and its decorator-driven, invalidation-aware integration into the query pipeline.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -3036,6 +3048,12 @@
           <tr>
           <td>1</td>
           <td><code>CacheKeyNamespace</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Caching</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>CacheSettings</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Caching</td>
           </tr>
@@ -3105,25 +3123,25 @@
           <td>0</td>
           <td><code>IEmailSender</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Mail</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ILiveChannelPublisher</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Notifications</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>INotificationRecipientProvider</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Notifications</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IPushNotificationSender</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Notifications</td>
           </tr>
           <tr>
           <td>0</td>
@@ -3213,19 +3231,19 @@
           <td>1</td>
           <td><code>NullLiveChannelPublisher</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Live</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullNotificationRecipientProvider</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure.Notifications</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullPushNotificationSender</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
           </tr>
           <tr>
           <td>1</td>
@@ -3243,7 +3261,7 @@
           <td>1</td>
           <td><code>SmtpEmailSender</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Mail</td>
           </tr>
           <tr>
           <td>2</td>
@@ -3255,7 +3273,7 @@
           <td>2</td>
           <td><code>NotificationHub</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Hubs</td>
+          <td>MMCA.Common.Infrastructure.Notifications</td>
           </tr>
           <tr>
           <td>2</td>
@@ -3273,13 +3291,13 @@
           <td>3</td>
           <td><code>SignalRLiveChannelPublisher</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Live</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>SignalRPushNotificationSender</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
           </tr>
           <tr>
           <td>5</td>
@@ -3443,31 +3461,31 @@
           <td>0</td>
           <td><code>NavigationType</code></td>
           <td>enum</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Navigation</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NavigationPropertyInfo</code></td>
           <td>record</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Navigation</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>INavigationMetadata</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Navigation</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>NavigationMetadata</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Navigation</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>INavigationPopulator&lt;in TEntity&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Navigation</td>
           </tr>
           <tr>
           <td>5</td>
@@ -3529,7 +3547,7 @@
           <td>0</td>
           <td><code>AppAssociationOptions</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
+          <td>MMCA.Common.API.Startup.Endpoints</td>
           </tr>
           <tr>
           <td>0</td>
@@ -3625,7 +3643,7 @@
           <td>0</td>
           <td><code>JwtAuthorityExtensions</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
+          <td>MMCA.Common.API.Startup.Auth</td>
           </tr>
           <tr>
           <td>0</td>
@@ -3637,13 +3655,13 @@
           <td>0</td>
           <td><code>MiddlewarePipelineStep</code></td>
           <td>record</td>
-          <td>MMCA.Common.API.Startup</td>
+          <td>MMCA.Common.API.Startup.Pipeline</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>MiddlewarePipelineStepNames</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
+          <td>MMCA.Common.API.Startup.Pipeline</td>
           </tr>
           <tr>
           <td>0</td>
@@ -3655,7 +3673,7 @@
           <td>0</td>
           <td><code>OpenApiEndpointExtensions</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
+          <td>MMCA.Common.API.Startup.Endpoints</td>
           </tr>
           <tr>
           <td>0</td>
@@ -3721,7 +3739,7 @@
           <td>1</td>
           <td><code>AppAssociationEndpointExtensions</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
+          <td>MMCA.Common.API.Startup.Endpoints</td>
           </tr>
           <tr>
           <td>1</td>
@@ -3733,7 +3751,7 @@
           <td>1</td>
           <td><code>CorrelationContext</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td>MMCA.Common.Infrastructure.Context</td>
           </tr>
           <tr>
           <td>1</td>
@@ -3757,7 +3775,7 @@
           <td>1</td>
           <td><code>JwksEndpointExtensions</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
+          <td>MMCA.Common.API.Startup.Endpoints</td>
           </tr>
           <tr>
           <td>1</td>
@@ -3799,7 +3817,7 @@
           <td>2</td>
           <td><code>InsecureJwtMetadataWarningStartupFilter</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
+          <td>MMCA.Common.API.Startup.Auth</td>
           </tr>
           <tr>
           <td>2</td>
@@ -3811,7 +3829,7 @@
           <td>2</td>
           <td><code>OidcDiscoveryEndpointExtensions</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
+          <td>MMCA.Common.API.Startup.Endpoints</td>
           </tr>
           <tr>
           <td>2</td>
@@ -3871,13 +3889,13 @@
           <td>4</td>
           <td><code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Mapping</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;</code></td>
           <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
+          <td>MMCA.Common.Application.Interfaces.Mapping</td>
           </tr>
           <tr>
           <td>4</td>
@@ -3967,7 +3985,7 @@
           <td>10</td>
           <td><code>MiddlewarePipelineBuilder</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
+          <td>MMCA.Common.API.Startup.Pipeline</td>
           </tr>
           <tr>
           <td>10</td>
@@ -4058,7 +4076,7 @@
           </tbody></table></div>
           <h3 id="g14---module-system-composition--configuration">G14 - Module System, Composition &amp; Configuration</h3>
           <blockquote>
-          <p><code>group-14-module-system-composition.md</code> | 72 types | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.</p>
+          <p><code>group-14-module-system-composition.md</code> | 69 types | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -4085,13 +4103,13 @@
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.Common.Domain</td>
+          <td>MMCA.Common.Infrastructure</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure</td>
+          <td>MMCA.Common.Domain</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4109,6 +4127,12 @@
           <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ClassReference</code></td>
+          <td>class</td>
           <td>MMCA.Common.Application</td>
           </tr>
           <tr>
@@ -4116,24 +4140,6 @@
           <td><code>ClassReference</code></td>
           <td>class</td>
           <td>MMCA.Common.Domain</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ClassReference</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ConnectionStringSettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>DataSourceEntrySettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4145,7 +4151,7 @@
           <td>0</td>
           <td><code>FileStorageSettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Storage</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4173,21 +4179,9 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>JwksSettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>JwtSigningAlgorithm</code></td>
-          <td>enum</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
-          </tr>
-          <tr>
-          <td>0</td>
           <td><code>MessageBusProvider</code></td>
           <td>enum</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Messaging</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4203,15 +4197,21 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>NativePushSettings</code></td>
+          <td><code>NativePushPayloads</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
           </tr>
           <tr>
           <td>0</td>
-          <td><code>PersistenceSettings</code></td>
+          <td><code>NativePushSettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>PeriodicBackgroundService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Scheduling</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4235,7 +4235,7 @@
           <td>0</td>
           <td><code>ScheduledJobOverrideSettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Scheduling</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4253,19 +4253,7 @@
           <td>0</td>
           <td><code>SmtpSettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>TenantDataSourceOverrideSettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>TenantResolutionStrategy</code></td>
-          <td>enum</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Mail</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4287,21 +4275,9 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>AuditTrailSettings</code></td>
+          <td><code>AzureNotificationHubNativePushSender</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>CacheSettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>DataSourcesSettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4335,15 +4311,9 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>JwtSettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>MessageBusSettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Messaging</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4353,21 +4323,27 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>NullNativePushSender</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>PushNotificationSettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>SchedulerSettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Scheduling</td>
           </tr>
           <tr>
           <td>1</td>
-          <td><code>TenantEntrySettings</code></td>
+          <td><code>TenantContext</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Context</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4383,9 +4359,9 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>ConnectionStringSettingsValidator</code></td>
+          <td><code>FaultIntegrationEventConsumer&lt;TEvent&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Consumers</td>
           </tr>
           <tr>
           <td>2</td>
@@ -4401,21 +4377,9 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>OutboxSettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td><code>RedisDistributedLock</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Concurrency</td>
-          </tr>
-          <tr>
-          <td>2</td>
-          <td><code>TenancySettings</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
           </tr>
           <tr>
           <td>2</td>
@@ -4424,10 +4388,46 @@
           <td>MMCA.Common.Application.Users</td>
           </tr>
           <tr>
-          <td>4</td>
-          <td><code>TenancySettingsValidator</code></td>
+          <td>3</td>
+          <td><code>EventUpcasterStartupValidator</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure.Settings</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Consumers</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>UpcastingIntegrationEventConsumer&lt;TEvent&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Messaging.Consumers</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>AzureBlobFileStorageService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Storage</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>AzureNotificationHubDeviceRegistrar</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>ImageSharpImageProcessor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Storage</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>NullFileStorageService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Storage</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>NullPushDeviceRegistrar</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Notifications.Push</td>
           </tr>
           <tr>
           <td>8</td>
@@ -4525,7 +4525,7 @@
           <td>0</td>
           <td><code>ApiFileDownloadButton</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Components</td>
+          <td>MMCA.Common.UI.Components.Forms</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4561,7 +4561,7 @@
           <td>0</td>
           <td><code>CultureDelegatingHandler</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Culture</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4591,7 +4591,7 @@
           <td>0</td>
           <td><code>ICultureApplier</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Culture</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4609,7 +4609,7 @@
           <td>0</td>
           <td><code>InfiniteScrollSentinel</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Components</td>
+          <td>MMCA.Common.UI.Components.Lists</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4621,19 +4621,19 @@
           <td>0</td>
           <td><code>IOAuthUISettings</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Auth.OAuth</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IPublicLinkBuilder</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Navigation</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ISecureTokenStore</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4645,13 +4645,13 @@
           <td>0</td>
           <td><code>ITokenRefresher</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ITokenStorageService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4663,13 +4663,13 @@
           <td>0</td>
           <td><code>IUserPreferenceWriter</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Preferences</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>JwtTokenInfo</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4747,7 +4747,7 @@
           <td>0</td>
           <td><code>QrErrorCorrectionLevel</code></td>
           <td>enum</td>
-          <td>MMCA.Common.UI.Components</td>
+          <td>MMCA.Common.UI.Components.Sharing</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4813,13 +4813,13 @@
           <td>0</td>
           <td><code>UserPreferences</code></td>
           <td>record</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Preferences</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>UserPreferencesRequest</code></td>
           <td>record</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Preferences</td>
           </tr>
           <tr>
           <td>0</td>
@@ -4837,7 +4837,7 @@
           <td>1</td>
           <td><code>ApiUserPreferenceWriter</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Preferences</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4849,13 +4849,13 @@
           <td>1</td>
           <td><code>AuthenticatedServiceBase</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Api</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>ConfigurationOAuthUISettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Auth.OAuth</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4867,19 +4867,19 @@
           <td>1</td>
           <td><code>DefaultOAuthUISettings</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Auth.OAuth</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>DirectApiTokenRefresher</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>EndpointCultureApplier</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Culture</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4891,7 +4891,7 @@
           <td>1</td>
           <td><code>IUserPreferenceReader</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Preferences</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4927,7 +4927,7 @@
           <td>1</td>
           <td><code>MmcaCultureBootstrap</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Culture</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4945,7 +4945,7 @@
           <td>1</td>
           <td><code>NavigationPublicLinkBuilder</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Navigation</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4987,13 +4987,13 @@
           <td>1</td>
           <td><code>SameOriginProxyTokenRefresher</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>ThemeService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Theme</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5005,13 +5005,13 @@
           <td>1</td>
           <td><code>WasmTokenStorageService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Auth</td>
+          <td>MMCA.Common.UI.Services.Auth.Tokens</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>ApiUserPreferenceReader</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Preferences</td>
           </tr>
           <tr>
           <td>2</td>
@@ -5045,6 +5045,12 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>MudToastService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Services</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>NotificationHubService</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Services.Notifications</td>
@@ -5065,7 +5071,7 @@
           <td>3</td>
           <td><code>HttpResultExecutor</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Api</td>
           </tr>
           <tr>
           <td>3</td>
@@ -5089,7 +5095,7 @@
           <td>3</td>
           <td><code>MobileInfiniteScrollList&lt;TItem&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Components</td>
+          <td>MMCA.Common.UI.Components.Lists</td>
           </tr>
           <tr>
           <td>3</td>
@@ -5101,13 +5107,13 @@
           <td>4</td>
           <td><code>ChildEntityServiceBase</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Api</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
+          <td>MMCA.Common.UI.Services.Api</td>
           </tr>
           <tr>
           <td>4</td>
@@ -5150,12 +5156,6 @@
           <td><code>MoneyExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Extensions</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>MudToastService</code></td>
-          <td>class</td>
-          <td>MMCA.Common.UI.Services</td>
           </tr>
           <tr>
           <td>5</td>
@@ -5220,7 +5220,7 @@
           </tbody></table></div>
           <h3 id="g16---aspire-orchestration--service-defaults">G16 - Aspire Orchestration &amp; Service Defaults</h3>
           <blockquote>
-          <p><code>group-16-aspire-orchestration.md</code> | 57 types | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.</p>
+          <p><code>group-16-aspire-orchestration.md</code> | 60 types | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -5336,6 +5336,12 @@
           <tr>
           <td>0</td>
           <td><code>HealthCheckTags</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>HealthEndpointPaths</code></td>
           <td>class</td>
           <td>MMCA.Common.Aspire</td>
           </tr>
@@ -5562,16 +5568,28 @@
           <td>MMCA.Common.Aspire.Telemetry</td>
           </tr>
           <tr>
-          <td>10</td>
-          <td><code>Extensions</code></td>
+          <td>9</td>
+          <td><code>ProbeTelemetryFilter</code></td>
           <td>class</td>
-          <td>MMCA.Common.Aspire</td>
+          <td>MMCA.Common.Aspire.Telemetry</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>GatewayCorrelationExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.Aspire.Gateway</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>ProbeTelemetryFilterProcessor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire.Telemetry</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>Extensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire</td>
           </tr>
           </tbody></table></div>
           <h3 id="g17---adc-conference---domain-model--module-contracts">G17 - ADC Conference - Domain Model &amp; Module Contracts</h3>
@@ -5621,7 +5639,7 @@
           <td>0</td>
           <td><code>EventLiveInfo</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Shared.Events</td>
+          <td>MMCA.ADC.Conference.Shared.Events.Live</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5639,7 +5657,7 @@
           <td>0</td>
           <td><code>QuestionModerationDefault</code></td>
           <td>enum</td>
-          <td>MMCA.ADC.Conference.Shared.Events</td>
+          <td>MMCA.ADC.Conference.Shared.Events.Live</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5657,7 +5675,7 @@
           <td>0</td>
           <td><code>RoomSessionInfo</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Shared.Events</td>
+          <td>MMCA.ADC.Conference.Shared.Rooms</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5699,7 +5717,7 @@
           <td>0</td>
           <td><code>SponsorLiveInfo</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Shared.Events</td>
+          <td>MMCA.ADC.Conference.Shared.Events.Live</td>
           </tr>
           <tr>
           <td>0</td>
@@ -5777,7 +5795,7 @@
           <td>1</td>
           <td><code>RoomDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Shared.Events</td>
+          <td>MMCA.ADC.Conference.Shared.Rooms</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5795,7 +5813,7 @@
           <td>1</td>
           <td><code>SessionLiveInfo</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Shared.Events</td>
+          <td>MMCA.ADC.Conference.Shared.Events.Live</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5945,7 +5963,7 @@
           <td>3</td>
           <td><code>IEventLiveValidationService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.Shared.Events</td>
+          <td>MMCA.ADC.Conference.Shared.Events.Live</td>
           </tr>
           <tr>
           <td>3</td>
@@ -6005,7 +6023,7 @@
           <td>4</td>
           <td><code>DisabledEventLiveValidationService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Shared.Events</td>
+          <td>MMCA.ADC.Conference.Shared.Events.Live</td>
           </tr>
           <tr>
           <td>4</td>
@@ -6173,13 +6191,13 @@
           <td>9</td>
           <td><code>IEventCascadeDeletionDomainService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.Domain.Services</td>
+          <td>MMCA.ADC.Conference.Domain.Events</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>EventCascadeDeletionDomainService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Domain.Services</td>
+          <td>MMCA.ADC.Conference.Domain.Events</td>
           </tr>
           </tbody></table></div>
           <h3 id="g18---adc-conference---application--use-cases">G18 - ADC Conference - Application &amp; Use Cases</h3>
@@ -8016,7 +8034,7 @@
           </tbody></table></div>
           <h3 id="g19---adc-conference---infrastructure--persistence">G19 - ADC Conference - Infrastructure &amp; Persistence</h3>
           <blockquote>
-          <p><code>group-19-conference-infrastructure.md</code> | 33 types | The Conference module DbContext registration, EF entity configurations, database seeding, and infrastructure services.</p>
+          <p><code>group-19-conference-infrastructure.md</code> | 37 types | The Conference module DbContext registration, EF entity configurations, database seeding, and infrastructure services.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -8031,19 +8049,31 @@
           <td>0</td>
           <td><code>AiScoreResponse</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AnthropicContentBlock</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>AnthropicJsonSchemaFormat</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AnthropicMessage</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>AnthropicUsage</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
           <td>0</td>
@@ -8061,115 +8091,127 @@
           <td>0</td>
           <td><code>SessionScoreStamp</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>SessionScoringCandidate</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
           <td>1</td>
-          <td><code>AnthropicRequest</code></td>
+          <td><code>AnthropicOutputConfig</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>AnthropicResponse</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
-          <td>3</td>
-          <td><code>AnthropicScoringService</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>2</td>
+          <td><code>AnthropicRequest</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>SessionScoringProcessor</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>ScoringInstruments</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>SessionizeService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Events.Sessionize</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>AnthropicScoringService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>CategoryItemConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Categories</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>ConferenceCategoryConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Categories</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>EventConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>EventQuestionAnswerConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>EventSpeakerConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>QuestionConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Questions</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>RoomConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Events</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>SessionAiScoreConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>SpeakerCategoryItemConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Speakers</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>SpeakerConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Speakers</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>SpeakerQuestionAnswerConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Speakers</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>ActivityConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Activities</td>
           </tr>
           <tr>
           <td>9</td>
@@ -8181,37 +8223,37 @@
           <td>9</td>
           <td><code>SessionCategoryItemConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SessionConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SessionQuestionAnswerConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SessionScoringSweepJob</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Sessions.Scoring</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SessionSpeakerConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SponsorConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sponsors</td>
           </tr>
           <tr>
           <td>10</td>
@@ -8243,49 +8285,49 @@
           <td>0</td>
           <td><code>AddCategoryItemRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Categories</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AddEventQuestionAnswerRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Events</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AddEventSpeakerRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Events</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AddRoomRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Events</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AddSessionCategoryItemRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AddSessionQuestionAnswerRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AddSessionSpeakerRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AddSpeakerCategoryItemRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Speakers</td>
           </tr>
           <tr>
           <td>0</td>
@@ -8297,7 +8339,7 @@
           <td>0</td>
           <td><code>BatchSessionQuestionAnswerItemRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>0</td>
@@ -8315,31 +8357,31 @@
           <td>0</td>
           <td><code>UpdateCategoryItemRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Categories</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>UpdateEventQuestionAnswerRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Events</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>UpdateRoomRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Events</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>UpdateSessionQuestionAnswerRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>BatchAddSessionQuestionAnswersRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>1</td>
@@ -8369,19 +8411,19 @@
           <td>5</td>
           <td><code>SessionSelectionController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>CategoryItemsController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Categories</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>ConferenceCategoriesController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Categories</td>
           </tr>
           <tr>
           <td>9</td>
@@ -8393,43 +8435,43 @@
           <td>9</td>
           <td><code>EventQuestionAnswersController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Events</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>EventSpeakersController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Events</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>QuestionsController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Questions</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>RoomsController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Events</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SpeakerCategoryItemsController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Speakers</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SpeakersController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Speakers</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>ActivitiesController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Activities</td>
           </tr>
           <tr>
           <td>10</td>
@@ -8441,7 +8483,7 @@
           <td>10</td>
           <td><code>EventsController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Events</td>
           </tr>
           <tr>
           <td>10</td>
@@ -8459,31 +8501,31 @@
           <td>10</td>
           <td><code>SessionCategoryItemsController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>SessionQuestionAnswersController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>SessionsController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>SessionSpeakersController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sessions</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>SponsorsController</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
+          <td>MMCA.ADC.Conference.API.Controllers.Sponsors</td>
           </tr>
           <tr>
           <td>11</td>
@@ -8527,13 +8569,13 @@
           <td>0</td>
           <td><code>CategoryItemInfo</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Categories</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ChildEntityDeletePath</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Common</td>
           </tr>
           <tr>
           <td>0</td>
@@ -8557,7 +8599,7 @@
           <td>0</td>
           <td><code>EventInfo</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Events</td>
           </tr>
           <tr>
           <td>0</td>
@@ -8587,25 +8629,25 @@
           <td>0</td>
           <td><code>ScorePollSignal</code></td>
           <td>enum</td>
-          <td>MMCA.ADC.Conference.UI.Pages.SessionSelection</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions.Selection</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>SessionSchedulePageRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Public</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>SessionSelectionDisplay</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.SessionSelection</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions.Selection</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>SpeakerInfo</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Speakers</td>
           </tr>
           <tr>
           <td>1</td>
@@ -8629,25 +8671,25 @@
           <td>1</td>
           <td><code>ScorePollTracker</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.SessionSelection</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions.Selection</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>SpeakerDetailLookups</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Speakers</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>SpeakerQr</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Speaker</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Speakers</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>ActivityFormModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Activity</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Activities</td>
           </tr>
           <tr>
           <td>2</td>
@@ -8659,43 +8701,43 @@
           <td>2</td>
           <td><code>ConferenceCategoryItemEditModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.ConferenceCategory</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Categories</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>QuestionFormModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Question</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Questions</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>RoomFormModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Room</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Rooms</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>SponsorFormModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Sponsor</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sponsors</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ActivityCreateModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Activity</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Activities</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ActivityEditModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Activity</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Activities</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ConferenceCategoryFormModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.ConferenceCategory</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Categories</td>
           </tr>
           <tr>
           <td>3</td>
@@ -8707,79 +8749,79 @@
           <td>3</td>
           <td><code>EventFormModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Event</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Events</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ICategoryItemLookupService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Categories</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IEventLookupService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Events</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IEventSpeakerUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Common</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IOrganizerEventFeedbackUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Feedback</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IOrganizerSessionFeedbackUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Feedback</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IPublicSessionScheduleService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Public</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ISessionCategoryItemUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Common</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ISessionSpeakerUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Common</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ISpeakerCategoryItemUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Common</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ISpeakerDashboardUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Speakers</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ISpeakerDetailLookupService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Speakers</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ISpeakerLookupService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Speakers</td>
           </tr>
           <tr>
           <td>3</td>
@@ -8791,265 +8833,265 @@
           <td>3</td>
           <td><code>PublicSessionListFilterBar</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public.Sessions</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>QuestionCreateModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Question</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Questions</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>QuestionEditModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Question</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Questions</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>RoomCreateModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Room</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Rooms</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>RoomEditModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Room</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Rooms</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>SessionFormModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Session</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>SessionizeRefreshOutcome</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Events</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>SpeakerFormModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Speaker</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Speakers</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>SponsorCreateModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Sponsor</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sponsors</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>SponsorEditModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Sponsor</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sponsors</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>CategoryItemLookupService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Categories</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>ConferenceCategoryCreateModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.ConferenceCategory</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Categories</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>ConferenceCategoryEditModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.ConferenceCategory</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Categories</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>EventCreateModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Event</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Events</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>EventEditModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Event</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Events</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>EventLookupService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Events</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>IActivityUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Activities</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>ICategoryItemUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Categories</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>IConferenceCategoryUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Categories</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>IEventUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Events</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>IQuestionUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Questions</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>IRoomUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Rooms</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>ISessionSelectionUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Sessions.Selection</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>ISessionUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Sessions</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>ISpeakerUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Speakers</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>ISponsorUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Sponsors</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>OrganizerEventFeedbackService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Feedback</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>OrganizerSessionFeedbackService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Feedback</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>ScorePollHost</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.UI.Pages.SessionSelection</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions.Selection</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>SessionCreateModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Session</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>SessionEditModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Session</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>SessionSelectionAiScores</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.SessionSelection</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions.Selection</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>SessionSelectionFilterOptions</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Conference.UI.Pages.SessionSelection</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions.Selection</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>SpeakerDashboardService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Speakers</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>SpeakerLookupService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Speakers</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>SpeakerUserSearch</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Speaker</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Speakers</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>ActivityService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Activities</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>CategoryItemService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Categories</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>ConferenceCategoryCreate</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.ConferenceCategory</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Categories</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>ConferenceCategoryDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.ConferenceCategory</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Categories</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>ConferenceCategoryList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.ConferenceCategory</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Categories</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>ConferenceCategoryService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Categories</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>EventService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Events</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>EventSpeakerService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Common</td>
           </tr>
           <tr>
           <td>5</td>
@@ -9061,109 +9103,109 @@
           <td>5</td>
           <td><code>PublicSessionListView</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public.Sessions</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>PublicSessionScheduleService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Public</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>QuestionService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Questions</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>RoomService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Rooms</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>ScorePollSession</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.SessionSelection</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions.Selection</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SessionCategoryItemService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Common</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SessionLookups</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Session</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SessionSelectionFilters</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.SessionSelection</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions.Selection</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SessionSelectionService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Sessions.Selection</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SessionService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Sessions</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SessionSpeakerService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Common</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SpeakerCategoryItemService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Common</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SpeakerCreateModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Speaker</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Speakers</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SpeakerDetailLookupService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Speakers</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SpeakerEditModel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Speaker</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Speakers</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SpeakerService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Speakers</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SponsorService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Services</td>
+          <td>MMCA.ADC.Conference.UI.Services.Sponsors</td>
           </tr>
           <tr>
           <td>6</td>
           <td><code>ConferenceCategoryItemsPanel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.ConferenceCategory</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Categories</td>
           </tr>
           <tr>
           <td>6</td>
@@ -9175,13 +9217,13 @@
           <td>6</td>
           <td><code>EventCreate</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Event</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Events</td>
           </tr>
           <tr>
           <td>6</td>
           <td><code>EventList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Event</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Events</td>
           </tr>
           <tr>
           <td>6</td>
@@ -9199,85 +9241,85 @@
           <td>6</td>
           <td><code>QuestionCreate</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Question</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Questions</td>
           </tr>
           <tr>
           <td>6</td>
           <td><code>QuestionList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Question</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Questions</td>
           </tr>
           <tr>
           <td>6</td>
           <td><code>RoomCreate</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Room</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Rooms</td>
           </tr>
           <tr>
           <td>6</td>
           <td><code>SessionCreate</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Session</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions</td>
           </tr>
           <tr>
           <td>6</td>
           <td><code>SpeakerCreate</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Speaker</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Speakers</td>
           </tr>
           <tr>
           <td>7</td>
           <td><code>SessionSelectionSpeakerOverlap</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.SessionSelection</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions.Selection</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>EventDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Event</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Events</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>PublicEventDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public.Events</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>QuestionDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Question</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Questions</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>RoomDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Room</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Rooms</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>SpeakerCategoryItemsPanel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Speaker</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Speakers</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>SpeakerDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Speaker</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Speakers</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>ActivityCreate</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Activity</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Activities</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>ActivityDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Activity</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Activities</td>
           </tr>
           <tr>
           <td>9</td>
@@ -9295,108 +9337,108 @@
           <td>9</td>
           <td><code>PublicActivityList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public.Activities</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>PublicEventList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public.Events</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>PublicSessionDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public.Sessions</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>PublicSponsorList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public.Sponsors</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SessionDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Session</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SessionSelectionDashboard</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.SessionSelection</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions.Selection</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SpeakerDashboard</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Speaker</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Speakers</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SponsorCreate</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Sponsor</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sponsors</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SponsorDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Sponsor</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sponsors</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>ActivityList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Activity</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Activities</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>PublicSessionList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public.Sessions</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>PublicSpeakerDetail</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public.Speakers</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>PublicSpeakerList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Public</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Public.Speakers</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>RoomList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Room</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Rooms</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>SessionList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Session</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sessions</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>SpeakerList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Speaker</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Speakers</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>SponsorList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Conference.UI.Pages.Sponsor</td>
+          <td>MMCA.ADC.Conference.UI.Pages.Sponsors</td>
           </tr>
           </tbody></table></div>
           <h3 id="g22---adc-engagement-module-session-bookmarks">G22 - ADC Engagement Module (Session Bookmarks)</h3>
           <blockquote>
-          <p><code>group-22-engagement-module.md</code> | 179 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</p>
+          <p><code>group-22-engagement-module.md</code> | 193 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -9408,6 +9450,12 @@
           </tr>
           </thead>
           <tbody><tr>
+          <td>0</td>
+          <td><code>AssemblyReference</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.API</td>
+          </tr>
+          <tr>
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
@@ -9427,33 +9475,27 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>AssemblyReference</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.API</td>
-          </tr>
-          <tr>
-          <td>0</td>
           <td><code>AttendeeRow</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Lookups</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AttendeeSearchField</code></td>
           <td>enum</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Lookups</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>BadgePayload</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Shared.CheckIns</td>
+          <td>MMCA.ADC.Engagement.Shared.CheckIns.Badges</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>CheckInErrorCodes</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.CheckIns</td>
           </tr>
           <tr>
           <td>0</td>
@@ -9477,13 +9519,7 @@
           <td>0</td>
           <td><code>CheckInState</code></td>
           <td>enum</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.Rooms</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ClassReference</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Application</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns.Rooms</td>
           </tr>
           <tr>
           <td>0</td>
@@ -9495,13 +9531,19 @@
           <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
+          <td>MMCA.ADC.Engagement.API</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ClassReference</code></td>
+          <td>class</td>
           <td>MMCA.ADC.Engagement.Infrastructure</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.API</td>
+          <td>MMCA.ADC.Engagement.Application</td>
           </tr>
           <tr>
           <td>0</td>
@@ -9601,15 +9643,21 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>LiveEventContext</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Engagement.UI.Services.SessionLive</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>MyBadgeDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.Shared.CheckIns</td>
+          <td>MMCA.ADC.Engagement.Shared.CheckIns.Badges</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>NowNextSessionInfo</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.HappeningNow</td>
           </tr>
           <tr>
           <td>0</td>
@@ -9633,43 +9681,49 @@
           <td>0</td>
           <td><code>RoomCheckInRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.Shared.CheckIns</td>
+          <td>MMCA.ADC.Engagement.Shared.CheckIns.Rooms</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>RoomCheckInResultDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.Shared.CheckIns</td>
+          <td>MMCA.ADC.Engagement.Shared.CheckIns.Rooms</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ScanOutcomeKind</code></td>
           <td>enum</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.CheckIn</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>SelfCheckInOutcome&lt;TResult&gt;</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.CheckIns</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>SessionAttendanceDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.Shared.CheckIns</td>
+          <td>MMCA.ADC.Engagement.Shared.CheckIns.Attendance</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>SessionAttendanceRow</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.CheckIn</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>SessionInfo</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Lookups</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>SessionReminder</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.HappeningNow</td>
           </tr>
           <tr>
           <td>0</td>
@@ -9681,13 +9735,13 @@
           <td>0</td>
           <td><code>SponsorVisitRequest</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.Shared.CheckIns</td>
+          <td>MMCA.ADC.Engagement.Shared.CheckIns.SponsorVisits</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>SponsorVisitResultDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.Shared.CheckIns</td>
+          <td>MMCA.ADC.Engagement.Shared.CheckIns.SponsorVisits</td>
           </tr>
           <tr>
           <td>0</td>
@@ -9705,13 +9759,13 @@
           <td>0</td>
           <td><code>VisitState</code></td>
           <td>enum</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.Sponsors</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns.Sponsors</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>AttendanceStatsDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.Shared.CheckIns</td>
+          <td>MMCA.ADC.Engagement.Shared.CheckIns.Attendance</td>
           </tr>
           <tr>
           <td>1</td>
@@ -9751,6 +9805,12 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ILiveEventUIService</code></td>
+          <td>interface</td>
+          <td>MMCA.ADC.Engagement.UI.Services.SessionLive</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>ManualCheckInRequest</code></td>
           <td>record</td>
           <td>MMCA.ADC.Engagement.Shared.CheckIns</td>
@@ -9759,7 +9819,7 @@
           <td>1</td>
           <td><code>NowNextSnapshot</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.HappeningNow</td>
           </tr>
           <tr>
           <td>1</td>
@@ -9795,13 +9855,19 @@
           <td>1</td>
           <td><code>ScanOutcome</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.CheckIn</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SessionLiveUIService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.UI.Services.SessionLive</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>SessionReminderPlanner</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.HappeningNow</td>
           </tr>
           <tr>
           <td>1</td>
@@ -9837,7 +9903,7 @@
           <td>2</td>
           <td><code>CurrentEventNotificationScopeProvider</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Notifications</td>
           </tr>
           <tr>
           <td>2</td>
@@ -9849,7 +9915,7 @@
           <td>2</td>
           <td><code>LiveBroadcastPatch</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.SessionLive</td>
           </tr>
           <tr>
           <td>2</td>
@@ -9909,25 +9975,31 @@
           <td>3</td>
           <td><code>IBookmarkUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Bookmarks</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>ICheckInUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.CheckIns</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IEventFeedbackUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Feedback</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>ILivePollUIService</code></td>
+          <td>interface</td>
+          <td>MMCA.ADC.Engagement.UI.Services.SessionLive</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>INowNextService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.HappeningNow</td>
           </tr>
           <tr>
           <td>3</td>
@@ -9939,13 +10011,13 @@
           <td>3</td>
           <td><code>IPointsUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Points</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>IQuestionLookupService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Feedback</td>
           </tr>
           <tr>
           <td>3</td>
@@ -9957,7 +10029,19 @@
           <td>3</td>
           <td><code>ISessionFeedbackUIService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Feedback</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>ISessionLookupService</code></td>
+          <td>interface</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Lookups</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>ISessionQuestionUIService</code></td>
+          <td>interface</td>
+          <td>MMCA.ADC.Engagement.UI.Services.SessionLive</td>
           </tr>
           <tr>
           <td>3</td>
@@ -9975,19 +10059,19 @@
           <td>3</td>
           <td><code>LiveChannelSubscription</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.SessionLive</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>BookmarkService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Bookmarks</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>CheckInService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.CheckIns</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10005,7 +10089,7 @@
           <td>4</td>
           <td><code>EventFeedbackService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Feedback</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10015,27 +10099,33 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>LivePollUIService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.UI.Services.SessionLive</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>NowNextService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.HappeningNow</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>PointsService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Points</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>QuestionLookupService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Lookups</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>SessionFeedbackService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Feedback</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10045,15 +10135,27 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>SessionLookupService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Lookups</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>SessionQuestionSubmittedPointsHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application.Points.DomainEventHandlers</td>
           </tr>
           <tr>
           <td>4</td>
+          <td><code>SessionQuestionUIService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.UI.Services.SessionLive</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>SessionReminderCoordinator</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.HappeningNow</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10065,7 +10167,7 @@
           <td>5</td>
           <td><code>AttendeeSummary</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Lookups</td>
           </tr>
           <tr>
           <td>5</td>
@@ -10083,7 +10185,7 @@
           <td>5</td>
           <td><code>MyBadge</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.CheckIn</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns</td>
           </tr>
           <tr>
           <td>5</td>
@@ -10107,19 +10209,19 @@
           <td>5</td>
           <td><code>RoomCheckIn</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.Rooms</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns.Rooms</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SessionBookmarkUIService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Bookmarks</td>
           </tr>
           <tr>
           <td>5</td>
           <td><code>SponsorVisit</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.Sponsors</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns.Sponsors</td>
           </tr>
           <tr>
           <td>6</td>
@@ -10137,7 +10239,7 @@
           <td>6</td>
           <td><code>IAttendeeLookupService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Lookups</td>
           </tr>
           <tr>
           <td>6</td>
@@ -10179,13 +10281,13 @@
           <td>7</td>
           <td><code>AttendeeLookupService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
+          <td>MMCA.ADC.Engagement.UI.Services.Lookups</td>
           </tr>
           <tr>
           <td>7</td>
           <td><code>AttendeeSearchPanel</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.CheckIn</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns</td>
           </tr>
           <tr>
           <td>7</td>
@@ -10203,7 +10305,7 @@
           <td>8</td>
           <td><code>AttendeeBadgeConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.CheckIns</td>
           </tr>
           <tr>
           <td>8</td>
@@ -10233,31 +10335,37 @@
           <td>8</td>
           <td><code>IBookmarkManagementDomainService</code></td>
           <td>interface</td>
-          <td>MMCA.ADC.Engagement.Domain.Services</td>
+          <td>MMCA.ADC.Engagement.Domain.UserSessionBookmarks</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>LeaderboardOptInConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.Points</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>LivePollVoteConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.LivePolls</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>PointsEntryConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.Points</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>SessionQuestionConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.SessionQuestions</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>SessionQuestionUpvoteConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.SessionQuestions</td>
           </tr>
           <tr>
           <td>8</td>
@@ -10269,7 +10377,7 @@
           <td>8</td>
           <td><code>UserSessionBookmarkConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.UserSessionBookmarks</td>
           </tr>
           <tr>
           <td>8</td>
@@ -10293,7 +10401,7 @@
           <td>9</td>
           <td><code>BookmarkManagementDomainService</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Domain.Services</td>
+          <td>MMCA.ADC.Engagement.Domain.UserSessionBookmarks</td>
           </tr>
           <tr>
           <td>9</td>
@@ -10327,6 +10435,24 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>LiveEventService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.UI.Services.SessionLive</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>LivePollConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.LivePolls</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>LivePollOptionConfiguration</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.LivePolls</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>PointsSettings</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Shared.Points</td>
@@ -10353,7 +10479,7 @@
           <td>10</td>
           <td><code>CheckInScan</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.CheckIn</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns</td>
           </tr>
           <tr>
           <td>10</td>
@@ -10371,7 +10497,7 @@
           <td>10</td>
           <td><code>OrganizerAttendance</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Pages.CheckIn</td>
+          <td>MMCA.ADC.Engagement.UI.Pages.CheckIns</td>
           </tr>
           <tr>
           <td>10</td>
@@ -10389,7 +10515,7 @@
           <td>11</td>
           <td><code>CheckInConfiguration</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration.CheckIns</td>
           </tr>
           <tr>
           <td>11</td>
@@ -10484,7 +10610,7 @@
           </tbody></table></div>
           <h3 id="g26---adc-engagement-live-layer-real-time-polls--session-qa">G26 - ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</h3>
           <blockquote>
-          <p><code>group-23-engagement-live-layer.md</code> | 99 types | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&amp;A with upvoting, over the SignalR hub-channel transport (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>) and the cross-service gRPC live-channel adapter.</p>
+          <p><code>group-23-engagement-live-layer.md</code> | 85 types | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&amp;A with upvoting, over the SignalR hub-channel transport (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>) and the cross-service gRPC live-channel adapter.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -10563,12 +10689,6 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>LiveEventContext</code></td>
-          <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
-          </tr>
-          <tr>
-          <td>0</td>
           <td><code>LivePollClosedPayload</code></td>
           <td>record</td>
           <td>MMCA.ADC.Engagement.Shared.LivePolls</td>
@@ -10626,12 +10746,6 @@
           <td><code>QuestionStatus</code></td>
           <td>enum</td>
           <td>MMCA.ADC.Engagement.Shared.SessionQuestions</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>SessionInfo</code></td>
-          <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
           </tr>
           <tr>
           <td>0</td>
@@ -10701,12 +10815,6 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>ILiveEventUIService</code></td>
-          <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>LivePollChannel</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Shared.LivePolls</td>
@@ -10728,12 +10836,6 @@
           <td><code>ModerateQuestionCommand</code></td>
           <td>record</td>
           <td>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Moderate</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>SessionLiveUIService</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
           </tr>
           <tr>
           <td>1</td>
@@ -10773,51 +10875,15 @@
           </tr>
           <tr>
           <td>3</td>
-          <td><code>ILivePollUIService</code></td>
-          <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>ISessionLookupService</code></td>
-          <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>ISessionQuestionUIService</code></td>
-          <td>interface</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
-          </tr>
-          <tr>
-          <td>3</td>
           <td><code>LivePollAuthorization</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application.LivePolls.Services</td>
           </tr>
           <tr>
           <td>4</td>
-          <td><code>LivePollUIService</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>SessionLivePollPanel</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI.Pages.SessionLive</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>SessionLookupService</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>SessionQuestionUIService</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
           </tr>
           <tr>
           <td>6</td>
@@ -10911,12 +10977,6 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>LivePollVoteConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
-          </tr>
-          <tr>
-          <td>8</td>
           <td><code>PollManagementPanel</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI.Pages.HappeningNow</td>
@@ -10965,27 +11025,9 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>LiveEventService</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Services</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>LivePollConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
-          </tr>
-          <tr>
-          <td>9</td>
           <td><code>LivePollDTOMapper</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application.LivePolls.DTOs</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>LivePollOptionConfiguration</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
           </tr>
           <tr>
           <td>9</td>
@@ -11227,37 +11269,37 @@
           <td>0</td>
           <td><code>UserDataExportBookmarkDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Identity.Shared.Users</td>
+          <td>MMCA.ADC.Identity.Shared.Users.DataExport</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>UserDataExportCheckInDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Identity.Shared.Users</td>
+          <td>MMCA.ADC.Identity.Shared.Users.DataExport</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>UserDataExportNotificationDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Identity.Shared.Users</td>
+          <td>MMCA.ADC.Identity.Shared.Users.DataExport</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>UserDataExportPointsEntryDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Identity.Shared.Users</td>
+          <td>MMCA.ADC.Identity.Shared.Users.DataExport</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>UserDataExportSubjectDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Identity.Shared.Users</td>
+          <td>MMCA.ADC.Identity.Shared.Users.DataExport</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>UserDataExportSubmittedQuestionDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Identity.Shared.Users</td>
+          <td>MMCA.ADC.Identity.Shared.Users.DataExport</td>
           </tr>
           <tr>
           <td>0</td>
@@ -11299,13 +11341,13 @@
           <td>1</td>
           <td><code>UserDataExportEngagementSectionDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Identity.Shared.Users</td>
+          <td>MMCA.ADC.Identity.Shared.Users.DataExport</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>UserDataExportNotificationSectionDTO</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Identity.Shared.Users</td>
+          <td>MMCA.ADC.Identity.Shared.Users.DataExport</td>
           </tr>
           <tr>
           <td>1</td>
@@ -11413,13 +11455,13 @@
           <td>5</td>
           <td><code>UserList</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Identity.UI.Pages.User</td>
+          <td>MMCA.ADC.Identity.UI.Pages.Users</td>
           </tr>
           <tr>
           <td>6</td>
           <td><code>Profile</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Identity.UI.Pages.Profile</td>
+          <td>MMCA.ADC.Identity.UI.Pages.Users.Profile</td>
           </tr>
           <tr>
           <td>6</td>
@@ -11777,73 +11819,73 @@
           <td>0</td>
           <td><code>BarcodeScanPage</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Media</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>DevicePreferenceKeys</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStorage</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>GeoPoint</code></td>
           <td>record</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IAccessibilityAnnouncer</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Accessibility</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IBarcodeScannerService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Media</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IBatteryStatusService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStatus</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IBiometricAuthenticator</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Auth</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IClipboardService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IConnectivityStatusService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStatus</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IDevicePreferences</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStorage</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IExternalAuthBroker</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Auth</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IExternalLinkService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>0</td>
@@ -11855,55 +11897,55 @@
           <td>0</td>
           <td><code>IHapticFeedbackService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStatus</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ILocalCacheStore</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStorage</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IMapNavigationService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IPushRegistrationService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Notifications</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IScreenshotService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>IShareService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ISpeechToTextService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Media</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ITextToSpeechService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Media</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>LocalNotificationRequest</code></td>
           <td>record</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Notifications</td>
           </tr>
           <tr>
           <td>0</td>
@@ -11915,109 +11957,109 @@
           <td>0</td>
           <td><code>PickedMedia</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Media</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>PushDeviceToken</code></td>
           <td>record</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Notifications</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>AlwaysOnlineConnectivityStatusService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStatus</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>BrowserMapNavigationService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Browser</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>CapabilitiesJsModule</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Browser</td>
+          <td>MMCA.Common.UI.Services.Capabilities</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>DeepLinkRouteEventArgs</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Navigation</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>IGeocodingService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>IGeolocationService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>ILocalNotificationService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Notifications</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>IMediaPickerService</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Media</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>InMemoryDevicePreferences</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStorage</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>IPushDeviceTokenProvider</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Notifications</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiAccessibilityAnnouncer</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Accessibility</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiBarcodeScannerService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Media</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiBatteryStatusService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.DeviceStatus</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiBiometricAuthenticator</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Auth</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiClipboardService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiConnectivityStatusService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.DeviceStatus</td>
           </tr>
           <tr>
           <td>1</td>
@@ -12029,13 +12071,13 @@
           <td>1</td>
           <td><code>MauiDevicePreferences</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.DeviceStorage</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiExternalLinkService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>1</td>
@@ -12047,19 +12089,19 @@
           <td>1</td>
           <td><code>MauiHapticFeedbackService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.DeviceStatus</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiLocalCacheStore</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.DeviceStorage</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiMapNavigationService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>1</td>
@@ -12071,7 +12113,7 @@
           <td>1</td>
           <td><code>MauiScreenshotService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>1</td>
@@ -12083,19 +12125,19 @@
           <td>1</td>
           <td><code>MauiShareService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiSpeechToTextService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Media</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MauiTextToSpeechService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Media</td>
           </tr>
           <tr>
           <td>1</td>
@@ -12107,91 +12149,91 @@
           <td>1</td>
           <td><code>NullAccessibilityAnnouncer</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Accessibility</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullBarcodeScannerService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Media</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullBatteryStatusService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStatus</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullBiometricAuthenticator</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Auth</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullClipboardService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullExternalLinkService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullHapticFeedbackService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStatus</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullLocalCacheStore</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStorage</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullMapNavigationService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullPushRegistrationService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Notifications</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullScreenshotService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullShareService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullSpeechToTextService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Media</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>NullTextToSpeechService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Media</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>UnavailableExternalAuthBroker</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Auth</td>
           </tr>
           <tr>
           <td>1</td>
@@ -12209,49 +12251,49 @@
           <td>2</td>
           <td><code>BrowserAccessibilityAnnouncer</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Browser</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Accessibility</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>BrowserClipboardService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Browser</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>BrowserConnectivityStatusService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Browser</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStatus</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>BrowserDevicePreferences</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Browser</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStorage</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>BrowserExternalLinkService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Browser</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>BrowserLocalCacheStore</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Browser</td>
+          <td>MMCA.Common.UI.Services.Capabilities.DeviceStorage</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>BrowserShareService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Browser</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Interop</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>IDeepLinkDispatcher</code></td>
           <td>interface</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Navigation</td>
           </tr>
           <tr>
           <td>2</td>
@@ -12275,73 +12317,73 @@
           <td>2</td>
           <td><code>MauiExternalAuthBroker</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Auth</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>MauiGeocodingService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>MauiGeolocationService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>MauiLocalNotificationService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Notifications</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>MauiMediaPickerService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Media</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>MauiPushRegistrationService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Maui.Capabilities</td>
+          <td>MMCA.Common.UI.Maui.Capabilities.Notifications</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>NullGeocodingService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>NullGeolocationService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Geo</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>NullLocalNotificationService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Notifications</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>NullMediaPickerService</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Media</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>NullPushDeviceTokenProvider</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities.Fallbacks</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Notifications</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>DeepLinkDispatcher</code></td>
           <td>class</td>
-          <td>MMCA.Common.UI.Services.Capabilities</td>
+          <td>MMCA.Common.UI.Services.Capabilities.Navigation</td>
           </tr>
           <tr>
           <td>3</td>
@@ -12370,7 +12412,7 @@
           </tbody></table></div>
           <h3 id="g25---testing--quality-infrastructure">G25 - Testing &amp; Quality Infrastructure</h3>
           <blockquote>
-          <p><code>group-27-testing-infrastructure.md</code> | 2270 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
+          <p><code>group-27-testing-infrastructure.md</code> | 2315 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
           </blockquote>
           <p>Rolled up by project (individual <code>[Fact]</code>s not sectioned - logged exception). Reusable test
           infrastructure assemblies (sectioned in full in the chapter) are marked <strong>(infra)</strong>.</p>
@@ -12385,7 +12427,7 @@
           </thead>
           <tbody><tr>
           <td><code>MMCA.ADC.Architecture.Tests</code> <strong>(infra)</strong></td>
-          <td>43</td>
+          <td>44</td>
           <td>L1-L13</td>
           <td></td>
           </tr>
@@ -12409,7 +12451,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Infrastructure.Tests</code></td>
-          <td>14</td>
+          <td>15</td>
           <td>L0-L11</td>
           <td></td>
           </tr>
@@ -12417,6 +12459,12 @@
           <td><code>MMCA.ADC.Conference.IntegrationTests</code></td>
           <td>37</td>
           <td>L1-L18</td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Conference.Scoring.Evaluation.Tests</code></td>
+          <td>11</td>
+          <td>L0-L7</td>
           <td></td>
           </tr>
           <tr>
@@ -12577,20 +12625,20 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Architecture.Tests</code> <strong>(infra)</strong></td>
-          <td>158</td>
+          <td>162</td>
           <td>L0-L13</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Aspire.Hosting.Tests</code></td>
           <td>4</td>
-          <td>L0-L11</td>
+          <td>L0-L12</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Aspire.Tests</code></td>
-          <td>41</td>
-          <td>L0-L12</td>
+          <td>44</td>
+          <td>L0-L13</td>
           <td></td>
           </tr>
           <tr>
@@ -12625,13 +12673,13 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Infrastructure.Tests</code></td>
-          <td>380</td>
+          <td>403</td>
           <td>L0-L17</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Shared.Tests</code></td>
-          <td>44</td>
+          <td>45</td>
           <td>L0-L6</td>
           <td></td>
           </tr>
@@ -12643,7 +12691,7 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Testing.Architecture</code> <strong>(infra)</strong></td>
-          <td>57</td>
+          <td>58</td>
           <td>L0-L5</td>
           <td></td>
           </tr>

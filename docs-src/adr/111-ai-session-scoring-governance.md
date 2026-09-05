@@ -159,8 +159,9 @@ budgeted ceiling.**
    exactly what changes spend: a model swap moves the per-token price, a prompt revision moves the
    token count (`:381-387`). They are recorded from the usage block of every response, including the
    ones that go on to fail (`:92-96`). In production the counters reach App Insights, where a
-   scheduled query rule sums both over a 30-day rolling window and fires when the total crosses
-   `aiScoringMonthlyTokenCeiling`, defaulted to 2,000,000 tokens
+   scheduled query rule sums both over a rolling two-day window (the longest window the rule type
+   evaluates; a 30-day override was rejected at deploy time on 2026-09-05) and fires when the total
+   crosses `aiScoringTokenCeiling`, defaulted to 2,000,000 tokens, the envelope of one full pass
    (`MMCA.ADC/infra/main.bicep:77-78`, rule at `:475-516`, query at `:500`). The rule is severity 3,
    not a page: a budget breach is a cost signal, nothing is down (`:482-484`). It is deployed only
    when a key is present (`:143`, `:475`), because with no key the feature is inert and the rule
@@ -249,9 +250,12 @@ budgeted ceiling.**
   by design, so an international number, a spelled-out address or a social handle passes through
   unredacted, and the narrowness that protects the credibility evidence is the same narrowness that
   limits the coverage.
-- **The ceiling is a 30-day rolling total with a daily evaluation.** A single runaway pass can spend
-  its whole way through the envelope inside an hour, and the alert notices on the next daily
-  evaluation. It is a budget guard, not a circuit breaker: nothing stops the calls.
+- **The ceiling is a two-day rolling total with a daily evaluation, not a monthly budget.** Azure
+  scheduled query rules evaluate at most two days of data, so the guard is sized to one legitimate
+  pass rather than a month of spend: a repeated or runaway pass inside two days trips it, while slow
+  accumulation across a month does not. A single runaway pass can spend its whole way through the
+  envelope inside an hour, and the alert notices on the next daily evaluation. It is a budget guard,
+  not a circuit breaker: nothing stops the calls.
 - **Cost visibility depends on the metrics export staying on.** The counters ride the application
   meter, which the http-client and runtime instrument toggles do not touch (`infra/main.bicep:472-474`),
   but an export path that breaks makes the alert evaluate zero and look healthy.

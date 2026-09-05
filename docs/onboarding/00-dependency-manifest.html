@@ -158,10 +158,10 @@
           is still linked (only one possible target). Names that are neither visible nor unique are
           dropped as unresolvable without full semantic binding.</p>
           <ul>
-          <li>Edges resolved by namespace visibility: <strong>15334</strong> (~96%)</li>
-          <li>Edges resolved by globally-unique name (fallback): <strong>586</strong></li>
-          <li>References dropped as ambiguous (matched &gt;1 type, none visible): <strong>38</strong></li>
-          <li>Sensitivity: <strong>832 / 4205</strong> type levels would change if the globally-unique fallback
+          <li>Edges resolved by namespace visibility: <strong>15415</strong> (~96%)</li>
+          <li>Edges resolved by globally-unique name (fallback): <strong>589</strong></li>
+          <li>References dropped as ambiguous (matched &gt;1 type, none visible): <strong>42</strong></li>
+          <li>Sensitivity: <strong>837 / 4257</strong> type levels would change if the globally-unique fallback
           were excluded; the fallback is retained because a globally-unique first-party name is
           unambiguous, so excluding it would under-count real dependencies.</li>
           </ul>
@@ -179,43 +179,43 @@
           </thead>
           <tbody><tr>
           <td>0</td>
-          <td>842</td>
+          <td>850</td>
           </tr>
           <tr>
           <td>1</td>
-          <td>501</td>
+          <td>510</td>
           </tr>
           <tr>
           <td>2</td>
-          <td>298</td>
+          <td>304</td>
           </tr>
           <tr>
           <td>3</td>
-          <td>285</td>
+          <td>290</td>
           </tr>
           <tr>
           <td>4</td>
-          <td>376</td>
+          <td>383</td>
           </tr>
           <tr>
           <td>5</td>
-          <td>292</td>
+          <td>296</td>
           </tr>
           <tr>
           <td>6</td>
-          <td>161</td>
+          <td>168</td>
           </tr>
           <tr>
           <td>7</td>
-          <td>131</td>
+          <td>132</td>
           </tr>
           <tr>
           <td>8</td>
-          <td>223</td>
+          <td>222</td>
           </tr>
           <tr>
           <td>9</td>
-          <td>247</td>
+          <td>249</td>
           </tr>
           <tr>
           <td>10</td>
@@ -223,23 +223,23 @@
           </tr>
           <tr>
           <td>11</td>
-          <td>97</td>
+          <td>93</td>
           </tr>
           <tr>
           <td>12</td>
-          <td>70</td>
+          <td>78</td>
           </tr>
           <tr>
           <td>13</td>
-          <td>120</td>
+          <td>121</td>
           </tr>
           <tr>
           <td>14</td>
-          <td>69</td>
+          <td>70</td>
           </tr>
           <tr>
           <td>15</td>
-          <td>145</td>
+          <td>143</td>
           </tr>
           <tr>
           <td>16</td>
@@ -258,7 +258,7 @@
           <td>1</td>
           </tr>
           </tbody></table></div>
-          <h2 id="cycles-scc-size--1-36">Cycles (SCC size &gt; 1): 36</h2>
+          <h2 id="cycles-scc-size--1-37">Cycles (SCC size &gt; 1): 37</h2>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -285,12 +285,12 @@
           <tr>
           <td>2</td>
           <td>2</td>
-          <td>API:InsecureJwtMetadataWarningStartupFilter, API:WebApplicationBuilderExtensions</td>
+          <td>API:SessionCookieEndpoints, API:SessionCookieJar</td>
           </tr>
           <tr>
           <td>2</td>
           <td>2</td>
-          <td>API:SessionCookieEndpoints, API:SessionCookieJar</td>
+          <td>API:WebApplicationBuilderExtensions, API:InsecureJwtMetadataWarningStartupFilter</td>
           </tr>
           <tr>
           <td>2</td>
@@ -326,6 +326,11 @@
           <td>4</td>
           <td>2</td>
           <td>Tests:Priority, Tests:Priority</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td>2</td>
+          <td>Tests:Severity, Tests:Severity</td>
           </tr>
           <tr>
           <td>5</td>
@@ -395,12 +400,22 @@
           <tr>
           <td>10</td>
           <td>2</td>
-          <td>API:MiddlewarePipelineBuilder, API:WebApplicationExtensions</td>
+          <td>API:WebApplicationExtensions, API:MiddlewarePipelineBuilder</td>
           </tr>
           <tr>
           <td>11</td>
           <td>8</td>
           <td>Infrastructure:AuditTrailSaveChangesInterceptor, Infrastructure:ApplicationDbContext, Infrastructure:DataSourceModelCacheKeyFactory, Infrastructure:AuditSaveChangesInterceptor, Infrastructure:DomainEventSaveChangesInterceptor, Infrastructure:DeferredDispatch, Infrastructure:TenantSaveChangesInterceptor, Infrastructure:OutboxFinalizer</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td>2</td>
+          <td>Tests:GateTestContext, Tests:GateTestContext</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td>2</td>
+          <td>Tests:AuditTrailTestContext, Tests:FailingSaveInterceptor</td>
           </tr>
           <tr>
           <td>12</td>
@@ -418,11 +433,6 @@
           <td>Tests:FailingSaveInterceptor, Tests:OutboxRoutingTestDbContext</td>
           </tr>
           <tr>
-          <td>12</td>
-          <td>2</td>
-          <td>Tests:GateTestContext, Tests:GateTestContext</td>
-          </tr>
-          <tr>
           <td>13</td>
           <td>2</td>
           <td>Tests:EventScopeFitnessTests, Tests:FakeConsumerMap</td>
@@ -431,11 +441,6 @@
           <td>13</td>
           <td>2</td>
           <td>Tests:EventUpcasterFitnessTests, Tests:UpcasterTestMap</td>
-          </tr>
-          <tr>
-          <td>13</td>
-          <td>2</td>
-          <td>Tests:AuditTrailTestContext, Tests:FailingSaveInterceptor</td>
           </tr>
           <tr>
           <td>14</td>
@@ -1007,7 +1012,21 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>AnthropicJsonSchemaFormat</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>AnthropicMessage</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>AnthropicUsage</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
           <td>0</td>
           <td>(none)</td>
@@ -1044,6 +1063,41 @@
           <td>0</td>
           <td><code>FakeAnthropicHandler</code></td>
           <td>MMCA.ADC.Conference.Infrastructure.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>TestMeterFactory</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>GoldenExpectation</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>GoldenSpeaker</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>RecordedScores</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>TestMeterFactory</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
@@ -3996,6 +4050,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>HealthEndpointPaths</code></td>
+          <td>MMCA.Common.Aspire</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>IWarmupTask</code></td>
           <td>MMCA.Common.Aspire</td>
           <td>0</td>
@@ -6523,17 +6584,17 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>AnthropicRequest</code></td>
+          <td><code>AnthropicOutputConfig</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
           <td>1</td>
-          <td>AnthropicMessage</td>
+          <td>AnthropicJsonSchemaFormat</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>AnthropicResponse</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
-          <td>1</td>
-          <td>AnthropicContentBlock</td>
+          <td>2</td>
+          <td>AnthropicContentBlock, AnthropicUsage</td>
           </tr>
           <tr>
           <td>1</td>
@@ -6555,6 +6616,13 @@
           <td>MMCA.ADC.Conference.IntegrationTests</td>
           <td>1</td>
           <td>IBookmarkCountService</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>GoldenInput</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>1</td>
+          <td>GoldenSpeaker</td>
           </tr>
           <tr>
           <td>1</td>
@@ -8093,8 +8161,8 @@
           <td>1</td>
           <td><code>DownstreamServiceHealthCheck</code></td>
           <td>MMCA.Common.Aspire</td>
-          <td>1</td>
-          <td>DownstreamProbeVersion</td>
+          <td>2</td>
+          <td>DownstreamProbeVersion, HealthEndpointPaths</td>
           </tr>
           <tr>
           <td>1</td>
@@ -8700,7 +8768,56 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>NoAssemblies</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>IEntityConfigurationAssemblyProvider</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>NoConfigurationAssemblyProvider</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>IEntityConfigurationAssemblyProvider</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>NoConfigurationAssemblyProvider</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>IEntityConfigurationAssemblyProvider</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>NullAssemblyProvider</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>IEntityConfigurationAssemblyProvider</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>NullAssemblyProvider</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>IEntityConfigurationAssemblyProvider</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>NullAssemblyProvider</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>IEntityConfigurationAssemblyProvider</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>NullAssemblyProvider</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>IEntityConfigurationAssemblyProvider</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>NullAssemblyProvider</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>IEntityConfigurationAssemblyProvider</td>
@@ -8830,6 +8947,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>ITenantEntity</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>TestDomainEvent</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>IDomainEvent</td>
           </tr>
           <tr>
           <td>1</td>
@@ -9950,6 +10074,20 @@
           <td>MMCA.ADC.Conference.Domain</td>
           <td>2</td>
           <td>BaseDomainEvent, DomainEntityState</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>AnthropicRequest</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure</td>
+          <td>2</td>
+          <td>AnthropicMessage, AnthropicOutputConfig</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>GoldenCase</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>4</td>
+          <td>GoldenExpectation, GoldenInput, SessionScoringInput, SpeakerInfo</td>
           </tr>
           <tr>
           <td>2</td>
@@ -11383,8 +11521,15 @@
           <td>2</td>
           <td><code>TestDomainEvent</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>BaseDomainEvent</td>
+          </tr>
+          <tr>
           <td>2</td>
-          <td>BaseDomainEvent, IDomainEvent</td>
+          <td><code>TestDomainEvent</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>BaseDomainEvent</td>
           </tr>
           <tr>
           <td>2</td>
@@ -11399,6 +11544,20 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
           <td>BaseDomainEvent, IIntegrationEvent</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>TestIntegrationEvent</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>IIntegrationEvent</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>TestLocalEvent</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>BaseDomainEvent</td>
           </tr>
           <tr>
           <td>2</td>
@@ -11672,6 +11831,13 @@
           <td>MMCA.Common.UI</td>
           <td>2</td>
           <td>DataAnnotationsModelValidator, IModelValidator</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>MudToastService</code></td>
+          <td>MMCA.Common.UI</td>
+          <td>2</td>
+          <td>IToastService, ToastSeverity</td>
           </tr>
           <tr>
           <td>2</td>
@@ -12039,13 +12205,6 @@
           </tr>
           <tr>
           <td>3</td>
-          <td><code>AnthropicScoringService</code></td>
-          <td>MMCA.ADC.Conference.Infrastructure</td>
-          <td>8</td>
-          <td>AiScoreResponse, AnthropicMessage, AnthropicRequest, AnthropicResponse, IAiScoringService, SessionScoringInput, SessionScoringResult, SpeakerInfo</td>
-          </tr>
-          <tr>
-          <td>3</td>
           <td><code>SessionScoringProcessor</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
           <td>6</td>
@@ -12064,6 +12223,13 @@
           <td>MMCA.ADC.Conference.IntegrationTests</td>
           <td>3</td>
           <td>IAiScoringService, SessionScoringInput, SessionScoringResult</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>GoldenCorpus</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>1</td>
+          <td>GoldenCase</td>
           </tr>
           <tr>
           <td>3</td>
@@ -13019,6 +13185,13 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>DriftedTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>2</td>
+          <td>FakeDependentModule, ModuleConformanceTestsBase&lt;TModule&gt;</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>EmptyScanTests</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>2</td>
@@ -13453,6 +13626,13 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>FixedSourcesRegistry</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>2</td>
+          <td>DataSourceKey, IEntityDataSourceRegistry</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>HarnessFaultingEvent</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
@@ -13562,6 +13742,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
           <td>BaseIntegrationEvent, IIntegrationEvent</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>TestIntegrationEvent</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>BaseIntegrationEvent</td>
           </tr>
           <tr>
           <td>3</td>
@@ -13894,6 +14081,13 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>BunitComponentTestBaseFacadeTests</code></td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td>5</td>
+          <td>BunitComponentTestBase, IAppDialogService, MudAppDialogService, MudToastService, ToastConsumer</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>BunitTestBase</code></td>
           <td>MMCA.Common.UI.Tests</td>
           <td>10</td>
@@ -13917,8 +14111,15 @@
           <td>3</td>
           <td><code>DirectApiTokenRefresherTests</code></td>
           <td>MMCA.Common.UI.Tests</td>
-          <td>7</td>
-          <td>AuthenticationResponse, DirectApiTokenRefresher, ISecureTokenStore, Mocks, Mocks, StubHttpClientFactory, StubHttpMessageHandler</td>
+          <td>6</td>
+          <td>AuthenticationResponse, DirectApiTokenRefresher, ISecureTokenStore, Mocks, StubHttpClientFactory, StubHttpMessageHandler</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>MudToastServiceTests</code></td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td>2</td>
+          <td>MudToastService, ToastSeverity</td>
           </tr>
           <tr>
           <td>3</td>
@@ -13938,8 +14139,8 @@
           <td>3</td>
           <td><code>WasmTokenStorageServiceTests</code></td>
           <td>MMCA.Common.UI.Tests</td>
-          <td>5</td>
-          <td>ISessionCookieSync, ITokenRefresher, Mocks, Mocks, WasmTokenStorageService</td>
+          <td>4</td>
+          <td>ISessionCookieSync, ITokenRefresher, Mocks, WasmTokenStorageService</td>
           </tr>
           <tr>
           <td>4</td>
@@ -13950,17 +14151,17 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>ScoringInstruments</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure</td>
+          <td>1</td>
+          <td>SessionScoringProcessor</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>SessionizeService</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
           <td>2</td>
           <td>ISessionizeService, SessionizeResponse</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>AnthropicScoringServiceTests</code></td>
-          <td>MMCA.ADC.Conference.Infrastructure.Tests</td>
-          <td>6</td>
-          <td>AnthropicScoringService, FakeAnthropicHandler, SessionScoringInput, SessionScoringResult, SpeakerInfo, ThrowingHandler&lt;TEvent&gt;</td>
           </tr>
           <tr>
           <td>4</td>
@@ -15352,8 +15553,8 @@
           <td>4</td>
           <td><code>DriftedTests</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
-          <td>4</td>
-          <td>AnonymousEndpointTestsBase, AnonymousEndpointTestsBaseTests, FakeDependentModule, ModuleConformanceTestsBase&lt;TModule&gt;</td>
+          <td>2</td>
+          <td>AnonymousEndpointTestsBase, AnonymousEndpointTestsBaseTests</td>
           </tr>
           <tr>
           <td>4</td>
@@ -15368,6 +15569,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>1</td>
           <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>FixtureAssemblyMap</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>4</td>
+          <td>ArchitectureMapBase, FixtureDomainEvent, Layer, LayerRef</td>
           </tr>
           <tr>
           <td>4</td>
@@ -15408,8 +15616,15 @@
           <td>4</td>
           <td><code>FixtureModuleMap</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
-          <td>5</td>
-          <td>ArchitectureMapBase, CreateTicketCommand, Layer, LayerRef, TicketErrors</td>
+          <td>4</td>
+          <td>ArchitectureMapBase, Layer, LayerRef, TicketErrors</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>FixtureModuleMap</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>4</td>
+          <td>ArchitectureMapBase, CreateTicketCommand, Layer, LayerRef</td>
           </tr>
           <tr>
           <td>4</td>
@@ -15417,6 +15632,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>3</td>
           <td>FixtureContestedV1, FixtureContestedV3, IEventUpcaster</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>ModuleConformanceTestsBaseTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>2</td>
+          <td>DriftedTests, FakeLeafModuleConformanceTests</td>
           </tr>
           <tr>
           <td>4</td>
@@ -15770,20 +15992,6 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>DataSourceServiceAdditionalTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>6</td>
-          <td>DataSource, DataSourceKey, DataSourceService, FakeEntity, IEntityDataSourceRegistry, UnregisteredEntity</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>DataSourceServiceTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>5</td>
-          <td>DataSource, DataSourceKey, DataSourceService, FakeEntity, IEntityDataSourceRegistry</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>DefaultDataSourceResolver</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>4</td>
@@ -15802,6 +16010,20 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>ICacheService</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>FakeEntity</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>FakeEntity</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
           </tr>
           <tr>
           <td>4</td>
@@ -15835,8 +16057,8 @@
           <td>4</td>
           <td><code>IntegrationEventConsumerTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>5</td>
-          <td>IInboxStore, IIntegrationEventHandler&lt;in TIntegrationEvent&gt;, IntegrationEventConsumer&lt;TEvent&gt;, NamedIntegrationEvent, TestIntegrationEvent</td>
+          <td>6</td>
+          <td>IInboxStore, IIntegrationEventHandler&lt;in TIntegrationEvent&gt;, IntegrationEventConsumer&lt;TEvent&gt;, NamedIntegrationEvent, TestIntegrationEvent, TestIntegrationEvent</td>
           </tr>
           <tr>
           <td>4</td>
@@ -15912,8 +16134,15 @@
           <td>4</td>
           <td><code>RetiredToV2Upcaster</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>5</td>
-          <td>IEventUpcaster, OrderPlacedV2, RetiredOrderPlaced, RetiredTestIntegrationEvent, TestIntegrationEventV2</td>
+          <td>3</td>
+          <td>IEventUpcaster, RetiredTestIntegrationEvent, TestIntegrationEventV2</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>RetiredToV2Upcaster</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>3</td>
+          <td>IEventUpcaster, OrderPlacedV2, RetiredOrderPlaced</td>
           </tr>
           <tr>
           <td>4</td>
@@ -16002,6 +16231,13 @@
           <tr>
           <td>4</td>
           <td><code>TestChildEntity</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>TestEntity</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
@@ -16144,7 +16380,14 @@
           <td><code>Severity</code></td>
           <td>MMCA.Common.Shared.Tests</td>
           <td>2</td>
-          <td>Enumeration&lt;TEnumeration&gt;, EnumerationJsonConverterFactory</td>
+          <td>Enumeration&lt;TEnumeration&gt;, Severity</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>Severity</code></td>
+          <td>MMCA.Common.Shared.Tests</td>
+          <td>3</td>
+          <td>Enumeration&lt;TEnumeration&gt;, EnumerationJsonConverterFactory, Severity</td>
           </tr>
           <tr>
           <td>4</td>
@@ -16393,6 +16636,13 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>ErrorSummaryTests</code></td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td>6</td>
+          <td>BunitTestBase, Error, ErrorType, Result, SharedResource, StubSharedLocalizer</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>ExternalLinkTests</code></td>
           <td>MMCA.Common.UI.Tests</td>
           <td>4</td>
@@ -16600,6 +16850,13 @@
           <td>MMCA.ADC.Conference.Domain</td>
           <td>3</td>
           <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, Error, Result</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>AnthropicScoringService</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure</td>
+          <td>11</td>
+          <td>AiScoreResponse, AnthropicJsonSchemaFormat, AnthropicMessage, AnthropicOutputConfig, AnthropicRequest, AnthropicResponse, IAiScoringService, ScoringInstruments, SessionScoringInput, SessionScoringResult, SpeakerInfo</td>
           </tr>
           <tr>
           <td>5</td>
@@ -17606,8 +17863,8 @@
           <td>5</td>
           <td><code>FixtureAssemblyMap</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
-          <td>7</td>
-          <td>ArchitectureMapBase, CascadeChildFixture, FixtureDomainEvent, FixtureEntity, Layer, LayerRef, NonThrowingFixture</td>
+          <td>6</td>
+          <td>ArchitectureMapBase, CascadeChildFixture, FixtureEntity, Layer, LayerRef, NonThrowingFixture</td>
           </tr>
           <tr>
           <td>5</td>
@@ -17650,13 +17907,6 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>2</td>
           <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, CascadeChildFixture</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>ModuleConformanceTestsBaseTests</code></td>
-          <td>MMCA.Common.Architecture.Tests</td>
-          <td>2</td>
-          <td>DriftedTests, FakeLeafModuleConformanceTests</td>
           </tr>
           <tr>
           <td>5</td>
@@ -17954,6 +18204,20 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>DataSourceServiceAdditionalTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>7</td>
+          <td>DataSource, DataSourceKey, DataSourceService, FakeEntity, FakeEntity, IEntityDataSourceRegistry, UnregisteredEntity</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>DataSourceServiceTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>6</td>
+          <td>DataSource, DataSourceKey, DataSourceService, FakeEntity, FakeEntity, IEntityDataSourceRegistry</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>DegradeCustomer</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
@@ -18004,6 +18268,13 @@
           <tr>
           <td>5</td>
           <td><code>ExclusionAggregate</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>FakeAggregate</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</td>
@@ -18122,6 +18393,13 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>SoftDeleteTestDbContext</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>SoftDeletableTestEntity</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>SpecTestEntity</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
@@ -18150,6 +18428,13 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>TestAggregate</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>TestAggregateEntity</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
@@ -18159,8 +18444,8 @@
           <td>5</td>
           <td><code>TestEntity</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>2</td>
-          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          <td>1</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</td>
           </tr>
           <tr>
           <td>5</td>
@@ -18173,8 +18458,8 @@
           <td>5</td>
           <td><code>UpcastingIntegrationEventConsumerTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>8</td>
-          <td>EventUpcasterRegistry, IEventUpcaster, IInboxStore, IIntegrationEventHandler&lt;in TIntegrationEvent&gt;, OrderPlacedV2, RetiredOrderPlaced, RetiredToV2Upcaster, UpcastingIntegrationEventConsumer&lt;TEvent&gt;</td>
+          <td>9</td>
+          <td>EventUpcasterRegistry, IEventUpcaster, IInboxStore, IIntegrationEventHandler&lt;in TIntegrationEvent&gt;, OrderPlacedV2, RetiredOrderPlaced, RetiredToV2Upcaster, RetiredToV2Upcaster, UpcastingIntegrationEventConsumer&lt;TEvent&gt;</td>
           </tr>
           <tr>
           <td>5</td>
@@ -18187,8 +18472,8 @@
           <td>5</td>
           <td><code>Alert</code></td>
           <td>MMCA.Common.Shared.Tests</td>
-          <td>1</td>
-          <td>Severity</td>
+          <td>2</td>
+          <td>Severity, Severity</td>
           </tr>
           <tr>
           <td>5</td>
@@ -18336,6 +18621,13 @@
           <td>MMCA.Common.Testing.Architecture</td>
           <td>2</td>
           <td>ArchitectureRules, IArchitectureMap</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>FolderWidthTestsBase</code></td>
+          <td>MMCA.Common.Testing.Architecture</td>
+          <td>1</td>
+          <td>ArchitectureRules</td>
           </tr>
           <tr>
           <td>5</td>
@@ -18500,13 +18792,6 @@
           </tr>
           <tr>
           <td>5</td>
-          <td><code>MudToastService</code></td>
-          <td>MMCA.Common.UI</td>
-          <td>3</td>
-          <td>IToastService, Severity, ToastSeverity</td>
-          </tr>
-          <tr>
-          <td>5</td>
           <td><code>NotificationRoutePaths</code></td>
           <td>MMCA.Common.UI</td>
           <td>1</td>
@@ -18532,13 +18817,6 @@
           <td>MMCA.Common.UI.Tests</td>
           <td>10</td>
           <td>BunitTestBase, DataGridListPageBase&lt;TDto&gt;, Error, GridBackedTestPage, IToastService, ListPageStateService, Result, TestGridPage, ToastSeverity, WidgetRow</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>ErrorSummaryTests</code></td>
-          <td>MMCA.Common.UI.Tests</td>
-          <td>7</td>
-          <td>BunitTestBase, Error, ErrorType, Result, Severity, SharedResource, StubSharedLocalizer</td>
           </tr>
           <tr>
           <td>5</td>
@@ -18579,8 +18857,8 @@
           <td>5</td>
           <td><code>NotificationInboxServiceTests</code></td>
           <td>MMCA.Common.UI.Tests</td>
-          <td>12</td>
-          <td>ErrorType, ITokenRefresher, ITokenStorageService, Mocks, Mocks, NotificationInboxService, PagedCollectionResult&lt;T&gt;, PaginationMetadata, StubHttpClientFactory, StubHttpMessageHandler, StubScopeProvider, UserNotificationDTO</td>
+          <td>11</td>
+          <td>ErrorType, ITokenRefresher, ITokenStorageService, Mocks, NotificationInboxService, PagedCollectionResult&lt;T&gt;, PaginationMetadata, StubHttpClientFactory, StubHttpMessageHandler, StubScopeProvider, UserNotificationDTO</td>
           </tr>
           <tr>
           <td>5</td>
@@ -18623,6 +18901,13 @@
           <td>MMCA.ADC.Architecture.Tests</td>
           <td>4</td>
           <td>AnonymousEndpointTestsBase, ConferenceModule, EngagementModule, IdentityModule</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>FolderWidthTests</code></td>
+          <td>MMCA.ADC.Architecture.Tests</td>
+          <td>2</td>
+          <td>ArchitectureMapBase, FolderWidthTestsBase</td>
           </tr>
           <tr>
           <td>6</td>
@@ -18721,6 +19006,34 @@
           <td>MMCA.ADC.Conference.Domain.Tests</td>
           <td>1</td>
           <td>SessionAiScore</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>AnthropicScoringServiceTests</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure.Tests</td>
+          <td>7</td>
+          <td>AnthropicScoringService, FakeAnthropicHandler, SessionScoringInput, SessionScoringResult, SpeakerInfo, TestMeterFactory, ThrowingHandler&lt;TEvent&gt;</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>LiveJudgeTests</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>3</td>
+          <td>AnthropicScoringService, GoldenCorpus, TestMeterFactory</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>PromptContractTests</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>5</td>
+          <td>AnthropicScoringService, GoldenCorpus, SessionScoringInput, SpeakerInfo, TestMeterFactory</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>ReplayHandler</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>2</td>
+          <td>AnthropicScoringService, GoldenCase</td>
           </tr>
           <tr>
           <td>6</td>
@@ -18997,6 +19310,13 @@
           </tr>
           <tr>
           <td>6</td>
+          <td><code>IdentityRouteAuthorizationTests</code></td>
+          <td>MMCA.ADC.Identity.UI.Tests</td>
+          <td>2</td>
+          <td>RouteAuthorizationTestsBase, UserList</td>
+          </tr>
+          <tr>
+          <td>6</td>
           <td><code>ProfileChangePasswordTests</code></td>
           <td>MMCA.ADC.Identity.UI.Tests</td>
           <td>6</td>
@@ -19256,6 +19576,13 @@
           </tr>
           <tr>
           <td>6</td>
+          <td><code>FolderWidthTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>2</td>
+          <td>ArchitectureMapBase, FolderWidthTestsBase</td>
+          </tr>
+          <tr>
+          <td>6</td>
           <td><code>IntegrationEventContractTestsBaseTests</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>3</td>
@@ -19424,6 +19751,13 @@
           </tr>
           <tr>
           <td>6</td>
+          <td><code>BetaSpecification</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>2</td>
+          <td>Specification&lt;TEntity, TIdentifierType&gt;, SpecTestEntity</td>
+          </tr>
+          <tr>
+          <td>6</td>
           <td><code>DeletedByNameSpecification</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
@@ -19460,6 +19794,13 @@
           <tr>
           <td>6</td>
           <td><code>IncludingSoftDeletedSpecification</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>2</td>
+          <td>QuerySpecification&lt;TEntity, TIdentifierType&gt;, SpecTestEntity</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>IncludingSpecification</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
           <td>QuerySpecification&lt;TEntity, TIdentifierType&gt;, SpecTestEntity</td>
@@ -19580,8 +19921,8 @@
           <td>6</td>
           <td><code>TestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>4</td>
-          <td>FakeAggregate, FakeEntity, TestChildEntity, TestEntity</td>
+          <td>6</td>
+          <td>FakeAggregate, FakeAggregate, FakeEntity, FakeEntity, TestChildEntity, TestEntity</td>
           </tr>
           <tr>
           <td>6</td>
@@ -19629,8 +19970,8 @@
           <td>6</td>
           <td><code>EnumerationSerializationTests</code></td>
           <td>MMCA.Common.Shared.Tests</td>
-          <td>4</td>
-          <td>Alert, EnumerationJsonConverterFactory, Grade, Severity</td>
+          <td>5</td>
+          <td>Alert, EnumerationJsonConverterFactory, Grade, Severity, Severity</td>
           </tr>
           <tr>
           <td>6</td>
@@ -19676,13 +20017,6 @@
           </tr>
           <tr>
           <td>6</td>
-          <td><code>BunitComponentTestBaseFacadeTests</code></td>
-          <td>MMCA.Common.UI.Tests</td>
-          <td>5</td>
-          <td>BunitComponentTestBase, IAppDialogService, MudAppDialogService, MudToastService, ToastConsumer</td>
-          </tr>
-          <tr>
-          <td>6</td>
           <td><code>ChildEntityServiceBaseTests</code></td>
           <td>MMCA.Common.UI.Tests</td>
           <td>7</td>
@@ -19711,13 +20045,6 @@
           </tr>
           <tr>
           <td>6</td>
-          <td><code>MudToastServiceTests</code></td>
-          <td>MMCA.Common.UI.Tests</td>
-          <td>3</td>
-          <td>MudToastService, Severity, ToastSeverity</td>
-          </tr>
-          <tr>
-          <td>6</td>
           <td><code>NavMenuTests</code></td>
           <td>MMCA.Common.UI.Tests</td>
           <td>10</td>
@@ -19734,8 +20061,8 @@
           <td>6</td>
           <td><code>PushNotificationServiceTests</code></td>
           <td>MMCA.Common.UI.Tests</td>
-          <td>13</td>
-          <td>ErrorType, ITokenStorageService, Mocks, Mocks, PagedCollectionResult&lt;T&gt;, PaginationMetadata, ProblemDetailsResultReader, PushNotificationDTO, PushNotificationService, SendPushNotificationRequest, StubHttpClientFactory, StubHttpMessageHandler, StubScopeProvider</td>
+          <td>12</td>
+          <td>ErrorType, ITokenStorageService, Mocks, PagedCollectionResult&lt;T&gt;, PaginationMetadata, ProblemDetailsResultReader, PushNotificationDTO, PushNotificationService, SendPushNotificationRequest, StubHttpClientFactory, StubHttpMessageHandler, StubScopeProvider</td>
           </tr>
           <tr>
           <td>6</td>
@@ -20063,8 +20390,8 @@
           <td>7</td>
           <td><code>Event</code></td>
           <td>MMCA.ADC.Conference.Domain</td>
-          <td>14</td>
-          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, DomainEntityState, Error, EventChanged, EventInvariants, EventQuestionAnswer, EventQuestionAnswerChanged, EventSpeaker, EventSpeakerChanged, IAuditedEntity, QuestionModerationDefault, Result, Room, RoomChanged</td>
+          <td>15</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, DomainEntityState, Email, Error, EventChanged, EventInvariants, EventQuestionAnswer, EventQuestionAnswerChanged, EventSpeaker, EventSpeakerChanged, IAuditedEntity, QuestionModerationDefault, Result, Room, RoomChanged</td>
           </tr>
           <tr>
           <td>7</td>
@@ -20177,6 +20504,13 @@
           <td>MMCA.ADC.Conference.IntegrationTests</td>
           <td>4</td>
           <td>ISessionizeService, SessionizeResponse, SessionizeSession, Sessions</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>GoldenReplayTests</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>6</td>
+          <td>AnthropicScoringService, GoldenCase, GoldenCorpus, RecordedScores, ReplayHandler, TestMeterFactory</td>
           </tr>
           <tr>
           <td>7</td>
@@ -20574,15 +20908,15 @@
           <td>7</td>
           <td><code>EFReadRepositoryDecoratorAdditionalTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>5</td>
-          <td>EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, FakeEntity, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;</td>
+          <td>7</td>
+          <td>EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, FakeEntity, FakeEntity, FakeEntity, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;</td>
           </tr>
           <tr>
           <td>7</td>
           <td><code>EFReadRepositoryDecoratorTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>4</td>
-          <td>BaseLookup&lt;TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, FakeEntity, IReadRepository&lt;TEntity, TIdentifierType&gt;</td>
+          <td>6</td>
+          <td>BaseLookup&lt;TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, FakeEntity, FakeEntity, FakeEntity, IReadRepository&lt;TEntity, TIdentifierType&gt;</td>
           </tr>
           <tr>
           <td>7</td>
@@ -21162,8 +21496,8 @@
           <td>8</td>
           <td><code>EventConfiguration</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
-          <td>3</td>
-          <td>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, Event, EventInvariants</td>
+          <td>4</td>
+          <td>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, Event, EventInvariants, NullableEmailValueConverter</td>
           </tr>
           <tr>
           <td>8</td>
@@ -21727,13 +22061,6 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>IdentityRouteAuthorizationTests</code></td>
-          <td>MMCA.ADC.Identity.UI.Tests</td>
-          <td>3</td>
-          <td>RouteAuthorizationTestsBase, User, UserList</td>
-          </tr>
-          <tr>
-          <td>8</td>
           <td><code>UserListTests</code></td>
           <td>MMCA.ADC.Identity.UI.Tests</td>
           <td>7</td>
@@ -21876,8 +22203,8 @@
           <td>8</td>
           <td><code>DeleteUserHandlerBase&lt;TUser, TCommand&gt;</code></td>
           <td>MMCA.Common.Application</td>
-          <td>9</td>
-          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, Error, ICommandHandler&lt;in TCommand, TResult&gt;, IErasableUser, IUnitOfWork, IUserOwnedRequest, Result, UserOwnershipRule, UserUseCaseLog</td>
+          <td>11</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, Error, ICacheService, ICommandHandler&lt;in TCommand, TResult&gt;, IErasableUser, IUnitOfWork, IUserOwnedRequest, Result, SoftDeletedUserCache, UserOwnershipRule, UserUseCaseLog</td>
           </tr>
           <tr>
           <td>8</td>
@@ -22009,8 +22336,8 @@
           <td>8</td>
           <td><code>HandlerMocks</code></td>
           <td>MMCA.Common.Application.Tests</td>
-          <td>9</td>
-          <td>IEmailSender, ILoginProtectionService, IPasswordHasher, IPasswordResetTokenService, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, TestHidingDeleteUser, TestIdentityUser</td>
+          <td>10</td>
+          <td>ICacheService, IEmailSender, ILoginProtectionService, IPasswordHasher, IPasswordResetTokenService, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, TestHidingDeleteUser, TestIdentityUser</td>
           </tr>
           <tr>
           <td>8</td>
@@ -22450,8 +22777,8 @@
           <td>9</td>
           <td><code>EventDTOMapper</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>6</td>
-          <td>Event, EventDTO, EventQuestionAnswerDTOMapper, EventSpeakerDTOMapper, IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;, RoomDTOMapper</td>
+          <td>7</td>
+          <td>Email, Event, EventDTO, EventQuestionAnswerDTOMapper, EventSpeakerDTOMapper, IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;, RoomDTOMapper</td>
           </tr>
           <tr>
           <td>9</td>
@@ -23402,8 +23729,8 @@
           <td>9</td>
           <td><code>DeleteUserHandler</code></td>
           <td>MMCA.ADC.Identity.Application</td>
-          <td>10</td>
-          <td>DeleteUserCommand, DeleteUserHandlerBase&lt;TUser, TCommand&gt;, ICacheService, IFileStorageService, IUnitOfWork, Result, SoftDeletedUserCache, User, UserDeleted, UserRole</td>
+          <td>9</td>
+          <td>DeleteUserCommand, DeleteUserHandlerBase&lt;TUser, TCommand&gt;, ICacheService, IFileStorageService, IUnitOfWork, Result, User, UserDeleted, UserRole</td>
           </tr>
           <tr>
           <td>9</td>
@@ -23829,8 +24156,8 @@
           <td>9</td>
           <td><code>TestDeleteUserHandler</code></td>
           <td>MMCA.Common.Application.Tests</td>
-          <td>5</td>
-          <td>DeleteUserHandlerBase&lt;TUser, TCommand&gt;, IUnitOfWork, Result, TestDeleteUserCommand, TestHidingDeleteUser</td>
+          <td>6</td>
+          <td>DeleteUserHandlerBase&lt;TUser, TCommand&gt;, ICacheService, IUnitOfWork, Result, TestDeleteUserCommand, TestHidingDeleteUser</td>
           </tr>
           <tr>
           <td>9</td>
@@ -23885,6 +24212,20 @@
           <td>9</td>
           <td><code>OutboxPollFilterProcessor</code></td>
           <td>MMCA.Common.Aspire</td>
+          <td>1</td>
+          <td>Activity</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>ProbeTelemetryFilter</code></td>
+          <td>MMCA.Common.Aspire</td>
+          <td>2</td>
+          <td>Activity, HealthEndpointPaths</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>ProbeTelemetryToggleTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
           <td>1</td>
           <td>Activity</td>
           </tr>
@@ -25096,8 +25437,8 @@
           <td>10</td>
           <td><code>CheckInScan</code></td>
           <td>MMCA.ADC.Engagement.UI</td>
-          <td>21</td>
-          <td>AttendeeSummary, BadgePayload, CheckInAttendeeRequest, CheckInResultDTO, CheckInScope, CheckInService, ErrorType, IAttendeeLookupService, IBarcodeScannerService, ICheckInUIService, ILiveEventUIService, ISessionLookupService, IToastService, LiveEventContext, LiveEventService, ManualCheckInRequest, Result, ScanOutcome, ScanOutcomeKind, SessionInfo …(+1)</td>
+          <td>20</td>
+          <td>AttendeeSummary, BadgePayload, CheckInAttendeeRequest, CheckInResultDTO, CheckInScope, CheckInService, ErrorType, IAttendeeLookupService, IBarcodeScannerService, ICheckInUIService, ILiveEventUIService, ISessionLookupService, IToastService, LiveEventContext, LiveEventService, ManualCheckInRequest, Result, ScanOutcome, ScanOutcomeKind, SessionInfo</td>
           </tr>
           <tr>
           <td>10</td>
@@ -25383,8 +25724,8 @@
           <td>10</td>
           <td><code>DeleteUserHandlerBaseTests</code></td>
           <td>MMCA.Common.Application.Tests</td>
-          <td>9</td>
-          <td>Error, ErrorType, HandlerMocks, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Result, TestDeleteUserCommand, TestDeleteUserHandler, TestHidingDeleteUser</td>
+          <td>11</td>
+          <td>Error, ErrorType, HandlerMocks, ICacheService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Result, SoftDeletedUserCache, TestDeleteUserCommand, TestDeleteUserHandler, TestHidingDeleteUser</td>
           </tr>
           <tr>
           <td>10</td>
@@ -25500,17 +25841,17 @@
           </tr>
           <tr>
           <td>10</td>
-          <td><code>Extensions</code></td>
-          <td>MMCA.Common.Aspire</td>
-          <td>9</td>
-          <td>HealthCheckTags, HttpResilienceDefaults, IWarmupTask, OpenIdConnectMetadataWarmupTask, OutboxPollFilterProcessor, RedisPingHealthCheck, WarmupHostedService, WarmupReadinessGate, WarmupReadinessHealthCheck</td>
-          </tr>
-          <tr>
-          <td>10</td>
           <td><code>GatewayCorrelationExtensions</code></td>
           <td>MMCA.Common.Aspire</td>
           <td>1</td>
           <td>GatewayCorrelationMiddleware</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>ProbeTelemetryFilterProcessor</code></td>
+          <td>MMCA.Common.Aspire</td>
+          <td>3</td>
+          <td>Activity, HealthEndpointPaths, ProbeTelemetryFilter</td>
           </tr>
           <tr>
           <td>10</td>
@@ -26179,45 +26520,17 @@
           </tr>
           <tr>
           <td>11</td>
-          <td><code>ServiceBusEmulatorBrokerTests</code></td>
-          <td>MMCA.Common.Aspire.Hosting.Tests</td>
+          <td><code>Extensions</code></td>
+          <td>MMCA.Common.Aspire</td>
+          <td>11</td>
+          <td>HealthCheckTags, HealthEndpointPaths, HttpResilienceDefaults, IWarmupTask, OpenIdConnectMetadataWarmupTask, OutboxPollFilterProcessor, ProbeTelemetryFilterProcessor, RedisPingHealthCheck, WarmupHostedService, WarmupReadinessGate, WarmupReadinessHealthCheck</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>ProbeTelemetryFilterProcessorTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
           <td>3</td>
-          <td>Extensions, Extensions, ServiceBusEmulatorResource</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>InfrastructureHealthChecksTests</code></td>
-          <td>MMCA.Common.Aspire.Tests</td>
-          <td>2</td>
-          <td>Extensions, HealthCheckTags</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>MetricsInstrumentationToggleTests</code></td>
-          <td>MMCA.Common.Aspire.Tests</td>
-          <td>1</td>
-          <td>Extensions</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>RedisReadinessSafetyTests</code></td>
-          <td>MMCA.Common.Aspire.Tests</td>
-          <td>2</td>
-          <td>Extensions, HealthCheckTags</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>StubHostEnvironment</code></td>
-          <td>MMCA.Common.Aspire.Tests</td>
-          <td>1</td>
-          <td>Extensions</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>TracesSampleRatioTests</code></td>
-          <td>MMCA.Common.Aspire.Tests</td>
-          <td>1</td>
-          <td>Extensions</td>
+          <td>Activity, ProbeTelemetryFilter, ProbeTelemetryFilterProcessor</td>
           </tr>
           <tr>
           <td>11</td>
@@ -26279,8 +26592,8 @@
           <td>11</td>
           <td><code>RepositoryFactoryTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>11</td>
-          <td>ApplicationSettings, EFReadRepository&lt;TEntity, TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, EFRepository&lt;TEntity, TIdentifierType&gt;, EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, FakeAggregate, FakeEntity, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RepositoryFactory, TestDbContext</td>
+          <td>13</td>
+          <td>ApplicationSettings, EFReadRepository&lt;TEntity, TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, EFRepository&lt;TEntity, TIdentifierType&gt;, EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, FakeAggregate, FakeAggregate, FakeEntity, FakeEntity, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RepositoryFactory, TestDbContext</td>
           </tr>
           <tr>
           <td>11</td>
@@ -26480,10 +26793,52 @@
           </tr>
           <tr>
           <td>12</td>
-          <td><code>SerilogHostExtensionsTests</code></td>
-          <td>MMCA.Common.Aspire.Tests</td>
+          <td><code>ServiceBusEmulatorBrokerTests</code></td>
+          <td>MMCA.Common.Aspire.Hosting.Tests</td>
           <td>3</td>
-          <td>Extensions, SerilogHostExtensions, StubHostEnvironment</td>
+          <td>Extensions, Extensions, ServiceBusEmulatorResource</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>InfrastructureHealthChecksTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
+          <td>2</td>
+          <td>Extensions, HealthCheckTags</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>MetricsInstrumentationToggleTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
+          <td>1</td>
+          <td>Extensions</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>ProbeTelemetryFilterTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
+          <td>2</td>
+          <td>Extensions, ProbeTelemetryFilter</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>RedisReadinessSafetyTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
+          <td>2</td>
+          <td>Extensions, HealthCheckTags</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>StubHostEnvironment</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
+          <td>1</td>
+          <td>Extensions</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>TracesSampleRatioTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
+          <td>1</td>
+          <td>Extensions</td>
           </tr>
           <tr>
           <td>12</td>
@@ -26536,38 +26891,45 @@
           </tr>
           <tr>
           <td>12</td>
+          <td><code>AuditTrailTestContext</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>16</td>
+          <td>ApplicationDbContext, AuditedThing, AuditSaveChangesInterceptor, AuditTrailEntry, AuditTrailSaveChangesInterceptor, CompositeKeyThing, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FailingSaveInterceptor, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, PlainThing, TestPhysicalDataSources</td>
+          </tr>
+          <tr>
+          <td>12</td>
           <td><code>CleanupTestContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>11</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, InboxMessage, IOutboxSignal, NullAssemblyProvider, OutboxMessage, TestPhysicalDataSources</td>
+          <td>12</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, InboxMessage, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, OutboxMessage, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>12</td>
           <td><code>CommitFailingDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>12</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FailingDatabaseFacade, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources</td>
+          <td>13</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FailingDatabaseFacade, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>12</td>
           <td><code>DegradeTestContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>8</td>
-          <td>ApplicationDbContext, DataSourceKey, DegradeCustomer, DegradeOrder, EmptyAssemblyProvider, EmptyAssemblyProvider, IEntityDataSourceRegistry, PhysicalDataSource</td>
+          <td>7</td>
+          <td>ApplicationDbContext, DataSourceKey, DegradeCustomer, DegradeOrder, EmptyAssemblyProvider, IEntityDataSourceRegistry, PhysicalDataSource</td>
           </tr>
           <tr>
           <td>12</td>
           <td><code>DetectionTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>10</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, TestPhysicalDataSources, Widget</td>
+          <td>11</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, TestPhysicalDataSources, Widget</td>
           </tr>
           <tr>
           <td>12</td>
           <td><code>ExclusionTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>8</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, ExclusionAggregate, IEntityDataSourceRegistry, NullAssemblyProvider, TestPhysicalDataSources</td>
+          <td>9</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, ExclusionAggregate, IEntityDataSourceRegistry, NullAssemblyProvider, NullAssemblyProvider, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>12</td>
@@ -26575,6 +26937,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
           <td>AlwaysRetryExecutionStrategy, CommitFailingDbContext</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>FailingSaveInterceptor</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditTrailTestContext</td>
           </tr>
           <tr>
           <td>12</td>
@@ -26615,8 +26984,8 @@
           <td>12</td>
           <td><code>IntegrityTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>11</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DataSourceKey, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IntegrityAggregate, IOutboxSignal, NullAssemblyProvider, PhysicalDataSource</td>
+          <td>12</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DataSourceKey, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IntegrityAggregate, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, PhysicalDataSource</td>
           </tr>
           <tr>
           <td>12</td>
@@ -26650,8 +27019,8 @@
           <td>12</td>
           <td><code>OutboxRoutingTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>10</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FailingSaveInterceptor, IEntityDataSourceRegistry, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources</td>
+          <td>11</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FailingSaveInterceptor, IEntityDataSourceRegistry, NullAssemblyProvider, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>12</td>
@@ -26671,8 +27040,8 @@
           <td>12</td>
           <td><code>QueryShapeTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>10</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, Product, TestPhysicalDataSources</td>
+          <td>11</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, Product, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>12</td>
@@ -26700,7 +27069,7 @@
           <td><code>SoftDeleteTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>11</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, SoftDeletableEntity, SoftDeletableTestEntity, TestPhysicalDataSources</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, SoftDeletableEntity, SoftDeleteTestDbContext, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>12</td>
@@ -26713,8 +27082,8 @@
           <td>12</td>
           <td><code>StampTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>10</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, StampedEntity, TestPhysicalDataSources</td>
+          <td>11</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, StampedEntity, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>12</td>
@@ -26734,15 +27103,15 @@
           <td>12</td>
           <td><code>TestAuditDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>10</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, TestAuditEntity, TestPhysicalDataSources</td>
+          <td>11</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, TestAuditEntity, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>12</td>
           <td><code>TestDomainEventDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>8</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IEntityDataSourceRegistry, NullAssemblyProvider, TestAggregate, TestPhysicalDataSources</td>
+          <td>9</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IEntityDataSourceRegistry, NullAssemblyProvider, NullAssemblyProvider, TestAggregate, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>12</td>
@@ -26762,8 +27131,8 @@
           <td>12</td>
           <td><code>TransactionTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>11</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources</td>
+          <td>12</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>12</td>
@@ -27243,6 +27612,13 @@
           </tr>
           <tr>
           <td>13</td>
+          <td><code>SerilogHostExtensionsTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
+          <td>3</td>
+          <td>Extensions, SerilogHostExtensions, StubHostEnvironment</td>
+          </tr>
+          <tr>
+          <td>13</td>
           <td><code>AuditTrailCleanupJob</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>10</td>
@@ -27376,10 +27752,10 @@
           </tr>
           <tr>
           <td>13</td>
-          <td><code>AuditTrailTestContext</code></td>
+          <td><code>AuditTrailSaveChangesInterceptorTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>17</td>
-          <td>ApplicationDbContext, AuditedThing, AuditSaveChangesInterceptor, AuditTrailEntry, AuditTrailSaveChangesInterceptor, CompositeKeyThing, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FailingSaveInterceptor, FailingSaveInterceptor, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, PlainThing, TestPhysicalDataSources</td>
+          <td>13</td>
+          <td>AuditedThing, AuditTrailEntry, AuditTrailSaveChangesInterceptor, AuditTrailTestContext, AuditTrailTestHarness, CompositeKeyThing, Email, FakeTimeProvider, InboxMessage, OutboxMessage, PiiRedactor, PlainThing, ScheduledJobEntry</td>
           </tr>
           <tr>
           <td>13</td>
@@ -27420,8 +27796,8 @@
           <td>13</td>
           <td><code>EFReadRepositoryGetByIdFilterTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>3</td>
-          <td>EFReadRepository&lt;TEntity, TIdentifierType&gt;, SoftDeletableTestEntity, SoftDeleteTestDbContext</td>
+          <td>4</td>
+          <td>EFReadRepository&lt;TEntity, TIdentifierType&gt;, SoftDeletableTestEntity, SoftDeleteTestDbContext, SoftDeleteTestDbContext</td>
           </tr>
           <tr>
           <td>13</td>
@@ -27448,15 +27824,8 @@
           <td>13</td>
           <td><code>EFReadRepositorySpecificationTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>14</td>
-          <td>AllSpecification, BetaSpecification, DeletedByNameSpecification, EFReadRepository&lt;TEntity, TIdentifierType&gt;, HighRankSpecification, IncludingSoftDeletedSpecification, IncludingSpecification, ISpecification&lt;TEntity, TIdentifierType&gt;, NoMatchSpecification, SpecificationTestDbContext, SpecTestChild, SpecTestEntity, TopTwoByRankSpecification, TrackedSpecification</td>
-          </tr>
-          <tr>
-          <td>13</td>
-          <td><code>FailingSaveInterceptor</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>1</td>
-          <td>AuditTrailTestContext</td>
+          <td>16</td>
+          <td>AllSpecification, BetaSpecification, BetaSpecification, DeletedByNameSpecification, EFReadRepository&lt;TEntity, TIdentifierType&gt;, HighRankSpecification, IncludingSoftDeletedSpecification, IncludingSpecification, IncludingSpecification, ISpecification&lt;TEntity, TIdentifierType&gt;, NoMatchSpecification, SpecificationTestDbContext, SpecTestChild, SpecTestEntity, TopTwoByRankSpecification, TrackedSpecification</td>
           </tr>
           <tr>
           <td>13</td>
@@ -27464,6 +27833,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>4</td>
           <td>IDataSourceResolver, IDbContextFactory, IDomainEventDispatcher, IOutboxSignal</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><code>Mocks</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>3</td>
+          <td>IDataSourceService, IDbContextFactory, IRepositoryFactory</td>
           </tr>
           <tr>
           <td>13</td>
@@ -27859,13 +28235,6 @@
           </tr>
           <tr>
           <td>14</td>
-          <td><code>AuditTrailSaveChangesInterceptorTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>13</td>
-          <td>AuditedThing, AuditTrailEntry, AuditTrailSaveChangesInterceptor, AuditTrailTestContext, AuditTrailTestHarness, CompositeKeyThing, Email, FakeTimeProvider, InboxMessage, OutboxMessage, PiiRedactor, PlainThing, ScheduledJobEntry</td>
-          </tr>
-          <tr>
-          <td>14</td>
           <td><code>BrokerEventBusTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>19</td>
@@ -27910,8 +28279,8 @@
           <td>14</td>
           <td><code>DbContextFactoryMigrationTargetTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>20</td>
-          <td>AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceKey, DataSourceResolver, DataSourcesSettings, DbContextFactory, DomainEventSaveChangesInterceptor, FixedSourcesRegistry, ICurrentUserService, IDataSourceResolver, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, ITenantContext, NoConfigurationAssemblyProvider, OutboxSignal, PhysicalDbContextFactory, TenancySettings</td>
+          <td>22</td>
+          <td>AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceKey, DataSourceResolver, DataSourcesSettings, DbContextFactory, DomainEventSaveChangesInterceptor, FixedSourcesRegistry, FixedSourcesRegistry, ICurrentUserService, IDataSourceResolver, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, ITenantContext, NoConfigurationAssemblyProvider, NoConfigurationAssemblyProvider, OutboxSignal …(+2)</td>
           </tr>
           <tr>
           <td>14</td>
@@ -28036,8 +28405,8 @@
           <td>14</td>
           <td><code>Mocks</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>6</td>
-          <td>IDataSourceResolver, IDataSourceService, IDbContextFactory, IEntityDataSourceRegistry, IRepositoryFactory, OutboxCleanupService</td>
+          <td>3</td>
+          <td>IDataSourceResolver, IEntityDataSourceRegistry, OutboxCleanupService</td>
           </tr>
           <tr>
           <td>14</td>
@@ -28064,8 +28433,8 @@
           <td>14</td>
           <td><code>OutboxProcessorTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>24</td>
-          <td>AuditSaveChangesInterceptor, BrokerResilienceDefaults, DataSource, DataSourceKey, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FakeTimeProvider, IDataSourceResolver, IDbContextFactory, IDomainEvent, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IIntegrationEvent, IMessageBus, IOutboxSignal, OutboxCycleResult, OutboxMessage, OutboxProcessor, OutboxSettings …(+4)</td>
+          <td>25</td>
+          <td>AuditSaveChangesInterceptor, BrokerResilienceDefaults, DataSource, DataSourceKey, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FakeTimeProvider, IDataSourceResolver, IDbContextFactory, IDomainEvent, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IIntegrationEvent, IMessageBus, IOutboxSignal, OutboxCycleResult, OutboxMessage, OutboxProcessor, OutboxSettings …(+5)</td>
           </tr>
           <tr>
           <td>14</td>
@@ -28101,6 +28470,20 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>14</td>
           <td>DataSource, DataSourceKey, IDataSourceResolver, IEntityDataSourceRegistry, IOutboxSignal, MessageBusSettings, OutboxCleanupService, OutboxProcessor, OutboxSettings, TenancySettings, TenantDataSourceOverrideSettings, TenantDataSourceTarget, TenantDataSourceTargets, TenantEntrySettings</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>UnitOfWorkAdditionalTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>12</td>
+          <td>ApplicationDbContext, DataSource, DataSourceKey, FakeAggregate, FakeEntity, IDataSourceService, IDbContextFactory, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRepositoryFactory, Mocks, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><code>UnitOfWorkTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>12</td>
+          <td>ApplicationDbContext, DataSource, DataSourceKey, FakeAggregate, FakeEntity, IDataSourceService, IDbContextFactory, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRepositoryFactory, Mocks, UnitOfWork</td>
           </tr>
           <tr>
           <td>14</td>
@@ -29079,8 +29462,8 @@
           <td>15</td>
           <td><code>OutboxCleanupServiceTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>15</td>
-          <td>ApplicationDbContext, CleanupTestContext, DataSource, DataSourceKey, FakeTimeProvider, IDataSourceResolver, IDbContextFactory, IEntityDataSourceRegistry, InboxMessage, MessageBusSettings, Mocks, OutboxCleanupService, OutboxMessage, OutboxSettings, Payload</td>
+          <td>16</td>
+          <td>ApplicationDbContext, CleanupTestContext, DataSource, DataSourceKey, FakeTimeProvider, IDataSourceResolver, IDbContextFactory, IEntityDataSourceRegistry, InboxMessage, MessageBusSettings, Mocks, Mocks, OutboxCleanupService, OutboxMessage, OutboxSettings, Payload</td>
           </tr>
           <tr>
           <td>15</td>
@@ -29102,20 +29485,6 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>8</td>
           <td>Email, Error, IdentityModuleDbSeederBase&lt;TUser&gt;, IPasswordHasher, IUnitOfWork, Result, SeedAccount, TestSeedUser</td>
-          </tr>
-          <tr>
-          <td>15</td>
-          <td><code>UnitOfWorkAdditionalTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>12</td>
-          <td>ApplicationDbContext, DataSource, DataSourceKey, FakeAggregate, FakeEntity, IDataSourceService, IDbContextFactory, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRepositoryFactory, Mocks, UnitOfWork</td>
-          </tr>
-          <tr>
-          <td>15</td>
-          <td><code>UnitOfWorkTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>12</td>
-          <td>ApplicationDbContext, DataSource, DataSourceKey, FakeAggregate, FakeEntity, IDataSourceService, IDbContextFactory, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRepositoryFactory, Mocks, UnitOfWork</td>
           </tr>
           <tr>
           <td>15</td>
